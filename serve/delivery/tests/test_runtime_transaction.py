@@ -58,7 +58,41 @@ def test_recovery_completes_lifecycle_job_and_activity_participants(tmp_path: Pa
 
     assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
     assert (work_root / "activity/plan.jsonl").read_bytes() == b'{"event":"started"}\n'
-    assert not list((change_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((change_root / "transactions").glob("*.yaml"))
+
+
+def test_recovery_migrates_legacy_transaction_directory(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    transaction = RuntimeTransaction(
+        manifest_root,
+        "legacy-directory",
+        (TransactionParticipant(work_root, Path("jobs/plan.yaml"), b"plan"),),
+    )
+
+    def interrupt(stage: str) -> None:
+        if stage == "before-publication":
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        transaction.commit(failure=interrupt)
+    (manifest_root / "transactions").rename(manifest_root / ".runtime-transactions")
+
+    RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
+
+    assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
+    assert not (manifest_root / ".runtime-transactions").exists()
+    assert not list((manifest_root / "transactions").glob("*.yaml"))
+
+
+def test_recovery_rejects_both_transaction_directories(tmp_path: Path) -> None:
+    manifest_root = tmp_path / "change"
+    (manifest_root / "transactions").mkdir(parents=True)
+    (manifest_root / ".runtime-transactions").mkdir()
+
+    with pytest.raises(TransactionManifestError, match="both transaction directories"):
+        RuntimeTransaction.recover_all(manifest_root)
 
 
 @pytest.mark.parametrize(
@@ -135,7 +169,7 @@ def test_recovery_converges_graph_job_receipt_activity_and_invalidation_particip
     assert (work_root / "invalidations/current.yaml").read_bytes() == b"invalidation"
     assert prior_receipt.read_bytes() == b"prior-receipt"
     assert prior_activity.read_bytes() == b"prior-activity\n"
-    assert not list((change_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((change_root / "transactions").glob("*.yaml"))
 
 
 def test_transaction_rejects_conflicts_and_escaped_destinations_without_mutation(tmp_path: Path) -> None:
@@ -188,7 +222,7 @@ def test_replacement_participant_recovers_and_replays(tmp_path: Path, stage: str
     RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
 
     assert destination.read_bytes() == b"replacement"
-    assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((manifest_root / "transactions").glob("*.yaml"))
 
 
 def test_abort_restores_exact_prepublication_state_for_mixed_participants(tmp_path: Path) -> None:
@@ -232,7 +266,7 @@ def test_abort_restores_exact_prepublication_state_for_mixed_participants(tmp_pa
     assert replacement.read_bytes() == b"before"
     assert move_source.read_bytes() == b"active"
     assert not move_destination.exists()
-    assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((manifest_root / "transactions").glob("*.yaml"))
 
 
 def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifests(tmp_path: Path) -> None:
@@ -251,7 +285,7 @@ def test_replacement_participant_rejects_conflicts_and_invalid_recovery_manifest
         transaction.commit()
     assert destination.read_bytes() == b"different"
 
-    manifest_directory = manifest_root / ".runtime-transactions"
+    manifest_directory = manifest_root / "transactions"
     manifest_directory.mkdir(parents=True, exist_ok=True)
     (manifest_directory / "malformed.yaml").write_text("schema_version: 2\nparticipants: [bad]\n", encoding="utf-8")
 
@@ -281,7 +315,7 @@ def test_replacement_recovery_rejects_altered_or_unsafe_manifests(tmp_path: Path
     with pytest.raises(RuntimeError, match="interrupted"):
         transaction.commit(failure=interrupt)
 
-    manifest_path = manifest_root / ".runtime-transactions/replacement.yaml"
+    manifest_path = manifest_root / "transactions/replacement.yaml"
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     participant = manifest["participants"][0]
     if alteration == "digest":
@@ -313,4 +347,4 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
 
     assert [process.returncode for process in processes] == [0, 0]
     assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
-    assert not list((manifest_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((manifest_root / "transactions").glob("*.yaml"))

@@ -850,8 +850,18 @@ class CapacityConfigurationConflictError(CoordinationConflictError):
 class CapacityLedgerConflictError(CoordinationConflictError):
     """The host capacity ledger changed during startup reconfiguration."""
 
-    def __init__(self) -> None:
-        super().__init__("host capacity ledger changed concurrently")
+    def __init__(self, detail: str = "host capacity ledger changed concurrently") -> None:
+        super().__init__(detail)
+
+    @classmethod
+    def both_filenames(cls) -> Self:
+        """Report that both canonical and legacy ledger files exist."""
+        return cls("both capacity ledger filenames are present")
+
+    @classmethod
+    def unsafe_legacy_file(cls) -> Self:
+        """Report that the legacy ledger is not a regular file."""
+        return cls("legacy capacity ledger is unsafe")
 
 
 class PortfolioCoordinator:
@@ -859,11 +869,15 @@ class PortfolioCoordinator:
 
     def __init__(self, state_root: Path, capacity: int) -> None:
         self._state_root = state_root
-        self._coordination_root = state_root / "claims" / "changes"
-        self._ledger_path = state_root / "capacity.json"
+        self._coordination_root = state_root / "coordination" / "changes"
+        self._legacy_coordination_root = state_root / "claims" / "changes"
+        self._ledger_path = state_root / "capacity-ledger.json"
+        self._legacy_ledger_path = state_root / "capacity.json"
         self._capacity = capacity
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
+        self._migrate_legacy_coordination()
+        self._migrate_legacy_ledger()
         self._initialize_ledger()
 
     def acquisition_lock(self) -> AbstractContextManager[None]:
@@ -1177,6 +1191,47 @@ class PortfolioCoordinator:
                 ),
             )
         except TransactionConflictError as exc:
+            raise CapacityLedgerConflictError from exc
+
+    def _migrate_legacy_coordination(self) -> None:
+        canonical_present = self._coordination_root.exists() or self._coordination_root.is_symlink()
+        legacy_present = self._legacy_coordination_root.exists() or self._legacy_coordination_root.is_symlink()
+        if canonical_present:
+            if legacy_present:
+                _coordination_conflict("both coordination directories are present")
+            if self._coordination_root.is_symlink() or not self._coordination_root.is_dir():
+                _coordination_conflict("coordination directory is unsafe")
+            return
+        if not legacy_present:
+            return
+        if self._legacy_coordination_root.is_symlink() or not self._legacy_coordination_root.is_dir():
+            _coordination_conflict("legacy coordination directory is unsafe")
+        parent = self._coordination_root.parent
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            _coordination_conflict("coordination directory parent is unsafe")
+        parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._legacy_coordination_root.rename(self._coordination_root)
+        except OSError as exc:
+            if self._coordination_root.is_dir() and not self._legacy_coordination_root.exists():
+                return
+            try:
+                _coordination_conflict("legacy coordination directory could not be migrated")
+            except CoordinationConflictError as error:
+                raise error from exc
+
+    def _migrate_legacy_ledger(self) -> None:
+        if self._ledger_path.exists():
+            if self._legacy_ledger_path.exists():
+                raise CapacityLedgerConflictError.both_filenames()
+            return
+        if not self._legacy_ledger_path.exists():
+            return
+        if self._legacy_ledger_path.is_symlink() or not self._legacy_ledger_path.is_file():
+            raise CapacityLedgerConflictError.unsafe_legacy_file()
+        try:
+            self._legacy_ledger_path.rename(self._ledger_path)
+        except OSError as exc:
             raise CapacityLedgerConflictError from exc
 
     def _coordination_path(self, change_id: str) -> Path:

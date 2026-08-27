@@ -109,6 +109,29 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
         )
 
 
+def test_coordinator_migrates_legacy_coordination_directory(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    legacy_root = state_root / "claims/changes"
+    legacy_root.mkdir(parents=True)
+    coordination = _coordination(tmp_path, "legacy-coordination")
+    (legacy_root / "legacy-coordination.json").write_bytes(coordination.model_dump_json().encode())
+
+    coordinator = PortfolioCoordinator(state_root, capacity=1)
+
+    assert coordinator.show("legacy-coordination") == coordination
+    assert (state_root / "coordination/changes/legacy-coordination.json").is_file()
+    assert not legacy_root.exists()
+
+
+def test_coordinator_rejects_both_coordination_directories(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    (state_root / "coordination/changes").mkdir(parents=True)
+    (state_root / "claims/changes").mkdir(parents=True)
+
+    with pytest.raises(CoordinationConflictError, match="both coordination directories"):
+        PortfolioCoordinator(state_root, capacity=1)
+
+
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
     coordinator.register(_coordination(tmp_path, "publish-change"))
@@ -424,7 +447,7 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     second = manager.ensure("change-a")
     _git(repository, "update-ref", "refs/heads/owlbear/change/nested-only/s1", initial)
     before_coordination = tuple(
-        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/coordination/changes").iterdir())
     )
     before_worktrees = _git(repository, "worktree", "list", "--porcelain")
     original_run_git = manager._run_git  # noqa: SLF001
@@ -448,7 +471,7 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     ]
     assert before_worktrees == _git(repository, "worktree", "list", "--porcelain")
     assert before_coordination == tuple(
-        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/coordination/changes").iterdir())
     )
 
 
@@ -498,7 +521,7 @@ def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -
     reviewed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / "state/claims/changes/legacy-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "state/coordination/changes/legacy-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
     coordinator.update(
         coordination.model_copy(update={"last_reviewed_commit": reviewed_head, "publication_base_head": None})
     )
@@ -531,7 +554,9 @@ def test_publication_baseline_recovery_requires_idle_change(tmp_path: Path, cust
     coordination = manager.ensure(f"busy-{custody.replace(' ', '-')}")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / f"state/coordination/changes/{coordination.change_id}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
     if custody == "writer":
         coordinator.acquire(
             coordination.change_id,
@@ -565,7 +590,9 @@ def test_publication_baseline_recovery_rejects_unusable_baseline(tmp_path: Path,
     coordination = manager.ensure(f"invalid-{baseline_kind}")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / f"state/coordination/changes/{coordination.change_id}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
     baseline = "f" * 40
     if baseline_kind == "non-ancestor":
         baseline = _git(repository, "commit-tree", f"{initial}^{{tree}}", "-m", "unrelated baseline")
@@ -602,7 +629,7 @@ def test_legacy_publication_summary_fails_closed_without_baseline(tmp_path: Path
     _git(repository, "commit", "-m", "advance target")
     target_head = _git(repository, "rev-parse", "HEAD")
     payload["target_head"] = target_head
-    (tmp_path / "state/claims/changes/unknown-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "state/coordination/changes/unknown-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(PublicationBaselineUnavailableError, match="explicitly known baseline"):
         manager.repository_automation_paths(coordination.change_id, initial)
@@ -776,7 +803,7 @@ def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) 
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     manager.ensure("stable-change")
-    coordination_root = tmp_path / "state/claims/changes"
+    coordination_root = tmp_path / "state/coordination/changes"
     (coordination_root / ".tmp-deadbeef-stable-change.json").write_text("not json", encoding="utf-8")
 
     assert [item.change_id for item in coordinator.list_registered()] == ["stable-change"]
@@ -786,7 +813,7 @@ def test_list_registered_rejects_malformed_or_misnamed_records(tmp_path: Path) -
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     manager.ensure("valid-change")
-    coordination_root = tmp_path / "state/claims/changes"
+    coordination_root = tmp_path / "state/coordination/changes"
     (coordination_root / "broken.json").write_text("{", encoding="utf-8")
 
     with pytest.raises(CoordinationConflictError, match="record is invalid"):
@@ -982,7 +1009,7 @@ def test_list_retained_worktrees_reports_orphaned_registration(tmp_path: Path) -
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("orphaned-change")
-    (tmp_path / "state/claims/changes/orphaned-change.json").unlink()
+    (tmp_path / "state/coordination/changes/orphaned-change.json").unlink()
 
     row = next(item for item in manager.list_retained() if item.change_id == coordination.change_id)
 
@@ -1275,7 +1302,7 @@ def test_restart_accepts_promoted_adoption_after_reviewed_descendant_and_replays
     assert _git(restarted.worktree_path, "rev-parse", "HEAD") == reviewed
     assert restarted.last_reviewed_commit == reviewed
     assert restarted.writer is None
-    assert CapacityLedger.model_validate_json((tmp_path / "state/capacity.json").read_bytes()).change_ids == ()
+    assert CapacityLedger.model_validate_json((tmp_path / "state/capacity-ledger.json").read_bytes()).change_ids == ()
 
     replayed = manager.restart(coordination.change_id, writer.attempt_id, rejected)
 
@@ -1319,7 +1346,7 @@ def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path:
     coordination = manager.ensure("recovered-change")
     reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
     manager.record_reviewed(coordination.change_id, reviewed)
-    (state_root / "claims/changes/recovered-change.json").unlink()
+    (state_root / "coordination/changes/recovered-change.json").unlink()
     recovered_manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
 
     with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
@@ -1346,14 +1373,15 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
     PortfolioCoordinator(state_root, capacity=1)
 
     assert (state_root / "target-runtime/recovered.json").read_bytes() == b"{}\n"
-    assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
+    assert not (state_root / "transactions/pending-portfolio.yaml").exists()
 
 
 def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "capacity.json"
+    legacy_ledger_path = state_root / "capacity.json"
+    ledger_path = state_root / "capacity-ledger.json"
     ledger_path.parent.mkdir(parents=True)
-    ledger_path.write_text(
+    legacy_ledger_path.write_text(
         CapacityLedger(capacity=4, change_ids=("change-a",)).model_dump_json(),
         encoding="utf-8",
     )
@@ -1364,6 +1392,7 @@ def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Pat
         capacity=1,
         change_ids=("change-a",),
     )
+    assert not legacy_ledger_path.exists()
 
 
 @pytest.mark.parametrize("transaction_id", ["initialize-capacity", "reconfigure-capacity"])
@@ -1372,7 +1401,7 @@ def test_coordinator_translates_capacity_ledger_conflict(
     transaction_id: str,
 ) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "capacity.json"
+    ledger_path = state_root / "capacity-ledger.json"
     if transaction_id == "reconfigure-capacity":
         state_root.mkdir(parents=True)
         ledger_path.write_text(CapacityLedger(capacity=2).model_dump_json(), encoding="utf-8")
@@ -1401,7 +1430,7 @@ def test_coordinator_translates_capacity_ledger_conflict(
 
 def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "capacity.json"
+    ledger_path = state_root / "capacity-ledger.json"
     ledger_path.parent.mkdir(parents=True)
     ledger_path.write_text(
         CapacityLedger(capacity=4, change_ids=("change-a", "change-b")).model_dump_json(),

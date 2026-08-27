@@ -294,7 +294,7 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
         DeliveryAdmissionReceipt.model_validate(receipt_payload).model_dump_json(),
         encoding="utf-8",
     )
-    coordination_root = runtime_root / "claims/changes"
+    coordination_root = runtime_root / "coordination/changes"
     coordination_root.mkdir(parents=True)
     coordination_root.joinpath("change-a.json").write_text(
         ChangeCoordination(
@@ -743,7 +743,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (repository / ".owlbear/delivery/runtime/capacity.json").is_file()
+        assert (repository / ".owlbear/delivery/runtime/capacity-ledger.json").is_file()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()  # noqa: SLF001

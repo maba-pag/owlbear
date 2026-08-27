@@ -1374,7 +1374,7 @@ def test_completion_transaction_recovers_after_receipt_publication(tmp_path: Pat
 
     assert recovered.completion_receipt() == receipt
     assert recovered.change_stage() == DeliveryChangeStage.COMPLETED
-    assert not tuple((tmp_path / ".runtime-transactions").glob("*.yaml"))
+    assert not tuple((tmp_path / "transactions").glob("*.yaml"))
 
 
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:

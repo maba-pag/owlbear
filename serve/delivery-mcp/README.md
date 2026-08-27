@@ -20,6 +20,11 @@ uv run python -m owlbear_delivery_mcp
 
 Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json` — not invoked directly.
 
+Delivery stores per-Change custody records under
+`.owlbear/delivery/runtime/coordination/changes/` and recoverable transaction manifests under
+`.owlbear/delivery/runtime/transactions/`. The sibling `runtime/claims/` namespace contains
+acquisition, publication, and verification locks.
+
 ### Tools
 
 The server exposes these operation groups:
@@ -58,7 +63,7 @@ The workspace root determines the repository and the canonical `.owlbear/deliver
 claim and one Build writer at a time by default. Set the optional host-local capacity file described
 in the [core Delivery configuration reference](../delivery/README.md#configuration) to raise either
 limit. `execution_capacity` counts all active Planner and Builder claims; `writer_capacity` counts
-concurrent Builder worktrees and is reflected in the generated `capacity.json` ledger. Agent
+concurrent Builder worktrees and is reflected in the generated `capacity-ledger.json` ledger. Agent
 frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
 Startup validates the configured remote, the exact
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
@@ -74,7 +79,7 @@ minutes), preserving an existing file on rerun. The optional ignored
 `.owlbear/delivery/runtime/host.local.json` may contain any subset of those settings for one host;
 local values override the baseline and are not synchronized through Git. The loader supplies the
 same defaults when either file or a field is absent, and all supplied numeric values must be positive
-integers. The generated `.owlbear/delivery/runtime/capacity.json` is runtime state, not a
+integers. The generated `.owlbear/delivery/runtime/capacity-ledger.json` is runtime state, not a
 configuration file, and must not be edited manually. The Delivery server reads no environment
 variables.
 

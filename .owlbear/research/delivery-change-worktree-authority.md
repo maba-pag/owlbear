@@ -144,12 +144,13 @@ Git administration rather than Delivery-authored product state.
 | `.owlbear/delivery/config.json` | Project Delivery policy, including target, remote, and provider repository identity | Tracked |
 | `.owlbear/delivery/packages/**` | Authored Design and admitted contract source authority | Tracked |
 | `.owlbear/delivery/runtime/changes/<change-id>/**` | Per-Change lifecycle events, claims, attempts, finalization, and acceptance state | Host-local and ignored |
-| `.owlbear/delivery/runtime/claims/**` | Shared fenced mutation-claim coordination | Host-local and ignored |
+| `.owlbear/delivery/runtime/coordination/changes/**` | Per-Change writer custody and coordination records | Host-local and ignored |
+| `.owlbear/delivery/runtime/claims/**` | Shared acquisition, publication, and verification lock state | Host-local and ignored |
 | `.owlbear/delivery/runtime/transactions/**` | Append-only transaction journals and recovery state | Host-local and ignored |
 | `.owlbear/delivery/runtime/publications/**` | Checkpoint, remote-head, PR, check-observation, and acceptance-observation receipts | Host-local and ignored |
 | `.owlbear/delivery/runtime/completions/**` | Receipt-backed completion history plus non-authoritative display metadata captured atomically from admitted Change authority | Host-local and ignored |
 | `.owlbear/delivery/runtime/host.json` | Host-local configured writer and execution capacities | Host-local and ignored |
-| `.owlbear/delivery/runtime/capacity.json` | Host-local derived writer ledger and active holders | Host-local and ignored |
+| `.owlbear/delivery/runtime/capacity-ledger.json` | Host-local derived capacity ledger and active holders | Host-local and ignored |
 | `.owlbear/delivery/worktrees/<change-id>/` | The one linked Change worktree | Host-local and ignored |
 | `.owlbear/legacy/briefs/**` | Retired ideation-blackboard artifacts | Tracked, read-only legacy evidence; no new writes |
 | `.owlbear/legacy/completed/**` | Legacy in-target completion packages | Tracked, read-only legacy evidence; no new writes |
@@ -205,7 +206,7 @@ name, and `github_repository` is the exact `owner/name` identity reconciled agai
 publication. Schema migration renames the current `integration_target` field to `target_branch`.
 Host-local writer and execution limits are optionally configured in the ignored
 `.owlbear/delivery/runtime/host.json`; the coordinator derives its active writer ledger in
-`.owlbear/delivery/runtime/capacity.json`. Tracked project policy does not prescribe laptop capacity.
+`.owlbear/delivery/runtime/capacity-ledger.json`. Tracked project policy does not prescribe laptop capacity.
 
 ### 4.3 GitHub Authority
 

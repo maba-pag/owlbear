@@ -91,7 +91,7 @@ def test_previsibility_failure_leaves_no_package_and_clean_replay_succeeds(repos
         failing_store.create("sample-change", b"intent\n", b"design\n")
 
     assert not (active_root / "sample-change").exists()
-    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((active_root / "transactions").glob("*.yaml"))
 
     created = DesignPackageStore(active_root, repository).create("sample-change", b"intent\n", b"design\n")
     assert created.replayed is False
@@ -166,7 +166,7 @@ def test_revise_handled_failure_restores_verified_old_package(
         failing_store.revise("sample-change", created.package_id, b"new intent\n", b"new design\n")
 
     assert DesignPackageStore(active_root, repository).read_verified("sample-change") == original
-    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((active_root / "transactions").glob("*.yaml"))
 
 
 def test_revise_recovers_interrupted_publication_to_verified_new_package(
@@ -192,7 +192,7 @@ def test_revise_recovers_interrupted_publication_to_verified_new_package(
     assert recovered.intent_bytes == b"new intent\n"
     assert recovered.design_bytes == b"new design\n"
     assert recovered.authority_bytes == b""
-    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((active_root / "transactions").glob("*.yaml"))
 
 
 def test_checkpoint_updates_only_package_history_and_replays_identical_content(

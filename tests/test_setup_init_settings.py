@@ -146,9 +146,9 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         ".owlbear/adapters",
         ".owlbear/target-cutover-request.json",
         ".owlbear/target-cutover.json",
-        ".owlbear/delivery/runtime/capacity.json",
+        ".owlbear/delivery/runtime/capacity-ledger.json",
         ".owlbear/delivery/runtime/changes",
-        ".owlbear/delivery/runtime/claims",
+        ".owlbear/delivery/runtime/coordination",
         ".owlbear/delivery/worktrees",
     ):
         assert not (target_dir / retired_path).exists()

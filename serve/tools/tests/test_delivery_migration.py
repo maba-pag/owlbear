@@ -256,7 +256,7 @@ def test_migration_moves_owned_worktree_and_preserves_runtime_and_archive(tmp_pa
     assert not legacy_worktree.exists()
     assert str(canonical_worktree) in _git(repository, "worktree", "list", "--porcelain")
     assert (runtime / "changes/change-a/frontier.json").read_bytes() == frontier_bytes
-    coordination = ChangeCoordination.model_validate_json((runtime / "claims/changes/change-a.json").read_bytes())
+    coordination = ChangeCoordination.model_validate_json((runtime / "coordination/changes/change-a.json").read_bytes())
     assert coordination.worktree_path == canonical_worktree
     assert (runtime / "claims/integration-verification/requests/request.json").is_file()
     assert (archive / "target/manifest.json").is_file()

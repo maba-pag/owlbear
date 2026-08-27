@@ -15,7 +15,8 @@ from owlbear_tools.commands import command_footer
 _DELIVERY_CONFIG = Path(".owlbear/delivery/config.json")
 _CHANGE_GLOB = ".owlbear/delivery/runtime/changes/*"
 _FRONTIER_GLOB = ".owlbear/delivery/runtime/changes/*/frontier.json"
-_COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
+_COORDINATION_GLOB = ".owlbear/delivery/runtime/coordination/changes/*.json"
+_LEGACY_COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
 _PACKAGE_GLOB = ".owlbear/delivery/packages/*"
 _LEGACY_DELIVERY_ROOTS = (Path(".owlbear/target"), Path(".owlbear/worktrees"))
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
@@ -123,15 +124,22 @@ def _delivery_blockers(root: Path) -> list[str]:
             blockers.append(f"active Delivery claim: {path.parent.name}")
         elif not _has_terminal_completion(frontier):
             blockers.append(f"unfinished Delivery change: {path.parent.name}")
-    for path in sorted(root.glob(_COORDINATION_GLOB)):
-        try:
-            _load_json(path)
-        except (OSError, TypeError, json.JSONDecodeError):
-            blockers.append(f"unreadable Delivery coordination: {path.relative_to(root)}")
-            continue
-        blockers.append(f"unfinished Delivery coordination: {path.stem}")
+    blockers.extend(_coordination_blockers(root))
     for path in sorted(root.glob(_PACKAGE_GLOB)):
         blockers.append(f"unfinished Delivery package: {path.name}")
+    return blockers
+
+
+def _coordination_blockers(root: Path) -> list[str]:
+    blockers: list[str] = []
+    for coordination_glob in (_COORDINATION_GLOB, _LEGACY_COORDINATION_GLOB):
+        for path in sorted(root.glob(coordination_glob)):
+            try:
+                _load_json(path)
+            except (OSError, TypeError, json.JSONDecodeError):
+                blockers.append(f"unreadable Delivery coordination: {path.relative_to(root)}")
+                continue
+            blockers.append(f"unfinished Delivery coordination: {path.stem}")
     return blockers
 
 

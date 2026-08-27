@@ -288,9 +288,9 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
 
     delivery_root = repository / ".owlbear/delivery"
     (delivery_root / "runtime/changes" / change_id).mkdir(parents=True)
-    (delivery_root / "runtime/claims/changes").mkdir(parents=True)
+    (delivery_root / "runtime/coordination/changes").mkdir(parents=True)
     (delivery_root / "runtime/claims").mkdir(exist_ok=True)
-    (delivery_root / "runtime/capacity.json").write_bytes(_canonical(CapacityLedger(capacity=1)))
+    (delivery_root / "runtime/capacity-ledger.json").write_bytes(_canonical(CapacityLedger(capacity=1)))
     (delivery_root / "config.json").write_text(
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
         encoding="utf-8",
@@ -326,7 +326,7 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
         target_head=target_commit,
         last_reviewed_commit=baseline,
     )
-    (delivery_root / "runtime/claims/changes" / f"{change_id}.json").write_bytes(_canonical(coordination))
+    (delivery_root / "runtime/coordination/changes" / f"{change_id}.json").write_bytes(_canonical(coordination))
     if with_worktree:
         _git(repository, "worktree", "add", str(coordination.worktree_path), branch)
     return (
@@ -383,8 +383,8 @@ def _prepare_migration_input(
     (legacy_target / "delivery/changes").mkdir(parents=True)
     (legacy_runtime / "coordination").mkdir(parents=True)
     change_source.rename(legacy_target / "delivery/changes/change-a")
-    (delivery_root / "runtime/claims/changes/change-a.json").rename(legacy_runtime / "coordination/change-a.json")
-    (delivery_root / "runtime/capacity.json").rename(legacy_runtime / "capacity.json")
+    (delivery_root / "runtime/coordination/changes/change-a.json").rename(legacy_runtime / "coordination/change-a.json")
+    (delivery_root / "runtime/capacity-ledger.json").rename(legacy_runtime / "capacity.json")
 
     completion = CompletionPackageManifest.model_validate_json(
         (repository / ".owlbear/legacy/completed/change-a/completion.json").read_bytes()
@@ -702,7 +702,7 @@ def test_retirement_applies_exact_cleanup_and_retains_git_history(tmp_path: Path
     apply_delivery_integration_retirement(plan)
 
     assert not (delivery_root / "runtime/changes/change-a").exists()
-    assert not (delivery_root / "runtime/claims/changes/change-a.json").exists()
+    assert not (delivery_root / "runtime/coordination/changes/change-a.json").exists()
     assert not (delivery_root / "runtime/claims/publication-locks/change-a").exists()
     assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
     assert not (repository / ".owlbear/scratch/delivery-integration-retirement").exists()
@@ -730,7 +730,7 @@ def test_retirement_recovers_staged_state_after_removal_failure(
         apply_delivery_integration_retirement(plan)
 
     assert (delivery_root / "runtime/changes/change-a/frontier.json").is_file()
-    assert (delivery_root / "runtime/claims/changes/change-a.json").is_file()
+    assert (delivery_root / "runtime/coordination/changes/change-a.json").is_file()
     worktree = delivery_root / "worktrees" / "change-a"
     assert worktree.is_dir()
     assert _git(worktree, "rev-parse", "HEAD") == commits["baseline"]

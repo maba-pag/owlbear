@@ -42,6 +42,8 @@ _WORKTREES_RELATIVE = Path(".owlbear/delivery/worktrees")
 _LEGACY_TARGET_RELATIVE = Path(".owlbear/target")
 _LEGACY_WORKTREES_RELATIVE = Path(".owlbear/worktrees")
 _STAGING_RELATIVE = Path(".owlbear/scratch/delivery-integration-retirement")
+_TRANSACTION_RELATIVE = Path("transactions")
+_LEGACY_TRANSACTION_RELATIVE = Path(".runtime-transactions")
 _VERIFICATION_RELATIVE = Path("claims/integration-verification")
 _PUBLICATION_LOCKS_RELATIVE = Path("claims/publication-locks")
 _ACQUISITION_LOCK_RELATIVE = Path("claims/acquisition-lock")
@@ -427,7 +429,7 @@ def _load_coordinations(
     runtime_root: Path,
     change_ids: set[str],
 ) -> tuple[dict[str, ChangeCoordination], dict[str, bytes]]:
-    coordination_root = runtime_root / "claims/changes"
+    coordination_root = runtime_root / "coordination/changes"
     if not coordination_root.exists():
         if change_ids:
             _fail("Delivery Change coordination is missing")
@@ -455,10 +457,10 @@ def _require_coordination_quiescence(coordinations: dict[str, ChangeCoordination
 
 
 def _require_runtime_quiescence(runtime_root: Path) -> None:
-    capacity = _load_model(runtime_root / "capacity.json", CapacityLedger)
+    capacity = _load_model(runtime_root / "capacity-ledger.json", CapacityLedger)
     if capacity.change_ids:
         _fail("active Delivery capacity holders block Integration retirement")
-    if _has_entries(runtime_root / ".runtime-transactions"):
+    if any(_has_entries(runtime_root / relative) for relative in (_TRANSACTION_RELATIVE, _LEGACY_TRANSACTION_RELATIVE)):
         _fail("pending Delivery runtime transactions block Integration retirement")
 
 
@@ -703,7 +705,7 @@ def _journal_for_plan(plan: DeliveryIntegrationRetirementPlan, staging_root: Pat
                 runtime_change_root=change.runtime_change_root,
                 coordination_path=change.coordination_path,
                 stage_change_root=staging_root / "changes" / change.change_id,
-                stage_coordination_path=staging_root / "coordination" / f"{change.change_id}.json",
+                stage_coordination_path=staging_root / "coordination/changes" / f"{change.change_id}.json",
                 verification_paths=change.verification_paths,
                 stage_verification_paths=tuple(
                     staging_root / "runtime" / relative for relative in relative_verification
@@ -848,9 +850,12 @@ def _validate_journal_change(
     runtime_root = journal.repository_root / _RUNTIME_RELATIVE
     expected_paths = (
         (change.runtime_change_root, runtime_root / "changes" / change.change_id),
-        (change.coordination_path, runtime_root / "claims/changes" / f"{change.change_id}.json"),
+        (change.coordination_path, runtime_root / "coordination/changes" / f"{change.change_id}.json"),
         (change.stage_change_root, journal.staging_root / "changes" / change.change_id),
-        (change.stage_coordination_path, journal.staging_root / "coordination" / f"{change.change_id}.json"),
+        (
+            change.stage_coordination_path,
+            journal.staging_root / "coordination/changes" / f"{change.change_id}.json",
+        ),
         (change.publication_lock_path, runtime_root / _PUBLICATION_LOCKS_RELATIVE / change.change_id),
     )
     for actual, expected in expected_paths:
@@ -1036,10 +1041,13 @@ def _validate_postconditions(root: Path, journal: _RetirementJournal) -> None:
             _fail(f"retired Delivery publication lock remains registered: {change.change_id}")
         if change.branch is not None and change.worktree_head is not None:
             _require_branch(root, change.branch, change.worktree_head)
-    capacity = _load_model(journal.runtime_root / "capacity.json", CapacityLedger)
+    capacity = _load_model(journal.runtime_root / "capacity-ledger.json", CapacityLedger)
     if capacity.change_ids:
         _fail("active Delivery capacity holders remain after Integration retirement")
-    if _has_entries(journal.runtime_root / ".runtime-transactions"):
+    if any(
+        _has_entries(journal.runtime_root / relative)
+        for relative in (_TRANSACTION_RELATIVE, _LEGACY_TRANSACTION_RELATIVE)
+    ):
         _fail("pending Delivery runtime transactions remain after Integration retirement")
 
 
@@ -1280,7 +1288,7 @@ def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetir
             _RetirementChange(
                 change_id=change_id,
                 runtime_change_root=change_roots[change_id],
-                coordination_path=runtime_root / "claims/changes" / f"{change_id}.json",
+                coordination_path=runtime_root / "coordination/changes" / f"{change_id}.json",
                 frontier=frontier,
                 frontier_bytes=frontier_bytes[change_id],
                 coordination=coordination,

@@ -10,14 +10,14 @@
 The reported claim was persisted in the frontier for
 [`delivery-capacity-consolidation`](../delivery/runtime/changes/delivery-capacity-consolidation/frontier.json)
 with `started_at: 2026-08-23T11:41:50Z`, and matching Builder writer custody in
-[`claims/changes/delivery-capacity-consolidation.json`](../delivery/runtime/claims/changes/delivery-capacity-consolidation.json).
+[`coordination/changes/delivery-capacity-consolidation.json`](../delivery/runtime/coordination/changes/delivery-capacity-consolidation.json).
 The managed worktree was clean at the reviewed commit, so exact recovery preserved the reviewed
 commit, released writer custody, and left the worktree unchanged.
 
 The canonical claim already persists `started_at`. The missing behavior was age comparison during
 acquisition. The tracked baseline is `.owlbear/delivery/runtime/host.json`; the optional ignored
-`.owlbear/delivery/runtime/host.local.json` contains per-host overrides. `capacity.json` is generated
-writer-ledger state and must not be repurposed as configuration.
+`.owlbear/delivery/runtime/host.local.json` contains per-host overrides.
+`capacity-ledger.json` is generated capacity-ledger state and must not be repurposed as configuration.
 
 Goals:
 
@@ -31,7 +31,7 @@ Goals:
 
 Non-goals:
 
-- No rename of `capacity.json`; it remains derived writer custody state.
+- No `.local` rename of `capacity-ledger.json`; it remains derived writer custody state.
 - No persisted `lease_expires_at` field, frontier schema migration, heartbeat, process-liveness probe,
   background scheduler, or distributed lease service.
 - No automatic Integration-repair recovery, MCP/Cockpit expiry redesign, or broad worktree cleanup.
@@ -47,7 +47,7 @@ Non-goals:
 | [`delivery_runtime.py`](../../serve/delivery/src/owlbear_delivery/delivery_runtime.py) | `DeliveryActiveClaim` persists `started_at`; active claims remain canonical frontier occupancy until explicitly removed. | Runtime has no clock-based claim expiry itself. |
 | [`change_workspace.py`](../../serve/delivery/src/owlbear_delivery/change_workspace.py) | `ChangeWriter`, `recovery_snapshot()`, and `restart()` protect exact Builder custody and preserve recoverable work. | Git/worktree safety is sampled and remains a bounded local risk during hard timeout recovery. |
 | [`test_portfolio_application.py`](../../serve/delivery/tests/test_portfolio_application.py) | Tests cover default/override loading, strict local validation, inclusive timeout, clean Builder recovery, dirty Builder retention, and cross-instance preservation. | Tests use controlled clocks and temporary repositories. |
-| [`serve/delivery/README.md`](../../serve/delivery/README.md) | Tracked `host.json` is the baseline, ignored `host.local.json` is the override, and `capacity.json` is generated writer-ledger state. | Package documentation is not runtime proof. |
+| [`serve/delivery/README.md`](../../serve/delivery/README.md) | Tracked `host.json` is the baseline, ignored `host.local.json` is the override, and `capacity-ledger.json` is generated capacity-ledger state. | Package documentation is not runtime proof. |
 | [`serve/delivery-mcp/README.md`](../../serve/delivery-mcp/README.md) | Canonical MCP startup loads baseline plus local overrides; local settings are not synchronized through Git. | Does not define the core application object. |
 | [`setup/init.py`](../../setup/init.py) and [`test_setup_init_settings.py`](../../tests/test_setup_init_settings.py) | Setup seeds the visible baseline, preserves local overrides on rerun, and migrates the ignore rule so only `host.json` is trackable in the runtime directory. | Setup tests use temporary consumer projects. |
 | [`w-packet-building`](../../share/skills/w-packet-building/SKILL.md) | Worker guidance already requires scoped commits and clean exact proof; a commit alone does not release a claim. | Guidance cannot run after a crash or cancellation. |
@@ -81,8 +81,9 @@ current exact recovery path.
 
 `.owlbear/delivery/config.json` is tracked project policy shared by the workspace. Tracked
 `.owlbear/delivery/runtime/host.json` is the discoverable host baseline. Optional ignored
-`.owlbear/delivery/runtime/host.local.json` is a partial overlay for one machine. `capacity.json` is
-rewritten transactionally when writer custody changes and remains generated state.
+`.owlbear/delivery/runtime/host.local.json` is a partial overlay for one machine.
+`capacity-ledger.json` is rewritten transactionally when writer custody changes and remains generated
+state.
 
 The baseline contains all supported settings:
 
@@ -128,7 +129,7 @@ topology and remain out of scope.
 | --- | --- | --- |
 | Agent instructions only | Supporting follow-up | Helps normal completion but cannot run after crashes and does not release claims. |
 | Put timeout in tracked `config.json` | Reject | Makes a host-local execution policy part of shared project authority. |
-| Rename `capacity.json` into a mixed settings/ledger file | Reject | Combines configuration with generated custody state and risks ambiguous writes. |
+| Rename `capacity-ledger.json` into a mixed settings/ledger file | Reject | Combines configuration with generated custody state and risks ambiguous writes. |
 | Tracked `host.json` baseline plus ignored partial `host.local.json` overlay | **Selected** | Discoverable defaults propagate to new checkouts while host-specific changes remain local. |
 | Heartbeat/inactivity lease | Defer | Requires a new operation and cadence; no evidence yet that normal work exceeds the configured limit. |
 | Background scheduler | Reject for now | Overbuilt for a library with explicit user/orchestrator acquisition calls. |
@@ -144,7 +145,7 @@ Keep the implementation in the existing Delivery application boundary:
   existing acquisition lock.
 - Clean Planning and Builder claims use existing exact recovery. Dirty or mismatched Builders retain
   claim/custody and recovery attention.
-- `capacity.json` remains generated state, and existing explicit recovery remains available.
+- `capacity-ledger.json` remains generated state, and existing explicit recovery remains available.
 
 Confidence is high for the configuration placement and implementation boundary. Confidence is medium
 for the hard-timeout policy because no task-duration measurement exists; the 60-minute requirement is
@@ -234,6 +235,6 @@ no Cockpit or npm validation is needed because no Cockpit response or frontend c
 - Revisit Integration-repair expiry only when current code produces or depends on those claims.
 
 The final conclusion is intentionally small: tracked `host.json` makes the baseline discoverable,
-ignored partial `host.local.json` keeps host-specific overrides local, `capacity.json` remains derived
-state, the configurable 60-minute default controls the existing age-gated recovery path, and
+ignored partial `host.local.json` keeps host-specific overrides local, `capacity-ledger.json` remains
+derived state, the configurable 60-minute default controls the existing age-gated recovery path, and
 automatic recovery is reported without weakening dirty-worktree protection.

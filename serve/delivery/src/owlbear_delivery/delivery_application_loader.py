@@ -329,7 +329,11 @@ def _bootstrap_remote_state(
     paths: _DeliveryPaths,
 ) -> None:
     """Restore missing local Delivery state from remote semantic snapshots."""
-    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
     try:
         state_publisher = DeliveryStatePublisher(
             paths.repository_root,
@@ -620,7 +624,11 @@ def _compose_application(
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
 ) -> PortfolioApplication:
-    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
     try:
         coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
     except CapacityConfigurationConflictError as exc:

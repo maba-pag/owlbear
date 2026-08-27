@@ -26,7 +26,7 @@ The main public areas are:
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
-| Coordination | Per-change writers, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
+| Coordination | Per-Change writer custody under `runtime/coordination/changes`, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
 | Legacy compatibility | Typed Integration attention/recovery and `TargetRuntime` evidence remain public for historical consumers |
@@ -64,6 +64,11 @@ Cause-specific missing-coordination classification is a separate follow-up Chang
 operation inventory is also unchanged by this remediation; user-control parity remains a separate,
 explicitly user-directed follow-up.
 
+Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
+The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,
+and verification locks. Recoverable runtime transaction manifests live under
+`.owlbear/delivery/runtime/transactions/`.
+
 ## Configuration
 
 The package reads no environment variables. Canonical MCP and Cockpit startup uses the tracked
@@ -75,7 +80,7 @@ same typed configuration directly.
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
 | `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `writer_capacity` and `execution_capacity` default to `1`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; all three values must be positive integers. | Tracked baseline configuration |
 | `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
-| `.owlbear/delivery/runtime/capacity.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived writer ledger |
+| `.owlbear/delivery/runtime/capacity-ledger.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived capacity ledger |
 
 The two host capacities control different limits. `execution_capacity` is the maximum number of
 active Planner or Builder claims across the portfolio. `writer_capacity` is the maximum number of
