@@ -914,7 +914,7 @@ class PortfolioCoordinator:
         return tuple(sorted(records, key=lambda item: item.change_id))
 
     def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
-        """Atomically bind one writer and one global capacity slot."""
+        """Atomically bind one writer to a Change."""
         coordination = self.show(change_id)
         publication_expiry = coordination.publication_expiry
         if publication_expiry is not None and publication_expiry > datetime.now(UTC):
@@ -978,7 +978,7 @@ class PortfolioCoordinator:
         *,
         lock: PublicationLock | None = None,
     ) -> ChangeCoordination:
-        """OCC-replace one registered per-change record without touching capacity."""
+        """OCC-replace one registered per-change record without changing ownership."""
         existing = self.show(coordination.change_id)
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")

@@ -4038,7 +4038,7 @@ def test_delivery_loader_uses_host_execution_capacity(tmp_path: Path) -> None:
     ("content", "field"),
     [
         ("not-json\n", "host_config"),
-        ('{"schema_version": 1, "writer_capacity": 0}\n', "writer_capacity"),
+        ('{"schema_version": 1, "writer_capacity": 2}\n', "writer_capacity"),
         ('{"schema_version": 1, "execution_capacity": "3"}\n', "execution_capacity"),
         ('{"schema_version": 1, "unknown": 3}\n', "unknown"),
     ],
@@ -4059,6 +4059,9 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
     assert exc_info.value.field == field
     assert "host.json" in exc_info.value.detail
     assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
+    if field == "writer_capacity":
+        assert exc_info.value.__cause__ is not None
+        assert exc_info.value.__cause__.errors()[0]["type"] == "extra_forbidden"
 
 
 def test_delivery_loader_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
