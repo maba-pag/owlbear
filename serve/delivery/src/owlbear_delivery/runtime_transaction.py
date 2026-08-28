@@ -174,6 +174,7 @@ class RuntimeTransaction:
 
     @classmethod
     def _migrate_legacy_directory(cls, manifest_root: Path) -> None:
+        # Transitional input only; current recovery uses transactions/.
         directory = manifest_root / "transactions"
         legacy_directory = manifest_root / ".runtime-transactions"
         canonical_present = directory.exists() or directory.is_symlink()

@@ -124,6 +124,7 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "workspace_root"
         detail = "Delivery state parents must not be symlinks"
         raise _load_error(field, detail)
+    # Current startup refuses unfinished transition journals instead of treating them as authority.
     migration_journal = delivery_root / "migration.json"
     if migration_journal.exists():
         field = "runtime_root"
@@ -134,6 +135,7 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "runtime_root"
         detail = "interrupted Integration retirement must be recovered before startup"
         raise _load_error(field, detail)
+    # Current startup also rejects pre-current roots so state cannot be silently orphaned.
     for field, legacy_root in (
         ("runtime_root", repository_root / ".owlbear/target"),
         ("worktree_root", repository_root / ".owlbear/worktrees"),

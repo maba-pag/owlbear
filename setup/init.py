@@ -77,6 +77,7 @@ _REFRESHABLE_CONFIG_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
+# Cleanup vocabulary for obsolete managed rules; the reconciliation mechanism is current setup behavior.
 _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
     {
         "# Brief drafts (transient template directory)",
@@ -326,6 +327,7 @@ def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | N
     If it exists but has no owlbear marker, appends the owlbear-managed section.
     If the marker is already present, removes retired rules and adds missing current rules.
     """
+    # `retired_lines` removes obsolete managed rules while preserving user-owned rules.
     seed_content = src.read_text(encoding="utf-8")
     retired = _RETIRED_OWLBEAR_GITIGNORE_LINES if retired_lines is None else retired_lines
 

@@ -16,8 +16,10 @@ _DELIVERY_CONFIG = Path(".owlbear/delivery/config.json")
 _CHANGE_GLOB = ".owlbear/delivery/runtime/changes/*"
 _FRONTIER_GLOB = ".owlbear/delivery/runtime/changes/*/frontier.json"
 _COORDINATION_GLOB = ".owlbear/delivery/runtime/coordination/changes/*.json"
+# Keep detecting pre-rename custody so target changes cannot be hidden by an incomplete cleanup.
 _LEGACY_COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
 _PACKAGE_GLOB = ".owlbear/delivery/packages/*"
+# These roots are rejected as unsupported input; they are not current Delivery state.
 _LEGACY_DELIVERY_ROOTS = (Path(".owlbear/target"), Path(".owlbear/worktrees"))
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
 
@@ -92,6 +94,7 @@ def _delivery_config_status(root: Path) -> tuple[list[str], str | None]:
 
 
 def _legacy_delivery_blockers(root: Path) -> list[str]:
+    """Reject unsupported pre-current Delivery roots before changing target configuration."""
     blockers: list[str] = []
     if (root / ".owlbear").is_symlink() or (root / ".owlbear/delivery").is_symlink():
         blockers.append("Delivery state parents must not be symlinks")

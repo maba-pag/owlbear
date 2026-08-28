@@ -193,7 +193,7 @@ class RecoverPublicationBaseline(_WorkspaceModel):
 
 
 class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
-    """Content-addressed evidence for one explicit legacy baseline recovery."""
+    """Content-addressed evidence for one explicit recovery of an unknown baseline."""
 
     schema_version: Literal[1] = 1
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -860,18 +860,21 @@ class CapacityLedgerConflictError(CoordinationConflictError):
 
     @classmethod
     def unsafe_legacy_file(cls) -> Self:
-        """Report that the legacy ledger is not a regular file."""
+        """Report an unsafe pre-rename ledger input during startup."""
         return cls("legacy capacity ledger is unsafe")
 
 
 class PortfolioCoordinator:
     """Atomically coordinate independent per-change writers and global capacity."""
 
+    # Temporary bridge for pre-rename state; current custody uses coordination/changes and capacity-ledger.json.
     def __init__(self, state_root: Path, capacity: int) -> None:
         self._state_root = state_root
         self._coordination_root = state_root / "coordination" / "changes"
+        # Transitional input only; current custody is under coordination/changes.
         self._legacy_coordination_root = state_root / "claims" / "changes"
         self._ledger_path = state_root / "capacity-ledger.json"
+        # Transitional input only; current custody is under capacity-ledger.json.
         self._legacy_ledger_path = state_root / "capacity.json"
         self._capacity = capacity
         state_root.mkdir(parents=True, exist_ok=True)
@@ -1194,6 +1197,7 @@ class PortfolioCoordinator:
             raise CapacityLedgerConflictError from exc
 
     def _migrate_legacy_coordination(self) -> None:
+        # Remove this bridge after the runtime-path cleanup TODO is cleared.
         canonical_present = self._coordination_root.exists() or self._coordination_root.is_symlink()
         legacy_present = self._legacy_coordination_root.exists() or self._legacy_coordination_root.is_symlink()
         if canonical_present:
@@ -1221,6 +1225,7 @@ class PortfolioCoordinator:
                 raise error from exc
 
     def _migrate_legacy_ledger(self) -> None:
+        # Transitional input check only; current ledger ownership is already canonical.
         if self._ledger_path.exists():
             if self._legacy_ledger_path.exists():
                 raise CapacityLedgerConflictError.both_filenames()
