@@ -3040,8 +3040,6 @@ class PortfolioApplication:
             for candidate in self._candidates():
                 if available == 0:
                     break
-                if candidate.role == DeliveryWorkerRole.BUILDER and not self._coordinator.writer_capacity_available():
-                    continue
                 source = self._prepare_source(
                     candidate.change_id,
                     candidate.runtime,

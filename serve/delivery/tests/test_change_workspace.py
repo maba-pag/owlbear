@@ -11,9 +11,7 @@ import pytest
 
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
-    CapacityConfigurationConflictError,
     CapacityLedger,
-    CapacityLedgerConflictError,
     ChangeCoordination,
     ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
@@ -1307,7 +1305,7 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
     assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
 
 
-def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Path) -> None:
+def test_coordinator_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     ledger_path = state_root / "capacity.json"
     ledger_path.parent.mkdir(parents=True)
@@ -1319,45 +1317,12 @@ def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Pat
     PortfolioCoordinator(state_root, capacity=1)
 
     assert CapacityLedger.model_validate_json(ledger_path.read_bytes()) == CapacityLedger(
-        capacity=1,
+        capacity=4,
         change_ids=("change-a",),
     )
 
 
-@pytest.mark.parametrize("transaction_id", ["initialize-capacity", "reconfigure-capacity"])
-def test_coordinator_translates_capacity_ledger_conflict(
-    tmp_path: Path,
-    transaction_id: str,
-) -> None:
-    state_root = tmp_path / "state"
-    ledger_path = state_root / "capacity.json"
-    if transaction_id == "reconfigure-capacity":
-        state_root.mkdir(parents=True)
-        ledger_path.write_text(CapacityLedger(capacity=2).model_dump_json(), encoding="utf-8")
-
-    original_commit = PortfolioCoordinator._commit  # noqa: SLF001
-
-    def race(
-        coordinator: PortfolioCoordinator,
-        candidate_transaction_id: str,
-        participants: tuple[object, ...],
-    ) -> None:
-        if candidate_transaction_id == transaction_id:
-            ledger_path.write_text(CapacityLedger(capacity=3).model_dump_json(), encoding="utf-8")
-        original_commit(coordinator, candidate_transaction_id, participants)  # type: ignore[arg-type]
-
-    with (
-        patch.object(PortfolioCoordinator, "_commit", new=race),
-        pytest.raises(CapacityLedgerConflictError) as exc_info,
-    ):
-        PortfolioCoordinator(state_root, capacity=1)
-
-    assert isinstance(exc_info.value, CoordinationConflictError)
-    assert not isinstance(exc_info.value, CapacityConfigurationConflictError)
-    assert str(exc_info.value) == "host capacity ledger changed concurrently"
-
-
-def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> None:
+def test_coordinator_does_not_validate_legacy_capacity_ledger(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     ledger_path = state_root / "capacity.json"
     ledger_path.parent.mkdir(parents=True)
@@ -1366,8 +1331,7 @@ def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    with pytest.raises(CoordinationConflictError, match="active writers exceed configured writer capacity"):
-        PortfolioCoordinator(state_root, capacity=1)
+    PortfolioCoordinator(state_root, capacity=1)
 
     assert CapacityLedger.model_validate_json(ledger_path.read_bytes()).capacity == 4
 

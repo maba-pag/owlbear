@@ -805,7 +805,7 @@ class ChangeTargetSyncConflictError(RuntimeError):
 
 
 class CapacityLedger(_WorkspaceModel):
-    """Global writer capacity without serializing independent changes."""
+    """Historical writer-capacity payload retained for legacy migration."""
 
     schema_version: Literal[1] = 1
     capacity: int = Field(gt=0)
@@ -833,38 +833,20 @@ class IntegrationContext(_WorkspaceModel):
 
 
 class CoordinationConflictError(RuntimeError):
-    """A per-change writer or global capacity slot is unavailable."""
+    """A per-change writer slot is unavailable."""
 
     code = "ERR_TARGET_COORDINATION_CONFLICT"
 
 
-class CapacityConfigurationConflictError(CoordinationConflictError):
-    """Configured writer capacity is below the active holder count."""
-
-    def __init__(self, active_holders: int, configured_capacity: int) -> None:
-        self.active_holders = active_holders
-        self.configured_capacity = configured_capacity
-        super().__init__(f"active writers exceed configured writer capacity: {active_holders} > {configured_capacity}")
-
-
-class CapacityLedgerConflictError(CoordinationConflictError):
-    """The host capacity ledger changed during startup reconfiguration."""
-
-    def __init__(self) -> None:
-        super().__init__("host capacity ledger changed concurrently")
-
-
 class PortfolioCoordinator:
-    """Atomically coordinate independent per-change writers and global capacity."""
+    """Atomically coordinate independent per-change writers."""
 
-    def __init__(self, state_root: Path, capacity: int) -> None:
+    def __init__(self, state_root: Path, capacity: int | None = None) -> None:
+        del capacity
         self._state_root = state_root
         self._coordination_root = state_root / "claims" / "changes"
-        self._ledger_path = state_root / "capacity.json"
-        self._capacity = capacity
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
-        self._initialize_ledger()
 
     def acquisition_lock(self) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""
@@ -885,11 +867,6 @@ class PortfolioCoordinator:
                 yield lock
             finally:
                 lock.close()
-
-    def writer_capacity_available(self) -> bool:
-        """Return whether another Build writer can be reserved."""
-        ledger = CapacityLedger.model_validate_json(self._ledger_path.read_bytes())
-        return len(ledger.change_ids) < ledger.capacity
 
     def register(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """Create one replayable per-change coordination record."""
@@ -947,8 +924,6 @@ class PortfolioCoordinator:
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
-        ledger_bytes = self._ledger_path.read_bytes()
-        ledger = CapacityLedger.model_validate_json(ledger_bytes)
         publication_expiry = coordination.publication_expiry
         publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
         if (
@@ -956,51 +931,40 @@ class PortfolioCoordinator:
             or publication_active
             or coordination.worktree_cleanup_intent is not None
             or coordination.worktree_cleanup is not None
-            or change_id in ledger.change_ids
         ):
             _coordination_conflict("change already has an active writer")
-        if len(ledger.change_ids) >= ledger.capacity:
-            _coordination_conflict("global writer capacity is exhausted")
         claimed = coordination.model_copy(
             update={
                 "writer": writer,
                 "publication_lease": None,
             }
         )
-        occupied = ledger.model_copy(update={"change_ids": tuple(sorted((*ledger.change_ids, change_id)))})
-        participants = (
-            _replacement(self._state_root, coordination_path, coordination_bytes, claimed),
-            _replacement(self._state_root, self._ledger_path, ledger_bytes, occupied),
-        )
         try:
-            self._commit(f"acquire-{change_id}-{writer.claim_id}", participants)
+            self._commit(
+                f"acquire-{change_id}-{writer.claim_id}",
+                (_replacement(self._state_root, coordination_path, coordination_bytes, claimed),),
+            )
         except TransactionConflictError as exc:
             msg = "writer coordination changed concurrently"
             raise CoordinationConflictError(msg) from exc
         return claimed
 
     def release(self, change_id: str, claim_id: str) -> ChangeCoordination:
-        """Release one exact writer and its capacity slot."""
+        """Release one exact writer."""
         for _attempt in range(_OCC_RETRY_LIMIT):
             coordination_path = self._coordination_path(change_id)
             coordination_bytes = coordination_path.read_bytes()
             coordination = ChangeCoordination.model_validate_json(coordination_bytes)
-            ledger_bytes = self._ledger_path.read_bytes()
-            ledger = CapacityLedger.model_validate_json(ledger_bytes)
-            if coordination.writer is None and change_id not in ledger.change_ids:
+            if coordination.writer is None:
                 return coordination
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
                 _coordination_conflict("writer claim does not own the change workspace")
             released = coordination.model_copy(update={"writer": None})
-            available = ledger.model_copy(
-                update={"change_ids": tuple(item for item in ledger.change_ids if item != change_id)}
-            )
-            participants = (
-                _replacement(self._state_root, coordination_path, coordination_bytes, released),
-                _replacement(self._state_root, self._ledger_path, ledger_bytes, available),
-            )
             try:
-                self._commit(f"release-{change_id}-{claim_id}", participants)
+                self._commit(
+                    f"release-{change_id}-{claim_id}",
+                    (_replacement(self._state_root, coordination_path, coordination_bytes, released),),
+                )
             except TransactionConflictError:
                 continue
             return released
@@ -1147,37 +1111,6 @@ class PortfolioCoordinator:
     @staticmethod
     def _publication_timestamp(value: str) -> datetime:
         return _publication_timestamp(value)
-
-    def _initialize_ledger(self) -> None:
-        initial = CapacityLedger(capacity=self._capacity)
-        if self._ledger_path.exists():
-            existing_bytes = self._ledger_path.read_bytes()
-            existing = CapacityLedger.model_validate_json(existing_bytes)
-            if existing.capacity != self._capacity:
-                if len(existing.change_ids) > self._capacity:
-                    raise CapacityConfigurationConflictError(len(existing.change_ids), self._capacity)
-                updated = existing.model_copy(update={"capacity": self._capacity})
-                try:
-                    self._commit(
-                        "reconfigure-capacity",
-                        (_replacement(self._state_root, self._ledger_path, existing_bytes, updated),),
-                    )
-                except TransactionConflictError as exc:
-                    raise CapacityLedgerConflictError from exc
-            return
-        try:
-            self._commit(
-                "initialize-capacity",
-                (
-                    TransactionParticipant(
-                        self._state_root,
-                        self._ledger_path.relative_to(self._state_root),
-                        _model_content(initial),
-                    ),
-                ),
-            )
-        except TransactionConflictError as exc:
-            raise CapacityLedgerConflictError from exc
 
     def _coordination_path(self, change_id: str) -> Path:
         if not change_id or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in change_id):

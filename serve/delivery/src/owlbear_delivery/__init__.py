@@ -19,9 +19,7 @@ from owlbear_delivery.change_publication import (
     SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
-    CapacityConfigurationConflictError,
     CapacityLedger,
-    CapacityLedgerConflictError,
     ChangeCoordination,
     ChangeDesignPackageSnapshotIntent,
     ChangeDesignPackageSnapshotReceipt,
@@ -344,9 +342,7 @@ __all__ = [
     "ArbitrateTargetAttemptRequest",
     "AuthorityStatus",
     "BlockDelivery",
-    "CapacityConfigurationConflictError",
     "CapacityLedger",
-    "CapacityLedgerConflictError",
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
     "ChangeBranchSupersessionReceipt",
