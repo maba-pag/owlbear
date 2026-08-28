@@ -17,6 +17,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionCode,
     PublicationBaselineRecoveryReceipt,
 )
+from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationHistory,
@@ -40,7 +41,6 @@ from owlbear_delivery.portfolio_application import (
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
 )
-from owlbear_delivery.target_admission import DeliveryAdmissionRequest
 
 
 class _TargetProtocolModel(BaseModel):

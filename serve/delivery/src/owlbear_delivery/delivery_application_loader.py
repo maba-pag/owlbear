@@ -23,6 +23,7 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
 )
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
+from owlbear_delivery.delivery_admission import DeliveryAuthorityRegistry
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     DeliveryDiscoveryRootError,
@@ -47,7 +48,6 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationDependencies,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
-from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
 
 if TYPE_CHECKING:
     from owlbear_delivery.publication_provider import PublicationProvider

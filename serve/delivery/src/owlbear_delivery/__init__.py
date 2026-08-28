@@ -65,6 +65,16 @@ from owlbear_delivery.completed_history import (
     LegacyCompletedChangeRecord,
     ReceiptCompletedChangeRecord,
 )
+from owlbear_delivery.delivery_admission import (
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionError,
+    DeliveryAdmissionReceipt,
+    DeliveryAdmissionRequest,
+    DeliveryAdmissionResult,
+    DeliveryAdmissionValidationError,
+    DeliveryAuthorityRegistry,
+    RevisionCarryForward,
+)
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryHostConfig,
@@ -238,13 +248,6 @@ from owlbear_delivery.publication_provider import (
     failed_required_publication_checks,
 )
 from owlbear_delivery.target_admission import (
-    DeliveryAdmissionConflictError,
-    DeliveryAdmissionReceipt,
-    DeliveryAdmissionRequest,
-    DeliveryAdmissionResult,
-    DeliveryAdmissionValidationError,
-    DeliveryAuthorityRegistry,
-    RevisionCarryForward,
     TargetAdmissionAssessment,
     TargetAdmissionCandidate,
     TargetAdmissionConflictError,
@@ -379,6 +382,7 @@ __all__ = [
     "DeliveryAcquisitionResult",
     "DeliveryActiveClaim",
     "DeliveryAdmissionConflictError",
+    "DeliveryAdmissionError",
     "DeliveryAdmissionReceipt",
     "DeliveryAdmissionRequest",
     "DeliveryAdmissionResult",

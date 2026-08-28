@@ -13,6 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import (
+    DeliveryAdmissionConflictError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
@@ -742,6 +743,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
         )
     )
     cases = (
+        (
+            "admit_delivery_change",
+            DeliveryAdmissionConflictError("active claims block Delivery authority revision"),
+            "ERR_DELIVERY_ADMISSION_CONFLICT",
+            False,
+        ),
         (
             "transition_delivery",
             DeliveryRuntimeReferenceError("outcome is absent"),

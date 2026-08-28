@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import DeliveryFrontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:

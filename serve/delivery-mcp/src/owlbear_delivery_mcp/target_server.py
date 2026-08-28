@@ -27,6 +27,7 @@ from owlbear_delivery.change_workspace import (
     PublicationBaselineUnavailableError,
 )
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
+from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
@@ -777,6 +778,7 @@ _NAMED_DELIVERY_ERRORS = (
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DesignPackageConflictError,
+    DeliveryAdmissionError,
     PortfolioApplicationError,
     TargetAdmissionError,
     TransactionConflictError,

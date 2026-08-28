@@ -50,6 +50,7 @@ from owlbear_delivery.change_workspace import (
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
 )
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryChangeObservation,
     DeliveryDiscoveryRootError,
@@ -139,7 +140,6 @@ from owlbear_delivery.publication_provider import (
     failed_required_publication_checks,
 )
 from owlbear_delivery.storage_io import locked_roots
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -167,17 +167,17 @@ if TYPE_CHECKING:
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
+    from owlbear_delivery.delivery_admission import (
+        DeliveryAdmissionRequest,
+        DeliveryAdmissionResult,
+        DeliveryAuthorityRegistry,
+    )
     from owlbear_delivery.delivery_state import DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
-    )
-    from owlbear_delivery.target_admission import (
-        DeliveryAdmissionRequest,
-        DeliveryAdmissionResult,
-        DeliveryAuthorityRegistry,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
