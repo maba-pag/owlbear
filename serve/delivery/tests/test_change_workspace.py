@@ -86,7 +86,7 @@ def _identity(change_id: str) -> WriterIdentity:
 
 
 def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "change-a"))
     coordinator.register(_coordination(tmp_path, "change-b"))
     first = coordinator.acquire(
@@ -108,7 +108,7 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
 
 
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "publish-change"))
     now = datetime.now(UTC)
 
@@ -144,7 +144,7 @@ def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path:
 
 
 def test_publication_locks_allow_independent_changes_concurrently(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "change-a"))
     coordinator.register(_coordination(tmp_path, "change-b"))
 
@@ -156,7 +156,7 @@ def test_publication_locks_allow_independent_changes_concurrently(tmp_path: Path
 
 
 def test_publication_lease_rejects_concurrent_owner_and_allows_expired_takeover(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "lease-change"))
     with coordinator.publication_lock("lease-change") as lock:
         coordinator.reserve_publication(
@@ -202,7 +202,7 @@ def test_publication_lease_rejects_concurrent_owner_and_allows_expired_takeover(
 
 
 def test_writer_acquisition_recovers_expired_publication_lease(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "expired-change"))
     with coordinator.publication_lock("expired-change") as lock:
         coordinator.reserve_publication(
@@ -238,7 +238,7 @@ def test_retired_scalar_publication_reservation_loads_as_abandoned(tmp_path: Pat
 
 
 def test_publication_lease_duration_is_bounded(tmp_path: Path) -> None:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "bounded-change"))
 
     with (
@@ -293,7 +293,7 @@ def _repository(tmp_path: Path, *, target: str = "release") -> tuple[Path, str]:
 
 
 def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remote: str = "origin"):
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target, remote=remote)
     return coordinator, manager
 
@@ -642,7 +642,7 @@ def test_repository_automation_paths_reports_changed_workflow_and_action_files(t
 
 def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=1)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
     assert coordinator.list_registered() == ()
     assert manager.list_retained() == ()
@@ -1270,7 +1270,7 @@ def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) ->
 def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     state_root = tmp_path / "state"
-    coordinator = PortfolioCoordinator(state_root, capacity=2)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
     coordination = manager.ensure("recovered-change")
     reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
@@ -1299,7 +1299,9 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
     with pytest.raises(RuntimeError, match="injected"):
         RuntimeTransaction(state_root, "pending-portfolio", (participant,)).commit(failure=interrupt)
 
-    PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
+    with coordinator.acquisition_lock():
+        coordinator.recover_pending_transactions()
 
     assert (state_root / "target-runtime/recovered.json").read_bytes() == b"{}\n"
     assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
@@ -1314,7 +1316,7 @@ def test_coordinator_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    PortfolioCoordinator(state_root, capacity=1)
+    PortfolioCoordinator(state_root)
 
     assert CapacityLedger.model_validate_json(ledger_path.read_bytes()) == CapacityLedger(
         capacity=4,
@@ -1331,7 +1333,7 @@ def test_coordinator_does_not_validate_legacy_capacity_ledger(tmp_path: Path) ->
         encoding="utf-8",
     )
 
-    PortfolioCoordinator(state_root, capacity=1)
+    PortfolioCoordinator(state_root)
 
     assert CapacityLedger.model_validate_json(ledger_path.read_bytes()).capacity == 4
 

@@ -110,7 +110,7 @@ def _runtime(
     contract: DeliveryContract,
 ) -> tuple[DeliveryRuntime, ChangeWorkspaceManager, Path]:
     state_root = tmp_path / "state"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     coordination = manager.ensure(change_id)
     frontier_path = state_root / "changes" / change_id / "frontier.json"
@@ -289,7 +289,7 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     ).encode()
     package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
     package = package_store.read_verified(change_id)
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     coordination = manager.ensure(change_id)
     frontier_path = state_root / "changes" / change_id / "frontier.json"

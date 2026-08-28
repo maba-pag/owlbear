@@ -841,12 +841,14 @@ class CoordinationConflictError(RuntimeError):
 class PortfolioCoordinator:
     """Atomically coordinate independent per-change writers."""
 
-    def __init__(self, state_root: Path, capacity: int | None = None) -> None:
-        del capacity
+    def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
         self._coordination_root = state_root / "claims" / "changes"
         state_root.mkdir(parents=True, exist_ok=True)
-        RuntimeTransaction.recover_all(state_root)
+
+    def recover_pending_transactions(self) -> None:
+        """Complete pending coordinator transactions before reading ownership state."""
+        RuntimeTransaction.recover_all(self._state_root)
 
     def acquisition_lock(self) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""

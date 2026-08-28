@@ -75,7 +75,7 @@ def _repository(tmp_path: Path) -> tuple[Path, Path, str]:
 
 
 def _change_workspace(tmp_path: Path, repository: Path) -> tuple[PortfolioCoordinator, ChangeWorkspaceManager]:
-    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator = PortfolioCoordinator(tmp_path / "state")
     manager = ChangeWorkspaceManager(
         repository,
         tmp_path / "worktrees",

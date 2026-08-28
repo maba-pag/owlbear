@@ -8,6 +8,8 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -19,6 +21,7 @@ from unittest.mock import Mock, patch, sentinel
 import pytest
 
 from owlbear_delivery import (
+    ActivateDeliveryClaim,
     AdministrativeDeliveryMove,
     AdvanceDelivery,
     BlockDelivery,
@@ -40,6 +43,7 @@ from owlbear_delivery import (
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceWaitingError,
+    DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
@@ -599,7 +603,7 @@ def _reopen_portfolio(
 ) -> tuple[PortfolioApplication, PortfolioCoordinator, ChangeWorkspaceManager]:
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
@@ -624,6 +628,296 @@ def _reopen_portfolio(
         ),
     )
     return application, coordinator, manager
+
+
+def _shared_acquisition_command() -> str:
+    return r"""
+import json
+import sys
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+from owlbear_delivery import (
+    ChangeWorkspaceManager,
+    CompletedHistoryCatalog,
+    DeliveryAuthorityRegistry,
+    DeliveryRolePolicy,
+    DeliveryRuntime,
+    DeliveryWorkerRole,
+    DesignPackageStore,
+    PortfolioApplication,
+    PortfolioApplicationConfig,
+    PortfolioApplicationDependencies,
+    PortfolioCoordinator,
+)
+from owlbear_delivery.delivery_contract_discovery import discover_persisted_changes
+
+state_root, repository, package_root, worktree_root, barrier_root = map(Path, sys.argv[1:6])
+worker_id = sys.argv[6]
+coordinator = PortfolioCoordinator(state_root)
+workspace_manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main")
+package_store = DesignPackageStore(package_root, repository)
+authority_registry = DeliveryAuthorityRegistry(state_root, package_store, integration_target="main")
+observations = discover_persisted_changes(state_root)
+runtimes = {
+    observation.change_id: DeliveryRuntime(state_root, observation.contract, workspace_manager=workspace_manager)
+    for observation in observations
+    if observation.contract is not None
+}
+policies = (
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.PLANNER,
+        worker_agent="planner",
+        reviewer_agent="planner-challenger",
+    ),
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.BUILDER,
+        worker_agent="builder",
+        reviewer_agent="build-reviewer",
+    ),
+)
+application = PortfolioApplication(
+    runtimes,
+    PortfolioApplicationDependencies(
+        target_root=state_root,
+        package_store=package_store,
+        authority_registry=authority_registry,
+        coordinator=coordinator,
+        workspace_manager=workspace_manager,
+        completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+    ),
+    PortfolioApplicationConfig(package_root=package_root, execution_capacity=3, role_policies=policies),
+)
+(barrier_root / f"ready-{worker_id}").write_text("ready", encoding="ascii")
+while not (barrier_root / "go").exists():
+    time.sleep(0.01)
+original_lock = coordinator.acquisition_lock
+original_reconcile = application._reconcile_runtimes
+lock_marker = barrier_root / f"lock-{worker_id}"
+outside_marker = barrier_root / f"outside-{worker_id}"
+
+@contextmanager
+def observed_lock():
+    with original_lock():
+        lock_marker.write_text("locked", encoding="ascii")
+        try:
+            yield
+        finally:
+            active = [
+                claim
+                for observation in discover_persisted_changes(state_root)
+                if observation.frontier is not None
+                for binding in observation.frontier.bindings
+                for claim in (binding.active_claim,)
+                if claim is not None
+            ]
+            (barrier_root / f"inside-{worker_id}.json").write_text(
+                json.dumps({"count": len(active), "roles": sorted(claim.worker_role.value for claim in active)}),
+                encoding="utf-8",
+            )
+            lock_marker.unlink(missing_ok=True)
+
+def reconcile():
+    location = "inside" if lock_marker.exists() else "outside"
+    (barrier_root / f"reconcile-{worker_id}-{location}").write_text("reconciled", encoding="ascii")
+    return original_reconcile()
+
+coordinator.acquisition_lock = observed_lock
+application._reconcile_runtimes = reconcile
+result = application.acquire_frontier_work()
+(barrier_root / f"result-{worker_id}.json").write_text(
+    json.dumps({"launches": len(result.launch_packages)}),
+    encoding="utf-8",
+)
+"""
+
+
+def _wait_for_files(paths: tuple[Path, ...], timeout: float = 10) -> None:
+    deadline = time.monotonic() + timeout
+    while not all(path.exists() for path in paths):
+        if time.monotonic() >= deadline:
+            message = f"timed out waiting for {paths}"
+            raise TimeoutError(message)
+        time.sleep(0.01)
+
+
+def test_shared_acquisition_serializes_reconciliation_and_bounds_claims(tmp_path: Path) -> None:
+    _application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.IMPLEMENTATION,
+            "change-c": DeliveryStage.IMPLEMENTATION,
+        },
+        execution_capacity=3,
+    )
+    repository = tmp_path / "repository"
+    package_root = tmp_path / "packages"
+    worktree_root = tmp_path / "worktrees"
+    barrier_root = tmp_path / "acquisition-barrier"
+    barrier_root.mkdir()
+    processes = [
+        subprocess.Popen(  # noqa: S603
+            (
+                sys.executable,
+                "-c",
+                _shared_acquisition_command(),
+                str(state_root),
+                str(repository),
+                str(package_root),
+                str(worktree_root),
+                str(barrier_root),
+                worker_id,
+            ),
+            cwd=repository,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for worker_id in ("one", "two")
+    ]
+    outputs: list[tuple[str, str]] = []
+    try:
+        _wait_for_files(tuple(barrier_root / f"ready-{worker_id}" for worker_id in ("one", "two")))
+        (barrier_root / "go").write_text("go", encoding="ascii")
+        outputs = [process.communicate(timeout=30) for process in processes]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            if process.returncode is None:
+                process.communicate()
+
+    for process, (_stdout, stderr) in zip(processes, outputs, strict=False):
+        assert process.returncode == 0, stderr
+    assert all((barrier_root / f"reconcile-{worker_id}-inside").is_file() for worker_id in ("one", "two"))
+    assert not list(barrier_root.glob("reconcile-*-outside"))
+    inside = [
+        json.loads((barrier_root / f"inside-{worker_id}.json").read_text(encoding="utf-8"))
+        for worker_id in ("one", "two")
+    ]
+    assert all(item["count"] <= 3 for item in inside)
+    launches = [
+        json.loads((barrier_root / f"result-{worker_id}.json").read_text(encoding="utf-8"))["launches"]
+        for worker_id in ("one", "two")
+    ]
+    assert sorted(launches) == [0, 3]
+    active_claims = [
+        binding.active_claim
+        for observation in discover_persisted_changes(state_root)
+        if observation.frontier is not None
+        for binding in observation.frontier.bindings
+        if binding.active_claim is not None
+    ]
+    assert len(active_claims) == 3
+    assert {claim.worker_role for claim in active_claims} == {
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+    }
+
+
+def test_acquisition_returns_preclaim_attention_and_refreshes_snapshot_cache(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.COMPLETED,
+        },
+        execution_capacity=1,
+    )
+    completed = coordinator.show("change-b")
+    original_activate = application._activate_candidate
+    reconciliation = Mock(wraps=application._reconcile_runtimes)
+
+    def activate(candidate, source):
+        launch = original_activate(candidate, source)
+        _publish_merge_conflict_attention(
+            runtimes,
+            state_root,
+            "change-b",
+            completed.last_reviewed_commit,
+            completed.target_head,
+        )
+        return launch
+
+    with (
+        patch.object(application, "_activate_candidate", side_effect=activate),
+        patch.object(application, "_reconcile_runtimes", new=reconciliation),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a",)
+    assert acquired.integration_attention == ()
+    assert reconciliation.call_count == 1
+    assert application._runtime_snapshots["change-b"].frontier.integration_attention is not None
+
+
+def test_acquisition_charges_noncomposable_change_from_persisted_claims(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+        },
+        execution_capacity=1,
+    )
+    _admit_discovery_change(application, "blocked-change")
+    blocked_runtime = runtimes.get("blocked-change", application._runtimes["blocked-change"])
+    claim = application._new_claim(DeliveryWorkerRole.PLANNER, None)
+    blocked_runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim=claim))
+    (state_root / "changes/blocked-change/contract.json").unlink()
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == ()
+    observation = next(item for item in application._discovered_changes.values() if item.change_id == "blocked-change")
+    assert observation.frontier is not None
+    assert sum(binding.active_claim is not None for binding in observation.frontier.bindings) == 1
+    assert application._runtime_reconciliation_errors["blocked-change"]
+
+
+def test_acquisition_uses_maximum_observed_occupancy_once_per_change(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=3,
+    )
+    claims = tuple(
+        DeliveryActiveClaim(
+            attempt_id=f"attempt-{index}",
+            claim_id=f"claim-{index}",
+            owner_id=f"owner-{index}",
+            process_id=f"process-{index}",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.PLANNER,
+        )
+        for index in range(3)
+    )
+    invalid_frontier = DeliveryFrontier(
+        bindings=tuple(
+            OutcomeAuthorityBinding(
+                outcome_id=f"OUT-{index + 1:03}",
+                plan_scope_id=f"SCOPE-{index + 1:03}",
+                active_claim=claim,
+            )
+            for index, claim in enumerate(claims)
+        )
+    )
+    (state_root / "changes/change-a/frontier.json").write_bytes(_canonical(invalid_frontier))
+
+    with patch.object(
+        runtimes["change-a"],
+        "active_claims",
+        return_value=(("OUT-001", claims[0]), ("OUT-002", claims[1])),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert application._execution_occupancy() == 3
 
 
 def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path: Path) -> None:
@@ -4052,7 +4346,7 @@ dependencies: []
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
-    coordinator = PortfolioCoordinator(runtime_root, capacity=1)
+    coordinator = PortfolioCoordinator(runtime_root)
     manager = ChangeWorkspaceManager(
         repository,
         repository / ".owlbear/delivery/worktrees",
