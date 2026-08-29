@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from mcp import Client
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
@@ -522,6 +522,24 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
     assert "integration_target" not in tools["resolve_target_sync_conflict"].output_schema["properties"]
 
 
+def test_stale_writer_capacity_fails_with_extra_forbidden_cause(tmp_path: Path) -> None:
+    content = _config()
+    content["writer_capacity"] = 1
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_config(path)
+
+    diagnostic = exc_info.value
+    assert diagnostic.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert diagnostic.field == "writer_capacity"
+    assert diagnostic.retry_safe is False
+    assert isinstance(diagnostic.__cause__, ValidationError)
+    assert diagnostic.__cause__.errors()[0]["type"] == "extra_forbidden"
+    assert not (tmp_path / "target").exists()
+
+
 @pytest.mark.asyncio
 async def test_external_head_adoption_tool_has_exact_contract() -> None:
     application = _PublicationApplication()
@@ -743,7 +761,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (repository / ".owlbear/delivery/runtime/capacity.json").is_file()
+        assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()  # noqa: SLF001
