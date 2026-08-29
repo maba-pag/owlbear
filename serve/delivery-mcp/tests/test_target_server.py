@@ -522,22 +522,33 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
     assert "integration_target" not in tools["resolve_target_sync_conflict"].output_schema["properties"]
 
 
-def test_stale_writer_capacity_fails_with_extra_forbidden_cause(tmp_path: Path) -> None:
-    content = _config()
-    content["writer_capacity"] = 1
-    path = tmp_path / "delivery.json"
-    _write_config(path, content)
+@pytest.mark.asyncio
+async def test_stale_writer_capacity_fails_with_extra_forbidden_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    config_path = repository / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    _write_config(config_path, _config())
+    host_path = repository / ".owlbear/delivery/runtime/host.json"
+    host_path.parent.mkdir(parents=True)
+    host_path.write_text('{"schema_version": 1, "writer_capacity": 1}', encoding="utf-8")
+    monkeypatch.chdir(repository)
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
-        load_delivery_config(path)
+        async with app_lifespan(mcp):
+            pass
 
     diagnostic = exc_info.value
     assert diagnostic.code == "ERR_DELIVERY_STARTUP_INVALID"
     assert diagnostic.field == "writer_capacity"
     assert diagnostic.retry_safe is False
-    assert isinstance(diagnostic.__cause__, ValidationError)
-    assert diagnostic.__cause__.errors()[0]["type"] == "extra_forbidden"
-    assert not (tmp_path / "target").exists()
+    assert "host.json" in diagnostic.detail
+    assert isinstance(diagnostic.__cause__, Exception)
+    assert isinstance(diagnostic.__cause__.__cause__, ValidationError)
+    assert diagnostic.__cause__.__cause__.errors()[0]["type"] == "extra_forbidden"
+    assert not (repository / ".owlbear/delivery/target").exists()
 
 
 @pytest.mark.asyncio
