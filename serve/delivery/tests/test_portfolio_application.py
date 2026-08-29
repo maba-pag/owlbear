@@ -5355,9 +5355,9 @@ def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_pat
     assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
 
 
-def test_acquisition_retains_expired_dirty_builder_claim_and_custody(tmp_path: Path) -> None:
+def test_acquisition_recovers_expired_dirty_builder_claim_and_relaunches(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
-    application, runtimes, coordinator, _state_root = _portfolio(
+    application, _runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
         clock=lambda: now[0],
@@ -5369,15 +5369,19 @@ def test_acquisition_retains_expired_dirty_builder_claim_and_custody(tmp_path: P
     now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
-    assert recovered.launch_packages == ()
-    assert len(recovered.failures) == 1
-    failure = recovered.failures[0]
-    assert failure.attempt_id == first.claim.attempt_id
-    assert failure.claim_id == first.claim.claim_id
-    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
-    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is not None
-    assert coordinator.show("change-a").writer == first.writer
-    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+    assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    recovery = recovered.recoveries[0]
+    assert recovery.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovery.quarantine_commit is not None
+    assert recovery.quarantine_ref == f"refs/owlbear/quarantine/change-a/{first.claim.attempt_id}"
+    assert _git(first.worktree_path, "rev-parse", recovery.quarantine_ref) == recovery.quarantine_commit
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert replacement.writer is not None
+    assert coordinator.show("change-a").writer == replacement.writer
+    assert _git(first.worktree_path, "status", "--porcelain") == ""
+    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
 
 
 def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_path: Path) -> None:
@@ -5640,7 +5644,7 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
     assert ledger.change_ids == ()
 
 
-def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path: Path) -> None:
+def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -5650,42 +5654,6 @@ def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path
     product.write_text("uncommitted attempt\n", encoding="utf-8")
     branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
 
-    retained = application.recover_claim(
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert retained.attention is not None
-    assert retained.attention.custody_retained
-    assert retained.attention.branch_head == branch_head
-    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
-    assert runtimes["change-a"].active_claims()[0][1] == package.claim
-    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention == retained.attention
-    assert coordinator.show("change-a").writer == package.writer
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
-
-
-def test_cleaned_build_recovery_clears_attention_and_relaunches(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
-    )
-    package = application.acquire_frontier_work().launch_packages[0]
-    dirty_file = package.worktree_path / "uncommitted.txt"
-    dirty_file.write_text("preserve me\n", encoding="utf-8")
-    retained = application.recover_claim(
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-
-    dirty_file.unlink()
     recovered = application.recover_claim(
         package.change_id,
         package.outcome_id,
@@ -5694,11 +5662,145 @@ def test_cleaned_build_recovery_clears_attention_and_relaunches(tmp_path: Path) 
     )
 
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit is not None
+    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{package.claim.attempt_id}"
+    assert _git(package.worktree_path, "rev-parse", recovered.quarantine_ref) == recovered.quarantine_commit
+    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
+    assert ledger.change_ids == ()
+    assert _git(package.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted attempt"
+    assert product.read_text(encoding="utf-8") == "baseline\n"
+    relaunched = application.acquire_frontier_work().launch_packages[0]
+    assert relaunched.claim.claim_id != package.claim.claim_id
+    assert relaunched.writer is not None
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == branch_head
+
+
+def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    dirty_file = package.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+    with (
+        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after cleanup")),
+        pytest.raises(RuntimeError, match="injected after cleanup"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    interrupted = coordinator.show("change-a")
+    quarantine = interrupted.dirty_worktree_quarantine
+    assert quarantine is not None
+    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer is None
+    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == ()
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit == quarantine.quarantine_commit
+    assert recovered.quarantine_ref == quarantine.quarantine_ref
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
     relaunched = application.acquire_frontier_work().launch_packages[0]
     assert relaunched.claim.claim_id != package.claim.claim_id
     assert relaunched.writer is not None
+
+
+def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    worktree = package.worktree_path
+    (worktree / "product.txt").write_text("attempt\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "attempt commit")
+    rejected = _git(worktree, "rev-parse", "HEAD")
+    (worktree / "uncommitted.bin").write_bytes(b"preserve\x00\xff")
+
+    with (
+        patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected before release")),
+        pytest.raises(CoordinationConflictError, match="injected before release"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    interrupted = coordinator.show("change-a")
+    quarantine = interrupted.dirty_worktree_quarantine
+    assert quarantine is not None
+    assert quarantine.base_head == rejected
+    assert interrupted.writer == package.writer
+    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit == quarantine.quarantine_commit
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == ()
+
+
+def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    dirty_file = package.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    with patch.object(
+        application._workspace_manager,
+        "quarantine_dirty_worktree",
+        side_effect=RuntimeError("injected preservation failure"),
+    ):
+        retained = application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
+    assert retained.attention is not None
+    assert retained.attention.custody_retained
+    assert "injected preservation failure" in retained.attention.reason
+    assert dirty_file.read_bytes() == b"preserve\x00\xff"
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
+    assert coordinator.show("change-a").dirty_worktree_quarantine is None
+    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == (
+        "change-a",
+    )
 
 
 def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path: Path) -> None:

@@ -164,17 +164,17 @@ Use only an existing operation whose contract owns the selected result:
   retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
-- dirty Builder claim recovery: when current Delivery evidence retains an active claim with
-  `recovery_attention` for uncommitted or otherwise ambiguous worktree state, treat the condition as
-  a user-owned preservation decision. Distinguish preserving the changes for a successor, adopting
-  compatible work into the current task, and intentional discard. The exact `recover_claim` operation
-  can complete only after the managed worktree is clean and the same attempt and claim identities are
-  re-read; run it again after that user-owned cleanup or WIP handoff. Do not call
-  `recover_change_worktree` while the writer is active, and do not use a dirty `retry` transition as a
-  cleanup request.
+- dirty Builder claim recovery: call the exact `recover_claim` operation with the supplied change,
+  outcome, attempt, and claim identities. Delivery preserves uncommitted tracked, staged, deleted,
+  renamed, and untracked non-ignored bytes in an isolated quarantine ref, verifies the evidence,
+  resets and cleans the managed worktree without removing ignored environments, releases stale
+  custody, and allows successor acquisition. Do not inspect, classify, adopt, discard, or commit
+  dirty files on the user's behalf. If recovery returns `recovered`, report the quarantine evidence
+  and continue the owning workflow. If it returns `attention`, report the machine-owned preservation
+  or custody failure and its retry condition; do not turn it into a Git decision for the user.
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
   its attempt and claim identities. A recovery result of `attention` is not recovery; report the
-  retained claim, custody, and exact next cleanup decision.
+  retained claim, custody, and machine-owned retry condition without performing Git cleanup.
 - retained Integration repair attention: preserve the existing
   `show_integration_attention(change_id)` and `recover_integration_repair_claim(change_id,
   attempt_id, claim_id)` route. Do not use Change disposition resolution for an Integration repair

@@ -26,10 +26,12 @@ acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
-typed `integration_attention`, and acquisition failures. Active claims remain occupied; an
-interrupted claim is recovered only through its exact recovery operation after a failed dispatch.
-Report Integration and recovery attention unchanged. Do not filter
-for capacity, infer readiness, create identities, or reserve writer custody.
+typed `integration_attention`, and acquisition failures. Active claims remain occupied until the
+exact recovery operation completes. `recover_claim` automatically preserves dirty Builder bytes in
+an isolated quarantine ref, cleans the managed worktree, releases stale custody, and permits the
+next acquisition; it returns attention only when preservation or exact custody verification fails.
+Report the typed result unchanged. Do not filter for capacity, infer readiness, create identities,
+or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
@@ -49,6 +51,11 @@ report it without interpreting Git, liveness, or custody. An acquisition failure
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
 attention and is not recoverable by Orchestrator. Do not report a recovery operation as unavailable
 unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
+
+When exact recovery returns `recovered`, discard the failed launch and continue with the next
+acquisition cycle; do not inspect or classify the quarantined files. When it returns `attention`,
+report the returned reason and retry condition as machine-owned evidence. Do not ask the user to
+choose which dirty files to keep, discard, adopt, or commit.
 
 ## Step 3 - Forward One Worker Transition
 

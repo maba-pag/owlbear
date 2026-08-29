@@ -735,6 +735,183 @@ def test_restart_refuses_dirty_worktree_before_creating_attempt_ref(tmp_path: Pa
     assert coordinator.show(coordination.change_id).writer == writer
 
 
+def test_quarantine_dirty_worktree_preserves_all_nonignored_bytes_and_environment(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    (repository / ".gitignore").write_text(".venv/\nnode_modules/\ndist/\n", encoding="utf-8")
+    (repository / "deleted.txt").write_text("delete me\n", encoding="utf-8")
+    (repository / "rename-source.txt").write_text("rename me\n", encoding="utf-8")
+    _git(repository, "add", ".gitignore", "deleted.txt", "rename-source.txt")
+    _git(repository, "commit", "-m", "seed quarantine boundaries")
+    base_head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "branch", "-f", "release", base_head)
+    _git(repository, "update-ref", "refs/remotes/origin/release", base_head)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-change")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"staged binary\x00\xff")
+    _git(worktree, "add", "shared.txt")
+    (worktree / "new.txt").write_bytes(b"untracked binary\x00\xfe")
+    _git(worktree, "mv", "rename-source.txt", "rename-target.txt")
+    (worktree / "deleted.txt").unlink()
+    (worktree / "uv.lock").write_bytes(b"lock\x00\xff")
+    for directory in (".venv", "node_modules", "dist"):
+        path = worktree / directory
+        path.mkdir()
+        (path / "keep.bin").write_bytes(b"ignored environment")
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-operation",
+    )
+
+    assert receipt.base_head == _git(repository, "rev-parse", coordination.branch)
+    assert receipt.quarantine_ref == f"refs/owlbear/quarantine/{coordination.change_id}/{writer.attempt_id}"
+    assert receipt.paths == tuple(sorted(receipt.paths))
+    assert set(receipt.paths) == {
+        "deleted.txt",
+        "new.txt",
+        "rename-source.txt",
+        "rename-target.txt",
+        "shared.txt",
+        "uv.lock",
+    }
+    assert _git(worktree, "status", "--porcelain") == ""
+    assert _git(worktree, "rev-parse", "HEAD") == base_head
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert not (worktree / "new.txt").exists()
+    assert (worktree / "rename-source.txt").read_text(encoding="utf-8") == "rename me\n"
+    assert not (worktree / "rename-target.txt").exists()
+    assert (worktree / "deleted.txt").exists()
+    for directory in (".venv", "node_modules", "dist"):
+        assert (worktree / directory / "keep.bin").read_bytes() == b"ignored environment"
+    assert _git(repository, "rev-parse", receipt.quarantine_ref) == receipt.quarantine_commit
+    assert (
+        subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+            ("git", "-C", str(repository), "show", f"{receipt.quarantine_commit}:shared.txt"),  # noqa: S607
+            check=True,
+            capture_output=True,
+        ).stdout
+        == b"staged binary\x00\xff"
+    )
+    assert (
+        subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+            ("git", "-C", str(repository), "show", f"{receipt.quarantine_commit}:uv.lock"),  # noqa: S607
+            check=True,
+            capture_output=True,
+        ).stdout
+        == b"lock\x00\xff"
+    )
+
+
+def test_quarantine_replays_after_receipt_persistence_failure(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-replay")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    with (
+        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected receipt failure")),
+        pytest.raises(CoordinationConflictError, match="injected receipt failure"),
+    ):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-replay-operation",
+        )
+
+    quarantine_ref = f"refs/owlbear/quarantine/{coordination.change_id}/{writer.attempt_id}"
+    assert _git_ref_exists(repository, quarantine_ref)
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine is None
+    assert dirty_file.read_bytes() == b"preserve\x00\xff"
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-replay-operation",
+    )
+
+    assert receipt.quarantine_ref == quarantine_ref
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine == receipt
+    assert dirty_file.exists() is False
+    assert _git(coordination.worktree_path, "status", "--porcelain") == ""
+
+
+def test_quarantine_replay_rejects_changed_bytes_after_preservation(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-drift")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"first\x00\xff")
+
+    with (
+        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected receipt failure")),
+        pytest.raises(CoordinationConflictError, match="injected receipt failure"),
+    ):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-drift-operation",
+        )
+
+    dirty_file.write_bytes(b"newer\x00\xfe")
+
+    with pytest.raises(RuntimeError, match="changed after quarantine preservation"):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-drift-operation",
+        )
+
+    assert dirty_file.read_bytes() == b"newer\x00\xfe"
+    assert coordinator.show(coordination.change_id).writer == writer
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine is None
+    assert _git(coordination.worktree_path, "status", "--porcelain")
+
+
+def test_quarantine_verifies_after_restart_moves_branch_to_reviewed_head(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-restart-replay")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-restart-replay-operation",
+    )
+    manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+    assert (
+        manager.verify_dirty_worktree_quarantine(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-restart-replay-operation",
+        )
+        == receipt
+    )
+
+
 def test_cleanup_replays_persisted_intent_after_receipt_write_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

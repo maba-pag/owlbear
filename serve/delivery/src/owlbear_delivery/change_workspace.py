@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -38,6 +39,7 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MERGE_COMMIT_MIN_PARENTS = 2
 _PORCELAIN_WORKTREE_STATUS_INDEX = 1
+_PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH = 4
 _DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.json")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_PARENT_COUNT = 2
@@ -538,6 +540,76 @@ class ChangeDesignPackageSnapshotReceipt(_WorkspaceModel):
         return self
 
 
+class DirtyWorktreeQuarantineReceipt(_WorkspaceModel):
+    """Content-addressed evidence that one dirty Builder worktree was preserved."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str = Field(min_length=1)
+    quarantine_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    paths: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _normalize_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("paths")
+    @classmethod
+    def _validate_paths(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if value != tuple(sorted(set(value))) or any(
+            not path or Path(path).is_absolute() or ".." in Path(path).parts for path in value
+        ):
+            message = "dirty worktree quarantine paths must be unique, sorted, and relative"
+            raise ValueError(message)
+        return value
+
+    @classmethod
+    def create(  # noqa: PLR0913 - quarantine identity requires each exact workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        branch: str,
+        worktree_path: Path,
+        base_head: str,
+        quarantine_ref: str,
+        quarantine_commit: str,
+        paths: tuple[str, ...],
+    ) -> Self:
+        """Create deterministic evidence for one preserved dirty worktree."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "attempt_id": attempt_id,
+            "claim_id": claim_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "base_head": base_head,
+            "quarantine_ref": quarantine_ref,
+            "quarantine_commit": quarantine_commit,
+            "paths": paths,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        return cls(receipt_id=_quarantine_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.receipt_id != _quarantine_digest(self):
+            message = "dirty worktree quarantine receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -596,6 +668,7 @@ class ChangeCoordination(_WorkspaceModel):
     external_head_promotion_receipts: tuple[ChangeExternalHeadPromotionReceipt, ...] = ()
     worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
+    dirty_worktree_quarantine: DirtyWorktreeQuarantineReceipt | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -663,6 +736,7 @@ class ChangeCoordination(_WorkspaceModel):
             message = "target synchronization abort receipt and conflict cannot coexist"
             raise ValueError(message)
         self._validate_design_package_snapshot()
+        self._validate_dirty_worktree_quarantine()
         return self
 
     def _validate_design_package_snapshot(self) -> None:
@@ -674,6 +748,29 @@ class ChangeCoordination(_WorkspaceModel):
             raise ValueError(message)
         if self.design_package_snapshot is not None and self.design_package_snapshot.change_id != self.change_id:
             message = "Design package snapshot receipt does not match its Change"
+            raise ValueError(message)
+
+    def _validate_dirty_worktree_quarantine(self) -> None:
+        receipt = self.dirty_worktree_quarantine
+        if receipt is None:
+            return
+        if receipt.change_id != self.change_id:
+            message = "dirty worktree quarantine receipt does not match its Change"
+            raise ValueError(message)
+        if receipt.branch != self.branch:
+            message = "dirty worktree quarantine receipt does not match its branch"
+            raise ValueError(message)
+        if receipt.worktree_path != self.worktree_path:
+            message = "dirty worktree quarantine receipt does not match its worktree"
+            raise ValueError(message)
+        expected_ref = f"refs/owlbear/quarantine/{receipt.change_id}/{receipt.attempt_id}"
+        if receipt.quarantine_ref != expected_ref:
+            message = "dirty worktree quarantine receipt ref does not match its attempt"
+            raise ValueError(message)
+        if self.writer is not None and (
+            self.writer.attempt_id != receipt.attempt_id or self.writer.claim_id != receipt.claim_id
+        ):
+            message = "dirty worktree quarantine receipt does not match active writer custody"
             raise ValueError(message)
 
     def _validate_publication_baseline_recovery(self) -> None:
@@ -712,6 +809,8 @@ class WorkspaceRecoverySnapshot(_WorkspaceModel):
     worktree_branch: str | None = None
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str | None = None
+    quarantine_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     clean: bool
     reviewed_ancestor: bool
     preserved_reviewed_ancestor: bool
@@ -982,6 +1081,7 @@ class PortfolioCoordinator:
             update={
                 "writer": writer,
                 "publication_lease": None,
+                "dirty_worktree_quarantine": None,
             }
         )
         occupied = ledger.model_copy(update={"change_ids": tuple(sorted((*ledger.change_ids, change_id)))})
@@ -1066,6 +1166,15 @@ class PortfolioCoordinator:
             and existing.publication_base_head is not None
         ):
             _coordination_conflict("publication baseline recovery authority cannot be added")
+        if existing.dirty_worktree_quarantine is not None and (
+            existing.dirty_worktree_quarantine != coordination.dirty_worktree_quarantine
+        ):
+            _coordination_conflict("dirty worktree quarantine authority cannot be replaced")
+        if existing.dirty_worktree_quarantine is None and coordination.dirty_worktree_quarantine is not None:
+            receipt = coordination.dirty_worktree_quarantine
+            writer = coordination.writer
+            if writer is None or writer.attempt_id != receipt.attempt_id or writer.claim_id != receipt.claim_id:
+                _coordination_conflict("dirty worktree quarantine authority requires matching writer custody")
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
             self._commit(f"update-{coordination.change_id}", (participant,))
@@ -2776,6 +2885,7 @@ class ChangeWorkspaceManager:
                 "--show-current",
             )
             clean = not self._git("-C", str(coordination.worktree_path), "status", "--porcelain")
+        quarantine = coordination.dirty_worktree_quarantine
         return WorkspaceRecoverySnapshot(
             change_id=change_id,
             worktree_path=coordination.worktree_path,
@@ -2785,6 +2895,8 @@ class ChangeWorkspaceManager:
             worktree_branch=worktree_branch,
             last_reviewed_commit=coordination.last_reviewed_commit,
             preserved_commit=preserved,
+            quarantine_ref=quarantine.quarantine_ref if quarantine is not None else None,
+            quarantine_commit=quarantine.quarantine_commit if quarantine is not None else None,
             clean=clean,
             reviewed_ancestor=self._is_ancestor(
                 coordination.last_reviewed_commit,
@@ -2801,6 +2913,334 @@ class ChangeWorkspaceManager:
             ),
             writer=coordination.writer,
         )
+
+    def quarantine_dirty_worktree(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        operation_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        """Preserve a dirty Builder worktree as an isolated commit before cleanup."""
+        coordination = self._coordinator.show(change_id)
+        writer = coordination.writer
+        if writer is None or writer.attempt_id != attempt_id or writer.claim_id != claim_id:
+            _coordination_conflict("dirty worktree quarantine requires matching writer custody")
+        worktree = coordination.worktree_path
+        branch_head = self._resolve(coordination.branch)
+        self._require_worktree(change_id, worktree, coordination.branch, branch_head)
+        quarantine_ref = f"refs/owlbear/quarantine/{change_id}/{attempt_id}"
+        self._git("check-ref-format", quarantine_ref)
+        receipt = self._prepare_dirty_worktree_quarantine(
+            coordination=coordination,
+            worktree=worktree,
+            branch_head=branch_head,
+            quarantine_ref=quarantine_ref,
+            operation_id=operation_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+        )
+        if self._resolve(coordination.branch) != branch_head:
+            _workspace_failure("change branch moved while dirty worktree was being quarantined")
+        self._git("reset", "--hard", branch_head, cwd=worktree)
+        self._git("clean", "-fd", cwd=worktree)
+        if self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=worktree):
+            _workspace_failure("dirty worktree quarantine did not clean the managed worktree")
+        return receipt
+
+    def _prepare_dirty_worktree_quarantine(  # noqa: PLR0913, PLR0917
+        self,
+        coordination: ChangeCoordination,
+        worktree: Path,
+        branch_head: str,
+        quarantine_ref: str,
+        operation_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        current = self._coordinator.show(coordination.change_id)
+        existing_receipt = current.dirty_worktree_quarantine
+        if existing_receipt is not None:
+            if (
+                existing_receipt.operation_id != operation_id
+                or existing_receipt.attempt_id != attempt_id
+                or existing_receipt.claim_id != claim_id
+                or existing_receipt.quarantine_ref != quarantine_ref
+            ):
+                _coordination_conflict("dirty worktree quarantine already has different authority")
+            if not self._quarantine_base_matches_current(coordination, branch_head, existing_receipt):
+                _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+            existing_commit = self._resolve(existing_receipt.quarantine_ref)
+            if existing_commit != existing_receipt.quarantine_commit:
+                _workspace_failure("dirty worktree quarantine ref does not match its receipt")
+            self._verify_quarantine_commit(
+                existing_receipt.quarantine_commit,
+                existing_receipt.base_head,
+                existing_receipt.paths,
+                existing_receipt.operation_id,
+            )
+            self._verify_worktree_matches_quarantine(worktree, existing_receipt)
+            return existing_receipt
+
+        paths = self._worktree_change_paths(worktree)
+        receipt_base_head = branch_head
+        existing = self._resolve(quarantine_ref, missing_ok=True)
+        if existing is None:
+            if not paths:
+                _coordination_conflict("dirty worktree quarantine requires changed content")
+            quarantine_commit = self._quarantine_commit(worktree, branch_head, paths, operation_id)
+            self._git("update-ref", quarantine_ref, quarantine_commit, "0" * 40)
+        else:
+            quarantine_commit = existing
+            quarantine_base = self._quarantine_commit_parent(quarantine_commit)
+            paths = self._quarantine_commit_paths(quarantine_commit, quarantine_base)
+            self._verify_quarantine_commit(quarantine_commit, quarantine_base, paths, operation_id)
+            replay_receipt = DirtyWorktreeQuarantineReceipt.create(
+                operation_id=operation_id,
+                change_id=coordination.change_id,
+                attempt_id=attempt_id,
+                claim_id=claim_id,
+                branch=coordination.branch,
+                worktree_path=worktree,
+                base_head=quarantine_base,
+                quarantine_ref=quarantine_ref,
+                quarantine_commit=quarantine_commit,
+                paths=paths,
+            )
+            if not self._quarantine_base_matches_current(coordination, branch_head, replay_receipt):
+                _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+            self._verify_worktree_matches_quarantine(worktree, replay_receipt)
+            receipt_base_head = quarantine_base
+        receipt = DirtyWorktreeQuarantineReceipt.create(
+            operation_id=operation_id,
+            change_id=coordination.change_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+            branch=coordination.branch,
+            worktree_path=worktree,
+            base_head=receipt_base_head,
+            quarantine_ref=quarantine_ref,
+            quarantine_commit=quarantine_commit,
+            paths=paths,
+        )
+        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}))
+        return receipt
+
+    def verify_dirty_worktree_quarantine(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        operation_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        """Verify preserved dirty-worktree evidence after workspace cleanup and writer release."""
+        coordination = self._coordinator.show(change_id)
+        receipt = coordination.dirty_worktree_quarantine
+        if receipt is None:
+            _coordination_conflict("dirty worktree quarantine receipt is missing")
+        if receipt.operation_id != operation_id or receipt.attempt_id != attempt_id or receipt.claim_id != claim_id:
+            _coordination_conflict("dirty worktree quarantine receipt does not match the recovery claim")
+        branch_head = self._resolve(coordination.branch)
+        if self._resolve(receipt.quarantine_ref) != receipt.quarantine_commit:
+            _workspace_failure("dirty worktree quarantine ref does not match its receipt")
+        if not self._quarantine_base_matches_current(coordination, branch_head, receipt):
+            _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+        self._verify_quarantine_commit(
+            receipt.quarantine_commit,
+            receipt.base_head,
+            receipt.paths,
+            receipt.operation_id,
+        )
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, branch_head)
+        if self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=coordination.worktree_path):
+            _workspace_failure("dirty worktree quarantine evidence requires a clean managed worktree")
+        return receipt
+
+    def _quarantine_base_matches_current(
+        self,
+        coordination: ChangeCoordination,
+        branch_head: str,
+        receipt: DirtyWorktreeQuarantineReceipt,
+    ) -> bool:
+        if receipt.base_head == branch_head:
+            return True
+        if branch_head != coordination.last_reviewed_commit:
+            return False
+        attempt_ref = f"refs/owlbear/attempts/{coordination.change_id}/{receipt.attempt_id}"
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        return preserved == receipt.base_head and self._is_ancestor(
+            coordination.last_reviewed_commit,
+            receipt.base_head,
+            cwd=self._repository,
+        )
+
+    def _worktree_change_paths(self, worktree: Path) -> tuple[str, ...]:
+        status = self._run_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            cwd=worktree,
+        ).stdout
+        if status and not status.endswith(b"\0"):
+            _workspace_failure("Git returned an unterminated dirty worktree status")
+        paths: set[str] = set()
+        records = status.split(b"\0")
+        index = 0
+        while index < len(records):
+            record = records[index]
+            index += 1
+            if not record:
+                continue
+            if len(record) < _PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH:
+                _workspace_failure("Git returned an invalid dirty worktree status record")
+            status_code = record[:2].decode("ascii")
+            paths.add(os.fsdecode(record[3:]))
+            if "R" in status_code or "C" in status_code:
+                if index >= len(records) or not records[index]:
+                    _workspace_failure("Git returned an incomplete rename status record")
+                paths.add(os.fsdecode(records[index]))
+                index += 1
+        return tuple(sorted(paths))
+
+    def _verify_worktree_matches_quarantine(
+        self,
+        worktree: Path,
+        receipt: DirtyWorktreeQuarantineReceipt,
+    ) -> None:
+        current_paths = self._worktree_change_paths(worktree)
+        if not set(current_paths).issubset(receipt.paths):
+            _workspace_failure("dirty worktree changed after quarantine preservation")
+        if not current_paths:
+            return
+        self._verify_worktree_paths_match_commit(
+            worktree,
+            receipt.base_head,
+            current_paths,
+            receipt.quarantine_commit,
+        )
+
+    def _verify_worktree_paths_match_commit(
+        self,
+        worktree: Path,
+        base_head: str,
+        paths: tuple[str, ...],
+        commit: str,
+    ) -> None:
+        tree = self._worktree_tree(worktree, base_head, paths)
+        result = self._run_git(
+            "--literal-pathspecs",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--quiet",
+            commit,
+            tree,
+            "--",
+            *paths,
+            check=False,
+        )
+        if result.returncode != 0:
+            _workspace_failure("dirty worktree content changed after quarantine preservation")
+
+    def _worktree_tree(self, worktree: Path, base_head: str, paths: tuple[str, ...]) -> str:
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-quarantine-index-")
+        os.close(index_fd)
+        Path(index_path).unlink()
+        environment = {**os.environ, "GIT_INDEX_FILE": index_path}
+        try:
+            self._run_git("read-tree", base_head, cwd=worktree, environment=environment)
+            self._run_git(
+                "--literal-pathspecs",
+                "add",
+                "--all",
+                "--",
+                *paths,
+                cwd=worktree,
+                environment=environment,
+            )
+            return self._run_git("write-tree", cwd=worktree, environment=environment).stdout.decode().strip()
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+
+    def _quarantine_commit(
+        self,
+        worktree: Path,
+        base_head: str,
+        paths: tuple[str, ...],
+        operation_id: str,
+    ) -> str:
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-quarantine-index-")
+        os.close(index_fd)
+        Path(index_path).unlink()
+        environment = {**os.environ, "GIT_INDEX_FILE": index_path}
+        try:
+            tree = self._worktree_tree(worktree, base_head, paths)
+            commit = (
+                self._run_git(
+                    "commit-tree",
+                    tree,
+                    "-p",
+                    base_head,
+                    "-m",
+                    _quarantine_commit_message(operation_id),
+                    cwd=worktree,
+                    environment={
+                        **environment,
+                        "GIT_AUTHOR_NAME": "OwlBear",
+                        "GIT_AUTHOR_EMAIL": "owlbear@localhost",
+                        "GIT_COMMITTER_NAME": "OwlBear",
+                        "GIT_COMMITTER_EMAIL": "owlbear@localhost",
+                    },
+                )
+                .stdout.decode()
+                .strip()
+            )
+            self._verify_quarantine_commit(commit, base_head, paths, operation_id)
+            return commit
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+
+    def _verify_quarantine_commit(
+        self,
+        commit: str,
+        base_head: str,
+        paths: tuple[str, ...],
+        operation_id: str,
+    ) -> None:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        if parents != [commit, base_head]:
+            _workspace_failure("quarantine commit does not have the exact reviewed worktree parent")
+        message = self._git("show", "-s", "--format=%B", commit).rstrip()
+        if message != _quarantine_commit_message(operation_id):
+            _workspace_failure("quarantine commit does not belong to the recovery operation")
+        changed = self._quarantine_commit_paths(commit, base_head)
+        if changed != paths:
+            _workspace_failure("quarantine commit does not contain the complete dirty worktree")
+
+    def _quarantine_commit_paths(self, commit: str, base_head: str) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                os.fsdecode(path)
+                for path in self._run_git(
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--name-only",
+                    "-z",
+                    base_head,
+                    commit,
+                ).stdout.split(b"\0")
+                if path
+            )
+        )
+
+    def _quarantine_commit_parent(self, commit: str) -> str:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        if len(parents) != _COMMIT_PARENT_COUNT:
+            _workspace_failure("quarantine commit does not have exactly one parent")
+        return parents[1]
 
     def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
         """Validate one writer-owned clean branch-head commit without mutation."""
@@ -3306,8 +3746,15 @@ class ChangeWorkspaceManager:
         cwd: Path | None = None,
         check: bool = True,
         input_bytes: bytes | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> str:
-        result = self._run_git(*arguments, cwd=cwd, check=check, input_bytes=input_bytes)
+        result = self._run_git(
+            *arguments,
+            cwd=cwd,
+            check=check,
+            input_bytes=input_bytes,
+            environment=environment,
+        )
         return result.stdout.decode().strip()
 
     def _run_git(
@@ -3316,12 +3763,14 @@ class ChangeWorkspaceManager:
         cwd: Path | None = None,
         check: bool = True,
         input_bytes: bytes | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
             (resolve_git_executable(), "-C", str(cwd or self._repository), *arguments),
             check=check,
             capture_output=True,
             input=input_bytes,
+            env=dict(environment) if environment is not None else None,
         )
 
 
@@ -3390,6 +3839,16 @@ def _design_package_snapshot_digest(receipt: ChangeDesignPackageSnapshotReceipt)
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _quarantine_digest(receipt: DirtyWorktreeQuarantineReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _quarantine_commit_message(operation_id: str) -> str:
+    return f"chore: quarantine dirty Builder worktree ({operation_id})"
 
 
 def _coordination_conflict(detail: str) -> Never:

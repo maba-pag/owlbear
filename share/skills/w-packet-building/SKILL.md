@@ -44,6 +44,12 @@ reason: <recorded prerequisite failure>
 
 ### Triage An Unclean Worktree
 
+The normal Builder launch is clean. If a Builder dispatch fails or ends without a valid transition,
+Orchestrator calls exact `recover_claim`; Delivery preserves and cleans a dirty worktree
+automatically. Do not ask the user to classify stale files or perform Git recovery. A recovery
+attention is a machine-owned preservation or custody failure, not an invitation to invent a manual
+cleanup route.
+
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
 `git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
 hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions, and the exact

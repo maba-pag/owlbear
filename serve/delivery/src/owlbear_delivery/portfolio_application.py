@@ -41,6 +41,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
+    DirtyWorktreeQuarantineReceipt,
     PortfolioCoordinator,
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
@@ -249,6 +250,14 @@ def _checkpoint_operation_id(kind: str, *parts: str) -> str:
     return f"checkpoint-{kind}-{hashlib.sha256(payload.encode()).hexdigest()}"
 
 
+def _dirty_recovery_operation_id(change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> str:
+    payload = json.dumps(
+        ("dirty-worktree-recovery", change_id, outcome_id, attempt_id, claim_id),
+        separators=(",", ":"),
+    )
+    return f"recover-dirty-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+
 def _checkpoint_summary(
     pending: DeliveryPendingCheckpoint,
     head: str,
@@ -452,7 +461,7 @@ class DeliveryClaimRecoveryStatus(StrEnum):
 
 
 class DeliveryClaimRecoveryResult(_ApplicationModel):
-    """Recovered claim state or retained typed repair attention."""
+    """Recovered claim state, isolated preservation evidence, or retained repair attention."""
 
     status: DeliveryClaimRecoveryStatus
     change_id: str = Field(min_length=1)
@@ -461,12 +470,17 @@ class DeliveryClaimRecoveryResult(_ApplicationModel):
     claim_id: str = Field(min_length=1)
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     preserved_ref: str | None = None
+    quarantine_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str | None = None
     attention: DeliveryRecoveryAttention | None = None
 
     @model_validator(mode="after")
     def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
         if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
             message = "only retained recovery requires repair attention"
+            raise ValueError(message)
+        if (self.quarantine_commit is None) != (self.quarantine_ref is None):
+            message = "quarantine recovery evidence requires both commit and ref"
             raise ValueError(message)
         return self
 
@@ -3179,7 +3193,7 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
     ) -> DeliveryClaimRecoveryResult:
-        """Remove one exact failed claim or retain deterministic Build repair attention."""
+        """Automatically preserve and recover one exact failed claim or retain typed attention."""
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
@@ -3217,7 +3231,7 @@ class PortfolioApplication:
             preserved_commit=preserved_commit,
         )
 
-    def _recover_claim(
+    def _recover_claim(  # noqa: PLR0911 - each exact recovery disposition has distinct observable evidence.
         self,
         change_id: str,
         outcome_id: str,
@@ -3235,6 +3249,24 @@ class PortfolioApplication:
         snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
         if snapshot.writer is None:
             if self._released_recovery_matches(snapshot):
+                quarantine: DirtyWorktreeQuarantineReceipt | None = None
+                if snapshot.quarantine_ref is not None or snapshot.quarantine_commit is not None:
+                    try:
+                        quarantine = self._workspace_manager.verify_dirty_worktree_quarantine(
+                            change_id,
+                            attempt_id,
+                            claim_id,
+                            _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
+                        )
+                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                        return self._retain_recovery_attention(
+                            runtime,
+                            outcome_id,
+                            claim,
+                            snapshot,
+                            reason=f"Automatic dirty worktree preservation evidence could not be verified: {exc}",
+                            retry_condition="Retry automatic recovery while the preserved quarantine evidence remains.",
+                        )
                 runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
                 return self._recovered(
                     change_id,
@@ -3242,10 +3274,36 @@ class PortfolioApplication:
                     attempt_id,
                     claim_id,
                     snapshot.preserved_commit,
+                    quarantine_commit=(
+                        quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit
+                    ),
+                    quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
                 )
             return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
         if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
             return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+        quarantine: DirtyWorktreeQuarantineReceipt | None = None
+        if (
+            snapshot.quarantine_ref is not None
+            or snapshot.quarantine_commit is not None
+            or (snapshot.worktree_head is not None and not snapshot.clean)
+        ):
+            try:
+                quarantine = self._workspace_manager.quarantine_dirty_worktree(
+                    change_id,
+                    attempt_id,
+                    claim_id,
+                    _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                return self._retain_recovery_attention(
+                    runtime,
+                    outcome_id,
+                    claim,
+                    snapshot,
+                    reason=f"Automatic dirty worktree preservation failed: {exc}",
+                    retry_condition="Retry automatic preservation while exact Builder custody is retained.",
+                )
         rejected_head = snapshot.preserved_commit or snapshot.branch_head
         self._workspace_manager.restart(change_id, attempt_id, rejected_head)
         runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
@@ -3255,6 +3313,8 @@ class PortfolioApplication:
             attempt_id,
             claim_id,
             rejected_head,
+            quarantine_commit=quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit,
+            quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
         )
 
     def _candidates(self) -> tuple[_Candidate, ...]:
@@ -3495,30 +3555,29 @@ class PortfolioApplication:
             return False
         if snapshot.worktree_head is None:
             return snapshot.preserved_commit is not None and snapshot.worktree_branch is None
-        return (
-            snapshot.clean
-            and snapshot.worktree_head == snapshot.branch_head
-            and snapshot.worktree_branch == snapshot.branch
-        )
+        return snapshot.worktree_head == snapshot.branch_head and snapshot.worktree_branch == snapshot.branch
 
-    def _retain_recovery_attention(
+    def _retain_recovery_attention(  # noqa: PLR0913 - recovery attention binds exact claim and workspace evidence.
         self,
         runtime: DeliveryRuntime,
         outcome_id: str,
         claim: DeliveryActiveClaim,
         snapshot: WorkspaceRecoverySnapshot,
+        *,
+        reason: str | None = None,
+        retry_condition: str = "Restore a clean recorded worktree and reconcile exact writer custody.",
     ) -> DeliveryClaimRecoveryResult:
         attention = DeliveryRecoveryAttention(
             attempt_id=claim.attempt_id,
             claim_id=claim.claim_id,
-            reason=self._recovery_reason(snapshot, claim),
+            reason=reason or self._recovery_reason(snapshot, claim),
             worktree_path=str(snapshot.worktree_path),
             branch_head=snapshot.branch_head,
             worktree_head=snapshot.worktree_head,
             last_reviewed_commit=snapshot.last_reviewed_commit,
             writer_claim_id=snapshot.writer.claim_id if snapshot.writer is not None else None,
             custody_retained=snapshot.writer is not None,
-            retry_condition="Restore a clean recorded worktree and reconcile exact writer custody.",
+            retry_condition=retry_condition,
         )
         runtime.publish_recovery_attention(outcome_id, attention)
         return DeliveryClaimRecoveryResult(
@@ -3546,12 +3605,15 @@ class PortfolioApplication:
         return "Build attempt history ref conflicts with the current branch head."
 
     @staticmethod
-    def _recovered(
+    def _recovered(  # noqa: PLR0913 - recovery result binds exact claim and preservation evidence.
         change_id: str,
         outcome_id: str,
         attempt_id: str,
         claim_id: str,
         preserved_commit: str | None = None,
+        *,
+        quarantine_commit: str | None = None,
+        quarantine_ref: str | None = None,
     ) -> DeliveryClaimRecoveryResult:
         return DeliveryClaimRecoveryResult(
             status=DeliveryClaimRecoveryStatus.RECOVERED,
@@ -3561,6 +3623,8 @@ class PortfolioApplication:
             claim_id=claim_id,
             preserved_commit=preserved_commit,
             preserved_ref=(f"refs/owlbear/attempts/{change_id}/{attempt_id}" if preserved_commit is not None else None),
+            quarantine_commit=quarantine_commit,
+            quarantine_ref=quarantine_ref,
         )
 
     def _validate_package_authority(self, runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> None:
