@@ -5417,6 +5417,41 @@ def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_pa
     assert coordinator.show("change-a").writer == initial_by_change["change-a"].writer
 
 
+def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=2,
+        clock=lambda: "2026-08-04T01:00:00Z",
+    )
+    initial = application.acquire_frontier_work()
+    initial_by_change = {package.change_id: package for package in initial.launch_packages}
+    application.recover_claim(
+        "change-b",
+        initial_by_change["change-b"].outcome_id,
+        initial_by_change["change-b"].claim.attempt_id,
+        initial_by_change["change-b"].claim.claim_id,
+    )
+    malformed_path = state_root / "changes/change-a/frontier.json"
+    malformed = json.loads(malformed_path.read_bytes())
+    malformed["bindings"][0]["active_claim"]["started_at"] = "not-a-timestamp"
+    malformed_path.write_bytes((json.dumps(malformed, sort_keys=True, separators=(",", ":")) + "\n").encode())
+
+    recovered = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
+    assert len(recovered.failures) == 1
+    failure = recovered.failures[0]
+    assert failure.change_id == "change-a"
+    assert failure.outcome_id == "OUT-001"
+    assert failure.claim_id == initial_by_change["change-a"].claim.claim_id
+    assert runtimes["change-a"].active_claims()
+    assert coordinator.show("change-a").writer is None
+
+
 def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,

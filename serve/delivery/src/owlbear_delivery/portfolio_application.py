@@ -3040,9 +3040,9 @@ class PortfolioApplication:
         failures: list[DeliveryAcquisitionFailure] = []
         for change_id, runtime in sorted(self._runtimes.items()):
             for outcome_id, claim in runtime.active_claims():
-                if _timestamp(claim.started_at) > cutoff:
-                    continue
                 try:
+                    if _timestamp(claim.started_at) > cutoff:
+                        continue
                     recovered = self._recover_claim(
                         change_id,
                         outcome_id,
