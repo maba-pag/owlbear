@@ -49,16 +49,16 @@ completion receipts.
 | [`delivery_application_loader.py`](../../serve/delivery/src/owlbear_delivery/delivery_application_loader.py) | Startup rejects migration and retirement journals and nonempty old Delivery roots before composing current owners. | These checks are only useful while old-state recovery is supported; current startup validation itself remains required. |
 | [`completed_history.py`](../../serve/delivery/src/owlbear_delivery/completed_history.py) | `CompletedHistoryCatalog` combines current completion receipts with `LegacyCompletedChangeRecord`, reads `.owlbear/legacy/completed`, and traverses a configured `legacy_source_ref`. | Receipt-backed current history must remain; the legacy branch and its public union can be removed only after archived records are intentionally discarded. |
 | [`delivery_runtime.py`](../../serve/delivery/src/owlbear_delivery/delivery_runtime.py) and [`delivery_contract_discovery.py`](../../serve/delivery/src/owlbear_delivery/delivery_contract_discovery.py) | Current frontier parsing accepts schema versions `2` through `16`, transforms schema `1`, rejects legacy Integration completion/finalization, and exposes `DeliveryRuntimeMigrationError`. | Current schema `17` and current discovery diagnostics remain. The old-format branches can be removed after current state is reinitialized. |
-| [`target_authority.py`](../../serve/delivery/src/owlbear_delivery/target_authority.py), [`target_admission.py`](../../serve/delivery/src/owlbear_delivery/target_admission.py), and [`target_runtime.py`](../../serve/delivery/src/owlbear_delivery/target_runtime.py) | The target-era kernel is dormant in part, but `target_admission.py` also owns current `DeliveryAuthorityRegistry`, `DeliveryAdmissionReceipt`, and the current admission exception hierarchy. | Do not delete `target_admission.py` wholesale. Split current admission into a current module first, then remove only the target-era remainder after import and contract proof. |
+| [`target_authority.py`](../../serve/delivery/src/owlbear_delivery/target_authority.py), [`target_admission.py`](../../serve/delivery/src/owlbear_delivery/target_admission.py), and [`target_runtime.py`](../../serve/delivery/src/owlbear_delivery/target_runtime.py) | The Target-era kernel is isolated in its own modules. The current source-bound `DeliveryAuthorityRegistry`, `DeliveryAdmission*` models, and exception hierarchy moved to `delivery_admission.py` in `38806a2e5`. | The split is complete. Remove the Target-era modules only as a later, separately validated deletion after import, public-contract, and test inventory. |
 | `snapshot.py` (removed in Slice 1) | `LegacySnapshot*`, `LegacyDisposition`, and descriptor-safe inventory/publication implemented immutable snapshots of old stores; local import search found only the package re-export and `test_snapshot.py`. | This was migration/data-preservation machinery, not current transaction recovery. It was the smallest independently credible deletion slice and is now implemented. |
-| [`__init__.py`](../../serve/delivery/src/owlbear_delivery/__init__.py) | Public exports include legacy snapshot types, `LegacyCompletedChangeRecord`, Target-era APIs, and migration-specific errors. | Export removal must follow implementation removal and MCP/Cockpit contract updates. |
+| [`__init__.py`](../../serve/delivery/src/owlbear_delivery/__init__.py) | The package root exports current admission from `delivery_admission.py` and the retained Target-era APIs separately. | Export removal must follow implementation removal and MCP/Cockpit contract updates. |
 | [`setup/init.py`](../../setup/init.py), seed templates, and setup guides | Setup removes old ignore lines, preserves old stores, seeds old-path exclusions, and documents `migrate-delivery-state` recovery. | Setup remains current; only old-state preservation, cleanup, and migration instructions should be removed. |
 | [`serve/tools/pyproject.toml`](../../serve/tools/pyproject.toml) and [`serve/tools/README.md`](../../serve/tools/README.md) | The tools package registers and documents `migrate-delivery-state` and `retire-delivery-integration`. | Other index, quality, and dependency tools are current and remain. |
-| [`serve/cockpit/README.md`](../../serve/cockpit/README.md), Delivery MCP models/server, and Cockpit tests | Current-facing docs and transport surfaces expose Integration attention and completed-history variants. Integration attention is produced by current publication/sync paths and its tools are declared by current agents and skills. | Do not delete the Integration attention model or its two tools as if they were historical-only. Correct the misleading “Legacy compatibility” label, and remove them only with a replacement current attention path if policy later requires it. |
+| [`serve/cockpit/README.md`](../../serve/cockpit/README.md), Delivery MCP models/server, and Cockpit tests | Current-facing docs and transport surfaces expose Integration attention and completed-history variants. Integration attention is produced by current publication/sync paths and its tools are declared by current agents and skills. | Keep the Integration attention model and its two tools as current operations. No replacement is planned; only the misleading old classification needed removal. |
 | `snapshot.py` (removed in Slice 1) and [`runtime_transaction.py`](../../serve/delivery/src/owlbear_delivery/runtime_transaction.py) | Snapshot publication and runtime transactions both used careful path, digest, fsync, and interruption handling. | Removing the snapshot subsystem does not justify removing current transaction safety; the transaction module remains current. |
 | [`serve/knowledge/`](../../serve/knowledge/) and [`serve/memory/`](../../serve/memory/) | Database setup contains schema evolution/backfill behavior for current local stores. | A schema upgrade from an installed current database is not automatically backwards compatibility; remove only branches proven unreachable by current storage creation and supported upgrade policy. |
 | `serve/cockpit/web/scripts/run-e2e*.mjs`, Playwright config, and setup docs | Chromium and PDS checks support the current browser test/toolchain. | These are present-day environment compatibility and remain outside this erasure unless a separate browser policy changes. |
-| Live checkout and Git history | `HEAD` includes the current runtime-path work and currently has four managed Change worktrees with unmerged commits. The ignored runtime still contains old path residue, and `.owlbear/legacy` contains 3,200 tracked files. | The old runtime shims have not necessarily run on this checkout. Verify canonical state before removing them; do not reset active Changes as an implicit cleanup step. |
+| Live checkout and Git history | `HEAD` includes the current runtime-path work and currently has four managed Change worktrees with unmerged commits. This checkout now contains canonical `coordination/changes`, `transactions`, and `capacity-ledger.json` state; the old runtime names are absent, while `.owlbear/legacy` still contains 3,200 tracked files. | The path shims have run here, but other installations may still need a deliberate current-state decision. Verify canonical state before removing them; do not reset active Changes as an implicit cleanup step. |
 
 No external source was needed. The question is answered by the repository's local ownership graph
 and the explicit current-only product policy.
@@ -217,8 +217,8 @@ In `delivery_runtime.py` and discovery:
   such as `migration_reviewed_head` and `require_checkpoint_backfill`;
 - preserve current frontier validation, claim identity, lifecycle transitions, and exact recovery.
 
-Then split current admission from the mixed `target_admission.py`, inventory imports, and delete
-dormant target-era modules if no current consumer remains:
+The current-admission split is complete in `38806a2e5`. `target_admission.py` is now Target-only;
+inventory its remaining consumers before deleting the dormant Target-era modules:
 
 - `target_authority.py` target semantic model extras that are not used by current Delivery;
 - the target-era remainder of `target_admission.py`: target admission registry, candidate/challenge,
@@ -227,17 +227,16 @@ dormant target-era modules if no current consumer remains:
 - associated `TargetAdmission*` and `TargetRuntime*` exports, MCP protocol types, tests, fixtures,
   and package-boundary/index entries.
 
-This phase must be evidence-led. The current source graph shows current Delivery uses
-`target_contract.py`, `delivery_runtime.py`, `DeliveryAuthorityRegistry`, and `PortfolioApplication`,
-while the target-era modules remain public exports and test subjects. Do not delete them based on
-filenames alone; first prove no current MCP/Cockpit route or public import relies on them.
+This phase must be evidence-led. Current Delivery uses `target_contract.py`, `delivery_runtime.py`,
+`delivery_admission.py`, and `PortfolioApplication`; the Target-era modules remain public exports
+and test subjects. Do not delete them based on filenames alone; first prove no current MCP/Cockpit
+route or public import relies on them, then remove the exports and rewrite the Target-era fixtures.
 
 #### Phase E: immutable old-store snapshot subsystem
 
-Delete `serve/delivery/src/owlbear_delivery/snapshot.py` and its tests as the first source-only
-slice. Local import inventory found no active consumer beyond the package re-export and its test.
-Remove all exports and references to `LegacyDisposition`, `LegacySnapshot*`, and
-`create_legacy_snapshot`/`verify_legacy_snapshot`. This does not touch live runtime state.
+The orphaned snapshot slice was implemented in `bb2eeb33a` and its plan references were repaired in
+`ad4a7cdeb`. Local import inventory found no active consumer beyond the removed package re-export
+and test. No further snapshot work is planned; this did not touch live runtime state.
 
 Do not remove `runtime_transaction.py`, `storage_io.py`, or current receipt stores. Snapshotting an
 old tree and recovering a current interrupted transaction solve different problems.
@@ -276,8 +275,8 @@ The user asked for the whole project, so each domain needs an explicit dispositi
 | Delivery runtime | Current `transactions/`, atomic recovery, current coordination, claims/locks, publications, completions, current frontier and claim fencing | Retain. These are present-day durability and lifecycle behavior. |
 | Delivery docs/research | Old-path support prose, migration plans, historical compatibility claims | Delete obsolete records or rewrite current design docs to remove support claims. Preserve only research that explains current behavior. |
 | Delivery setup/seed | Old root cleanup/preservation and migration instructions | Remove after the reset; keep current config, host baseline/local overlay, and current ignores. |
-| Cockpit | Legacy Integration attention rows, legacy completed-history fields, old target-context routes if any | Remove with the corresponding core/API types. Keep current operator recovery, backward outcome movement, browser/PDS behavior, and receipt-backed completion. |
-| Delivery MCP | Integration attention and repair tools are declared by current agents and skills and are backed by current runtime state. | Keep for now; correct the misleading “Legacy compatibility” label. Removing them requires a replacement current attention path and a coordinated agent/MCP change. |
+| Cockpit | Misleading Integration-attention labels, legacy completed-history fields, old target-context routes if any | Remove only the historical completed-history variants with their core/API types. Keep current Integration attention, operator recovery, backward outcome movement, browser/PDS behavior, and receipt-backed completion. |
+| Delivery MCP | Integration attention and repair tools are declared by current agents and skills and are backed by current runtime state. | Keep as current operations; remove the misleading historical classification. No replacement is planned. |
 | Knowledge | Existing-database schema evolution/backfill such as `vectors_synced` and pending-delete state | Retain until storage policy proves all current databases are freshly created. These are current installation upgrades, not old product-state compatibility. Then simplify in a separate data-schema task if desired. |
 | Memory | Schema/version fields and current score/state migrations | Retain unless a focused source/test audit proves a branch handles a retired product format rather than current database durability. Do not delete based on the word “migration” alone. |
 | Browser/PDS | Chromium installation/checks, Playwright compatibility config, PDS asset/runtime checks | Retain. These describe current supported tooling and environment compatibility, not historical OwlBear state. |

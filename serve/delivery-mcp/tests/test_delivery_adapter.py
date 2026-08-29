@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import (
     DeliveryAdmissionConflictError,
+    DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
@@ -747,6 +748,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "admit_delivery_change",
             DeliveryAdmissionConflictError("active claims block Delivery authority revision"),
             "ERR_DELIVERY_ADMISSION_CONFLICT",
+            False,
+        ),
+        (
+            "admit_delivery_change",
+            DeliveryAdmissionValidationError("authored Specification does not compile"),
+            "ERR_DELIVERY_ADMISSION_VALIDATION",
             False,
         ),
         (
