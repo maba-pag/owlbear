@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
 from owlbear_cockpit.target_models import PublicationChecksObservationResponse
@@ -22,7 +23,7 @@ from owlbear_delivery import (
     PublicationProviderError,
     PublicationProviderFailureCode,
 )
-from owlbear_delivery.acceptance import CompletionPullRequestIdentity
+from owlbear_delivery.acceptance import CompletionPullRequestIdentity, CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
@@ -1304,6 +1305,48 @@ def test_worktree_attention_recovery_route_returns_typed_delivery_error() -> Non
         "retry_safe": False,
     }
     assert application.calls == [("recover-worktree", ("change-a", "c" * 40, True))]
+
+
+def test_live_cockpit_app_surfaces_known_delivery_failure() -> None:
+    from owlbear_cockpit.main import app  # noqa: PLC0415
+
+    application = _DeliveryApplicationFake(
+        {"observe_acceptance": CompletionReceiptConflictError("completion receipt is inconsistent")}
+    )
+    app.dependency_overrides[get_target_context] = lambda: application
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post("/api/changes/change-a/acceptance/observe")
+    finally:
+        app.dependency_overrides.pop(get_target_context, None)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_COMPLETION_RECEIPT_CONFLICT",
+        "detail": "completion receipt is inconsistent",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
+def test_live_cockpit_app_keeps_unknown_failure_on_generic_backstop() -> None:
+    from owlbear_cockpit.main import app  # noqa: PLC0415
+
+    application = _DeliveryApplicationFake({"observe_acceptance": RuntimeError("unexpected failure")})
+    app.dependency_overrides[get_target_context] = lambda: application
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post("/api/changes/change-a/acceptance/observe")
+    finally:
+        app.dependency_overrides.pop(get_target_context, None)
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "COCKPIT_INTERNAL_ERROR",
+        "message": "An unexpected error occurred.",
+    }
+    assert application.calls == [("acceptance-observe", ("change-a",))]
 
 
 def test_target_routes_are_mounted_on_live_app() -> None:
