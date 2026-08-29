@@ -49,7 +49,7 @@ Load only what the selected scope needs:
 2. `share/WIRING.md` for declared consumers and delegation paths.
 3. `share/skills/h-agent-structure/SKILL.md` for file-type and structural conventions.
 4. The target files and their actual loading relationships.
-5. Domain authorities such as `r-pipeline-protocol` only when the audited claim depends on them.
+5. Domain authorities only when the audited claim depends on them.
 
 Existing standards are evidence, not untouchable truth. When a prompt and skill disagree, determine
 which behavior best serves the system. Recommend changing the named authority, both consumers, or a

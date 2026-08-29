@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import types
 from pathlib import Path
@@ -15,6 +16,7 @@ _AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _PROMPTS_ROOT = _REPO_ROOT / "share/prompts"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
+_LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
@@ -199,7 +201,9 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
     assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
     assert {
         ".github/workflows/dependency-verification.yml",
+        ".owlbear/instructions/**",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "share/instructions/**",
         "tests/test_dependency_verification_workflow.py",
     } <= set(pull_request["paths"])
     assert job["timeout-minutes"] == 5
@@ -459,6 +463,48 @@ def test_retired_delivery_operations_are_absent_from_agent_prose() -> None:
     orchestrator = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
     assert "repair result" not in orchestrator
     assert "repair-authority attention" not in orchestrator
+
+
+def test_retired_skills_are_absent_from_active_customization_prose() -> None:
+    """Retired skill names must not survive in active customization sources."""
+    roots = (
+        _REPO_ROOT / "share/agents",
+        _REPO_ROOT / "share/instructions",
+        _REPO_ROOT / "share/prompts",
+        _REPO_ROOT / "share/skills",
+        _REPO_ROOT / ".owlbear/agents",
+        _REPO_ROOT / ".owlbear/instructions",
+        _REPO_ROOT / ".owlbear/prompts",
+        _REPO_ROOT / ".owlbear/skills",
+    )
+    active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]
+    active_files.append(_REPO_ROOT / ".github/copilot-instructions.md")
+
+    for path in active_files:
+        content = path.read_text(encoding="utf-8")
+        for skill in _RETIRED_SKILLS:
+            assert re.search(rf"(?<![a-z0-9-]){re.escape(skill)}(?![a-z0-9-])", content) is None, (
+                f"{path.relative_to(_REPO_ROOT)} mentions retired skill {skill}"
+            )
+
+
+def test_project_doc_instruction_declares_local_standard_route() -> None:
+    """The local doc wiring declares its scope and standards route; runtime loading is separate."""
+    path = _LOCAL_INSTRUCTIONS_ROOT / "doc-types.instructions.md"
+    content = path.read_text(encoding="utf-8")
+    _, raw_frontmatter, _ = content.split("---", maxsplit=2)
+    metadata = yaml.safe_load(raw_frontmatter)
+    assert isinstance(metadata, dict)
+
+    apply_to = metadata["applyTo"]
+    assert isinstance(apply_to, str)
+    assert {
+        ".github/README-automation.md",
+        ".owlbear/README.md",
+        "store/README.md",
+        "tests/README.md",
+    } <= set(apply_to.split(","))
+    assert "Before applying these project-specific document-type rules, read `r-doc-standards`" in content
 
 
 def test_memory_curator_identity_deferral_reporting_split() -> None:
