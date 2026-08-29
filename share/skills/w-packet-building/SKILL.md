@@ -28,6 +28,12 @@ Before edits, enter only `launch.worktree_path` and require:
 - any predecessor results, resolved requests, return context, and recovery attention come only from
   this fresh Build context.
 
+The branch, `HEAD`, ancestry, writer custody, and worktree-cleanliness observations must come from the
+Builder's own direct tool calls in the assigned worktree. A delegated execution report or caller prose
+summary is not admissible identity or custody evidence; if a required observation is delegated or
+unavailable, return `dispatch_failure` instead of inferring the result. Delegated execution remains
+available for ordinary read-only proof after custody is established.
+
 Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
 cannot establish fresh Build context or custody returns this non-transition result to Orchestrator
 for fail-closed claim recovery; it does not fabricate a lifecycle decision or mutate a checkout:
