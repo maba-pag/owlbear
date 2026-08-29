@@ -12,6 +12,21 @@ from mcp.types import CallToolResult
 
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
+_REVIEWED_MEMORY = """---
+id: 550e8400-e29b-41d4-a716-446655440000
+title: Reviewed memory
+categories: [process]
+confidence: 0.8
+state: approved
+source_agent: test-agent
+created_at: '2026-08-29T00:00:00+00:00'
+updated_at: '2026-08-29T00:00:00+00:00'
+approved_at: '2026-08-29T00:00:00+00:00'
+---
+
+Reviewed memory.
+"""
+
 
 def _text(result: CallToolResult) -> str:
     """Extract the text payload from one MCP tool result."""
@@ -68,10 +83,7 @@ async def test_live_server_commits_reviewed_memory_batch(
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "OwlBear Test")
     _git(tmp_path, "config", "user.email", "test@example.invalid")
-    (tmp_path / ".owlbear/memory/reviewed.md").write_text(
-        "---\nstate: approved\n---\n\n# Reviewed\n",
-        encoding="utf-8",
-    )
+    (tmp_path / ".owlbear/memory/reviewed.md").write_text(_REVIEWED_MEMORY, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     async with mcp.Client(memory_mcp) as client:
@@ -103,10 +115,7 @@ async def test_live_server_reports_git_hook_failure(
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "OwlBear Test")
     _git(tmp_path, "config", "user.email", "test@example.invalid")
-    (tmp_path / ".owlbear/memory/reviewed.md").write_text(
-        "---\nstate: approved\n---\n\n# Reviewed\n",
-        encoding="utf-8",
-    )
+    (tmp_path / ".owlbear/memory/reviewed.md").write_text(_REVIEWED_MEMORY, encoding="utf-8")
     hook = tmp_path / ".git/hooks/pre-commit"
     hook.write_text(
         "#!/bin/sh\nprintf '%s\\n' 'HOOKFAIL: review hook rejected this commit' >&2\nexit 1\n",

@@ -2182,7 +2182,6 @@ dependencies = [
     { name = "mcp" },
     { name = "owlbear-memory" },
     { name = "pydantic" },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -2190,7 +2189,6 @@ requires-dist = [
     { name = "mcp", specifier = ">=2,<2.1" },
     { name = "owlbear-memory", editable = "serve/memory" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [[package]]

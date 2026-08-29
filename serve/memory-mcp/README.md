@@ -25,7 +25,6 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Module | Purpose |
 | --- | --- |
-| `agents.py` | Dynamic canonical-agent discovery from active VS Code agent locations |
 | `server.py` | MCPServer app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
 | `git.py` | State-aware batch commit implementation used by the MCP operation |
@@ -128,7 +127,7 @@ owlbear-memory/commit_memory_batch(session_type="curation")
 owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
-The operation stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or a no-op result when there is nothing to commit. The lower-level `git.py` module remains an internal implementation detail.
+The operation validates every existing memory entry before staging, stages only non-pending entries and tracked hard-deletions of pending entries or purged tombstones, and returns the commit SHA or a no-op result when there is nothing to commit. Invalid entries, staged pending entries, and physical deletion of live reviewed entries fail the batch without creating a commit. The lower-level `git.py` module remains an internal implementation detail.
 
 If Git or a commit hook fails, the MCP error begins with `memory batch commit failed` and includes
 the failed command, exit status, and captured `stderr` (falling back to `stdout`). Captured output
@@ -143,4 +142,3 @@ The command-line entry point uses the same bounded diagnostic formatter.
 | `mcp` | MCPServer framework |
 | `owlbear-memory` | Shared memory engine, models, and error types (workspace package) |
 | `pydantic` | Model validation at the MCP tool layer |
-| `pyyaml` | YAML frontmatter serialisation for memory files |
