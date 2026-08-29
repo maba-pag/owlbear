@@ -52,6 +52,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     FinalizeDeliveryChange,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
@@ -767,7 +768,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "revise_design_session",
             DesignPackageConflictError("package identity is stale"),
             "ERR_DESIGN_PACKAGE_CONFLICT",
-            True,
+            False,
         ),
         (
             "reconcile_change_checkpoint",
@@ -777,7 +778,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
                 "provider rate limit reached",
                 retry_safe=True,
             ),
-            "rate_limited",
+            "ERR_DELIVERY_PROVIDER_RATE_LIMITED",
             True,
         ),
         (
@@ -820,6 +821,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             PublicationBaselineUnavailableError(CHANGE, "publication baseline is unavailable"),
             "ERR_PUBLICATION_BASELINE_UNAVAILABLE",
             False,
+        ),
+        (
+            "observe_acceptance",
+            DeliveryStatePublicationError("state publication failed", retry_safe=True),
+            "ERR_DELIVERY_STATE_PUBLICATION",
+            True,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:
