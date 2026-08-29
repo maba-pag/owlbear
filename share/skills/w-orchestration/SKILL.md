@@ -104,11 +104,13 @@ identity; do not call `transition_delivery` or `recover_claim` for it.
 
 The curator's successful Channel A result must use the `w-mem-curation` form
 `DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
-present. If the dispatch binding is unavailable or the agent tool returns an error, record a
-fail-closed housekeeping failure, report it separately, and stop after the current batch; do not
-use Delivery recovery. If the dispatch returns no result or a result without the curator's Channel A
-verdict, record a malformed housekeeping result, do not retry it, and continue acquisition. A
-scheduled attempt consumes its cadence slot regardless of its result.
+present. If the dispatch binding is unavailable, the `runSubagent` invocation itself returns a
+tool-layer error, or capability dispatch fails before a child result exists, record a fail-closed
+housekeeping failure, report it separately, and stop after the current batch; do not use Delivery
+recovery. If the invocation completes but returns no result, a result without the curator's Channel A
+verdict, or a child report of its own internal failure, record a malformed housekeeping result, do
+not retry it, and continue acquisition. A scheduled attempt consumes its cadence slot regardless of
+its result.
 
 ## Step 6 - Refresh
 
