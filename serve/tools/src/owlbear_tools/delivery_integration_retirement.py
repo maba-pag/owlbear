@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from owlbear_delivery.change_workspace import CapacityLedger, ChangeCoordination, ChangeWorkspaceManager
+from owlbear_delivery.change_workspace import ChangeCoordination, ChangeWorkspaceManager
 from owlbear_delivery.completed_history import (
     CompletedHistoryCatalog,
     LegacyCompletedChangeRecord,
@@ -455,9 +455,6 @@ def _require_coordination_quiescence(coordinations: dict[str, ChangeCoordination
 
 
 def _require_runtime_quiescence(runtime_root: Path) -> None:
-    capacity = _load_model(runtime_root / "capacity.json", CapacityLedger)
-    if capacity.change_ids:
-        _fail("active Delivery capacity holders block Integration retirement")
     if _has_entries(runtime_root / ".runtime-transactions"):
         _fail("pending Delivery runtime transactions block Integration retirement")
 
@@ -1036,9 +1033,6 @@ def _validate_postconditions(root: Path, journal: _RetirementJournal) -> None:
             _fail(f"retired Delivery publication lock remains registered: {change.change_id}")
         if change.branch is not None and change.worktree_head is not None:
             _require_branch(root, change.branch, change.worktree_head)
-    capacity = _load_model(journal.runtime_root / "capacity.json", CapacityLedger)
-    if capacity.change_ids:
-        _fail("active Delivery capacity holders remain after Integration retirement")
     if _has_entries(journal.runtime_root / ".runtime-transactions"):
         _fail("pending Delivery runtime transactions remain after Integration retirement")
 

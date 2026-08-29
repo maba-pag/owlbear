@@ -544,6 +544,18 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
     assert plan.changes == ()
 
 
+def test_retirement_accepts_missing_current_capacity_ledger(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    (delivery_root / "runtime/capacity.json").unlink()
+
+    plan = plan_delivery_integration_retirement(repository)
+
+    assert tuple(change.change_id for change in plan.changes) == ("change-a",)
+    apply_delivery_integration_retirement(plan)
+
+    assert not (delivery_root / "runtime/changes/change-a").exists()
+
+
 def test_retirement_accepts_schema_fifteen_legacy_completion(tmp_path: Path) -> None:
     repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
