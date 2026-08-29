@@ -27,7 +27,7 @@ Running `init.py` writes the following files into your project directory:
 | --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
+| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -59,7 +59,9 @@ project. Setup skips this file on later runs so those project-specific instructi
 The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testing; replace it with
 exact hostnames before using Browser against production or sensitive sites.
 
-For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
+For a fresh workspace, `init.py` writes tracked Delivery configuration. Planner and Builder outcomes
+share one `execution_capacity` budget (default `3`), while Build retains exact writer custody per
+Change; there is no separate global `writer_capacity` limit. It does not create mutable
 Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
 audit stores. Existing legacy state is preserved unchanged.
 
@@ -193,13 +195,13 @@ worktree and their promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
-- Build reads one typed task and custody context, commits only its maintained surfaces, publishes
+- Build reads one typed task and exact per-Change custody context, commits only its maintained surfaces, publishes
   one independently reviewed exact-commit result, and returns the same transition set.
 - Reviewers return only `pass` or `finding` with source-grounded evidence. They never publish,
   repair, choose transitions, or mutate lifecycle state.
 
-Expected outcome: outcomes move through Planning and Build under separate execution and writer
-capacity without Orchestrator scheduling judgment or conversation-derived authority.
+Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
+exact per-Change writer custody, without Orchestrator scheduling judgment or conversation-derived authority.
 
 ### Correction And Recovery
 

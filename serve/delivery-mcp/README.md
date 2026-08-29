@@ -55,11 +55,11 @@ directory, so no Delivery environment variable is required.
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
-claim and one Build writer at a time by default. Set the optional host-local capacity file described
-in the [core Delivery configuration reference](../delivery/README.md#configuration) to raise either
-limit. `execution_capacity` counts all active Planner and Builder claims; `writer_capacity` counts
-concurrent Builder worktrees and is reflected in the generated `capacity.json` ledger. Agent
-frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
+uses one shared `execution_capacity` budget for active Planner and Builder outcome claims, defaulting
+to `3`. Each Change retains exact Build writer custody; `writer_capacity` is rejected and is never an
+active admission limit. See the [core Delivery configuration reference](../delivery/README.md#configuration).
+`CapacityLedger` and `capacity.json` data are historical migration exports, not current runtime authority.
+Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
 Startup validates the configured remote, the exact
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
 remote URL. It does not require or inspect a local target branch.
@@ -69,9 +69,9 @@ version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_s
 defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
 `owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
 remote. The ignored `.owlbear/delivery/runtime/host.json` is optional: its schema version is `1`, and
-both `writer_capacity` and `execution_capacity` default to `1` when the file or either field is
-absent. The generated `.owlbear/delivery/runtime/capacity.json` is runtime state, not a configuration
-file, and must not be edited manually. The Delivery server reads no environment variables.
+`execution_capacity` defaults to `3` when the file or field is absent. The historical
+`.owlbear/delivery/runtime/capacity.json` is not current runtime state or configuration and must not
+be edited manually. The Delivery server reads no environment variables.
 
 At admission, Delivery commits the verified four-file Design package to the managed Change branch
 before opening its first draft pull request. Sparse checkpoints on `delivery_state_branch` retain
