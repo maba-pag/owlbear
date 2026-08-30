@@ -11,6 +11,7 @@ import type {
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
+  WorkItemPublicationReconciliationResponse,
   PublicationChecksObservationResponse,
 } from '../api/workItems'
 import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
@@ -299,6 +300,7 @@ let completedHistorySearchRecords: CompletedChangeRecord[]
 let completedHistorySearchNextCursor: string | null
 let completedHistorySearchPageRecords: CompletedChangeRecord[]
 let completedHistorySearchRelease: (() => void) | null
+let publicationReconciliationResult: WorkItemPublicationReconciliationResponse
 let requests: Array<{ url: string; method: string; body: unknown }>
 
 function response(payload: unknown, status = 200): Response {
@@ -483,6 +485,7 @@ function installFetch() {
       if (pendingMutationPath && url.endsWith(pendingMutationPath)) {
         await new Promise<void>((resolve) => { pendingMutationRelease = resolve })
       }
+      if (url.endsWith('/publication/reconcile')) return response(publicationReconciliationResult)
       if (url.endsWith('/acceptance/observe') && acceptanceObservationFailure) {
         return response({
           detail: {
@@ -608,6 +611,7 @@ beforeEach(() => {
   acceptanceObservationFailure = false
   acceptanceReconciliationProviderUnavailable = false
   publicationChecksFailure = false
+  publicationReconciliationResult = { reconciled: true }
   publicationChecksResponse = {
     schema_version: 1,
     observation_id: 'a'.repeat(64),
@@ -1505,6 +1509,57 @@ it('reconciles a pending publication checkpoint from the Change publication view
     body: null,
   }))
   expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
+})
+
+it('does not claim publication success when reconciliation remains incomplete', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Reconcile the final checkpoint',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
+    action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'checkpoint-pending',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: null,
+      pending_checkpoint_head: '1'.repeat(40),
+      pending_checkpoint_triggers: ['finalization'],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  publicationReconciliationResult = { reconciled: false }
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Publish checkpoint'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/reconcile',
+    method: 'POST',
+    body: null,
+  }))
+  await waitFor(() => expect(screen.queryByText('Publication checkpoint reconciled.')).not.toBeInTheDocument())
 })
 
 it('syncs the Change with the target and shows the latest sync receipt', async () => {

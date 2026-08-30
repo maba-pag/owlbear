@@ -845,6 +845,15 @@ class _PreparedSource:
 
 
 @dataclass(frozen=True)
+class _PreparedCheckpointHead:
+    state: DeliveryCheckpointPublicationState
+    pending: DeliveryPendingCheckpoint
+    head: str
+    first_checkpoint: bool
+    finalization_invalidated: bool = False
+
+
+@dataclass(frozen=True)
 class _SupersessionPublishContext:
     change_id: str
     expected_publication_id: str
@@ -2095,6 +2104,13 @@ class PortfolioApplication:
         initial = runtime.checkpoint_publication_state()
         pending = initial.pending_checkpoint
         if pending is None:
+            finalization = runtime.finalization()
+            if finalization is not None and initial.published_head != finalization.exact_head:
+                raise DeliveryRuntimeReconciliationError(
+                    change_id,
+                    "published checkpoint does not match the finalized Change head; "
+                    "reconcile finalization before retrying publication",
+                )
             return DeliveryCheckpointReconciliationResult(
                 change_id=change_id,
                 attempted_head=None,
@@ -2119,12 +2135,23 @@ class PortfolioApplication:
                     ("publication-baseline-unavailable", f"exact-head:{head}"),
                 )
             raise
-        initial, pending, head, first_checkpoint = self._prepare_checkpoint_head(
+        prepared = self._prepare_checkpoint_head(
             change_id,
             runtime,
             initial,
             pending,
         )
+        if prepared.finalization_invalidated:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=prepared.head,
+                state=prepared.state,
+                reconciled=False,
+            )
+        initial = prepared.state
+        pending = prepared.pending
+        head = prepared.head
+        first_checkpoint = prepared.first_checkpoint
         summary = _checkpoint_summary(pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
@@ -2214,7 +2241,7 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         initial: DeliveryCheckpointPublicationState,
         pending: DeliveryPendingCheckpoint,
-    ) -> tuple[DeliveryCheckpointPublicationState, DeliveryPendingCheckpoint, str, bool]:
+    ) -> _PreparedCheckpointHead:
         """Prepare the exact first checkpoint head and its pull-request boundary."""
         first_checkpoint = any(
             trigger.kind
@@ -2247,9 +2274,23 @@ class PortfolioApplication:
                 pending = initial.pending_checkpoint
                 if pending is None or pending.head is None:
                     self._fail("Design package snapshot removed the pending checkpoint")
+                if runtime.finalization() is not None:
+                    runtime.reconcile_finalization_head(snapshot.snapshot_head, _timestamp(self._clock()))
+                    return _PreparedCheckpointHead(
+                        state=runtime.checkpoint_publication_state(),
+                        pending=pending,
+                        head=snapshot.snapshot_head,
+                        first_checkpoint=first_checkpoint,
+                        finalization_invalidated=True,
+                    )
         if pending.head is None:
             self._fail("checkpoint preparation removed the pending head")
-        return initial, pending, pending.head, first_checkpoint
+        return _PreparedCheckpointHead(
+            state=initial,
+            pending=pending,
+            head=pending.head,
+            first_checkpoint=first_checkpoint,
+        )
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""
