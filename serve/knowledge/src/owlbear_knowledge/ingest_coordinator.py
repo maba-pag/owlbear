@@ -14,6 +14,7 @@ from owlbear_knowledge.protocols.content import (
     ContentStore,
 )
 from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeOperationError
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import (
     IngestDocument,
@@ -77,10 +78,14 @@ class IngestCoordinator:
         chunks_replaced = 0
         chunks_enqueued = 0
         content_results: list[ContentIngestResult] = []
+        errors: list[KnowledgeFailure] = []
 
         for document in request.documents:
             documents_processed += 1
             outcome = await self._process_document(request, document)
+            if isinstance(outcome, KnowledgeFailure):
+                errors.append(outcome)
+                continue
             if outcome is None:
                 continue
 
@@ -127,6 +132,7 @@ class IngestCoordinator:
             chunks_replaced=chunks_replaced,
             chunks_enqueued=chunks_enqueued,
             content_results=tuple(content_results),
+            errors=tuple(errors),
             started_at=started_at,
             completed_at=completed_at,
         )
@@ -234,7 +240,7 @@ class IngestCoordinator:
         self,
         request: IngestRequest,
         document: IngestDocument,
-    ) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | None:
+    ) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure | None:
         """Run ingest and cascade actions for one document."""
         try:
             content_result = await self._content.ingest(
@@ -276,6 +282,9 @@ class IngestCoordinator:
                 )
             else:
                 outcome = (content_result.state, content_result, 0, 0, 0)
+        except KnowledgeOperationError as exc:
+            logger.exception("Failed to process document during ingest")
+            return exc.failure
         except (RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError):
             logger.exception("Failed to process document during ingest")
             return None
@@ -332,6 +341,22 @@ class IngestCoordinator:
                         )
                     )
                     ingest_results.append(ingest_result)
+                    errors.extend(
+                        RefreshError(
+                            source_id=source.id,
+                            error=failure.message,
+                            timestamp=datetime.now(tz=UTC),
+                            failure=failure,
+                        )
+                        for failure in ingest_result.errors
+                    )
+                    successful_documents = (
+                        ingest_result.documents_created
+                        + ingest_result.documents_replaced
+                        + ingest_result.documents_unchanged
+                    )
+                    if ingest_result.errors and successful_documents == 0:
+                        continue
 
                 refreshed_at = datetime.now(tz=UTC)
                 self._sources.update_source(

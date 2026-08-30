@@ -12,6 +12,12 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
+
 
 class SparseVector(BaseModel):
     """Sparse vector representation for lexical matching."""
@@ -66,6 +72,32 @@ def _configure_huggingface_tls() -> None:
     set_client_factory(client_factory)
 
 
+def _model_load_failure(error: Exception) -> KnowledgeOperationError:
+    """Convert model setup failures to stable, safe diagnostics."""
+    details = str(error).lower()
+    configured_ca = os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR")
+    if configured_ca and not Path(configured_ca).exists():
+        code = "embedding_tls_configuration"
+        message = "BGE-M3 TLS configuration is unavailable"
+    elif "certificate" in details or "certificate_verify_failed" in details or "ssl" in details or "tls" in details:
+        code = "embedding_tls_failed"
+        message = "BGE-M3 download TLS verification failed"
+    elif "localentrynotfound" in details or "local entry" in details or "no local model" in details:
+        code = "embedding_model_unavailable"
+        message = "BGE-M3 model is unavailable locally"
+    else:
+        code = "embedding_download_failed"
+        message = "BGE-M3 model download failed"
+    return KnowledgeOperationError(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.INDEXING,
+            code=code,
+            retryable=True,
+            message=message,
+        )
+    )
+
+
 class BgeM3EmbeddingProvider:
     """Embedding provider backed by ``FlagEmbedding.BGEM3FlagModel``.
 
@@ -99,18 +131,26 @@ class BgeM3EmbeddingProvider:
                 try:
                     from FlagEmbedding import BGEM3FlagModel  # noqa: PLC0415
                 except ImportError:
-                    msg = (
-                        "FlagEmbedding is required for BgeM3EmbeddingProvider. "
-                        "Install it with: uv pip install FlagEmbedding"
-                    )
-                    raise ImportError(msg) from None
+                    raise KnowledgeOperationError(
+                        KnowledgeFailure(
+                            stage=KnowledgeFailureStage.INDEXING,
+                            code="embedding_dependency_missing",
+                            retryable=False,
+                            message="FlagEmbedding dependency is unavailable",
+                        )
+                    ) from None
                 _configure_huggingface_tls()
-                self._model = BGEM3FlagModel(
-                    self.model_name,
-                    use_fp16=True,
-                    devices=["cpu"],
-                    batch_size=self.batch_size,
-                )
+                try:
+                    self._model = BGEM3FlagModel(
+                        self.model_name,
+                        use_fp16=True,
+                        devices=["cpu"],
+                        batch_size=self.batch_size,
+                    )
+                except KnowledgeOperationError:
+                    raise
+                except Exception as exc:
+                    raise _model_load_failure(exc) from exc
         return self._model
 
     def _reset_timer(self) -> None:

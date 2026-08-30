@@ -32,6 +32,7 @@ from pydantic import Field
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
 from owlbear_knowledge.protocols.content import ContentIngestResult, ContentPurgeResult
 from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
+from owlbear_knowledge.protocols.failures import KnowledgeFailure
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.sources import SourceDeletionInfo
 
@@ -80,6 +81,7 @@ class IngestResult(BoundaryModel):
     chunks_replaced: int = 0
     chunks_enqueued: int = 0
     content_results: tuple[ContentIngestResult, ...] = Field(default_factory=tuple)
+    errors: tuple[KnowledgeFailure, ...] = Field(default_factory=tuple)
     started_at: datetime
     completed_at: datetime
 
@@ -138,8 +140,9 @@ class RefreshError(BoundaryModel):
     """Error encountered during source refresh."""
 
     source_id: str
-    error: str
+    error: str = ""
     timestamp: datetime
+    failure: KnowledgeFailure | None = None
 
 
 # ---------------------------------------------------------------------------
