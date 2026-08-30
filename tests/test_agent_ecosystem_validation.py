@@ -525,6 +525,17 @@ def test_memory_curator_identity_deferral_reporting_split() -> None:
     assert "another reviewed non-pending entry or a readable local definition" in content
 
 
+def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
+    """The curator's logical workflow resolves when no project-local override exists."""
+    agent = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
+    skill = _SKILLS_ROOT / "w-mem-curation/SKILL.md"
+
+    assert "fall back to `share/skills` when no local override exists" in agent
+    assert skill.is_file()
+    assert "owlbear-memory/list_memories" in agent
+    assert "owlbear-memory/commit_memory_batch" in agent
+
+
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     """Manual review cannot infer named scope from an entry's own provenance."""
     prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
