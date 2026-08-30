@@ -54,10 +54,10 @@ directory, so no Delivery environment variable is required.
 ```
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
-`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
-uses one shared `execution_capacity` budget for active Planner and Builder outcome claims, defaulting
-to `3`. Each Change retains exact Build writer custody; `writer_capacity` is rejected and is never an
-active admission limit. See the [core Delivery configuration reference](../delivery/README.md#configuration).
+`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits active
+Planner and Builder outcome claims against one shared `execution_capacity` budget, defaulting to `3`.
+Each Change retains exact Build writer custody; `writer_capacity` is rejected and is never an active
+admission limit. See the [core Delivery configuration reference](../delivery/README.md#configuration).
 `CapacityLedger` and `capacity.json` data are historical migration exports, not current runtime authority.
 Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
 Startup validates the configured remote, the exact
