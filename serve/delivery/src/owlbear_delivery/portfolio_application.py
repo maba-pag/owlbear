@@ -2441,8 +2441,12 @@ class PortfolioApplication:
         verified_package_ids = {package.change_id for package in self._package_store.list_verified()}
         status_ids = sorted((*verified_package_ids, *self._discovered_changes))
         change_statuses = tuple(
-            self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
-            for change_id in dict.fromkeys(status_ids)
+            status
+            for status in (
+                self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
+                for change_id in dict.fromkeys(status_ids)
+            )
+            if status.stage is not DeliveryChangeStage.COMPLETED or not status.actionable_runtime
         )
         draft_design_ids = tuple(status.change_id for status in change_statuses if not status.admitted)
         design_required_ids = tuple(

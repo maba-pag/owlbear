@@ -82,7 +82,10 @@ class PortfolioChangeLifecycleStatus(_OperatingModel):
 
 
 class PortfolioOperatingView(_OperatingModel):
-    """Independent operating facts and derived guidance for the whole portfolio."""
+    """Current operating facts and derived guidance for the whole portfolio.
+
+    The status projection excludes normally completed Changes; completion totals retain them.
+    """
 
     unfinished_change_count: int = Field(ge=0)
     completed_change_count: int = Field(ge=0)

@@ -71,9 +71,6 @@ async function normalizeSeedLifecycleStatuses(page: Page): Promise<void> {
       if (status.change_id === 'work-e2e') {
         return { ...status, admission: 'admitted', stage: 'design', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
       }
-      if (status.change_id === 'publication-e2e') {
-        return { ...status, admission: 'admitted', stage: 'completed', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
-      }
       return status
     })
     await route.fulfill({ response, body: JSON.stringify({ ...payload, operating: { ...payload.operating, statuses } }) })
