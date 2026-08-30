@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
+import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
@@ -50,7 +50,7 @@ function selectedValue(event: SelectValueEvent): string {
 function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | 'history'; onChange: (workspace: 'current' | 'history') => void }) {
   return (
     <nav
-      className="flex shrink-0 items-stretch gap-static-lg bg-canvas px-static-lg pb-static-xs"
+      className="flex shrink-0 items-stretch gap-static-lg bg-canvas pb-static-xs"
       aria-label="Delivery portfolio views"
       data-testid="work-view-selector"
     >
@@ -82,6 +82,7 @@ interface FilterProps {
   needsFilter: WorkItemNeed | ''
   open: boolean
   onToggle: () => void
+  onDismiss: () => void
   onChangeFilter: (value: string) => void
   onNeedsFilter: (value: WorkItemNeed | '') => void
 }
@@ -89,6 +90,7 @@ interface FilterProps {
 /** Collapsed trigger plus active-filter chips; the expanded surface renders separately below. */
 function PortfolioFilterTools(props: FilterProps) {
   const activeCount = (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   return (
     <>
       {props.changeFilter ? (
@@ -109,17 +111,32 @@ function PortfolioFilterTools(props: FilterProps) {
           onClick={() => props.onNeedsFilter('')}
         />
       ) : null}
-      <button
-        type="button"
-        className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus hover:text-primary"
-        data-testid="work-filters-toggle"
-        aria-expanded={props.open}
-        aria-controls="work-filters-panel"
-        onClick={props.onToggle}
+      <PPopover
+        compact
+        open={props.open}
+        direction="bottom"
+        aria={{ 'aria-label': 'Delivery filters' }}
+        className="max-w-full"
+        onDismiss={() => {
+          props.onDismiss()
+          window.requestAnimationFrame(() => triggerRef.current?.focus())
+        }}
       >
-        <PIcon name="filter" size="inherit" aria-hidden="true" />
-        {activeCount > 0 ? `Filter (${activeCount})` : 'Filter'}
-      </button>
+        <button
+          type="button"
+          slot="button"
+          ref={triggerRef}
+          className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus hover:text-primary"
+          data-testid="work-filters-toggle"
+          aria-expanded={props.open}
+          aria-controls="work-filters-panel"
+          onClick={props.onToggle}
+        >
+          <PIcon name="filter" size="inherit" aria-hidden="true" />
+          {activeCount > 0 ? `Filter (${activeCount})` : 'Filter'}
+        </button>
+        {props.open ? <PortfolioFilterPanel {...props} /> : null}
+      </PPopover>
     </>
   )
 }
@@ -130,11 +147,11 @@ function PortfolioFilterPanel(props: FilterProps) {
     <div
       id="work-filters-panel"
       data-testid="work-filters-panel"
-      className="ml-auto flex w-fit max-w-full flex-wrap items-end gap-x-static-sm gap-y-static-xs rounded-sm border border-contrast-low bg-surface px-static-sm py-static-xs"
+      className="flex w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-wrap items-end gap-x-static-sm gap-y-static-xs rounded-sm border border-contrast-low bg-surface px-static-sm py-static-xs"
     >
       <PSelect
         compact
-        className="w-48"
+        className="w-full sm:w-48"
         label="Change"
         name="work-change-filter"
         value={props.changeFilter}
@@ -145,7 +162,7 @@ function PortfolioFilterPanel(props: FilterProps) {
       </PSelect>
       <PSelect
         compact
-        className="w-56"
+        className="w-full sm:w-56"
         label="Attention"
         name="work-needs-filter"
         value={props.needsFilter}
@@ -518,6 +535,7 @@ export default function WorkPortfolioPage() {
     needsFilter,
     open: filtersOpen,
     onToggle: () => setFiltersOpen((open) => !open),
+    onDismiss: () => setFiltersOpen(false),
     onChangeFilter: setChangeFilter,
     onNeedsFilter: setNeedsFilter,
   }
@@ -539,7 +557,15 @@ export default function WorkPortfolioPage() {
         ) : undefined}
       />
 
-      <PortfolioViewSwitch workspace={workspace} onChange={handleWorkspaceChange} />
+      <div className="flex min-w-0 shrink-0 flex-wrap items-end gap-x-static-md gap-y-static-xs bg-canvas px-static-lg">
+        <PortfolioViewSwitch workspace={workspace} onChange={handleWorkspaceChange} />
+        {workspace === 'current' ? (
+          <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-static-xs pb-static-xs">
+            {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownEntryCount} of ${totalEntryCount}`} unit="portfolio entries shown" /></span> : null}
+            <PortfolioFilterTools {...filterProps} />
+          </div>
+        ) : null}
+      </div>
 
       <div
         className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-lg overflow-y-auto overflow-x-hidden px-static-lg py-static-lg"
@@ -547,14 +573,6 @@ export default function WorkPortfolioPage() {
       >
         {workspace === 'current' ? (
           <>
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-static-lg gap-y-static-sm">
-              <div className="ml-auto flex min-w-0 flex-wrap items-center gap-static-xs">
-                {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownEntryCount} of ${totalEntryCount}`} unit="portfolio entries shown" /></span> : null}
-                <PortfolioFilterTools {...filterProps} />
-              </div>
-            </div>
-            {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
-
             {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{Array.from({ length: 4 }, (_, index) => <span key={index} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
             {error ? (
               <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
