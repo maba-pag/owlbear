@@ -35,12 +35,12 @@ The server exposes these operation groups:
 | Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
-| Legacy compatibility | `show_integration_attention`, `recover_integration_repair_claim` |
+| Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
-attention operation. The compatibility tools only make persisted legacy state visible or recoverable;
-current work uses sequential Change outcomes and user-owned pull-request acceptance.
+creation operation. These operations expose and recover current typed Integration attention; current
+work uses sequential Change outcomes and user-owned pull-request acceptance.
 
 ## Configuration
 
@@ -59,11 +59,12 @@ directory, so no Delivery environment variable is required.
 ```
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
-`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
-claim and one Build writer at a time by default. Set the optional host-local capacity file described
-in the [core Delivery configuration reference](../delivery/README.md#configuration) to raise either
-limit. `execution_capacity` counts all active Planner and Builder claims; `writer_capacity` counts
-concurrent Builder worktrees and is reflected in the generated `capacity-ledger.json` ledger. Agent
+`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery uses one shared
+`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `3`. Each
+Change retains exact Build writer custody; `writer_capacity` is rejected and is never an active
+admission limit. The optional host-local settings file is described in the [core Delivery
+configuration reference](../delivery/README.md#configuration). `CapacityLedger` and any
+`capacity-ledger.json` data are historical migration exports, not current runtime authority. Agent
 frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
 Startup validates the configured remote, the exact
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
@@ -74,13 +75,14 @@ version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_s
 defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
 `owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
 remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` baseline with schema
-version `1`, `writer_capacity: 1`, `execution_capacity: 1`, and `claim_timeout_seconds: 3600` (60
+version `1`, `execution_capacity: 3`, and `claim_timeout_seconds: 3600` (60
 minutes), preserving an existing file on rerun. The optional ignored
-`.owlbear/delivery/runtime/host.local.json` may contain any subset of those settings for one host;
+`.owlbear/delivery/runtime/host.local.json` may contain `execution_capacity` and/or
+`claim_timeout_seconds` for one host;
 local values override the baseline and are not synchronized through Git. The loader supplies the
 same defaults when either file or a field is absent, and all supplied numeric values must be positive
-integers. The generated `.owlbear/delivery/runtime/capacity-ledger.json` is runtime state, not a
-configuration file, and must not be edited manually. The Delivery server reads no environment
+integers. A historical `.owlbear/delivery/runtime/capacity-ledger.json` is not current runtime
+state or configuration and must not be edited manually. The Delivery server reads no environment
 variables.
 
 At admission, Delivery commits the verified four-file Design package to the managed Change branch
@@ -121,5 +123,5 @@ as its current directory. Startup fails closed when nonempty retired `.owlbear/t
 | Package | Purpose |
 | --- | --- |
 | `mcp` | MCPServer framework |
-| `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, legacy compatibility, and completed history |
+| `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, Integration attention, and completed history |
 | `owlbear-delivery-github` | Fixed GitHub API adapter for draft pull-request publication |

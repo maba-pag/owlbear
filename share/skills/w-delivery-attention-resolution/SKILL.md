@@ -156,7 +156,7 @@ Use only an existing operation whose contract owns the selected result:
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
-  legacy repair claim for recovery; do not create a new claim, candidate, review, or admission;
+  Integration repair claim for recovery; do not create a new claim, candidate, review, or admission;
 - target-sync merge conflict: when the Change attention diagnostics identify a preserved target
   synchronization conflict, retain the managed worktree, `MERGE_HEAD`, and conflict paths and
   report `authority-gap` unless the current context supplies an exact Delivery-owned operation for

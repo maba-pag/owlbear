@@ -28,7 +28,7 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
-| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for writer capacity, execution capacity, and the 60-minute claim timeout | Seeded with defaults; existing values are preserved on rerun |
+| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 3`; existing values are preserved on rerun |
 | `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -62,8 +62,10 @@ The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testi
 exact hostnames before using Browser against production or sensitive sites.
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration and the visible default
-`host.json`. Create `host.local.json` only for machine-specific overrides; it is ignored and is not
-synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
+`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 3`).
+Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
+Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
+is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
 profiles, or retired task, decision, board, accept, or audit stores. Existing legacy state is
 preserved unchanged.
 
@@ -197,13 +199,13 @@ worktree and their promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
-- Build reads one typed task and custody context, commits only its maintained surfaces, publishes
+- Build reads one typed task and exact per-Change custody context, commits only its maintained surfaces, publishes
   one independently reviewed exact-commit result, and returns the same transition set.
 - Reviewers return only `pass` or `finding` with source-grounded evidence. They never publish,
   repair, choose transitions, or mutate lifecycle state.
 
-Expected outcome: outcomes move through Planning and Build under separate execution and writer
-capacity without Orchestrator scheduling judgment or conversation-derived authority.
+Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
+exact per-Change writer custody, without Orchestrator scheduling judgment or conversation-derived authority.
 
 ### Correction And Recovery
 
@@ -220,7 +222,7 @@ Worker transitions keep correction finite and typed:
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
 Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and retained legacy Integration attention
+unblock, confirmed-dead claim recovery, backward movement, and retained Integration attention
 remain user-owned Cockpit controls rather than agent MCP operations.
 
 ### Publication, Acceptance, And Completed History
@@ -238,10 +240,11 @@ requires the exact repository, PR, base, finalized head, merged state, merge tim
 reported merge commit. Completed history preserves the finalized Change head and accepted merge
 commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
 
-Persisted legacy Integration attention remains visible through compatibility surfaces only. Use
-Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact legacy
-attention. New Integration repair claims, candidates, reviews, and admissions are retired. Treat a
-merge conflict without a current legacy claim as an authority gap; if persisted legacy claim context
+Persisted Integration attention remains visible through the current attention surfaces. Use
+Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact attention.
+New Integration repair claims, candidates, reviews, and admissions are not created by the current
+workflow. Treat a
+merge conflict without a current repair claim as an authority gap; if persisted repair-claim context
 supplies exact attempt and claim identities, use the exact recovery operation and preserve its
 evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
 provide bounded list, search, and exact lookup of receipt-backed history.

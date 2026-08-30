@@ -2,7 +2,7 @@
 
 `owlbear-delivery` is the transport-free control plane for Change delivery. It projects semantic work
 items from admitted Design authority, owns deterministic Planning and Build transitions, coordinates
-bounded execution and writer capacity, publishes reviewed Change checkpoints, observes user-owned
+bounded execution, publishes reviewed Change checkpoints, observes user-owned
 pull-request acceptance, and projects recoverable completed history. It retains legacy Target cutover
 and evidence contracts for historical consumers; canonical Change delivery does not use them.
 
@@ -26,10 +26,10 @@ The main public areas are:
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
-| Coordination | Per-Change writer custody under `runtime/coordination/changes`, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
+| Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
-| Legacy compatibility | Typed Integration attention/recovery and `TargetRuntime` evidence remain public for historical consumers |
+| Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -78,23 +78,23 @@ same typed configuration directly.
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
-| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `writer_capacity` and `execution_capacity` default to `1`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; all three values must be positive integers. | Tracked baseline configuration |
+| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `execution_capacity` defaults to `3`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; both values must be positive integers. | Tracked baseline configuration |
 | `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
-| `.owlbear/delivery/runtime/capacity-ledger.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived capacity ledger |
+| `.owlbear/delivery/runtime/capacity-ledger.json` | Legacy migration export; do not edit | Historical `CapacityLedger` data may retain active-holder fields for migration validation. It is not current runtime authority and is absent from new runtime state. | Historical migration authority |
 
-The two host capacities control different limits. `execution_capacity` is the maximum number of
-active Planner or Builder claims across the portfolio. `writer_capacity` is the maximum number of
-concurrent Builder worktrees; a Builder needs both an execution slot and a writer slot. For example,
-the tracked baseline can allow two writers and three total claims:
+`execution_capacity` is the maximum number of active Planner or Builder outcome claims across the
+portfolio. Each acquired Change has exact per-Change writer custody; there is no separate global
+`writer_capacity` admission limit. The tracked baseline allows three active claims:
 
 ```json
-{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3, "claim_timeout_seconds": 3600}
+{"schema_version": 1, "execution_capacity": 3, "claim_timeout_seconds": 3600}
 ```
 
-Put machine-specific changes in the ignored local overlay instead of editing the tracked baseline:
+Put machine-specific execution or timeout changes in the ignored local overlay instead of editing the
+tracked baseline:
 
 ```json
-{"writer_capacity": 1, "claim_timeout_seconds": 1800}
+{"execution_capacity": 2, "claim_timeout_seconds": 1800}
 ```
 
 An active Planner or Builder claim is eligible for recovery after the configured
