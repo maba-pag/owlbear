@@ -140,7 +140,7 @@ _PROMPT_VALIDATOR = _load_module(_PROMPT_VALIDATOR_PATH, "prompt_validator")
 def _agent_text(
     name: str,
     *,
-    tools: str = "[search]",
+    tools: str = "[vscode/toolSearch, search]",
     agents: str = "[]",
     agent_rows: str = "",
     disable_model_invocation: str = "true",
@@ -231,9 +231,21 @@ class _TargetApplicationDouble:
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/acquire]"))
+    path = _write_agent(
+        tmp_path,
+        "reader",
+        _agent_text("reader", tools="[vscode/toolSearch, owlbear-browser/acquire]"),
+    )
 
     assert _AGENT_VALIDATOR.validate_agent(path) == []
+
+
+def test_agent_validator_requires_tool_search(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[search]"))
+
+    errors = _AGENT_VALIDATOR.validate_agent(path)
+
+    assert any("missing required tool(s): ['vscode/toolSearch']" in error for error in errors)
 
 
 def test_agent_validator_rejects_unavailable_mcp_tool_suffix(tmp_path: Path) -> None:

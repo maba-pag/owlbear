@@ -5,6 +5,7 @@ Checks each agents/*.agent.md file for:
   - 'todos' on the tools: line — tool is disabled for subagents
   - Presence of 'manage_todo_list' anywhere — tool is disabled for subagents
   - Presence of 'resolveMemoryFileUri' anywhere
+    - Presence of the required 'vscode/toolSearch' tool
   - Unknown tool names not in the canonical registry
   - Frontmatter agents: ↔ body <agents> table alignment
     - Hook declaration shape, script paths, and required role contracts
@@ -34,6 +35,7 @@ _MANAGE_TODO_LIST = "manage_todo_list"
 _TOOL_SEARCH_QUERY_RE = re.compile(r'`"?(OwlBear (?:Delivery|Memory)\s+[^`"]+)"?`')
 _TOOL_SEARCH_IGNORED_WORDS = frozenset({"portfolio", "target"})
 _MIN_TOOL_SEARCH_PARTS = 3
+_REQUIRED_AGENT_TOOLS = frozenset({"vscode/toolSearch"})
 _MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
     "owlbear-browser": ("owlbear_browser_mcp.server", "mcp"),
     "owlbear-delivery": ("owlbear_delivery_mcp.server", "mcp"),
@@ -413,6 +415,14 @@ def _check_unknown_tools(
     return errors
 
 
+def _check_required_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Require every agent to retain the deferred-tool discovery escape hatch."""
+    missing = sorted(_REQUIRED_AGENT_TOOLS - set(_declared_tool_names(fm_lines)))
+    if not missing:
+        return []
+    return [f"{agent_file}: tools: missing required tool(s): {missing}"]
+
+
 def _check_live_mcp_grants(
     agent_files: list[Path],
     configured_servers: frozenset[str],
@@ -552,6 +562,7 @@ def _check_tool_policy(
     if tools and _BARE_TODO_RE.search(tools):
         errors.append(f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents")
 
+    errors.extend(_check_required_tools(fm_lines, agent_file))
     errors.extend(_check_unknown_tools(fm_lines, agent_file, mcp_servers))
     return errors
 
