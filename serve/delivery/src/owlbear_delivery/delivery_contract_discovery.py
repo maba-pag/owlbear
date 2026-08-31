@@ -9,17 +9,17 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from owlbear_delivery.delivery_admission import (
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
+    _validate_delivery_frontier,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryRuntimeMigrationError,
     derive_change_stage,
     parse_delivery_frontier,
-)
-from owlbear_delivery.target_admission import (
-    DeliveryAdmissionConflictError,
-    DeliveryAdmissionReceipt,
-    _validate_delivery_frontier,
 )
 from owlbear_delivery.target_contract import DeliveryContract
 

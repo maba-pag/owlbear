@@ -27,20 +27,40 @@ they must also be on the same drive.
 
 Walk the teammate through these steps:
 
+### 1. Clone the project repository
+
 ```shell
-# 1. Clone the project repository to a convenient parent directory
 git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
+```
 
-# 2. Clone owlbear as a sibling
+**Expected result:** the project is checked out at `~/Dev/my-project`.
+
+### 2. Clone OwlBear as a sibling
+
+```shell
 git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
+```
 
-# 3. Bootstrap owlbear into the project workspace
+**Expected result:** the OwlBear checkout is at `~/Dev/owlbear`, beside the project repository.
+
+### 3. Bootstrap OwlBear into the project workspace
+
+```shell
 cd ~/Dev/my-project
 uv run --project ../owlbear python ../owlbear/setup/init.py
+```
 
-# 4. Open the project in VS Code
+**Expected result:** setup creates or merges the project's VS Code configuration, registers the
+seeded MCP servers, and copies the project-local runtime files.
+
+### 4. Open the project in VS Code
+
+```shell
 code .
 ```
+
+**Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
+available.
 
 > **Windows:** use `C:\Dev\...` paths and backslashes:
 > `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.

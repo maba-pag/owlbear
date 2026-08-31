@@ -24,6 +24,11 @@ from owlbear_knowledge.protocols.content import (
 from owlbear_knowledge.protocols.content import (
     ContentStore as ContentStoreProtocol,
 )
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
 
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
@@ -37,6 +42,18 @@ def compute_content_hash(content: str) -> str:
     """Return a stable SHA-256 digest for normalized document text."""
     normalized = " ".join(content.split())
     return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def _embedding_failure(*, query: bool) -> KnowledgeOperationError:
+    """Return a safe generic failure for non-BGE embedding providers."""
+    return KnowledgeOperationError(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.QUERY if query else KnowledgeFailureStage.INDEXING,
+            code="query_embedding_failed" if query else "embedding_failed",
+            retryable=True,
+            message="Query embedding failed" if query else "Document embedding failed",
+        )
+    )
 
 
 class ContentStore(ContentStoreProtocol):
@@ -464,26 +481,35 @@ class ContentStore(ContentStoreProtocol):
 
     def _embed_for_storage(self, texts: list[str]) -> list[object]:
         """Embed texts for storage — hybrid if available, dense fallback."""
-        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
-        if callable(embed_hybrid):
-            hybrid = embed_hybrid(texts)
-            if isinstance(hybrid, (list, tuple)) and len(hybrid) == len(texts):
-                return list(hybrid)
+        try:
+            embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+            if callable(embed_hybrid):
+                hybrid = embed_hybrid(texts)
+                if isinstance(hybrid, (list, tuple)) and len(hybrid) == len(texts):
+                    return list(hybrid)
 
-        return self._embedding_provider.embed(texts)
+            return self._embedding_provider.embed(texts)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _embedding_failure(query=False) from exc
 
     def _embed_query(self, query_text: str) -> object:
-        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
-        if callable(embed_hybrid):
-            hybrid = embed_hybrid([query_text])
-            if isinstance(hybrid, (list, tuple)) and hybrid:
-                return hybrid[0]
+        try:
+            embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+            if callable(embed_hybrid):
+                hybrid = embed_hybrid([query_text])
+                if isinstance(hybrid, (list, tuple)) and hybrid:
+                    return hybrid[0]
 
-        dense = self._embedding_provider.embed([query_text])
-        if dense:
-            return dense[0]
-        msg = "embedding provider returned no query embedding"
-        raise ValueError(msg)
+            dense = self._embedding_provider.embed([query_text])
+            if dense:
+                return dense[0]
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _embedding_failure(query=True) from exc
+        raise _embedding_failure(query=True)
 
     def _get_chunks_by_ids(self, chunk_ids: tuple[str, ...]) -> dict[str, ContentChunk]:
         if not chunk_ids:

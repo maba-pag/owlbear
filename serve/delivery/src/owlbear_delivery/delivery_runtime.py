@@ -1321,7 +1321,7 @@ class DeliveryRuntimeReferenceError(ValueError):
 
 
 class DeliveryRuntimeMigrationError(ValueError):
-    """A legacy frontier requires explicit migration before startup."""
+    """A retired frontier shape is not accepted by the current runtime."""
 
 
 _STAGE_ORDER = {
@@ -1333,6 +1333,7 @@ _STAGE_ORDER = {
 _PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
 _FRONTIER_SCHEMA_VERSION = 17
 _FINALIZATION_SCHEMA_VERSION = 2
+# These names describe rejected obsolete fields; the current parser never reads historical authority.
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -3123,9 +3124,12 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
-            self._require_workspace().release_writer_at_head(
+            claim = binding.active_claim
+            if claim is None:
+                _conflict("Implementation block requires an active claim")
+            self._require_workspace().restart(
                 self._contract.change_id,
-                request.claim_id,
+                claim.attempt_id,
                 request.resume_commit,
             )
         elif request.resume_commit is not None:
@@ -3315,6 +3319,7 @@ def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
 
 
 def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None:
+    # Current parser guard: retired completion fields must never be accepted as present authority.
     result_id = payload.pop("integration_result_id", None)
     completion = payload.pop("integration_completion", None)
     if result_id is not None or completion is not None:
@@ -3322,6 +3327,7 @@ def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None
 
 
 def _reject_legacy_finalization(payload: dict[str, object]) -> None:
+    # Current-schema integrity guard; this does not read or translate historical state.
     finalization = payload.get("finalization")
     if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
         raise DeliveryRuntimeMigrationError(_LEGACY_FINALIZATION_MESSAGE)

@@ -30,6 +30,7 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedEntity,
     ExtractedRelation,
 )
+from owlbear_knowledge.protocols.failures import KnowledgeOperationError
 from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshRequest
 from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
@@ -509,6 +510,8 @@ async def knowledge_search(
             scopes=tuple(normalized_scopes or ()),
         )
         result = await query_facade.search(request)
+    except KnowledgeOperationError as exc:
+        return exc.failure.model_dump(mode="json")  # type: ignore[return-value]
     except ValueError as exc:
         msg = "invalid search request"
         raise ToolError(msg) from exc

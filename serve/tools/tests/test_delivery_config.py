@@ -166,7 +166,7 @@ def test_target_branch_rejects_idle_change_coordination_without_frontier(
         '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
         encoding="utf-8",
     )
-    coordination = tmp_path / ".owlbear/delivery/runtime/claims/changes/example.json"
+    coordination = tmp_path / ".owlbear/delivery/runtime/coordination/changes/example.json"
     coordination.parent.mkdir(parents=True)
     coordination.write_text('{"writer": null}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)

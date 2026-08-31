@@ -261,7 +261,7 @@ def test_rejected_package_validation_cannot_publish_during_later_recovery(
     store.checkpoint("source-bound-change")
     verified = store.read_verified("source-bound-change")
     assert verified.authority_bytes == b""
-    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+    assert not list((active_root / "transactions").glob("*.yaml"))
 
 
 def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents(

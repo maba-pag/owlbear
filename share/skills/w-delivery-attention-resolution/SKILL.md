@@ -156,7 +156,7 @@ Use only an existing operation whose contract owns the selected result:
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
-  legacy repair claim for recovery; do not create a new claim, candidate, review, or admission;
+  Integration repair claim for recovery; do not create a new claim, candidate, review, or admission;
 - target-sync merge conflict: when the Change attention diagnostics identify a preserved target
   synchronization conflict, retain the managed worktree, `MERGE_HEAD`, and conflict paths and
   report `authority-gap` unless the current context supplies an exact Delivery-owned operation for
@@ -164,8 +164,17 @@ Use only an existing operation whose contract owns the selected result:
   retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
+- dirty Builder claim recovery: call the exact `recover_claim` operation with the supplied change,
+  outcome, attempt, and claim identities. Delivery preserves uncommitted tracked, staged, deleted,
+  renamed, and untracked non-ignored bytes in an isolated quarantine ref, verifies the evidence,
+  resets and cleans the managed worktree without removing ignored environments, releases stale
+  custody, and allows successor acquisition. Do not inspect, classify, adopt, discard, or commit
+  dirty files on the user's behalf. If recovery returns `recovered`, report the quarantine evidence
+  and continue the owning workflow. If it returns `attention`, report the machine-owned preservation
+  or custody failure and its retry condition; do not turn it into a Git decision for the user.
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
-  its attempt and claim identities.
+  its attempt and claim identities. A recovery result of `attention` is not recovery; report the
+  retained claim, custody, and machine-owned retry condition without performing Git cleanup.
 - retained Integration repair attention: preserve the existing
   `show_integration_attention(change_id)` and `recover_integration_repair_claim(change_id,
   attempt_id, claim_id)` route. Do not use Change disposition resolution for an Integration repair

@@ -26,10 +26,10 @@ The main public areas are:
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
-| Coordination | Exact per-Change writer custody, one shared execution budget, warm worktrees, and reviewed source boundaries |
+| Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
-| Legacy compatibility | Typed Integration attention/recovery and `TargetRuntime` evidence remain public for historical consumers |
+| Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -64,6 +64,11 @@ Cause-specific missing-coordination classification is a separate follow-up Chang
 operation inventory is also unchanged by this remediation; user-control parity remains a separate,
 explicitly user-directed follow-up.
 
+Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
+The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,
+and verification locks. Recoverable runtime transaction manifests live under
+`.owlbear/delivery/runtime/transactions/`.
+
 ## Configuration
 
 The package reads no environment variables. Canonical MCP and Cockpit startup uses the tracked
@@ -73,19 +78,35 @@ same typed configuration directly.
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
-| `.owlbear/delivery/runtime/host.json` | Optional and ignored | `execution_capacity` defaults to `3`. When present, `schema_version` must be `1`; execution capacity must be a positive integer. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
-| `.owlbear/delivery/runtime/capacity.json` | Legacy migration export; do not edit | Historical `CapacityLedger` data may retain active-holder fields for migration validation. It is not current runtime authority and is absent from new runtime state. | Historical migration authority |
+| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `execution_capacity` defaults to `3`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; both values must be positive integers. | Tracked baseline configuration |
+| `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
+| `.owlbear/delivery/runtime/capacity-ledger.json` | Legacy migration export; do not edit | Historical `CapacityLedger` data may retain active-holder fields for migration validation. It is not current runtime authority and is absent from new runtime state. | Historical migration authority |
 
 `execution_capacity` is the maximum number of active Planner or Builder outcome claims across the
 portfolio. Each acquired Change has exact per-Change writer custody; there is no separate global
-`writer_capacity` admission limit. The optional host file can allow three active claims:
+`writer_capacity` admission limit. The tracked baseline allows three active claims:
 
 ```json
-{"schema_version": 1, "execution_capacity": 3}
+{"schema_version": 1, "execution_capacity": 3, "claim_timeout_seconds": 3600}
 ```
 
-`setup/init.py` creates the tracked project policy but does not create `host.json`; the absence of
-that file therefore preserves the defaults above.
+Put machine-specific execution or timeout changes in the ignored local overlay instead of editing the
+tracked baseline:
+
+```json
+{"execution_capacity": 2, "claim_timeout_seconds": 1800}
+```
+
+An active Planner or Builder claim is eligible for recovery after the configured
+`claim_timeout_seconds` (3600 seconds by default), measured from its persisted `started_at` value.
+The loader merges `host.local.json` over `host.json` when the overlay exists. Recovery runs lazily at
+the next `acquire_frontier_work()` call. Clean matching Builder custody is restarted and released
+through the normal recovery path; dirty or mismatched worktrees remain retained with recovery
+attention and continue to consume capacity.
+
+`setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. It
+does not create `host.local.json`; create that ignored file only when this host needs overrides. The
+loader still accepts an absent baseline or local file for older or manually managed workspaces.
 
 ### Portability And Recovery
 

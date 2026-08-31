@@ -14,45 +14,32 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
+    BlockedImplementationRecoveryReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
-    ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
     PublicationBaselineRecoveryReceipt,
-    PublicationBaselineUnavailableError,
 )
-from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
+from owlbear_delivery.completed_history import CompletedHistoryError
 from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
 )
-from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     PortfolioApplication,
-    PortfolioApplicationError,
 )
-from owlbear_delivery.publication_provider import PublicationProviderError
-from owlbear_delivery.runtime_transaction import (
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-from owlbear_delivery.target_admission import TargetAdmissionError
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
+    ChangeBlockedImplementationRecoveryResponse,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
@@ -91,6 +78,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
+    RecoverBlockedImplementationParams,
+    RecoverBlockedImplementationRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverPublicationBaselineParams,
@@ -161,6 +150,7 @@ DELIVERY_OPERATION_NAMES = (
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
+    "recover_blocked_implementation",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -618,6 +608,27 @@ class TargetMCPAdapter:
         )
         return ChangePublicationBaselineRecoveryResponse.from_receipt(receipt)
 
+    async def recover_blocked_implementation(
+        self,
+        request: RecoverBlockedImplementationRequest,
+    ) -> ChangeBlockedImplementationRecoveryResponse:
+        """Recover one released blocked Implementation candidate after explicit confirmation."""
+        params = self._validate(RecoverBlockedImplementationParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_blocked_implementation(
+                params.change_id,
+                params.outcome_id,
+                params.expected_resume_commit,
+                params.expected_reviewed_head,
+                params.operation_id,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            BlockedImplementationRecoveryReceipt,
+        )
+        return ChangeBlockedImplementationRecoveryResponse.from_receipt(receipt)
+
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
@@ -697,28 +708,14 @@ class TargetMCPAdapter:
     def _call_raw(self, params: BaseModel, operation: Callable[[], object]) -> object:
         try:
             return operation()
-        except CompletedHistoryError as exc:
-            authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or self._authority(params)
-            self._raise(
-                exc.diagnostic.code.value,
-                exc.diagnostic.detail,
-                authority,
-                retry_safe=isinstance(exc, CompletedHistoryStaleError),
-            )
-        except PublicationProviderError as exc:
-            self._raise(
-                exc.code.value,
-                str(exc) or exc.code.value,
-                self._authority(params),
-                retry_safe=exc.retry_safe,
-            )
-        except _NAMED_DELIVERY_ERRORS as exc:
-            self._raise(
-                exc.code,
-                str(exc) or exc.code,
-                self._authority(params),
-                retry_safe=getattr(exc, "retry_safe", isinstance(exc, _RETRY_SAFE_ERRORS)),
-            )
+        except Exception as exc:
+            failure = classify_delivery_failure(exc)
+            if failure is None:
+                raise
+            authority = self._authority(params)
+            if isinstance(exc, CompletedHistoryError):
+                authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or authority
+            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe)
 
     @staticmethod
     def _serialize(value: object) -> StructuredOutput:
@@ -766,29 +763,6 @@ class TargetMCPAdapter:
             retry_safe=retry_safe,
         )
         raise ToolError(diagnostic.model_dump_json())
-
-
-_NAMED_DELIVERY_ERRORS = (
-    CompletionReceiptConflictError,
-    ChangeTargetSyncConflictError,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
-    PublicationBaselineUnavailableError,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
-    DesignPackageConflictError,
-    PortfolioApplicationError,
-    TargetAdmissionError,
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-_RETRY_SAFE_ERRORS = (
-    CoordinationConflictError,
-    DeliveryRuntimeConflictError,
-    DesignPackageConflictError,
-    TransactionConflictError,
-)
 
 
 def assemble_target_server(application: PortfolioApplication) -> MCPServer:

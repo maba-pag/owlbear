@@ -20,6 +20,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_application_loader import DeliveryHostConfig, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
@@ -38,7 +39,6 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest, DesignPackageStore
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,

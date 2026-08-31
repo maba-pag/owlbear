@@ -20,6 +20,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
 from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult
 from owlbear_knowledge.protocols.ingest import (
     IngestResult,
@@ -382,3 +387,35 @@ class TestFetchErrorPropagation:
         await coordinator.refresh(RefreshRequest())
 
         mock_sources.update_source.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_embedding_failure_is_returned_and_does_not_mark_source_refreshed(
+    mock_sources: MagicMock,
+    mock_enrichment: MagicMock,
+    mock_graph: MagicMock,
+    mock_fetcher: MagicMock,
+) -> None:
+    failure = KnowledgeFailure(
+        stage=KnowledgeFailureStage.INDEXING,
+        code="embedding_tls_failed",
+        retryable=True,
+        message="BGE-M3 download TLS verification failed",
+    )
+    content = MagicMock(name="content")
+    content.ingest = AsyncMock(side_effect=KnowledgeOperationError(failure))
+    coordinator = IngestCoordinator(
+        sources=mock_sources,
+        content=content,
+        enrichment=mock_enrichment,
+        graph=mock_graph,
+        fetcher=mock_fetcher,
+    )
+    mock_fetcher.fetch_source = AsyncMock(return_value=FetchResult(documents=(_make_fetched_doc(),)))
+
+    result = await coordinator.refresh(RefreshRequest())
+
+    assert result.sources_refreshed == 0
+    assert result.errors[0].failure == failure
+    assert result.errors[0].error == failure.message
+    mock_sources.update_source.assert_not_called()

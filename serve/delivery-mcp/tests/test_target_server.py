@@ -88,6 +88,7 @@ DELIVERY_TOOLS = {
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
+    "recover_blocked_implementation",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -294,7 +295,7 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
         DeliveryAdmissionReceipt.model_validate(receipt_payload).model_dump_json(),
         encoding="utf-8",
     )
-    coordination_root = runtime_root / "claims/changes"
+    coordination_root = runtime_root / "coordination/changes"
     coordination_root.mkdir(parents=True)
     coordination_root.joinpath("change-a.json").write_text(
         ChangeCoordination(

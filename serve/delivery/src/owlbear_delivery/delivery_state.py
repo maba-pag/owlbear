@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_runtime import DeliveryFrontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
@@ -180,12 +180,6 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
 
 def _validate_snapshot_lifecycle(snapshot: DeliveryStateSnapshot) -> None:
     """Reject live or transient lifecycle state from portable snapshots."""
-    if (
-        snapshot.frontier.change_completion is not None
-        and snapshot.frontier.change_completion.change_id != snapshot.change_id
-    ):
-        message = "Delivery-state completion does not match its Change"
-        raise ValueError(message)
     if any(
         binding.output is not None
         or binding.candidate is not None

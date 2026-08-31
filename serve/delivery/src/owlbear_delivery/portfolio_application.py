@@ -9,11 +9,12 @@ import subprocess
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
+from markdown_it import MarkdownIt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.acceptance import (
@@ -30,6 +31,7 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    BlockedImplementationRecoveryReceipt,
     ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
@@ -41,15 +43,18 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
+    DirtyWorktreeQuarantineReceipt,
     PortfolioCoordinator,
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
+    RecoverBlockedImplementation,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
 )
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryChangeObservation,
     DeliveryDiscoveryRootError,
@@ -72,6 +77,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
+    DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
@@ -139,7 +145,6 @@ from owlbear_delivery.publication_provider import (
     failed_required_publication_checks,
 )
 from owlbear_delivery.storage_io import locked_roots
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -167,17 +172,17 @@ if TYPE_CHECKING:
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
+    from owlbear_delivery.delivery_admission import (
+        DeliveryAdmissionRequest,
+        DeliveryAdmissionResult,
+        DeliveryAuthorityRegistry,
+    )
     from owlbear_delivery.delivery_state import DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
-    )
-    from owlbear_delivery.target_admission import (
-        DeliveryAdmissionRequest,
-        DeliveryAdmissionResult,
-        DeliveryAuthorityRegistry,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
@@ -196,6 +201,12 @@ _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
 _MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
 _MAX_AUTOMATION_PATHS = 32
 _MAX_AUTOMATION_PATH_LENGTH = 240
+_MAX_PR_OUTCOMES = 24
+_MAX_PR_GOAL_LENGTH = 1_200
+_MAX_PR_INTENT_LENGTH = 1_600
+_MAX_PR_OUTCOME_TITLE_LENGTH = 180
+_MAX_PR_OUTCOME_PROMISE_LENGTH = 480
+_INTENT_SUMMARY_HEADING = "Problem And Product Promise"
 
 
 def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
@@ -249,25 +260,179 @@ def _checkpoint_operation_id(kind: str, *parts: str) -> str:
     return f"checkpoint-{kind}-{hashlib.sha256(payload.encode()).hexdigest()}"
 
 
-def _checkpoint_summary(
-    pending: DeliveryPendingCheckpoint,
+def _dirty_recovery_operation_id(change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> str:
+    payload = json.dumps(
+        ("dirty-worktree-recovery", change_id, outcome_id, attempt_id, claim_id),
+        separators=(",", ":"),
+    )
+    return f"recover-dirty-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+
+def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoint publication inputs.
+    runtime: DeliveryRuntime,
+    package: VerifiedDesignPackage,
+    pending: DeliveryPendingCheckpoint | None,
     head: str,
     automation_paths: tuple[str, ...],
+    *,
+    supersedes_publication_id: str | None = None,
 ) -> str:
-    lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
-    for trigger in pending.triggers:
-        if trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN:
-            lines.append("- Admitted Design package")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
-            lines.append("- First promoted Task result")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
-            lines.append(f"- Verified Outcome `{trigger.outcome_id}`")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
-            lines.append("- Finalized Change")
-        else:
-            lines.append("- Explicit publication request")
+    goal, intent = _intent_summary(package.intent_bytes, runtime)
+    bindings = {binding.outcome_id: binding for binding in runtime.bindings()}
+    completed_outcomes = sum(binding.stage == DeliveryStage.COMPLETED for binding in bindings.values())
+    lines = [
+        "## Goal",
+        "",
+        f"> {_summary_text(goal, _MAX_PR_GOAL_LENGTH)}",
+        "",
+        "## Intent",
+        "",
+        f"> {_summary_text(intent, _MAX_PR_INTENT_LENGTH)}",
+        "",
+        "## Promised Outcomes",
+        "",
+    ]
+    visible_outcomes = runtime.contract.outcomes[:_MAX_PR_OUTCOMES]
+    for outcome in visible_outcomes:
+        binding = bindings[outcome.outcome_id]
+        complete = binding.stage == DeliveryStage.COMPLETED
+        state = "complete" if complete else binding.stage.value
+        checkbox = "x" if complete else " "
+        outcome_line = (
+            f"- [{checkbox}] **{_summary_text(outcome.title, _MAX_PR_OUTCOME_TITLE_LENGTH)}** "
+            f"(`{outcome.outcome_id}`; {state})"
+        )
+        lines.extend(
+            (
+                outcome_line,
+                f"  Promised result: {_summary_text(outcome.promise, _MAX_PR_OUTCOME_PROMISE_LENGTH)}",
+            )
+        )
+    omitted_outcomes = len(runtime.contract.outcomes) - len(visible_outcomes)
+    if omitted_outcomes:
+        lines.append(f"- {omitted_outcomes} additional Outcome(s) omitted from this summary")
+    lines.extend(
+        (
+            "",
+            "## Delivery Status",
+            "",
+            f"As of reviewed checkpoint `{head}`:",
+            "",
+            f"- Outcomes complete: {completed_outcomes} of {len(runtime.contract.outcomes)}",
+        )
+    )
+    if pending is not None:
+        lines.append(
+            f"- Checkpoint includes: {', '.join(_checkpoint_trigger_label(trigger) for trigger in pending.triggers)}"
+        )
+    finalization = runtime.finalization()
+    if finalization is not None and finalization.exact_head == head:
+        lines.extend(
+            (
+                "- Delivery finalization: recorded for this checkpoint",
+                "- Independent exact-commit review: passed for this checkpoint",
+            )
+        )
+    if supersedes_publication_id is not None:
+        lines.append(f"- Publication supersedes provider publication `{supersedes_publication_id}`")
     lines.extend(_automation_summary(automation_paths))
     return "\n".join(lines)
+
+
+def _checkpoint_trigger_label(trigger: DeliveryCheckpointTrigger) -> str:
+    if trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN:
+        return "admitted Design package"
+    if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+        return "first promoted Task result"
+    if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+        return f"Outcome `{trigger.outcome_id}` verified"
+    if trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
+        return "finalization recorded"
+    return "explicit publication request"
+
+
+def _intent_summary(intent_bytes: bytes, runtime: DeliveryRuntime) -> tuple[str, str]:
+    paragraphs = _intent_summary_paragraphs(intent_bytes)
+    if paragraphs:
+        goal = paragraphs[0]
+        intent = " ".join(paragraphs[1:]).strip() or "Deliver the promised Outcomes below."
+        return goal, intent
+    fallback = next(
+        (
+            commitment.statement
+            for commitment in runtime.contract.commitments
+            if commitment.commitment_class.value in {"dealbreaker", "protected-request"}
+        ),
+        runtime.contract.title,
+    )
+    return fallback, "Deliver the promised Outcomes below."
+
+
+def _intent_summary_paragraphs(intent_bytes: bytes) -> tuple[str, ...]:
+    text = intent_bytes.decode("utf-8", errors="replace")
+    tokens = MarkdownIt("commonmark").parse(text)
+    in_summary_section = False
+    in_paragraph = False
+    paragraphs: list[str] = []
+    for index, token in enumerate(tokens):
+        if token.type == "heading_open":
+            heading = ""
+            if index + 1 < len(tokens) and tokens[index + 1].type == "inline":
+                heading = tokens[index + 1].content
+            if token.tag == "h2" and heading == _INTENT_SUMMARY_HEADING:
+                in_summary_section = True
+            elif token.tag in {"h1", "h2"}:
+                in_summary_section = False
+            in_paragraph = False
+        elif token.type == "paragraph_open":
+            in_paragraph = in_summary_section
+        elif token.type == "paragraph_close":
+            in_paragraph = False
+        elif token.type == "inline" and in_paragraph and token.content.strip():
+            paragraphs.append(token.content)
+    return tuple(paragraphs)
+
+
+def _summary_text(value: str, max_length: int) -> str:
+    normalized = " ".join("".join(character if character.isprintable() else " " for character in value).split())
+    if not normalized:
+        return "Not provided."
+    escaped = _escape_summary_text(normalized)
+    if len(escaped) <= max_length:
+        return escaped
+    suffix = "..."
+    low = 0
+    high = len(normalized)
+    while low < high:
+        midpoint = (low + high + 1) // 2
+        candidate = normalized[:midpoint].rstrip() + suffix
+        if len(_escape_summary_text(candidate)) <= max_length:
+            low = midpoint
+        else:
+            high = midpoint - 1
+    return _escape_summary_text(normalized[:low].rstrip() + suffix)
+
+
+def _escape_summary_text(value: str) -> str:
+    escaped = html.escape(value, quote=False)
+    replacements = {
+        ord(character): replacement
+        for character, replacement in (
+            ("\\", "&#92;"),
+            ("`", "&#96;"),
+            ("@", "&#64;"),
+            ("#", "&#35;"),
+            (":", "&#58;"),
+            ("/", "&#47;"),
+            ("*", "&#42;"),
+            ("_", "&#95;"),
+            ("[", "&#91;"),
+            ("]", "&#93;"),
+            ("~", "&#126;"),
+            ("|", "&#124;"),
+        )
+    }
+    return escaped.translate(replacements)
 
 
 def _automation_summary(paths: tuple[str, ...]) -> tuple[str, ...]:
@@ -310,16 +475,6 @@ def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
     if len(title) <= _MAX_PULL_REQUEST_TITLE_LENGTH:
         return title
     return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
-
-
-def _supersession_summary(head: str, predecessor_id: str, automation_paths: tuple[str, ...]) -> str:
-    lines = [
-        f"Superseding reviewed Delivery checkpoint `{head}`.",
-        "",
-        f"This publication supersedes provider publication `{predecessor_id}`.",
-    ]
-    lines.extend(_automation_summary(automation_paths))
-    return "\n".join(lines)
 
 
 def _publication_identity(
@@ -444,11 +599,44 @@ class DeliveryIntegrationAttentionStatus(_ApplicationModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryClaimRecoveryStatus(StrEnum):
+    """Observable disposition of one exact-claim recovery request."""
+
+    RECOVERED = "recovered"
+    ATTENTION = "attention"
+
+
+class DeliveryClaimRecoveryResult(_ApplicationModel):
+    """Recovered claim state, isolated preservation evidence, or retained repair attention."""
+
+    status: DeliveryClaimRecoveryStatus
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str | None = None
+    quarantine_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str | None = None
+    attention: DeliveryRecoveryAttention | None = None
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
+        if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
+            message = "only retained recovery requires repair attention"
+            raise ValueError(message)
+        if (self.quarantine_commit is None) != (self.quarantine_ref is None):
+            message = "quarantine recovery evidence requires both commit and ref"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
+    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
 
 
@@ -585,33 +773,6 @@ class DeliveryOperatorContext(_ApplicationModel):
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttention | None = None
     integration_attention: DeliveryOperatorIntegrationAttention | None = None
-
-
-class DeliveryClaimRecoveryStatus(StrEnum):
-    """Observable disposition of one exact-claim recovery request."""
-
-    RECOVERED = "recovered"
-    ATTENTION = "attention"
-
-
-class DeliveryClaimRecoveryResult(_ApplicationModel):
-    """Recovered claim state or retained typed repair attention."""
-
-    status: DeliveryClaimRecoveryStatus
-    change_id: str = Field(min_length=1)
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    attempt_id: str = Field(min_length=1)
-    claim_id: str = Field(min_length=1)
-    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    preserved_ref: str | None = None
-    attention: DeliveryRecoveryAttention | None = None
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
-        if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
-            message = "only retained recovery requires repair attention"
-            raise ValueError(message)
-        return self
 
 
 class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
@@ -772,10 +933,11 @@ class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
 
 
 class PortfolioApplicationConfig(_ApplicationModel):
-    """Configured capacity, source root, and complete stage-role policy."""
+    """Configured capacity, claim timeout, source root, and stage-role policy."""
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
+    claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
     role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=2, max_length=2)
 
     @model_validator(mode="after")
@@ -829,6 +991,15 @@ class _PreparedSource:
 
 
 @dataclass(frozen=True)
+class _PreparedCheckpointHead:
+    state: DeliveryCheckpointPublicationState
+    pending: DeliveryPendingCheckpoint
+    head: str
+    first_checkpoint: bool
+    finalization_invalidated: bool = False
+
+
+@dataclass(frozen=True)
 class _SupersessionPublishContext:
     change_id: str
     expected_publication_id: str
@@ -874,6 +1045,7 @@ class PortfolioApplication:
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._execution_capacity = config.execution_capacity
+        self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
         self._clock = (
@@ -1264,6 +1436,8 @@ class PortfolioApplication:
         provider_publisher = self._draft_pull_request_publisher
         if branch_publisher is None or provider_publisher is None:
             self._fail("publication supersession is not configured")
+        package = self._package_store.read_verified(context.change_id)
+        self._validate_package_authority(runtime, package)
         automation_paths = self._workspace_manager.repository_automation_paths(
             context.change_id,
             context.superseding_head,
@@ -1291,10 +1465,13 @@ class PortfolioApplication:
                 successor_branch=git_receipt.successor_branch,
                 superseding_head=context.superseding_head,
                 title=_checkpoint_pull_request_title(runtime),
-                generated_summary=_supersession_summary(
+                generated_summary=_checkpoint_summary(
+                    runtime,
+                    package,
+                    None,
                     context.superseding_head,
-                    context.expected_publication_id,
                     automation_paths,
+                    supersedes_publication_id=context.expected_publication_id,
                 ),
             )
         )
@@ -1647,6 +1824,41 @@ class PortfolioApplication:
                 expected_change_head,
                 publication_base_head,
                 operation_id,
+            )
+
+    def recover_blocked_implementation(  # noqa: PLR0913
+        self,
+        change_id: str,
+        outcome_id: str,
+        expected_resume_commit: str,
+        expected_reviewed_head: str,
+        operation_id: str,
+        *,
+        confirmed_recovery: Literal[True],
+    ) -> BlockedImplementationRecoveryReceipt:
+        """Recover one released blocked Implementation candidate after confirmation."""
+        if confirmed_recovery is not True:
+            self._fail("blocked Implementation recovery requires explicit confirmation")
+        runtime = self._runtime(change_id, for_mutation=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("blocked Implementation recovery cannot overlap an active claim")
+            binding = runtime.show_binding(outcome_id)
+            block = binding.block
+            if binding.stage != DeliveryStage.IMPLEMENTATION or block is None:
+                self._fail("blocked Implementation recovery requires a blocked Implementation outcome")
+            if not block.resolved:
+                self._fail("blocked Implementation recovery requires a resolved request")
+            if block.resume_commit != expected_resume_commit:
+                self._fail("blocked Implementation recovery candidate differs from the resolved block")
+            return self._workspace_manager.recover_blocked_implementation(
+                RecoverBlockedImplementation(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    expected_resume_commit=expected_resume_commit,
+                    expected_reviewed_head=expected_reviewed_head,
+                    operation_id=operation_id,
+                )
             )
 
     def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
@@ -2078,6 +2290,13 @@ class PortfolioApplication:
         initial = runtime.checkpoint_publication_state()
         pending = initial.pending_checkpoint
         if pending is None:
+            finalization = runtime.finalization()
+            if finalization is not None and initial.published_head != finalization.exact_head:
+                raise DeliveryRuntimeReconciliationError(
+                    change_id,
+                    "published checkpoint does not match the finalized Change head; "
+                    "reconcile finalization before retrying publication",
+                )
             return DeliveryCheckpointReconciliationResult(
                 change_id=change_id,
                 attempted_head=None,
@@ -2102,13 +2321,26 @@ class PortfolioApplication:
                     ("publication-baseline-unavailable", f"exact-head:{head}"),
                 )
             raise
-        initial, pending, head, first_checkpoint = self._prepare_checkpoint_head(
+        prepared = self._prepare_checkpoint_head(
             change_id,
             runtime,
             initial,
             pending,
         )
-        summary = _checkpoint_summary(pending, head, automation_paths)
+        if prepared.finalization_invalidated:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=prepared.head,
+                state=prepared.state,
+                reconciled=False,
+            )
+        initial = prepared.state
+        pending = prepared.pending
+        head = prepared.head
+        first_checkpoint = prepared.first_checkpoint
+        package = self._package_store.read_verified(change_id)
+        self._validate_package_authority(runtime, package)
+        summary = _checkpoint_summary(runtime, package, pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
             change_id=change_id,
@@ -2197,7 +2429,7 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         initial: DeliveryCheckpointPublicationState,
         pending: DeliveryPendingCheckpoint,
-    ) -> tuple[DeliveryCheckpointPublicationState, DeliveryPendingCheckpoint, str, bool]:
+    ) -> _PreparedCheckpointHead:
         """Prepare the exact first checkpoint head and its pull-request boundary."""
         first_checkpoint = any(
             trigger.kind
@@ -2230,9 +2462,23 @@ class PortfolioApplication:
                 pending = initial.pending_checkpoint
                 if pending is None or pending.head is None:
                     self._fail("Design package snapshot removed the pending checkpoint")
+                if runtime.finalization() is not None:
+                    runtime.reconcile_finalization_head(snapshot.snapshot_head, _timestamp(self._clock()))
+                    return _PreparedCheckpointHead(
+                        state=runtime.checkpoint_publication_state(),
+                        pending=pending,
+                        head=snapshot.snapshot_head,
+                        first_checkpoint=first_checkpoint,
+                        finalization_invalidated=True,
+                    )
         if pending.head is None:
             self._fail("checkpoint preparation removed the pending head")
-        return initial, pending, pending.head, first_checkpoint
+        return _PreparedCheckpointHead(
+            state=initial,
+            pending=pending,
+            head=pending.head,
+            first_checkpoint=first_checkpoint,
+        )
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""
@@ -2431,8 +2677,12 @@ class PortfolioApplication:
         verified_package_ids = {package.change_id for package in self._package_store.list_verified()}
         status_ids = sorted((*verified_package_ids, *self._discovered_changes))
         change_statuses = tuple(
-            self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
-            for change_id in dict.fromkeys(status_ids)
+            status
+            for status in (
+                self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
+                for change_id in dict.fromkeys(status_ids)
+            )
+            if status.stage is not DeliveryChangeStage.COMPLETED or not status.actionable_runtime
         )
         draft_design_ids = tuple(status.change_id for status in change_statuses if not status.admitted)
         design_required_ids = tuple(
@@ -2835,7 +3085,7 @@ class PortfolioApplication:
             else:
                 try:
                     reconciled_runtime = self._compose_runtime(observation)
-                except (OSError, RuntimeError, ValueError) as exc:
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                     error = str(exc) or "replacement runtime is unavailable"
         return reconciled_runtime, error
 
@@ -3055,16 +3305,67 @@ class PortfolioApplication:
             self._fail("completed-history catalog dependency is not configured")
         return self._completed_history_catalog
 
+    def _recover_expired_claims(
+        self,
+    ) -> tuple[tuple[DeliveryClaimRecoveryResult, ...], tuple[DeliveryAcquisitionFailure, ...]]:
+        cutoff = _timestamp(self._clock()) - self._claim_timeout
+        recoveries: list[DeliveryClaimRecoveryResult] = []
+        failures: list[DeliveryAcquisitionFailure] = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            for outcome_id, claim in runtime.active_claims():
+                try:
+                    if _timestamp(claim.started_at) > cutoff:
+                        continue
+                    recovered = self._recover_claim(
+                        change_id,
+                        outcome_id,
+                        claim.attempt_id,
+                        claim.claim_id,
+                    )
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id=outcome_id,
+                            attempt_id=claim.attempt_id,
+                            claim_id=claim.claim_id,
+                            code=getattr(exc, "code", PortfolioApplicationError.code),
+                            detail=str(exc) or "expired claim recovery failed",
+                            retry_condition="Retry exact claim recovery after reconciling workspace custody.",
+                        )
+                    )
+                else:
+                    recoveries.append(recovered)
+                    if recovered.status == DeliveryClaimRecoveryStatus.ATTENTION:
+                        attention = recovered.attention
+                        if attention is None:
+                            self._fail("expired claim recovery returned incomplete attention")
+                        failures.append(
+                            DeliveryAcquisitionFailure(
+                                change_id=change_id,
+                                outcome_id=outcome_id,
+                                attempt_id=claim.attempt_id,
+                                claim_id=claim.claim_id,
+                                code=PortfolioApplicationError.code,
+                                detail=attention.reason,
+                                retry_condition=attention.retry_condition,
+                            )
+                        )
+        return tuple(recoveries), tuple(failures)
+
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
             self._coordinator.recover_pending_transactions()
             self._reconcile_runtimes()
             pre_claim_snapshots = self._capture_portfolio_snapshots()
+            recoveries, recovery_failures = self._recover_expired_claims()
+            failures = list(recovery_failures)
+            if recoveries or recovery_failures:
+                self._reconcile_runtimes()
             occupied = self._execution_occupancy()
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
-            failures: list[DeliveryAcquisitionFailure] = []
             for candidate in self._candidates():
                 if available == 0:
                     break
@@ -3087,6 +3388,7 @@ class PortfolioApplication:
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 integration_attention=self._integration_attention_statuses(pre_claim_snapshots),
+                recoveries=recoveries,
                 failures=tuple(failures),
             )
 
@@ -3153,7 +3455,7 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
     ) -> DeliveryClaimRecoveryResult:
-        """Remove one exact failed claim or retain deterministic Build repair attention."""
+        """Automatically preserve and recover one exact failed claim or retain typed attention."""
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
@@ -3191,7 +3493,7 @@ class PortfolioApplication:
             preserved_commit=preserved_commit,
         )
 
-    def _recover_claim(
+    def _recover_claim(  # noqa: PLR0911 - each exact recovery disposition has distinct observable evidence.
         self,
         change_id: str,
         outcome_id: str,
@@ -3209,6 +3511,24 @@ class PortfolioApplication:
         snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
         if snapshot.writer is None:
             if self._released_recovery_matches(snapshot):
+                quarantine: DirtyWorktreeQuarantineReceipt | None = None
+                if snapshot.quarantine_ref is not None or snapshot.quarantine_commit is not None:
+                    try:
+                        quarantine = self._workspace_manager.verify_dirty_worktree_quarantine(
+                            change_id,
+                            attempt_id,
+                            claim_id,
+                            _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
+                        )
+                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                        return self._retain_recovery_attention(
+                            runtime,
+                            outcome_id,
+                            claim,
+                            snapshot,
+                            reason=f"Automatic dirty worktree preservation evidence could not be verified: {exc}",
+                            retry_condition="Retry automatic recovery while the preserved quarantine evidence remains.",
+                        )
                 runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
                 return self._recovered(
                     change_id,
@@ -3216,10 +3536,36 @@ class PortfolioApplication:
                     attempt_id,
                     claim_id,
                     snapshot.preserved_commit,
+                    quarantine_commit=(
+                        quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit
+                    ),
+                    quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
                 )
             return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
         if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
             return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+        quarantine: DirtyWorktreeQuarantineReceipt | None = None
+        if (
+            snapshot.quarantine_ref is not None
+            or snapshot.quarantine_commit is not None
+            or (snapshot.worktree_head is not None and not snapshot.clean)
+        ):
+            try:
+                quarantine = self._workspace_manager.quarantine_dirty_worktree(
+                    change_id,
+                    attempt_id,
+                    claim_id,
+                    _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                return self._retain_recovery_attention(
+                    runtime,
+                    outcome_id,
+                    claim,
+                    snapshot,
+                    reason=f"Automatic dirty worktree preservation failed: {exc}",
+                    retry_condition="Retry automatic preservation while exact Builder custody is retained.",
+                )
         rejected_head = snapshot.preserved_commit or snapshot.branch_head
         self._workspace_manager.restart(change_id, attempt_id, rejected_head)
         runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
@@ -3229,6 +3575,8 @@ class PortfolioApplication:
             attempt_id,
             claim_id,
             rejected_head,
+            quarantine_commit=quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit,
+            quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
         )
 
     def _candidates(self) -> tuple[_Candidate, ...]:
@@ -3469,30 +3817,29 @@ class PortfolioApplication:
             return False
         if snapshot.worktree_head is None:
             return snapshot.preserved_commit is not None and snapshot.worktree_branch is None
-        return (
-            snapshot.clean
-            and snapshot.worktree_head == snapshot.branch_head
-            and snapshot.worktree_branch == snapshot.branch
-        )
+        return snapshot.worktree_head == snapshot.branch_head and snapshot.worktree_branch == snapshot.branch
 
-    def _retain_recovery_attention(
+    def _retain_recovery_attention(  # noqa: PLR0913 - recovery attention binds exact claim and workspace evidence.
         self,
         runtime: DeliveryRuntime,
         outcome_id: str,
         claim: DeliveryActiveClaim,
         snapshot: WorkspaceRecoverySnapshot,
+        *,
+        reason: str | None = None,
+        retry_condition: str = "Restore a clean recorded worktree and reconcile exact writer custody.",
     ) -> DeliveryClaimRecoveryResult:
         attention = DeliveryRecoveryAttention(
             attempt_id=claim.attempt_id,
             claim_id=claim.claim_id,
-            reason=self._recovery_reason(snapshot, claim),
+            reason=reason or self._recovery_reason(snapshot, claim),
             worktree_path=str(snapshot.worktree_path),
             branch_head=snapshot.branch_head,
             worktree_head=snapshot.worktree_head,
             last_reviewed_commit=snapshot.last_reviewed_commit,
             writer_claim_id=snapshot.writer.claim_id if snapshot.writer is not None else None,
             custody_retained=snapshot.writer is not None,
-            retry_condition="Restore a clean recorded worktree and reconcile exact writer custody.",
+            retry_condition=retry_condition,
         )
         runtime.publish_recovery_attention(outcome_id, attention)
         return DeliveryClaimRecoveryResult(
@@ -3520,12 +3867,15 @@ class PortfolioApplication:
         return "Build attempt history ref conflicts with the current branch head."
 
     @staticmethod
-    def _recovered(
+    def _recovered(  # noqa: PLR0913 - recovery result binds exact claim and preservation evidence.
         change_id: str,
         outcome_id: str,
         attempt_id: str,
         claim_id: str,
         preserved_commit: str | None = None,
+        *,
+        quarantine_commit: str | None = None,
+        quarantine_ref: str | None = None,
     ) -> DeliveryClaimRecoveryResult:
         return DeliveryClaimRecoveryResult(
             status=DeliveryClaimRecoveryStatus.RECOVERED,
@@ -3535,6 +3885,8 @@ class PortfolioApplication:
             claim_id=claim_id,
             preserved_commit=preserved_commit,
             preserved_ref=(f"refs/owlbear/attempts/{change_id}/{attempt_id}" if preserved_commit is not None else None),
+            quarantine_commit=quarantine_commit,
+            quarantine_ref=quarantine_ref,
         )
 
     def _validate_package_authority(self, runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> None:

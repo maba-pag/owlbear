@@ -9,6 +9,7 @@ name: Agent ecosystem validation
       - .github/workflows/dependency-verification.yml
       - .owlbear/hooks/**
       - .owlbear/agents/**
+      - .owlbear/instructions/**
       - .owlbear/prompts/**
       - .owlbear/scripts/validate_agents.py
       - .owlbear/scripts/validate_prompts.py
@@ -18,6 +19,7 @@ name: Agent ecosystem validation
       - serve/tools/src/owlbear_tools/dependency_ci.py
       - .pre-commit-config.yaml
       - share/agents/**
+      - share/instructions/**
       - share/prompts/**
       - share/skills/**
       - tests/test_agent_ecosystem_validation.py

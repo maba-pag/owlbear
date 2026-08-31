@@ -372,8 +372,8 @@ def plan_delivery_state_migration(root: Path) -> DeliveryStateMigrationPlan:
 def _stage_runtime(plan: DeliveryStateMigrationPlan, staging: Path) -> None:
     legacy_runtime = plan.legacy_target / "target-runtime"
     shutil.copytree(plan.legacy_target / "delivery/changes", staging / "changes")
-    shutil.copy2(legacy_runtime / "capacity.json", staging / "capacity.json")
-    coordination_root = staging / "claims/changes"
+    shutil.copy2(legacy_runtime / "capacity.json", staging / "capacity-ledger.json")
+    coordination_root = staging / "coordination/changes"
     coordination_root.mkdir(parents=True)
     for change in plan.changes:
         updated = change.coordination.model_copy(update={"worktree_path": change.target_worktree})
@@ -386,13 +386,13 @@ def _stage_runtime(plan: DeliveryStateMigrationPlan, staging: Path) -> None:
 
 
 def _validate_staging(plan: DeliveryStateMigrationPlan, staging: Path) -> None:
-    _load_model(staging / "capacity.json", CapacityLedger)
+    _load_model(staging / "capacity-ledger.json", CapacityLedger)
     for change in plan.changes:
         change_root = staging / "changes" / change.change_id
         contract = _load_model(change_root / "contract.json", DeliveryContract)
         frontier, legacy_completion = _load_migration_frontier(change_root / "frontier.json")
         coordination = _load_model(
-            staging / "claims/changes" / f"{change.change_id}.json",
+            staging / "coordination/changes" / f"{change.change_id}.json",
             ChangeCoordination,
         )
         if contract.change_id != change.change_id or coordination.worktree_path != change.target_worktree:

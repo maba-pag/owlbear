@@ -59,6 +59,7 @@ _SKIP_IF_EXISTS_REL = frozenset(
         ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
+        ".owlbear/delivery/runtime/host.json",
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
@@ -76,6 +77,7 @@ _REFRESHABLE_CONFIG_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
+# Cleanup vocabulary for obsolete managed rules; the reconciliation mechanism is current setup behavior.
 _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
     {
         "# Brief drafts (transient template directory)",
@@ -325,6 +327,7 @@ def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | N
     If it exists but has no owlbear marker, appends the owlbear-managed section.
     If the marker is already present, removes retired rules and adds missing current rules.
     """
+    # `retired_lines` removes obsolete managed rules while preserving user-owned rules.
     seed_content = src.read_text(encoding="utf-8")
     retired = _RETIRED_OWLBEAR_GITIGNORE_LINES if retired_lines is None else retired_lines
 
@@ -1661,7 +1664,7 @@ def init(  # noqa: C901, PLR0913
         if rel_posix == ".owlbear/.gitignore":
             before = dest.read_text(encoding="utf-8") if dest.exists() else ""
             created = not dest.exists()
-            _write_gitignore(src, dest, retired_lines=frozenset())
+            _write_gitignore(src, dest, retired_lines=frozenset({"delivery/runtime/"}))
             _record_seed_install(
                 manifest,
                 rel_posix,

@@ -48,6 +48,14 @@ from owlbear_knowledge.protocols.enrichment import (
     SuggestedEdge,
 )
 
+# --- failures ---
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureCode,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
+
 # --- fetcher ---
 from owlbear_knowledge.protocols.fetcher import (
     FetchedDocument,
@@ -206,7 +214,11 @@ __all__ = [
     "IngestStats",
     "InlineConfig",
     "JsonValue",
+    "KnowledgeFailure",
+    "KnowledgeFailureCode",
+    "KnowledgeFailureStage",
     "KnowledgeModule",
+    "KnowledgeOperationError",
     "Metadata",
     "Provenance",
     "PurgeResult",

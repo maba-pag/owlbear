@@ -21,6 +21,7 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
 )
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
+from owlbear_delivery.delivery_admission import DeliveryAuthorityRegistry
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     DeliveryDiscoveryRootError,
@@ -45,7 +46,6 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationDependencies,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
-from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
 
 if TYPE_CHECKING:
     from owlbear_delivery.publication_provider import PublicationProvider
@@ -67,10 +67,19 @@ class DeliveryStartupConfig(_LoaderModel):
 
 
 class DeliveryHostConfig(_LoaderModel):
-    """Host-local limits for concurrent Delivery work."""
+    """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
     execution_capacity: int = Field(default=3, gt=0)
+    claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
+
+
+class _DeliveryHostConfigOverrides(_LoaderModel):
+    """Optional host-local overrides layered over tracked Delivery defaults."""
+
+    schema_version: Literal[1] = 1
+    execution_capacity: int | None = Field(default=None, gt=0)
+    claim_timeout_seconds: int | None = Field(default=None, gt=0)
 
 
 @dataclass(frozen=True)
@@ -111,6 +120,7 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "workspace_root"
         detail = "Delivery state parents must not be symlinks"
         raise _load_error(field, detail)
+    # Current startup refuses unfinished transition journals instead of treating them as authority.
     migration_journal = delivery_root / "migration.json"
     if migration_journal.exists():
         field = "runtime_root"
@@ -121,6 +131,7 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "runtime_root"
         detail = "interrupted Integration retirement must be recovered before startup"
         raise _load_error(field, detail)
+    # Current startup also rejects pre-current roots so state cannot be silently orphaned.
     for field, legacy_root in (
         ("runtime_root", repository_root / ".owlbear/target"),
         ("worktree_root", repository_root / ".owlbear/worktrees"),
@@ -254,28 +265,45 @@ def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
         raise error from exc
 
 
-def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
-    path = paths.runtime_root / "host.json"
+def _load_host_config_model[T: BaseModel](path: Path, model: type[T], default: T) -> T:
     try:
         if not path.exists():
             if path.is_symlink():
-                error = _load_error("host_config", "host-local Delivery capacity configuration is unsafe")
+                error = _load_error("host_config", "host-local Delivery runtime configuration is unsafe")
                 raise error
-            return DeliveryHostConfig(schema_version=1)
+            return default
         if path.is_symlink() or not path.is_file():
-            error = _load_error("host_config", "host-local Delivery capacity configuration must be a regular file")
+            error = _load_error("host_config", "host-local Delivery runtime configuration must be a regular file")
             raise error
-        return DeliveryHostConfig.model_validate_json(path.read_bytes())
+        return model.model_validate_json(path.read_bytes())
     except DeliveryApplicationLoadError:
         raise
     except ValidationError as exc:
         location = exc.errors(include_url=False, include_context=False)[0].get("loc")
         field = location[0] if isinstance(location, tuple | list) and location else "host_config"
-        error = _load_error(str(field), f"host-local Delivery capacity configuration is invalid: {path}")
+        error = _load_error(str(field), f"host-local Delivery runtime configuration is invalid: {path}")
         raise error from exc
     except (OSError, ValueError) as exc:
-        error = _load_error("host_config", f"host-local Delivery capacity configuration cannot be read: {path}")
+        error = _load_error("host_config", f"host-local Delivery runtime configuration cannot be read: {path}")
         raise error from exc
+
+
+def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
+    baseline = _load_host_config_model(
+        paths.runtime_root / "host.json",
+        DeliveryHostConfig,
+        DeliveryHostConfig(schema_version=1),
+    )
+    overrides = _load_host_config_model(
+        paths.runtime_root / "host.local.json",
+        _DeliveryHostConfigOverrides,
+        _DeliveryHostConfigOverrides(),
+    )
+    values = baseline.model_dump()
+    local_values = overrides.model_dump(exclude_none=True)
+    local_values.pop("schema_version", None)
+    values.update(local_values)
+    return DeliveryHostConfig.model_validate(values)
 
 
 def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
@@ -298,7 +326,11 @@ def _bootstrap_remote_state(
     paths: _DeliveryPaths,
 ) -> None:
     """Restore missing local Delivery state from remote semantic snapshots."""
-    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
     try:
         state_publisher = DeliveryStatePublisher(
             paths.repository_root,
@@ -589,7 +621,11 @@ def _compose_application(
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
 ) -> PortfolioApplication:
-    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
     coordinator = PortfolioCoordinator(paths.runtime_root)
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
@@ -642,6 +678,7 @@ def _compose_application(
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
         execution_capacity=host_config.execution_capacity,
+        claim_timeout_seconds=host_config.claim_timeout_seconds,
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)

@@ -525,19 +525,20 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     }
   }
 
-  const mutate = async (
+  async function mutate<T>(
     action: string,
-    operation: () => Promise<unknown>,
-    result: string,
-  ): Promise<Error | null> => {
+    operation: () => Promise<T>,
+    result: string | ((value: T) => string | null),
+  ): Promise<Error | null> {
     setPendingAction(action)
     setActionError(null)
     setActionResult(null)
     try {
-      await operation()
-      setActionResult(result)
+      const value = await operation()
       polling.refetch()
       onChanged()
+      const message = typeof result === 'function' ? result(value) : result
+      if (message !== null) setActionResult(message)
       return null
     } catch (caught: unknown) {
       const error = caught instanceof Error ? caught : new Error('Delivery control failed')
@@ -614,7 +615,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     reconcilePublication: () => mutate(
       'publication-reconcile',
       () => reconcileWorkItemPublication(identity.changeId),
-      'Publication checkpoint reconciled.',
+      (reconciliation) => reconciliation.reconciled ? 'Publication checkpoint reconciled.' : null,
     ),
     markPublicationReady: () => mutate(
       'publication-ready',

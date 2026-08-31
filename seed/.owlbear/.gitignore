@@ -10,8 +10,9 @@ knowledge/*.db
 knowledge/vectors/
 memory/*.db
 
-# Host-local Delivery runtime and linked worktrees
-delivery/runtime/
+# Delivery runtime state; keep the visible host defaults trackable
+delivery/runtime/*
+!delivery/runtime/host.json
 delivery/worktrees/
 worktrees/
 delivery/migration.json

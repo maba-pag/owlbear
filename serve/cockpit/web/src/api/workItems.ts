@@ -265,6 +265,10 @@ export interface PublicationChecksObservationResponse {
   truncated_count: number
 }
 
+export interface WorkItemPublicationReconciliationResponse {
+  reconciled: boolean
+}
+
 export interface WorkItemPublicationView {
   phase: WorkItemPublicationPhase
   finalization_id: string | null
@@ -643,7 +647,7 @@ export function previewWorkItemBackward(
   )
 }
 
-export function reconcileWorkItemPublication(changeId: string): Promise<unknown> {
+export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/reconcile`,
     'ERR_WORK_ITEM_PUBLICATION_RECONCILE',

@@ -40,6 +40,10 @@ regenerated automatically by pre-commit or CI; source files remain authoritative
 
 `migrate-delivery-state` validates retired authority without mutation unless `--apply` is present. Apply moves registered Change worktrees through Git, preserves unrelated registered worktrees under ignored scratch storage, archives retired state under `.owlbear/legacy/delivery-state-migration/`, and resumes safely from an interrupted attempt.
 
+## Configuration
+
+Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag. Dependency commands use the repository checkout and do not require environment variables. Set `OWLBEAR_DOCKER_STOP_RUNTIME=1` when `megalint` should stop a runtime it started after the command finishes.
+
 ### Dependency environment
 
 Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and Cockpit npm environments. Use `uv run dep-status` for a read-only check. Both commands support `--all` (`-a`) for the complete workspace profile; `--pds` (`-p`) includes generated Porsche Design System assets, and `--browsers` (`-b`) installs the Playwright Chromium browser. Status also supports `--verbose` (`-v`) and `--json` (`-j`).
@@ -50,7 +54,11 @@ These commands consume the dependency versions already selected in the checkout.
 
 The dependency commands use the repository checkout and do not require environment variables. The default profile covers the uv workspace and the Cockpit npm root; `--all` adds the other npm roots, PDS assets, and Playwright Chromium.
 
-### Public API
+## Dependencies
+
+Python indexing uses the standard-library AST. ECMAScript indexing uses `tree-sitter-language-pack`.
+
+## Public API
 
 ```python
 from owlbear_tools.doc_index import generate_index as generate_doc_index
@@ -72,18 +80,10 @@ generate_ts_index(root)  # writes .owlbear/ts-index.md
 | `ts_index.generate_index(root)` | Regenerate the TS/TSX/JS/JSX structure index |
 | `doc_index.parse_index(content)` | Parse an existing documentation index into entries |
 
-### Excluded directories
+## Excluded directories
 
 The documentation index excludes workspace state, generated indexes, caches, external stores, and
 directories named `fixtures`. It keeps the root README files from otherwise-excluded `store/` and
 `tests/` trees but excludes the rest of those trees. Excalidraw entries retain top-level
 `describes` source-path globs for diagram audits. Source indexes additionally exclude tests and
 conventional test filenames, `vendor`, `public`, `generated`, coverage, and build output.
-
-## Configuration
-
-Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag. Dependency commands use the repository checkout and do not require environment variables. Set `OWLBEAR_DOCKER_STOP_RUNTIME=1` when `megalint` should stop a runtime it started after the command finishes.
-
-## Dependencies
-
-Python indexing uses the standard-library AST. ECMAScript indexing uses `tree-sitter-language-pack`.

@@ -58,14 +58,15 @@ integrity.
 
 | Generation | Current role | Main modules |
 | --- | --- | --- |
-| Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, the `DeliveryAuthorityRegistry` half of `target_admission.py`, `portfolio_application.py` |
+| Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, `delivery_admission.py`, `portfolio_application.py` |
 | Retained target-v1 execution | Job/attempt/review/receipt runtime and semantic authority used by cutover/finalizer and retained public evidence contracts | `target_runtime.py`, `target_authority.py`, the `TargetAuthorityRegistry` half of `target_admission.py` |
 | One-time cutover and snapshot retention | Bootstrap source retirement, snapshot verification, receipt publication, and mutation gate | `target_cutover.py`, `snapshot.py`, `setup/finalize.py` |
 | Transport | Process configuration/lifespan and explicit MCP adaptation | `delivery-mcp/server.py`, `delivery-mcp/target_server.py`, `delivery-mcp/target_models.py` |
 
-The active and retained generations are not cleanly isolated. `target_admission.py` contains both
-registries, the package root exports both generations, and the active work-item read path converts
-schema-v2 contracts and frontiers back into target-v1 authority/evidence models.
+The active and retained generations are isolated at the admission-module boundary. Current
+source-bound admission lives in `delivery_admission.py`; `target_admission.py` contains only the
+retained Target-era registry and models. The package root still exports both generations while the
+Target-era public surface remains supported.
 
 ## Reconciliation of the initial assessment
 

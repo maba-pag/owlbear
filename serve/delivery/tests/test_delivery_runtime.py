@@ -270,6 +270,7 @@ def _activate(
     claim_id: str,
     *,
     task_id: str | None = None,
+    attempt_id: str | None = None,
 ):
     stage = runtime.show_binding(outcome_id).stage
     role = {
@@ -280,7 +281,7 @@ def _activate(
         ActivateDeliveryClaim(
             outcome_id=outcome_id,
             claim=DeliveryActiveClaim(
-                attempt_id=f"attempt-{claim_id}",
+                attempt_id=attempt_id or f"attempt-{claim_id}",
                 claim_id=claim_id,
                 owner_id=f"owner-{claim_id}",
                 process_id=f"process-{claim_id}",
@@ -1374,7 +1375,7 @@ def test_completion_transaction_recovers_after_receipt_publication(tmp_path: Pat
 
     assert recovered.completion_receipt() == receipt
     assert recovered.change_stage() == DeliveryChangeStage.COMPLETED
-    assert not tuple((tmp_path / ".runtime-transactions").glob("*.yaml"))
+    assert not tuple((tmp_path / "transactions").glob("*.yaml"))
 
 
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
@@ -1940,7 +1941,7 @@ def _active_second_task(tmp_path: Path):
             kind="build",
         ),
     )
-    _activate(runtime, "OUT-001", "claim-002", task_id="TASK-002")
+    _activate(runtime, "OUT-001", "claim-002", task_id="TASK-002", attempt_id="attempt-002")
     (coordination.worktree_path / "product.txt").write_text("unreviewed task two\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", "unreviewed task two")
@@ -2037,7 +2038,32 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
         assert result.results == (first_result,)
         assert result.block is not None
         assert result.block.resume_commit == attempt_commit
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
+        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+        assert (
+            _git(coordination.worktree_path, "rev-parse", "refs/owlbear/attempts/delivery-runtime/attempt-002")
+            == attempt_commit
+        )
+
+
+def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    dirty_file = coordination.worktree_path / "dirty-retry.txt"
+    dirty_file.write_text("preserve this work\n", encoding="utf-8")
+    before = dirty_file.read_bytes()
+
+    with pytest.raises(RuntimeError, match="clean change worktree"):
+        runtime.transition(
+            RetryDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                abandoned_commit=attempt_commit,
+                attempt_id="attempt-002",
+            )
+        )
+
+    assert dirty_file.read_bytes() == before
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
+    assert coordinator.show("delivery-runtime").writer is not None
 
 
 @pytest.mark.parametrize(
@@ -2170,6 +2196,35 @@ def test_implementation_block_requires_bounded_user_request(tmp_path: Path) -> N
 
     assert runtime.frontier_bytes() == before
     assert coordinator.show("delivery-runtime").writer is not None
+
+
+def test_implementation_block_rejects_resume_commit_not_at_branch_head(tmp_path: Path) -> None:
+    runtime, coordinator, _coordination, initial, _attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(RuntimeError, match="outside the recoverable restart states"):
+        runtime.transition(
+            BlockDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                block_id="block-stale-resume",
+                reason="External evidence is unavailable.",
+                unblock_condition="The evidence is supplied.",
+                expected_evidence=("External result",),
+                locators=("TASK-002",),
+                request=DeliveryRequest(
+                    request_id="request-stale-resume",
+                    kind=DeliveryRequestKind.ACTION,
+                    outcome_id="OUT-001",
+                    summary="Supply the external result.",
+                ),
+                resume_commit=initial,
+            )
+        )
+
+    assert runtime.frontier_bytes() == before
+    assert coordinator.show("delivery-runtime").writer is not None
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
 
 
 def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_path: Path) -> None:

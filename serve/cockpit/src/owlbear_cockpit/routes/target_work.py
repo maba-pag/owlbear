@@ -42,27 +42,19 @@ from owlbear_cockpit.target_models import (
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
 )
-from owlbear_delivery.change_workspace import (
-    ChangeTargetSyncConflictError,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
-)
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
     CompletedChangeRecord,
-    CompletedHistoryError,
-    CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     DeliveryRequestResolution,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
     DeliveryStage,
 )
-from owlbear_delivery.design_package import DesignPackageConflictError
-from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
-from owlbear_delivery.publication_provider import PublicationProviderError
+from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
+from owlbear_delivery.portfolio_application import (
+    PortfolioApplication,  # noqa: TC001 - FastAPI evaluates this annotation.
+)
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemActivityState,
@@ -302,39 +294,19 @@ class TargetCockpitService:
         return self._invoke(lambda: self._application.show_completed_change(change_id, completion_id))
 
     @staticmethod
-    def _invoke(operation: Callable[[], object]):  # noqa: ANN205
+    def _invoke(operation: Callable[[], object]) -> object:
         try:
             return operation()
-        except CompletedHistoryError as exc:
+        except Exception as exc:
+            failure = classify_delivery_failure(exc)
+            if failure is None:
+                raise
             _http_error(
-                404 if isinstance(exc, CompletedHistoryMissingError) else 409,
-                exc.diagnostic.code,
-                exc.diagnostic.detail,
-                retry_safe=False,
+                _http_status(failure.category),
+                failure.code,
+                failure.detail,
+                retry_safe=failure.retry_safe,
             )
-        except (
-            ChangeTargetSyncConflictError,
-            ChangeWorktreeAttentionError,
-            DeliveryRuntimeConflictError,
-            CoordinationConflictError,
-        ) as exc:
-            _http_error(
-                409,
-                getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),
-                str(exc),
-                retry_safe=getattr(exc, "retry_safe", True),
-            )
-        except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
-            _http_error(409, exc.code, str(exc), retry_safe=False)
-        except PublicationProviderError as exc:
-            _http_error(
-                502,
-                f"ERR_DELIVERY_PROVIDER_{exc.code.value.upper()}",
-                str(exc),
-                retry_safe=exc.retry_safe,
-            )
-        except DesignPackageConflictError as exc:
-            _http_error(409, exc.code, str(exc), retry_safe=False)
 
 
 def _get_target_service(
@@ -623,6 +595,14 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
             working=activity.count(WorkItemActivityState.WORKING),
         ),
     )
+
+
+def _http_status(category: DeliveryFailureCategory) -> int:
+    if category is DeliveryFailureCategory.NOT_FOUND:
+        return 404
+    if category is DeliveryFailureCategory.PROVIDER:
+        return 502
+    return 409
 
 
 def _http_error(status_code: int, code: object, detail: str, *, retry_safe: bool) -> None:

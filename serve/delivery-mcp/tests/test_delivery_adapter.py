@@ -13,6 +13,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import (
+    BlockedImplementationRecoveryReceipt,
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
@@ -50,6 +53,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     FinalizeDeliveryChange,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
@@ -225,7 +229,7 @@ class _RecordingApplication:
         self.failures = failures or {}
 
     def __getattr__(self, name: str) -> Any:  # noqa: C901
-        def operation(*args: object, **kwargs: object) -> object:
+        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
             if failure is not None:
@@ -271,6 +275,15 @@ class _RecordingApplication:
                     change_id=CHANGE,
                     expected_change_head=COMMIT,
                     publication_base_head="a" * 40,
+                )
+            elif name == "recover_blocked_implementation":
+                result = BlockedImplementationRecoveryReceipt.create(
+                    operation_id="recover-blocked",
+                    change_id=CHANGE,
+                    outcome_id="OUT-001",
+                    expected_resume_commit=COMMIT,
+                    reviewed_head="a" * 40,
+                    preserved_ref="refs/owlbear/recoveries/change-a/recover-blocked",
                 )
             elif name == "publish_delivery_plan":
                 request = args[1]
@@ -494,6 +507,14 @@ def _requests() -> dict[str, dict[str, object]]:
             "publication_base_head": "a" * 40,
             "operation_id": "recover-baseline",
         },
+        "recover_blocked_implementation": {
+            **change,
+            "confirmed_recovery": True,
+            "outcome_id": "OUT-001",
+            "expected_resume_commit": COMMIT,
+            "expected_reviewed_head": "a" * 40,
+            "operation_id": "recover-blocked",
+        },
         "transition_delivery": {
             **change,
             "request": {
@@ -576,6 +597,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     if operation_name == "recover_publication_baseline":
         assert application.calls[0][1] == (CHANGE, COMMIT, "a" * 40, "recover-baseline")
         assert application.calls[0][2] == {"confirmed_recovery": True}
+    if operation_name == "recover_blocked_implementation":
+        assert application.calls[0][1] == (CHANGE, "OUT-001", COMMIT, "a" * 40, "recover-blocked")
+        assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
     if operation_name == "mark_change_ready":
@@ -598,6 +622,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
             "change_id": CHANGE,
             "expected_change_head": COMMIT,
             "publication_base_head": "a" * 40,
+        },
+        "recover_blocked_implementation": {
+            "change_id": CHANGE,
+            "outcome_id": "OUT-001",
+            "expected_resume_commit": COMMIT,
+            "reviewed_head": "a" * 40,
+            "preserved_ref": "refs/owlbear/recoveries/change-a/recover-blocked",
         },
     }
     if operation_name == "list_retained_change_worktrees":
@@ -743,6 +774,18 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
     )
     cases = (
         (
+            "admit_delivery_change",
+            DeliveryAdmissionConflictError("active claims block Delivery authority revision"),
+            "ERR_DELIVERY_ADMISSION_CONFLICT",
+            False,
+        ),
+        (
+            "admit_delivery_change",
+            DeliveryAdmissionValidationError("authored Specification does not compile"),
+            "ERR_DELIVERY_ADMISSION_VALIDATION",
+            False,
+        ),
+        (
             "transition_delivery",
             DeliveryRuntimeReferenceError("outcome is absent"),
             "ERR_DELIVERY_RUNTIME_REFERENCE",
@@ -753,7 +796,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "revise_design_session",
             DesignPackageConflictError("package identity is stale"),
             "ERR_DESIGN_PACKAGE_CONFLICT",
-            True,
+            False,
         ),
         (
             "reconcile_change_checkpoint",
@@ -763,7 +806,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
                 "provider rate limit reached",
                 retry_safe=True,
             ),
-            "rate_limited",
+            "ERR_DELIVERY_PROVIDER_RATE_LIMITED",
             True,
         ),
         (
@@ -806,6 +849,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             PublicationBaselineUnavailableError(CHANGE, "publication baseline is unavailable"),
             "ERR_PUBLICATION_BASELINE_UNAVAILABLE",
             False,
+        ),
+        (
+            "observe_acceptance",
+            DeliveryStatePublicationError("state publication failed", retry_safe=True),
+            "ERR_DELIVERY_STATE_PUBLICATION",
+            True,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:

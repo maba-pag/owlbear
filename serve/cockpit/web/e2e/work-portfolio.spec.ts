@@ -71,9 +71,6 @@ async function normalizeSeedLifecycleStatuses(page: Page): Promise<void> {
       if (status.change_id === 'work-e2e') {
         return { ...status, admission: 'admitted', stage: 'design', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
       }
-      if (status.change_id === 'publication-e2e') {
-        return { ...status, admission: 'admitted', stage: 'completed', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
-      }
       return status
     })
     await route.fulfill({ response, body: JSON.stringify({ ...payload, operating: { ...payload.operating, statuses } }) })
@@ -456,6 +453,59 @@ test.describe('assembled Delivery portfolio', () => {
       violation.impact === 'serious' || violation.impact === 'critical')
     expect(blocking, formatViolations(blocking)).toEqual([])
     await page.screenshot({ path: testInfo.outputPath('delivery-mobile-rows.png'), fullPage: true })
+  })
+
+  test('filter popover preserves portfolio position and supports real selection', async ({ page }) => {
+    for (const width of [1177, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/delivery')
+
+      const table = page.getByTestId('work-portfolio-table')
+      await expect(table).toBeVisible()
+      const closedBox = await table.boundingBox()
+      expect(closedBox).not.toBeNull()
+
+      const toggle = page.getByTestId('work-filters-toggle')
+      await toggle.click()
+      await expect(page.getByTestId('work-filters-panel')).toBeVisible()
+      const openBox = await table.boundingBox()
+      expect(openBox).not.toBeNull()
+      expect(openBox!.y).toBe(closedBox!.y)
+
+      const attention = page.getByRole('combobox', { name: 'Attention' })
+      await attention.click()
+      await page.getByRole('option', { name: 'Needs you', exact: true }).click()
+      await expect(page.getByTestId('work-shown-count')).toContainText('of 9')
+      await expect(page.getByTestId('work-filter-chip-needs')).toBeVisible()
+      await expect(page.getByTestId('work-filters-panel')).toBeVisible()
+
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('work-filters-panel')).not.toBeVisible()
+      await expect(toggle).toBeFocused()
+
+      await toggle.click()
+      await expect(page.getByTestId('work-filters-panel')).toBeVisible()
+      await page.getByRole('heading', { name: 'Work portfolio E2E', exact: true }).click()
+      await expect(page.getByTestId('work-filters-panel')).not.toBeVisible()
+      await expect(toggle).toBeFocused()
+    }
+  })
+
+  test('filter popover fits the compact viewport without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/delivery')
+
+    const toggle = page.getByTestId('work-filters-toggle')
+    await toggle.click()
+    const panel = page.getByTestId('work-filters-panel')
+    await expect(panel).toBeVisible()
+    const panelBox = await panel.boundingBox()
+    expect(panelBox).not.toBeNull()
+    expect(panelBox!.x).toBeGreaterThanOrEqual(0)
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(390)
+    await expect(panel.getByRole('combobox', { name: 'Change' })).toBeVisible()
+    await expect(panel.getByRole('combobox', { name: 'Attention' })).toBeVisible()
+    await expectNoHorizontalOverflow(page)
   })
 
   test('desktop workspaces keep columns and overview context beside detail', async ({ page }) => {

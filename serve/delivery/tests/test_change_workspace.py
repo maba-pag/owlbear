@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    BlockedImplementationRecoveryReceipt,
     CapacityLedger,
     ChangeCoordination,
     ChangeDesignPackageSnapshotReceipt,
@@ -25,6 +26,7 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
+    RecoverBlockedImplementation,
     SyncChangeWithTarget,
     WriterIdentity,
 )
@@ -105,6 +107,29 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
             "change-a",
             ChangeWriter(**_identity("change-a").model_dump(), job_id=3, kind="build"),
         )
+
+
+def test_coordinator_migrates_legacy_coordination_directory(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    legacy_root = state_root / "claims/changes"
+    legacy_root.mkdir(parents=True)
+    coordination = _coordination(tmp_path, "legacy-coordination")
+    (legacy_root / "legacy-coordination.json").write_bytes(coordination.model_dump_json().encode())
+
+    coordinator = PortfolioCoordinator(state_root)
+
+    assert coordinator.show("legacy-coordination") == coordination
+    assert (state_root / "coordination/changes/legacy-coordination.json").is_file()
+    assert not legacy_root.exists()
+
+
+def test_coordinator_rejects_both_coordination_directories(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    (state_root / "coordination/changes").mkdir(parents=True)
+    (state_root / "claims/changes").mkdir(parents=True)
+
+    with pytest.raises(CoordinationConflictError, match="both coordination directories"):
+        PortfolioCoordinator(state_root)
 
 
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
@@ -422,7 +447,7 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     second = manager.ensure("change-a")
     _git(repository, "update-ref", "refs/heads/owlbear/change/nested-only/s1", initial)
     before_coordination = tuple(
-        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/coordination/changes").iterdir())
     )
     before_worktrees = _git(repository, "worktree", "list", "--porcelain")
     original_run_git = manager._run_git  # noqa: SLF001
@@ -446,7 +471,7 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     ]
     assert before_worktrees == _git(repository, "worktree", "list", "--porcelain")
     assert before_coordination == tuple(
-        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/coordination/changes").iterdir())
     )
 
 
@@ -496,7 +521,7 @@ def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -
     reviewed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / "state/claims/changes/legacy-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "state/coordination/changes/legacy-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
     coordinator.update(
         coordination.model_copy(update={"last_reviewed_commit": reviewed_head, "publication_base_head": None})
     )
@@ -522,6 +547,41 @@ def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -
         manager.recover_publication_baseline(coordination.change_id, reviewed_head, initial, "other-operation")
 
 
+def test_released_blocked_implementation_recovery_preserves_and_reanchors_candidate(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("blocked-recovery")
+    candidate = _commit_new_file(
+        coordination.worktree_path,
+        "candidate.txt",
+        "preserve this candidate\n",
+        "preserve blocked candidate",
+    )
+    request = RecoverBlockedImplementation(
+        change_id=coordination.change_id,
+        outcome_id="OUT-001",
+        expected_resume_commit=candidate,
+        expected_reviewed_head=initial,
+        operation_id="recover-blocked-candidate",
+    )
+
+    receipt = manager.recover_blocked_implementation(request)
+    replayed = manager.recover_blocked_implementation(request)
+
+    assert isinstance(receipt, BlockedImplementationRecoveryReceipt)
+    assert replayed == receipt
+    assert receipt.preserved_commit == candidate
+    assert receipt.reviewed_head == initial
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+    assert _git(repository, "rev-parse", receipt.preserved_ref) == candidate
+    recovered = coordinator.show(coordination.change_id)
+    assert "blocked_implementation_recovery" not in recovered.model_dump(mode="json")
+
+    with pytest.raises(CoordinationConflictError, match="candidate was not preserved"):
+        manager.recover_blocked_implementation(request.model_copy(update={"operation_id": "other-operation"}))
+
+
 @pytest.mark.parametrize("custody", ["writer", "publication lease"])
 def test_publication_baseline_recovery_requires_idle_change(tmp_path: Path, custody: str) -> None:
     repository, initial = _repository(tmp_path)
@@ -529,7 +589,9 @@ def test_publication_baseline_recovery_requires_idle_change(tmp_path: Path, cust
     coordination = manager.ensure(f"busy-{custody.replace(' ', '-')}")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / f"state/coordination/changes/{coordination.change_id}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
     if custody == "writer":
         coordinator.acquire(
             coordination.change_id,
@@ -563,7 +625,9 @@ def test_publication_baseline_recovery_rejects_unusable_baseline(tmp_path: Path,
     coordination = manager.ensure(f"invalid-{baseline_kind}")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / f"state/coordination/changes/{coordination.change_id}.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
     baseline = "f" * 40
     if baseline_kind == "non-ancestor":
         baseline = _git(repository, "commit-tree", f"{initial}^{{tree}}", "-m", "unrelated baseline")
@@ -600,7 +664,7 @@ def test_legacy_publication_summary_fails_closed_without_baseline(tmp_path: Path
     _git(repository, "commit", "-m", "advance target")
     target_head = _git(repository, "rev-parse", "HEAD")
     payload["target_head"] = target_head
-    (tmp_path / "state/claims/changes/unknown-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+    (tmp_path / "state/coordination/changes/unknown-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(PublicationBaselineUnavailableError, match="explicitly known baseline"):
         manager.repository_automation_paths(coordination.change_id, initial)
@@ -680,6 +744,207 @@ def test_cleanup_refuses_dirty_worktree_without_discarding_content(tmp_path: Pat
     assert dirty_file.read_text(encoding="utf-8") == "preserve me\n"
     assert coordination.worktree_path.exists()
     assert coordinator.show(coordination.change_id).worktree_cleanup is None
+
+
+def test_restart_refuses_dirty_worktree_before_creating_attempt_ref(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("dirty-restart")
+    writer = ChangeWriter(
+        **_identity(coordination.change_id).model_dump(),
+        job_id=1,
+        kind="build",
+    )
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="clean committed change worktree"):
+        manager.restart(coordination.change_id, writer.attempt_id, initial)
+
+    assert dirty_file.read_text(encoding="utf-8") == "preserve me\n"
+    assert not _git_ref_exists(
+        repository,
+        f"refs/owlbear/attempts/{coordination.change_id}/{writer.attempt_id}",
+    )
+    assert coordinator.show(coordination.change_id).writer == writer
+
+
+def test_quarantine_dirty_worktree_preserves_all_nonignored_bytes_and_environment(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    (repository / ".gitignore").write_text(".venv/\nnode_modules/\ndist/\n", encoding="utf-8")
+    (repository / "deleted.txt").write_text("delete me\n", encoding="utf-8")
+    (repository / "rename-source.txt").write_text("rename me\n", encoding="utf-8")
+    _git(repository, "add", ".gitignore", "deleted.txt", "rename-source.txt")
+    _git(repository, "commit", "-m", "seed quarantine boundaries")
+    base_head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "branch", "-f", "release", base_head)
+    _git(repository, "update-ref", "refs/remotes/origin/release", base_head)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-change")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"staged binary\x00\xff")
+    _git(worktree, "add", "shared.txt")
+    (worktree / "new.txt").write_bytes(b"untracked binary\x00\xfe")
+    _git(worktree, "mv", "rename-source.txt", "rename-target.txt")
+    (worktree / "deleted.txt").unlink()
+    (worktree / "uv.lock").write_bytes(b"lock\x00\xff")
+    for directory in (".venv", "node_modules", "dist"):
+        path = worktree / directory
+        path.mkdir()
+        (path / "keep.bin").write_bytes(b"ignored environment")
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-operation",
+    )
+
+    assert receipt.base_head == _git(repository, "rev-parse", coordination.branch)
+    assert receipt.quarantine_ref == f"refs/owlbear/quarantine/{coordination.change_id}/{writer.attempt_id}"
+    assert receipt.paths == tuple(sorted(receipt.paths))
+    assert set(receipt.paths) == {
+        "deleted.txt",
+        "new.txt",
+        "rename-source.txt",
+        "rename-target.txt",
+        "shared.txt",
+        "uv.lock",
+    }
+    assert _git(worktree, "status", "--porcelain") == ""
+    assert _git(worktree, "rev-parse", "HEAD") == base_head
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert not (worktree / "new.txt").exists()
+    assert (worktree / "rename-source.txt").read_text(encoding="utf-8") == "rename me\n"
+    assert not (worktree / "rename-target.txt").exists()
+    assert (worktree / "deleted.txt").exists()
+    for directory in (".venv", "node_modules", "dist"):
+        assert (worktree / directory / "keep.bin").read_bytes() == b"ignored environment"
+    assert _git(repository, "rev-parse", receipt.quarantine_ref) == receipt.quarantine_commit
+    assert (
+        subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+            ("git", "-C", str(repository), "show", f"{receipt.quarantine_commit}:shared.txt"),  # noqa: S607
+            check=True,
+            capture_output=True,
+        ).stdout
+        == b"staged binary\x00\xff"
+    )
+    assert (
+        subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+            ("git", "-C", str(repository), "show", f"{receipt.quarantine_commit}:uv.lock"),  # noqa: S607
+            check=True,
+            capture_output=True,
+        ).stdout
+        == b"lock\x00\xff"
+    )
+
+
+def test_quarantine_replays_after_receipt_persistence_failure(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-replay")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    with (
+        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected receipt failure")),
+        pytest.raises(CoordinationConflictError, match="injected receipt failure"),
+    ):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-replay-operation",
+        )
+
+    quarantine_ref = f"refs/owlbear/quarantine/{coordination.change_id}/{writer.attempt_id}"
+    assert _git_ref_exists(repository, quarantine_ref)
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine is None
+    assert dirty_file.read_bytes() == b"preserve\x00\xff"
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-replay-operation",
+    )
+
+    assert receipt.quarantine_ref == quarantine_ref
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine == receipt
+    assert dirty_file.exists() is False
+    assert _git(coordination.worktree_path, "status", "--porcelain") == ""
+
+
+def test_quarantine_replay_rejects_changed_bytes_after_preservation(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-drift")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"first\x00\xff")
+
+    with (
+        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected receipt failure")),
+        pytest.raises(CoordinationConflictError, match="injected receipt failure"),
+    ):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-drift-operation",
+        )
+
+    dirty_file.write_bytes(b"newer\x00\xfe")
+
+    with pytest.raises(RuntimeError, match="changed after quarantine preservation"):
+        manager.quarantine_dirty_worktree(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-drift-operation",
+        )
+
+    assert dirty_file.read_bytes() == b"newer\x00\xfe"
+    assert coordinator.show(coordination.change_id).writer == writer
+    assert coordinator.show(coordination.change_id).dirty_worktree_quarantine is None
+    assert _git(coordination.worktree_path, "status", "--porcelain")
+
+
+def test_quarantine_verifies_after_restart_moves_branch_to_reviewed_head(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("quarantine-restart-replay")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    dirty_file = coordination.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    receipt = manager.quarantine_dirty_worktree(
+        coordination.change_id,
+        writer.attempt_id,
+        writer.claim_id,
+        "quarantine-restart-replay-operation",
+    )
+    manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+    assert (
+        manager.verify_dirty_worktree_quarantine(
+            coordination.change_id,
+            writer.attempt_id,
+            writer.claim_id,
+            "quarantine-restart-replay-operation",
+        )
+        == receipt
+    )
 
 
 def test_cleanup_replays_persisted_intent_after_receipt_write_failure(
@@ -774,7 +1039,7 @@ def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) 
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     manager.ensure("stable-change")
-    coordination_root = tmp_path / "state/claims/changes"
+    coordination_root = tmp_path / "state/coordination/changes"
     (coordination_root / ".tmp-deadbeef-stable-change.json").write_text("not json", encoding="utf-8")
 
     assert [item.change_id for item in coordinator.list_registered()] == ["stable-change"]
@@ -784,7 +1049,7 @@ def test_list_registered_rejects_malformed_or_misnamed_records(tmp_path: Path) -
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     manager.ensure("valid-change")
-    coordination_root = tmp_path / "state/claims/changes"
+    coordination_root = tmp_path / "state/coordination/changes"
     (coordination_root / "broken.json").write_text("{", encoding="utf-8")
 
     with pytest.raises(CoordinationConflictError, match="record is invalid"):
@@ -980,7 +1245,7 @@ def test_list_retained_worktrees_reports_orphaned_registration(tmp_path: Path) -
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("orphaned-change")
-    (tmp_path / "state/claims/changes/orphaned-change.json").unlink()
+    (tmp_path / "state/coordination/changes/orphaned-change.json").unlink()
 
     row = next(item for item in manager.list_retained() if item.change_id == coordination.change_id)
 
@@ -1238,6 +1503,48 @@ def test_restart_rejects_reset_across_unpromoted_external_head(tmp_path: Path) -
     assert coordinator.show(coordination.change_id).writer == writer
 
 
+def test_restart_accepts_promoted_adoption_after_reviewed_descendant_and_replays(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("restart-promoted-adoption")
+    _remote, adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, initial)
+    manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="adopt-before-promoted-restart",
+        )
+    )
+    promoted = manager.promote_external_head(
+        PromoteExternalHead(
+            change_id=coordination.change_id,
+            expected_head=adopted,
+            operation_id="promote-before-restart",
+        )
+    )
+    reviewed = _commit_new_file(coordination.worktree_path, "reviewed.txt", "reviewed\n", "reviewed descendant")
+    manager.record_reviewed(coordination.change_id, reviewed)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    attempt_ref = f"refs/owlbear/attempts/{coordination.change_id}/{writer.attempt_id}"
+
+    restarted = manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert promoted is not None
+    assert _git(repository, "rev-parse", attempt_ref) == rejected
+    assert _git(repository, "rev-parse", coordination.branch) == reviewed
+    assert _git(restarted.worktree_path, "rev-parse", "HEAD") == reviewed
+    assert restarted.last_reviewed_commit == reviewed
+    assert restarted.writer is None
+    assert not (tmp_path / "state/capacity-ledger.json").exists()
+
+    replayed = manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert replayed == restarted
+
+
 def test_record_reviewed_rejects_backward_boundary(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
@@ -1275,7 +1582,7 @@ def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path:
     coordination = manager.ensure("recovered-change")
     reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
     manager.record_reviewed(coordination.change_id, reviewed)
-    (state_root / "claims/changes/recovered-change.json").unlink()
+    (state_root / "coordination/changes/recovered-change.json").unlink()
     recovered_manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
 
     with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
@@ -1304,24 +1611,25 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
         coordinator.recover_pending_transactions()
 
     assert (state_root / "target-runtime/recovered.json").read_bytes() == b"{}\n"
-    assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
+    assert not (state_root / "transactions/pending-portfolio.yaml").exists()
 
 
 def test_coordinator_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "capacity.json"
-    ledger_path.parent.mkdir(parents=True)
-    ledger_path.write_text(
+    legacy_ledger_path = state_root / "capacity.json"
+    legacy_ledger_path.parent.mkdir(parents=True)
+    legacy_ledger_path.write_text(
         CapacityLedger(capacity=4, change_ids=("change-a",)).model_dump_json(),
         encoding="utf-8",
     )
 
     PortfolioCoordinator(state_root)
 
-    assert CapacityLedger.model_validate_json(ledger_path.read_bytes()) == CapacityLedger(
+    assert CapacityLedger.model_validate_json(legacy_ledger_path.read_bytes()) == CapacityLedger(
         capacity=4,
         change_ids=("change-a",),
     )
+    assert not (state_root / "capacity-ledger.json").exists()
 
 
 def test_coordinator_does_not_validate_legacy_capacity_ledger(tmp_path: Path) -> None:

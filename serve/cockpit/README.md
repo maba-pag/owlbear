@@ -149,8 +149,8 @@ methods.
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
 answer-bearing and administrative controls reserved for users. It does not schedule work, choose
 worker transitions, interpret reviewer evidence, repair source, merge pull requests, or update the
-configured target branch on its own. Persisted legacy Integration attention remains visible only
-through compatibility surfaces.
+configured target branch on its own. Persisted Integration attention remains visible through the
+current attention surfaces.
 
 ## Configuration
 
