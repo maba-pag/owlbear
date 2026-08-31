@@ -1596,6 +1596,7 @@ def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path:
 
 def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
+    coordinator = PortfolioCoordinator(state_root)
     participant = TransactionParticipant(state_root, Path("target-runtime/recovered.json"), b"{}\n")
 
     def interrupt(stage: str) -> None:
@@ -1606,7 +1607,6 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
     with pytest.raises(RuntimeError, match="injected"):
         RuntimeTransaction(state_root, "pending-portfolio", (participant,)).commit(failure=interrupt)
 
-    coordinator = PortfolioCoordinator(state_root)
     with coordinator.acquisition_lock():
         coordinator.recover_pending_transactions()
 

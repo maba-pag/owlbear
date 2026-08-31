@@ -85,6 +85,11 @@ integers. A historical `.owlbear/delivery/runtime/capacity-ledger.json` is not c
 state or configuration and must not be edited manually. The Delivery server reads no environment
 variables.
 
+When upgrading an existing workspace, remove the obsolete `writer_capacity` field from
+`.owlbear/delivery/runtime/host.json` and any `.owlbear/delivery/runtime/host.local.json` override
+before restarting Delivery. Setup preserves an existing `host.json` on rerun, and startup rejects
+the stale field rather than rewriting it. Do not edit historical `capacity-ledger.json` data.
+
 At admission, Delivery commits the verified four-file Design package to the managed Change branch
 before opening its first draft pull request. Sparse checkpoints on `delivery_state_branch` retain
 frontier, publication, finalization, and completion authority without active claims, locks, process
