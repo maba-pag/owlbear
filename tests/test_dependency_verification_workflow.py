@@ -453,7 +453,7 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert "npm run build" in text
     assert browser["needs"] == "proof"
     assert browser["if"] == "needs.proof.result == 'success'"
-    assert "npx playwright install chromium firefox webkit" in text
+    assert "npx playwright install --with-deps chromium firefox webkit" in text
     assert "npm run test:e2e:compat" in text
 
 
