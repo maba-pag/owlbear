@@ -484,10 +484,12 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
         if self.schema_version == 1 and self.provenance != "fast-forward":
             message = "schema v1 external Change-head adoption receipts require fast-forward provenance"
             raise ValueError(message)
-        valid_ids = {_external_head_adoption_digest(self)}
-        if self.schema_version == 1:
-            valid_ids.add(_legacy_external_head_adoption_digest(self))
-        if self.receipt_id not in valid_ids:
+        expected_id = (
+            _legacy_external_head_adoption_digest(self)
+            if self.schema_version == 1
+            else _external_head_adoption_digest(self)
+        )
+        if self.receipt_id != expected_id:
             message = "external Change head adoption receipt identity is invalid"
             raise ValueError(message)
         return self

@@ -1448,6 +1448,19 @@ def test_external_head_adoption_loads_legacy_fast_forward_receipt(tmp_path: Path
     assert restored.provenance == "fast-forward"
     assert restored.receipt_id == legacy_payload["receipt_id"]
 
+    v1_with_new_digest = dict(legacy_payload)
+    v1_with_new_digest["provenance"] = "fast-forward"
+    v1_with_new_digest["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in v1_with_new_digest.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+    with pytest.raises(ValueError, match="receipt identity is invalid"):
+        ChangeExternalHeadAdoptionReceipt.model_validate(v1_with_new_digest)
+
 
 def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)

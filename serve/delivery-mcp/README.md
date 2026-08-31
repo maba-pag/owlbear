@@ -116,6 +116,18 @@ admission for the exact adopted head. Finalization may perform its own exact-hea
 completed adopted Change after independent review. Durable adoption and promotion receipts make both
 operations replayable after a process interruption and distinguish movement from observation.
 
+### External-head response compatibility
+
+The `adopt_external_head` response uses transport schema `2` and always includes `provenance`:
+`fast-forward` means Delivery moved the managed worktree, while `observed` means the clean managed
+worktree was already at the exact remote head and Delivery verified that remote tip before recording
+it. Consumers must handle both values and must not infer review authority from adoption; the prior
+reviewed boundary remains in force until explicit promotion or fresh finalization.
+
+Persisted domain receipts remain compatible with schema `1`. A schema-1 receipt uses exactly the
+legacy content digest without `provenance`; schema-2 receipts use the provenance-inclusive digest.
+This keeps each receipt identity deterministic while allowing older Delivery state to load.
+
 Legacy coordination records without publication-baseline provenance fail closed during publication
 summary generation. After confirming the exact Change head, baseline commit, and a clean idle managed
 worktree, `recover_publication_baseline` records one replayable recovery receipt. It does not resolve
