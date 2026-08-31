@@ -2859,7 +2859,12 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert pull_request_publisher.update_generated_summary.call_count == 1
     request = pull_request_publisher.publish.call_args.args[0]
     assert request.published_head == snapshot.snapshot_head
-    assert "Verified Outcome `OUT-001`" in request.generated_summary
+    assert "## Goal" in request.generated_summary
+    assert "## Intent" in request.generated_summary
+    assert "## Promised Outcomes" in request.generated_summary
+    assert "Promised result: Return one bounded launch package." in request.generated_summary
+    assert "Outcome `OUT-001` verified" in request.generated_summary
+    assert "Outcomes complete: 1 of 1" in request.generated_summary
     history = runtimes["change-a"].publication_history()
     assert history is not None
     assert history.current.number == 7
@@ -3197,6 +3202,12 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(  # noqa: 
     assert provider_request.expected_predecessor_receipt_id == predecessor.receipt_id
     assert provider_request.successor_branch == successor_branch
     assert provider_request.superseding_head == superseding_head
+    assert "## Goal" in provider_request.generated_summary
+    assert "## Intent" in provider_request.generated_summary
+    assert "## Promised Outcomes" in provider_request.generated_summary
+    assert (
+        f"Publication supersedes provider publication `{predecessor.receipt_id}`" in provider_request.generated_summary
+    )
     assert "### Repository automation changed" in provider_request.generated_summary
     assert "<code>.github/workflows/successor.yml</code>" in provider_request.generated_summary
 
@@ -3412,7 +3423,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     assert not request.title.startswith(" ")
     assert "\x00" not in request.title
     assert "owlbear-change:forged" not in request.generated_summary
-    assert "Verified Outcome `OUT-001`" in request.generated_summary
+    assert "Outcome `OUT-001` verified" in request.generated_summary
 
 
 def test_reconcile_later_checkpoint_updates_summary_from_prior_published_head(tmp_path: Path) -> None:
@@ -4665,6 +4676,12 @@ def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) 
     application, _runtimes, coordinator, _state_root = _portfolio(tmp_path, {})
     intent = b"""# Initial package
 
+## Problem And Product Promise
+
+The initial package needs a published boundary.
+
+Publish the stable package before workers run.
+
 ```yaml target-contract
 kind: commitment
 id: COM-001
@@ -4718,7 +4735,11 @@ dependencies: []
     assert branch_request.expected_published_head == snapshot.snapshot_head
     pull_request = pull_request_publisher.publish.call_args.args[0]
     assert pull_request.published_head == snapshot.snapshot_head
-    assert "Admitted Design package" in pull_request.generated_summary
+    assert "> The initial package needs a published boundary." in pull_request.generated_summary
+    assert "> Publish the stable package before workers run." in pull_request.generated_summary
+    assert "Promised result: Publish the stable package before workers run." in pull_request.generated_summary
+    assert "Outcomes complete: 0 of 1" in pull_request.generated_summary
+    assert "admitted Design package" in pull_request.generated_summary
     package_paths = {
         ".owlbear/delivery/packages/change-a/authority.json",
         ".owlbear/delivery/packages/change-a/design.md",
@@ -4733,6 +4754,110 @@ dependencies: []
         coordination.branch,
     ).splitlines()
     assert set(tree_paths) >= package_paths
+
+
+def test_checkpoint_summary_renders_and_escapes_authored_change_content(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    intent = b"""# Safe summary
+
+## Problem And Product Promise
+
+The goal contains <tag>, @team, #123, and https://example.test.
+
+The intent contains <script>, Fixes #456, @team, https://example.test/path, and `literal`.
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: summary test
+statement: Preserve safe summary rendering.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: "Outcome <tag> @team #7"
+promise: "Deliver <script> Fixes #8 @team https://example.test/path `literal`."
+acceptance: [The authored content is rendered safely.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("change-a", intent, b"# Architecture\n")
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+
+    summary = pull_request_publisher.publish.call_args.args[0].generated_summary
+    assert "> The goal contains &lt;tag&gt;, &#64;team, &#35;123, and https&#58;&#47;&#47;example.test." in summary
+    assert (
+        "> The intent contains &lt;script&gt;, Fixes &#35;456, &#64;team, "
+        "https&#58;&#47;&#47;example.test&#47;path, and &#96;literal&#96;."
+    ) in summary
+    assert "Outcome &lt;tag&gt; &#64;team &#35;7" in summary
+    assert (
+        "Promised result: Deliver &lt;script&gt; Fixes &#35;8 &#64;team "
+        "https&#58;&#47;&#47;example.test&#47;path &#96;literal&#96;."
+    ) in summary
+    assert "<script>" not in summary
+    assert "@team" not in summary
+    assert "#123" not in summary
+    assert "https://example.test" not in summary
+    assert summary.count("## Delivery Status") == 1
+    assert "Delivery finalization: recorded" not in summary
+
+
+def test_checkpoint_summary_scopes_finalization_status_to_its_checkpoint(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial_head = coordinator.show("change-a").last_reviewed_commit
+    _set_checkpoint(
+        runtimes["change-a"],
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=initial_head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    application.reconcile_change_checkpoint("change-a")
+    first_summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
+    assert "Delivery finalization: recorded" not in first_summary
+
+    finalized_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", finalized_head))
+    application.reconcile_change_checkpoint("change-a")
+
+    final_summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
+    assert f"As of reviewed checkpoint `{finalized_head}`:" in final_summary
+    assert "Delivery finalization: recorded for this checkpoint" in final_summary
+    assert "Independent exact-commit review: passed for this checkpoint" in final_summary
 
 
 def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path: Path) -> None:

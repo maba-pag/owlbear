@@ -14,6 +14,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
+from markdown_it import MarkdownIt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.acceptance import (
@@ -76,6 +77,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
+    DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
@@ -199,6 +201,12 @@ _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
 _MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
 _MAX_AUTOMATION_PATHS = 32
 _MAX_AUTOMATION_PATH_LENGTH = 240
+_MAX_PR_OUTCOMES = 24
+_MAX_PR_GOAL_LENGTH = 1_200
+_MAX_PR_INTENT_LENGTH = 1_600
+_MAX_PR_OUTCOME_TITLE_LENGTH = 180
+_MAX_PR_OUTCOME_PROMISE_LENGTH = 480
+_INTENT_SUMMARY_HEADING = "Problem And Product Promise"
 
 
 def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
@@ -260,25 +268,171 @@ def _dirty_recovery_operation_id(change_id: str, outcome_id: str, attempt_id: st
     return f"recover-dirty-{hashlib.sha256(payload.encode()).hexdigest()}"
 
 
-def _checkpoint_summary(
-    pending: DeliveryPendingCheckpoint,
+def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoint publication inputs.
+    runtime: DeliveryRuntime,
+    package: VerifiedDesignPackage,
+    pending: DeliveryPendingCheckpoint | None,
     head: str,
     automation_paths: tuple[str, ...],
+    *,
+    supersedes_publication_id: str | None = None,
 ) -> str:
-    lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
-    for trigger in pending.triggers:
-        if trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN:
-            lines.append("- Admitted Design package")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
-            lines.append("- First promoted Task result")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
-            lines.append(f"- Verified Outcome `{trigger.outcome_id}`")
-        elif trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
-            lines.append("- Finalized Change")
-        else:
-            lines.append("- Explicit publication request")
+    goal, intent = _intent_summary(package.intent_bytes, runtime)
+    bindings = {binding.outcome_id: binding for binding in runtime.bindings()}
+    completed_outcomes = sum(binding.stage == DeliveryStage.COMPLETED for binding in bindings.values())
+    lines = [
+        "## Goal",
+        "",
+        f"> {_summary_text(goal, _MAX_PR_GOAL_LENGTH)}",
+        "",
+        "## Intent",
+        "",
+        f"> {_summary_text(intent, _MAX_PR_INTENT_LENGTH)}",
+        "",
+        "## Promised Outcomes",
+        "",
+    ]
+    visible_outcomes = runtime.contract.outcomes[:_MAX_PR_OUTCOMES]
+    for outcome in visible_outcomes:
+        binding = bindings[outcome.outcome_id]
+        complete = binding.stage == DeliveryStage.COMPLETED
+        state = "complete" if complete else binding.stage.value
+        checkbox = "x" if complete else " "
+        outcome_line = (
+            f"- [{checkbox}] **{_summary_text(outcome.title, _MAX_PR_OUTCOME_TITLE_LENGTH)}** "
+            f"(`{outcome.outcome_id}`; {state})"
+        )
+        lines.extend(
+            (
+                outcome_line,
+                f"  Promised result: {_summary_text(outcome.promise, _MAX_PR_OUTCOME_PROMISE_LENGTH)}",
+            )
+        )
+    omitted_outcomes = len(runtime.contract.outcomes) - len(visible_outcomes)
+    if omitted_outcomes:
+        lines.append(f"- {omitted_outcomes} additional Outcome(s) omitted from this summary")
+    lines.extend(
+        (
+            "",
+            "## Delivery Status",
+            "",
+            f"As of reviewed checkpoint `{head}`:",
+            "",
+            f"- Outcomes complete: {completed_outcomes} of {len(runtime.contract.outcomes)}",
+        )
+    )
+    if pending is not None:
+        lines.append(
+            f"- Checkpoint includes: {', '.join(_checkpoint_trigger_label(trigger) for trigger in pending.triggers)}"
+        )
+    finalization = runtime.finalization()
+    if finalization is not None and finalization.exact_head == head:
+        lines.extend(
+            (
+                "- Delivery finalization: recorded for this checkpoint",
+                "- Independent exact-commit review: passed for this checkpoint",
+            )
+        )
+    if supersedes_publication_id is not None:
+        lines.append(f"- Publication supersedes provider publication `{supersedes_publication_id}`")
     lines.extend(_automation_summary(automation_paths))
     return "\n".join(lines)
+
+
+def _checkpoint_trigger_label(trigger: DeliveryCheckpointTrigger) -> str:
+    if trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN:
+        return "admitted Design package"
+    if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+        return "first promoted Task result"
+    if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+        return f"Outcome `{trigger.outcome_id}` verified"
+    if trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
+        return "finalization recorded"
+    return "explicit publication request"
+
+
+def _intent_summary(intent_bytes: bytes, runtime: DeliveryRuntime) -> tuple[str, str]:
+    paragraphs = _intent_summary_paragraphs(intent_bytes)
+    if paragraphs:
+        goal = paragraphs[0]
+        intent = " ".join(paragraphs[1:]).strip() or "Deliver the promised Outcomes below."
+        return goal, intent
+    fallback = next(
+        (
+            commitment.statement
+            for commitment in runtime.contract.commitments
+            if commitment.commitment_class.value in {"dealbreaker", "protected-request"}
+        ),
+        runtime.contract.title,
+    )
+    return fallback, "Deliver the promised Outcomes below."
+
+
+def _intent_summary_paragraphs(intent_bytes: bytes) -> tuple[str, ...]:
+    text = intent_bytes.decode("utf-8", errors="replace")
+    tokens = MarkdownIt("commonmark").parse(text)
+    in_summary_section = False
+    in_paragraph = False
+    paragraphs: list[str] = []
+    for index, token in enumerate(tokens):
+        if token.type == "heading_open":
+            heading = ""
+            if index + 1 < len(tokens) and tokens[index + 1].type == "inline":
+                heading = tokens[index + 1].content
+            if token.tag == "h2" and heading == _INTENT_SUMMARY_HEADING:
+                in_summary_section = True
+            elif token.tag in {"h1", "h2"}:
+                in_summary_section = False
+            in_paragraph = False
+        elif token.type == "paragraph_open":
+            in_paragraph = in_summary_section
+        elif token.type == "paragraph_close":
+            in_paragraph = False
+        elif token.type == "inline" and in_paragraph and token.content.strip():
+            paragraphs.append(token.content)
+    return tuple(paragraphs)
+
+
+def _summary_text(value: str, max_length: int) -> str:
+    normalized = " ".join("".join(character if character.isprintable() else " " for character in value).split())
+    if not normalized:
+        return "Not provided."
+    escaped = _escape_summary_text(normalized)
+    if len(escaped) <= max_length:
+        return escaped
+    suffix = "..."
+    low = 0
+    high = len(normalized)
+    while low < high:
+        midpoint = (low + high + 1) // 2
+        candidate = normalized[:midpoint].rstrip() + suffix
+        if len(_escape_summary_text(candidate)) <= max_length:
+            low = midpoint
+        else:
+            high = midpoint - 1
+    return _escape_summary_text(normalized[:low].rstrip() + suffix)
+
+
+def _escape_summary_text(value: str) -> str:
+    escaped = html.escape(value, quote=False)
+    replacements = {
+        ord(character): replacement
+        for character, replacement in (
+            ("\\", "&#92;"),
+            ("`", "&#96;"),
+            ("@", "&#64;"),
+            ("#", "&#35;"),
+            (":", "&#58;"),
+            ("/", "&#47;"),
+            ("*", "&#42;"),
+            ("_", "&#95;"),
+            ("[", "&#91;"),
+            ("]", "&#93;"),
+            ("~", "&#126;"),
+            ("|", "&#124;"),
+        )
+    }
+    return escaped.translate(replacements)
 
 
 def _automation_summary(paths: tuple[str, ...]) -> tuple[str, ...]:
@@ -321,16 +475,6 @@ def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
     if len(title) <= _MAX_PULL_REQUEST_TITLE_LENGTH:
         return title
     return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
-
-
-def _supersession_summary(head: str, predecessor_id: str, automation_paths: tuple[str, ...]) -> str:
-    lines = [
-        f"Superseding reviewed Delivery checkpoint `{head}`.",
-        "",
-        f"This publication supersedes provider publication `{predecessor_id}`.",
-    ]
-    lines.extend(_automation_summary(automation_paths))
-    return "\n".join(lines)
 
 
 def _publication_identity(
@@ -1292,6 +1436,8 @@ class PortfolioApplication:
         provider_publisher = self._draft_pull_request_publisher
         if branch_publisher is None or provider_publisher is None:
             self._fail("publication supersession is not configured")
+        package = self._package_store.read_verified(context.change_id)
+        self._validate_package_authority(runtime, package)
         automation_paths = self._workspace_manager.repository_automation_paths(
             context.change_id,
             context.superseding_head,
@@ -1319,10 +1465,13 @@ class PortfolioApplication:
                 successor_branch=git_receipt.successor_branch,
                 superseding_head=context.superseding_head,
                 title=_checkpoint_pull_request_title(runtime),
-                generated_summary=_supersession_summary(
+                generated_summary=_checkpoint_summary(
+                    runtime,
+                    package,
+                    None,
                     context.superseding_head,
-                    context.expected_publication_id,
                     automation_paths,
+                    supersedes_publication_id=context.expected_publication_id,
                 ),
             )
         )
@@ -2189,7 +2338,9 @@ class PortfolioApplication:
         pending = prepared.pending
         head = prepared.head
         first_checkpoint = prepared.first_checkpoint
-        summary = _checkpoint_summary(pending, head, automation_paths)
+        package = self._package_store.read_verified(change_id)
+        self._validate_package_authority(runtime, package)
+        summary = _checkpoint_summary(runtime, package, pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
             change_id=change_id,
