@@ -612,7 +612,13 @@ class TargetMCPAdapter:
         self,
         request: RecoverBlockedImplementationRequest,
     ) -> ChangeBlockedImplementationRecoveryResponse:
-        """Recover one released blocked Implementation candidate after explicit confirmation."""
+        """Repair legacy released-at-candidate Implementation state.
+
+        Normal blocked Implementations do not use this migration operation. Alert the user that
+        recovery preserves the candidate commit under a recovery ref and re-anchors the managed
+        worktree at the reviewed head; it does not resolve the block or admit candidate work.
+        Invoke only after the user explicitly confirms these effects.
+        """
         params = self._validate(RecoverBlockedImplementationParams, request)
         receipt = await asyncio.to_thread(
             self._call_model,

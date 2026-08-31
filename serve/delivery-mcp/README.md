@@ -114,6 +114,12 @@ summary generation. After confirming the exact Change head, baseline commit, and
 worktree, `recover_publication_baseline` records one replayable recovery receipt. It does not resolve
 existing publication attention; use `resolve_change_disposition` separately after reviewing the repair.
 
+`recover_blocked_implementation` is only for migrating historical released-at-candidate
+Implementation state; normal blocked Implementations do not use it. Before invoking it, alert the
+user that the operation preserves the candidate commit under a recovery ref and re-anchors the
+managed worktree at the reviewed head, but neither resolves the block nor admits the candidate work.
+Invoke it only after the user explicitly confirms those effects.
+
 Delivery has no environment configuration. The server must be launched with the consuming workspace
 as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or
 `.owlbear/worktrees` roots remain, so live state cannot be silently orphaned before migration.
