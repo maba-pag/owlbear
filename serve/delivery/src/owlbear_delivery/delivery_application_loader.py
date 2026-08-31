@@ -360,6 +360,8 @@ def _bootstrap_remote_state(
                 _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
             else:
                 _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
+        except _DeferredRemoteStateReconciliationError:
+            continue
         except DeliveryApplicationLoadError:
             raise
         except (OSError, RuntimeError, ValueError) as exc:
@@ -469,7 +471,9 @@ def _fetch_snapshot_change_head(
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
         if remote_branch != snapshot.change_head:
-            _bootstrap_failure("remote Change branch differs from Delivery-state snapshot")
+            if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
+                raise _DeferredRemoteStateReconciliationError
+            _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
         result = _run_loader_git(
             repository,
             "fetch",
@@ -505,6 +509,38 @@ def _fetch_snapshot_change_head(
     ):
         _bootstrap_failure("accepted merge commit is not present on the configured target")
     return latch.accepted_merge_commit, False
+
+
+class _DeferredRemoteStateReconciliationError(Exception):
+    """One Change is safely deferred while its remote branch advances past its snapshot."""
+
+
+def _can_defer_remote_state_reconciliation(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    remote_branch: str,
+) -> bool:
+    """Return whether one clean reviewed descendant can be quarantined at startup."""
+    if snapshot.frontier.change_completion is not None:
+        return False
+    if not _loader_git_is_ancestor(repository, snapshot.last_reviewed_commit, remote_branch):
+        return False
+    return _loader_git_is_ancestor(repository, snapshot.change_head, remote_branch)
+
+
+def _loader_git_is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
+    """Check commit ancestry without changing repository state."""
+    return (
+        _run_loader_git(
+            repository,
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def _restore_local_change_branch(

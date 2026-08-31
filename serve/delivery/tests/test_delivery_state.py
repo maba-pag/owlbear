@@ -48,6 +48,9 @@ from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
+    _can_defer_remote_state_reconciliation,
+    _DeferredRemoteStateReconciliationError,
+    _fetch_snapshot_change_head,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -190,6 +193,119 @@ def _admission(runtime: DeliveryRuntime, manager: ChangeWorkspaceManager, change
         ).hexdigest(),
         **admission_values,
     )
+
+
+def _startup_config() -> DeliveryStartupConfig:
+    return DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+    )
+
+
+def _snapshot(
+    runtime: DeliveryRuntime,
+    manager: ChangeWorkspaceManager,
+    change_id: str,
+) -> DeliveryStateSnapshot:
+    return DeliveryStateSnapshot.create(
+        operation_id=f"snapshot-{change_id}",
+        change_id=change_id,
+        package_id="f" * 64,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        sequence=1,
+        parent_snapshot_id=None,
+        base_head=None,
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+
+
+def _commit_descendant(worktree: Path, filename: str, message: str) -> str:
+    (worktree / filename).write_text(f"{message}\n", encoding="utf-8")
+    _git(worktree, "add", filename)
+    _git(worktree, "commit", "-m", message)
+    return _git(worktree, "rev-parse", "HEAD")
+
+
+def test_loader_defers_active_remote_descendant_drift(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-descendant"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    descendant = _commit_descendant(worktree, "descendant.txt", "active descendant")
+
+    assert _can_defer_remote_state_reconciliation(snapshot, repository, descendant)
+    with (
+        patch(
+            "owlbear_delivery.delivery_application_loader._remote_branch_head",
+            return_value=descendant,
+        ),
+        pytest.raises(_DeferredRemoteStateReconciliationError),
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+
+def test_loader_does_not_defer_completed_remote_descendant_drift(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-completed"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    completed = snapshot.model_copy(
+        update={
+            "frontier": snapshot.frontier.model_copy(
+                update={
+                    "change_completion": DeliveryChangeCompletion(
+                        completion_id="a" * 64,
+                        completed_at=datetime(2026, 8, 23, tzinfo=UTC),
+                    )
+                }
+            )
+        }
+    )
+    descendant = _commit_descendant(worktree, "completed-descendant.txt", "completed descendant")
+
+    assert not _can_defer_remote_state_reconciliation(completed, repository, descendant)
+    with (
+        patch(
+            "owlbear_delivery.delivery_application_loader._remote_branch_head",
+            return_value=descendant,
+        ),
+        pytest.raises(
+            DeliveryApplicationLoadError,
+            match="remote Change branch differs from Delivery-state snapshot: state-completed",
+        ),
+    ):
+        _fetch_snapshot_change_head(completed, _startup_config(), repository)
+
+
+def test_loader_rejects_divergent_remote_branch_drift(tmp_path: Path) -> None:
+    repository, _remote, initial = _repository(tmp_path)
+    change_id = "state-divergent"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    reviewed = _commit_descendant(worktree, "reviewed.txt", "reviewed state")
+    manager.record_reviewed(change_id, reviewed)
+    snapshot = _snapshot(runtime, manager, change_id)
+    divergent = _commit_descendant(repository, "divergent.txt", "divergent state")
+
+    assert initial != divergent
+    assert not _can_defer_remote_state_reconciliation(snapshot, repository, divergent)
+    with (
+        patch(
+            "owlbear_delivery.delivery_application_loader._remote_branch_head",
+            return_value=divergent,
+        ),
+        pytest.raises(
+            DeliveryApplicationLoadError,
+            match="remote Change branch differs from Delivery-state snapshot: state-divergent",
+        ),
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
 
 
 def test_state_publisher_round_trips_and_replays_without_primary_checkout_changes(tmp_path: Path) -> None:
