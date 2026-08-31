@@ -1967,6 +1967,24 @@ def test_required_check_attention_records_after_ready_without_preexisting_public
     assert provider.set_pull_request_draft_state.call_count == 1
 
 
+def test_mark_change_ready_publishes_ready_authority_to_delivery_state(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
+
+    ready = application.mark_current_change_ready("change-a")
+
+    state_publisher.publish.assert_called_once()
+    publication = state_publisher.publish.call_args.kwargs
+    assert publication["change_id"] == "change-a"
+    assert publication["operation_id"] == f"ready-{ready.receipt_id}"
+    assert publication["runtime"] is runtime
+    assert publication["runtime"].ready_receipt() == ready
+
+
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
     application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,

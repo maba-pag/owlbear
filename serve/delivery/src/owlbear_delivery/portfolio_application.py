@@ -1728,7 +1728,9 @@ class PortfolioApplication:
                 and existing_ready.head_sha == finalization.exact_head
             ):
                 receipt = self._draft_pull_request_publisher.mark_ready(request)
-                return runtime.mark_awaiting_merge(receipt)
+                ready = runtime.mark_awaiting_merge(receipt)
+                self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
+                return ready
             observation, failures = self._observe_required_checks_for_ready(
                 change_id,
                 finalization.exact_head,
@@ -1737,6 +1739,7 @@ class PortfolioApplication:
             ready = runtime.mark_awaiting_merge(receipt)
             if failures:
                 self._record_required_check_attention(runtime, observation, failures, ready)
+            self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
             return ready
 
     def _observe_required_checks_for_ready(
