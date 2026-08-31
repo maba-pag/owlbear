@@ -14,7 +14,9 @@ from unittest.mock import patch
 import httpx
 import pytest
 
+from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.fetcher import HttpxContentFetcher
+from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge_mcp import server
 
 FIXTURE_URL = "https://fixture.example/article"
@@ -184,14 +186,15 @@ class _FailingPersistenceConnection(sqlite3.Connection):
         return super().execute(sql, parameters)
 
 
-def _assembled_context(
+def _assembled_context(  # noqa: PLR0913
     tmp_path: Path,
     responses: Iterable[tuple[str, str] | Exception],
     *,
     embedding_provider: object | None = None,
-    vector_store: _DeterministicVectorStore | None = None,
+    vector_store: object | None = None,
     connection_factory: type[sqlite3.Connection] = sqlite3.Connection,
-) -> tuple[SimpleNamespace, server.AppContext, _DeterministicVectorStore]:
+    resolver_calls: list[tuple[str, int]] | None = None,
+) -> tuple[SimpleNamespace, server.AppContext, object]:
     (tmp_path / ".owlbear").mkdir()
     database_path = tmp_path / ".owlbear/knowledge/local.db"
     database_path.parent.mkdir()
@@ -200,9 +203,15 @@ def _assembled_context(
     resolved_embedding_provider = (
         embedding_provider if embedding_provider is not None else _DeterministicEmbeddingProvider()
     )
+
+    async def resolver(hostname: str, port: int) -> list[tuple[int, int, int, str, tuple[str, int]]]:
+        if resolver_calls is not None:
+            resolver_calls.append((hostname, port))
+        return await _public_fixture_resolver(hostname, port)
+
     http_fetcher = HttpxContentFetcher(
         transport=httpx.MockTransport(_ResponseTransport(responses)),
-        resolver=_public_fixture_resolver,
+        resolver=resolver,
     )
     app_context = server.build_app_context(
         workspace_root=tmp_path,
@@ -229,7 +238,16 @@ async def _register_fixture_source(tool_context: SimpleNamespace, urls: Iterable
     return registered["id"]
 
 
-def _assert_refresh_failure(response: dict[str, object], *, stage: str, code: str, message: str) -> None:
+def _sqlite_counts(connection: sqlite3.Connection) -> tuple[int, int, int]:
+    source_count = int(connection.execute("SELECT COUNT(*) FROM source_registry").fetchone()[0])
+    document_count = int(connection.execute("SELECT COUNT(*) FROM content_documents").fetchone()[0])
+    chunk_count = int(connection.execute("SELECT COUNT(*) FROM content_chunks").fetchone()[0])
+    return source_count, document_count, chunk_count
+
+
+def _assert_refresh_failure(
+    response: dict[str, object], *, stage: str, code: str, retryable: bool, message: str
+) -> None:
     assert response["sources_refreshed"] == 0
     assert response["documents_created"] == 0
     assert response["documents_replaced"] == 0
@@ -242,7 +260,7 @@ def _assert_refresh_failure(response: dict[str, object], *, stage: str, code: st
     failure = errors[0]
     assert failure["stage"] == stage
     assert failure["code"] == code
-    assert failure["retryable"] is True or failure["retryable"] is False
+    assert failure["retryable"] is retryable
     assert failure["message"] == message
     assert isinstance(failure["timestamp"], str)
 
@@ -255,9 +273,11 @@ async def test_assembled_refresh_persists_and_searches_static_html(tmp_path: Pat
         "<p>Unique assembled article phrase.</p></article>"
         "<script>Fixture script payload</script></body></html>"
     )
+    resolver_calls: list[tuple[str, int]] = []
     tool_context, app_context, vector_store = _assembled_context(
         tmp_path,
         [(html_body, "text/html; charset=utf-8")],
+        resolver_calls=resolver_calls,
     )
     try:
         source_id = await _register_fixture_source(tool_context)
@@ -280,8 +300,12 @@ async def test_assembled_refresh_persists_and_searches_static_html(tmp_path: Pat
         assert app_context.content_store is not None
         assert app_context.content_store.stats().documents == 1
         assert app_context.content_store.stats().chunks == 1
-        assert vector_store.events[0][0] == "store"
-        assert vector_store.events[-1][0] == "search"
+        assert resolver_calls == [("fixture.example", 443)]
+        assert _sqlite_counts(app_context.conn) == (1, 1, 1)
+        chunk_row = app_context.conn.execute("SELECT id FROM content_chunks").fetchone()
+        assert chunk_row is not None
+        assert isinstance(vector_store, _DeterministicVectorStore)
+        assert vector_store.events == [("store", chunk_row["id"]), ("search", "")]
     finally:
         app_context.conn.close()
 
@@ -302,6 +326,7 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
         first = await server.refresh_knowledge_source(tool_context, source_id)
         assert app_context.content_store is not None
         first_stats = app_context.content_store.stats()
+        first_counts = _sqlite_counts(app_context.conn)
         document_row = app_context.conn.execute("SELECT document_id FROM content_documents").fetchone()
         assert document_row is not None
         first_document_id = str(document_row["document_id"])
@@ -310,7 +335,10 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
 
         unchanged = await server.refresh_knowledge_source(tool_context, source_id)
         unchanged_stats = app_context.content_store.stats()
+        unchanged_counts = _sqlite_counts(app_context.conn)
         replaced = await server.refresh_knowledge_source(tool_context, source_id)
+        replaced_counts = _sqlite_counts(app_context.conn)
+        replacement_chunk_id = app_context.content_store.list_chunks(first_document_id)[0].id
         search_results = await server.knowledge_search(tool_context, "fresh static phrase")
 
         assert first["documents_created"] == 1
@@ -324,13 +352,16 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
         assert unchanged["errors"] == []
         assert unchanged_stats.documents == first_stats.documents == 1
         assert unchanged_stats.chunks == first_stats.chunks == 1
+        assert first_counts == unchanged_counts == replaced_counts == (1, 1, 1)
         assert replaced["documents_replaced"] == 1
         assert replaced["chunks_created"] == 1
         assert replaced["chunks_replaced"] == 1
         assert first_document is not None
+        assert replacement_chunk_id != first_chunk_id
         assert app_context.content_store.get_document(first_document_id) is not None
         assert "Fresh static phrase" in search_results[0]["snippet"]
         assert all("Stable static phrase" not in item["snippet"] for item in search_results)
+        assert isinstance(vector_store, _DeterministicVectorStore)
         delete_index = vector_store.events.index(("delete", first_chunk_id))
         replacement_store_index = next(
             index for index, event in enumerate(vector_store.events) if index > delete_index and event[0] == "store"
@@ -340,6 +371,7 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
             for index, event in enumerate(vector_store.events)
             if index > replacement_store_index and event[0] == "search"
         )
+        assert vector_store.events[replacement_store_index] == ("store", replacement_chunk_id)
         assert delete_index < replacement_store_index < search_index
     finally:
         app_context.conn.close()
@@ -357,6 +389,7 @@ async def test_assembled_refresh_returns_typed_acquisition_failure(tmp_path: Pat
             response,
             stage="acquisition",
             code="transport_failure",
+            retryable=True,
             message="HTTP transport failed",
         )
         assert response["errors"][0]["source_id"] == source_id
@@ -384,6 +417,7 @@ async def test_assembled_refresh_returns_typed_extraction_failure(tmp_path: Path
             response,
             stage="extraction",
             code="extraction_failed",
+            retryable=False,
             message="Response extraction failed",
         )
         assert app_context.content_store is not None
@@ -411,6 +445,7 @@ async def test_assembled_refresh_returns_typed_persistence_failure(tmp_path: Pat
             response,
             stage="persistence",
             code="persistence_failed",
+            retryable=True,
             message="Content persistence failed",
         )
         app_context.conn.fail_content_reads = False
@@ -439,6 +474,7 @@ async def test_assembled_refresh_returns_typed_embedding_failure(tmp_path: Path)
             response,
             stage="indexing",
             code="embedding_failed",
+            retryable=True,
             message="Document embedding failed",
         )
         assert "embedding secret" not in str(response)
@@ -463,6 +499,7 @@ async def test_assembled_refresh_returns_typed_vector_write_failure(tmp_path: Pa
             response,
             stage="indexing",
             code="vector_write_failed",
+            retryable=True,
             message="Vector write failed",
         )
         assert "vector writer secret" not in str(response)
@@ -484,6 +521,7 @@ async def test_assembled_refresh_preserves_partial_url_list_success(tmp_path: Pa
 
         response = await server.refresh_knowledge_source(tool_context, source_id)
 
+        assert response["source_id"] == source_id
         assert response["sources_refreshed"] == 1
         assert response["documents_created"] == 1
         assert response["documents_replaced"] == 0
@@ -492,7 +530,10 @@ async def test_assembled_refresh_preserves_partial_url_list_success(tmp_path: Pa
         assert response["chunks_replaced"] == 0
         assert len(response["errors"]) == 1
         assert response["errors"][0]["source_id"] == source_id
+        assert response["errors"][0]["stage"] == "acquisition"
         assert response["errors"][0]["code"] == "transport_failure"
+        assert response["errors"][0]["retryable"] is True
+        assert response["errors"][0]["message"] == "HTTP transport failed"
         assert "partial transport secret" not in str(response)
     finally:
         app_context.conn.close()
@@ -584,4 +625,39 @@ async def test_assembled_refresh_persists_text_media_without_html_extraction(
         assert app_context.content_store is not None
         assert app_context.content_store.stats().documents == 1
     finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.model
+@pytest.mark.timeout(600)
+async def test_assembled_refresh_runs_real_bge_m3_with_filesystem_qdrant(tmp_path: Path) -> None:
+    embedding_provider = BgeM3EmbeddingProvider(idle_timeout=0)
+    vector_store = QdrantVectorStore(location=str(tmp_path / "qdrant"))
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("Real BGE-M3 static phrase\n\nPersistent filesystem vector.", "text/plain")],
+        embedding_provider=embedding_provider,
+        vector_store=vector_store,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+
+        refresh = await server.refresh_knowledge_source(tool_context, source_id)
+        assert refresh["documents_created"] == 1
+        assert refresh["chunks_created"] == 1
+        assert refresh["errors"] == []
+
+        chunk_row = app_context.conn.execute("SELECT id FROM content_chunks").fetchone()
+        assert chunk_row is not None
+        chunk_id = str(chunk_row["id"])
+        persisted_embedding = vector_store.get_embedding(chunk_id)
+        assert persisted_embedding
+
+        search_results = await server.knowledge_search(tool_context, "real BGE-M3 static phrase")
+        assert isinstance(search_results, list)
+        assert len(search_results) == 1
+        assert "Real BGE-M3 static phrase" in search_results[0]["snippet"]
+    finally:
+        embedding_provider.unload()
         app_context.conn.close()
