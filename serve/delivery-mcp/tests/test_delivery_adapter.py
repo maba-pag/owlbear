@@ -558,6 +558,7 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
         assert result.provider_supersession.successor_number == 8
     elif operation_name == "adopt_external_head":
         assert result.adopted_head == "e" * 40
+        assert result.provenance == "fast-forward"
     elif operation_name == "promote_external_head":
         assert result.promoted_head == "e" * 40
     elif operation_name in {"sync_change_with_target", "resolve_target_sync_conflict"}:

@@ -1629,7 +1629,7 @@ def _workspace(tmp_path: Path):
     _git(repository, "commit", "-m", "baseline")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     coordination = manager.ensure("delivery-runtime")
     return state_root, coordinator, manager, coordination

@@ -90,6 +90,12 @@ portfolio. Each acquired Change has exact per-Change writer custody; there is no
 {"schema_version": 1, "execution_capacity": 3, "claim_timeout_seconds": 3600}
 ```
 
+When upgrading an existing workspace, remove the obsolete `writer_capacity` field from
+`.owlbear/delivery/runtime/host.json` and any `.owlbear/delivery/runtime/host.local.json` override
+before starting Delivery. `setup/init.py` preserves an existing `host.json` on rerun, and startup
+rejects the stale field instead of rewriting it. If no host-specific values are needed, recreate
+`host.json` from the baseline above. Do not edit historical `capacity-ledger.json` data.
+
 Put machine-specific execution or timeout changes in the ignored local overlay instead of editing the
 tracked baseline:
 

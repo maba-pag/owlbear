@@ -2586,8 +2586,15 @@ class PortfolioApplication:
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
+        return self._integration_attention_statuses(self._portfolio_snapshots())
+
+    def _integration_attention_statuses(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
+        """Project Integration attention from an already captured portfolio."""
         statuses = []
-        for snapshot in self._portfolio_snapshots():
+        for snapshot in snapshots:
             attention = snapshot.frontier.integration_attention
             if (
                 attention is None
@@ -3152,6 +3159,10 @@ class PortfolioApplication:
 
     def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
         self._reconcile_runtimes()
+        return self._capture_portfolio_snapshots()
+
+    def _capture_portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
+        """Capture current runtime snapshots without rediscovering persisted Changes."""
         snapshots: list[DeliveryPortfolioSnapshot] = []
         retained_snapshots: dict[str, DeliveryPortfolioSnapshot] = {}
         for change_id, runtime in sorted(self._runtimes.items()):
@@ -3165,6 +3176,21 @@ class PortfolioApplication:
             snapshots.append(snapshot)
         self._runtime_snapshots = retained_snapshots
         return tuple(snapshots)
+
+    def _execution_occupancy(self) -> int:
+        """Count the largest observed active outcome claim set once per Change."""
+        occupancy: dict[str, int] = {}
+        for change_id, observation in self._discovered_changes.items():
+            frontier = observation.frontier
+            if frontier is not None:
+                occupancy[change_id] = sum(binding.active_claim is not None for binding in frontier.bindings)
+        for change_id, runtime in self._runtimes.items():
+            try:
+                active_count = len(runtime.active_claims())
+            except (OSError, RuntimeError, ValueError):
+                continue
+            occupancy[change_id] = max(occupancy.get(change_id, 0), active_count)
+        return sum(occupancy.values())
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
         return DeliveryPortfolioSnapshot.capture(
@@ -3339,18 +3365,20 @@ class PortfolioApplication:
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
-        self._reconcile_runtimes()
         with self._coordinator.acquisition_lock():
+            self._coordinator.recover_pending_transactions()
+            self._reconcile_runtimes()
+            pre_claim_snapshots = self._capture_portfolio_snapshots()
             recoveries, recovery_failures = self._recover_expired_claims()
             failures = list(recovery_failures)
-            occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
+            if recoveries or recovery_failures:
+                self._reconcile_runtimes()
+            occupied = self._execution_occupancy()
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
             for candidate in self._candidates():
                 if available == 0:
                     break
-                if candidate.role == DeliveryWorkerRole.BUILDER and not self._coordinator.writer_capacity_available():
-                    continue
                 source = self._prepare_source(
                     candidate.change_id,
                     candidate.runtime,
@@ -3366,9 +3394,10 @@ class PortfolioApplication:
                     failures.append(launch)
                     continue
                 launches.append(launch)
+            self._capture_portfolio_snapshots()
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
-                integration_attention=self.list_integration_attention(),
+                integration_attention=self._integration_attention_statuses(pre_claim_snapshots),
                 recoveries=recoveries,
                 failures=tuple(failures),
             )

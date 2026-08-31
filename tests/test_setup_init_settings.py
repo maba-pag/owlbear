@@ -209,8 +209,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     host_config = json.loads((target_dir / ".owlbear/delivery/runtime/host.json").read_text(encoding="utf-8"))
     assert host_config == {
         "schema_version": 1,
-        "writer_capacity": 1,
-        "execution_capacity": 1,
+        "execution_capacity": 3,
         "claim_timeout_seconds": 3600,
     }
     installed_text = "\n".join(

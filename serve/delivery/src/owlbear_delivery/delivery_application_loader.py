@@ -15,8 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from owlbear_delivery.acceptance import CompletionReceiptStore
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
-    CapacityConfigurationConflictError,
-    CapacityLedgerConflictError,
     ChangeCoordination,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -72,8 +70,7 @@ class DeliveryHostConfig(_LoaderModel):
     """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
-    writer_capacity: int = Field(default=1, gt=0)
-    execution_capacity: int = Field(default=1, gt=0)
+    execution_capacity: int = Field(default=3, gt=0)
     claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
 
 
@@ -81,7 +78,6 @@ class _DeliveryHostConfigOverrides(_LoaderModel):
     """Optional host-local overrides layered over tracked Delivery defaults."""
 
     schema_version: Literal[1] = 1
-    writer_capacity: int | None = Field(default=None, gt=0)
     execution_capacity: int | None = Field(default=None, gt=0)
     claim_timeout_seconds: int | None = Field(default=None, gt=0)
 
@@ -327,7 +323,6 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
 
 def _bootstrap_remote_state(
     config: DeliveryStartupConfig,
-    host_config: DeliveryHostConfig,
     paths: _DeliveryPaths,
 ) -> None:
     """Restore missing local Delivery state from remote semantic snapshots."""
@@ -350,7 +345,7 @@ def _bootstrap_remote_state(
         raise error from exc
     if not snapshots:
         return
-    coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
+    coordinator = PortfolioCoordinator(paths.runtime_root)
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
         paths.worktree_root,
@@ -631,20 +626,7 @@ def _compose_application(
         paths.repository_root,
         transaction_root=paths.runtime_root,
     )
-    try:
-        coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
-    except CapacityConfigurationConflictError as exc:
-        error = _load_error(
-            "writer_capacity",
-            f"host-local Delivery runtime configuration in host.json cannot be lower than active writers: {exc}",
-        )
-        raise error from exc
-    except CapacityLedgerConflictError as exc:
-        error = _load_error(
-            "runtime_root",
-            f"Delivery capacity ledger changed concurrently; retry startup: {exc}",
-        )
-        raise error from exc
+    coordinator = PortfolioCoordinator(paths.runtime_root)
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
         paths.worktree_root,
@@ -733,6 +715,6 @@ def load_delivery_application(
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
     if "delivery_state_branch" in config.model_fields_set:
-        _bootstrap_remote_state(config, host_config, paths)
+        _bootstrap_remote_state(config, paths)
     contracts = _load_contracts(paths.runtime_root)
     return _compose_application(config, host_config, paths, contracts, publication_provider)

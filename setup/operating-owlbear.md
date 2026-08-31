@@ -69,6 +69,12 @@ is not synced to other hosts. Setup does not create mutable Delivery runtime sta
 profiles, or retired task, decision, board, accept, or audit stores. Existing legacy state is
 preserved unchanged.
 
+When upgrading an existing workspace, remove the obsolete `writer_capacity` field from
+`.owlbear/delivery/runtime/host.json` and any `.owlbear/delivery/runtime/host.local.json` override
+before restarting Delivery. Rerunning `init.py` preserves `host.json`, and startup rejects the stale
+field rather than rewriting it. If no host-specific values are needed, recreate `host.json` from the
+seeded `execution_capacity: 3` baseline. Leave historical `capacity-ledger.json` data untouched.
+
 Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
 checks and procedures may differ by Change; Delivery retains their typed observations and an
 independent exact-commit review. This evidence does not claim that GitHub can merge the Change or

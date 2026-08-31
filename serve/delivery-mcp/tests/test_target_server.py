@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from mcp import Client
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
@@ -524,6 +524,35 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stale_writer_capacity_fails_with_extra_forbidden_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    config_path = repository / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    _write_config(config_path, _config())
+    host_path = repository / ".owlbear/delivery/runtime/host.json"
+    host_path.parent.mkdir(parents=True)
+    host_path.write_text('{"schema_version": 1, "writer_capacity": 1}', encoding="utf-8")
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    diagnostic = exc_info.value
+    assert diagnostic.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert diagnostic.field == "writer_capacity"
+    assert diagnostic.retry_safe is False
+    assert "host.json" in diagnostic.detail
+    assert isinstance(diagnostic.__cause__, Exception)
+    assert isinstance(diagnostic.__cause__.__cause__, ValidationError)
+    assert diagnostic.__cause__.__cause__.errors()[0]["type"] == "extra_forbidden"
+    assert not (repository / ".owlbear/delivery/target").exists()
+
+
+@pytest.mark.asyncio
 async def test_external_head_adoption_tool_has_exact_contract() -> None:
     application = _PublicationApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
@@ -541,6 +570,7 @@ async def test_external_head_adoption_tool_has_exact_contract() -> None:
         "branch",
         "expected_head",
         "adopted_head",
+        "provenance",
     } <= set(tools["adopt_external_head"].output_schema["required"])
 
 
@@ -744,7 +774,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (repository / ".owlbear/delivery/runtime/capacity-ledger.json").is_file()
+        assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()  # noqa: SLF001

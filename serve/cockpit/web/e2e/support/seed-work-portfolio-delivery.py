@@ -422,7 +422,7 @@ def _write_config(workspace: Path) -> None:
 
 
 def _write_host_config(workspace: Path) -> None:
-    config = DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=2)
+    config = DeliveryHostConfig(schema_version=1, execution_capacity=2)
     path = workspace / ".owlbear/delivery/runtime/host.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(), encoding="utf-8")
@@ -443,7 +443,7 @@ def seed_delivery(workspace: Path) -> None:
     _write_current_delivery(runtime_root, head)
     _write_publication_delivery(runtime_root, head)
     _write_host_config(workspace)
-    coordinator = PortfolioCoordinator(runtime_root, capacity=2)
+    coordinator = PortfolioCoordinator(runtime_root)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
     workspace_manager.ensure("work-e2e")
     workspace_manager.ensure("publication-e2e")

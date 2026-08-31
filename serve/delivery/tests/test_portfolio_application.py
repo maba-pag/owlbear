@@ -8,6 +8,8 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -20,11 +22,11 @@ from unittest.mock import Mock, patch, sentinel
 import pytest
 
 from owlbear_delivery import (
+    ActivateDeliveryClaim,
     AdministrativeDeliveryMove,
     AdvanceDelivery,
     BlockDelivery,
     CapacityLedger,
-    CapacityLedgerConflictError,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
@@ -42,6 +44,7 @@ from owlbear_delivery import (
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceWaitingError,
+    DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
@@ -547,7 +550,6 @@ def _portfolio(
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
-    writer_capacity: int = 1,
     execution_capacity: int = 3,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
 ):
@@ -562,7 +564,7 @@ def _portfolio(
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
     package_root = tmp_path / "packages"
-    coordinator = PortfolioCoordinator(state_root, capacity=writer_capacity)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
@@ -615,7 +617,7 @@ def _reopen_portfolio(
 ) -> tuple[PortfolioApplication, PortfolioCoordinator, ChangeWorkspaceManager]:
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
@@ -644,6 +646,299 @@ def _reopen_portfolio(
         hooks,
     )
     return application, coordinator, manager
+
+
+def _shared_acquisition_command() -> str:
+    return r"""
+import json
+import sys
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+from owlbear_delivery import (
+    ChangeWorkspaceManager,
+    CompletedHistoryCatalog,
+    DeliveryAuthorityRegistry,
+    DeliveryRolePolicy,
+    DeliveryRuntime,
+    DeliveryWorkerRole,
+    DesignPackageStore,
+    PortfolioApplication,
+    PortfolioApplicationConfig,
+    PortfolioApplicationDependencies,
+    PortfolioCoordinator,
+)
+from owlbear_delivery.delivery_contract_discovery import discover_persisted_changes
+
+state_root, repository, package_root, worktree_root, barrier_root = map(Path, sys.argv[1:6])
+worker_id = sys.argv[6]
+coordinator = PortfolioCoordinator(state_root)
+workspace_manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main")
+package_store = DesignPackageStore(package_root, repository)
+authority_registry = DeliveryAuthorityRegistry(state_root, package_store, integration_target="main")
+observations = discover_persisted_changes(state_root)
+runtimes = {
+    observation.change_id: DeliveryRuntime(state_root, observation.contract, workspace_manager=workspace_manager)
+    for observation in observations
+    if observation.contract is not None
+}
+policies = (
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.PLANNER,
+        worker_agent="planner",
+        reviewer_agent="planner-challenger",
+    ),
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.BUILDER,
+        worker_agent="builder",
+        reviewer_agent="build-reviewer",
+    ),
+)
+application = PortfolioApplication(
+    runtimes,
+    PortfolioApplicationDependencies(
+        target_root=state_root,
+        package_store=package_store,
+        authority_registry=authority_registry,
+        coordinator=coordinator,
+        workspace_manager=workspace_manager,
+        completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+    ),
+    PortfolioApplicationConfig(package_root=package_root, execution_capacity=3, role_policies=policies),
+)
+(barrier_root / f"ready-{worker_id}").write_text("ready", encoding="ascii")
+while not (barrier_root / "go").exists():
+    time.sleep(0.01)
+original_lock = coordinator.acquisition_lock
+original_reconcile = application._reconcile_runtimes
+lock_marker = barrier_root / f"lock-{worker_id}"
+outside_marker = barrier_root / f"outside-{worker_id}"
+
+@contextmanager
+def observed_lock():
+    with original_lock():
+        lock_marker.write_text("locked", encoding="ascii")
+        try:
+            yield
+        finally:
+            active = [
+                claim
+                for observation in discover_persisted_changes(state_root)
+                if observation.frontier is not None
+                for binding in observation.frontier.bindings
+                for claim in (binding.active_claim,)
+                if claim is not None
+            ]
+            (barrier_root / f"inside-{worker_id}.json").write_text(
+                json.dumps({"count": len(active), "roles": sorted(claim.worker_role.value for claim in active)}),
+                encoding="utf-8",
+            )
+            lock_marker.unlink(missing_ok=True)
+
+def reconcile():
+    location = "inside" if lock_marker.exists() else "outside"
+    (barrier_root / f"reconcile-{worker_id}-{location}").write_text("reconciled", encoding="ascii")
+    return original_reconcile()
+
+coordinator.acquisition_lock = observed_lock
+application._reconcile_runtimes = reconcile
+result = application.acquire_frontier_work()
+(barrier_root / f"result-{worker_id}.json").write_text(
+    json.dumps({"launches": len(result.launch_packages)}),
+    encoding="utf-8",
+)
+"""
+
+
+def _wait_for_files(paths: tuple[Path, ...], timeout: float = 10) -> None:
+    deadline = time.monotonic() + timeout
+    while not all(path.exists() for path in paths):
+        if time.monotonic() >= deadline:
+            message = f"timed out waiting for {paths}"
+            raise TimeoutError(message)
+        time.sleep(0.01)
+
+
+def test_shared_acquisition_serializes_reconciliation_and_bounds_claims(tmp_path: Path) -> None:
+    _application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.IMPLEMENTATION,
+            "change-c": DeliveryStage.IMPLEMENTATION,
+        },
+        execution_capacity=3,
+    )
+    repository = tmp_path / "repository"
+    package_root = tmp_path / "packages"
+    worktree_root = tmp_path / "worktrees"
+    barrier_root = tmp_path / "acquisition-barrier"
+    barrier_root.mkdir()
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    python_path = os.pathsep.join(filter(None, (str(source_root), os.environ.get("PYTHONPATH"))))
+    processes = [
+        subprocess.Popen(  # noqa: S603
+            (
+                sys.executable,
+                "-c",
+                _shared_acquisition_command(),
+                str(state_root),
+                str(repository),
+                str(package_root),
+                str(worktree_root),
+                str(barrier_root),
+                worker_id,
+            ),
+            cwd=repository,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": python_path},
+        )
+        for worker_id in ("one", "two")
+    ]
+    outputs: list[tuple[str, str]] = []
+    try:
+        _wait_for_files(tuple(barrier_root / f"ready-{worker_id}" for worker_id in ("one", "two")))
+        (barrier_root / "go").write_text("go", encoding="ascii")
+        outputs = [process.communicate(timeout=30) for process in processes]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            if process.returncode is None:
+                process.communicate()
+
+    for process, (_stdout, stderr) in zip(processes, outputs, strict=False):
+        assert process.returncode == 0, stderr
+    assert all((barrier_root / f"reconcile-{worker_id}-inside").is_file() for worker_id in ("one", "two"))
+    assert not list(barrier_root.glob("reconcile-*-outside"))
+    inside = [
+        json.loads((barrier_root / f"inside-{worker_id}.json").read_text(encoding="utf-8"))
+        for worker_id in ("one", "two")
+    ]
+    assert all(item["count"] <= 3 for item in inside)
+    launches = [
+        json.loads((barrier_root / f"result-{worker_id}.json").read_text(encoding="utf-8"))["launches"]
+        for worker_id in ("one", "two")
+    ]
+    assert sorted(launches) == [0, 3]
+    active_claims = [
+        binding.active_claim
+        for observation in discover_persisted_changes(state_root)
+        if observation.frontier is not None
+        for binding in observation.frontier.bindings
+        if binding.active_claim is not None
+    ]
+    assert len(active_claims) == 3
+    assert {claim.worker_role for claim in active_claims} == {
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+    }
+
+
+def test_acquisition_returns_preclaim_attention_and_refreshes_snapshot_cache(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.COMPLETED,
+        },
+        execution_capacity=1,
+    )
+    completed = coordinator.show("change-b")
+    original_activate = application._activate_candidate
+    reconciliation = Mock(wraps=application._reconcile_runtimes)
+
+    def activate(candidate, source):
+        launch = original_activate(candidate, source)
+        _publish_merge_conflict_attention(
+            runtimes,
+            state_root,
+            "change-b",
+            completed.last_reviewed_commit,
+            completed.target_head,
+        )
+        return launch
+
+    with (
+        patch.object(application, "_activate_candidate", side_effect=activate),
+        patch.object(application, "_reconcile_runtimes", new=reconciliation),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a",)
+    assert acquired.integration_attention == ()
+    assert reconciliation.call_count == 1
+    assert application._runtime_snapshots["change-b"].frontier.integration_attention is not None
+
+
+def test_acquisition_charges_noncomposable_change_from_persisted_claims(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+        },
+        execution_capacity=1,
+    )
+    _admit_discovery_change(application, "blocked-change")
+    blocked_runtime = runtimes.get("blocked-change", application._runtimes["blocked-change"])
+    claim = application._new_claim(DeliveryWorkerRole.PLANNER, None)
+    blocked_runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim=claim))
+    (state_root / "changes/blocked-change/contract.json").unlink()
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == ()
+    observation = next(item for item in application._discovered_changes.values() if item.change_id == "blocked-change")
+    assert observation.frontier is not None
+    assert sum(binding.active_claim is not None for binding in observation.frontier.bindings) == 1
+    assert application._runtime_reconciliation_errors["blocked-change"]
+
+
+def test_acquisition_uses_maximum_observed_occupancy_once_per_change(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=3,
+    )
+    claims = tuple(
+        DeliveryActiveClaim(
+            attempt_id=f"attempt-{index}",
+            claim_id=f"claim-{index}",
+            owner_id=f"owner-{index}",
+            process_id=f"process-{index}",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.PLANNER,
+        )
+        for index in range(3)
+    )
+    invalid_frontier = DeliveryFrontier(
+        bindings=tuple(
+            OutcomeAuthorityBinding(
+                outcome_id=f"OUT-{index + 1:03}",
+                plan_scope_id=f"SCOPE-{index + 1:03}",
+                active_claim=claim,
+            )
+            for index, claim in enumerate(claims)
+        )
+    )
+    (state_root / "changes/change-a/frontier.json").write_bytes(_canonical(invalid_frontier))
+
+    with patch.object(
+        runtimes["change-a"],
+        "active_claims",
+        return_value=(("OUT-001", claims[0]), ("OUT-002", claims[1])),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert application._execution_occupancy() == 3
 
 
 def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path: Path) -> None:
@@ -874,6 +1169,31 @@ def test_application_binds_external_head_adoption_without_advancing_reviewed_aut
     publication = runtimes["change-a"].checkpoint_publication_state()
     assert publication.pending_checkpoint is not None
     assert publication.pending_checkpoint.head == "5" * 40
+
+
+def test_application_binds_observed_external_head_without_granting_review_authority(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    expected_head = coordination.last_reviewed_commit
+    repository = tmp_path / "repository"
+    adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, expected_head)
+    _git(
+        repository,
+        "fetch",
+        "origin",
+        f"refs/heads/{coordination.branch}:refs/remotes/origin/{coordination.branch}",
+    )
+    _git(coordination.worktree_path, "merge", "--ff-only", adopted)
+
+    receipt = application.adopt_external_head("change-a", expected_head, adopted, "observe-change-a")
+
+    assert receipt.provenance == "observed"
+    assert runtimes["change-a"].external_head_adoption_receipt() == receipt
+    assert coordinator.show("change-a").last_reviewed_commit == expected_head
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is not None
 
 
 def test_application_requires_adopted_head_promotion_before_build_acquisition(tmp_path: Path) -> None:
@@ -1758,6 +2078,24 @@ def test_required_check_attention_records_after_ready_without_preexisting_public
     assert runtime.change_disposition() is not None
     assert runtime.ready_receipt() == ready
     assert provider.set_pull_request_draft_state.call_count == 1
+
+
+def test_mark_change_ready_publishes_ready_authority_to_delivery_state(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
+
+    ready = application.mark_current_change_ready("change-a")
+
+    state_publisher.publish.assert_called_once()
+    publication = state_publisher.publish.call_args.kwargs
+    assert publication["change_id"] == "change-a"
+    assert publication["operation_id"] == f"ready-{ready.receipt_id}"
+    assert publication["runtime"] is runtime
+    assert publication["runtime"].ready_receipt() == ready
 
 
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
@@ -3958,9 +4296,9 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
         workspace_root=repository,
     )
     assert application.list_work_items() == ()
-    assert (runtime_root / "capacity-ledger.json").is_file()
-    assert CapacityLedger.model_validate_json((runtime_root / "capacity-ledger.json").read_bytes()).capacity == 1
-    assert application._execution_capacity == 1
+    assert not (runtime_root / "capacity.json").exists()
+    assert not (runtime_root / "capacity-ledger.json").exists()
+    assert application._execution_capacity == 3
     assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
@@ -3973,23 +4311,18 @@ def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Pa
     host_config_path.write_text(
         DeliveryHostConfig(
             schema_version=1,
-            writer_capacity=2,
             execution_capacity=3,
             claim_timeout_seconds=3600,
         ).model_dump_json(),
         encoding="utf-8",
     )
     (repository / ".owlbear/delivery/runtime/host.local.json").write_text(
-        '{"writer_capacity": 4, "execution_capacity": 5, "claim_timeout_seconds": 5}\n',
+        '{"execution_capacity": 5, "claim_timeout_seconds": 5}\n',
         encoding="utf-8",
     )
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
-    ledger = CapacityLedger.model_validate_json(
-        (repository / ".owlbear/delivery/runtime/capacity-ledger.json").read_bytes()
-    )
-    assert ledger.capacity == 4
     assert application._execution_capacity == 5
     assert application._claim_timeout == timedelta(seconds=5)
 
@@ -3998,7 +4331,7 @@ def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Pa
     ("content", "field"),
     [
         ("not-json\n", "host_config"),
-        ('{"schema_version": 1, "writer_capacity": 0}\n', "writer_capacity"),
+        ('{"schema_version": 1, "writer_capacity": 2}\n', "writer_capacity"),
         ('{"schema_version": 1, "execution_capacity": "3"}\n', "execution_capacity"),
         ('{"schema_version": 1, "claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
         ('{"schema_version": 1, "claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
@@ -4020,7 +4353,11 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
 
     assert exc_info.value.field == field
     assert "host.json" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
     assert not (repository / ".owlbear/delivery/runtime/capacity-ledger.json").exists()
+    if field == "writer_capacity":
+        assert exc_info.value.__cause__ is not None
+        assert exc_info.value.__cause__.errors()[0]["type"] == "extra_forbidden"
 
 
 @pytest.mark.parametrize(
@@ -4050,7 +4387,7 @@ def test_delivery_loader_rejects_invalid_host_local_config_before_ledger_mutatio
     assert not (repository / ".owlbear/delivery/runtime/capacity-ledger.json").exists()
 
 
-def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(tmp_path: Path) -> None:
+def test_delivery_loader_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
     runtime_root.mkdir(parents=True)
@@ -4062,67 +4399,14 @@ def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(t
     before = ledger_path.read_bytes()
     host_config_path = runtime_root / "host.json"
     host_config_path.write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
+        DeliveryHostConfig(schema_version=1, execution_capacity=1).model_dump_json(),
         encoding="utf-8",
     )
 
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(_startup_config(), workspace_root=repository)
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
 
-    assert exc_info.value.field == "writer_capacity"
-    assert "active writers" in exc_info.value.detail
-    assert "host.json" in exc_info.value.detail
+    assert application._execution_capacity == 1
     assert ledger_path.read_bytes() == before
-
-
-def test_delivery_loader_rejects_both_capacity_ledger_filenames(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    runtime_root.mkdir(parents=True)
-    ledger = CapacityLedger(capacity=1).model_dump_json()
-    (runtime_root / "capacity-ledger.json").write_text(ledger, encoding="utf-8")
-    (runtime_root / "capacity.json").write_text(ledger, encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError, match="both capacity ledger filenames"):
-        load_delivery_application(_startup_config(), workspace_root=repository)
-
-
-def test_delivery_loader_reports_capacity_ledger_race_as_runtime_error(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    runtime_root.mkdir(parents=True)
-    (runtime_root / "capacity-ledger.json").write_text(
-        CapacityLedger(capacity=2).model_dump_json(),
-        encoding="utf-8",
-    )
-    (runtime_root / "host.json").write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
-        encoding="utf-8",
-    )
-    original_commit = PortfolioCoordinator._commit
-
-    def race(
-        coordinator: PortfolioCoordinator,
-        transaction_id: str,
-        participants: tuple[object, ...],
-    ) -> None:
-        if transaction_id == "reconfigure-capacity":
-            (runtime_root / "capacity-ledger.json").write_text(
-                CapacityLedger(capacity=3).model_dump_json(),
-                encoding="utf-8",
-            )
-        original_commit(coordinator, transaction_id, participants)  # type: ignore[arg-type]
-
-    with (
-        patch.object(PortfolioCoordinator, "_commit", new=race),
-        pytest.raises(DeliveryApplicationLoadError) as exc_info,
-    ):
-        load_delivery_application(_startup_config(), workspace_root=repository)
-
-    assert exc_info.value.field == "runtime_root"
-    assert "capacity ledger changed concurrently" in exc_info.value.detail
-    assert "active writers" not in exc_info.value.detail
-    assert isinstance(exc_info.value.__cause__, CapacityLedgerConflictError)
 
 
 def test_delivery_loader_does_not_translate_unrelated_coordination_conflict(tmp_path: Path) -> None:
@@ -4388,7 +4672,7 @@ dependencies: []
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
-    coordinator = PortfolioCoordinator(runtime_root, capacity=1)
+    coordinator = PortfolioCoordinator(runtime_root)
     manager = ChangeWorkspaceManager(
         repository,
         repository / ".owlbear/delivery/worktrees",
@@ -5599,8 +5883,7 @@ def test_acquisition_returns_bounded_stage_packages_without_integration_work(tmp
     assert runtimes["change-d"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-b").writer is not None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ("change-b",)
+    assert not (state_root / "capacity.json").exists()
 
     plan_package, build_package = acquired.launch_packages
     plan_context = application.show_plan_context(
@@ -5660,8 +5943,7 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     )
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
@@ -5691,8 +5973,7 @@ def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_p
     assert replacement.claim.claim_id != first.claim.claim_id
     assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_path: Path) -> None:
@@ -5762,7 +6043,6 @@ def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_pa
             "change-a": DeliveryStage.IMPLEMENTATION,
             "change-b": DeliveryStage.PLANNING,
         },
-        writer_capacity=2,
         execution_capacity=2,
         clock=lambda: now[0],
     )
@@ -5826,7 +6106,7 @@ def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: P
     assert coordinator.show("change-a").writer is None
 
 
-def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:
+def test_execution_capacity_allows_independent_builders_and_planners(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {
@@ -5834,17 +6114,18 @@ def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_pat
             "change-b": DeliveryStage.IMPLEMENTATION,
             "change-c": DeliveryStage.PLANNING,
         },
-        writer_capacity=1,
+        execution_capacity=3,
     )
 
     acquired = application.acquire_frontier_work()
 
-    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a", "change-c")
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a", "change-b", "change-c")
     assert acquired.failures == ()
-    assert runtimes["change-b"].active_claims() == ()
-    assert coordinator.show("change-b").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
+    assert all(runtimes[change_id].active_claims() for change_id in ("change-a", "change-b", "change-c"))
+    assert coordinator.show("change-a").writer is not None
+    assert coordinator.show("change-b").writer is not None
+    assert coordinator.show("change-c").writer is None
+    assert not (state_root / "capacity.json").exists()
 
 
 @pytest.mark.parametrize("stage", [DeliveryStage.PLANNING])
@@ -5863,8 +6144,7 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     assert recovered.preserved_commit is None
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_path: Path) -> None:
@@ -5874,7 +6154,7 @@ def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_
     )
     interrupted = application.acquire_frontier_work().launch_packages[0]
     before_coordination = coordinator.show("change-a")
-    before_capacity = (state_root / "capacity-ledger.json").read_bytes()
+    assert not (state_root / "capacity.json").exists()
 
     reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(
         tmp_path,
@@ -5887,7 +6167,7 @@ def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_
     assert resumed.launch_packages == ()
     assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
     assert coordinator.show("change-a") == before_coordination
-    assert (state_root / "capacity-ledger.json").read_bytes() == before_capacity
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Path) -> None:
@@ -5898,7 +6178,7 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     interrupted = application.acquire_frontier_work().launch_packages[0]
     (interrupted.worktree_path / "product.txt").write_text("uncommitted attempt\n", encoding="utf-8")
     before_coordination = coordinator.show("change-a")
-    before_capacity = (state_root / "capacity-ledger.json").read_bytes()
+    assert not (state_root / "capacity.json").exists()
 
     resumed = application.acquire_frontier_work()
 
@@ -5906,7 +6186,7 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
     assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is None
     assert coordinator.show("change-a") == before_coordination
-    assert (state_root / "capacity-ledger.json").read_bytes() == before_capacity
+    assert not (state_root / "capacity.json").exists()
     assert (interrupted.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
 
 
@@ -5954,8 +6234,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert recovered.preserved_commit == attempt_commit
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
     with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
         runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
 
@@ -6010,12 +6289,11 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
+    application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -6039,8 +6317,6 @@ def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tm
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ()
     assert _git(package.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted attempt"
     assert product.read_text(encoding="utf-8") == "baseline\n"
     relaunched = application.acquire_frontier_work().launch_packages[0]
@@ -6050,7 +6326,7 @@ def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tm
 
 
 def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
+    application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -6075,7 +6351,6 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer is None
-    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == ()
 
     recovered = application.recover_claim(
         package.change_id,
@@ -6095,7 +6370,7 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
 
 
 def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
+    application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -6136,7 +6411,6 @@ def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_pa
     assert recovered.quarantine_commit == quarantine.quarantine_commit
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == ()
 
 
 def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: Path) -> None:
@@ -6167,10 +6441,8 @@ def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: 
     assert dirty_file.read_bytes() == b"preserve\x00\xff"
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer == package.writer
+    assert not (state_root / "capacity.json").exists()
     assert coordinator.show("change-a").dirty_worktree_quarantine is None
-    assert CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes()).change_ids == (
-        "change-a",
-    )
 
 
 def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path: Path) -> None:
@@ -6203,5 +6475,4 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert retained.attention.writer_claim_id == mismatched.claim_id
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity-ledger.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
+    assert not (state_root / "capacity.json").exists()

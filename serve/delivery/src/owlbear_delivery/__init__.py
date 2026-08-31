@@ -20,9 +20,7 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     BlockedImplementationRecoveryReceipt,
-    CapacityConfigurationConflictError,
     CapacityLedger,
-    CapacityLedgerConflictError,
     ChangeCoordination,
     ChangeDesignPackageSnapshotIntent,
     ChangeDesignPackageSnapshotReceipt,
@@ -333,9 +331,7 @@ __all__ = [
     "AuthorityStatus",
     "BlockDelivery",
     "BlockedImplementationRecoveryReceipt",
-    "CapacityConfigurationConflictError",
     "CapacityLedger",
-    "CapacityLedgerConflictError",
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
     "ChangeBranchSupersessionReceipt",
