@@ -75,9 +75,9 @@ initialized OwlBear workspace and exposes its complete tool set.
 The server's private composition root assembles the SQLite stores, content and query facades,
 ingest coordinator, and composite source fetcher. Production lifespan wiring supplies zero-argument
 HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. The default
-assembled proof is deterministic and replaces only the embedding and vector-store factories, while
-keeping source registration, SSRF validation, SQLite persistence, and MCP tool calls on the same path
-as production.
+assembled proof is deterministic and replaces the HTTP response-fetcher, embedding, and vector-store
+factories with test adapters, while keeping source registration, SSRF validation, SQLite persistence,
+and MCP tool calls on the same path as production.
 
 ### Opt-in model proof
 
