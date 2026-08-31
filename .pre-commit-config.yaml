@@ -205,6 +205,9 @@ repos:
           ^(?:share/agents|\.owlbear/agents)/.*\.agent\.md$
           |^\.owlbear/hooks/.*\.py$
           |^\.owlbear/scripts/validate_agents\.py$
+          |^\.vscode/mcp\.json$
+          |^seed/\.vscode/mcp\.json$
+          |^serve/[^/]+-mcp/.*$
         pass_filenames: false
       - id: validate-prompts
         name: Validate Agent Prompts

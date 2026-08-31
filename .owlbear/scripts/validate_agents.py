@@ -17,6 +17,9 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
+import importlib
+import json
 import re
 import shlex
 import sys
@@ -28,6 +31,17 @@ _BARE_TODO_RE = re.compile(r"\btodo\b")
 _TODOS_RE = re.compile(r"\btodos\b")
 _RESOLVE_URI = "resolveMemoryFileUri"
 _MANAGE_TODO_LIST = "manage_todo_list"
+_TOOL_SEARCH_QUERY_RE = re.compile(r'`"?(OwlBear (?:Delivery|Memory)\s+[^`"]+)"?`')
+_TOOL_SEARCH_IGNORED_WORDS = frozenset({"portfolio", "target"})
+_MIN_TOOL_SEARCH_PARTS = 3
+_MCP_SERVER_MODULES: dict[str, tuple[str, str]] = {
+    "owlbear-browser": ("owlbear_browser_mcp.server", "mcp"),
+    "owlbear-delivery": ("owlbear_delivery_mcp.server", "mcp"),
+    "owlbear-knowledge": ("owlbear_knowledge_mcp.server", "mcp"),
+    "owlbear-memory": ("owlbear_memory_mcp.server", "mcp"),
+}
+_EXTERNAL_MCP_SERVERS = frozenset({"markitdown"})
+_DEFAULT_MCP_SERVERS: frozenset[str] = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
 
 # Canonical VS Code built-in toolset prefixes.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
@@ -52,18 +66,16 @@ KNOWN_TOOLSETS: frozenset[str] = frozenset(
 # Update this set when VS Code adds new standalone tools.
 KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection", "vscode.mermaid-markdown-features"})
 
-# MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
-# Update this set when a new MCP server is added to the workspace.
-KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
-    {"owlbear-browser", "owlbear-delivery", "owlbear-knowledge", "owlbear-memory", "ddgs", "markitdown"}
-)
-
 # Tool names that already produce specific ban errors — skip in unknown-tool check
 # to avoid double-reporting the same tool with two different error messages.
 _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_MCP_CONFIG_PATHS = (_REPO_ROOT / "seed/.vscode/mcp.json", _REPO_ROOT / ".vscode/mcp.json")
+_CANONICAL_MCP_CONFIG = _MCP_CONFIG_PATHS[0]
+_SYSTEM_INSTRUCTIONS = _REPO_ROOT / "share/instructions/owlbear-system.instructions.md"
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
+_INSTRUCTION_ROOTS = (_REPO_ROOT / "share" / "instructions", _REPO_ROOT / ".owlbear" / "instructions")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _HOOK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
 _REQUIRED_HOOKS: dict[str, dict[str, frozenset[str]]] = {
@@ -140,6 +152,67 @@ def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _read_mcp_config(path: Path) -> tuple[frozenset[str], list[str]]:
+    """Read configured MCP server names and report malformed configuration."""
+    if not path.is_file():
+        return frozenset(), [f"{path}: MCP configuration file does not exist"]
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return frozenset(), [f"{path}: MCP configuration is not valid JSON: {exc}"]
+    if not isinstance(parsed, dict):
+        return frozenset(), [f"{path}: MCP configuration must be a JSON object"]
+    servers = parsed.get("servers")
+    if not isinstance(servers, dict):
+        return frozenset(), [f"{path}: MCP configuration needs a servers object"]
+    names = frozenset(name for name in servers if isinstance(name, str) and name)
+    return names, []
+
+
+def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]:
+    """Read canonical and active MCP server names, checking their key sets."""
+    canonical, errors = _read_mcp_config(_CANONICAL_MCP_CONFIG)
+    active_path = _MCP_CONFIG_PATHS[1]
+    if active_path.is_file():
+        active, active_errors = _read_mcp_config(active_path)
+        errors.extend(active_errors)
+        if not active_errors and active != canonical:
+            errors.append(
+                f"{active_path}: MCP server names differ from {_CANONICAL_MCP_CONFIG}: "
+                f"expected={sorted(canonical)}, actual={sorted(active)}"
+            )
+    return canonical, errors
+
+
+def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]:
+    """Validate MCP configuration keys against enumerable and external servers."""
+    configured, errors = _configured_mcp_servers()
+    if configured:
+        expected = frozenset({*_MCP_SERVER_MODULES, *_EXTERNAL_MCP_SERVERS})
+        missing = sorted(expected - configured)
+        unexpected = sorted(configured - expected)
+        if missing:
+            errors.append(f"{_CANONICAL_MCP_CONFIG}: MCP servers are missing: {missing}")
+        if unexpected:
+            errors.append(f"{_CANONICAL_MCP_CONFIG}: MCP servers have no validator registry: {unexpected}")
+    return configured, errors
+
+
+async def _read_live_mcp_tool_registries() -> dict[str, frozenset[str]]:
+    """Read tool names from the in-repository MCP registries without starting lifespans."""
+    registries: dict[str, frozenset[str]] = {}
+    for server_name, (module_name, attribute_name) in _MCP_SERVER_MODULES.items():
+        module = importlib.import_module(module_name)
+        server = getattr(module, attribute_name)
+        registries[server_name] = frozenset(tool.name for tool in await server.list_tools())
+    return registries
+
+
+def _load_live_mcp_tool_registries() -> dict[str, frozenset[str]]:
+    """Synchronously load MCP registries for this command-line validator."""
+    return asyncio.run(_read_live_mcp_tool_registries())
+
+
 def _frontmatter_lines(content: str) -> list[str]:
     """Return lines inside the leading --- ... --- block, or empty list."""
     lines = content.splitlines()
@@ -167,7 +240,18 @@ def _tools_text(fm_lines: list[str]) -> str:
     return " ".join(result)
 
 
-def _is_valid_tool(name: str) -> bool:
+def _declared_tool_names(fm_lines: list[str]) -> tuple[str, ...]:
+    """Extract normalized tool names from an agent's tools list."""
+    tools = _tools_text(fm_lines)
+    if not tools:
+        return ()
+    bracket_match = re.search(r"\[([^\]]*)\]", tools)
+    if bracket_match is None:
+        return ()
+    return tuple(name for raw in bracket_match.group(1).split(",") if (name := raw.strip().strip("'\"")))
+
+
+def _is_valid_tool(name: str, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> bool:
     """Return True if name matches any recognized VS Code built-in or MCP server pattern."""
     # (a) exact match in KNOWN_TOOLSETS — toolset shorthand like 'search'
     if name in KNOWN_TOOLSETS:
@@ -178,7 +262,7 @@ def _is_valid_tool(name: str) -> bool:
         if prefix in KNOWN_TOOLSETS:
             return True
         # (e) prefix is a known MCP server — e.g. 'owlbear-delivery/transition_delivery'
-        if prefix in KNOWN_MCP_SERVERS:
+        if prefix in mcp_servers:
             return True
     # (c) exact match in KNOWN_STANDALONE_TOOLS
     return name in KNOWN_STANDALONE_TOOLS
@@ -309,29 +393,107 @@ def _check_hooks(fm_lines: list[str], agent_file: Path) -> list[str]:
     return errors
 
 
-def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
+def _check_unknown_tools(
+    fm_lines: list[str],
+    agent_file: Path,
+    mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS,
+) -> list[str]:
     """Return error messages for tool names not in the canonical registry.
 
     Skips names already covered by specific ban checks to avoid double errors.
     """
-    tools = _tools_text(fm_lines)
-    if not tools:
-        return []
-    bracket_match = re.search(r"\[([^\]]*)\]", tools)
-    if not bracket_match:
-        return []
     errors: list[str] = []
-    for raw in bracket_match.group(1).split(","):
-        name = raw.strip().strip("'\"")
-        if not name:
-            continue
+    for name in _declared_tool_names(fm_lines):
         if name in _BANNED_TOOL_NAMES:
             continue
-        if not _is_valid_tool(name):
+        if not _is_valid_tool(name, mcp_servers):
             errors.append(
                 f"{agent_file}: tools: unknown tool '{name}' — not a recognized VS Code built-in or MCP server pattern"
             )
     return errors
+
+
+def _check_live_mcp_grants(
+    agent_files: list[Path],
+    configured_servers: frozenset[str],
+    registries: dict[str, frozenset[str]],
+) -> list[str]:
+    """Validate exact MCP tool grants against the live local registries."""
+    errors: list[str] = []
+    for agent_file in agent_files:
+        fm_lines = _frontmatter_lines(agent_file.read_text(encoding="utf-8"))
+        for name in _declared_tool_names(fm_lines):
+            if "/" not in name:
+                continue
+            server_name, tool_name = name.split("/", maxsplit=1)
+            if server_name not in configured_servers:
+                continue
+            if server_name in _EXTERNAL_MCP_SERVERS:
+                continue
+            available = registries.get(server_name)
+            if available is None:
+                errors.append(f"{agent_file}: MCP server '{server_name}' has no live registry")
+            elif tool_name == "*":
+                errors.append(f"{agent_file}: local MCP server '{server_name}' requires an exact tool grant, not '*'")
+            elif tool_name not in available:
+                errors.append(
+                    f"{agent_file}: unavailable {server_name} tool '{tool_name}' — "
+                    f"registered tools are {sorted(available)}"
+                )
+    return errors
+
+
+def _tool_search_queries() -> tuple[tuple[Path, str], ...]:
+    """Return explicitly formatted MCP tool-search queries from active guidance."""
+    paths = sorted(
+        {path for root in (*_INSTRUCTION_ROOTS, *_SKILL_ROOTS) if root.is_dir() for path in root.rglob("*.md")}
+    )
+    queries: list[tuple[Path, str]] = []
+    for path in paths:
+        content = path.read_text(encoding="utf-8")
+        queries.extend((path, match.group(1)) for match in _TOOL_SEARCH_QUERY_RE.finditer(content))
+    return tuple(queries)
+
+
+def _check_tool_search_queries(registries: dict[str, frozenset[str]]) -> list[str]:
+    """Validate exact MCP names in explicit Delivery and Memory search queries."""
+    errors: list[str] = []
+    for path, query in _tool_search_queries():
+        parts = query.split()
+        if len(parts) < _MIN_TOOL_SEARCH_PARTS:
+            errors.append(f"{path}: MCP tool-search query has no tool names: {query!r}")
+            continue
+        server_name = f"owlbear-{parts[1].lower()}"
+        available = registries.get(server_name)
+        if available is None:
+            errors.append(f"{path}: MCP tool-search query names unknown server '{server_name}'")
+            continue
+        names = tuple(
+            name for name in parts[2:] if not (server_name == "owlbear-delivery" and name in _TOOL_SEARCH_IGNORED_WORDS)
+        )
+        unknown = sorted(set(names) - available)
+        if unknown:
+            errors.append(f"{path}: {server_name} tool-search query names unavailable tools: {unknown}")
+        if path == _SYSTEM_INSTRUCTIONS and server_name == "owlbear-delivery":
+            missing = sorted(available - set(names))
+            if missing:
+                errors.append(f"{path}: exhaustive Delivery bootstrap query is missing tools: {missing}")
+            if len(names) != len(set(names)):
+                errors.append(f"{path}: exhaustive Delivery bootstrap query contains duplicate tools")
+    return errors
+
+
+def _check_mcp_surface(agent_files: list[Path]) -> tuple[frozenset[str], list[str]]:
+    """Validate configuration, live grants, and explicit MCP bootstrap queries."""
+    configured_servers, errors = _validate_mcp_configuration()
+    try:
+        registries = _load_live_mcp_tool_registries()
+    except (AttributeError, ImportError, RuntimeError) as exc:
+        errors.append(f"MCP live registry discovery failed: {exc}")
+        return configured_servers, errors
+    errors.extend(_check_live_mcp_grants(agent_files, configured_servers, registries))
+    errors.extend(_check_tool_search_queries(registries))
+    return configured_servers, errors
 
 
 def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> list[str]:
@@ -370,7 +532,12 @@ def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> lis
     return errors
 
 
-def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> list[str]:
+def _check_tool_policy(
+    content: str,
+    fm_lines: list[str],
+    agent_file: Path,
+    mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS,
+) -> list[str]:
     """Validate banned and unknown tool declarations."""
     errors: list[str] = []
 
@@ -385,7 +552,7 @@ def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> l
     if tools and _BARE_TODO_RE.search(tools):
         errors.append(f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents")
 
-    errors.extend(_check_unknown_tools(fm_lines, agent_file))
+    errors.extend(_check_unknown_tools(fm_lines, agent_file, mcp_servers))
     return errors
 
 
@@ -435,13 +602,13 @@ def _check_required_reading(content: str, agent_file: Path) -> list[str]:
     return [f"{agent_file}: required skills do not resolve beside agent tree: {unresolved}"]
 
 
-def validate_agent(agent_file: Path) -> list[str]:
+def validate_agent(agent_file: Path, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> list[str]:
     """Validate one agent's structure, tools, delegation, and nesting metadata."""
     content = Path(agent_file).read_text(encoding="utf-8")
     fm_lines = _frontmatter_lines(content)
     errors = [
         *_check_structure(content, fm_lines, agent_file),
-        *_check_tool_policy(content, fm_lines, agent_file),
+        *_check_tool_policy(content, fm_lines, agent_file, mcp_servers),
         *_check_hooks(fm_lines, agent_file),
         *_check_delegation(content, fm_lines, agent_file),
         *_check_required_reading(content, agent_file),
@@ -474,8 +641,15 @@ def main(argv: list[str] | None = None) -> int:
         agent_files = [Path(p) for p in args]
 
     has_errors = False
+    mcp_servers = _DEFAULT_MCP_SERVERS
+    if not args:
+        mcp_servers, surface_errors = _check_mcp_surface(agent_files)
+        for error in surface_errors:
+            has_errors = True
+            sys.stderr.write(f"{error}\n")
+
     for agent_file in agent_files:
-        errors = validate_agent(agent_file)
+        errors = validate_agent(agent_file, mcp_servers)
         if errors:
             has_errors = True
             for error in errors:

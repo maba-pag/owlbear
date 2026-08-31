@@ -18,6 +18,9 @@ name: Agent ecosystem validation
       - .github/scripts/check_uv_version.py
       - serve/tools/src/owlbear_tools/dependency_ci.py
       - .pre-commit-config.yaml
+      - .vscode/mcp.json
+      - seed/.vscode/mcp.json
+      - serve/*-mcp/**
       - share/agents/**
       - share/instructions/**
       - share/prompts/**

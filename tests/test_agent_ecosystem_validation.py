@@ -203,6 +203,9 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         ".github/workflows/dependency-verification.yml",
         ".owlbear/instructions/**",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "serve/*-mcp/**",
+        "seed/.vscode/mcp.json",
+        ".vscode/mcp.json",
         "share/instructions/**",
         "tests/test_dependency_verification_workflow.py",
     } <= set(pull_request["paths"])
@@ -231,6 +234,58 @@ def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: 
     path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/acquire]"))
 
     assert _AGENT_VALIDATOR.validate_agent(path) == []
+
+
+def test_agent_validator_rejects_unavailable_mcp_tool_suffix(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/missing]"))
+
+    errors = _AGENT_VALIDATOR._check_live_mcp_grants(  # noqa: SLF001
+        [path],
+        frozenset({"owlbear-browser"}),
+        {"owlbear-browser": frozenset({"acquire"})},
+    )
+
+    assert any("unavailable owlbear-browser tool 'missing'" in error for error in errors)
+
+
+def test_agent_validator_rejects_local_mcp_wildcard(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/*]"))
+
+    errors = _AGENT_VALIDATOR._check_live_mcp_grants(  # noqa: SLF001
+        [path],
+        frozenset({"owlbear-browser"}),
+        {"owlbear-browser": frozenset({"acquire"})},
+    )
+
+    assert any("requires an exact tool grant" in error for error in errors)
+
+
+def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = tmp_path / "mcp.json"
+    config.write_text('{"servers": {"owlbear-browser": {}, "ddgs": {}}}', encoding="utf-8")
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", config)
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG_PATHS", (config, config))
+
+    _configured, errors = _AGENT_VALIDATOR._validate_mcp_configuration()  # noqa: SLF001
+
+    assert any("MCP servers are missing" in error for error in errors)
+    assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
+
+
+def test_agent_validator_checks_explicit_tool_search_queries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    system_instructions = tmp_path / "owlbear-system.instructions.md"
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_SYSTEM_INSTRUCTIONS", system_instructions)
+    monkeypatch.setattr(
+        _AGENT_VALIDATOR,
+        "_tool_search_queries",
+        lambda: ((system_instructions, "OwlBear Delivery acquire_frontier_work"),),
+    )
+
+    errors = _AGENT_VALIDATOR._check_tool_search_queries(  # noqa: SLF001
+        {"owlbear-delivery": frozenset({"acquire_frontier_work", "transition_delivery"})}
+    )
+
+    assert any("exhaustive Delivery bootstrap query is missing tools" in error for error in errors)
 
 
 def test_agent_validator_rejects_malformed_frontmatter_and_missing_sections(tmp_path: Path) -> None:
