@@ -7,8 +7,11 @@ agent-facing source, search, and enrichment tools.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
-**Status:** Alpha. The server exposes the current Knowledge tool surface, but end-to-end
-real-world validation is still pending.
+**Status:** Alpha. Deterministic assembled proof covers bounded fixture ingestion, persisted-vector
+retrieval, and fixture-content search through the Knowledge MCP path. An opt-in model proof covers
+the real BGE-M3 embedding provider and filesystem-backed Qdrant for that same bounded fixture; it
+does not establish model quality, performance, arbitrary external-site validation, or broad
+production readiness.
 
 ---
 
@@ -71,9 +74,25 @@ initialized OwlBear workspace and exposes its complete tool set.
 
 The server's private composition root assembles the SQLite stores, content and query facades,
 ingest coordinator, and composite source fetcher. Production lifespan wiring supplies zero-argument
-HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. Deterministic assembled
-tests replace only those lower runtime factories, keeping source registration, SSRF validation,
-SQLite persistence, and MCP tool calls on the same path as production.
+HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. The default
+assembled proof is deterministic and replaces only the embedding and vector-store factories, while
+keeping source registration, SSRF validation, SQLite persistence, and MCP tool calls on the same path
+as production.
+
+### Opt-in model proof
+
+The opt-in smoke proof requires installed `owlbear-knowledge[full]`, an available BGE-M3 model, and
+writable filesystem-Qdrant state. The model may download approximately 2.3 GB on first use. Model
+tests are excluded by default; from the repository root, opt in with:
+
+```bash
+uv run --locked pytest tests/test_mcp_knowledge_static_refresh.py -m model -n 0 -q --tb=short
+```
+
+Support for this runtime path requires the model test itself to run and pass without a skip or
+deselection. The positive observations are bounded fixture ingestion, persisted-vector retrieval,
+and a search result containing fixture content. Exit status alone, a skipped model test, or a
+deselected model test is not support evidence.
 
 ## Dependencies
 
