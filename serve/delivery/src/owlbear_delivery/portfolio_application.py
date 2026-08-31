@@ -30,6 +30,7 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    BlockedImplementationRecoveryReceipt,
     ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
@@ -46,6 +47,7 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
+    RecoverBlockedImplementation,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
@@ -1673,6 +1675,41 @@ class PortfolioApplication:
                 expected_change_head,
                 publication_base_head,
                 operation_id,
+            )
+
+    def recover_blocked_implementation(  # noqa: PLR0913
+        self,
+        change_id: str,
+        outcome_id: str,
+        expected_resume_commit: str,
+        expected_reviewed_head: str,
+        operation_id: str,
+        *,
+        confirmed_recovery: Literal[True],
+    ) -> BlockedImplementationRecoveryReceipt:
+        """Recover one released blocked Implementation candidate after confirmation."""
+        if confirmed_recovery is not True:
+            self._fail("blocked Implementation recovery requires explicit confirmation")
+        runtime = self._runtime(change_id, for_mutation=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("blocked Implementation recovery cannot overlap an active claim")
+            binding = runtime.show_binding(outcome_id)
+            block = binding.block
+            if binding.stage != DeliveryStage.IMPLEMENTATION or block is None:
+                self._fail("blocked Implementation recovery requires a blocked Implementation outcome")
+            if not block.resolved:
+                self._fail("blocked Implementation recovery requires a resolved request")
+            if block.resume_commit != expected_resume_commit:
+                self._fail("blocked Implementation recovery candidate differs from the resolved block")
+            return self._workspace_manager.recover_blocked_implementation(
+                RecoverBlockedImplementation(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    expected_resume_commit=expected_resume_commit,
+                    expected_reviewed_head=expected_reviewed_head,
+                    operation_id=operation_id,
+                )
             )
 
     def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:

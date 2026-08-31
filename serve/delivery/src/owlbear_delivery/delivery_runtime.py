@@ -3124,9 +3124,12 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
-            self._require_workspace().release_writer_at_head(
+            claim = binding.active_claim
+            if claim is None:
+                _conflict("Implementation block requires an active claim")
+            self._require_workspace().restart(
                 self._contract.change_id,
-                request.claim_id,
+                claim.attempt_id,
                 request.resume_commit,
             )
         elif request.resume_commit is not None:

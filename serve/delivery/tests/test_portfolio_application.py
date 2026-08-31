@@ -47,6 +47,7 @@ from owlbear_delivery import (
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
+    DeliveryBlock,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
@@ -4997,6 +4998,137 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
         resumed.claim.claim_id,
     )
     assert plan_context.requests[0].resolution == resolved.resolution
+
+
+def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    candidate_path = launch.worktree_path / "candidate.txt"
+    candidate_path.write_text("preserved Builder candidate\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", candidate_path.name)
+    _git(launch.worktree_path, "commit", "-m", "preserve Builder candidate")
+    candidate_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+    request = DeliveryRequest(
+        request_id="request-implementation",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Repair the external runtime prerequisite.",
+    )
+
+    blocked = application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-implementation",
+            reason="The external runtime prerequisite is unavailable.",
+            unblock_condition="The prerequisite is repaired.",
+            expected_evidence=("Successful implementation proof",),
+            locators=("TASK-001",),
+            request=request,
+            resume_commit=candidate_head,
+        ),
+    )
+
+    assert blocked.block is not None
+    assert blocked.block.resume_commit == candidate_head
+    assert blocked.active_claim is None
+    coordination = coordinator.show("change-a")
+    assert coordination.last_reviewed_commit == reviewed_head
+    assert coordination.writer is None
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") == reviewed_head
+    assert (
+        _git(
+            launch.worktree_path,
+            "rev-parse",
+            f"refs/owlbear/attempts/change-a/{launch.claim.attempt_id}",
+        )
+        == candidate_head
+    )
+
+    resolved = application.resolve_request(
+        "change-a",
+        request.request_id,
+        DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+    )
+    resumed = application.acquire_frontier_work().launch_packages
+
+    assert len(resumed) == 1
+    resumed_launch = resumed[0]
+    assert resumed_launch.claim.claim_id != launch.claim.claim_id
+    assert resumed_launch.source_head == reviewed_head
+    assert resumed_launch.last_reviewed_commit == reviewed_head
+    build_context = application.show_build_context(
+        "change-a",
+        resumed_launch.outcome_id,
+        resumed_launch.claim.attempt_id,
+        resumed_launch.claim.claim_id,
+    )
+    assert build_context.requests[0].resolution == resolved.resolution
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim_id == resumed_launch.claim.claim_id
+
+
+def test_recover_legacy_released_implementation_block_reanchors_candidate(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    candidate_path = launch.worktree_path / "candidate.txt"
+    candidate_path.write_text("legacy blocked candidate\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", candidate_path.name)
+    _git(launch.worktree_path, "commit", "-m", "legacy blocked candidate")
+    candidate_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+    request = DeliveryRequest(
+        request_id="request-legacy-implementation",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Repair the legacy runtime prerequisite.",
+        resolution=DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+    )
+    application._workspace_manager.release_writer_at_head(
+        "change-a",
+        launch.claim.claim_id,
+        candidate_head,
+    )
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
+    block = DeliveryBlock(
+        block_id="block-legacy-implementation",
+        reason="The legacy runtime prerequisite is unavailable.",
+        unblock_condition="The prerequisite is repaired.",
+        expected_evidence=("Successful implementation proof",),
+        locators=("TASK-001",),
+        request_id=request.request_id,
+        resolution_note=request.resolution.response_text,
+        resolution_locators=(request.request_id,),
+        resume_commit=candidate_head,
+    )
+    binding = frontier.bindings[0].model_copy(update={"active_claim": None, "block": block, "requests": (request,)})
+    (state_root / "changes/change-a/frontier.json").write_bytes(
+        _canonical(frontier.model_copy(update={"bindings": (binding,)}))
+    )
+
+    receipt = application.recover_blocked_implementation(
+        "change-a",
+        "OUT-001",
+        candidate_head,
+        reviewed_head,
+        "recover-legacy-implementation",
+        confirmed_recovery=True,
+    )
+
+    assert receipt.expected_resume_commit == candidate_head
+    assert receipt.reviewed_head == reviewed_head
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") == reviewed_head
+    assert _git(launch.worktree_path, "rev-parse", receipt.preserved_ref) == candidate_head
+    resumed = application.acquire_frontier_work().launch_packages
+    assert len(resumed) == 1
+    assert resumed[0].source_head == reviewed_head
 
 
 def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -> None:

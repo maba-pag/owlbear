@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    BlockedImplementationRecoveryReceipt,
     CapacityConfigurationConflictError,
     CapacityLedger,
     CapacityLedgerConflictError,
@@ -27,6 +28,7 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
+    RecoverBlockedImplementation,
     SyncChangeWithTarget,
     WriterIdentity,
 )
@@ -545,6 +547,41 @@ def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -
     assert recovered.publication_baseline_recovery == receipt
     with pytest.raises(CoordinationConflictError, match="different authority"):
         manager.recover_publication_baseline(coordination.change_id, reviewed_head, initial, "other-operation")
+
+
+def test_released_blocked_implementation_recovery_preserves_and_reanchors_candidate(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("blocked-recovery")
+    candidate = _commit_new_file(
+        coordination.worktree_path,
+        "candidate.txt",
+        "preserve this candidate\n",
+        "preserve blocked candidate",
+    )
+    request = RecoverBlockedImplementation(
+        change_id=coordination.change_id,
+        outcome_id="OUT-001",
+        expected_resume_commit=candidate,
+        expected_reviewed_head=initial,
+        operation_id="recover-blocked-candidate",
+    )
+
+    receipt = manager.recover_blocked_implementation(request)
+    replayed = manager.recover_blocked_implementation(request)
+
+    assert isinstance(receipt, BlockedImplementationRecoveryReceipt)
+    assert replayed == receipt
+    assert receipt.preserved_commit == candidate
+    assert receipt.reviewed_head == initial
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+    assert _git(repository, "rev-parse", receipt.preserved_ref) == candidate
+    recovered = coordinator.show(coordination.change_id)
+    assert "blocked_implementation_recovery" not in recovered.model_dump(mode="json")
+
+    with pytest.raises(CoordinationConflictError, match="candidate was not preserved"):
+        manager.recover_blocked_implementation(request.model_copy(update={"operation_id": "other-operation"}))
 
 
 @pytest.mark.parametrize("custody", ["writer", "publication lease"])

@@ -15,6 +15,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery.change_workspace import (
+    BlockedImplementationRecoveryReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
@@ -38,6 +39,7 @@ from owlbear_delivery_mcp.target_models import (
     AbandonChangeRequest,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
+    ChangeBlockedImplementationRecoveryResponse,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
@@ -76,6 +78,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
+    RecoverBlockedImplementationParams,
+    RecoverBlockedImplementationRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverPublicationBaselineParams,
@@ -146,6 +150,7 @@ DELIVERY_OPERATION_NAMES = (
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
+    "recover_blocked_implementation",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -602,6 +607,27 @@ class TargetMCPAdapter:
             PublicationBaselineRecoveryReceipt,
         )
         return ChangePublicationBaselineRecoveryResponse.from_receipt(receipt)
+
+    async def recover_blocked_implementation(
+        self,
+        request: RecoverBlockedImplementationRequest,
+    ) -> ChangeBlockedImplementationRecoveryResponse:
+        """Recover one released blocked Implementation candidate after explicit confirmation."""
+        params = self._validate(RecoverBlockedImplementationParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_blocked_implementation(
+                params.change_id,
+                params.outcome_id,
+                params.expected_resume_commit,
+                params.expected_reviewed_head,
+                params.operation_id,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            BlockedImplementationRecoveryReceipt,
+        )
+        return ChangeBlockedImplementationRecoveryResponse.from_receipt(receipt)
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""

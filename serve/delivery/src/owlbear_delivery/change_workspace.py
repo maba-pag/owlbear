@@ -231,6 +231,64 @@ class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
         return self
 
 
+class RecoverBlockedImplementation(_WorkspaceModel):
+    """Exact authority for recovering one released Implementation block candidate."""
+
+    change_id: ChangeId
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class BlockedImplementationRecoveryReceipt(_WorkspaceModel):
+    """Content-addressed evidence for one released Implementation recovery."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str = Field(min_length=1)
+    preserved_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        outcome_id: str,
+        expected_resume_commit: str,
+        reviewed_head: str,
+        preserved_ref: str,
+    ) -> Self:
+        """Create deterministic evidence for one preserved blocked candidate."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "outcome_id": outcome_id,
+            "expected_resume_commit": expected_resume_commit,
+            "reviewed_head": reviewed_head,
+            "preserved_ref": preserved_ref,
+            "preserved_commit": expected_resume_commit,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        return cls(receipt_id=_blocked_implementation_recovery_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> Self:
+        if self.preserved_commit != self.expected_resume_commit:
+            message = "blocked Implementation recovery receipt names different preserved commits"
+            raise ValueError(message)
+        if self.receipt_id != _blocked_implementation_recovery_digest(self):
+            message = "blocked Implementation recovery receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
@@ -673,11 +731,14 @@ class ChangeCoordination(_WorkspaceModel):
     @model_validator(mode="before")
     @classmethod
     def _discard_retired_publication_reservation(cls, value: object) -> object:
-        if not isinstance(value, dict) or "publication_operation_id" not in value:
+        if not isinstance(value, dict) or (
+            "publication_operation_id" not in value and "blocked_implementation_recovery" not in value
+        ):
             return value
         migrated: dict[object, object] = dict(value)
         migrated.pop("publication_operation_id", None)
         migrated.pop("publication_expires_at", None)
+        migrated.pop("blocked_implementation_recovery", None)
         return migrated
 
     @field_validator("external_head_adoption_receipts", mode="before")
@@ -2028,6 +2089,82 @@ class ChangeWorkspaceManager:
                 lock=lock,
             )
             return candidate
+
+    def recover_blocked_implementation(
+        self,
+        request: RecoverBlockedImplementation,
+    ) -> BlockedImplementationRecoveryReceipt:
+        """Preserve and re-anchor one released blocked Implementation candidate."""
+        preserved_ref = _blocked_implementation_recovery_ref(request.change_id, request.operation_id)
+        self._git("check-ref-format", preserved_ref)
+        candidate = BlockedImplementationRecoveryReceipt.create(
+            operation_id=request.operation_id,
+            change_id=request.change_id,
+            outcome_id=request.outcome_id,
+            expected_resume_commit=request.expected_resume_commit,
+            reviewed_head=request.expected_reviewed_head,
+            preserved_ref=preserved_ref,
+        )
+        with self._coordinator.publication_lock(request.change_id) as lock:
+            coordination = self._coordinator.show(request.change_id)
+            if coordination.writer is not None or coordination.publication_lease is not None:
+                _coordination_conflict("blocked Implementation recovery requires an idle Change")
+            if (
+                coordination.worktree_cleanup_intent is not None
+                or coordination.worktree_cleanup is not None
+                or coordination.target_sync_conflict is not None
+                or coordination.external_head_adoption_intent is not None
+            ):
+                _coordination_conflict("blocked Implementation recovery cannot overlap workspace attention")
+            if coordination.last_reviewed_commit != request.expected_reviewed_head:
+                _coordination_conflict("blocked Implementation recovery reviewed head is stale")
+            branch_head = self._resolve(coordination.branch)
+            if branch_head not in {request.expected_resume_commit, request.expected_reviewed_head}:
+                _coordination_conflict("blocked Implementation recovery branch head is outside the request")
+            preserved = self._resolve(preserved_ref, missing_ok=True)
+            if preserved is not None and preserved != request.expected_resume_commit:
+                _coordination_conflict("blocked Implementation recovery preserved ref differs from the request")
+            if branch_head == request.expected_resume_commit:
+                self._require_ancestor(request.expected_reviewed_head, branch_head)
+                self._require_worktree(
+                    request.change_id,
+                    coordination.worktree_path,
+                    coordination.branch,
+                    branch_head,
+                )
+                self._require_clean_worktree(coordination.worktree_path)
+                if preserved is None:
+                    self._git("update-ref", preserved_ref, request.expected_resume_commit, "0" * 40)
+                self._git(
+                    "update-ref",
+                    f"refs/heads/{coordination.branch}",
+                    request.expected_reviewed_head,
+                    request.expected_resume_commit,
+                )
+                self._git("reset", "--hard", request.expected_reviewed_head, cwd=coordination.worktree_path)
+            elif preserved != request.expected_resume_commit:
+                _coordination_conflict("blocked Implementation recovery candidate was not preserved")
+            self._verify_blocked_implementation_recovery(coordination, candidate)
+            self._coordinator.update(coordination, lock=lock)
+            return candidate
+
+    def _verify_blocked_implementation_recovery(
+        self,
+        coordination: ChangeCoordination,
+        receipt: BlockedImplementationRecoveryReceipt,
+    ) -> None:
+        """Verify one replayed blocked-candidate recovery without changing state."""
+        if self._resolve(receipt.preserved_ref) != receipt.preserved_commit:
+            _workspace_failure("blocked Implementation recovery ref differs from its receipt")
+        if self._resolve(coordination.branch) != receipt.reviewed_head:
+            _workspace_failure("blocked Implementation recovery branch was not re-anchored")
+        self._require_worktree(
+            receipt.change_id,
+            coordination.worktree_path,
+            coordination.branch,
+            receipt.reviewed_head,
+        )
+        self._require_clean_worktree(coordination.worktree_path)
 
     def _replay_target_sync_receipt(
         self,
@@ -3812,6 +3949,16 @@ def _target_sync_abort_digest(receipt: ChangeTargetSyncAbortReceipt) -> str:
 
 
 def _publication_baseline_recovery_digest(receipt: PublicationBaselineRecoveryReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _blocked_implementation_recovery_ref(change_id: str, operation_id: str) -> str:
+    return f"refs/owlbear/recoveries/{change_id}/{operation_id}"
+
+
+def _blocked_implementation_recovery_digest(receipt: BlockedImplementationRecoveryReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

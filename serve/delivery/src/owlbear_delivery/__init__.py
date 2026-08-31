@@ -19,6 +19,7 @@ from owlbear_delivery.change_publication import (
     SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
+    BlockedImplementationRecoveryReceipt,
     CapacityConfigurationConflictError,
     CapacityLedger,
     CapacityLedgerConflictError,
@@ -44,6 +45,7 @@ from owlbear_delivery.change_workspace import (
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
     PublicationLease,
+    RecoverBlockedImplementation,
     RecoverPublicationBaseline,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
@@ -330,6 +332,7 @@ __all__ = [
     "ArbitrateTargetAttemptRequest",
     "AuthorityStatus",
     "BlockDelivery",
+    "BlockedImplementationRecoveryReceipt",
     "CapacityConfigurationConflictError",
     "CapacityLedger",
     "CapacityLedgerConflictError",
@@ -536,6 +539,7 @@ __all__ = [
     "ReadChangePublicationCheckObservations",
     "ReadChangePublicationHistory",
     "ReceiptCompletedChangeRecord",
+    "RecoverBlockedImplementation",
     "RecoverInterruptedTaskRequest",
     "RecoverPublicationBaseline",
     "RequiredPublicationChecksFailedError",
