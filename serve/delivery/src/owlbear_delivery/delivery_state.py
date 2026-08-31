@@ -131,7 +131,12 @@ class DeliveryStateSnapshot(_StateModel):
 
     @model_validator(mode="after")
     def _validate_identity(self) -> DeliveryStateSnapshot:
-        if self.snapshot_id != _snapshot_digest(self):
+        valid_ids = {_snapshot_digest(self)}
+        if self.frontier.external_head_adoption_receipt is not None:
+            receipt = self.frontier.external_head_adoption_receipt
+            if receipt.schema_version == 1:
+                valid_ids.add(_legacy_snapshot_digest(self))
+        if self.snapshot_id not in valid_ids:
             message = "Delivery-state snapshot identity is invalid"
             raise ValueError(message)
         _validate_snapshot_metadata(self)
@@ -532,11 +537,34 @@ def _validate_change_id(change_id: str) -> None:
 
 
 def _canonical_bytes(model: BaseModel) -> bytes:
-    return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    return _canonical_payload(model.model_dump(mode="json"))
+
+
+def _canonical_payload(payload: object) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _legacy_frontier_payload(frontier: DeliveryFrontier) -> dict[str, object]:
+    payload = frontier.model_dump(mode="json")
+    adoption = payload.get("external_head_adoption_receipt")
+    if isinstance(adoption, dict) and adoption.get("schema_version") == 1:
+        adoption.pop("provenance", None)
+    return payload
+
+
+def _legacy_frontier_bytes(frontier: DeliveryFrontier) -> bytes:
+    return _canonical_payload(_legacy_frontier_payload(frontier))
 
 
 def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
+
+
+def _legacy_snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
+    payload = snapshot.model_dump(mode="json")
+    payload["snapshot_id"] = ""
+    payload["frontier"] = _legacy_frontier_payload(snapshot.frontier)
+    return hashlib.sha256(_canonical_payload(payload)).hexdigest()
 
 
 def _publication_digest(receipt: DeliveryStatePublicationReceipt) -> str:

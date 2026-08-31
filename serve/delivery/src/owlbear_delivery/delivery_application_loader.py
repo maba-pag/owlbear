@@ -35,7 +35,12 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
 )
-from owlbear_delivery.delivery_state import DeliveryStatePublicationError, DeliveryStatePublisher, DeliveryStateSnapshot
+from owlbear_delivery.delivery_state import (
+    DeliveryStatePublicationError,
+    DeliveryStatePublisher,
+    DeliveryStateSnapshot,
+    _legacy_frontier_bytes,
+)
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -448,9 +453,7 @@ def _validate_local_snapshot(
         "admission.json": _canonical_model(snapshot.admission),
     }
     for name, content in expected.items():
-        path = relative_root / name
-        if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
-            _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
+        _validate_local_snapshot_artifact(relative_root / name, name, content, snapshot)
     frontier = DeliveryFrontier.model_validate_json((relative_root / "frontier.json").read_bytes())
     if frontier != snapshot.frontier:
         _bootstrap_failure("local Delivery frontier differs from its remote snapshot")
@@ -460,6 +463,23 @@ def _validate_local_snapshot(
         _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
     if completion != snapshot.completion:
         _bootstrap_failure("local completion evidence differs from its remote snapshot")
+
+
+def _validate_local_snapshot_artifact(
+    path: Path,
+    name: str,
+    expected: bytes,
+    snapshot: DeliveryStateSnapshot,
+) -> None:
+    """Require one local runtime artifact to match current or known legacy bytes."""
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
+    actual = path.read_bytes()
+    if actual == expected:
+        return
+    if name == "frontier.json" and actual == _legacy_frontier_bytes(snapshot.frontier):
+        return
+    _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
 
 
 def _fetch_snapshot_change_head(

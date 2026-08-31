@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery import (
+    ChangeExternalHeadAdoptionReceipt,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryChangeCompletion,
@@ -306,6 +307,48 @@ def test_loader_rejects_divergent_remote_branch_drift(tmp_path: Path) -> None:
         ),
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+
+def test_state_snapshot_accepts_legacy_outer_digest_for_v1_adoption_receipt(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "legacy-snapshot"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="legacy-snapshot-adoption",
+        change_id=change_id,
+        branch=manager.show(change_id).branch,
+        expected_head="a" * 40,
+        adopted_head="b" * 40,
+    )
+    legacy_adoption = adoption.model_dump(mode="json")
+    legacy_adoption["schema_version"] = 1
+    legacy_adoption.pop("provenance")
+    legacy_adoption["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in legacy_adoption.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    payload = snapshot.model_dump(mode="json")
+    payload["frontier"]["external_head_adoption_receipt"] = legacy_adoption
+    payload["snapshot_id"] = ""
+    snapshot_id = hashlib.sha256(
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+    payload["snapshot_id"] = snapshot_id
+
+    restored = DeliveryStateSnapshot.model_validate_json(json.dumps(payload))
+
+    assert restored.snapshot_id == snapshot_id
+    assert restored.frontier.external_head_adoption_receipt is not None
+    assert restored.frontier.external_head_adoption_receipt.provenance == "fast-forward"
+
+    payload["snapshot_id"] = "0" * 64
+    with pytest.raises(ValueError, match="snapshot identity is invalid"):
+        DeliveryStateSnapshot.model_validate_json(json.dumps(payload))
 
 
 def test_state_publisher_round_trips_and_replays_without_primary_checkout_changes(tmp_path: Path) -> None:
