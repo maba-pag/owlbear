@@ -1476,12 +1476,19 @@ class PortfolioApplication:
             )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             results = tuple(result for binding in runtime.bindings() for result in binding.results)
-            self._workspace_manager.validate_finalization_head(
-                change_id,
-                request.exact_head,
-                tuple(result.completed_commit for result in results),
-            )
-            finalization = runtime.finalize_change(request, _timestamp(self._clock()))
+            with self._coordinator.publication_lock(change_id) as publication_lock:
+                boundary_participant = self._workspace_manager.prepare_finalization_boundary(
+                    change_id,
+                    request.exact_head,
+                    tuple(result.completed_commit for result in results),
+                    publication_lock,
+                )
+                additional_participants = () if boundary_participant is None else (boundary_participant,)
+                finalization = runtime.finalize_change(
+                    request,
+                    _timestamp(self._clock()),
+                    additional_participants=additional_participants,
+                )
             self._promote_finalized_external_head(change_id, finalization.exact_head)
             return finalization
 

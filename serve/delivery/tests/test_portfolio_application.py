@@ -123,6 +123,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
+from owlbear_delivery.runtime_transaction import RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 
 _USER_CHECKOUT_STATES = (
@@ -164,6 +165,13 @@ def _commit_reviewed_head(application, coordination, filename: str, content: str
     head = _git(coordination.worktree_path, "rev-parse", "HEAD")
     application._workspace_manager.record_reviewed("change-a", head)
     return head
+
+
+def _commit_local_descendant(coordination, filename: str = "local-repair.txt") -> str:
+    (coordination.worktree_path / filename).write_text("local repair\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", filename)
+    _git(coordination.worktree_path, "commit", "-m", "local repair")
+    return _git(coordination.worktree_path, "rev-parse", "HEAD")
 
 
 def _canonical(model) -> bytes:
@@ -617,6 +625,111 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert invalidation.observed_head == observed_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert application.list_integration_attention() == ()
+
+
+def test_finalization_admits_clean_local_descendant_and_advances_reviewed_boundary(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    initial = coordination.last_reviewed_commit
+    exact_head = _commit_local_descendant(coordination)
+
+    context = application.show_finalization_context("change-a")
+
+    assert context.ready_for_finalization is True
+    assert context.change_head == exact_head
+    assert context.reviewed_change_head == initial
+    request = _finalization_request("change-a", exact_head)
+    finalization = application.finalize_change("change-a", request)
+
+    assert finalization.exact_head == exact_head
+    assert coordinator.show("change-a").last_reviewed_commit == exact_head
+    assert runtimes["change-a"].finalization() == finalization
+    pending = runtimes["change-a"].checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert pending.head == exact_head
+    assert application.finalize_change("change-a", request) == finalization
+
+
+def test_local_descendant_does_not_grant_builder_authority(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = coordinator.show("change-a")
+    initial = coordination.last_reviewed_commit
+    _commit_local_descendant(coordination)
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert len(acquired.failures) == 1
+    assert "reviewed" in acquired.failures[0].detail
+    assert coordinator.show("change-a").last_reviewed_commit == initial
+
+
+def test_finalization_admits_local_descendant_after_promoted_external_ancestor(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    initial = coordination.last_reviewed_commit
+    adopted = _publish_external_change_head(
+        tmp_path,
+        application._workspace_manager.repository,
+        coordination.branch,
+        initial,
+    )
+    application.adopt_external_head("change-a", initial, adopted, "adopt-before-local-finalization")
+    application.promote_external_head("change-a", adopted, "promote-before-local-finalization")
+    exact_head = _commit_local_descendant(coordination, "local-after-adoption.txt")
+
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+
+    assert finalization.exact_head == exact_head
+    assert coordinator.show("change-a").last_reviewed_commit == exact_head
+    promotion = coordinator.show("change-a").external_head_promotion_receipt
+    assert promotion is not None
+    assert promotion.promoted_head == adopted
+    assert runtimes["change-a"].finalization() == finalization
+
+
+def test_finalization_replays_atomic_local_boundary_after_interruption(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    initial = coordination.last_reviewed_commit
+    exact_head = _commit_local_descendant(coordination, "local-replay.txt")
+    request = _finalization_request("change-a", exact_head)
+    original_commit = RuntimeTransaction.commit
+
+    def interrupt_after_frontier(transaction: RuntimeTransaction) -> None:
+        def interrupt(stage: str) -> None:
+            if stage == "after-first-publication":
+                message = "simulated finalization interruption"
+                raise RuntimeError(message)
+
+        original_commit(transaction, failure=interrupt)
+
+    with (
+        patch.object(RuntimeTransaction, "commit", interrupt_after_frontier),
+        pytest.raises(RuntimeError, match="simulated finalization interruption"),
+    ):
+        application.finalize_change("change-a", request)
+
+    assert coordinator.show("change-a").last_reviewed_commit == initial
+    assert tuple((state_root / ".runtime-transactions").glob("*.yaml"))
+
+    replayed = application.finalize_change("change-a", request)
+
+    assert replayed == runtimes["change-a"].finalization()
+    assert coordinator.show("change-a").last_reviewed_commit == exact_head
+    assert not tuple((state_root / ".runtime-transactions").glob("*.yaml"))
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)

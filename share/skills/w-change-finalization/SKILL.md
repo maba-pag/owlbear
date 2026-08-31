@@ -22,12 +22,14 @@ exact values for the attempt:
 - `publication_phase`.
 
 Proceed only when the phase is `ready-for-finalization` or `finalization-invalidated`. The context
-must be ready. Normally its Change head equals its reviewed head. After an engine-validated external
-head adoption, the Change head may differ and is the exact head that observations and review must
-bind. Adoption is provenance only; Builder acquisition requires a separate `promote_external_head`
-admission. For a completed adopted Change, this finalization workflow owns the finalization-bound
-promotion after the exact review is durable. Do not resolve a target ref, read a verification profile,
-or invoke a separate finalization proof executor.
+must be ready. Normally its Change head equals its reviewed head. The engine may also admit a clean
+local descendant for finalization; the Change head is the exact head that observations and review
+must bind. After an engine-validated external head adoption, the Change head may differ and remains
+the exact head that observations and review must bind. Adoption is provenance only; Builder
+acquisition requires a separate `promote_external_head` admission. For a completed adopted Change,
+this finalization workflow owns the finalization-bound promotion after the exact review is durable.
+Do not resolve a target ref, read a verification profile, or invoke a separate finalization proof
+executor.
 
 If `finalization_id` is present, first call `reconcile_finalization_head(change_id)` and re-read the
 context. Treat the Change as already finalized when `finalized_head` equals the current `change_head`
@@ -41,8 +43,8 @@ Use read-only Git commands against the returned `worktree_path` and require:
 - the path resolves to the managed worktree;
 - `branch --show-current` equals the returned `branch`;
 - worktree `HEAD` equals `change_head`;
-- when `change_head` differs from `reviewed_change_head`, the difference is the exact current adopted
-  head retained by Delivery authority;
+- when `change_head` differs from `reviewed_change_head`, the engine has authorized the exact clean
+  local descendant or adopted head for this finalization attempt;
 - the worktree is clean, including untracked files;
 - the Change identity and reviewed-head context remain unchanged.
 
