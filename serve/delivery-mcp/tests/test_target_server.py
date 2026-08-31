@@ -570,6 +570,7 @@ async def test_external_head_adoption_tool_has_exact_contract() -> None:
         "branch",
         "expected_head",
         "adopted_head",
+        "provenance",
     } <= set(tools["adopt_external_head"].output_schema["required"])
 
 

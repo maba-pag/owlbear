@@ -1058,6 +1058,31 @@ def test_application_binds_external_head_adoption_without_advancing_reviewed_aut
     assert publication.pending_checkpoint.head == "5" * 40
 
 
+def test_application_binds_observed_external_head_without_granting_review_authority(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    expected_head = coordination.last_reviewed_commit
+    repository = tmp_path / "repository"
+    adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, expected_head)
+    _git(
+        repository,
+        "fetch",
+        "origin",
+        f"refs/heads/{coordination.branch}:refs/remotes/origin/{coordination.branch}",
+    )
+    _git(coordination.worktree_path, "merge", "--ff-only", adopted)
+
+    receipt = application.adopt_external_head("change-a", expected_head, adopted, "observe-change-a")
+
+    assert receipt.provenance == "observed"
+    assert runtimes["change-a"].external_head_adoption_receipt() == receipt
+    assert coordinator.show("change-a").last_reviewed_commit == expected_head
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is not None
+
+
 def test_application_requires_adopted_head_promotion_before_build_acquisition(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,

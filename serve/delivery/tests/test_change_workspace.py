@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -1316,6 +1317,7 @@ def test_adopt_external_head_fast_forwards_managed_worktree_and_preserves_review
     assert isinstance(receipt, ChangeExternalHeadAdoptionReceipt)
     assert receipt.expected_head == initial
     assert receipt.adopted_head == adopted
+    assert receipt.provenance == "fast-forward"
     assert _git(repository, "rev-parse", coordination.branch) == adopted
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == adopted
     assert coordinator.show(coordination.change_id).last_reviewed_commit == initial
@@ -1345,6 +1347,106 @@ def test_adopt_external_head_fast_forwards_managed_worktree_and_preserves_review
         == receipt
     )
     assert _git(remote, "rev-parse", f"refs/heads/{coordination.branch}") == adopted
+
+
+def test_adopt_external_head_observes_exact_remote_head_already_on_managed_branch(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("observed-adoption")
+    _remote, adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, initial)
+    _git(
+        repository,
+        "fetch",
+        "origin",
+        f"refs/heads/{coordination.branch}:refs/remotes/origin/{coordination.branch}",
+    )
+    _git(coordination.worktree_path, "merge", "--ff-only", adopted)
+
+    receipt = manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="observe-external-change",
+        )
+    )
+
+    assert receipt.schema_version == 2
+    assert receipt.provenance == "observed"
+    assert receipt.expected_head == initial
+    assert receipt.adopted_head == adopted
+    assert coordinator.show(coordination.change_id).last_reviewed_commit == initial
+    assert (
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=initial,
+                adopted_head=adopted,
+                operation_id="observe-external-change",
+            )
+        )
+        == receipt
+    )
+
+
+def test_adopt_external_head_rejects_local_only_advanced_head(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("local-only-adoption")
+    _remote, _remote_adopted = _publish_external_change_head(
+        tmp_path,
+        repository,
+        coordination.branch,
+        initial,
+    )
+    local_only = _commit_new_file(
+        coordination.worktree_path,
+        "local-only.txt",
+        "local\n",
+        "local-only Change update",
+    )
+    before = coordinator.show(coordination.change_id)
+
+    with pytest.raises(CoordinationConflictError, match="remote Change branch differs from the adoption request"):
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=initial,
+                adopted_head=local_only,
+                operation_id="reject-local-only-change",
+            )
+        )
+
+    assert _git(repository, "rev-parse", coordination.branch) == local_only
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == local_only
+    assert coordinator.show(coordination.change_id) == before
+
+
+def test_external_head_adoption_loads_legacy_fast_forward_receipt(tmp_path: Path) -> None:
+    _repository(tmp_path)
+    receipt = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="legacy-adoption",
+        change_id="legacy-adoption",
+        branch="owlbear/change/legacy-adoption",
+        expected_head="a" * 40,
+        adopted_head="b" * 40,
+    )
+    legacy_payload = receipt.model_dump(mode="json")
+    legacy_payload["schema_version"] = 1
+    legacy_payload.pop("provenance")
+    legacy_payload["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in legacy_payload.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+
+    restored = ChangeExternalHeadAdoptionReceipt.model_validate(legacy_payload)
+
+    assert restored.schema_version == 1
+    assert restored.provenance == "fast-forward"
+    assert restored.receipt_id == legacy_payload["receipt_id"]
 
 
 def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tmp_path: Path) -> None:

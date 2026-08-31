@@ -448,20 +448,29 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
 
 
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
-    """MCP response for one exact external Change-head adoption receipt."""
+    """MCP response for one exact external Change-head adoption or observation receipt."""
 
-    schema_version: int = 1
+    schema_version: int = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(min_length=1)
     change_id: ChangeId
     branch: str = Field(min_length=1)
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"]
 
     @classmethod
     def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ChangeExternalHeadAdoptionResponse:
         """Project one domain adoption receipt into the transport contract."""
-        return cls(**receipt.model_dump())
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            expected_head=receipt.expected_head,
+            adopted_head=receipt.adopted_head,
+            provenance=receipt.provenance,
+        )
 
 
 class ChangeExternalHeadPromotionResponse(_TargetProtocolModel):

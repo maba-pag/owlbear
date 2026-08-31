@@ -43,6 +43,7 @@ _PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH = 4
 _DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.json")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_PARENT_COUNT = 2
+_EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -424,18 +425,35 @@ class ChangeTargetSyncAbortReceipt(_WorkspaceModel):
 
 
 class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
-    """Content-addressed evidence that one remote Change descendant was adopted."""
+    """Content-addressed evidence that one remote Change descendant was adopted or observed."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
     branch: str = Field(min_length=1)
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"] = "fast-forward"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _require_v2_provenance(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        schema_version = value.get("schema_version")
+        if schema_version in {None, 1}:
+            legacy = dict(value)
+            legacy["schema_version"] = 1
+            legacy.setdefault("provenance", "fast-forward")
+            return legacy
+        if schema_version == _EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION and "provenance" not in value:
+            message = "schema v2 external Change-head adoption receipts require provenance"
+            raise ValueError(message)
+        return value
 
     @classmethod
-    def create(
+    def create(  # noqa: PLR0913 - adoption receipt binds each exact provenance input.
         cls,
         *,
         operation_id: str,
@@ -443,14 +461,17 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
         branch: str,
         expected_head: str,
         adopted_head: str,
+        provenance: Literal["fast-forward", "observed"] = "fast-forward",
     ) -> Self:
         """Create deterministic evidence for one adopted remote Change head."""
         values = {
+            "schema_version": _EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION,
             "operation_id": operation_id,
             "change_id": change_id,
             "branch": branch,
             "expected_head": expected_head,
             "adopted_head": adopted_head,
+            "provenance": provenance,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
         return cls(receipt_id=_external_head_adoption_digest(candidate), **values)
@@ -460,7 +481,13 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
         if self.expected_head == self.adopted_head:
             message = "external Change head adoption requires head movement"
             raise ValueError(message)
-        if self.receipt_id != _external_head_adoption_digest(self):
+        if self.schema_version == 1 and self.provenance != "fast-forward":
+            message = "schema v1 external Change-head adoption receipts require fast-forward provenance"
+            raise ValueError(message)
+        valid_ids = {_external_head_adoption_digest(self)}
+        if self.schema_version == 1:
+            valid_ids.add(_legacy_external_head_adoption_digest(self))
+        if self.receipt_id not in valid_ids:
             message = "external Change head adoption receipt identity is invalid"
             raise ValueError(message)
         return self
@@ -2234,6 +2261,10 @@ class ChangeWorkspaceManager:
 
             branch_head = self._resolve(coordination.branch)
             if branch_head == request.adopted_head:
+                provenance: Literal["fast-forward", "observed"] = "fast-forward"
+                if coordination.external_head_adoption_intent is None:
+                    self._fetch_external_head(coordination.branch, request.adopted_head)
+                    provenance = "observed"
                 self._require_ancestor(request.expected_head, branch_head)
                 self._require_worktree(
                     request.change_id,
@@ -2241,10 +2272,22 @@ class ChangeWorkspaceManager:
                     coordination.branch,
                     branch_head,
                 )
-                self._require_clean_worktree(coordination.worktree_path)
-                return self._complete_external_head_adoption(request, coordination, lock)
+                self._require_clean_worktree(
+                    coordination.worktree_path,
+                    operation="external Change-head adoption",
+                )
+                return self._complete_external_head_adoption(
+                    request,
+                    coordination,
+                    lock,
+                    provenance=provenance,
+                )
             if branch_head != request.expected_head:
-                _coordination_conflict("Change branch head differs from the adoption request")
+                _coordination_conflict(
+                    "external Change head adoption requires the managed Change branch to equal either "
+                    f"the reviewed head {request.expected_head} or requested adopted head "
+                    f"{request.adopted_head}; observed branch head is {branch_head}"
+                )
             return self._fast_forward_external_head(request, coordination, lock)
 
     def _prepare_external_head_adoption(
@@ -2252,26 +2295,35 @@ class ChangeWorkspaceManager:
         request: AdoptExternalHead,
         coordination: ChangeCoordination,
     ) -> ChangeCoordination:
-        self._require_external_head_adoption_start(coordination)
+        self._require_external_head_adoption_start(coordination, request)
         intent = coordination.external_head_adoption_intent
         expected_intent = ChangeExternalHeadAdoptionIntent.create(request, coordination.branch)
         if intent is not None:
             if intent != expected_intent:
                 _coordination_conflict("external Change head adoption intent differs from the request")
             return coordination
-        branch_head = self._resolve(coordination.branch)
-        if branch_head != request.expected_head:
-            _coordination_conflict("Change branch head differs from the adoption request")
+        current = coordination.external_head_adoption_receipt
+        if (
+            current is not None
+            and current.operation_id != request.operation_id
+            and current.expected_head == request.expected_head
+            and current.adopted_head == request.adopted_head
+        ):
+            _coordination_conflict("external Change head adoption was already recorded for the requested head")
         if request.expected_head != coordination.last_reviewed_commit:
             _coordination_conflict("external Change head adoption requires the reviewed branch head")
         self._require_ancestor(coordination.last_reviewed_commit, request.expected_head)
+        branch_head = self._resolve(coordination.branch)
         self._require_worktree(
             request.change_id,
             coordination.worktree_path,
             coordination.branch,
-            request.expected_head,
+            branch_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
         return coordination
 
     def _fast_forward_external_head(
@@ -2309,8 +2361,17 @@ class ChangeWorkspaceManager:
             coordination.branch,
             adopted_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
-        return self._complete_external_head_adoption(request, coordination, lock, adopted_head)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
+        return self._complete_external_head_adoption(
+            request,
+            coordination,
+            lock,
+            adopted_head,
+            provenance="fast-forward",
+        )
 
     def _complete_external_head_adoption(
         self,
@@ -2318,6 +2379,7 @@ class ChangeWorkspaceManager:
         coordination: ChangeCoordination,
         lock: PublicationLock,
         adopted_head: str | None = None,
+        provenance: Literal["fast-forward", "observed"] = "fast-forward",
     ) -> ChangeExternalHeadAdoptionReceipt:
         receipt = ChangeExternalHeadAdoptionReceipt.create(
             operation_id=request.operation_id,
@@ -2325,6 +2387,7 @@ class ChangeWorkspaceManager:
             branch=coordination.branch,
             expected_head=request.expected_head,
             adopted_head=adopted_head or request.adopted_head,
+            provenance=provenance,
         )
         history = coordination.external_head_adoption_receipts
         if receipt.operation_id not in {item.operation_id for item in history}:
@@ -2362,7 +2425,10 @@ class ChangeWorkspaceManager:
             coordination.branch,
             receipt.adopted_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
         return receipt
 
     @staticmethod
@@ -2376,7 +2442,11 @@ class ChangeWorkspaceManager:
             receipts = (*receipts, current)
         return next((receipt for receipt in receipts if receipt.operation_id == operation_id), None)
 
-    def _require_external_head_adoption_start(self, coordination: ChangeCoordination) -> None:
+    def _require_external_head_adoption_start(
+        self,
+        coordination: ChangeCoordination,
+        request: AdoptExternalHead,
+    ) -> None:
         if coordination.writer is not None:
             _coordination_conflict("external Change head adoption cannot overlap an active writer")
         if coordination.publication_lease is not None:
@@ -2387,8 +2457,12 @@ class ChangeWorkspaceManager:
             _coordination_conflict("external Change head adoption cannot overlap a target synchronization conflict")
         if coordination.external_head_adoption_intent is None:
             branch_head = self._resolve(coordination.branch)
-            if branch_head != coordination.last_reviewed_commit:
-                _coordination_conflict("external Change head adoption requires the reviewed branch head")
+            if branch_head not in {request.expected_head, request.adopted_head}:
+                _coordination_conflict(
+                    "external Change head adoption requires the managed Change branch to equal either "
+                    f"the reviewed head {request.expected_head} or requested adopted head "
+                    f"{request.adopted_head}; observed branch head is {branch_head}"
+                )
 
     def _fetch_external_head(self, branch: str, expected_head: str) -> str:
         source_ref = f"refs/heads/{branch}"
@@ -2713,9 +2787,9 @@ class ChangeWorkspaceManager:
             return ()
         return tuple(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
 
-    def _require_clean_worktree(self, worktree: Path) -> None:
+    def _require_clean_worktree(self, worktree: Path, *, operation: str = "target synchronization") -> None:
         if self._git("-C", str(worktree), "status", "--porcelain=v1").strip():
-            _workspace_failure("target synchronization worktree is not clean")
+            _workspace_failure(f"{operation} worktree is not clean")
 
     def _require_no_unstaged_changes(self, worktree: Path) -> None:
         status = self._git("-C", str(worktree), "status", "--porcelain=v1")
@@ -3872,6 +3946,12 @@ def _blocked_implementation_recovery_digest(receipt: BlockedImplementationRecove
 
 def _external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _legacy_external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id", "provenance"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 

@@ -107,12 +107,14 @@ Delivery does not resolve or execute a target-bound verification profile. This e
 that GitHub can merge the Change or that the merged result passes.
 
 `adopt_external_head` fetches one exact remote Change descendant into a fixed remote-tracking ref and
-fast-forwards only the managed Change worktree. Adoption proves provenance but does not grant review
-authority: it preserves the prior reviewed boundary, and Builder acquisition remains blocked until
-`promote_external_head(change_id, expected_head, operation_id)` records explicit review admission for
-the exact adopted head. Finalization may perform its own exact-head promotion for a completed adopted
-Change after independent review. Durable adoption and promotion receipts make both operations
-replayable after a process interruption.
+normally fast-forwards only the managed Change worktree. When an intentional out-of-band push has
+already advanced the clean managed worktree to that exact remote head, the operation observes the
+head and returns `provenance: "observed"` instead of moving it. Adoption proves provenance but does
+not grant review authority: it preserves the prior reviewed boundary, and Builder acquisition remains
+blocked until `promote_external_head(change_id, expected_head, operation_id)` records explicit review
+admission for the exact adopted head. Finalization may perform its own exact-head promotion for a
+completed adopted Change after independent review. Durable adoption and promotion receipts make both
+operations replayable after a process interruption and distinguish movement from observation.
 
 Legacy coordination records without publication-baseline provenance fail closed during publication
 summary generation. After confirming the exact Change head, baseline commit, and a clean idle managed

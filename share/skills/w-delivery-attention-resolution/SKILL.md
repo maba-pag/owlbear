@@ -111,10 +111,12 @@ Use only an existing operation whose contract owns the selected result:
   irreversible and must not be inferred from an attention diagnosis.
 - External Change head adoption: after the user explicitly selects adoption and the exact expected
   reviewed head and remote adopted head have been re-read, call
-  `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. This fast-forwards
-  only the managed Change worktree and preserves the prior reviewed boundary; adoption proves
-  provenance but does not grant review authority. Before Builder acquisition, re-read the exact
-  adopted receipt and call
+  `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. When the managed
+  branch is at the reviewed head, Delivery fast-forwards it; when an intentional out-of-band push
+  has already put the clean managed branch at the exact adopted head, Delivery verifies the remote
+  tip and records observed provenance. Both paths preserve the prior reviewed boundary; adoption
+  proves provenance but does not grant review authority. Before Builder acquisition, re-read the
+  exact adopted receipt and call
   `promote_external_head(change_id, expected_head=adopted_head, operation_id)` to admit review
   authority for that exact head. For a completed adopted Change, hand off to the finalization
   workflow, which performs the finalization-bound promotion after exact review. Do not use target
