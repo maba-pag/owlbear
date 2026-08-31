@@ -547,6 +547,9 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
 def test_retirement_ignores_current_capacity_ledger(tmp_path: Path) -> None:
     repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     assert (delivery_root / "runtime/capacity-ledger.json").is_file()
+    (delivery_root / "runtime/capacity-ledger.json").write_bytes(
+        _canonical(CapacityLedger(capacity=1, change_ids=("change-a",)))
+    )
 
     plan = plan_delivery_integration_retirement(repository)
 
