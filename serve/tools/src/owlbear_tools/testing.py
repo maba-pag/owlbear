@@ -51,10 +51,11 @@ def _matching_root_tests(*patterns: str) -> list[str]:
 
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
-    if normalized.startswith("serve/cockpit/web/"):
+    route_path = normalized if normalized.endswith("/") else f"{normalized}/"
+    if route_path.startswith("serve/cockpit/web/"):
         return []
     for prefix, directories, patterns in _PYTHON_ROUTES:
-        if normalized.startswith(prefix):
+        if route_path.startswith(prefix):
             roots = [_REPOSITORY_ROOT / directory for directory in directories]
             return [*_existing_paths(roots), *_matching_root_tests(*patterns)]
     if normalized.startswith(_DOCS_ONLY_PREFIXES) or Path(normalized).suffix.lower() == ".md":
