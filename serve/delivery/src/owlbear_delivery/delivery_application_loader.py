@@ -453,7 +453,7 @@ def _validate_local_snapshot(
     for name, content in expected.items():
         path = relative_root / name
         if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
-            _bootstrap_failure("local Delivery runtime differs from its remote snapshot")
+            _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
     frontier = DeliveryFrontier.model_validate_json((relative_root / "frontier.json").read_bytes())
     if frontier != snapshot.frontier:
         _bootstrap_failure("local Delivery frontier differs from its remote snapshot")
