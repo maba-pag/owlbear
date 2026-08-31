@@ -98,9 +98,20 @@ jobs:
       - name: Install locked Cockpit dependencies
         run: npm ci --engine-strict
 
-      - name: Install Playwright browser engines
+      - name: Install Playwright browser engines and Linux dependencies
         timeout-minutes: 10
-        run: npx playwright install chromium firefox webkit
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run cross-engine compatibility smoke tests
         run: npm run test:e2e:compat
+
+      - name: Upload browser compatibility diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: cockpit-browser-compatibility-diagnostics
+          path: |
+            serve/cockpit/web/test-results
+            serve/cockpit/web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 15

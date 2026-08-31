@@ -104,7 +104,8 @@ npm run test:e2e:compat
 
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
 smoke scenarios against the Playwright-pinned current Chromium, Firefox, and WebKit engines. It
-does not execute the exact minimum browser versions in the output-target table. The maintained
+does not execute the exact minimum browser versions in the output-target table. On Ubuntu CI, the
+same installation also uses `--with-deps` so WebKit's host libraries are present. The maintained
 fast and assembled suites remain Chromium-only.
 
 ## Delivery Evidence

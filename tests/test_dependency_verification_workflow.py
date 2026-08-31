@@ -453,8 +453,32 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert "npm run build" in text
     assert browser["needs"] == "proof"
     assert browser["if"] == "needs.proof.result == 'success'"
-    assert "npx playwright install chromium firefox webkit" in text
+    assert "npx playwright install --with-deps chromium firefox webkit" in text
     assert "npm run test:e2e:compat" in text
+
+
+def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
+    config = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
+    workflow = _workflow(COCKPIT_VERIFY_PATH)
+    browser = _job(workflow, "browser_compatibility")
+
+    assert "trace: 'retain-on-failure'" in config
+    assert "outputFolder: 'playwright-report'" in config
+
+    upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser compatibility diagnostics"]
+    assert upload_steps == [
+        {
+            "name": "Upload browser compatibility diagnostics",
+            "if": "always()",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "with": {
+                "name": "cockpit-browser-compatibility-diagnostics",
+                "path": "serve/cockpit/web/test-results\nserve/cockpit/web/playwright-report\n",
+                "if-no-files-found": "ignore",
+                "retention-days": 15,
+            },
+        }
+    ]
 
 
 def test_cockpit_workflow_actions_are_pinned() -> None:

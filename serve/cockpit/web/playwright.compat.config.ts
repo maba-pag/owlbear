@@ -7,7 +7,12 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173',
     headless: true,
+    trace: 'retain-on-failure',
   },
+  reporter: [
+    ['line'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+  ],
   projects: [
     {
       name: 'compatibility-chromium',
