@@ -1244,6 +1244,24 @@ class PortfolioCoordinator:
             raise CoordinationConflictError(msg) from exc
         return coordination
 
+    def prepare_reviewed_boundary(
+        self,
+        coordination: ChangeCoordination,
+        reviewed_head: str,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant | None:
+        """Prepare a reviewed-boundary replacement for a shared Delivery transaction."""
+        self._require_publication_lock(lock, coordination.change_id)
+        path = self._coordination_path(coordination.change_id)
+        previous = path.read_bytes()
+        existing = ChangeCoordination.model_validate_json(previous)
+        if existing != coordination:
+            _coordination_conflict("change workspace changed during finalization preparation")
+        if existing.last_reviewed_commit == reviewed_head:
+            return None
+        updated = existing.model_copy(update={"last_reviewed_commit": reviewed_head})
+        return _replacement(self._state_root, path, previous, updated)
+
     def reserve_publication(
         self,
         change_id: str,
@@ -1602,6 +1620,22 @@ class ChangeWorkspaceManager:
         self._require_ancestor(commit, branch_head)
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
+
+    def prepare_finalization_boundary(
+        self,
+        change_id: str,
+        exact_head: str,
+        promoted_commits: tuple[str, ...],
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant | None:
+        """Prepare a reviewed-boundary advance for one clean finalization head."""
+        coordination = self.validate_finalization_head(change_id, exact_head, promoted_commits)
+        adoption = coordination.external_head_adoption_receipt
+        if coordination.last_reviewed_commit == exact_head or (
+            adoption is not None and adoption.adopted_head == exact_head
+        ):
+            return None
+        return self._coordinator.prepare_reviewed_boundary(coordination, exact_head, lock)
 
     def snapshot_design_package(
         self,
@@ -2990,8 +3024,26 @@ class ChangeWorkspaceManager:
         coordination = self._coordinator.show(change_id)
         if coordination.writer is not None:
             _workspace_failure("Delivery finalization cannot overlap an active Change writer")
-        if self.source_head(change_id) != exact_head:
-            _workspace_failure("Delivery finalization head differs from the reviewed Change head")
+        if coordination.publication_lease is not None:
+            _workspace_failure("Delivery finalization cannot overlap a publication lease")
+        if coordination.external_head_adoption_intent is not None:
+            _coordination_conflict("Delivery finalization cannot overlap external Change-head adoption")
+        if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
+            _coordination_conflict("Delivery finalization cannot overlap Change worktree cleanup")
+        if coordination.dirty_worktree_quarantine is not None:
+            _coordination_conflict("Delivery finalization cannot use a quarantined Change worktree")
+        branch_head = self._resolve(coordination.branch)
+        if branch_head != exact_head:
+            _workspace_failure("Delivery finalization head differs from the current Change branch")
+        if not self._is_ancestor(coordination.last_reviewed_commit, exact_head, cwd=self._repository):
+            _workspace_failure("Delivery finalization head is not a descendant of the reviewed Change head")
+        self._require_worktree(
+            change_id,
+            coordination.worktree_path,
+            coordination.branch,
+            exact_head,
+        )
+        self._require_clean_worktree(coordination.worktree_path)
         for predecessor, successor in pairwise(promoted_commits):
             self._require_ancestor(predecessor, successor)
         for promoted_commit in promoted_commits:

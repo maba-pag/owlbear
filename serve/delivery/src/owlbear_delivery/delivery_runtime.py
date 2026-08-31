@@ -2188,6 +2188,8 @@ class DeliveryRuntime:
         self,
         request: FinalizeDeliveryChange,
         finalized_at: datetime,
+        *,
+        additional_participants: tuple[ReplacementTransactionParticipant, ...] = (),
     ) -> DeliveryFinalizationReceipt:
         """Bind completed authority and final validation to one exact Change head."""
         frontier, previous = self._read()
@@ -2235,7 +2237,30 @@ class DeliveryRuntime:
             ),
             request.exact_head,
         )
-        self._replace(previous, updated)
+        replacement = _model_content(updated)
+        frontier_participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._frontier_path.relative_to(self._target_root),
+            previous,
+            replacement,
+        )
+        participant_content = b"".join(
+            b"\0".join(
+                (
+                    str(participant.root.resolve()).encode(),
+                    participant.relative_path.as_posix().encode(),
+                    participant.expected_content,
+                    participant.replacement_content,
+                )
+            )
+            for participant in additional_participants
+        )
+        transaction_id = hashlib.sha256(previous + replacement + participant_content).hexdigest()
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-finalization-{transaction_id}",
+            (frontier_participant, *additional_participants),
+        ).commit()
         return receipt
 
     def reconcile_finalization_head(
