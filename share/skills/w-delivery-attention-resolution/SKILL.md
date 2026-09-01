@@ -13,6 +13,15 @@ Delivery authority permits. Local Integration execution and completion-proposal 
 retired; completion is recorded only from a fresh provider observation bound to finalized Delivery
 authority.
 
+## Lifecycle Status
+
+This is a temporary recovery/exception workflow, not a normal Delivery step. Retire its user-facing
+prompt only after Cockpit and Delivery provide guided, tested routes for every capability currently
+reachable only here: external Change-head adoption and promotion, publication-baseline recovery,
+and retained Integration-repair claim recovery. The replacement must preserve exact identity
+binding, user decisions, provider actions, and explicit authority-gap reporting. Ordinary Change
+attention buttons do not satisfy this retirement condition.
+
 ## Step 0 - Bind The Exact Current Attention
 
 Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by one
