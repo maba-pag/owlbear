@@ -25,6 +25,7 @@ from owlbear_delivery import (
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
+    DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryChangeAbandonment,
@@ -845,6 +846,33 @@ def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) 
     )
     with pytest.raises(DeliveryRuntimeConflictError, match="requires attention"):
         _activate(runtime, "OUT-001", "claim-001")
+
+
+def test_legacy_change_disposition_identity_remains_loadable(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    disposition = runtime.capture_acceptance_attention(
+        _pull_request_observation(),
+        ("provider acceptance evidence does not match authority",),
+        reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
+    )
+    payload = json.loads(runtime.frontier_bytes())
+    legacy = payload["change_disposition"]
+    legacy.pop("acceptance_reason")
+    legacy["disposition_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in legacy.items() if key != "disposition_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    payload["change_disposition"] = legacy
+    (tmp_path / "changes/delivery-runtime/frontier.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    restored = DeliveryRuntime(tmp_path, _contract())
+
+    assert restored.change_disposition() == disposition.model_copy(
+        update={"disposition_id": legacy["disposition_id"], "acceptance_reason": None}
+    )
 
 
 def test_change_attention_resolution_is_exact_idempotent_and_preserves_ready_invalidation(tmp_path: Path) -> None:

@@ -136,6 +136,10 @@ class DeliveryStateSnapshot(_StateModel):
             receipt = self.frontier.external_head_adoption_receipt
             if receipt.schema_version == 1:
                 valid_ids.add(_legacy_snapshot_digest(self))
+        if self.frontier.change_disposition is not None:
+            disposition = self.frontier.change_disposition
+            if disposition.acceptance_reason is None:
+                valid_ids.add(_legacy_snapshot_digest(self))
         if self.snapshot_id not in valid_ids:
             message = "Delivery-state snapshot identity is invalid"
             raise ValueError(message)
@@ -549,6 +553,9 @@ def _legacy_frontier_payload(frontier: DeliveryFrontier) -> dict[str, object]:
     adoption = payload.get("external_head_adoption_receipt")
     if isinstance(adoption, dict) and adoption.get("schema_version") == 1:
         adoption.pop("provenance", None)
+    disposition = payload.get("change_disposition")
+    if isinstance(disposition, dict) and disposition.get("acceptance_reason") is None:
+        disposition.pop("acceptance_reason", None)
     return payload
 
 

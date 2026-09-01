@@ -43,6 +43,7 @@ from owlbear_delivery import (
     CompletionReceipt,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
+    DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
@@ -2276,13 +2277,6 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
     assert waiting[0].status.value == "waiting"
     assert runtime.change_disposition() is None
 
-    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
-    moved = application.reconcile_awaiting_acceptance(("change-a",))
-    assert moved[0].status.value == "head-moved"
-    assert moved[0].code == "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
-    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
-    assert runtime.change_disposition() is None
-
     provider.read_pull_request.side_effect = PublicationProviderError(
         PublicationProviderFailureCode.UNAVAILABLE,
         "read_pull_request",
@@ -2308,6 +2302,26 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
     assert completed[0].status.value == "completed"
     assert completed[0].completion_id is not None
     assert runtime.completion_receipt() is not None
+
+
+def test_reconcile_awaiting_acceptance_repairs_open_head_drift(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
+    moved = application.reconcile_awaiting_acceptance(("change-a",))
+
+    assert moved[0].status.value == "head-moved"
+    assert moved[0].code == "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
+    assert runtime.change_stage() == DeliveryChangeStage.ACCEPTANCE_ATTENTION
+    assert runtime.finalization() is None
+    assert runtime.finalization_invalidation() is not None
+    assert runtime.ready_receipt() is None
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.HEAD_MOVED
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_called_once()
 
 
 def test_reconcile_awaiting_acceptance_skips_a_busy_change_without_provider_io(tmp_path: Path) -> None:
@@ -2560,6 +2574,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     disposition = runtime.change_disposition()
     assert disposition is not None
     assert disposition.kind.value == "acceptance-attention"
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED
     assert runtime.ready_receipt() is None
     with pytest.raises(PortfolioApplicationError, match="requires attention resolution"):
         application.observe_acceptance("change-a")
@@ -2589,6 +2604,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     disposition = runtime.change_disposition()
     assert disposition is not None
     assert disposition.kind.value == "acceptance-attention"
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.LATCH_REGRESSION
     assert runtime.merged_pull_request_latch() == original_latch
     assert runtime.ready_receipt() is None
 

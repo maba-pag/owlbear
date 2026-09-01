@@ -66,6 +66,7 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryBlock,
@@ -2008,23 +2009,31 @@ class PortfolioApplication:
     ) -> DeliveryAcceptanceReconciliationOutcome | None:
         snapshot = observation.snapshot
         if snapshot.state == "open" and not snapshot.merged:
-            status = DeliveryAcceptanceReconciliationStatus.HEAD_MOVED
-            detail = "The open pull request head differs from the finalized Change head."
-            code: str | None = "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
             if snapshot.head_sha == authority.exact_head:
-                status = DeliveryAcceptanceReconciliationStatus.WAITING
-                detail = "The pull request is open and not merged."
-                code = None
+                return DeliveryAcceptanceReconciliationOutcome(
+                    change_id=change_id,
+                    status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                    detail="The pull request is open and not merged.",
+                )
+            self._reconcile_finalization_head_locked(
+                change_id,
+                runtime,
+                observation=observation,
+                acceptance_reason=DeliveryAcceptanceAttentionReason.HEAD_MOVED,
+            )
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
-                status=status,
-                code=code,
-                detail=detail,
+                status=DeliveryAcceptanceReconciliationStatus.HEAD_MOVED,
+                code="ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED",
+                detail=(
+                    "The open pull request head differed from the finalized Change head; finalization was invalidated."
+                ),
             )
         if snapshot.state == "closed" and not snapshot.merged:
             runtime.capture_acceptance_attention(
                 observation,
                 ("provider pull request is closed without a merge",),
+                reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
@@ -2041,6 +2050,7 @@ class PortfolioApplication:
             runtime.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence does not match awaiting-merge authority",),
+                reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
             )
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
@@ -2167,6 +2177,7 @@ class PortfolioApplication:
                 runtime.capture_acceptance_attention(
                     observation,
                     ("provider pull request does not satisfy acceptance authority",),
+                    reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
                 )
                 message = "provider pull request does not satisfy acceptance authority"
                 raise PortfolioApplicationError(message)
@@ -2218,19 +2229,86 @@ class PortfolioApplication:
             message = "provider pull request is still open and unmerged"
             raise DeliveryAcceptanceWaitingError(message)
         snapshot = observation.snapshot
-        if (
-            snapshot.state != "closed"
-            or not snapshot.merged
-            or snapshot.merge_commit_sha is None
-            or snapshot.merged_at is None
-        ):
+        if snapshot.state != "closed" or not snapshot.merged:
             runtime.capture_acceptance_attention(
                 observation,
                 ("provider pull request does not satisfy acceptance authority",),
+                reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
+            )
+            message = "provider pull request does not satisfy acceptance authority"
+            raise PortfolioApplicationError(message)
+        if snapshot.merge_commit_sha is None or snapshot.merged_at is None:
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request is missing merge evidence",),
+                reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
             message = "provider pull request does not satisfy acceptance authority"
             raise PortfolioApplicationError(message)
         return runtime.latch_merged_pull_request(observation)
+
+    def _reconcile_finalization_head_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        *,
+        observation: PublicationPullRequestObservationReceipt | None = None,
+        acceptance_reason: DeliveryAcceptanceAttentionReason | None = None,
+    ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
+        """Retain or invalidate finalization while the Change checkpoint lock is held."""
+        if runtime.completion_receipt() is not None:
+            finalization = runtime.finalization()
+            if finalization is not None:
+                self._promote_finalized_external_head(change_id, finalization.exact_head)
+            return finalization
+        finalization = runtime.finalization()
+        ready = runtime.ready_receipt()
+        if observation is None:
+            observation = (
+                None
+                if self._draft_pull_request_publisher is None
+                else self._draft_pull_request_publisher.observe_pull_request(
+                    ObserveChangePublicationPullRequest(change_id=change_id)
+                )
+            )
+        observed_head = (
+            self._workspace_manager.observed_change_head(change_id)
+            if observation is None
+            else observation.snapshot.head_sha
+        )
+        if (
+            finalization is not None
+            and ready is not None
+            and observation is not None
+            and observed_head != finalization.exact_head
+        ):
+            publisher = self._draft_pull_request_publisher
+            if publisher is None:
+                self._fail("finalization reconciliation requires a publication provider")
+            publisher.return_to_draft(
+                ReturnChangePullRequestToDraft(
+                    change_id=change_id,
+                    operation_id=f"return-draft-{ready.finalization_id}",
+                    finalization_id=ready.finalization_id,
+                    exact_head=observation.snapshot.head_sha,
+                )
+            )
+            if acceptance_reason is not None:
+                runtime.capture_acceptance_attention(
+                    observation,
+                    ("provider pull request head differs from finalized Change head",),
+                    reason=acceptance_reason,
+                )
+        result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+        if isinstance(result, DeliveryFinalizationReceipt):
+            self._promote_finalized_external_head(change_id, result.exact_head)
+        if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
+            runtime.reconcile_pull_request_draft_state(
+                provider_draft=observation.snapshot.draft,
+                observed_at=observation.observed_at,
+                observation_id=observation.observation_id,
+            )
+        return result
 
     def reconcile_finalization_head(
         self,
@@ -2239,49 +2317,7 @@ class PortfolioApplication:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            if runtime.completion_receipt() is not None:
-                finalization = runtime.finalization()
-                if finalization is not None:
-                    self._promote_finalized_external_head(change_id, finalization.exact_head)
-                return finalization
-            finalization = runtime.finalization()
-            ready = runtime.ready_receipt()
-            observation = (
-                None
-                if self._draft_pull_request_publisher is None
-                else self._draft_pull_request_publisher.observe_pull_request(
-                    ObserveChangePublicationPullRequest(change_id=change_id)
-                )
-            )
-            observed_head = (
-                self._workspace_manager.observed_change_head(change_id)
-                if observation is None
-                else observation.snapshot.head_sha
-            )
-            if (
-                finalization is not None
-                and ready is not None
-                and observation is not None
-                and observed_head != finalization.exact_head
-            ):
-                self._draft_pull_request_publisher.return_to_draft(
-                    ReturnChangePullRequestToDraft(
-                        change_id=change_id,
-                        operation_id=f"return-draft-{ready.finalization_id}",
-                        finalization_id=ready.finalization_id,
-                        exact_head=observation.snapshot.head_sha,
-                    )
-                )
-            result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
-            if isinstance(result, DeliveryFinalizationReceipt):
-                self._promote_finalized_external_head(change_id, result.exact_head)
-            if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
-                runtime.reconcile_pull_request_draft_state(
-                    provider_draft=observation.snapshot.draft,
-                    observed_at=observation.observed_at,
-                    observation_id=observation.observation_id,
-                )
-            return result
+            return self._reconcile_finalization_head_locked(change_id, runtime)
 
     def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
         """Reconcile one durable checkpoint without accepting caller-supplied external fences."""

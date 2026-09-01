@@ -66,6 +66,16 @@ class DeliveryChangeDispositionKind(StrEnum):
     ACCEPTANCE_ATTENTION = "acceptance-attention"
 
 
+class DeliveryAcceptanceAttentionReason(StrEnum):
+    """Typed provider condition that caused acceptance attention."""
+
+    HEAD_MOVED = "head-moved"
+    CLOSED_UNMERGED = "closed-unmerged"
+    IDENTITY_MISMATCH = "identity-mismatch"
+    MERGE_EVIDENCE_MISSING = "merge-evidence-missing"
+    LATCH_REGRESSION = "latch-regression"
+
+
 class DeliveryOutputKind(StrEnum):
     """Minimal phase-output categories consumed by mechanical transitions."""
 
@@ -596,9 +606,10 @@ class DeliveryChangeDisposition(_DeliveryModel):
     entered_from: DeliveryChangeStage
     recorded_at: datetime
     diagnostics: tuple[str, ...] = Field(min_length=1)
+    acceptance_reason: DeliveryAcceptanceAttentionReason | None = None
 
     @classmethod
-    def create(
+    def create(  # noqa: PLR0913 - acceptance reason binds one additional typed authority field.
         cls,
         *,
         kind: DeliveryChangeDispositionKind,
@@ -606,6 +617,7 @@ class DeliveryChangeDisposition(_DeliveryModel):
         entered_from: DeliveryChangeStage,
         recorded_at: datetime,
         diagnostics: tuple[str, ...],
+        acceptance_reason: DeliveryAcceptanceAttentionReason | None = None,
     ) -> DeliveryChangeDisposition:
         """Create one deterministic attention record from typed evidence."""
         values = {
@@ -614,6 +626,7 @@ class DeliveryChangeDisposition(_DeliveryModel):
             "entered_from": entered_from,
             "recorded_at": recorded_at,
             "diagnostics": diagnostics,
+            "acceptance_reason": acceptance_reason,
         }
         candidate = cls.model_construct(disposition_id="0" * 64, schema_version=1, **values)
         return cls(disposition_id=_receipt_digest(candidate, "disposition_id"), **values)
@@ -629,10 +642,18 @@ class DeliveryChangeDisposition(_DeliveryModel):
         ):
             message = "acceptance attention must be entered from awaiting-merge state"
             raise ValueError(message)
+        if self.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION and self.acceptance_reason is not None:
+            message = "acceptance attention reason requires acceptance attention"
+            raise ValueError(message)
         if self.recorded_at.tzinfo is None:
             message = "Change disposition timestamp must include a timezone"
             raise ValueError(message)
-        if self.disposition_id != _receipt_digest(self, "disposition_id"):
+        expected_id = _receipt_digest(self, "disposition_id")
+        if self.acceptance_reason is None:
+            expected_ids = {expected_id, _legacy_change_disposition_digest(self)}
+        else:
+            expected_ids = {expected_id}
+        if self.disposition_id not in expected_ids:
             message = "Change disposition identity is invalid"
             raise ValueError(message)
         return self
@@ -1547,6 +1568,7 @@ class DeliveryRuntime:
             and existing.change_id == disposition.change_id
             and existing.entered_from == disposition.entered_from
             and existing.diagnostics == disposition.diagnostics
+            and existing.acceptance_reason == disposition.acceptance_reason
         ):
             _conflict("Delivery Change already has different attention authority")
         if publication_identity is None:
@@ -1664,6 +1686,8 @@ class DeliveryRuntime:
         self,
         observation: PublicationPullRequestObservationReceipt,
         diagnostics: tuple[str, ...],
+        *,
+        reason: DeliveryAcceptanceAttentionReason = DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
     ) -> DeliveryChangeDisposition:
         """Capture one mismatched provider acceptance observation."""
         return self.capture_change_disposition(
@@ -1673,6 +1697,7 @@ class DeliveryRuntime:
                 entered_from=DeliveryChangeStage.AWAITING_MERGE,
                 recorded_at=observation.observed_at,
                 diagnostics=(*diagnostics, f"acceptance-observation:{observation.observation_id}"),
+                acceptance_reason=reason,
             ),
             clear_ready=True,
             publication_identity=DeliveryChangePublicationIdentity(
@@ -2041,6 +2066,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence does not match awaiting-merge authority",),
+                reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
             )
             _conflict("merged pull-request evidence does not match awaiting-merge authority")
         existing = frontier.merged_pull_request_latch
@@ -2053,6 +2079,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence regressed from the immutable merged latch",),
+                reason=DeliveryAcceptanceAttentionReason.LATCH_REGRESSION,
             )
             _conflict("provider acceptance evidence regressed from the immutable merged latch")
         if is_acceptance_waiting_observation(observation):
@@ -2062,12 +2089,14 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance observation is not merged and closed",),
+                reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
             _conflict("acceptance observation does not report a merged pull request")
         if snapshot.merged_at is None or snapshot.merge_commit_sha is None:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance observation is missing merge evidence",),
+                reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
             _conflict("merged pull-request evidence is incomplete")
         candidate = DeliveryMergedPullRequestLatch(
@@ -2106,6 +2135,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence conflicts with the immutable merged latch",),
+                reason=DeliveryAcceptanceAttentionReason.LATCH_REGRESSION,
             )
             _conflict("merged pull-request evidence conflicts with the immutable latch")
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
@@ -2270,7 +2300,7 @@ class DeliveryRuntime:
     ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
         """Retain exact finalization or invalidate it after observed Change-head drift."""
         frontier, previous = self._read()
-        _require_change_mutable(frontier, "reconcile_finalization_head")
+        _require_change_mutable(frontier, "reconcile_finalization_head", allow_attention=True)
         finalization = frontier.finalization
         if finalization is None:
             invalidation = frontier.finalization_invalidation
@@ -3577,6 +3607,12 @@ def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _legacy_change_disposition_digest(disposition: DeliveryChangeDisposition) -> str:
+    payload = disposition.model_dump(mode="json", exclude={"disposition_id", "acceptance_reason"})
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(content).hexdigest()
+
+
 def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryChangePublicationIdentity | None:
     if ready is None:
         return None
@@ -3635,6 +3671,7 @@ __all__ = [
     "AdministrativeDeliveryMoveResult",
     "AdvanceDelivery",
     "BlockDelivery",
+    "DeliveryAcceptanceAttentionReason",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
     "DeliveryChangeAbandonment",
