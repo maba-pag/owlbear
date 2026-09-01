@@ -67,7 +67,6 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
-| `publish-change` | Current agent directed by prompt | Loads `w-change-publication`; advances one finalized Change through target convergence, publication, and acceptance |
 | `resolve-delivery-attention` | Current agent directed by prompt | Loads `w-delivery-attention-resolution`; binds one exact Integration attention before interactive diagnosis |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
@@ -95,7 +94,6 @@ The named caller owns each on-demand condition and timing.
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
-| `publish-change` prompt | `w-change-publication` | One finalized Change needs target convergence, checkpoint publication, readiness, or acceptance observation |
 | `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Integration attention needs interactive diagnosis or a user-selected remedy |
 
 ## Required Skill Consumers

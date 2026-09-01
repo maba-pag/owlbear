@@ -56,6 +56,7 @@ _RETIRED_SKILLS = {
     "w-node-acceptance",
     "w-whole-change-audit",
     "w-integration-repair",
+    "w-change-publication",
 }
 _GENERIC_TASK_TOOLS = {
     "owlbear-delivery/create_task",
