@@ -14,6 +14,7 @@ name: Dependency verification
       - .github/scripts/check_node_runtime.py
       - .github/scripts/check_uv_version.py
       - .github/scripts/check_uv_workspace_lock.py
+      - .github/scripts/check_ruff_toolchain.py
       - .github/workflows/**
       - .mega-linter.yml
       - .pre-commit-config.yaml
@@ -53,6 +54,7 @@ jobs:
       pds: ${{ steps.scope.outputs.pds }}
       precommit: ${{ steps.scope.outputs.precommit }}
       python: ${{ steps.scope.outputs.python }}
+      ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}
       renovate: ${{ steps.scope.outputs.renovate }}
       root_node: ${{ steps.scope.outputs.root_node }}
       shared_node_runtime: ${{ steps.scope.outputs.shared_node_runtime }}
@@ -232,6 +234,10 @@ jobs:
 
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Verify Ruff toolchain parity
+        if: needs.classify.outputs.ruff_toolchain == 'true'
+        run: uv run python .github/scripts/check_ruff_toolchain.py
 
       - name: Setup Node.js for frontend lint hooks
         if: needs.classify.outputs.precommit == 'true'

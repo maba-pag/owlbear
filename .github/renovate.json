@@ -87,23 +87,6 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "Keep Ruff and its pre-commit hook version coupled",
-      "matchManagers": [
-        "pep621",
-        "pre-commit"
-      ],
-      "matchPackageNames": [
-        "ruff",
-        "astral-sh/ruff-pre-commit"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch"
-      ],
-      "groupName": "Ruff toolchain"
-    },
-    {
       "description": "Keep Node runtime declarations aligned",
       "matchDatasources": [
         "node-version"
@@ -152,16 +135,21 @@
       "automerge": false
     },
     {
-      "description": "Keep MegaLinter image and action versions coupled",
+      "description": "Keep Ruff and MegaLinter toolchain versions coupled",
       "matchManagers": [
+        "pep621",
+        "pre-commit",
         "custom.regex",
         "github-actions"
       ],
       "matchDatasources": [
-        "docker",
-        "github-tags"
+        "pypi",
+        "github-tags",
+        "docker"
       ],
       "matchPackageNames": [
+        "ruff",
+        "astral-sh/ruff-pre-commit",
         "ghcr.io/oxsecurity/megalinter",
         "ghcr.io/oxsecurity/megalinter-cupcake",
         "oxsecurity/megalinter"
@@ -174,7 +162,7 @@
         "pinDigest",
         "digest"
       ],
-      "groupName": "MegaLinter version alignment"
+      "groupName": "Ruff and MegaLinter toolchain"
     },
     {
       "description": "Disable unsupported MegaLinter Docker pin and digest updates",

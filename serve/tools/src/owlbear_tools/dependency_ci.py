@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,6 +25,11 @@ _DIAGRAM_NODE_FILES = {
     ".owlbear/scripts/export-diagrams/package-lock.json",
     ".owlbear/scripts/export-diagrams/package.json",
 }
+_RUFF_TOOLCHAIN_FILES = {
+    ".github/workflows/megalinter.yml",
+    ".mega-linter.yml",
+    ".pre-commit-config.yaml",
+}
 _PDS_PACKAGES = (
     "@porsche-design-system/components-js",
     "@porsche-design-system/components-react",
@@ -41,6 +47,7 @@ class DependencyScope:
     diagrams: bool
     pds: bool
     precommit: bool
+    ruff_toolchain: bool
     workflows: bool
     megalinter: bool
     renovate: bool
@@ -48,7 +55,7 @@ class DependencyScope:
     @property
     def compatibility(self) -> bool:
         """Return whether a non-runtime compatibility proof is required."""
-        return self.precommit or self.workflows or self.megalinter or self.renovate
+        return self.precommit or self.ruff_toolchain or self.workflows or self.megalinter or self.renovate
 
     @property
     def applicable(self) -> bool:
@@ -82,6 +89,10 @@ def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencySco
     megalinter = ".mega-linter.yml" in changed
     renovate = ".github/renovate.json" in changed
     precommit = ".pre-commit-config.yaml" in changed
+    ruff_toolchain = bool(changed & _RUFF_TOOLCHAIN_FILES) or (
+        bool(changed & {"pyproject.toml", "uv.lock"}) and re.search(r"(?i)ruff", diff) is not None
+    )
+    python = python or precommit
 
     return DependencyScope(
         python=python,
@@ -91,6 +102,7 @@ def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencySco
         diagrams=diagrams,
         pds=node and any(package in diff for package in _PDS_PACKAGES),
         precommit=precommit,
+        ruff_toolchain=ruff_toolchain,
         workflows=workflows,
         megalinter=megalinter,
         renovate=renovate,

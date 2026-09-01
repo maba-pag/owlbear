@@ -21,6 +21,7 @@ SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
+RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
 
 
 def _workflow(path: Path) -> dict[str, object]:
@@ -62,6 +63,20 @@ def _fake_node(tmp_path: Path, version: str) -> Path:
     return executable
 
 
+def _fake_ruff(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "ruff"
+    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
+def _fake_docker(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "docker"
+    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
 def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         [sys.executable, str(UV_VERSION_SCRIPT), "--uv-executable", str(executable)],
@@ -81,6 +96,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
         ".github/scripts/check_node_runtime.py",
+        ".github/scripts/check_ruff_toolchain.py",
         ".github/scripts/check_uv_version.py",
         ".github/scripts/check_uv_workspace_lock.py",
         ".github/workflows/**",
@@ -155,6 +171,22 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
 
 
+def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert "ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}" in text
+    parity_steps = [step for step in compatibility["steps"] if step.get("name") == "Verify Ruff toolchain parity"]
+    assert parity_steps == [
+        {
+            "name": "Verify Ruff toolchain parity",
+            "if": "needs.classify.outputs.ruff_toolchain == 'true'",
+            "run": "uv run python .github/scripts/check_ruff_toolchain.py",
+        }
+    ]
+
+
 def test_uv_runtime_check_precedes_uv_commands() -> None:
     for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH):
         workflow = _workflow(path)
@@ -193,6 +225,32 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "below" in result.stderr
+
+
+def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path) -> None:
+    result = _run_script(
+        RUFF_TOOLCHAIN_SCRIPT,
+        "--ruff-executable",
+        str(_fake_ruff(tmp_path, "0.16.2")),
+        "--docker-executable",
+        str(_fake_docker(tmp_path, "0.16.2")),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "aligned at 0.16.2" in result.stdout
+
+
+def test_ruff_toolchain_proof_rejects_bundled_version_drift(tmp_path: Path) -> None:
+    result = _run_script(
+        RUFF_TOOLCHAIN_SCRIPT,
+        "--ruff-executable",
+        str(_fake_ruff(tmp_path, "0.16.2")),
+        "--docker-executable",
+        str(_fake_docker(tmp_path, "0.16.1")),
+    )
+
+    assert result.returncode != 0
+    assert "MegaLinter bundled Ruff=0.16.1" in result.stderr
 
 
 def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
@@ -306,12 +364,27 @@ def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
     assert "frontend_runtime" not in frontend.github_outputs()
 
 
-def test_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
+def test_precommit_changes_use_python_and_compatibility_proof() -> None:
     scope = classify_dependency_change([".pre-commit-config.yaml"], "")
 
     assert scope.precommit
     assert scope.compatibility
-    assert not scope.python
+    assert scope.python
+    assert scope.ruff_toolchain
+
+
+@pytest.mark.parametrize(
+    ("path", "diff"),
+    [
+        ("pyproject.toml", '-  "ruff==0.16.2"\n+  "ruff==0.16.3"'),
+        ("uv.lock", '-version = "0.16.2"\n+version = "0.16.3"\n name = "ruff"'),
+    ],
+)
+def test_ruff_lock_backed_changes_use_parity_proof(path: str, diff: str) -> None:
+    scope = classify_dependency_change([path], diff)
+
+    assert scope.ruff_toolchain
+    assert scope.compatibility
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:
@@ -543,10 +616,30 @@ def test_ruff_declarations_and_renovate_updates_stay_coupled() -> None:
         r"repo: https://github\.com/astral-sh/ruff-pre-commit\s+rev: v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
         precommit,
     )
-    rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff toolchain")
+    rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff and MegaLinter toolchain")
+    generic_group_index = next(
+        index
+        for index, candidate in enumerate(renovate["packageRules"])
+        if candidate.get("description") == "Group routine version updates by ecosystem on Friday"
+    )
+    integrity_group_index = next(
+        index
+        for index, candidate in enumerate(renovate["packageRules"])
+        if candidate.get("description") == "Group integrity updates by ecosystem on Friday"
+    )
+    toolchain_index = renovate["packageRules"].index(rule)
 
     assert dependency_match is not None
     assert hook_match is not None
     assert dependency_match.group("version") == hook_match.group("version")
-    assert rule["matchManagers"] == ["pep621", "pre-commit"]
-    assert rule["matchPackageNames"] == ["ruff", "astral-sh/ruff-pre-commit"]
+    assert generic_group_index < toolchain_index
+    assert integrity_group_index < toolchain_index
+    assert rule["matchManagers"] == ["pep621", "pre-commit", "custom.regex", "github-actions"]
+    assert rule["matchDatasources"] == ["pypi", "github-tags", "docker"]
+    assert rule["matchPackageNames"] == [
+        "ruff",
+        "astral-sh/ruff-pre-commit",
+        "ghcr.io/oxsecurity/megalinter",
+        "ghcr.io/oxsecurity/megalinter-cupcake",
+        "oxsecurity/megalinter",
+    ]
