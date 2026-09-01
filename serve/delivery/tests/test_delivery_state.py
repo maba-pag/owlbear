@@ -14,6 +14,10 @@ from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryChangeCompletion,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
+    DeliveryChangePublicationIdentity,
+    DeliveryChangeStage,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -52,6 +56,7 @@ from owlbear_delivery.delivery_application_loader import (
     _can_defer_remote_state_reconciliation,
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
+    _is_unpublished_acceptance_attention_successor,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -248,6 +253,71 @@ def test_loader_defers_active_remote_descendant_drift(tmp_path: Path) -> None:
         pytest.raises(_DeferredRemoteStateReconciliationError),
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+
+def test_loader_accepts_local_descendant_when_active_remote_branch_was_deleted(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-local-fallback"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    _commit_descendant(manager.show(change_id).worktree_path, "descendant.txt", "local descendant")
+
+    with pytest.raises(
+        DeliveryApplicationLoadError,
+        match="remote Change branch is missing for an active Delivery snapshot",
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+    with pytest.raises(
+        DeliveryApplicationLoadError,
+        match="remote Change branch is missing for an active Delivery snapshot",
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository, allow_local_branch=True)
+
+    assert _fetch_snapshot_change_head(
+        snapshot,
+        _startup_config(),
+        repository,
+        allow_local_branch=True,
+        allow_local_descendant=True,
+    ) == (
+        snapshot.change_head,
+        False,
+    )
+
+
+def test_loader_accepts_unpublished_local_acceptance_attention(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-local-attention"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    attention = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION,
+        change_id=change_id,
+        entered_from=DeliveryChangeStage.AWAITING_MERGE,
+        recorded_at=datetime(2026, 8, 23, tzinfo=UTC),
+        diagnostics=("provider acceptance evidence does not match authority",),
+    )
+    local_frontier = snapshot.frontier.model_copy(
+        update={
+            "change_disposition": attention,
+            "change_disposition_publication": DeliveryChangePublicationIdentity(
+                change_id=change_id,
+                repository="example/project",
+                number=7,
+                node_id="PR_node_7",
+                head_sha=snapshot.change_head,
+            ),
+        }
+    )
+
+    assert _is_unpublished_acceptance_attention_successor(snapshot.frontier, local_frontier)
+    assert not _is_unpublished_acceptance_attention_successor(
+        snapshot.frontier,
+        local_frontier.model_copy(update={"published_head": "a" * 40}),
+    )
 
 
 def test_loader_does_not_defer_completed_remote_descendant_drift(tmp_path: Path) -> None:

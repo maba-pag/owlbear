@@ -1963,9 +1963,11 @@ class PortfolioApplication:
                 code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
                 detail=str(exc) or "Change state changed during reconciliation.",
             )
-        if outcome is not None:
-            return outcome
-        return self._reconcile_merged_acceptance(change_id, runtime)
+        result = outcome if outcome is not None else self._reconcile_merged_acceptance(change_id, runtime)
+        disposition = runtime.change_disposition()
+        if disposition is not None:
+            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{disposition.disposition_id}")
+        return result
 
     def _reconcile_awaiting_acceptance_locked(
         self,

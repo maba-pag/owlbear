@@ -2150,6 +2150,24 @@ def test_mark_change_ready_publishes_ready_authority_to_delivery_state(tmp_path:
     assert publication["runtime"].ready_receipt() == ready
 
 
+def test_reconcile_acceptance_publishes_new_attention_authority(tmp_path: Path) -> None:
+    application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
+    state["pull_request"] = state["pull_request"].model_copy(update={"state": "closed"})
+
+    outcomes = application.reconcile_awaiting_acceptance(("change-a",))
+
+    assert outcomes[0].status.value == "attention"
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    state_publisher.publish.assert_called_once()
+    publication = state_publisher.publish.call_args.kwargs
+    assert publication["change_id"] == "change-a"
+    assert publication["operation_id"] == f"acceptance-attention-{disposition.disposition_id}"
+    assert publication["runtime"] is runtime
+
+
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
     application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,

@@ -30,6 +30,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     require_startup_contracts,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
     DeliveryRuntimeMigrationError,
@@ -426,8 +427,7 @@ def _validate_local_snapshot(
     package_store: DesignPackageStore,
     coordinator: PortfolioCoordinator,
 ) -> None:
-    """Reject local Delivery state that does not exactly match its remote checkpoint."""
-    _fetch_snapshot_change_head(snapshot, config, paths.repository_root)
+    """Reject local Delivery state outside exact or explicitly recoverable authority."""
     try:
         package = package_store.read_verified(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
@@ -452,11 +452,21 @@ def _validate_local_snapshot(
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
-    for name, content in expected.items():
-        _validate_local_snapshot_artifact(relative_root / name, name, content, snapshot)
-    frontier = DeliveryFrontier.model_validate_json((relative_root / "frontier.json").read_bytes())
-    if frontier != snapshot.frontier:
-        _bootstrap_failure("local Delivery frontier differs from its remote snapshot")
+    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    local_attention_successor = _is_unpublished_acceptance_attention_successor(snapshot.frontier, frontier)
+    _fetch_snapshot_change_head(
+        snapshot,
+        config,
+        paths.repository_root,
+        allow_local_branch=True,
+        allow_local_descendant=local_attention_successor,
+    )
+    if not (
+        frontier_bytes in {expected["frontier.json"], _legacy_frontier_bytes(snapshot.frontier)}
+        or local_attention_successor
+    ):
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
+    _validate_local_snapshot_artifacts(relative_root, expected)
     try:
         completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
     except RuntimeError as exc:
@@ -465,19 +475,59 @@ def _validate_local_snapshot(
         _bootstrap_failure("local completion evidence differs from its remote snapshot")
 
 
+def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
+    """Read and validate the local frontier needed for startup reconciliation."""
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
+    try:
+        content = path.read_bytes()
+        return content, DeliveryFrontier.model_validate_json(content)
+    except (OSError, ValueError) as exc:
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
+
+
+def _validate_local_snapshot_artifacts(
+    relative_root: Path,
+    expected: dict[str, bytes],
+) -> None:
+    """Validate the non-frontier local artifacts against the remote snapshot."""
+    for name in ("contract.json", "admission.json"):
+        _validate_local_snapshot_artifact(relative_root / name, name, expected[name])
+
+
+def _is_unpublished_acceptance_attention_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local acceptance attention captured after the last state snapshot."""
+    disposition = local_frontier.change_disposition
+    if (
+        snapshot_frontier.change_disposition is not None
+        or disposition is None
+        or disposition.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+        or local_frontier.change_disposition_resolution is not None
+        or local_frontier.ready is not None
+    ):
+        return False
+    attention_slots = {
+        "change_disposition": None,
+        "change_disposition_publication": None,
+        "change_disposition_resolution": None,
+        "ready": None,
+    }
+    return snapshot_frontier.model_copy(update=attention_slots) == local_frontier.model_copy(update=attention_slots)
+
+
 def _validate_local_snapshot_artifact(
     path: Path,
     name: str,
     expected: bytes,
-    snapshot: DeliveryStateSnapshot,
 ) -> None:
-    """Require one local runtime artifact to match current or known legacy bytes."""
+    """Require one local runtime artifact to match its remote snapshot bytes."""
     if path.is_symlink() or not path.is_file():
         _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
     actual = path.read_bytes()
     if actual == expected:
-        return
-    if name == "frontier.json" and actual == _legacy_frontier_bytes(snapshot.frontier):
         return
     _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
 
@@ -486,27 +536,84 @@ def _fetch_snapshot_change_head(
     snapshot: DeliveryStateSnapshot,
     config: DeliveryStartupConfig,
     repository: Path,
+    *,
+    allow_local_branch: bool = False,
+    allow_local_descendant: bool = False,
 ) -> tuple[str, bool]:
     """Fetch the remote Change branch or use the configured target for completion."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
-        if remote_branch != snapshot.change_head:
-            if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
-                raise _DeferredRemoteStateReconciliationError
-            _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
-        result = _run_loader_git(
-            repository,
-            "fetch",
-            "--no-tags",
-            "--no-write-fetch-head",
-            "--refmap=",
-            config.remote,
-            f"refs/heads/{snapshot.branch}",
-            check=False,
-        )
-        if result.returncode != 0:
-            _bootstrap_failure("remote Change branch could not be fetched")
-        return snapshot.change_head, True
+        return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
+    local_head = _local_snapshot_change_head(
+        snapshot,
+        repository,
+        allow_local_branch=allow_local_branch,
+        allow_local_descendant=allow_local_descendant,
+    )
+    if local_head is not None:
+        return local_head, False
+    return _fetch_completed_snapshot_change_head(snapshot, config, repository)
+
+
+def _fetch_remote_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+    remote_branch: str,
+) -> tuple[str, bool]:
+    """Validate and fetch one remote Change branch at its snapshot head."""
+    if remote_branch != snapshot.change_head:
+        if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
+            raise _DeferredRemoteStateReconciliationError
+        _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
+    result = _run_loader_git(
+        repository,
+        "fetch",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--refmap=",
+        config.remote,
+        f"refs/heads/{snapshot.branch}",
+        check=False,
+    )
+    if result.returncode != 0:
+        _bootstrap_failure("remote Change branch could not be fetched")
+    return snapshot.change_head, True
+
+
+def _local_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    *,
+    allow_local_branch: bool,
+    allow_local_descendant: bool,
+) -> str | None:
+    """Return the snapshot head when a retained local branch is safe to use."""
+    if not allow_local_branch or snapshot.frontier.change_completion is not None:
+        return None
+    local_branch = _loader_git_output(
+        repository,
+        "rev-parse",
+        "--verify",
+        f"refs/heads/{snapshot.branch}^{{commit}}",
+    )
+    if local_branch == snapshot.change_head:
+        return snapshot.change_head
+    if (
+        allow_local_descendant
+        and local_branch is not None
+        and _loader_git_is_ancestor(repository, snapshot.change_head, local_branch)
+    ):
+        return snapshot.change_head
+    return None
+
+
+def _fetch_completed_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+) -> tuple[str, bool]:
+    """Validate a completed snapshot against the configured target branch."""
     if snapshot.frontier.change_completion is None:
         _bootstrap_failure("remote Change branch is missing for an active Delivery snapshot")
     target_ref = f"refs/remotes/{config.remote}/{config.target_branch}"
