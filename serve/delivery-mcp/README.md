@@ -33,7 +33,7 @@ The server exposes these operation groups:
 | --- | --- |
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
 | Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
-| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `recover_blocked_implementation`, `transition_delivery`, `recover_claim` |
+| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `recover_blocked_implementation`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
@@ -138,6 +138,12 @@ Implementation state; normal blocked Implementations do not use it. Before invok
 user that the operation preserves the candidate commit under a recovery ref and re-anchors the
 managed worktree at the reviewed head, but neither resolves the block nor admits the candidate work.
 Invoke it only after the user explicitly confirms those effects.
+
+`prepare_review_repair` verifies an open, unmerged Change pull request at its exact finalized head,
+returns it to draft when necessary, invalidates the old finalization and ready authority, and
+publishes the repair-ready state. It is the Delivery boundary for external review repair; review
+threads and reviewer decisions remain outside the product and are handled by the
+`/address-pr-feedback` workflow through the `gh` CLI.
 
 Delivery has no environment configuration. The server must be launched with the consuming workspace
 as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or

@@ -453,6 +453,7 @@ def _requests() -> dict[str, dict[str, object]]:
                 "exact_head": COMMIT,
             }
         },
+        "prepare_review_repair": change,
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
         "sync_change_with_target": {
@@ -590,6 +591,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
+        "prepare_review_repair": (CHANGE,),
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]

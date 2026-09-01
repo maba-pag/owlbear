@@ -27,7 +27,7 @@ The main public areas are:
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
-| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
+| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
 

@@ -132,6 +132,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_delivery_result",
     "finalize_change",
     "mark_change_ready",
+    "prepare_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -351,6 +352,15 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.mark_change_ready(params.request.change_id, params.request),
+        )
+
+    async def prepare_review_repair(self, request: ChangeRequest) -> dict[str, object]:
+        """Return one open Change pull request to draft before external review repair."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.prepare_review_repair(params.change_id),
         )
 
     async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:

@@ -2403,6 +2403,87 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
     assert runtime.completion_receipt() is not None
 
 
+def test_prepare_review_repair_returns_ready_pull_request_to_draft(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+
+    invalidation = application.prepare_review_repair("change-a")
+
+    assert invalidation.reason == "review-repair"
+    assert invalidation.expected_head == invalidation.observed_head == exact_head
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_called_once()
+    assert provider.set_pull_request_draft_state.call_args.args[0].draft is True
+    assert application.prepare_review_repair("change-a") == invalidation
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+def test_prepare_review_repair_accepts_pull_request_already_in_draft(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+
+    invalidation = application.prepare_review_repair("change-a")
+
+    assert invalidation.expected_head == invalidation.observed_head == exact_head
+    assert runtime.finalization() is None
+    assert state["pull_request"].draft is True
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_prepare_review_repair_rejects_merged_pull_request(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    provider.set_pull_request_draft_state.reset_mock()
+
+    with pytest.raises(PortfolioApplicationError, match="open pull request at the finalized head"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_prepare_review_repair_rejects_provider_head_mismatch(tmp_path: Path) -> None:
+    application, runtime, _provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
+
+    with pytest.raises(PortfolioApplicationError, match="open pull request at the finalized head"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.finalization().exact_head == exact_head
+    assert runtime.ready_receipt() is not None
+
+
+def test_prepare_review_repair_preserves_authority_when_draft_transition_fails(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.set_pull_request_draft_state.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "return_to_draft",
+        "GitHub is unavailable",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PublicationProviderError, match="GitHub is unavailable"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+
+
 def test_reconcile_awaiting_acceptance_repairs_open_head_drift(tmp_path: Path) -> None:
     application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     provider.set_pull_request_draft_state.reset_mock()
@@ -5122,6 +5203,26 @@ def test_admitted_design_revision_is_rejected_without_package_mutation(tmp_path:
     assert application.read_design_session("change-a") == current
 
 
+def test_returned_design_revision_is_allowed_for_quiescent_change(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.DESIGN},
+    )
+    runtime = runtimes["change-a"]
+    current = application.read_design_session("change-a")
+
+    revised = application.revise_design_session(
+        "change-a",
+        current.package_id,
+        b"changed intent\n",
+        b"changed design\n",
+    )
+
+    assert revised.package_id != current.package_id
+    assert revised.intent_bytes == b"changed intent\n"
+    assert runtime.change_stage() is DeliveryChangeStage.DESIGN
+
+
 def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
     intent = b"""# Composed Delivery
@@ -5284,6 +5385,9 @@ dependencies: []
     assert "Promised result: Publish the stable package before workers run." in pull_request.generated_summary
     assert "Outcomes complete: 0 of 1" in pull_request.generated_summary
     assert "admitted Design package" in pull_request.generated_summary
+    assert "Do not manually change this PR's draft/ready state or push to its branch." in pull_request.generated_summary
+    assert "/address-pr-feedback change-a" in pull_request.generated_summary
+    assert "merge this pull request in GitHub" in pull_request.generated_summary
     package_paths = {
         ".owlbear/delivery/packages/change-a/authority.json",
         ".owlbear/delivery/packages/change-a/design.md",

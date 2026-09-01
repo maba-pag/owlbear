@@ -286,6 +286,10 @@ def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoin
     bindings = {binding.outcome_id: binding for binding in runtime.bindings()}
     completed_outcomes = sum(binding.stage == DeliveryStage.COMPLETED for binding in bindings.values())
     lines = [
+        "> **OwlBear-managed pull request:**",
+        "> Do not manually change this PR's draft/ready state or push to its branch.",
+        "> Use Delivery controls so provider state and Delivery evidence stay synchronized.",
+        "",
         "## Goal",
         "",
         f"> {_summary_text(goal, _MAX_PR_GOAL_LENGTH)}",
@@ -341,6 +345,18 @@ def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoin
     if supersedes_publication_id is not None:
         lines.append(f"- Publication supersedes provider publication `{supersedes_publication_id}`")
     lines.extend(_automation_summary(automation_paths))
+    lines.extend(
+        (
+            "",
+            "## Review And Merge",
+            "",
+            (f"- To evaluate and address reviewer feedback, run `/address-pr-feedback {runtime.contract.change_id}`."),
+            (
+                "- When satisfied with the review, merge this pull request in GitHub; "
+                "Delivery records acceptance afterward."
+            ),
+        )
+    )
     return "\n".join(lines)
 
 
@@ -1163,6 +1179,56 @@ class PortfolioApplication:
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
             return receipt
 
+    def adopt_external_head_after_acceptance_attention(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+        expected_head: str,
+        adopted_head: str,
+        operation_id: str,
+    ) -> ChangeExternalHeadAdoptionReceipt:
+        """Adopt one moved open PR head after exact acceptance-attention validation."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("acceptance head adoption requires a publication provider")
+        runtime = self._runtime(change_id, for_mutation=True)
+        request = AdoptExternalHead(
+            change_id=change_id,
+            expected_head=expected_head,
+            adopted_head=adopted_head,
+            operation_id=operation_id,
+        )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            disposition = runtime.change_disposition()
+            if (
+                disposition is None
+                or disposition.disposition_id != expected_disposition_id
+                or disposition.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+                or disposition.acceptance_reason != DeliveryAcceptanceAttentionReason.HEAD_MOVED
+            ):
+                self._fail("acceptance head adoption requires matching head-moved attention")
+            publication = runtime.change_disposition_publication()
+            if publication is None or publication.head_sha != adopted_head:
+                self._fail("acceptance head adoption does not match observed pull-request authority")
+            coordination = self._workspace_manager.show(change_id)
+            if coordination.last_reviewed_commit != expected_head:
+                self._fail("acceptance head adoption expected head differs from the reviewed boundary")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("acceptance head adoption cannot overlap an active Delivery claim")
+            observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+            if observation is None or observation.snapshot.state != "open" or observation.snapshot.merged:
+                self._fail("acceptance head adoption requires an open unmerged pull request")
+            if observation.snapshot.head_sha != adopted_head:
+                self._fail("acceptance head adoption pull-request head changed")
+            try:
+                receipt = self._workspace_manager.adopt_external_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("external Change head could not be adopted", exc)
+            resolved_at = _timestamp(self._clock())
+            runtime.resolve_change_disposition(expected_disposition_id, resolved_at)
+            runtime.record_external_head_adoption(receipt, resolved_at)
+            return receipt
+
     def promote_external_head(
         self,
         change_id: str,
@@ -1805,6 +1871,68 @@ class PortfolioApplication:
                 exact_head=finalization.exact_head,
             ),
         )
+
+    def prepare_review_repair(self, change_id: str) -> DeliveryFinalizationInvalidationReceipt:
+        """Return an open Change pull request to draft before external review repair."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "review repair requires a publication provider"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id, for_mutation=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            existing = runtime.finalization_invalidation()
+            if existing is not None and existing.reason == "review-repair":
+                return existing
+            finalization = runtime.finalization()
+            if finalization is None:
+                message = "review repair requires current finalization authority"
+                raise PortfolioApplicationError(message)
+            if runtime.merged_pull_request_latch() is not None:
+                message = "merged Change cannot be reopened for review repair"
+                raise PortfolioApplicationError(message)
+            ready = runtime.ready_receipt()
+            publication = runtime.publication_history()
+            if ready is not None and (
+                ready.finalization_id != finalization.finalization_id or ready.head_sha != finalization.exact_head
+            ):
+                message = "review repair ready authority does not match finalization"
+                raise PortfolioApplicationError(message)
+            identity = ready if ready is not None else None if publication is None else publication.current
+            if identity is None:
+                message = "review repair requires current publication identity"
+                raise PortfolioApplicationError(message)
+            observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+            if observation is None:
+                message = "review repair requires a bound pull request"
+                raise PortfolioApplicationError(message)
+            snapshot = observation.snapshot
+            if (
+                snapshot.repository != publisher.repository
+                or snapshot.repository != identity.repository
+                or snapshot.number != identity.number
+                or snapshot.node_id != identity.node_id
+                or snapshot.base_branch != publisher.target_branch
+                or snapshot.head_sha != finalization.exact_head
+                or snapshot.state != "open"
+                or snapshot.merged
+            ):
+                message = "review repair requires an open pull request at the finalized head"
+                raise PortfolioApplicationError(message)
+            if not snapshot.draft:
+                publisher.return_to_draft(
+                    ReturnChangePullRequestToDraft(
+                        change_id=change_id,
+                        operation_id=f"review-repair-draft-{finalization.finalization_id}",
+                        finalization_id=finalization.finalization_id,
+                        exact_head=finalization.exact_head,
+                    )
+                )
+            invalidation = runtime.prepare_review_repair(
+                finalization.finalization_id,
+                _timestamp(self._clock()),
+            )
+            self._publish_delivery_state(change_id, runtime, f"review-repair-{invalidation.invalidation_id}")
+            return invalidation
 
     def resolve_change_disposition(
         self,
@@ -2560,9 +2688,22 @@ class PortfolioApplication:
     ) -> VerifiedDesignPackage:
         """Replace authored Design bytes for one exact package identity."""
         self._reconcile_runtimes()
-        if change_id in self._runtimes:
+        runtime = self._runtimes.get(change_id)
+        if runtime is not None and not self._admitted_design_revision_allowed(runtime):
             self._fail("admitted Delivery Changes cannot revise their Design package")
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
+
+    @staticmethod
+    def _admitted_design_revision_allowed(runtime: DeliveryRuntime) -> bool:
+        """Allow revision only for a quiescent Change with an explicit Design return."""
+        return (
+            runtime.change_stage() is DeliveryChangeStage.DESIGN
+            and any(binding.stage is DeliveryStage.DESIGN for binding in runtime.bindings())
+            and not runtime.active_claims()
+            and runtime.change_disposition() is None
+            and runtime.integration_repair_claim() is None
+            and runtime.finalization() is None
+        )
 
     def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint one verified active package without touching product refs."""

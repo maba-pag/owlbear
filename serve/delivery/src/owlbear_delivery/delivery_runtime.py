@@ -524,7 +524,7 @@ class DeliveryFinalizationInvalidation(_DeliveryModel):
     finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reason: Literal["head-drift", "target-sync-conflict"] = "head-drift"
+    reason: Literal["head-drift", "target-sync-conflict", "review-repair"] = "head-drift"
     invalidated_at: datetime
 
 
@@ -545,7 +545,7 @@ class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
-        if self.expected_head == self.observed_head:
+        if self.expected_head == self.observed_head and self.reason != "review-repair":
             message = "Delivery finalization invalidation requires head drift"
             raise ValueError(message)
         if self.invalidated_at.tzinfo is None:
@@ -1387,6 +1387,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "latch_merged_pull_request",
         "complete_change",
         "finalize_change",
+        "prepare_review_repair",
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
@@ -2321,6 +2322,49 @@ class DeliveryRuntime:
                 finalization_id=finalization.finalization_id,
                 expected_head=finalization.exact_head,
                 observed_head=observed_head,
+                invalidated_at=invalidated_at,
+            )
+        )
+        updated = frontier.model_copy(
+            update={
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "ready": None,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return invalidation
+
+    def prepare_review_repair(
+        self,
+        expected_finalization_id: str,
+        invalidated_at: datetime,
+    ) -> DeliveryFinalizationInvalidationReceipt:
+        """Invalidate current finalization before repairing external review feedback."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "prepare_review_repair")
+        finalization = frontier.finalization
+        existing = frontier.finalization_invalidation
+        if finalization is None:
+            if (
+                existing is not None
+                and existing.reason == "review-repair"
+                and existing.finalization_id == expected_finalization_id
+            ):
+                return existing
+            _conflict("review repair requires current finalization authority")
+        if finalization.finalization_id != expected_finalization_id:
+            _conflict("review repair finalization identity is stale")
+        if frontier.merged_pull_request_latch is not None:
+            _conflict("merged Change cannot be reopened for review repair")
+        invalidation = DeliveryFinalizationInvalidationReceipt.create(
+            DeliveryFinalizationInvalidation(
+                change_id=self._contract.change_id,
+                finalization_id=finalization.finalization_id,
+                expected_head=finalization.exact_head,
+                observed_head=finalization.exact_head,
+                reason="review-repair",
                 invalidated_at=invalidated_at,
             )
         )

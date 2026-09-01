@@ -67,6 +67,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
+| `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; evaluates external review threads with `gh`, repairs managed Change work, and hands off to finalization |
 | `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |

@@ -601,6 +601,33 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
 
 
+def test_review_repair_invalidates_current_finalization_and_replays(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, "3" * 40))
+
+    invalidation = runtime.prepare_review_repair(
+        finalization.finalization_id,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+    )
+
+    assert invalidation.reason == "review-repair"
+    assert invalidation.expected_head == invalidation.observed_head == "3" * 40
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert runtime.finalization_invalidation() == invalidation
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+    assert runtime.prepare_review_repair(finalization.finalization_id, datetime(2026, 8, 11, 17, tzinfo=UTC)) == (
+        invalidation
+    )
+
+
 def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
     tmp_path: Path,
 ) -> None:

@@ -70,6 +70,7 @@ DELIVERY_TOOLS = {
     "publish_delivery_result",
     "finalize_change",
     "mark_change_ready",
+    "prepare_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -344,6 +345,18 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert application.calls == ["list_work_items"]
 
 
+@pytest.mark.asyncio
+async def test_registered_review_repair_tool_invokes_strict_adapter_once() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool("prepare_review_repair", {"request": {"change_id": "change-a"}})
+
+    assert result.structured_content == {"operation": "prepare_review_repair"}
+    assert application.calls == ["prepare_review_repair"]
+
+
 def _published_result_payload() -> dict[str, object]:
     completed_commit = "c" * 40
     observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
@@ -441,6 +454,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     resolution_schema = tools["resolve_change_disposition"].input_schema
     resolution_request = resolution_schema["$defs"]["ResolveChangeDispositionParams"]
     assert set(resolution_request["properties"]) == {"change_id", "expected_disposition_id"}
+    assert set(tools["prepare_review_repair"].input_schema["$defs"]["ChangeParams"]["properties"]) == {"change_id"}
     supersession_schema = tools["supersede_publication"].input_schema
     supersession_request = supersession_schema["$defs"]["SupersedePublicationParams"]
     assert set(supersession_request["properties"]) == {
