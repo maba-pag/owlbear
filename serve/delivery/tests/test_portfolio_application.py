@@ -610,6 +610,36 @@ def _portfolio(
     return application, runtimes, coordinator, state_root
 
 
+def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_root = repository / ".owlbear/delivery/packages"
+    worktree_root = repository / ".owlbear/delivery/worktrees"
+    coordinator = PortfolioCoordinator(runtime_root)
+    manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
+    store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
+    intent = b"loader-composed intent\n"
+    design = b"loader-composed design\n"
+    contract = _contract("change-a", intent, design)
+    package = store.create("change-a", intent, design)
+    store.publish_contract("change-a", package.package_id, _canonical(contract), lambda *_content: None)
+    coordination = manager.ensure("change-a")
+    runtime = _runtime(
+        runtime_root,
+        contract,
+        manager,
+        DeliveryStage.COMPLETED,
+        coordination.last_reviewed_commit,
+    )
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    change_root = runtime_root / "changes" / "change-a"
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "admission.json").write_bytes(
+        _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
+    )
+    return repository, runtime_root
+
+
 def _reopen_portfolio(
     tmp_path: Path,
     state_root: Path,
@@ -4387,6 +4417,38 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
+
+
+def test_loader_composed_finalization_admits_descendant_and_replays_after_reload(tmp_path: Path) -> None:
+    repository, runtime_root = _seed_loader_composed_completed_change(tmp_path)
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=GitHubCliPublicationProvider(),
+    )
+    coordination = PortfolioCoordinator(runtime_root).show("change-a")
+    exact_head = _commit_local_descendant(coordination, "loader-finalization.txt")
+
+    context = application.show_finalization_context("change-a")
+
+    assert context.ready_for_finalization is True
+    assert context.change_head == exact_head
+    finalization_request = _finalization_request("change-a", exact_head)
+    finalization = application.finalize_change("change-a", finalization_request)
+    assert finalization.exact_head == exact_head
+    assert PortfolioCoordinator(runtime_root).show("change-a").last_reviewed_commit == exact_head
+
+    reloaded = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=GitHubCliPublicationProvider(),
+    )
+    reloaded_context = reloaded.show_finalization_context("change-a")
+
+    assert reloaded_context.finalization_id == finalization.finalization_id
+    assert reloaded_context.finalized_head == exact_head
+    assert reloaded_context.reviewed_change_head == exact_head
+    assert reloaded.finalize_change("change-a", finalization_request) == finalization
 
 
 def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Path) -> None:
