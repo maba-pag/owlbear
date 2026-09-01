@@ -29,6 +29,7 @@ name: Dependency verification
       - serve/cockpit/web/package.json
       - serve/cockpit/web/package-lock.json
       - serve/tools/src/owlbear_tools/dependency_ci.py
+      - serve/tools/src/owlbear_tools/megalinter.py
       - tests/test_dependency_verification_workflow.py
       - uv.lock
 
@@ -54,6 +55,7 @@ jobs:
       pds: ${{ steps.scope.outputs.pds }}
       precommit: ${{ steps.scope.outputs.precommit }}
       python: ${{ steps.scope.outputs.python }}
+      proof_tooling: ${{ steps.proof_tooling.outputs.proof_tooling }}
       ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}
       renovate: ${{ steps.scope.outputs.renovate }}
       root_node: ${{ steps.scope.outputs.root_node }}
@@ -73,13 +75,34 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
           git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
           git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
           python3 serve/tools/src/owlbear_tools/dependency_ci.py \
             --paths-file "$RUNNER_TEMP/dependency-paths" \
             --diff-file "$RUNNER_TEMP/dependency.diff" \
+            --base-ref "$MERGE_BASE" \
+            --head-ref "$HEAD_SHA" \
+            --repository-root "$GITHUB_WORKSPACE" \
             --github-output "$GITHUB_OUTPUT" \
             --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Protect dependency proof tooling
+        id: proof_tooling
+        run: |
+          proof_tooling=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/scripts/check_ruff_toolchain.py|\
+              .github/workflows/dependency-verification.yml|\
+              serve/tools/src/owlbear_tools/dependency_ci.py|\
+              serve/tools/src/owlbear_tools/megalinter.py)
+                proof_tooling=true
+                break
+                ;;
+            esac
+          done < "$RUNNER_TEMP/dependency-paths"
+          echo "proof_tooling=$proof_tooling" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js for runtime declaration
         if: steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true'
@@ -214,7 +237,9 @@ jobs:
   compatibility:
     name: Prove dependency tooling compatibility
     needs: classify
-    if: needs.classify.outputs.compatibility == 'true'
+    if: >-
+      needs.classify.outputs.compatibility == 'true' ||
+      needs.classify.outputs.proof_tooling == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -234,6 +259,10 @@ jobs:
 
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Exercise dependency proof tooling
+        if: needs.classify.outputs.proof_tooling == 'true'
+        run: uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py
 
       - name: Verify Ruff toolchain parity
         if: needs.classify.outputs.ruff_toolchain == 'true'
@@ -282,7 +311,9 @@ jobs:
         env:
           CLASSIFY: ${{ needs.classify.result }}
           COMPATIBILITY: ${{ needs.compatibility.result }}
-          COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
+          COMPATIBILITY_EXPECTED: >-
+            ${{ needs.classify.outputs.compatibility == 'true' ||
+            needs.classify.outputs.proof_tooling == 'true' }}
           NODE: ${{ needs.proof-node.result }}
           NODE_EXPECTED: >-
             ${{ needs.classify.outputs.pds == 'true' ||

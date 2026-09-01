@@ -113,6 +113,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "serve/cockpit/web/package.json",
         "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "serve/tools/src/owlbear_tools/megalinter.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
@@ -185,6 +186,35 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
             "run": "uv run python .github/scripts/check_ruff_toolchain.py",
         }
     ]
+
+
+def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    classify = _job(workflow, "classify")
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert classify["outputs"]["proof_tooling"] == "${{ steps.proof_tooling.outputs.proof_tooling }}"
+    assert 'MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"' in text
+    assert '--base-ref "$MERGE_BASE"' in text
+    assert '--head-ref "$HEAD_SHA"' in text
+    assert compatibility["if"] == (
+        "needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true'"
+    )
+    proof_step_name = "Exercise dependency proof tooling"
+    steps = compatibility["steps"]
+    proof_steps = [step for step in steps if step.get("name") == proof_step_name]
+    assert proof_steps == [
+        {
+            "name": "Exercise dependency proof tooling",
+            "if": "needs.classify.outputs.proof_tooling == 'true'",
+            "run": (
+                "uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py"
+            ),
+        }
+    ]
+    assert "dependency-verification.yml|" in text
+    assert "serve/tools/src/owlbear_tools/megalinter.py)" in text
 
 
 def test_uv_runtime_check_precedes_uv_commands() -> None:
@@ -315,6 +345,11 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     assert "extraction" not in gate["needs"]
     assert "prepare-fixes" not in gate["needs"]
 
+    gate_env = gate["steps"][0]["env"]
+    assert gate_env["COMPATIBILITY_EXPECTED"] == (
+        "${{ needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true' }}"
+    )
+
 
 def test_dependency_workflow_actions_are_pinned() -> None:
     for line in VERIFY_PATH.read_text(encoding="utf-8").splitlines():
@@ -364,27 +399,110 @@ def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
     assert "frontend_runtime" not in frontend.github_outputs()
 
 
-def test_precommit_changes_use_python_and_compatibility_proof() -> None:
+def test_unrelated_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
     scope = classify_dependency_change([".pre-commit-config.yaml"], "")
 
     assert scope.precommit
     assert scope.compatibility
-    assert scope.python
-    assert scope.ruff_toolchain
+    assert not scope.python
+    assert not scope.ruff_toolchain
 
 
 @pytest.mark.parametrize(
-    ("path", "diff"),
+    ("path", "before", "after", "ruff_toolchain"),
     [
-        ("pyproject.toml", '-  "ruff==0.16.2"\n+  "ruff==0.16.3"'),
-        ("uv.lock", '-version = "0.16.2"\n+version = "0.16.3"\n name = "ruff"'),
+        (
+            "pyproject.toml",
+            '[project]\ndependencies = ["ruff==0.16.2"]\n',
+            '[project]\ndependencies = ["ruff==0.16.3"]\n',
+            True,
+        ),
+        (
+            "pyproject.toml",
+            '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.3"]\n',
+            '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.4"]\n',
+            False,
+        ),
+        (
+            "uv.lock",
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n',
+            '[[package]]\nname = "ruff"\nversion = "0.16.3"\n',
+            True,
+        ),
+        (
+            "uv.lock",
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n\n[[package]]\nname = "pytest"\nversion = "9.0.3"\n',
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n\n[[package]]\nname = "pytest"\nversion = "9.0.4"\n',
+            False,
+        ),
+        (
+            ".pre-commit-config.yaml",
+            "- repo: https://github.com/astral-sh/ruff-pre-commit\n  rev: v0.16.2\n  hooks: []\n",
+            "- repo: https://github.com/astral-sh/ruff-pre-commit\n  rev: v0.16.3\n  hooks: []\n",
+            True,
+        ),
+        (
+            ".pre-commit-config.yaml",
+            (
+                "- repo: https://github.com/astral-sh/ruff-pre-commit\n"
+                "  rev: v0.16.2\n"
+                "  hooks: []\n"
+                "- repo: https://github.com/rhysd/actionlint\n"
+                "  rev: v1.7.12\n"
+            ),
+            (
+                "- repo: https://github.com/astral-sh/ruff-pre-commit\n"
+                "  rev: v0.16.2\n"
+                "  hooks: []\n"
+                "- repo: https://github.com/rhysd/actionlint\n"
+                "  rev: v1.7.13\n"
+            ),
+            False,
+        ),
+        (
+            ".mega-linter.yml",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.1.0\nENABLE_LINTERS: []\n",
+            True,
+        ),
+        (
+            ".mega-linter.yml",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: [PYTHON_RUFF]\n",
+            False,
+        ),
+        (
+            ".github/workflows/megalinter.yml",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@oldsha  # v10.0.0\n",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@newsha  # v10.0.0\n",
+            True,
+        ),
+        (
+            ".github/workflows/megalinter.yml",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 15\n",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 20\n",
+            False,
+        ),
     ],
 )
-def test_ruff_lock_backed_changes_use_parity_proof(path: str, diff: str) -> None:
-    scope = classify_dependency_change([path], diff)
+def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
+    path: str,
+    before: str,
+    after: str,
+    *,
+    ruff_toolchain: bool,
+) -> None:
+    scope = classify_dependency_change(
+        [path],
+        "",
+        before_files={path: before},
+        after_files={path: after},
+    )
 
-    assert scope.ruff_toolchain
-    assert scope.compatibility
+    assert scope.ruff_toolchain is ruff_toolchain
+    assert scope.compatibility is (
+        ruff_toolchain or path in {".pre-commit-config.yaml", ".mega-linter.yml", ".github/workflows/megalinter.yml"}
+    )
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:

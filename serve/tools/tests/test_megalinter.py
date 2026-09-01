@@ -35,6 +35,7 @@ def test_megalinter_image_loads_from_workspace_config(tmp_path: Path) -> None:
 
     assert image.repository == "ghcr.io/oxsecurity/megalinter-cupcake"
     assert image.tag == "v10.0.0"
+    assert image.flavor == "cupcake"
 
 
 def test_megalinter_image_matches_workspace_config() -> None:
@@ -66,6 +67,7 @@ def test_megalinter_image_uses_base_repository_for_all_flavor(tmp_path: Path) ->
     image = load_megalinter_image(config)
 
     assert image.reference == "ghcr.io/oxsecurity/megalinter:v10.0.0"
+    assert image.flavor == "all"
 
 
 @pytest.mark.parametrize(

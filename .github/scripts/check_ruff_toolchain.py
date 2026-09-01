@@ -11,11 +11,11 @@ from typing import NoReturn
 
 import yaml
 
+from owlbear_tools.megalinter import load_megalinter_image
+
 _VERSION_PATTERN = re.compile(r"^(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
 _RUFF_REQUIREMENT_PATTERN = re.compile(r"^ruff==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
-_IMAGE_COMPONENT_PATTERN = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 _RUFF_PRE_COMMIT_REPOSITORY = "https://github.com/astral-sh/ruff-pre-commit"
-_MEGA_LINTER_REPOSITORY = "ghcr.io/oxsecurity/megalinter"
 _ACTION_PATTERN = re.compile(
     r"uses:\s*oxsecurity/megalinter(?:/flavors/(?P<flavor>[a-z0-9-]+))?@[^\s]+\s+#\s*"
     r"v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
@@ -88,17 +88,6 @@ def _read_pre_commit_ruff_version(root: Path) -> str:
     return _normalise_version(matches[0].get("rev"), f"{path} Ruff pre-commit revision")
 
 
-def _read_megalinter_image(root: Path) -> tuple[str, str]:
-    path = root / ".mega-linter.yml"
-    document = _load_yaml_mapping(path)
-    flavor = document.get("MEGALINTER_FLAVOR", "all")
-    if not isinstance(flavor, str) or _IMAGE_COMPONENT_PATTERN.fullmatch(flavor) is None:
-        _raise_value_error(f"{path} has an invalid MEGALINTER_FLAVOR")
-    version = _normalise_version(document.get("MEGALINTER_VERSION"), f"{path} MEGALINTER_VERSION")
-    repository = _MEGA_LINTER_REPOSITORY if flavor == "all" else f"{_MEGA_LINTER_REPOSITORY}-{flavor}"
-    return flavor, f"{repository}:v{version}"
-
-
 def _read_megalinter_action_version(root: Path) -> tuple[str, str]:
     path = root / ".github/workflows/megalinter.yml"
     match = _ACTION_PATTERN.search(path.read_text(encoding="utf-8"))
@@ -127,11 +116,12 @@ def check_ruff_toolchain(
     """Raise when every maintained Ruff toolchain version is not identical."""
     standalone_version = _read_standalone_ruff_version(root)
     pre_commit_version = _read_pre_commit_ruff_version(root)
-    native_flavor, image = _read_megalinter_image(root)
+    image = load_megalinter_image(root / ".mega-linter.yml")
+    native_flavor = image.flavor
     action_flavor, action_version = _read_megalinter_action_version(root)
     if native_flavor != action_flavor:
         _raise_value_error(f"MegaLinter flavors diverge: native={native_flavor}, action={action_flavor}")
-    native_version = image.rsplit(":v", maxsplit=1)[1]
+    native_version = image.tag.removeprefix("v")
     if native_version != action_version:
         _raise_value_error(f"MegaLinter versions diverge: native={native_version}, action={action_version}")
 
@@ -148,10 +138,10 @@ def check_ruff_toolchain(
             "linux/amd64",
             "--entrypoint",
             "ruff",
-            image,
+            image.reference,
             "--version",
         ],
-        f"Ruff from {image}",
+        f"Ruff from {image.reference}",
     )
     versions = {
         "pyproject.toml": standalone_version,
