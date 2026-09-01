@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -19,6 +20,8 @@ from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryRuntime,
+    PortfolioApplication,
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -39,6 +42,7 @@ from owlbear_delivery.completed_history import (
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangeStage,
 )
@@ -51,6 +55,7 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkReference,
     PortfolioWorkScope,
 )
+from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
@@ -70,6 +75,16 @@ from owlbear_delivery.work_items import (
     WorkItemTargetSyncView,
 )
 from owlbear_delivery_github import GitHubCliPublicationProvider
+
+
+class _LockOnlyPortfolioApplication(PortfolioApplication):
+    def __init__(self, target_root: Path) -> None:
+        self._target_root = target_root.resolve()
+        self._clock = lambda: "2026-08-11T16:00:00Z"
+
+    def _runtime(self, _change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
+        del for_mutation
+        return cast(DeliveryRuntime, object())
 
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
@@ -1191,6 +1206,49 @@ def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
         "retry_safe": False,
     }
     assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+
+
+def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
+    client, application = _client(
+        {"resolve_change_disposition": DeliveryChangeDispositionBusyError("attention is already in progress")}
+    )
+
+    response = client.post(
+        "/api/changes/change-a/attention/resolve",
+        json={"expected_disposition_id": "a" * 64},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+        "detail": "attention is already in progress",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
+    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+
+
+def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_path: Path) -> None:
+    application = _LockOnlyPortfolioApplication(tmp_path)
+    lock_root = tmp_path / "publications/checkpoints/locks/change-a"
+
+    with (
+        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        locked_roots((lock_root,)),
+        TestClient(assemble_target_app(application)) as client,
+    ):
+        response = client.post(
+            "/api/changes/change-a/attention/resolve",
+            json={"expected_disposition_id": "a" * 64},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+        "detail": "Change attention resolution is already in progress; retry after the active mutation finishes",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
 
 
 def test_malformed_body_fails_before_application_mutation() -> None:

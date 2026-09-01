@@ -21,6 +21,7 @@ from owlbear_delivery.completed_history import (
 from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
@@ -103,6 +104,15 @@ def test_completed_history_missing_is_not_found() -> None:
 
 def test_unknown_exception_is_left_for_transport_fallbacks() -> None:
     assert classify_delivery_failure(ValueError("unknown")) is None
+
+
+def test_busy_change_attention_resolution_is_retryable_conflict() -> None:
+    classification = classify_delivery_failure(DeliveryChangeDispositionBusyError("attention is busy"))
+
+    assert classification is not None
+    assert classification.code == "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY"
+    assert classification.retry_safe is True
+    assert classification.category is DeliveryFailureCategory.CONFLICT
 
 
 def _known_delivery_failures() -> tuple[Exception, ...]:

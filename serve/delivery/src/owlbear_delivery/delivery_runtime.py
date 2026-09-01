@@ -1329,6 +1329,12 @@ class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
     retry_safe = False
 
 
+class DeliveryChangeDispositionBusyError(DeliveryRuntimeConflictError):
+    """A Change attention resolution is temporarily blocked by another mutation."""
+
+    code = "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY"
+
+
 class DeliveryAcceptanceWaitingError(DeliveryRuntimeConflictError):
     """The bound pull request is still open and has not reached acceptance."""
 
@@ -3678,6 +3684,7 @@ __all__ = [
     "DeliveryChangeCompletion",
     "DeliveryChangeDeferral",
     "DeliveryChangeDisposition",
+    "DeliveryChangeDispositionBusyError",
     "DeliveryChangeDispositionConflictError",
     "DeliveryChangeDispositionKind",
     "DeliveryChangeDispositionResolution",

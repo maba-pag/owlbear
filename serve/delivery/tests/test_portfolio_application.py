@@ -52,6 +52,7 @@ from owlbear_delivery import (
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
     DeliveryBlock,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
@@ -1498,6 +1499,56 @@ def test_application_aborts_target_sync_conflict_and_resolves_exact_attention(tm
 
     assert runtimes["change-a"].change_disposition() is None
     assert runtimes["change-a"].change_disposition_resolution().disposition_id == disposition.disposition_id
+
+
+def test_resolving_change_attention_fails_fast_when_checkpoint_is_busy(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+
+    with (
+        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        locked_roots((state_root / "publications/checkpoints/locks/change-a",)),
+        pytest.raises(DeliveryChangeDispositionBusyError, match="already in progress"),
+    ):
+        application.resolve_change_disposition("change-a", disposition.disposition_id)
+
+    assert runtimes["change-a"].change_disposition() == disposition
+
+
+def test_resolving_change_attention_retries_short_checkpoint_contention(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    lock = locked_roots((state_root / "publications/checkpoints/locks/change-a",))
+    lock.__enter__()
+    released = False
+
+    def release_lock(_delay: float) -> None:
+        nonlocal released
+        lock.__exit__(None, None, None)
+        released = True
+
+    try:
+        with patch("owlbear_delivery.portfolio_application.time.sleep", side_effect=release_lock) as sleep:
+            resolution = application.resolve_change_disposition("change-a", disposition.disposition_id)
+        sleep.assert_called_once()
+    finally:
+        if not released:
+            lock.__exit__(None, None, None)
+
+    assert resolution.disposition_id == disposition.disposition_id
+    assert runtimes["change-a"].change_disposition() is None
 
 
 def test_application_records_semantic_target_resolution_with_exact_runtime_receipt(tmp_path: Path) -> None:

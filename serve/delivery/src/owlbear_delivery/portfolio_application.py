@@ -6,8 +6,9 @@ import hashlib
 import html
 import json
 import subprocess
+import time
 import uuid
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -72,6 +73,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionKind,
     DeliveryChangeDispositionResolution,
     DeliveryChangePublicationHistory,
@@ -198,6 +200,8 @@ def _timestamp(value: str) -> datetime:
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
+_ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS = 2.0
+_ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS = 0.05
 _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
 _MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
 _MAX_AUTOMATION_PATHS = 32
@@ -1809,7 +1813,22 @@ class PortfolioApplication:
     ) -> DeliveryChangeDispositionResolution:
         """Resolve one exact Change attention record without recreating provider authority."""
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        deadline = time.monotonic() + _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS
+        with ExitStack() as stack:
+            while True:
+                try:
+                    stack.enter_context(locked_roots((self._checkpoint_lock_root(change_id),), blocking=False))
+                except BlockingIOError as exc:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        message = (
+                            "Change attention resolution is already in progress; "
+                            "retry after the active mutation finishes"
+                        )
+                        raise DeliveryChangeDispositionBusyError(message) from exc
+                    time.sleep(min(_ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS, remaining))
+                else:
+                    break
             return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
 
     def recover_publication_baseline(

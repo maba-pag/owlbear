@@ -39,6 +39,7 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
@@ -827,6 +828,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             DeliveryChangeDispositionConflictError("attention identity is stale"),
             "ERR_DELIVERY_RUNTIME_CONFLICT",
             False,
+        ),
+        (
+            "resolve_change_disposition",
+            DeliveryChangeDispositionBusyError("attention resolution is already in progress"),
+            "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+            True,
         ),
         (
             "cleanup_abandoned_change_worktree",
