@@ -1433,6 +1433,95 @@ def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path
     assert application._workspace_manager.reviewed_source_head("change-a") == receipt.merged_head
 
 
+def test_target_sync_demotes_ready_pull_request_before_moving_managed_branch(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "target-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    coordination = application._workspace_manager.show("change-a")
+    draft_transition_heads: list[tuple[str, str, bool]] = []
+    original_transition = provider.set_pull_request_draft_state.side_effect
+
+    def observe_transition(request):
+        draft_transition_heads.append(
+            (
+                _git(repository, "rev-parse", coordination.branch),
+                request.expected_head_sha,
+                request.draft,
+            )
+        )
+        return original_transition(request)
+
+    provider.set_pull_request_draft_state.side_effect = observe_transition
+
+    receipt = application.sync_change_with_target("change-a", target_head, "sync-before-branch-move")
+
+    assert draft_transition_heads == [(exact_head, exact_head, True)]
+    assert _git(repository, "rev-parse", coordination.branch) == receipt.merged_head
+    assert state["pull_request"].draft is True
+    assert runtime.ready_receipt() is None
+
+
+def test_external_head_adoption_demotes_ready_pull_request_before_moving_managed_branch(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    draft_transition_heads: list[tuple[str, str, bool]] = []
+    original_transition = provider.set_pull_request_draft_state.side_effect
+
+    def observe_transition(request):
+        draft_transition_heads.append(
+            (
+                _git(repository, "rev-parse", coordination.branch),
+                request.expected_head_sha,
+                request.draft,
+            )
+        )
+        return original_transition(request)
+
+    provider.set_pull_request_draft_state.side_effect = observe_transition
+
+    receipt = application.adopt_external_head(
+        "change-a",
+        exact_head,
+        adopted_head,
+        "adopt-before-branch-move",
+    )
+
+    assert draft_transition_heads == [(exact_head, exact_head, True)]
+    assert _git(repository, "rev-parse", coordination.branch) == adopted_head
+    assert state["pull_request"].draft is True
+    assert runtime.ready_receipt() is None
+    assert receipt.adopted_head == adopted_head
+
+
+def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "target-failure-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    branch = application._workspace_manager.show("change-a").branch
+    provider.set_pull_request_draft_state.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "return_to_draft",
+        "provider unavailable",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="target synchronization could not be completed"):
+        application.sync_change_with_target("change-a", target_head, "sync-provider-failure")
+
+    assert _git(repository, "rev-parse", branch) == exact_head
+    assert runtime.ready_receipt() is not None
+
+
 def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -1622,6 +1711,52 @@ def test_application_records_semantic_target_resolution_with_exact_runtime_recei
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
 
 
+def test_resolved_target_merge_requires_fresh_finalization_before_checkpoint_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "resolved-merge-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    coordination = coordinator.show("change-a")
+    (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    _git(coordination.worktree_path, "commit", "-m", "change branch edit")
+    reviewed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    application._workspace_manager.record_reviewed("change-a", reviewed_head)
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target_head, "sync-resolved-merge")
+
+    disposition = runtimes["change-a"].change_disposition()
+    assert disposition is not None
+    (coordination.worktree_path / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    receipt = application.resolve_target_sync_conflict(
+        "change-a",
+        disposition.disposition_id,
+        target_head,
+        "sync-resolved-merge",
+    )
+    application._change_branch_publisher = Mock()
+    application._draft_pull_request_publisher = Mock()
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert receipt.review_required is True
+    assert receipt.schema_version == 2
+    assert runtimes["change-a"].finalization() is None
+    assert result.reconciled is False
+    assert result.state.pending_checkpoint is not None
+    assert result.state.pending_checkpoint.head == receipt.merged_head
+    application._change_branch_publisher.publish.assert_not_called()
+    application._draft_pull_request_publisher.publish.assert_not_called()
+
+
 @pytest.mark.parametrize("operation", ["abort_target_sync_conflict", "resolve_target_sync_conflict"])
 def test_target_sync_conflict_exit_rejects_deferred_change_before_workspace_mutation(
     tmp_path: Path,
@@ -1719,6 +1854,50 @@ def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tm
     assert ChangeWorktreeAttentionCode.WORKTREE_DIRTY in raised.value.attention
     assert runtimes["change-a"].change_stage() is DeliveryChangeStage.ABANDONED
     assert coordination.worktree_path.exists()
+
+
+@pytest.mark.parametrize("remove_worktree", [False, True])
+def test_abandoned_target_sync_conflict_can_be_discarded_and_cleaned(
+    tmp_path: Path,
+    remove_worktree: bool,  # noqa: FBT001 - pytest parametrization supplies this boolean positionally.
+) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "discard-merge-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    coordination = coordinator.show("change-a")
+    (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    _git(coordination.worktree_path, "commit", "-m", "change branch edit")
+    application._workspace_manager.record_reviewed(
+        "change-a",
+        _git(coordination.worktree_path, "rev-parse", "HEAD"),
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target_head, "sync-discard-cleanup")
+    application.abandon_change("change-a", "Stop the unresolved Change")
+    if remove_worktree:
+        _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+
+    receipt = application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+        "change-a",
+        confirmed_discard=True,
+    )
+
+    assert receipt.change_id == "change-a"
+    assert not coordination.worktree_path.exists()
+    assert _git_ref_exists(repository, coordination.branch)
+    assert runtimes["change-a"].change_stage() is DeliveryChangeStage.ABANDONED
+    assert coordinator.show("change-a").target_sync_conflict is None
+    assert coordinator.show("change-a").target_sync_abort_receipt is not None
+    assert application.list_retained_change_worktrees() == ()
 
 
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
@@ -3270,8 +3449,9 @@ dependencies: []
     view = reader.portfolio_read_view()
 
     assert tuple(group.change_id for group in view.groups) == ("admitted-change",)
-    assert tuple(item.work_item_id for item in view.groups[0].items) == tuple(
-        outcome.outcome_id for outcome in admitted.contract.outcomes
+    assert tuple(item.work_item_id for item in view.groups[0].items) == (
+        *tuple(outcome.outcome_id for outcome in admitted.contract.outcomes),
+        "admitted-change",
     )
     assert view.groups[0].outcome_total == len(admitted.contract.outcomes)
     assert view.groups[0].outcome_completed == 0
@@ -3504,22 +3684,6 @@ def test_portfolio_keeps_deferred_change_visible_without_orchestration_queue(tmp
     assert view.operating.unfinished_change_count == 1
     assert view.operating.queued_for_orchestration == ()
     assert tuple(item.kind.value for item in view.operating.guidance) == ("intervene",)
-
-
-def test_portfolio_keeps_abandoned_change_visible_but_terminal_and_not_completed(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.PLANNING},
-    )
-    application.abandon_change("change-a", "user stopped the Change")
-
-    view = application.portfolio_read_view()
-
-    assert tuple(group.lifecycle.value for group in view.groups) == ("abandoned",)
-    assert all(item.needs.value == "none" for item in view.groups[0].items)
-    assert view.operating.unfinished_change_count == 0
-    assert view.operating.completed_change_count == 0
-    assert view.operating.queued_for_orchestration == ()
 
 
 def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) -> None:
@@ -5349,7 +5513,10 @@ dependencies: []
     assert checkpoint.replayed
     assert _git(tmp_path / "repository", "rev-parse", "main") == product_head
     listed = application.list_work_items()
-    assert tuple((item.change_id, item.work_item_id) for item in listed) == (("composed-delivery", "OUT-001"),)
+    assert tuple((item.change_id, item.work_item_id) for item in listed) == (
+        ("composed-delivery", "OUT-001"),
+        ("composed-delivery", "composed-delivery"),
+    )
     coordination = _coordinator.show("composed-delivery")
     package_paths = {
         ".owlbear/delivery/packages/composed-delivery/authority.json",
@@ -5710,6 +5877,18 @@ def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Pat
     assert detail.publication.worktree_cleanup.eligible is True
     assert detail.publication.worktree_cleanup.blocked_reason is None
     assert detail.publication.worktree_cleanup.completion_id is None
+
+
+def test_abandoned_change_is_removed_from_current_work_portfolio(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    application.abandon_change("change-a", "User stopped the Change")
+
+    assert application.list_work_item_groups() == ()
+    assert application.portfolio_operating_view().statuses == ()
 
 
 def test_publication_detail_projects_preserved_target_sync_conflict(tmp_path: Path) -> None:

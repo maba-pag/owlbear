@@ -254,7 +254,11 @@ class _RecordingApplication:
                         cleanup_eligible=True,
                     ),
                 )
-            elif name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
+            elif name in {
+                "cleanup_abandoned_change_worktree",
+                "cleanup_abandoned_change_worktree_after_target_sync_discard",
+                "cleanup_completed_change_worktree",
+            }:
                 result = DeliveryChangeWorktreeCleanup(
                     cleanup_id=DIGEST,
                     change_id=CHANGE,
@@ -496,6 +500,10 @@ def _requests() -> dict[str, dict[str, object]]:
         "resume_change": change,
         "abandon_change": {**change, "reason": "Stop this Change"},
         "cleanup_abandoned_change_worktree": change,
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": {
+            **change,
+            "confirmed_discard": True,
+        },
         "cleanup_completed_change_worktree": {**change, "completion_id": DIGEST},
         "recover_change_worktree": {
             **change,
@@ -589,6 +597,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         "abort_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "resolve_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "cleanup_abandoned_change_worktree": (CHANGE,),
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
         "prepare_review_repair": (CHANGE,),
@@ -616,6 +625,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     }
     receipt_results = {
         "cleanup_abandoned_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": {
+            "cleanup_id": DIGEST,
+            "worktree_path": str(WORKTREE_PATH),
+        },
         "cleanup_completed_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
         "recover_change_worktree": {
             "change_id": CHANGE,
@@ -732,7 +745,12 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
     assert tuple(DELIVERY_OPERATION_ANNOTATIONS) == DELIVERY_OPERATION_NAMES
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
         assert tool_annotations.destructive_hint is (
-            name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+            name
+            in {
+                "cleanup_abandoned_change_worktree",
+                "cleanup_abandoned_change_worktree_after_target_sync_discard",
+                "cleanup_completed_change_worktree",
+            }
         )
         assert tool_annotations.read_only_hint is (name in reads)
         assert tool_annotations.idempotent_hint is (name != "acquire_frontier_work")

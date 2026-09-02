@@ -479,6 +479,7 @@ function installFetch() {
       || url.endsWith('/resume')
       || url.endsWith('/abandon')
       || url.endsWith('/worktree/cleanup/abandoned')
+      || url.endsWith('/worktree/cleanup/abandoned/target-sync-discard')
       || url.endsWith('/worktree/cleanup/completed')
       || url.endsWith('/worktree/recover')
     )) {
@@ -523,6 +524,7 @@ function installFetch() {
           change_head_before: '2'.repeat(40),
           merged_head: '3'.repeat(40),
           merge_commit: true,
+          review_required: false,
         })
       }
       if (url.endsWith('/target/conflict/abort')) {
@@ -547,6 +549,16 @@ function installFetch() {
           change_head_before: '5'.repeat(40),
           merged_head: '6'.repeat(40),
           merge_commit: true,
+          review_required: true,
+        })
+      }
+      if (url.endsWith('/worktree/cleanup/abandoned/target-sync-discard')) {
+        return response({
+          cleanup_id: 'd'.repeat(64),
+          change_id: 'change-alpha',
+          branch: 'owlbear/change/change-alpha',
+          worktree_path: '.owlbear/delivery/worktrees/change-alpha',
+          branch_head: '5'.repeat(40),
         })
       }
       return response({})
@@ -924,7 +936,7 @@ it('closes removed Design detail after a portfolio refresh', async () => {
   await screen.findByTestId('design-work-detail')
 
   currentPortfolio = portfolio()
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
   await screen.findByTestId('completed-history-workspace')
   fireEvent.click(screen.getByRole('button', { name: 'Current delivery', exact: true }))
 
@@ -1606,6 +1618,7 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
         change_head_before: '2'.repeat(40),
         merged_head: '3'.repeat(40),
         merge_commit: true,
+        review_required: false,
       },
     },
   })
@@ -2375,6 +2388,51 @@ it('keeps abandoned worktree cleanup confirmation open when cleanup fails', asyn
   expect(within(dialog).getByText('Clean abandoned worktree')).toBeInTheDocument()
 })
 
+it('confirms discard and cleanup for an abandoned target-sync conflict', async () => {
+  const publicationCard = publicationCardForChecks({
+    next_step: 'Target merge requires discard before cleanup',
+    progress: { kind: 'publication', label: 'Abandoned target merge', done: null, total: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      worktree_cleanup: { eligible: false, blocked_reason: 'worktree-attention', completion_id: null },
+      target_sync_conflict: {
+        conflict_id: 'e'.repeat(64),
+        operation_id: 'target-sync-abandoned',
+        target_head: '4'.repeat(40),
+        change_head_before: '5'.repeat(40),
+        conflict_paths: ['src/app.py'],
+      },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Discard merge and clean worktree'))
+  fireEvent.click(await screen.findByText('Confirm discard and cleanup'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/abandoned/target-sync-discard',
+    method: 'POST',
+    body: { confirmed_discard: true },
+  }))
+  expect(await screen.findByText('Target merge discarded and abandoned Change worktree cleaned up.')).toBeInTheDocument()
+})
+
 it('cleans an eligible completed Change worktree with its exact completion identity', async () => {
   const completionId = 'e'.repeat(64)
   const publicationCard = card({
@@ -2929,7 +2987,7 @@ it('moves a completed selected Change into completed history instead of leaving 
   const inspector = await screen.findByTestId('work-item-detail')
   fireEvent.click(within(inspector).getByText('Complete accepted Change'))
 
-  expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
+  expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Change history')
   await waitFor(() => expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/history'))
   expect(await screen.findByText('Portfolio redesign')).toBeInTheDocument()
 })
@@ -2938,7 +2996,7 @@ it('closes live detail before entering completed history', async () => {
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
   await screen.findByTestId('work-item-detail')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
 
   await screen.findByTestId('completed-history-workspace')
   expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument()
@@ -2946,12 +3004,12 @@ it('closes live detail before entering completed history', async () => {
     const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
     expect(openFlyout).toBeUndefined()
   })
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Completed history', exact: true })).toHaveFocus())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Change history', exact: true })).toHaveFocus())
 })
 
 it('presents legacy completion package provenance explicitly', async () => {
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
 
@@ -2973,7 +3031,7 @@ it('refreshes current delivery immediately after returning from completed histor
   renderPage()
   await screen.findByRole('heading', { name: 'Initial delivery', exact: true })
 
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
   await screen.findByTestId('completed-history-workspace')
   currentPortfolio = portfolio([group({ title: 'Refreshed delivery' })])
   const requestsBeforeReturn = requests.filter(({ method, url }) => method === 'GET' && url === '/api/work-items').length
@@ -2988,17 +3046,17 @@ it('refreshes current delivery immediately after returning from completed histor
 it('explains when completed history is empty', async () => {
   completedRecords = []
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
 
   const emptyState = await screen.findByTestId('completed-history-empty-state')
-  expect(emptyState).toHaveTextContent('No completed changes yet')
-  expect(emptyState).toHaveTextContent('Accepted Delivery changes will appear here with their merge evidence.')
+  expect(emptyState).toHaveTextContent('No changes in history yet')
+  expect(emptyState).toHaveTextContent('Completed and abandoned Changes will appear here with their retained evidence.')
 })
 
 it('distinguishes no matching completed history and clears the search', async () => {
   completedRecords = [completed]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-change-record')
 
   const search = container.querySelector('p-input-search')
@@ -3006,7 +3064,7 @@ it('distinguishes no matching completed history and clears the search', async ()
   inputValue(search as Element, 'unmatched history')
 
   const emptyState = await screen.findByTestId('completed-history-empty-state')
-  expect(emptyState).toHaveTextContent('No completed changes match "unmatched history"')
+  expect(emptyState).toHaveTextContent('No changes match "unmatched history"')
   expect(emptyState).toHaveTextContent('Try a different search or clear the current search.')
   fireEvent.click(within(emptyState).getByText('Clear search', { exact: true }))
 
@@ -3017,7 +3075,7 @@ it('marks previous completed history results while a search is pending', async (
   completedRecords = [completed, receiptCompleted]
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -3045,7 +3103,7 @@ it('retains previous completed history when a search fails', async () => {
   completedHistorySearchFailuresRemaining = 1
   completedHistorySearchRecords = [receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   const search = container.querySelector('p-input-search')
@@ -3053,7 +3111,7 @@ it('retains previous completed history when a search fails', async () => {
   inputValue(search as Element, 'Beta')
 
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Completed history is unavailable.')
+  expect(alert).toHaveTextContent('Change history is unavailable.')
   expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
   expect(screen.getByTestId('completed-history-stale-status')).toHaveTextContent('Previous results are shown while this search is retried.')
   const loadMore = screen.getByText('Load more', { exact: true }).closest('p-button') as HTMLElement & { disabled?: boolean }
@@ -3070,7 +3128,7 @@ it('disables load more while a completed history search is pending', async () =>
   completedHistoryNextCursor = 'page-2'
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -3093,7 +3151,7 @@ it('appends paginated results for a completed history search', async () => {
   completedHistorySearchNextCursor = 'search-page-2'
   completedHistorySearchPageRecords = [receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1))
 
   const search = container.querySelector('p-input-search')
@@ -3113,7 +3171,7 @@ it('closes completed history detail when a settled search removes the selected r
   completedRecords = [completed, receiptCompleted]
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -3144,7 +3202,7 @@ it('closes completed history detail when a settled search removes the selected r
 it('debounces completed history search requests while typing', async () => {
   completedRecords = [completed, receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   const search = container.querySelector('p-input-search')
@@ -3160,7 +3218,7 @@ it('retries failed completed history detail in place', async () => {
   completedRecords = [completed]
   completedDetailFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
 
@@ -3176,7 +3234,7 @@ it('retries failed completed history detail in place', async () => {
 it('closes a listed completion when its detail is confirmed missing', async () => {
   completedRecords = [completed]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
   completedDetailNotFound = true
@@ -3194,7 +3252,7 @@ it('closes a missing completion despite a failed history page load', async () =>
   completedHistoryNextCursor = 'page-2'
   completedHistoryPageFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
 
@@ -3221,7 +3279,7 @@ it('returns focus to history after appending the final page', async () => {
   completedHistoryNextCursor = 'page-2'
   completedHistoryPageRecords = [nextRecord]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-history-load-more')
 
   fireEvent.click(screen.getByTestId('completed-history-load-more'))
@@ -3247,7 +3305,7 @@ it('keeps a deep-linked completion open while the initial history list fails', a
   const detailView = await screen.findByTestId('completed-change-detail')
   expect(detailView).toHaveTextContent('Historical delivery')
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Completed history is unavailable.')
+  expect(alert).toHaveTextContent('Change history is unavailable.')
 
   fireEvent.click(within(alert).getByText('Retry history', { exact: true }))
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
@@ -3284,13 +3342,13 @@ it('retries a failed completed history page without resetting loaded records', a
   completedHistoryPageRecords = [nextRecord]
   completedHistoryPageFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-change-record')
   expect(screen.getByTestId('completed-history-count')).toHaveTextContent('2')
 
   fireEvent.click(screen.getByText('Load more', { exact: true }))
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Could not load more completed history.')
+  expect(alert).toHaveTextContent('Could not load more Change history.')
   expect(within(alert).getByText('Retry loading more', { exact: true })).toBeInTheDocument()
   expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1)
 
@@ -3303,7 +3361,7 @@ it('retries a failed completed history page without resetting loaded records', a
 it('presents receipt completion identities without graph claims', async () => {
   completedRecords = [receiptCompleted]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const pullRequest = within(record).getByRole('link', { name: 'PR #42' })
   expect(pullRequest).toHaveAttribute('href', 'https://github.com/owlbear/example/pull/42')

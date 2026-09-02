@@ -23,7 +23,11 @@ from owlbear_delivery.publication_provider import (
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
-    from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
+    from owlbear_delivery.change_workspace import (
+        ChangeExternalHeadAdoptionReceipt,
+        ChangeTargetSyncAbortReceipt,
+        ChangeTargetSyncReceipt,
+    )
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
     from owlbear_delivery.portfolio_application import (
         DeliveryAcceptanceReconciliationOutcome,
@@ -272,6 +276,15 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class AdoptExternalHeadAfterAcceptanceAttentionBody(_TargetHTTPModel):
+    """Exact acceptance attention and pull-request heads for external-head adoption."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class ChangeDispositionReasonBody(_TargetHTTPModel):
     """User reason for deferring or abandoning one Change."""
 
@@ -312,6 +325,12 @@ class TargetSyncConflictBody(_TargetHTTPModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class CleanupAbandonedTargetSyncBody(_TargetHTTPModel):
+    """Explicit confirmation to discard a preserved target merge before cleanup."""
+
+    confirmed_discard: Literal[True]
+
+
 class SupersedePublicationBody(_TargetHTTPModel):
     """Stable operation identity used to reconcile a publication successor retry."""
 
@@ -331,6 +350,7 @@ class TargetSyncResponse(_TargetHTTPModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> TargetSyncResponse:
@@ -345,6 +365,7 @@ class TargetSyncResponse(_TargetHTTPModel):
             change_head_before=receipt.change_head_before,
             merged_head=receipt.merged_head,
             merge_commit=receipt.merge_commit,
+            review_required=receipt.review_required,
         )
 
 
@@ -361,6 +382,24 @@ class TargetSyncAbortResponse(_TargetHTTPModel):
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncAbortReceipt) -> TargetSyncAbortResponse:
         """Convert one application abort receipt into the HTTP transport shape."""
+        return cls(**receipt.model_dump())
+
+
+class ExternalHeadAdoptionResponse(_TargetHTTPModel):
+    """Typed receipt returned after adopting one exact external Change head."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"]
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ExternalHeadAdoptionResponse:
+        """Convert one Delivery adoption receipt into the HTTP transport shape."""
         return cls(**receipt.model_dump())
 
 
@@ -460,16 +499,19 @@ __all__ = [
     "AcceptanceReconciliationRequest",
     "AcceptanceReconciliationResponse",
     "ActivityCounts",
+    "AdoptExternalHeadAfterAcceptanceAttentionBody",
     "AnswerRequestBody",
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
     "ChangeWorktreeCleanupResponse",
     "ChangeWorktreeRecoveryResponse",
+    "CleanupAbandonedTargetSyncBody",
     "CleanupCompletedChangeBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
+    "ExternalHeadAdoptionResponse",
     "NeedsCounts",
     "PortfolioChangeLifecycleStatusResponse",
     "PortfolioOperatingResponse",

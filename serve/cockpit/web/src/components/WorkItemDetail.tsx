@@ -69,6 +69,11 @@ interface WorkItemDetailProps {
   isObservingPublicationChecks: boolean
   onObservePublicationChecks: () => Promise<Error | null>
   onObserveAcceptance: () => Promise<Error | null>
+  onAdoptExternalHeadAfterAcceptanceAttention: (
+    expectedDispositionId: string,
+    expectedHead: string,
+    adoptedHead: string,
+  ) => Promise<Error | null>
   onResolveAttention: (expectedDispositionId: string) => Promise<Error | null>
   onSupersedePublication: () => Promise<Error | null>
   onSyncTarget: () => Promise<Error | null>
@@ -78,6 +83,7 @@ interface WorkItemDetailProps {
   onResumeChange: () => Promise<Error | null>
   onAbandonChange: (reason: string) => Promise<Error | null>
   onCleanupAbandonedChange: () => Promise<Error | null>
+  onDiscardAbandonedTargetSync: () => Promise<Error | null>
   onCleanupCompletedChange: (completionId: string) => Promise<Error | null>
   onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>
 }
@@ -232,7 +238,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm Change abandonment' }}>
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">Confirm Change abandonment</PHeading>
-            <p className="text-sm">Abandonment is permanent. The Change will not enter completed history.</p>
+            <p className="text-sm">Abandonment is permanent. The Change will be retained in Change history as an abandoned record.</p>
             <p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p>
             {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
@@ -329,7 +335,7 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>
           <AttentionItem
             label={`Returned to ${PROGRESS_STAGE_LABELS[returned.target]}`}
             reason={returned.reason}
-            retry={returned.target === 'design' ? `Resume /design ${detail.item.card.change_id}.` : undefined}
+              retry={returned.target === 'design' ? `Resume /design ${detail.item.card.change_id}.` : undefined}
             evidence={returned.locators.join(', ')}
             sourceBoundary={returned.source_boundary}
           />
@@ -495,6 +501,69 @@ function pullRequestUrl(repository: string, number: number): string {
   return `${repositoryUrl}/pull/${number}`
 }
 
+function ExternalHeadAdoptionSection(props: WorkItemDetailProps) {
+  const action = props.detail.item.card.action
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
+  if (
+    action.kind !== 'adopt-external-head'
+    || !action.attention_id
+    || !action.expected_head
+    || !action.adopted_head
+  ) return null
+  const run = async () => {
+    const error = await props.onAdoptExternalHeadAfterAcceptanceAttention(
+      action.attention_id as string,
+      action.expected_head as string,
+      action.adopted_head as string,
+    )
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
+  }
+  return (
+    <section className="mt-static-md border-l-4 border-warning bg-surface p-static-md" aria-labelledby="external-head-adoption-heading">
+      <PHeading id="external-head-adoption-heading" tag="h4" size="sm">Pull request head changed</PHeading>
+      <p className="mt-static-xs text-sm">Adopt the exact open pull-request head before re-running finalization and review.</p>
+      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
+        <IdentityRow label="Finalized head" value={action.expected_head} />
+        <IdentityRow label="Pull request head" value={action.adopted_head} />
+      </dl>
+      <PButton
+        className="mt-static-md"
+        type="button"
+        compact
+        variant="secondary"
+        data-testid="acceptance-head-adopt"
+        disabled={props.pendingAction !== null}
+        onClick={() => { setActionFailed(false); setConfirmOpen(true) }}
+      >
+        {props.pendingAction === 'acceptance-head-adopt' ? 'Adopting...' : 'Adopt changed PR head'}
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm changed pull-request head adoption' }}>
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Confirm changed PR head</PHeading>
+            <p className="text-sm">The exact open pull-request head will become the new Change head. Finalization and pull-request readiness will be cleared; run `/finalize-change` again afterward.</p>
+            <dl className="grid gap-static-xs break-all text-sm">
+              <dt className="font-semibold">Finalized head</dt>
+              <dd>{action.expected_head}</dd>
+              <dt className="font-semibold">Pull request head</dt>
+              <dd>{action.adopted_head}</dd>
+            </dl>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
+                {props.pendingAction === 'acceptance-head-adopt' ? 'Adopting...' : 'Confirm adoption'}
+              </PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
 function WorktreeRecoverySection(props: WorkItemDetailProps) {
   const recovery = props.detail.item.publication?.worktree_recovery
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -548,6 +617,10 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
   if (!publication || !cleanup) return null
   const terminal = publication.phase === 'abandoned' || publication.phase === 'acceptance-observed'
   if (!terminal) return null
+  const abandonedConflict = publication.phase === 'abandoned' && Boolean(publication.target_sync_conflict)
+  if (abandonedConflict) {
+    return <AbandonedTargetSyncCleanupSection {...props} />
+  }
   if (!cleanup.eligible) {
     return cleanup.blocked_reason ? (
       <p className="mt-static-md border-l-4 border-warning bg-surface p-static-sm text-sm" role="status">
@@ -584,6 +657,40 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
                 {props.pendingAction === pendingAction ? 'Cleaning...' : `Confirm ${actionName.toLowerCase()}`}
+              </PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
+function AbandonedTargetSyncCleanupSection(props: WorkItemDetailProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
+  const run = async () => {
+    const error = await props.onDiscardAbandonedTargetSync()
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
+  }
+  return (
+    <section className="mt-static-md border-l-4 border-danger bg-surface p-static-md" aria-labelledby="abandoned-target-sync-cleanup-heading">
+      <PHeading id="abandoned-target-sync-cleanup-heading" tag="h4" size="sm">Abandoned target sync</PHeading>
+      <p className="mt-static-xs text-sm">The abandoned Change still contains a preserved target merge. Discard that merge before removing the worktree.</p>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
+        {props.pendingAction === 'change-cleanup-abandoned-target-sync' ? 'Discarding and cleaning...' : 'Discard merge and clean worktree'}
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm target merge discard and worktree cleanup' }}>
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Discard target merge and clean worktree</PHeading>
+            <p className="text-sm">The preserved target merge will be aborted and its worktree directory removed. The abandoned Change branch and receipts will remain.</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
+                {props.pendingAction === 'change-cleanup-abandoned-target-sync' ? 'Discarding and cleaning...' : 'Confirm discard and cleanup'}
               </PButton>
             </div>
           </ConfirmationContent>
@@ -747,7 +854,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
   return (
     <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
       <div className="flex flex-wrap items-start justify-between gap-static-sm">
-        <PHeading id="publication-checks-heading" tag="h4" size="sm">PR CI checks</PHeading>
+          <PHeading id="publication-checks-heading" tag="h4" size="sm">PR CI checks</PHeading>
         {observable ? (
           <PButton
             type="button"
@@ -796,6 +903,8 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   if (!publication) return null
+  const finalizationPhase = publication.phase === 'ready-for-finalization' || publication.phase === 'finalization-invalidated'
+  const finalizationBlocked = finalizationPhase && publication.ready_for_finalization === false
   const action = props.detail.item.card.action
   const targetSyncAttention = Boolean(
     publication.target_sync_conflict && publication.attention?.kind === 'publication-attention',
@@ -828,6 +937,18 @@ function PublicationSection(props: WorkItemDetailProps) {
     <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
       <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.card.next_step}</p>
+      {finalizationBlocked ? (
+        <section className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="status" data-testid="finalization-readiness">
+          <PHeading tag="h4" size="sm">Finalization unavailable</PHeading>
+          <p className="mt-static-xs text-sm">Delivery cannot finalize the current Change yet.</p>
+          {(publication.readiness_diagnostics ?? []).length > 0 ? (
+            <ul className="mt-static-xs list-disc pl-static-md text-sm">
+              {(publication.readiness_diagnostics ?? []).map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
+            </ul>
+          ) : null}
+          <p className="mt-static-xs text-sm text-contrast-medium">Resolve the condition, then run `/finalize-change` again.</p>
+        </section>
+      ) : null}
       <TargetSyncConflictSection {...props} />
       {publication.attention ? (
         <div className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="alert">
@@ -839,6 +960,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           <p className="mt-static-xs break-all font-mono text-xs">Disposition: {publication.attention.disposition_id}</p>
         </div>
       ) : null}
+      <ExternalHeadAdoptionSection {...props} />
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
         <IdentityRow label="Repository" value={publication.repository} />
         {publication.repository && publication.pull_request_number ? (
@@ -881,7 +1003,7 @@ function PublicationSection(props: WorkItemDetailProps) {
         </div>
       ) : null}
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
-      {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
+      {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
       {canSupersede ? (
         <PButton

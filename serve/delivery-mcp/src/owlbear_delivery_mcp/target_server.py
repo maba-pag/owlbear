@@ -53,6 +53,8 @@ from owlbear_delivery_mcp.target_models import (
     ClaimContextRequest,
     CleanupAbandonedChangeParams,
     CleanupAbandonedChangeRequest,
+    CleanupAbandonedTargetSyncParams,
+    CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
     CompletedPageParams,
@@ -148,6 +150,7 @@ DELIVERY_OPERATION_NAMES = (
     "resume_change",
     "abandon_change",
     "cleanup_abandoned_change_worktree",
+    "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
@@ -184,7 +187,12 @@ DELIVERY_OPERATION_ANNOTATIONS = {
     else _ACQUIRE
     if name == "acquire_frontier_work"
     else _CLEANUP
-    if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+    if name
+    in {
+        "cleanup_abandoned_change_worktree",
+        "cleanup_abandoned_change_worktree_after_target_sync_discard",
+        "cleanup_completed_change_worktree",
+    }
     else _WRITE
     for name in DELIVERY_OPERATION_NAMES
 }
@@ -559,6 +567,23 @@ class TargetMCPAdapter:
             self._call_model,
             params,
             lambda: self._application.cleanup_abandoned_change_worktree(params.change_id),
+            DeliveryChangeWorktreeCleanup,
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    async def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        request: CleanupAbandonedTargetSyncRequest,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Discard one abandoned target merge and remove its exact worktree."""
+        params = self._validate(CleanupAbandonedTargetSyncParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+                params.change_id,
+                confirmed_discard=params.confirmed_discard,
+            ),
             DeliveryChangeWorktreeCleanup,
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)

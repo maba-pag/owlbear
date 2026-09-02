@@ -17,16 +17,19 @@ from owlbear_cockpit.target_models import (
     AcceptanceReconciliationRequest,
     AcceptanceReconciliationResponse,
     ActivityCounts,
+    AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
     ChangeWorktreeCleanupResponse,
     ChangeWorktreeRecoveryResponse,
+    CleanupAbandonedTargetSyncBody,
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
+    ExternalHeadAdoptionResponse,
     NeedsCounts,
     PortfolioOperatingResponse,
     PublicationChecksObservationResponse,
@@ -176,6 +179,23 @@ class TargetCockpitService:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
 
+    def adopt_external_head_after_acceptance_attention(
+        self,
+        change_id: str,
+        body: AdoptExternalHeadAfterAcceptanceAttentionBody,
+    ) -> ExternalHeadAdoptionResponse:
+        """Adopt one exact open pull-request head from matching acceptance attention."""
+        receipt = self._invoke(
+            lambda: self._application.adopt_external_head_after_acceptance_attention(
+                change_id,
+                body.expected_disposition_id,
+                body.expected_head,
+                body.adopted_head,
+                body.operation_id,
+            )
+        )
+        return ExternalHeadAdoptionResponse.from_receipt(receipt)
+
     def observe_publication_checks(self, change_id: str) -> PublicationChecksObservationResponse:
         """Observe provider checks at the current exact published Change head."""
         receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
@@ -253,6 +273,20 @@ class TargetCockpitService:
     def cleanup_abandoned_change_worktree(self, change_id: str) -> ChangeWorktreeCleanupResponse:
         """Clean one abandoned Change worktree without reopening its terminal state."""
         receipt = self._invoke(lambda: self._application.cleanup_abandoned_change_worktree(change_id))
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        change_id: str,
+        body: CleanupAbandonedTargetSyncBody,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Discard one abandoned target merge and clean its exact Change worktree."""
+        receipt = self._invoke(
+            lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+                change_id,
+                confirmed_discard=body.confirmed_discard,
+            )
+        )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
     def cleanup_completed_change_worktree(
@@ -435,7 +469,7 @@ def _register_outcome_controls(router: APIRouter) -> None:
         return service.preview_backward_move(change_id, outcome_id, body)
 
 
-def _register_publication_controls(router: APIRouter) -> None:
+def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     @router.post(
         "/work-items/acceptance/reconcile",
         response_model=AcceptanceReconciliationResponse,
@@ -457,6 +491,17 @@ def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/acceptance/observe")
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
+
+    @router.post(
+        "/changes/{change_id}/acceptance/external-head/adopt",
+        response_model=ExternalHeadAdoptionResponse,
+    )
+    def adopt_external_head_after_acceptance_attention(
+        change_id: str,
+        body: AdoptExternalHeadAfterAcceptanceAttentionBody,
+        service: _TargetService,
+    ) -> ExternalHeadAdoptionResponse:
+        return service.adopt_external_head_after_acceptance_attention(change_id, body)
 
     @router.post(
         "/changes/{change_id}/publication/checks/observe",
@@ -551,6 +596,17 @@ def _register_target_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> ChangeWorktreeCleanupResponse:
         return service.cleanup_abandoned_change_worktree(change_id)
+
+    @router.post(
+        "/changes/{change_id}/worktree/cleanup/abandoned/target-sync-discard",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        change_id: str,
+        body: CleanupAbandonedTargetSyncBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_abandoned_change_worktree_after_target_sync_discard(change_id, body)
 
     @router.post(
         "/changes/{change_id}/worktree/cleanup/completed",

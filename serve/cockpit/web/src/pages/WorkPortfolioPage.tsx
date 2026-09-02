@@ -56,7 +56,7 @@ function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | '
     >
       {([
         ['current', 'Current delivery'],
-        ['history', 'Completed history'],
+        ['history', 'Change history'],
       ] as const).map(([value, label]) => (
         <button
           key={value}
@@ -264,6 +264,7 @@ function SelectedWorkItemDetail({
         isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
         onObservePublicationChecks={selectedDetail.observePublicationChecks}
         onObserveAcceptance={selectedDetail.observeAcceptance}
+        onAdoptExternalHeadAfterAcceptanceAttention={selectedDetail.adoptExternalHeadAfterAcceptanceAttention}
         onResolveAttention={selectedDetail.resolveAttention}
         onSupersedePublication={selectedDetail.supersedePublication}
         onSyncTarget={selectedDetail.syncTarget}
@@ -273,6 +274,7 @@ function SelectedWorkItemDetail({
         onResumeChange={selectedDetail.resumeChange}
         onAbandonChange={selectedDetail.abandonChange}
         onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
+        onDiscardAbandonedTargetSync={selectedDetail.discardAbandonedTargetSync}
         onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
         onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
       />

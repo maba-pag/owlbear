@@ -328,6 +328,9 @@ Validate OwlBear agent files against conventions.
 ### Imports
 
 - `__future__`
+- `asyncio`
+- `importlib`
+- `json`
 - `pathlib`
 - `re`
 - `shlex`
@@ -337,21 +340,32 @@ Validate OwlBear agent files against conventions.
 ### Interfaces
 
 - `def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]`
+- `def _read_mcp_config(path: Path) -> tuple[frozenset[str], list[str]]`
+- `def _configured_mcp_servers() -> tuple[frozenset[str], list[str]]`
+- `def _validate_mcp_configuration() -> tuple[frozenset[str], list[str]]`
+- `async def _read_live_mcp_tool_registries() -> dict[str, frozenset[str]]`
+- `def _load_live_mcp_tool_registries() -> dict[str, frozenset[str]]`
 - `def _frontmatter_lines(content: str) -> list[str]`
 - `def _tools_text(fm_lines: list[str]) -> str`
-- `def _is_valid_tool(name: str) -> bool`
+- `def _declared_tool_names(fm_lines: list[str]) -> tuple[str, ...]`
+- `def _is_valid_tool(name: str, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> bool`
 - `def _fm_scalar(fm_lines: list[str], key: str) -> str | None`
 - `def _fm_agents(fm_lines: list[str]) -> list[str]`
 - `def _body_agents_table(content: str) -> list[str]`
 - `def _hook_entry_command(event: str, index: int, entry: object, agent_file: Path) -> tuple[str | None, list[str]]`
 - `def _hook_commands(fm_lines: list[str], agent_file: Path) -> tuple[dict[str, list[str]], list[str]]`
 - `def _check_hooks(fm_lines: list[str], agent_file: Path) -> list[str]`
-- `def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_unknown_tools(fm_lines: list[str], agent_file: Path, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> list[str]`
+- `def _check_required_tools(fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_live_mcp_grants(agent_files: list[Path], configured_servers: frozenset[str], registries: dict[str, frozenset[str]]) -> list[str]`
+- `def _tool_search_queries() -> tuple[tuple[Path, str], ...]`
+- `def _check_tool_search_queries(registries: dict[str, frozenset[str]]) -> list[str]`
+- `def _check_mcp_surface(agent_files: list[Path]) -> tuple[frozenset[str], list[str]]`
 - `def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
-- `def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> list[str]`
 - `def _check_delegation(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_required_reading(content: str, agent_file: Path) -> list[str]`
-- `def validate_agent(agent_file: Path) -> list[str]`
+- `def validate_agent(agent_file: Path, mcp_servers: frozenset[str] = _DEFAULT_MCP_SERVERS) -> list[str]`
 - `def _discover_agent_files() -> list[Path]`
 - `def main(argv: list[str] | None = None) -> int`
 
@@ -1496,6 +1510,7 @@ Per-change writer coordination and Git workspace management.
   - `def release(self, change_id: str, claim_id: str) -> ChangeCoordination`
   - `def update(self, coordination: ChangeCoordination, *, lock: PublicationLock | None = None) -> ChangeCoordination`
   - `def _update(self, coordination: ChangeCoordination) -> ChangeCoordination`
+  - `def prepare_reviewed_boundary(self, coordination: ChangeCoordination, reviewed_head: str, lock: PublicationLock) -> ReplacementTransactionParticipant | None`
   - `def reserve_publication(self, change_id: str, lease: PublicationLease, lock: PublicationLock, *, now: str) -> ChangeCoordination`
   - `def release_publication(self, change_id: str, operation_id: str, owner_id: str, lock: PublicationLock) -> ChangeCoordination`
   - `def _validate_publication_operation_id(operation_id: str) -> None`
@@ -1513,6 +1528,7 @@ Per-change writer coordination and Git workspace management.
   - `def _validate_existing_coordination(self, coordination: ChangeCoordination, recovery_reviewed_head: str | None) -> None`
   - `def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None`
   - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
+  - `def prepare_finalization_boundary(self, change_id: str, exact_head: str, promoted_commits: tuple[str, ...], lock: PublicationLock) -> ReplacementTransactionParticipant | None`
   - `def snapshot_design_package(self, change_id: str, package_id: str, package_files: Mapping[str, bytes], operation_id: str) -> ChangeDesignPackageSnapshotReceipt`
   - `def _validate_design_package_snapshot_replay(self, receipt: ChangeDesignPackageSnapshotReceipt, package_id: str, operation_id: str) -> None`
   - `def _commit_design_package_snapshot(self, coordination: ChangeCoordination, intent: ChangeDesignPackageSnapshotIntent, package_files: Mapping[str, bytes], branch_head: str | None) -> str`
@@ -1831,6 +1847,9 @@ Transport-free Delivery application configuration and composition.
 - `def _restore_remote_snapshot(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, paths: _DeliveryPaths, package_store: DesignPackageStore, coordinator: PortfolioCoordinator, workspace_manager: ChangeWorkspaceManager) -> None`
 - `def _validate_local_snapshot(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, paths: _DeliveryPaths, package_store: DesignPackageStore, coordinator: PortfolioCoordinator) -> None`
 - `def _fetch_snapshot_change_head(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, repository: Path) -> tuple[str, bool]`
+- `class _DeferredRemoteStateReconciliation(Exception)`
+- `def _can_defer_remote_state_reconciliation(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, repository: Path, remote_branch: str) -> bool`
+- `def _loader_git_is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool`
 - `def _restore_local_change_branch(snapshot: DeliveryStateSnapshot, repository: Path) -> None`
 - `def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Path) -> None`
 - `def _local_runtime_change_ids(runtime_root: Path) -> set[str]`
@@ -2066,7 +2085,7 @@ Mechanical Delivery state and worker-owned transitions.
   - `def latch_merged_pull_request(self, observation: PublicationPullRequestObservationReceipt) -> DeliveryMergedPullRequestLatch`
   - `def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt`
   - `def completion_bundle(self) -> CompletionReceiptBundle | None`
-  - `def finalize_change(self, request: FinalizeDeliveryChange, finalized_at: datetime) -> DeliveryFinalizationReceipt`
+  - `def finalize_change(self, request: FinalizeDeliveryChange, finalized_at: datetime, *, additional_participants: tuple[ReplacementTransactionParticipant, ...] = ()) -> DeliveryFinalizationReceipt`
   - `def reconcile_finalization_head(self, observed_head: str, invalidated_at: datetime) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None`
   - `def record_target_sync(self, receipt: ChangeTargetSyncReceipt, synced_at: datetime) -> ChangeTargetSyncReceipt`
   - `def record_external_head_adoption(self, receipt: ChangeExternalHeadAdoptionReceipt, adopted_at: datetime) -> ChangeExternalHeadAdoptionReceipt`

@@ -470,6 +470,14 @@ class _DeliveryApplicationFake:
             raise failure
         return self._cleanup_receipt()
 
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        *args: object,
+        confirmed_discard: bool,
+    ) -> SimpleNamespace:
+        self.calls.append(("cleanup-abandoned-target-sync", (*args, confirmed_discard)))
+        return self._cleanup_receipt()
+
     def cleanup_completed_change_worktree(self, *args: object) -> SimpleNamespace:
         self.calls.append(("cleanup-completed", args))
         return self._cleanup_receipt()
@@ -723,6 +731,7 @@ def test_detail_target_sync_uses_target_branch_wire_contract() -> None:
         "change_head_before": "2" * 40,
         "merged_head": "3" * 40,
         "merge_commit": True,
+        "review_required": False,
     }
 
 
@@ -857,6 +866,7 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         "change_head_before": "d" * 40,
         "merged_head": "f" * 40,
         "merge_commit": True,
+        "review_required": False,
     }
     assert responses[8].json() == {
         "cleanup_id": "c" * 64,
@@ -1166,6 +1176,33 @@ def test_target_sync_conflict_exit_routes_delegate_exactly_once() -> None:
     ]
 
 
+def test_abandoned_target_sync_discard_cleanup_route_requires_confirmation() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
+        json={"confirmed_discard": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "cleanup_id": "c" * 64,
+        "change_id": "change-a",
+        "branch": "owlbear/change/change-a",
+        "worktree_path": ".owlbear/delivery/worktrees/change-a",
+        "branch_head": "d" * 40,
+    }
+    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+
+    rejected = client.post(
+        "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
+        json={"confirmed_discard": False},
+    )
+
+    assert rejected.status_code == 422
+    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+
+
 def test_publication_supersession_route_delegates_current_identity_exactly_once() -> None:
     client, application = _client()
 
@@ -1433,11 +1470,13 @@ def test_completed_history_routes_publish_versioned_discriminated_schema() -> No
     assert record_schema["oneOf"] == [
         {"$ref": "#/components/schemas/LegacyCompletedChangeRecord"},
         {"$ref": "#/components/schemas/ReceiptCompletedChangeRecord"},
+        {"$ref": "#/components/schemas/AbandonedChangeRecord"},
     ]
     assert record_schema["discriminator"] == {
         "propertyName": "record_kind",
         "mapping": {
             "legacy-package": "#/components/schemas/LegacyCompletedChangeRecord",
             "completion-receipt": "#/components/schemas/ReceiptCompletedChangeRecord",
+            "abandoned-change": "#/components/schemas/AbandonedChangeRecord",
         },
     }

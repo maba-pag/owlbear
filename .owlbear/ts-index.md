@@ -11,6 +11,17 @@
 
 - `export default tseslint.config( { ignores: [ "dist/**", "coverage/**", "playwright-report/**", "node_modules/**", "public/porsche-design-system/**", ], }, js.configs.recommended, ...tseslint.configs.recommended, { languageOptions: { ecmaVersion: 2022, sourceType: "module", parserOptions: { ecmaFeatures: { jsx: true }, }, globals: { window: "readonly", document: "readonly", console: "readonly", fetch: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly", }, }, rules: { // Project-wide overrides intentionally minimal. // Add React/Hook rules in a follow-up if/when needed. "@typescript-eslint/no-unused-vars": [ "warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }, ], // Ban raw PDS custom elements — use React wrappers from // @porsche-design-system/components-react instead. // Raw custom elements + React 19 SyntheticEvent = broken event.detail. "no-restricted-syntax": [ "error", { selector: "JSXOpeningElement[name.name='p-select']", message: "Use <PSelect> from @porsche-design-system/components-react instead of raw <p-select>.", }, { selector: "JSXOpeningElement[name.name='p-button']", message: "Use <PButton> from @porsche-design-system/components-react instead of raw <p-button>.", }, { selector: "JSXOpeningElement[name.name='p-input-search']", message: "Use <PInputSearch> from @porsche-design-system/components-react instead of raw <p-input-search>.", }, { selector: "JSXOpeningElement[name.name='p-input-text']", message: "Use <PInputText> from @porsche-design-system/components-react instead of raw <p-input-text>.", }, { selector: "JSXOpeningElement[name.name='p-tag']", message: "Use <PTag> from @porsche-design-system/components-react instead of raw <p-tag>.", }, ], }, }, { files: ["scripts/**/*.mjs", "e2e/support/**/*.mjs"], languageOptions: { globals: { process: "readonly", Buffer: "readonly", console: "readonly", }, }, }, )`
 
+## serve/cockpit/web/playwright.compat.config.ts
+
+### Imports
+
+- `import { defineConfig, devices } from '@playwright/test'`
+
+### Interfaces
+
+- `const compatibilitySpecs`
+- `export default defineConfig({ testDir: 'e2e', use: { baseURL: 'http://localhost:4173', headless: true, trace: 'retain-on-failure', }, reporter: [ ['line'], ['html', { outputFolder: 'playwright-report', open: 'never' }], ], projects: [ { name: 'compatibility-chromium', testMatch: compatibilitySpecs, use: { ...devices['Desktop Chrome'] }, }, { name: 'compatibility-firefox', testMatch: compatibilitySpecs, use: { ...devices['Desktop Firefox'] }, }, { name: 'compatibility-webkit', testMatch: compatibilitySpecs, use: { ...devices['Desktop Safari'] }, }, ], webServer: { command: 'npm run build && npm run preview', url: 'http://localhost:4173', reuseExistingServer: !process.env['CI'], timeout: 120_000, }, })`
+
 ## serve/cockpit/web/playwright.config.ts
 
 ### Imports
@@ -29,15 +40,15 @@
 - `import react, { reactCompilerPreset } from '@vitejs/plugin-react'`
 - `import tailwindcss from '@tailwindcss/vite'`
 - `import babel from '@rolldown/plugin-babel'`
-- `import { Features } from 'lightningcss'`
 - `import * as fs from 'node:fs'`
 - `import { join } from 'node:path'`
 
 ### Interfaces
 
+- `const BROWSER_TARGET`
 - `function cspPlugin()`
 - `function pdsVersionCheckPlugin()`
-- `export default defineConfig({ plugins: [ tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin(), ], build: { outDir: '../dist', emptyOutDir: true, }, css: { transformer: 'lightningcss', lightningcss: { exclude: Features.LightDark, }, }, test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'], globals: true, include: ['src/**/*.{test,spec}.{ts,tsx}'], testTimeout: 20_000, teardownTimeout: 3_000, // Suppress React act() warnings — thousands of these drown real errors. // Keep all other console output for debugging. onConsoleLog(log) { if (log.includes('not wrapped in act')) return false }, }, })`
+- `export default defineConfig({ plugins: [ tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin(), ], build: { outDir: '../dist', emptyOutDir: true, target: BROWSER_TARGET, cssTarget: BROWSER_TARGET, }, css: { transformer: 'lightningcss', }, test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'], globals: true, include: ['src/**/*.{test,spec}.{ts,tsx}'], testTimeout: 20_000, teardownTimeout: 3_000, // Suppress React act() warnings — thousands of these drown real errors. // Keep all other console output for debugging. onConsoleLog(log) { if (log.includes('not wrapped in act')) return false }, }, })`
 
 ## serve/cockpit/web/vitest.setup.ts
 
@@ -253,6 +264,9 @@
 - `export interface NeedsCounts`
 - `export interface ActivityCounts`
 - `export interface WorkItemPortfolioTotals`
+- `export type PortfolioChangeAdmission = 'admitted' | 'unadmitted'`
+- `export type PortfolioChangeStage = | 'design' | 'building' | 'finalized' | 'awaiting-merge' | 'publication-attention' | 'acceptance-attention' | 'deferred' | 'abandoned' | 'completed'`
+- `export interface PortfolioChangeLifecycleStatus`
 - `export type PortfolioWorkScope = 'outcome' | 'publication'`
 - `export type PortfolioGuidanceKind = | 'resume-design' | 'start-orchestration' | 'work-underway' | 'intervene' | 'wait' | 'create-change'`
 - `export interface PortfolioWorkReference`
@@ -274,6 +288,7 @@
 - `export type PublicationCheckBlockingState = 'blocking' | 'required-pending' | 'not-blocking'`
 - `export interface PublicationCheckView`
 - `export interface PublicationChecksObservationResponse`
+- `export interface WorkItemPublicationReconciliationResponse`
 - `export interface WorkItemPublicationView`
 - `export interface WorkItemTargetSyncView`
 - `export interface WorkItemTargetSyncConflictView`
@@ -316,7 +331,7 @@
 - `export function recoverWorkItemClaim( changeId: string, outcomeId: string, attemptId: string, claimId: string, ): Promise<unknown>`
 - `export function moveWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, reason: string, snapshotVersion: string, ): Promise<BackwardMoveResult>`
 - `export function previewWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, ): Promise<BackwardMovePreview>`
-- `export function reconcileWorkItemPublication(changeId: string): Promise<unknown>`
+- `export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse>`
 - `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
 - `export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse>`
 - `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
@@ -395,6 +410,7 @@
 ### Imports
 
 - `import { Link } from 'react-router'`
+- `import type { PortfolioChangeLifecycleStatus } from '../api/workItems'`
 - `import CopyCommand from './CopyCommand'`
 - `import { designCommand, designWorkTitle } from './designWorkPresentation'`
 - `import { workItemStatusClassName } from './workItemPresentation'`
@@ -402,7 +418,7 @@
 ### Interfaces
 
 - `interface DesignWorkSectionProps`
-- `export default function DesignWorkSection({ changeIds, selectedChangeId, onSelect }: DesignWorkSectionProps)`
+- `export default function DesignWorkSection({ statuses, selectedChangeId, onSelect }: DesignWorkSectionProps)`
 
 ## serve/cockpit/web/src/components/ErrorBoundary.tsx
 
@@ -821,9 +837,9 @@
 ### Imports
 
 - `import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'`
-- `import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'`
+- `import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'`
 - `import { useLocation, useNavigate } from 'react-router'`
-- `import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'`
+- `import type { ChangeGroupView, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'`
 - `import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'`
 - `import DesignWorkDetail from '../components/DesignWorkDetail'`
 - `import DesignWorkSection from '../components/DesignWorkSection'`
@@ -839,6 +855,9 @@
 
 - `type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }`
 - `type FocusDestination = 'trigger' | 'current-view' | 'history-view'`
+- `const CHANGE_STAGE_LABELS: Record<PortfolioChangeStage, string>`
+- `function isUnadmittedDesign(status: PortfolioChangeLifecycleStatus): boolean`
+- `function isUnavailableAdmitted(status: PortfolioChangeLifecycleStatus): boolean`
 - `function selectedValue(event: SelectValueEvent): string`
 - `function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | 'history'; onChange: (workspace: 'current' | 'history') => void })`
 - `interface FilterProps`
@@ -851,5 +870,6 @@
 - `function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void })`
 - `function PortfolioWorkspace({ groups, selected, emptyMessage, onSelect, }: { groups: ChangeGroupView[] selected: WorkItemIdentity | null emptyMessage?: string onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void })`
 - `function EmptyPortfolioState({ filtered }: { filtered: boolean })`
+- `function DeliveryStatusSection({ statuses }: { statuses: PortfolioChangeLifecycleStatus[] })`
 - `function EmptyDetail({ error, retry, onClose, subject = 'Work Item', retryLabel = 'Retry item', }: { error: Error | null retry: () => void onClose: () => void subject?: string retryLabel?: string })`
 - `export default function WorkPortfolioPage()`

@@ -5,6 +5,7 @@ export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working'
 export type WorkItemActionKind =
   | 'none'
+  | 'resume-design'
   | 'answer-request'
   | 'clear-block'
   | 'recover-claim'
@@ -13,6 +14,7 @@ export type WorkItemActionKind =
   | 'mark-ready'
   | 'observe-acceptance'
   | 'resolve-attention'
+  | 'adopt-external-head'
   | 'resume-change'
   | 'start-orchestration'
 export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
@@ -41,6 +43,8 @@ export interface WorkItemAction {
   label: string | null
   command: string | null
   attention_id?: string | null
+  expected_head?: string | null
+  adopted_head?: string | null
 }
 
 export interface WorkItemProgress {
@@ -274,6 +278,8 @@ export interface WorkItemPublicationView {
   phase: WorkItemPublicationPhase
   finalization_id: string | null
   finalized_head: string | null
+  ready_for_finalization?: boolean | null
+  readiness_diagnostics?: string[]
   published_head: string | null
   pending_checkpoint_head: string | null
   pending_checkpoint_triggers: string[]
@@ -292,6 +298,7 @@ export interface WorkItemPublicationView {
     entered_from: string
     recorded_at: string
     diagnostics: string[]
+    acceptance_reason?: 'head-moved' | 'closed-unmerged' | 'identity-mismatch' | 'merge-evidence-missing' | 'latch-regression' | null
   } | null
   target_sync?: WorkItemTargetSyncView | null
   target_sync_conflict?: WorkItemTargetSyncConflictView | null
@@ -308,6 +315,7 @@ export interface WorkItemTargetSyncView {
   change_head_before: string
   merged_head: string
   merge_commit: boolean
+  review_required: boolean
 }
 
 export interface WorkItemTargetSyncConflictView {
@@ -357,6 +365,7 @@ export interface TargetSyncResponse {
   change_head_before: string
   merged_head: string
   merge_commit: boolean
+  review_required: boolean
 }
 
 export interface TargetSyncAbortResponse {
@@ -366,6 +375,17 @@ export interface TargetSyncAbortResponse {
   change_id: string
   target_head: string
   restored_head: string
+}
+
+export interface ExternalHeadAdoptionResponse {
+  schema_version: 2
+  receipt_id: string
+  operation_id: string
+  change_id: string
+  branch: string
+  expected_head: string
+  adopted_head: string
+  provenance: 'fast-forward' | 'observed'
 }
 
 export interface PublicationSupersessionResponse {
@@ -481,7 +501,23 @@ export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase 
   completed_at: string
 }
 
-export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord
+export interface AbandonedChangeRecord {
+  schema_version: 1
+  record_kind: 'abandoned-change'
+  change_id: string
+  abandonment_id: string
+  title: string
+  semantic_summary: string
+  outcome_titles: string[]
+  outcome_promises?: string[] | null
+  prior_stage: WorkItemStage
+  reason: string
+  abandoned_at: string
+  cleanup_available: boolean
+  target_sync_conflict: boolean
+}
+
+export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[]
@@ -553,8 +589,12 @@ export function searchCompletedChanges(query: string, cursor?: string, signal?: 
   )
 }
 
-export function showCompletedChange(changeId: string, completionId: string): Promise<CompletedChangeRecord> {
-  const query = new URLSearchParams({ completion_id: completionId })
+export function completedChangeRecordId(record: CompletedChangeRecord): string {
+  return record.record_kind === 'abandoned-change' ? record.abandonment_id : record.completion_id
+}
+
+export function showCompletedChange(changeId: string, recordId: string): Promise<CompletedChangeRecord> {
+  const query = new URLSearchParams({ completion_id: recordId })
   return workItemRequest(
     `/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`,
     { fallbackCode: 'ERR_COMPLETED_HISTORY_DETAIL' },
@@ -676,6 +716,25 @@ export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   )
 }
 
+export function adoptExternalHeadAfterAcceptanceAttention(
+  changeId: string,
+  expectedDispositionId: string,
+  expectedHead: string,
+  adoptedHead: string,
+  operationId: string,
+): Promise<ExternalHeadAdoptionResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/acceptance/external-head/adopt`,
+    'ERR_WORK_ITEM_ACCEPTANCE_HEAD_ADOPTION',
+    {
+      expected_disposition_id: expectedDispositionId,
+      expected_head: expectedHead,
+      adopted_head: adoptedHead,
+      operation_id: operationId,
+    },
+  )
+}
+
 export function reconcileWorkItemAcceptance(
   changeIds: string[],
   signal?: AbortSignal,
@@ -768,6 +827,14 @@ export function cleanupAbandonedWorkItemChange(changeId: string): Promise<Change
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned`,
     'ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP',
+  )
+}
+
+export function discardAbandonedTargetSyncAndCleanup(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned/target-sync-discard`,
+    'ERR_WORK_ITEM_TARGET_SYNC_DISCARD_CLEANUP',
+    { confirmed_discard: true },
   )
 }
 

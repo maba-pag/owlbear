@@ -111,6 +111,12 @@ class CleanupAbandonedChangeParams(ChangeParams):
     """Validate cleanup of one terminal abandoned Change worktree."""
 
 
+class CleanupAbandonedTargetSyncParams(ChangeParams):
+    """Validate explicit discard of an abandoned target-sync conflict before cleanup."""
+
+    confirmed_discard: Literal[True]
+
+
 class CleanupCompletedChangeParams(ChangeParams):
     """Validate cleanup of one completed Change worktree receipt."""
 
@@ -430,6 +436,7 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> ChangeTargetSyncResponse:
@@ -444,6 +451,7 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
             change_head_before=receipt.change_head_before,
             merged_head=receipt.merged_head,
             merge_commit=receipt.merge_commit,
+            review_required=receipt.review_required,
         )
 
 
@@ -556,6 +564,10 @@ type CleanupAbandonedChangeRequest = Annotated[
     CleanupAbandonedChangeParams,
     BeforeValidator(partial(_parse_json_model, CleanupAbandonedChangeParams)),
 ]
+type CleanupAbandonedTargetSyncRequest = Annotated[
+    CleanupAbandonedTargetSyncParams,
+    BeforeValidator(partial(_parse_json_model, CleanupAbandonedTargetSyncParams)),
+]
 type CleanupCompletedChangeRequest = Annotated[
     CleanupCompletedChangeParams,
     BeforeValidator(partial(_parse_json_model, CleanupCompletedChangeParams)),
@@ -666,6 +678,8 @@ __all__ = [
     "ClaimContextRequest",
     "CleanupAbandonedChangeParams",
     "CleanupAbandonedChangeRequest",
+    "CleanupAbandonedTargetSyncParams",
+    "CleanupAbandonedTargetSyncRequest",
     "CleanupCompletedChangeParams",
     "CleanupCompletedChangeRequest",
     "CompletedPageParams",

@@ -860,6 +860,8 @@ class DeliveryCheckpointReconciliationResult(_ApplicationModel):
     generated_summary: GeneratedPullRequestSummaryReceipt | None = None
     state: DeliveryCheckpointPublicationState
     reconciled: bool
+    error_code: str | None = Field(default=None, min_length=1)
+    error_detail: str | None = Field(default=None, min_length=1)
 
 
 class DeliveryAcceptanceReconciliationStatus(StrEnum):
@@ -1134,7 +1136,14 @@ class PortfolioApplication:
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("target synchronization cannot overlap an active Delivery claim")
             try:
-                receipt = self._workspace_manager.sync_with_target(request)
+                receipt = self._workspace_manager.sync_with_target(
+                    request,
+                    before_head_change=lambda: self._return_publication_to_draft_before_head_change(
+                        change_id,
+                        runtime,
+                        operation_id,
+                    ),
+                )
             except ChangeTargetSyncConflictError as exc:
                 history = runtime.publication_history()
                 runtime.capture_target_sync_conflict(
@@ -1187,7 +1196,14 @@ class PortfolioApplication:
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("external Change head adoption cannot overlap an active Delivery claim")
             try:
-                receipt = self._workspace_manager.adopt_external_head(request)
+                receipt = self._workspace_manager.adopt_external_head(
+                    request,
+                    before_head_change=lambda: self._return_publication_to_draft_before_head_change(
+                        change_id,
+                        runtime,
+                        operation_id,
+                    ),
+                )
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("external Change head could not be adopted", exc)
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
@@ -1235,7 +1251,19 @@ class PortfolioApplication:
             if observation.snapshot.head_sha != adopted_head:
                 self._fail("acceptance head adoption pull-request head changed")
             try:
-                receipt = self._workspace_manager.adopt_external_head(request)
+                receipt = self._workspace_manager.adopt_external_head(
+                    request,
+                    before_head_change=lambda: self._return_publication_to_draft_before_head_change(
+                        change_id,
+                        runtime,
+                        operation_id,
+                        finalization_id=(
+                            runtime.finalization_invalidation().finalization_id
+                            if runtime.finalization_invalidation() is not None
+                            else None
+                        ),
+                    ),
+                )
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("external Change head could not be adopted", exc)
             resolved_at = _timestamp(self._clock())
@@ -1384,6 +1412,7 @@ class PortfolioApplication:
             self._fail("publication supersession is not configured")
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_fresh_target_sync_review(runtime)
             runtime_history, predecessor, replay_head = self._read_supersession_context(
                 runtime,
                 change_id,
@@ -1435,6 +1464,7 @@ class PortfolioApplication:
         publisher = self._draft_pull_request_publisher
         if publisher is None:
             self._fail("publication supersession is not configured")
+        self._require_fresh_target_sync_review(self._runtime(change_id, for_mutation=True))
         try:
             superseding_head = self._workspace_manager.reviewed_source_head(change_id)
             self._workspace_manager.repository_automation_paths(change_id, superseding_head)
@@ -1660,23 +1690,30 @@ class PortfolioApplication:
         """Clean one terminal Change worktree after exact lifecycle validation."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            lifecycle = runtime.change_stage()
-            completion = runtime.completion_receipt()
-            completed = lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
-            if lifecycle != DeliveryChangeStage.ABANDONED and not completed:
-                self._fail("Change worktree cleanup requires an abandoned or completed Change")
-            if expected_completion_id is not None and (
-                not completed or completion.completion_id != expected_completion_id
-            ):
-                self._fail("completed Change worktree cleanup requires the exact completion receipt")
-            try:
-                receipt = self._workspace_manager.cleanup(change_id)
-            except ChangeWorktreeAttentionError:
-                raise
-            except CoordinationConflictError:
-                raise
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                self._fail("Change worktree cleanup could not complete", exc)
+            return self._cleanup_change_worktree_locked(change_id, runtime, expected_completion_id)
+
+    def _cleanup_change_worktree_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        expected_completion_id: str | None = None,
+    ) -> DeliveryChangeWorktreeCleanup:
+        """Clean one terminal Change worktree while its checkpoint lock is held."""
+        lifecycle = runtime.change_stage()
+        completion = runtime.completion_receipt()
+        completed = lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
+        if lifecycle != DeliveryChangeStage.ABANDONED and not completed:
+            self._fail("Change worktree cleanup requires an abandoned or completed Change")
+        if expected_completion_id is not None and (not completed or completion.completion_id != expected_completion_id):
+            self._fail("completed Change worktree cleanup requires the exact completion receipt")
+        try:
+            receipt = self._workspace_manager.cleanup(change_id)
+        except ChangeWorktreeAttentionError:
+            raise
+        except CoordinationConflictError:
+            raise
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("Change worktree cleanup could not complete", exc)
         return DeliveryChangeWorktreeCleanup(
             cleanup_id=receipt.cleanup_id,
             change_id=receipt.change_id,
@@ -1691,6 +1728,52 @@ class PortfolioApplication:
         if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
             self._fail("abandoned Change worktree cleanup requires an abandoned Change")
         return self.cleanup_change_worktree(change_id)
+
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        change_id: str,
+        *,
+        confirmed_discard: Literal[True],
+    ) -> DeliveryChangeWorktreeCleanup:
+        """Discard one abandoned target merge and then clean its exact Change worktree."""
+        if confirmed_discard is not True:
+            self._fail("discarding an abandoned target synchronization conflict requires explicit confirmation")
+        runtime = self._runtime(change_id, for_mutation=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
+                self._fail("abandoned target synchronization conflict cleanup requires an abandoned Change")
+            coordination = self._workspace_manager.show(change_id)
+            conflict = coordination.target_sync_conflict
+            if conflict is not None:
+                retained = next(
+                    (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+                    None,
+                )
+                if retained is None:
+                    self._fail("abandoned target synchronization conflict worktree is not registered")
+                if not retained.worktree_present or not retained.git_registered:
+                    try:
+                        coordination = self._workspace_manager.recover(
+                            change_id,
+                            coordination.last_reviewed_commit,
+                        )
+                    except ChangeWorktreeAttentionError:
+                        raise
+                    except CoordinationConflictError:
+                        raise
+                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                        self._fail("abandoned target synchronization conflict worktree could not be recovered", exc)
+                try:
+                    self._workspace_manager.abort_target_sync_conflict(
+                        TargetSyncConflictRequest(
+                            change_id=change_id,
+                            target_head=conflict.target_head,
+                            operation_id=conflict.operation_id,
+                        )
+                    )
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                    self._fail("abandoned target synchronization conflict could not be discarded", exc)
+            return self._cleanup_change_worktree_locked(change_id, runtime)
 
     def cleanup_completed_change_worktree(
         self,
@@ -2548,7 +2631,66 @@ class PortfolioApplication:
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return self._reconcile_change_checkpoint(change_id, runtime)
 
-    def _reconcile_change_checkpoint(
+    def reconcile_pending_checkpoints(
+        self,
+        *,
+        limit: int = 8,
+    ) -> tuple[DeliveryCheckpointReconciliationResult, ...]:
+        """Drain a bounded set of pending checkpoints without failing sibling Changes."""
+        if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
+            return ()
+        if limit < 1:
+            message = "checkpoint reconciliation limit must be positive"
+            raise ValueError(message)
+        self._reconcile_runtimes()
+        pending_change_ids = tuple(
+            change_id
+            for change_id, runtime in sorted(self._runtimes.items())
+            if runtime.checkpoint_publication_state().pending_checkpoint is not None
+        )[:limit]
+        results = []
+        for change_id in pending_change_ids:
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                continue
+            try:
+                with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                    results.append(self._reconcile_change_checkpoint(change_id, runtime))
+            except BlockingIOError:
+                state = runtime.checkpoint_publication_state()
+                results.append(
+                    DeliveryCheckpointReconciliationResult(
+                        change_id=change_id,
+                        state=state,
+                        reconciled=False,
+                        error_code="ERR_DELIVERY_CHECKPOINT_BUSY",
+                        error_detail="Checkpoint reconciliation is already in progress.",
+                    )
+                )
+            except (
+                PublicationProviderError,
+                PublicationBaselineUnavailableError,
+                DeliveryRuntimeConflictError,
+                OSError,
+                RuntimeError,
+                subprocess.SubprocessError,
+                ValueError,
+            ) as exc:
+                state = runtime.checkpoint_publication_state()
+                results.append(
+                    DeliveryCheckpointReconciliationResult(
+                        change_id=change_id,
+                        attempted_head=state.pending_checkpoint.head if state.pending_checkpoint else None,
+                        state=state,
+                        reconciled=False,
+                        error_code=getattr(exc, "code", "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"),
+                        error_detail=str(exc)
+                        or "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+                    )
+                )
+        return tuple(results)
+
+    def _reconcile_change_checkpoint(  # noqa: C901
         self,
         change_id: str,
         runtime: DeliveryRuntime,
@@ -2570,6 +2712,15 @@ class PortfolioApplication:
                 reconciled=True,
             )
         if pending.head is None:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=None,
+                state=initial,
+                reconciled=False,
+            )
+
+        target_sync = runtime.target_sync_receipt()
+        if target_sync is not None and target_sync.review_required and runtime.finalization() is None:
             return DeliveryCheckpointReconciliationResult(
                 change_id=change_id,
                 attempted_head=None,
@@ -2961,7 +3112,8 @@ class PortfolioApplication:
                 self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
                 for change_id in dict.fromkeys(status_ids)
             )
-            if status.stage is not DeliveryChangeStage.COMPLETED or not status.actionable_runtime
+            if status.stage not in {DeliveryChangeStage.COMPLETED, DeliveryChangeStage.ABANDONED}
+            or not status.actionable_runtime
         )
         draft_design_ids = tuple(status.change_id for status in change_statuses if not status.admitted)
         design_required_ids = tuple(
@@ -3174,6 +3326,27 @@ class PortfolioApplication:
                 ),
             }
         )
+        if publication.phase in {
+            WorkItemPublicationPhase.READY_FOR_FINALIZATION,
+            WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
+        }:
+            try:
+                finalization_context = self.show_finalization_context(change_id)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                diagnostic = str(exc) or "Finalization readiness could not be inspected."
+                publication = publication.model_copy(
+                    update={
+                        "ready_for_finalization": False,
+                        "readiness_diagnostics": (diagnostic,),
+                    }
+                )
+            else:
+                publication = publication.model_copy(
+                    update={
+                        "ready_for_finalization": finalization_context.ready_for_finalization,
+                        "readiness_diagnostics": finalization_context.readiness_diagnostics,
+                    }
+                )
         return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
@@ -3543,7 +3716,7 @@ class PortfolioApplication:
 
     @staticmethod
     def _is_work_portfolio_visible(snapshot: DeliveryPortfolioSnapshot) -> bool:
-        return snapshot.frontier.change_abandonment is not None or not is_change_terminal(snapshot.frontier)
+        return snapshot.frontier.change_abandonment is None and not is_change_terminal(snapshot.frontier)
 
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:
@@ -3979,6 +4152,77 @@ class PortfolioApplication:
                 runtime.record_external_head_promotion(promotion, _timestamp(self._clock()))
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("finalization could not promote the reviewed adopted Change head", exc)
+
+    def _return_publication_to_draft_before_head_change(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        operation_id: str,
+        *,
+        finalization_id: str | None = None,
+    ) -> None:
+        """Demote the bound provider pull request before its Change head moves."""
+        finalization = runtime.finalization()
+        ready = runtime.ready_receipt()
+        if finalization is None or ready is None:
+            if finalization_id is None:
+                return
+            publication = runtime.change_disposition_publication()
+            if publication is None:
+                self._fail("Change head movement requires a bound publication identity")
+            expected_finalization_id = finalization_id
+            expected_repository = publication.repository
+            expected_number = publication.number
+            expected_node_id = publication.node_id
+        else:
+            expected_finalization_id = finalization.finalization_id
+            expected_repository = ready.repository
+            expected_number = ready.number
+            expected_node_id = ready.node_id
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("Change head movement requires a configured publication provider")
+        observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        if observation is None:
+            self._fail("Change head movement requires a bound pull request")
+        snapshot = observation.snapshot
+        if (
+            snapshot.repository != expected_repository
+            or snapshot.number != expected_number
+            or snapshot.node_id != expected_node_id
+            or snapshot.base_branch != publisher.target_branch
+            or snapshot.state != "open"
+            or snapshot.merged
+        ):
+            self._fail("Change head movement requires an open bound pull request")
+        if snapshot.draft:
+            if finalization is not None and ready is not None:
+                runtime.clear_ready_for_head_change(
+                    finalization.finalization_id,
+                    finalization.exact_head,
+                )
+            return
+        publisher.return_to_draft(
+            ReturnChangePullRequestToDraft(
+                change_id=change_id,
+                operation_id=f"return-draft-{operation_id}",
+                finalization_id=expected_finalization_id,
+                exact_head=snapshot.head_sha,
+            )
+        )
+        if finalization is not None and ready is not None:
+            runtime.clear_ready_for_head_change(
+                finalization.finalization_id,
+                finalization.exact_head,
+            )
+
+    @staticmethod
+    def _require_fresh_target_sync_review(runtime: DeliveryRuntime) -> None:
+        """Reject publication paths that still contain an unreviewed resolved target merge."""
+        target_sync = runtime.target_sync_receipt()
+        if target_sync is not None and target_sync.review_required and runtime.finalization() is None:
+            message = "target synchronization resolution requires fresh finalization review"
+            raise PortfolioApplicationError(message)
 
     def _activate_candidate(
         self,

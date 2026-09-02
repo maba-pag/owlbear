@@ -299,8 +299,9 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
         WorkItemStage.DESIGN,
         WorkItemNeed.YOU,
         WorkItemActivityState.IDLE,
-        WorkItemActionKind.NONE,
+        WorkItemActionKind.RESUME_DESIGN,
     )
+    assert card.action.command == "/design portfolio-change"
     assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
     assert detail.projection.attention == WorkItemAttention.USER
@@ -316,7 +317,7 @@ def test_work_item_activity_contract_has_no_legacy_repair_state() -> None:
     }
 
 
-def test_design_return_suppresses_preserved_request_action_until_readmission() -> None:
+def test_design_return_exposes_resume_command_and_suppresses_preserved_request_action() -> None:
     request = DeliveryRequest(
         request_id="REQ-001",
         kind=DeliveryRequestKind.DECISION,
@@ -336,7 +337,8 @@ def test_design_return_suppresses_preserved_request_action_until_readmission() -
     card = projector.group_view().items[0]
 
     assert card.needs_headline == "Re-admission required"
-    assert card.action.kind == WorkItemActionKind.NONE
+    assert card.action.kind == WorkItemActionKind.RESUME_DESIGN
+    assert card.action.command == "/design portfolio-change"
 
 
 def test_detail_exposes_operator_directed_course_changes() -> None:
@@ -498,6 +500,7 @@ def test_target_sync_receipt_projects_without_receipt_only_fields() -> None:
         "change_head_before": receipt.change_head_before,
         "merged_head": receipt.merged_head,
         "merge_commit": receipt.merge_commit,
+        "review_required": receipt.review_required,
     }
 
 

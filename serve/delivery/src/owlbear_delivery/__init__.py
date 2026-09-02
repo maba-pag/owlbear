@@ -51,7 +51,9 @@ from owlbear_delivery.change_workspace import (
     WorkspaceRecoverySnapshot,
     WriterIdentity,
 )
+from owlbear_delivery.checkpoint_supervisor import DeliveryCheckpointSupervisor
 from owlbear_delivery.completed_history import (
+    AbandonedChangeRecord,
     CompletedChangePage,
     CompletedChangeRecord,
     CompletedHistoryCatalog,
@@ -324,6 +326,7 @@ from owlbear_delivery.work_items import (
 
 __all__ = [
     "DELIVERY_TRANSITION_ADAPTER",
+    "AbandonedChangeRecord",
     "ActivateDeliveryClaim",
     "AdministrativeDeliveryMove",
     "AdministrativeDeliveryMovePreview",
@@ -410,6 +413,7 @@ __all__ = [
     "DeliveryChangeWorktreeRecovery",
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointReconciliationResult",
+    "DeliveryCheckpointSupervisor",
     "DeliveryCheckpointTrigger",
     "DeliveryCheckpointTriggerKind",
     "DeliveryClaimRecoveryResult",

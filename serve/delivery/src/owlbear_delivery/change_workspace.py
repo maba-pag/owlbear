@@ -44,6 +44,7 @@ _DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.j
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_PARENT_COUNT = 2
 _EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION = 2
+_TARGET_SYNC_REVIEW_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,7 @@ class ChangeWriter(WriterIdentity):
 class _ChangeWorktreeCleanupRecord(_WorkspaceModel):
     """Identity-bound record for one exact Change worktree cleanup."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     change_id: ChangeId
     branch: str = Field(min_length=1)
@@ -293,7 +294,7 @@ class BlockedImplementationRecoveryReceipt(_WorkspaceModel):
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -303,6 +304,20 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_receipt(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        schema_version = value.get("schema_version")
+        if schema_version in {None, 1}:
+            legacy = dict(value)
+            legacy["schema_version"] = 1
+            legacy.setdefault("review_required", False)
+            return legacy
+        return value
 
     @classmethod
     def create(  # noqa: PLR0913
@@ -316,9 +331,11 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
         change_head_before: str,
         merged_head: str,
         merge_commit: bool,
+        review_required: bool = False,
     ) -> Self:
         """Create a content-addressed receipt from one completed target merge."""
         values = {
+            "schema_version": 2 if review_required else 1,
             "operation_id": operation_id,
             "change_id": change_id,
             "integration_target": integration_target,
@@ -327,16 +344,22 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
             "change_head_before": change_head_before,
             "merged_head": merged_head,
             "merge_commit": merge_commit,
+            "review_required": review_required,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
-        return cls(receipt_id=_target_sync_digest(candidate), **values)
+        digest = _target_sync_digest(candidate) if review_required else _legacy_target_sync_digest(candidate)
+        return cls(receipt_id=digest, **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> Self:
         if self.expected_target != self.target_head:
             message = "target synchronization receipt names a different fetched target"
             raise ValueError(message)
-        if self.receipt_id != _target_sync_digest(self):
+        if (self.schema_version == _TARGET_SYNC_REVIEW_SCHEMA_VERSION) != self.review_required:
+            message = "target synchronization review metadata does not match its schema version"
+            raise ValueError(message)
+        expected_digest = _legacy_target_sync_digest(self) if self.schema_version == 1 else _target_sync_digest(self)
+        if self.receipt_id != expected_digest:
             message = "target synchronization receipt identity is invalid"
             raise ValueError(message)
         return self
@@ -2210,7 +2233,11 @@ class ChangeWorkspaceManager:
         if branch_head != coordination.last_reviewed_commit:
             _coordination_conflict("target synchronization requires the reviewed Change head")
 
-    def sync_with_target(self, request: SyncChangeWithTarget) -> ChangeTargetSyncReceipt:
+    def sync_with_target(
+        self,
+        request: SyncChangeWithTarget,
+        before_head_change: Callable[[], None] | None = None,
+    ) -> ChangeTargetSyncReceipt:
         """Fetch one exact target head and merge it only in the managed Change worktree."""
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
@@ -2248,6 +2275,11 @@ class ChangeWorkspaceManager:
                 coordination.branch,
                 branch_head,
             )
+            if (
+                not self._is_ancestor(target_head, branch_head, cwd=coordination.worktree_path)
+                and before_head_change is not None
+            ):
+                before_head_change()
             merge = self._run_git(
                 "merge",
                 "--no-edit",
@@ -2262,6 +2294,11 @@ class ChangeWorkspaceManager:
                     self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
                 _workspace_failure("target synchronization merge failed")
             merged_head = self._resolve(coordination.branch)
+            inherited_review_requirement = (
+                coordination.target_sync_receipt.review_required
+                if coordination.target_sync_receipt is not None
+                else False
+            )
             receipt = ChangeTargetSyncReceipt.create(
                 operation_id=request.operation_id,
                 change_id=request.change_id,
@@ -2271,6 +2308,7 @@ class ChangeWorkspaceManager:
                 change_head_before=branch_head,
                 merged_head=merged_head,
                 merge_commit=self._is_merge_commit(merged_head, coordination.worktree_path),
+                review_required=inherited_review_requirement,
             )
             self._coordinator.update(
                 coordination.model_copy(
@@ -2286,7 +2324,11 @@ class ChangeWorkspaceManager:
             )
             return receipt
 
-    def adopt_external_head(self, request: AdoptExternalHead) -> ChangeExternalHeadAdoptionReceipt:
+    def adopt_external_head(
+        self,
+        request: AdoptExternalHead,
+        before_head_change: Callable[[], None] | None = None,
+    ) -> ChangeExternalHeadAdoptionReceipt:
         """Adopt one exact descendant from the remote Change branch without advancing review authority."""
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
@@ -2312,6 +2354,8 @@ class ChangeWorkspaceManager:
                     coordination.worktree_path,
                     operation="external Change-head adoption",
                 )
+                if before_head_change is not None:
+                    before_head_change()
                 return self._complete_external_head_adoption(
                     request,
                     coordination,
@@ -2324,7 +2368,7 @@ class ChangeWorkspaceManager:
                     f"the reviewed head {request.expected_head} or requested adopted head "
                     f"{request.adopted_head}; observed branch head is {branch_head}"
                 )
-            return self._fast_forward_external_head(request, coordination, lock)
+            return self._fast_forward_external_head(request, coordination, lock, before_head_change)
 
     def _prepare_external_head_adoption(
         self,
@@ -2367,6 +2411,7 @@ class ChangeWorkspaceManager:
         request: AdoptExternalHead,
         coordination: ChangeCoordination,
         lock: PublicationLock,
+        before_head_change: Callable[[], None] | None,
     ) -> ChangeExternalHeadAdoptionReceipt:
         remote_ref = self._fetch_external_head(coordination.branch, request.adopted_head)
         if not self._is_ancestor(request.expected_head, request.adopted_head, cwd=self._repository):
@@ -2378,6 +2423,8 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(update={"external_head_adoption_intent": intent}),
                 lock=lock,
             )
+        if before_head_change is not None:
+            before_head_change()
         merge = self._run_git(
             "merge",
             "--ff-only",
@@ -2709,6 +2756,7 @@ class ChangeWorkspaceManager:
                 change_head_before=change_head_before,
                 merged_head=merged_head,
                 merge_commit=True,
+                review_required=True,
             )
             self._coordinator.update(
                 coordination.model_copy(
@@ -3966,6 +4014,12 @@ def _model_content(model: BaseModel) -> bytes:
 
 def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _legacy_target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id", "review_required"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 

@@ -1383,6 +1383,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_external_head_promotion",
         "capture_target_sync_conflict",
         "mark_awaiting_merge",
+        "clear_ready_for_head_change",
         "reconcile_pull_request_draft_state",
         "latch_merged_pull_request",
         "complete_change",
@@ -2022,6 +2023,29 @@ class DeliveryRuntime:
             frontier.model_copy(update={"ready": receipt, "change_publication_history": updated_history}),
         )
         return receipt
+
+    def clear_ready_for_head_change(
+        self,
+        finalization_id: str,
+        exact_head: str,
+    ) -> PullRequestReadyReceipt | None:
+        """Clear local ready authority after its provider pull request returns to draft."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "clear_ready_for_head_change")
+        finalization = frontier.finalization
+        ready = frontier.ready
+        if ready is None:
+            return None
+        if (
+            finalization is None
+            or finalization.finalization_id != finalization_id
+            or finalization.exact_head != exact_head
+            or ready.finalization_id != finalization_id
+            or ready.head_sha != exact_head
+        ):
+            _conflict("ready authority does not match the head-change boundary")
+        self._replace(previous, frontier.model_copy(update={"ready": None}))
+        return ready
 
     def reconcile_pull_request_draft_state(
         self,
