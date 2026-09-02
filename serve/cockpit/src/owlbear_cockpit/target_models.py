@@ -34,6 +34,7 @@ if TYPE_CHECKING:
         DeliveryChangePublicationSupersessionReceipt,
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
+        DeliveryCheckpointReconciliationResult,
     )
 
 
@@ -230,6 +231,39 @@ class AcceptanceReconciliationResponse(_TargetHTTPModel):
     """Batch of isolated acceptance reconciliation outcomes."""
 
     outcomes: tuple[AcceptanceReconciliationOutcomeResponse, ...]
+
+
+class WorkItemPublicationReconciliationResponse(_TargetHTTPModel):
+    """Expose one checkpoint attempt and its durable remaining queue state."""
+
+    change_id: str = Field(min_length=1)
+    attempted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    reconciled: bool
+    error_code: str | None = Field(default=None, min_length=1)
+    error_detail: str | None = Field(default=None, min_length=1, max_length=240)
+    pending_checkpoint_attempt_count: int = Field(default=0, ge=0)
+    pending_checkpoint_last_attempted_at: datetime | None = None
+    pending_checkpoint_error_code: str | None = Field(default=None, min_length=1)
+    pending_checkpoint_error_detail: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @classmethod
+    def from_result(
+        cls,
+        result: DeliveryCheckpointReconciliationResult,
+    ) -> WorkItemPublicationReconciliationResponse:
+        """Adapt one Delivery checkpoint result without deriving new authority."""
+        pending = result.state.pending_checkpoint
+        return cls(
+            change_id=result.change_id,
+            attempted_head=result.attempted_head,
+            reconciled=result.reconciled,
+            error_code=result.error_code,
+            error_detail=result.error_detail,
+            pending_checkpoint_attempt_count=pending.attempt_count if pending is not None else 0,
+            pending_checkpoint_last_attempted_at=(pending.last_attempted_at if pending is not None else None),
+            pending_checkpoint_error_code=pending.last_error_code if pending is not None else None,
+            pending_checkpoint_error_detail=pending.last_error_detail if pending is not None else None,
+        )
 
 
 class DesignWorkDetailResponse(_TargetHTTPModel):
@@ -525,4 +559,5 @@ __all__ = [
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",
     "WorkItemPortfolioTotals",
+    "WorkItemPublicationReconciliationResponse",
 ]

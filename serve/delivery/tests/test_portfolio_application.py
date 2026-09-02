@@ -1505,12 +1505,15 @@ def test_external_head_adoption_retains_attention_after_demotion_then_movement_f
     coordination = application._workspace_manager.show("change-a")
     adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
     provider.set_pull_request_draft_state.reset_mock()
+    original_run_git = application._workspace_manager._run_git
+
+    def fail_merge(*arguments: str, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if arguments and arguments[0] == "merge":
+            return subprocess.CompletedProcess(arguments, 1, b"", b"fast-forward failed")
+        return original_run_git(*arguments, **kwargs)
+
     with (
-        patch.object(
-            application._workspace_manager,
-            "_run_git",
-            return_value=subprocess.CompletedProcess(("git", "merge"), 1, b"", b"fast-forward failed"),
-        ),
+        patch.object(application._workspace_manager, "_run_git", side_effect=fail_merge),
         pytest.raises(PortfolioApplicationError, match="external Change head could not be adopted"),
     ):
         application.adopt_external_head("change-a", exact_head, adopted_head, "adopt-after-demotion")
@@ -3903,10 +3906,14 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
 
 def test_background_checkpoint_failure_persists_error_and_waits_before_retry(tmp_path: Path) -> None:
     current = [datetime(2026, 8, 4, tzinfo=UTC)]
+
+    def clock() -> str:
+        return current[0].isoformat()
+
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        clock=current[0].isoformat,
+        clock=clock,
     )
     head = coordinator.show("change-a").last_reviewed_commit
     pending = DeliveryPendingCheckpoint(

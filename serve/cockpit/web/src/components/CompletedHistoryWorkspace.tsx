@@ -159,11 +159,15 @@ function CompletedDetail({
   const outcomePromises = record.outcome_promises ?? []
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [cleanupError, setCleanupError] = useState<Error | null>(null)
+  const [cleanupComplete, setCleanupComplete] = useState(false)
   const abandoned = isAbandoned(record)
   const cleanup = async () => {
     const error = await onCleanup()
     setCleanupError(error)
-    if (!error) setConfirmOpen(false)
+    if (!error) {
+      setCleanupComplete(true)
+      setConfirmOpen(false)
+    }
   }
   return (
     <article
@@ -296,7 +300,12 @@ function CompletedDetail({
       </details>
       {abandoned && record.cleanup_available ? (
         <>
-          <PButton type="button" variant="secondary" className="mt-static-lg" onClick={() => { setCleanupError(null); setConfirmOpen(true) }}>
+          {cleanupComplete ? <p className="mt-static-lg border-l-4 border-success bg-surface p-static-sm text-sm" role="status">
+            {record.target_sync_conflict
+              ? 'Target merge discarded and abandoned Change worktree cleaned up.'
+              : 'Abandoned Change worktree cleaned up.'}
+          </p> : null}
+          <PButton type="button" variant="secondary" className="mt-static-lg" onClick={() => { setCleanupError(null); setCleanupComplete(false); setConfirmOpen(true) }}>
             {record.target_sync_conflict ? 'Discard conflict and clean worktree' : 'Clean abandoned worktree'}
           </PButton>
           {confirmOpen ? (

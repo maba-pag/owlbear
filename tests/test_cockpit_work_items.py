@@ -20,6 +20,8 @@ from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryCheckpointPublicationState,
+    DeliveryCheckpointReconciliationResult,
     DeliveryRuntime,
     PortfolioApplication,
     PublicationCheckKind,
@@ -305,7 +307,11 @@ class _DeliveryApplicationFake:
 
     def reconcile_change_checkpoint(self, *args: object) -> dict[str, object]:
         self.calls.append(("publication-reconcile", args))
-        return {"change_id": args[0], "reconciled": True}
+        return DeliveryCheckpointReconciliationResult(
+            change_id=str(args[0]),
+            state=DeliveryCheckpointPublicationState(change_id=str(args[0])),
+            reconciled=True,
+        )
 
     def mark_current_change_ready(self, *args: object) -> dict[str, object]:
         self.calls.append(("publication-ready", args))

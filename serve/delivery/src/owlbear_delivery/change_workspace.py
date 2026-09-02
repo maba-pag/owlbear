@@ -2354,8 +2354,6 @@ class ChangeWorkspaceManager:
                     coordination.worktree_path,
                     operation="external Change-head adoption",
                 )
-                if before_head_change is not None:
-                    before_head_change()
                 return self._complete_external_head_adoption(
                     request,
                     coordination,

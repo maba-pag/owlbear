@@ -44,6 +44,7 @@ from owlbear_cockpit.target_models import (
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
+    WorkItemPublicationReconciliationResponse,
 )
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
@@ -167,9 +168,10 @@ class TargetCockpitService:
             )
         )
 
-    def reconcile_checkpoint(self, change_id: str) -> object:
+    def reconcile_checkpoint(self, change_id: str) -> WorkItemPublicationReconciliationResponse:
         """Reconcile the current engine-derived Change checkpoint."""
-        return self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
+        result = self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
+        return WorkItemPublicationReconciliationResponse.from_result(result)
 
     def mark_ready(self, change_id: str) -> object:
         """Mark the current exact finalized pull request ready."""
@@ -480,8 +482,14 @@ def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     ) -> AcceptanceReconciliationResponse:
         return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
 
-    @router.post("/changes/{change_id}/publication/reconcile")
-    def reconcile_checkpoint(change_id: str, service: _TargetService) -> object:
+    @router.post(
+        "/changes/{change_id}/publication/reconcile",
+        response_model=WorkItemPublicationReconciliationResponse,
+    )
+    def reconcile_checkpoint(
+        change_id: str,
+        service: _TargetService,
+    ) -> WorkItemPublicationReconciliationResponse:
         return service.reconcile_checkpoint(change_id)
 
     @router.post("/changes/{change_id}/publication/ready")

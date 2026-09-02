@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from threading import Event, Thread
 from typing import TYPE_CHECKING
 
@@ -30,17 +31,11 @@ class DeliveryCheckpointSupervisor:
         self._limit = limit
         self._stop = Event()
         self._thread: Thread | None = None
-        self._last_error: str | None = None
 
     @property
     def running(self) -> bool:
         """Return whether the supervisor thread is currently alive."""
         return self._thread is not None and self._thread.is_alive()
-
-    @property
-    def last_error(self) -> str | None:
-        """Return the latest bounded background failure, if one occurred."""
-        return self._last_error
 
     def start(self) -> None:
         """Start one idempotent checkpoint reconciliation loop."""
@@ -69,10 +64,8 @@ class DeliveryCheckpointSupervisor:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            try:
+            with suppress(Exception):  # Persisted checkpoint state owns failure diagnostics.
                 self._application.reconcile_pending_checkpoints(limit=self._limit)
-            except Exception as exc:  # noqa: BLE001 - a transient provider failure must not kill the supervisor.
-                self._last_error = str(exc) or type(exc).__name__
             self._stop.wait(self._interval_seconds)
 
 

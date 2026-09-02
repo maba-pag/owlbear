@@ -347,6 +347,10 @@ class WorkItemPublicationView(_ProjectionModel):
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint_triggers: tuple[str, ...] = ()
+    pending_checkpoint_attempt_count: int = Field(default=0, ge=0)
+    pending_checkpoint_last_attempted_at: str | None = None
+    pending_checkpoint_error_code: str | None = None
+    pending_checkpoint_error_detail: str | None = None
     invalidated_expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     invalidated_observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     repository: str | None = None
@@ -475,7 +479,7 @@ class WorkItemProjector:
         frontier = self._snapshot.frontier
         if (
             all(binding.stage == DeliveryStage.COMPLETED for binding in frontier.bindings)
-            or (frontier.pending_checkpoint is not None and frontier.pending_checkpoint.head is not None)
+            or frontier.pending_checkpoint is not None
             or frontier.change_disposition is not None
             or frontier.change_deferral is not None
             or frontier.change_abandonment is not None
@@ -868,7 +872,7 @@ class WorkItemProjector:
             and frontier.finalization is None
         ):
             phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
-        elif frontier.pending_checkpoint is not None and frontier.pending_checkpoint.head is not None:
+        elif frontier.pending_checkpoint is not None:
             phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
         elif frontier.finalization is None:
             phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
@@ -900,6 +904,12 @@ class WorkItemProjector:
             published_head=frontier.published_head,
             pending_checkpoint_head=pending.head if pending is not None else None,
             pending_checkpoint_triggers=tuple(trigger.kind.value for trigger in pending.triggers) if pending else (),
+            pending_checkpoint_attempt_count=pending.attempt_count if pending is not None else 0,
+            pending_checkpoint_last_attempted_at=(
+                pending.last_attempted_at.isoformat() if pending is not None and pending.last_attempted_at else None
+            ),
+            pending_checkpoint_error_code=pending.last_error_code if pending is not None else None,
+            pending_checkpoint_error_detail=pending.last_error_detail if pending is not None else None,
             invalidated_expected_head=invalidation.expected_head if invalidation is not None else None,
             invalidated_observed_head=invalidation.observed_head if invalidation is not None else None,
             repository=publication_identity.repository if publication_identity is not None else None,

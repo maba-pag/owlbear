@@ -699,6 +699,42 @@ def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
     assert draft.group_view().items[-1].action.kind == WorkItemActionKind.MARK_READY
 
 
+def test_unanchored_checkpoint_projects_reconciliation_action_and_retry_metadata() -> None:
+    pending = DeliveryPendingCheckpoint(
+        head=None,
+        triggers=(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+        ),
+        attempt_count=2,
+        last_attempted_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+        last_error_code="ERR_DELIVERY_CHECKPOINT_HEAD_MISSING",
+        last_error_detail="Checkpoint publication is waiting for a reviewed Change head.",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.PLANNING)),
+            frontier_updates={"pending_checkpoint": pending},
+        )
+    )
+
+    group = projector.group_view()
+    publication = projector.show_view("publication").publication
+
+    assert group.items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
+    assert projector.publication_phase() == WorkItemPublicationPhase.CHECKPOINT_PENDING
+    assert publication is not None
+    assert publication.pending_checkpoint_head is None
+    assert publication.pending_checkpoint_attempt_count == 2
+    assert publication.pending_checkpoint_last_attempted_at == "2026-08-11T17:00:00+00:00"
+    assert publication.pending_checkpoint_error_code == "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
+    assert publication.pending_checkpoint_error_detail == (
+        "Checkpoint publication is waiting for a reviewed Change head."
+    )
+
+
 def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
     deferral = DeliveryChangeDeferral.create(
         change_id="portfolio-change",

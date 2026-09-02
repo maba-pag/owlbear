@@ -1003,6 +1003,15 @@ function PublicationSection(props: WorkItemDetailProps) {
         </div>
       ) : null}
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
+      {publication.pending_checkpoint_head
+        || publication.pending_checkpoint_triggers.length > 0
+        || (publication.pending_checkpoint_attempt_count ?? 0) > 0 ? (
+        <div className="mt-static-sm border-l-4 border-warning bg-surface p-static-sm text-sm" data-testid="checkpoint-diagnostics" role={publication.pending_checkpoint_error_code ? 'alert' : 'status'}>
+          <p>Checkpoint attempts: {publication.pending_checkpoint_attempt_count ?? 0}</p>
+          {publication.pending_checkpoint_last_attempted_at ? <p className="mt-static-xs text-xs text-contrast-medium">Last attempt: <time dateTime={publication.pending_checkpoint_last_attempted_at}>{publication.pending_checkpoint_last_attempted_at}</time></p> : null}
+          {publication.pending_checkpoint_error_code ? <p className="mt-static-xs break-words"><strong>{publication.pending_checkpoint_error_code}</strong>{publication.pending_checkpoint_error_detail ? `: ${publication.pending_checkpoint_error_detail}` : ''}</p> : null}
+        </div>
+      ) : null}
       {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
       {canSupersede ? (

@@ -271,7 +271,15 @@ export interface PublicationChecksObservationResponse {
 }
 
 export interface WorkItemPublicationReconciliationResponse {
+  change_id: string
+  attempted_head: string | null
   reconciled: boolean
+  error_code: string | null
+  error_detail: string | null
+  pending_checkpoint_attempt_count: number
+  pending_checkpoint_last_attempted_at: string | null
+  pending_checkpoint_error_code: string | null
+  pending_checkpoint_error_detail: string | null
 }
 
 export interface WorkItemPublicationView {
@@ -283,6 +291,10 @@ export interface WorkItemPublicationView {
   published_head: string | null
   pending_checkpoint_head: string | null
   pending_checkpoint_triggers: string[]
+  pending_checkpoint_attempt_count?: number
+  pending_checkpoint_last_attempted_at?: string | null
+  pending_checkpoint_error_code?: string | null
+  pending_checkpoint_error_detail?: string | null
   invalidated_expected_head: string | null
   invalidated_observed_head: string | null
   repository: string | null
@@ -510,7 +522,7 @@ export interface AbandonedChangeRecord {
   semantic_summary: string
   outcome_titles: string[]
   outcome_promises?: string[] | null
-  prior_stage: WorkItemStage
+  prior_stage: 'design' | 'building' | 'finalized' | 'awaiting-merge' | 'publication-attention' | 'acceptance-attention' | 'deferred'
   reason: string
   abandoned_at: string
   cleanup_available: boolean

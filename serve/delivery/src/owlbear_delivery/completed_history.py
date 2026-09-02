@@ -22,6 +22,7 @@ from owlbear_delivery.acceptance import (
 )
 from owlbear_delivery.change_workspace import ChangeCoordination
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryStage,
     DeliveryTaskDefinition,
@@ -220,7 +221,7 @@ class AbandonedChangeRecord(_CompletedHistoryModel):
     semantic_summary: str = Field(min_length=1)
     outcome_titles: tuple[str, ...] = Field(min_length=1)
     outcome_promises: tuple[str, ...] | None = None
-    prior_stage: DeliveryStage
+    prior_stage: DeliveryChangeStage
     reason: str = Field(min_length=1)
     abandoned_at: datetime
     cleanup_available: bool
@@ -407,7 +408,7 @@ class CompletedHistoryCatalog:
         observations = []
         for change_root in sorted(changes_root.iterdir(), key=lambda path: path.name):
             if change_root.is_symlink() or not change_root.is_dir() or not _SAFE_CHANGE_ID.fullmatch(change_root.name):
-                self._malformed("Delivery abandoned-history entry is invalid", change_root.name)
+                continue
             path = change_root / "frontier.json"
             if path.is_symlink() or not path.is_file():
                 continue

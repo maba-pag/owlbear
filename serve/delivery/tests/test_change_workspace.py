@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -1362,19 +1362,22 @@ def test_adopt_external_head_observes_exact_remote_head_already_on_managed_branc
     )
     _git(coordination.worktree_path, "merge", "--ff-only", adopted)
 
+    callback = Mock()
     receipt = manager.adopt_external_head(
         AdoptExternalHead(
             change_id=coordination.change_id,
             expected_head=initial,
             adopted_head=adopted,
             operation_id="observe-external-change",
-        )
+        ),
+        before_head_change=callback,
     )
 
     assert receipt.schema_version == 2
     assert receipt.provenance == "observed"
     assert receipt.expected_head == initial
     assert receipt.adopted_head == adopted
+    callback.assert_not_called()
     assert coordinator.show(coordination.change_id).last_reviewed_commit == initial
     assert (
         manager.adopt_external_head(

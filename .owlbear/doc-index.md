@@ -703,6 +703,8 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ## share/instructions/research-docs.instructions.md
 
+## share/prompts/address-pr-feedback.prompt.md
+
 ## share/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
 - ## `Step 1 - Load the standard first`
@@ -1099,6 +1101,18 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
+## share/skills/w-address-pr-feedback/SKILL.md
+- # `Address Pull-Request Feedback`
+- ## `Step 0 - Route The Requested Mode`
+- ## `Step 1 - Bind The Change And Pull Request`
+- ## `Step 2 - Critically Triage Every Thread`
+- ## `Step 3 - Prepare The Provider And Delivery State`
+- ## `Step 4 - Repair One Thread At A Time`
+- ## `Step 5 - Hand Off To Finalization`
+- ## `Step 6 - Publish Then Reply And Resolve Threads`
+- ## `Output Template`
+- ## `Known Pitfalls`
+
 ## share/skills/w-change-finalization/SKILL.md
 - # `Change Finalization`
 - ## `Step 0 - Resolve Current Authority`
@@ -1113,6 +1127,7 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ## share/skills/w-delivery-attention-resolution/SKILL.md
 - # `Delivery Attention Resolution`
+- ## `Lifecycle Status`
 - ## `Step 0 - Bind The Exact Current Attention`
 - ## `Step 1 - Diagnose Current State Read-Only`
 - ## `Step 2 - Present One Decision`

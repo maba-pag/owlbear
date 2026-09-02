@@ -3,6 +3,7 @@ import { PorscheDesignSystemProvider, PToast } from '@porsche-design-system/comp
 import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type {
+  AbandonedChangeRecord,
   ChangeGroupView,
   CompletedChangeRecord,
   DesignWorkDetailResponse,
@@ -14,6 +15,7 @@ import type {
   WorkItemPublicationReconciliationResponse,
   PublicationChecksObservationResponse,
 } from '../api/workItems'
+import { completedChangeRecordId } from '../api/workItems'
 import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import WorkPortfolioPage from '../pages/WorkPortfolioPage'
 
@@ -264,6 +266,25 @@ const receiptCompleted: CompletedChangeRecord = {
   completed_at: '2026-08-11T13:00:00Z',
 }
 
+function abandonedRecord(overrides: Partial<AbandonedChangeRecord> = {}): AbandonedChangeRecord {
+  return {
+    schema_version: 1,
+    record_kind: 'abandoned-change',
+    change_id: 'change-alpha',
+    abandonment_id: '9'.repeat(64),
+    title: 'Abandoned portfolio change',
+    semantic_summary: 'Stopped before completion with its terminal evidence retained.',
+    outcome_titles: ['Preserve the abandoned Change record'],
+    outcome_promises: ['Keep the abandoned Change recoverable for cleanup.'],
+    prior_stage: 'building',
+    reason: 'User stopped the Change',
+    abandoned_at: '2026-08-11T14:00:00Z',
+    cleanup_available: true,
+    target_sync_conflict: false,
+    ...overrides,
+  }
+}
+
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
 let currentDesignWork: DesignWorkDetailResponse
@@ -371,9 +392,9 @@ function installFetch() {
       })
     }
     if (method === 'GET' && url.startsWith('/api/work-items/completed/')) {
-      const selected = completedDetailMismatch ?? (completedDetailRecord && url.includes(completedDetailRecord.completion_id)
+      const selected = completedDetailMismatch ?? (completedDetailRecord && url.includes(completedChangeRecordId(completedDetailRecord))
         ? completedDetailRecord
-        : completedRecords.find((record) => url.includes(record.completion_id)))
+        : completedRecords.find((record) => url.includes(completedChangeRecordId(record))))
       if (completedDetailNotFound) return response({ detail: 'Completion detail was removed' }, 404)
       if (completedDetailFailuresRemaining > 0) {
         completedDetailFailuresRemaining -= 1
@@ -623,7 +644,17 @@ beforeEach(() => {
   acceptanceObservationFailure = false
   acceptanceReconciliationProviderUnavailable = false
   publicationChecksFailure = false
-  publicationReconciliationResult = { reconciled: true }
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: true,
+    error_code: null,
+    error_detail: null,
+    pending_checkpoint_attempt_count: 0,
+    pending_checkpoint_last_attempted_at: null,
+    pending_checkpoint_error_code: null,
+    pending_checkpoint_error_detail: null,
+  }
   publicationChecksResponse = {
     schema_version: 1,
     observation_id: 'a'.repeat(64),
@@ -1523,6 +1554,71 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
 })
 
+it('shows persisted checkpoint retry diagnostics and structured reconciliation errors', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    next_actor: 'agent',
+    next_step: 'Reconcile the final checkpoint',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
+    action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'checkpoint-pending',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: ['verified-outcome'],
+      pending_checkpoint_attempt_count: 2,
+      pending_checkpoint_last_attempted_at: '2026-08-11T17:00:00+00:00',
+      pending_checkpoint_error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+      pending_checkpoint_error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 1, items: [publicationCard] })])
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: false,
+    error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+    error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+    pending_checkpoint_attempt_count: 2,
+    pending_checkpoint_last_attempted_at: '2026-08-11T17:00:00+00:00',
+    pending_checkpoint_error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+    pending_checkpoint_error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+  }
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const diagnostics = within(inspector).getByTestId('checkpoint-diagnostics')
+  expect(diagnostics).toHaveTextContent('Checkpoint attempts: 2')
+  expect(diagnostics).toHaveTextContent('Last attempt: 2026-08-11T17:00:00+00:00')
+  expect(diagnostics).toHaveTextContent('ERR_DELIVERY_CHECKPOINT_HEAD_MISSING')
+  fireEvent.click(within(inspector).getByText('Publish checkpoint'))
+
+  await waitFor(() => expect(screen.getByText(
+    'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING: Checkpoint publication is waiting for a reviewed Change head.',
+  )).toBeInTheDocument())
+})
+
 it('does not claim publication success when reconciliation remains incomplete', async () => {
   const publicationCard = card({
     item_key: 'publication',
@@ -1561,7 +1657,17 @@ it('does not claim publication success when reconciliation remains incomplete', 
     },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
-  publicationReconciliationResult = { reconciled: false }
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: false,
+    error_code: null,
+    error_detail: null,
+    pending_checkpoint_attempt_count: 0,
+    pending_checkpoint_last_attempted_at: null,
+    pending_checkpoint_error_code: null,
+    pending_checkpoint_error_detail: null,
+  }
   renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
@@ -2299,46 +2405,18 @@ it('does not show Change disposition controls for an abandoned Change', async ()
   expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
 })
 
-it('confirms and cleans an eligible abandoned Change worktree', async () => {
-  const publicationCard = card({
-    item_key: 'publication',
-    work_item_id: 'change-alpha',
-    scope: 'change-publication',
-    title: 'Change publication',
-    stage: null,
-    needs: 'none',
-    needs_headline: null,
-    next_actor: 'none',
-    next_step: 'Change abandoned',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-  })
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      phase: 'abandoned',
-      finalization_id: null,
-      finalized_head: null,
-      published_head: null,
-      pending_checkpoint_head: null,
-      pending_checkpoint_triggers: [],
-      invalidated_expected_head: null,
-      invalidated_observed_head: null,
-      repository: null,
-      pull_request_number: null,
-      pull_request_head: null,
-      accepted_merge_commit: null,
-      merged_at: null,
-      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+it('confirms and cleans an eligible abandoned Change from Change history', async () => {
+  const abandoned = abandonedRecord()
+  completedRecords = [abandoned]
+  renderPage()
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
-  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
     method: 'POST',
@@ -2347,37 +2425,19 @@ it('confirms and cleans an eligible abandoned Change worktree', async () => {
   expect(await screen.findByText('Abandoned Change worktree cleaned up.')).toBeInTheDocument()
 })
 
-it('keeps abandoned worktree cleanup confirmation open when cleanup fails', async () => {
-  const publicationCard = publicationCardForChecks({
-    next_step: 'Change abandoned',
-    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
-  })
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      phase: 'abandoned',
-      finalization_id: null,
-      finalized_head: null,
-      published_head: null,
-      pending_checkpoint_head: null,
-      pending_checkpoint_triggers: [],
-      invalidated_expected_head: null,
-      invalidated_observed_head: null,
-      repository: null,
-      pull_request_number: null,
-      pull_request_head: null,
-      accepted_merge_commit: null,
-      merged_at: null,
-      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+it('keeps abandoned history cleanup confirmation open when cleanup fails', async () => {
+  const abandoned = abandonedRecord()
+  completedRecords = [abandoned]
   mutationFailurePath = '/worktree/cleanup/abandoned'
-  renderPage('/delivery/change-alpha/publication')
+  renderPage()
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
-  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
     method: 'POST',
@@ -2388,43 +2448,21 @@ it('keeps abandoned worktree cleanup confirmation open when cleanup fails', asyn
   expect(within(dialog).getByText('Clean abandoned worktree')).toBeInTheDocument()
 })
 
-it('confirms discard and cleanup for an abandoned target-sync conflict', async () => {
-  const publicationCard = publicationCardForChecks({
-    next_step: 'Target merge requires discard before cleanup',
-    progress: { kind: 'publication', label: 'Abandoned target merge', done: null, total: null },
+it('confirms discard and cleanup for an abandoned target-sync conflict from Change history', async () => {
+  const abandoned = abandonedRecord({
+    target_sync_conflict: true,
+    cleanup_available: true,
   })
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      phase: 'abandoned',
-      finalization_id: null,
-      finalized_head: null,
-      published_head: null,
-      pending_checkpoint_head: null,
-      pending_checkpoint_triggers: [],
-      invalidated_expected_head: null,
-      invalidated_observed_head: null,
-      repository: null,
-      pull_request_number: null,
-      pull_request_head: null,
-      accepted_merge_commit: null,
-      merged_at: null,
-      worktree_cleanup: { eligible: false, blocked_reason: 'worktree-attention', completion_id: null },
-      target_sync_conflict: {
-        conflict_id: 'e'.repeat(64),
-        operation_id: 'target-sync-abandoned',
-        target_head: '4'.repeat(40),
-        change_head_before: '5'.repeat(40),
-        conflict_paths: ['src/app.py'],
-      },
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+  completedRecords = [abandoned]
+  renderPage()
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Discard merge and clean worktree'))
-  fireEvent.click(await screen.findByText('Confirm discard and cleanup'))
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Discard conflict and clean worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned/target-sync-discard',
     method: 'POST',

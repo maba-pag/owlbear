@@ -619,7 +619,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     reconcilePublication: () => mutate(
       'publication-reconcile',
       () => reconcileWorkItemPublication(identity.changeId),
-      (reconciliation) => reconciliation.reconciled ? 'Publication checkpoint reconciled.' : null,
+      (reconciliation) => {
+        if (reconciliation.reconciled) return 'Publication checkpoint reconciled.'
+        if (reconciliation.error_detail) return `${reconciliation.error_code ?? 'Checkpoint pending'}: ${reconciliation.error_detail}`
+        return null
+      },
     ),
     markPublicationReady: () => mutate(
       'publication-ready',
