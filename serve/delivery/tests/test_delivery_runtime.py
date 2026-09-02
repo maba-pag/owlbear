@@ -628,6 +628,24 @@ def test_review_repair_invalidates_current_finalization_and_replays(tmp_path: Pa
     )
 
 
+def test_review_repair_rejects_finalizing_the_unchanged_head(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.prepare_review_repair(finalization.finalization_id, datetime(2026, 8, 11, 16, tzinfo=UTC))
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="new Change commit"):
+        runtime.finalize_change(
+            _finalization_request("3" * 40),
+            datetime(2026, 8, 11, 17, tzinfo=UTC),
+        )
+
+
 def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
     tmp_path: Path,
 ) -> None:

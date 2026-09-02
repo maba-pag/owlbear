@@ -115,6 +115,7 @@ class WorkItemPublicationPhase(StrEnum):
     """Durable Change publication phase derived from exact frontier receipts."""
 
     FINALIZATION_INVALIDATED = "finalization-invalidated"
+    REVIEW_REPAIR = "review-repair"
     READY_FOR_FINALIZATION = "ready-for-finalization"
     CHECKPOINT_PENDING = "checkpoint-pending"
     PULL_REQUEST_DRAFT = "pull-request-draft"
@@ -649,7 +650,15 @@ class WorkItemProjector:
                 ),
             )
         phase = self._publication_phase()
-        if phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
+        if phase == WorkItemPublicationPhase.REVIEW_REPAIR:
+            needs, headline, next_actor = WorkItemNeed.YOU, "Review feedback needs attention", WorkItemNextActor.YOU
+            next_step, progress = "Address pull-request feedback before re-finalization", "Review repair in progress"
+            action = WorkItemAction(
+                kind=WorkItemActionKind.NONE,
+                label="Address pull-request feedback",
+                command=f"/address-pr-feedback {self._snapshot.contract.change_id}",
+            )
+        elif phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
             needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
             next_step, progress = "Re-finalize the current Change head", "Head drift observed"
             action = WorkItemAction(
@@ -675,12 +684,15 @@ class WorkItemProjector:
             action = WorkItemAction(kind=WorkItemActionKind.RECONCILE_CHECKPOINT, label="Publish checkpoint")
         elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
-            next_step, progress = "Mark the pull request ready", "Pull request is draft"
-            action = WorkItemAction(kind=WorkItemActionKind.MARK_READY, label="Mark ready")
+            next_step, progress = "Make the pull request ready for review", "Pull request is draft"
+            action = WorkItemAction(
+                kind=WorkItemActionKind.MARK_READY,
+                label="Make PR ready for review",
+            )
         elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
             needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
             next_step, progress = headline, "Awaiting merge in GitHub"
-            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check GitHub acceptance")
+            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status")
         else:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Record accepted completion", "Merge observed"
@@ -731,6 +743,7 @@ class WorkItemProjector:
                 phase = self._publication_phase()
                 if phase in {
                     WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
+                    WorkItemPublicationPhase.REVIEW_REPAIR,
                     WorkItemPublicationPhase.READY_FOR_FINALIZATION,
                 }:
                     lifecycle = WorkItemChangeLifecycle.FINALIZATION
@@ -751,6 +764,11 @@ class WorkItemProjector:
             phase = WorkItemPublicationPhase.ABANDONED
         elif frontier.change_deferral is not None:
             phase = WorkItemPublicationPhase.DEFERRED
+        elif (
+            frontier.finalization_invalidation is not None
+            and frontier.finalization_invalidation.reason == "review-repair"
+        ):
+            phase = WorkItemPublicationPhase.REVIEW_REPAIR
         elif frontier.finalization_invalidation is not None:
             phase = WorkItemPublicationPhase.FINALIZATION_INVALIDATED
         elif frontier.finalization is None:

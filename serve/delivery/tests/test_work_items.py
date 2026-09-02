@@ -555,6 +555,38 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     assert detail.publication.invalidated_observed_head == "4" * 40
 
 
+def test_review_repair_projects_feedback_prompt_without_premature_finalization() -> None:
+    finalization = _finalization()
+    invalidation = DeliveryFinalizationInvalidationReceipt.create(
+        DeliveryFinalizationInvalidation(
+            change_id="portfolio-change",
+            finalization_id=finalization.finalization_id,
+            expected_head=finalization.exact_head,
+            observed_head=finalization.exact_head,
+            reason="review-repair",
+            invalidated_at=datetime(2026, 8, 11, 15, tzinfo=UTC),
+        )
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"finalization_invalidation": invalidation},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert projector.publication_phase() == WorkItemPublicationPhase.REVIEW_REPAIR
+    assert projector.group_view().lifecycle == "finalization"
+    assert card.needs == WorkItemNeed.YOU
+    assert card.next_step == "Address pull-request feedback before re-finalization"
+    assert card.action.kind == WorkItemActionKind.NONE
+    assert card.action.command == "/address-pr-feedback portfolio-change"
+    assert detail.publication is not None
+    assert detail.publication.phase == WorkItemPublicationPhase.REVIEW_REPAIR
+
+
 def test_change_attention_projects_user_resolution_before_outcomes_complete() -> None:
     attention = DeliveryChangeDisposition.create(
         kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
@@ -733,7 +765,7 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
         WorkItemNextActor.YOU,
         WorkItemActionKind.OBSERVE_ACCEPTANCE,
     )
-    assert card.action.label == "Check GitHub acceptance"
+    assert card.action.label == "Check merge status"
     assert detail.publication is not None
     assert detail.publication.pull_request_number == 42
 

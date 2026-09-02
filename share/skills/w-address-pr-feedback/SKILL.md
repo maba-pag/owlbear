@@ -19,7 +19,9 @@ authority and the `gh` CLI for GitHub review data. Do not use a GitHub MCP serve
 
 1. Call `list_work_items` and require the requested Change publication item to be present.
 2. Call `show_finalization_context` and retain the exact branch, managed worktree, finalized head,
-   reviewed head, and publication phase.
+   reviewed head, and publication phase. Continue only for a finalized PR. If the PR is still in
+   an earlier draft checkpoint, report `authority-gap: change-not-finalized` without replying,
+   resetting, or editing; external review repair is not supported before finalization.
 3. Require `gh auth status` to succeed. Read `github_repository` from the tracked Delivery
    configuration and find the open pull request for the exact managed branch:
 
@@ -78,9 +80,9 @@ Use these routes:
 | Classification | Route |
 | --- | --- |
 | `fix` | Implement one bounded repair commit for this thread. |
-| `no-change` | Reply with evidence explaining why the comment does not apply, then resolve the thread. |
-| `duplicate` | Reply with the existing fix or thread reference; do not create an empty second commit, then resolve the thread. |
-| `stale` | Reply with the current evidence only when the thread is still actionable; resolve it when the stale condition is clear. |
+| `no-change` | Record the evidence and defer the reply and resolution until the repaired head is published. |
+| `duplicate` | Record the existing fix or thread reference; do not create an empty second commit, and defer the reply and resolution until publication. |
+| `stale` | Record the current evidence and defer any reply and resolution until publication if the thread remains actionable. |
 | `needs-user-decision` | Ask exactly one user question, leave the thread unresolved, and stop. |
 | `authority-gap` | Stop without editing; identify the missing Design, Planning, Delivery, or provider authority. |
 
@@ -103,7 +105,9 @@ explicitly designed merged-history recovery; this workflow never rewrites accept
 
 After preparation, re-read `show_finalization_context` and direct Git state in the returned managed
 worktree. Require the managed branch, current head, reviewed boundary, and clean status to be
-consistent before editing. Never enter or modify the user's primary checkout.
+consistent before editing. The finalization ID must be absent while repair is in progress. If a
+finalization reappears before a repair commit, stop with `authority-gap: review-repair-was-reversed`.
+Never enter or modify the user's primary checkout.
 
 ## Step 3 - Repair One Thread At A Time
 
@@ -134,64 +138,63 @@ an empty or duplicate commit.
 A clean commit does not by itself authorize publication or acceptance. The repaired branch remains
 unpublished until the normal finalization and checkpoint publication steps.
 
-## Step 4 - Reply And Resolve Threads With `gh`
+## Step 4 - Hand Off To Finalization
 
-Use `gh api graphql` mutations, never a GitHub MCP server, to reply to and resolve inline review
-threads. For a repaired thread, reply with:
-
-- the full commit SHA and a commit URL when available;
-- a concise statement of the accepted problem and fix;
-- the focused proof that passed;
-- a note that the commit will be published with the next finalized checkpoint when it is not yet
-  on the remote PR branch.
-
-Use the original thread node ID with these mutations, passing the reply as a GraphQL variable so
-review text is not interpolated into the query:
-
-```text
-reply_query='mutation($threadId:ID!, $body:String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) { comment { id url } } }'
-gh api graphql -f query="$reply_query" -f threadId="$thread_id" -f body="$reply_body"
-
-resolve_query='mutation($threadId:ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }'
-gh api graphql -f query="$resolve_query" -f threadId="$thread_id"
-```
-
-Verify the returned thread has `isResolved: true`. Keep the reviewer conversation attached to its
-original thread. If either mutation fails, leave the thread unresolved, retain the repair commit,
-and report the exact GitHub error.
-Do not post a new top-level PR comment when a thread reply is available.
-
-For `no-change`, `duplicate`, or clearly `stale` threads, reply with the evidence and decision.
-Resolve only after the response accurately addresses the claim. For `needs-user-decision` or
-`authority-gap`, leave the thread unresolved and report it.
-
-If a reply or resolution mutation fails, preserve the code commit but leave the thread unresolved,
-report the exact GitHub error, and do not claim the conversation was closed.
-
-## Step 5 - Hand Off To Finalization And Publication
-
-After all eligible repairs and replies:
+After all eligible repairs:
 
 1. Re-read the PR threads and current Delivery context. Require every repaired thread to have a
-   recorded commit and every clearly answerable thread to be resolved.
+   recorded commit. Do not resolve repaired threads yet.
 2. Re-read `show_finalization_context`. A repaired Change should be in
    `finalization-invalidated` or `ready-for-finalization` with the managed worktree at the new
    exact head and clean.
 3. Do not construct finalization evidence inside this workflow. Give the user the exact next
-   command:
+   command and stop:
 
    ```text
    /finalize-change <change-id>
    ```
 
-4. After finalization succeeds, use Delivery `reconcile_change_checkpoint` to publish the new
-   Change head and update the existing PR. Then use `observe_change_publication_checks` for the
-   current PR head, `mark_change_ready` when the user is satisfied, merge in GitHub, and finally
-   use `observe_acceptance` to record the user-owned merge.
+The first invocation stops here. It must not reply to or resolve a thread before the repaired head
+is finalized and published.
 
-The workflow may finish immediately after the repair commits and thread responses. It must not
-mark the PR ready again, merge the PR, or claim completion. If no code repair was needed, no
-finalization handoff is required.
+## Step 5 - Publish Then Reply And Resolve Threads
+
+Resume `/address-pr-feedback <change-id>` after `/finalize-change` succeeds. On that resumed
+invocation:
+
+1. Re-bind the exact open, unmerged pull request and re-read the unresolved review threads.
+2. Call Delivery `reconcile_change_checkpoint` to publish the new Change head and update the
+   existing PR. Verify the repaired commit is the current PR head before changing any thread.
+3. Use `gh api graphql` mutations, never a GitHub MCP server, to reply to each eligible thread.
+   For a repaired thread, include the full commit SHA and URL when available, the accepted problem
+   and fix, and the focused proof that passed. For `no-change`, `duplicate`, or `stale`, include
+   the recorded evidence and decision. Keep the reply on the original thread.
+
+   Pass the reply as a GraphQL variable so review text is not interpolated into the query:
+
+   ```text
+   reply_query='mutation($threadId:ID!, $body:String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) { comment { id url } } }'
+   gh api graphql -f query="$reply_query" -f threadId="$thread_id" -f body="$reply_body"
+   ```
+
+4. Only after the reply succeeds, resolve that same thread and verify the returned thread has
+   `isResolved: true`:
+
+   ```text
+   resolve_query='mutation($threadId:ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }'
+   gh api graphql -f query="$resolve_query" -f threadId="$thread_id"
+   ```
+
+   If either mutation fails, leave the thread unresolved, retain the repair commit, report the exact
+   GitHub error, and do not claim the conversation was closed. Do not post a new top-level PR
+   comment when a thread reply is available.
+
+5. Leave the PR draft and do not merge it. The user owns the ready-state decision and GitHub merge;
+   Delivery records the user-owned merge later through `observe_acceptance`.
+
+The workflow may finish immediately when no code repair was needed. A repair run stops for
+finalization and is resumed only after the user invokes this prompt again. It must not mark the PR
+ready, merge the PR, or claim completion.
 
 ## Output Template
 
@@ -210,7 +213,7 @@ threads:
     response_posted: true | false
     resolved: true | false
     proof: <bounded proof or reason>
-next_command: /finalize-change <change-id> | none
+next_command: /finalize-change <change-id> | /address-pr-feedback <change-id> | none
 remaining_blocker: <non-empty reason or none>
 ```
 

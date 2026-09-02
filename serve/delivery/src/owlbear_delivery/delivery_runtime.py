@@ -2243,6 +2243,13 @@ class DeliveryRuntime:
             _conflict("Delivery Change is already finalized with different authority")
         if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
             _conflict("Delivery finalization requires every Outcome completed")
+        invalidation = frontier.finalization_invalidation
+        if (
+            invalidation is not None
+            and invalidation.reason == "review-repair"
+            and request.exact_head == invalidation.expected_head
+        ):
+            _conflict("review repair requires a new Change commit before finalization")
         if any(binding.active_claim is not None for binding in frontier.bindings):
             _conflict("Delivery finalization cannot overlap an active Outcome claim")
         if frontier.integration_repair_claim is not None:
@@ -2343,7 +2350,7 @@ class DeliveryRuntime:
     ) -> DeliveryFinalizationInvalidationReceipt:
         """Invalidate current finalization before repairing external review feedback."""
         frontier, previous = self._read()
-        _require_change_mutable(frontier, "prepare_review_repair")
+        _require_change_mutable(frontier, "prepare_review_repair", allow_attention=True)
         finalization = frontier.finalization
         existing = frontier.finalization_invalidation
         if finalization is None:
@@ -2358,6 +2365,8 @@ class DeliveryRuntime:
             _conflict("review repair finalization identity is stale")
         if frontier.merged_pull_request_latch is not None:
             _conflict("merged Change cannot be reopened for review repair")
+        if frontier.change_disposition is not None:
+            _conflict("review repair requires current Change attention resolution")
         invalidation = DeliveryFinalizationInvalidationReceipt.create(
             DeliveryFinalizationInvalidation(
                 change_id=self._contract.change_id,

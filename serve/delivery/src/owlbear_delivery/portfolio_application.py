@@ -345,18 +345,22 @@ def _checkpoint_summary(  # noqa: PLR0913 - summary binds semantic and checkpoin
     if supersedes_publication_id is not None:
         lines.append(f"- Publication supersedes provider publication `{supersedes_publication_id}`")
     lines.extend(_automation_summary(automation_paths))
-    lines.extend(
-        (
-            "",
-            "## Review And Merge",
-            "",
-            (f"- To evaluate and address reviewer feedback, run `/address-pr-feedback {runtime.contract.change_id}`."),
+    if finalization is not None and finalization.exact_head == head:
+        lines.extend(
             (
-                "- When satisfied with the review, merge this pull request in GitHub; "
-                "Delivery records acceptance afterward."
-            ),
+                "",
+                "## Review And Merge",
+                "",
+                (
+                    "- To evaluate and address reviewer feedback, run "
+                    f"`/address-pr-feedback {runtime.contract.change_id}`."
+                ),
+                (
+                    "- When satisfied with the review, merge this pull request in GitHub; "
+                    "Delivery records acceptance afterward."
+                ),
+            )
         )
-    )
     return "\n".join(lines)
 
 
@@ -1035,6 +1039,16 @@ class _AcceptanceReconciliationAuthority:
     exact_head: str
     ready: PullRequestReadyReceipt
     target_branch: str
+
+
+@dataclass(frozen=True)
+class _ReviewRepairAuthority:
+    invalidation: DeliveryFinalizationInvalidationReceipt | None
+    expected_finalization_id: str
+    expected_head: str
+    repository: str
+    number: int
+    node_id: str
 
 
 class PortfolioApplication:
@@ -1880,59 +1894,116 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            existing = runtime.finalization_invalidation()
-            if existing is not None and existing.reason == "review-repair":
-                return existing
-            finalization = runtime.finalization()
-            if finalization is None:
-                message = "review repair requires current finalization authority"
-                raise PortfolioApplicationError(message)
-            if runtime.merged_pull_request_latch() is not None:
-                message = "merged Change cannot be reopened for review repair"
-                raise PortfolioApplicationError(message)
-            ready = runtime.ready_receipt()
-            publication = runtime.publication_history()
-            if ready is not None and (
-                ready.finalization_id != finalization.finalization_id or ready.head_sha != finalization.exact_head
-            ):
-                message = "review repair ready authority does not match finalization"
-                raise PortfolioApplicationError(message)
-            identity = ready if ready is not None else None if publication is None else publication.current
-            if identity is None:
-                message = "review repair requires current publication identity"
-                raise PortfolioApplicationError(message)
-            observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
-            if observation is None:
-                message = "review repair requires a bound pull request"
-                raise PortfolioApplicationError(message)
-            snapshot = observation.snapshot
-            if (
-                snapshot.repository != publisher.repository
-                or snapshot.repository != identity.repository
-                or snapshot.number != identity.number
-                or snapshot.node_id != identity.node_id
-                or snapshot.base_branch != publisher.target_branch
-                or snapshot.head_sha != finalization.exact_head
-                or snapshot.state != "open"
-                or snapshot.merged
-            ):
-                message = "review repair requires an open pull request at the finalized head"
-                raise PortfolioApplicationError(message)
-            if not snapshot.draft:
+            authority = self._review_repair_authority(runtime)
+            observation = self._observe_review_repair_pull_request(change_id, publisher, authority)
+            replayed = self._replay_review_repair(change_id, publisher, authority, observation)
+            if replayed is not None:
+                return replayed
+            if not observation.snapshot.draft:
                 publisher.return_to_draft(
                     ReturnChangePullRequestToDraft(
                         change_id=change_id,
-                        operation_id=f"review-repair-draft-{finalization.finalization_id}",
-                        finalization_id=finalization.finalization_id,
-                        exact_head=finalization.exact_head,
+                        operation_id=f"review-repair-draft-{authority.expected_finalization_id}",
+                        finalization_id=authority.expected_finalization_id,
+                        exact_head=authority.expected_head,
                     )
                 )
             invalidation = runtime.prepare_review_repair(
-                finalization.finalization_id,
+                authority.expected_finalization_id,
                 _timestamp(self._clock()),
             )
             self._publish_delivery_state(change_id, runtime, f"review-repair-{invalidation.invalidation_id}")
             return invalidation
+
+    @staticmethod
+    def _review_repair_authority(runtime: DeliveryRuntime) -> _ReviewRepairAuthority:
+        """Validate local review-repair authority and return its exact publication fence."""
+        if runtime.change_disposition() is not None:
+            message = "review repair requires current Change attention resolution"
+            raise PortfolioApplicationError(message)
+        invalidation = runtime.finalization_invalidation()
+        finalization = runtime.finalization()
+        if finalization is None and (invalidation is None or invalidation.reason != "review-repair"):
+            message = "review repair requires current finalization authority"
+            raise PortfolioApplicationError(message)
+        if runtime.merged_pull_request_latch() is not None:
+            message = "merged Change cannot be reopened for review repair"
+            raise PortfolioApplicationError(message)
+        ready = runtime.ready_receipt()
+        publication = runtime.publication_history()
+        expected_finalization_id = (
+            invalidation.finalization_id if invalidation is not None else finalization.finalization_id
+        )
+        expected_head = invalidation.expected_head if invalidation is not None else finalization.exact_head
+        if ready is not None and (ready.finalization_id != expected_finalization_id or ready.head_sha != expected_head):
+            message = "review repair ready authority does not match finalization"
+            raise PortfolioApplicationError(message)
+        if finalization is None and ready is not None:
+            message = "review repair cannot replay with ready authority"
+            raise PortfolioApplicationError(message)
+        identity = ready if ready is not None else None if publication is None else publication.current
+        if identity is None:
+            message = "review repair requires current publication identity"
+            raise PortfolioApplicationError(message)
+        return _ReviewRepairAuthority(
+            invalidation=invalidation,
+            expected_finalization_id=expected_finalization_id,
+            expected_head=expected_head,
+            repository=identity.repository,
+            number=identity.number,
+            node_id=identity.node_id,
+        )
+
+    @staticmethod
+    def _observe_review_repair_pull_request(
+        change_id: str,
+        publisher: DraftPullRequestPublisher,
+        authority: _ReviewRepairAuthority,
+    ) -> PublicationPullRequestObservationReceipt:
+        """Observe the bound open pull request at the exact review-repair head."""
+        observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        if observation is None:
+            message = "review repair requires a bound pull request"
+            raise PortfolioApplicationError(message)
+        snapshot = observation.snapshot
+        if (
+            snapshot.repository != publisher.repository
+            or snapshot.repository != authority.repository
+            or snapshot.number != authority.number
+            or snapshot.node_id != authority.node_id
+            or snapshot.base_branch != publisher.target_branch
+            or snapshot.head_sha != authority.expected_head
+            or snapshot.state != "open"
+            or snapshot.merged
+        ):
+            message = "review repair requires an open pull request at the finalized head"
+            raise PortfolioApplicationError(message)
+        return observation
+
+    @staticmethod
+    def _replay_review_repair(
+        change_id: str,
+        publisher: DraftPullRequestPublisher,
+        authority: _ReviewRepairAuthority,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> DeliveryFinalizationInvalidationReceipt | None:
+        """Replay an existing review-repair fence without duplicating provider state changes."""
+        invalidation = authority.invalidation
+        if invalidation is None:
+            return None
+        if invalidation.reason != "review-repair" or invalidation.finalization_id != authority.expected_finalization_id:
+            message = "review repair finalization invalidation is not replayable"
+            raise PortfolioApplicationError(message)
+        if not observation.snapshot.draft:
+            publisher.return_to_draft(
+                ReturnChangePullRequestToDraft(
+                    change_id=change_id,
+                    operation_id=f"review-repair-draft-{authority.expected_finalization_id}",
+                    finalization_id=authority.expected_finalization_id,
+                    exact_head=authority.expected_head,
+                )
+            )
+        return invalidation
 
     def resolve_change_disposition(
         self,

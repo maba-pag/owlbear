@@ -20,6 +20,7 @@ export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publicat
 export type DeliveryWorkerRole = 'planner' | 'builder'
 export type WorkItemPublicationPhase =
   | 'finalization-invalidated'
+  | 'review-repair'
   | 'ready-for-finalization'
   | 'checkpoint-pending'
   | 'pull-request-draft'

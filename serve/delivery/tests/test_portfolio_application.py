@@ -2484,6 +2484,78 @@ def test_prepare_review_repair_preserves_authority_when_draft_transition_fails(t
     assert runtime.ready_receipt() is not None
 
 
+def test_prepare_review_repair_does_not_mutate_provider_with_existing_attention(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider check failed",),
+    )
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.observe_pull_request.reset_mock()
+
+    with pytest.raises(PortfolioApplicationError, match="current Change attention resolution"):
+        application.prepare_review_repair("change-a")
+
+    assert state["pull_request"].draft is False
+    provider.observe_pull_request.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+
+
+def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    invalidation = application.prepare_review_repair("change-a")
+    coordination = application._workspace_manager.show("change-a")
+    repaired_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "review-fix.txt",
+        "review fix\n",
+        "address review feedback",
+    )
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": repaired_head})
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=repaired_head,
+        checks=(),
+    )
+
+    def update_summary(request):
+        state["pull_request"] = state["pull_request"].model_copy(update={"body": request.body})
+        return state["pull_request"]
+
+    provider.update_pull_request.side_effect = update_summary
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    application._change_branch_publisher = branch_publisher
+
+    finalization = application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", repaired_head),
+    )
+
+    assert invalidation.expected_head == exact_head
+    assert finalization.finalization_id != invalidation.finalization_id
+    assert runtime.finalization_invalidation() is None
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled is True
+    assert result.state.pending_checkpoint is None
+    assert result.state.published_head == repaired_head
+    assert runtime.finalization() == finalization
+    assert state["pull_request"].head_sha == repaired_head
+    assert state["pull_request"].draft is True
+    branch_publisher.publish.assert_called_once()
+
+    ready = application.mark_current_change_ready("change-a")
+
+    assert ready.head_sha == repaired_head
+    assert state["pull_request"].draft is False
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+
+
 def test_reconcile_awaiting_acceptance_repairs_open_head_drift(tmp_path: Path) -> None:
     application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     provider.set_pull_request_draft_state.reset_mock()
@@ -5386,8 +5458,9 @@ dependencies: []
     assert "Outcomes complete: 0 of 1" in pull_request.generated_summary
     assert "admitted Design package" in pull_request.generated_summary
     assert "Do not manually change this PR's draft/ready state or push to its branch." in pull_request.generated_summary
-    assert "/address-pr-feedback change-a" in pull_request.generated_summary
-    assert "merge this pull request in GitHub" in pull_request.generated_summary
+    assert "## Review And Merge" not in pull_request.generated_summary
+    assert "/address-pr-feedback change-a" not in pull_request.generated_summary
+    assert "merge this pull request in GitHub" not in pull_request.generated_summary
     package_paths = {
         ".owlbear/delivery/packages/change-a/authority.json",
         ".owlbear/delivery/packages/change-a/design.md",
@@ -5506,6 +5579,9 @@ def test_checkpoint_summary_scopes_finalization_status_to_its_checkpoint(tmp_pat
     assert f"As of reviewed checkpoint `{finalized_head}`:" in final_summary
     assert "Delivery finalization: recorded for this checkpoint" in final_summary
     assert "Independent exact-commit review: passed for this checkpoint" in final_summary
+    assert "## Review And Merge" in final_summary
+    assert "/address-pr-feedback change-a" in final_summary
+    assert "merge this pull request in GitHub" in final_summary
 
 
 def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path: Path) -> None:

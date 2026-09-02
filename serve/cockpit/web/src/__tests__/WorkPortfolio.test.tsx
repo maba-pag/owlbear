@@ -1616,7 +1616,8 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
   expect(inspector).toHaveTextContent(`Target head${'1'.repeat(40)}`)
   expect(inspector).toHaveTextContent(`Merged Change head${'3'.repeat(40)}`)
   expect(inspector).toHaveTextContent('Last target sync: main (merge commit)')
-  fireEvent.click(within(inspector).getByText('Sync with target'))
+  fireEvent.click(within(inspector).getByText('Merge latest target into Change'))
+  fireEvent.click(screen.getByText('Confirm target update'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/target/sync',
     method: 'POST',
@@ -1820,6 +1821,7 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
   expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
 
   fireEvent.click(screen.getByTestId('target-sync-conflict-abort'))
+  fireEvent.click(screen.getByText('Confirm abort'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/target/conflict/abort',
     method: 'POST',
@@ -1948,7 +1950,7 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
     next_step: 'Merge pull request in GitHub',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
-    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
+    action: { kind: 'observe-acceptance', label: 'Check merge status', command: null },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -1980,7 +1982,7 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   expect(inspector).toHaveTextContent('owlbear/example')
   expect(inspector).toHaveTextContent('42')
   expect(within(inspector).queryByText(/merge now/i)).not.toBeInTheDocument()
-  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  fireEvent.click(within(inspector).getByText('Check merge status'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/acceptance/observe',
     method: 'POST',
@@ -1988,7 +1990,7 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   }))
 
   acceptanceObservationFailure = true
-  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  fireEvent.click(within(inspector).getByText('Check merge status'))
   const waiting = await within(inspector).findByRole('status')
   expect(waiting).toHaveTextContent('ERR_DELIVERY_ACCEPTANCE_WAITING')
   expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
@@ -2007,7 +2009,7 @@ it('surfaces acceptance-reconciliation provider failure with an immediate retry'
     next_step: 'Merge pull request in GitHub',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
-    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
+    action: { kind: 'observe-acceptance', label: 'Check merge status', command: null },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', items: [publicationCard] })])
   acceptanceReconciliationProviderUnavailable = true
@@ -2542,10 +2544,10 @@ it('presents a draft pull request as publication work', async () => {
     title: 'Change publication',
     stage: null,
     next_actor: 'agent',
-    next_step: 'Mark the pull request ready',
+    next_step: 'Make the pull request ready for review',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Pull request is draft', done: null, total: null },
-    action: { kind: 'mark-ready', label: 'Mark ready', command: null },
+    action: { kind: 'mark-ready', label: 'Make PR ready for review', command: null },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
   renderPage()
@@ -2553,8 +2555,8 @@ it('presents a draft pull request as publication work', async () => {
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
   expect(table).toHaveTextContent('Pull request is draft')
-  expect(table).toHaveTextContent('Mark ready')
-  const readyLink = within(table).getByText('Mark ready').closest('p-link-pure') as HTMLElement & { href: string }
+  expect(table).toHaveTextContent('Make PR ready for review')
+  const readyLink = within(table).getByText('Make PR ready for review').closest('p-link-pure') as HTMLElement & { href: string }
   expect(readyLink.href).toBe('/delivery/change-alpha/publication')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
@@ -2672,7 +2674,8 @@ it('disables publication-check observation while another publication action is p
   const inspector = (renderPage('/delivery/change-alpha/publication'), await screen.findByTestId('work-item-detail'))
 
   try {
-    fireEvent.click(within(inspector).getByText('Sync with target'))
+    fireEvent.click(within(inspector).getByText('Merge latest target into Change'))
+    fireEvent.click(screen.getByText('Confirm target update'))
     const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
     await waitFor(() => expect(observe.disabled).toBe(true))
   } finally {
@@ -2695,7 +2698,7 @@ it('disables publication actions while publication-check observation is pending'
 
   try {
     fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-    const sync = within(inspector).getByText('Sync with target') as HTMLElement & { disabled: boolean }
+    const sync = within(inspector).getByText('Merge latest target into Change') as HTMLElement & { disabled: boolean }
     await waitFor(() => expect(sync.disabled).toBe(true))
     expect(requests.filter(({ url, method }) => method === 'POST' && url.endsWith('/target/sync'))).toHaveLength(0)
   } finally {

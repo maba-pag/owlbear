@@ -473,6 +473,7 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
 
 const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   'finalization-invalidated': 'Finalization invalidated',
+  'review-repair': 'Review feedback repair',
   'ready-for-finalization': 'Ready for finalization',
   'checkpoint-pending': 'Checkpoint pending',
   'pull-request-draft': 'Pull request draft',
@@ -485,6 +486,13 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
 function IdentityRow({ label, value }: { label: string; value: string | number | null }) {
   if (value === null) return null
   return <><dt className="text-contrast-medium">{label}</dt><dd className="min-w-0 break-all font-mono text-xs">{value}</dd></>
+}
+
+function pullRequestUrl(repository: string, number: number): string {
+  const repositoryUrl = repository.startsWith('http')
+    ? repository.replace(/\/$/, '')
+    : `https://github.com/${repository}`
+  return `${repositoryUrl}/pull/${number}`
 }
 
 function WorktreeRecoverySection(props: WorkItemDetailProps) {
@@ -589,8 +597,16 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   const conflict = publication?.target_sync_conflict
   const attention = publication?.attention
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
   if (!publication || !conflict) return null
   const canExit = attention?.kind === 'publication-attention'
+  const abort = async () => {
+    if (!attention) return
+    const error = await props.onAbortTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
+  }
   return (
     <section className="border-l-4 border-danger bg-surface p-static-md" aria-labelledby="target-sync-conflict-heading">
       <PHeading id="target-sync-conflict-heading" tag="h4" size="sm">Target sync conflict</PHeading>
@@ -613,7 +629,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
             variant="secondary"
             data-testid="target-sync-conflict-abort"
             disabled={props.pendingAction !== null}
-            onClick={() => void props.onAbortTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
+            onClick={() => { setActionFailed(false); setConfirmOpen(true) }}
           >
             {props.pendingAction === 'target-sync-abort' ? 'Aborting...' : 'Abort target sync'}
           </PButton>
@@ -624,11 +640,67 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
             disabled={props.pendingAction !== null}
             onClick={() => void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
           >
-            {props.pendingAction === 'target-sync-resolve' ? 'Validating...' : 'Validate resolved merge'}
+            {props.pendingAction === 'target-sync-resolve' ? 'Submitting...' : 'Submit resolved merge'}
           </PButton>
         </div>
       ) : <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>}
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm target sync abort' }}>
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Abort target sync</PHeading>
+            <p className="text-sm">The preserved target merge will be aborted and the Change will return to its reviewed head. Any target-sync merge state will be discarded.</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void abort()}>
+                {props.pendingAction === 'target-sync-abort' ? 'Aborting...' : 'Confirm abort'}
+              </PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
     </section>
+  )
+}
+
+function TargetSyncSection(props: WorkItemDetailProps) {
+  const publication = props.detail.item.publication
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
+  if (!publication || publication.attention || ['deferred', 'abandoned', 'acceptance-observed'].includes(publication.phase)) return null
+  const run = async () => {
+    const error = await props.onSyncTarget()
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
+  }
+  return (
+    <>
+      <PButton
+        className="mt-static-md"
+        type="button"
+        compact
+        variant="secondary"
+        disabled={props.pendingAction !== null || props.isObservingPublicationChecks}
+        onClick={() => { setActionFailed(false); setConfirmOpen(true) }}
+      >
+        {props.pendingAction === 'target-sync' ? 'Updating Change...' : 'Merge latest target into Change'}
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm target synchronization' }}>
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Merge latest target into Change</PHeading>
+            <p className="text-sm">Delivery will merge the current integration target into the managed Change. This can create a merge commit or conflicts, invalidate finalization, and require a new review.</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
+                {props.pendingAction === 'target-sync' ? 'Updating Change...' : 'Confirm target update'}
+              </PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
+    </>
   )
 }
 
@@ -675,7 +747,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
   return (
     <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
       <div className="flex flex-wrap items-start justify-between gap-static-sm">
-        <PHeading id="publication-checks-heading" tag="h4" size="sm">Publication checks</PHeading>
+        <PHeading id="publication-checks-heading" tag="h4" size="sm">PR CI checks</PHeading>
         {observable ? (
           <PButton
             type="button"
@@ -685,7 +757,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
             disabled={props.isObservingPublicationChecks || props.pendingAction !== null}
             onClick={() => void props.onObservePublicationChecks()}
           >
-            {props.isObservingPublicationChecks ? 'Checking...' : 'Check publication'}
+            {props.isObservingPublicationChecks ? 'Checking CI...' : 'Refresh PR CI'}
           </PButton>
         ) : null}
       </div>
@@ -769,7 +841,16 @@ function PublicationSection(props: WorkItemDetailProps) {
       ) : null}
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
         <IdentityRow label="Repository" value={publication.repository} />
-        <IdentityRow label="Pull request" value={publication.pull_request_number} />
+        {publication.repository && publication.pull_request_number ? (
+          <>
+            <dt className="text-contrast-medium">Pull request</dt>
+            <dd className="min-w-0 break-all text-xs">
+              <a className="font-medium text-primary underline decoration-contrast-low underline-offset-2 hover:decoration-primary" href={pullRequestUrl(publication.repository, publication.pull_request_number)} target="_blank" rel="noreferrer">
+                {publication.repository} #{publication.pull_request_number}
+              </a>
+            </dd>
+          </>
+        ) : <IdentityRow label="Pull request" value={publication.pull_request_number} />}
         <IdentityRow label="Finalized head" value={publication.finalized_head} />
         <IdentityRow label="Published head" value={publication.published_head} />
         <IdentityRow label="Pull request head" value={publication.pull_request_head} />
@@ -815,11 +896,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           {props.pendingAction === 'publication-supersede' ? 'Superseding...' : 'Supersede publication'}
         </PButton>
       ) : null}
-      {!publication.attention && !['deferred', 'abandoned', 'acceptance-observed'].includes(publication.phase) ? (
-        <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void props.onSyncTarget()}>
-          {props.pendingAction === 'target-sync' ? 'Syncing target...' : 'Sync with target'}
-        </PButton>
-      ) : null}
+      <TargetSyncSection {...props} />
       <WorktreeRecoverySection {...props} />
       <WorktreeCleanupSection {...props} />
     </section>
