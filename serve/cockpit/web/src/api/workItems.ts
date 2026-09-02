@@ -61,6 +61,7 @@ export interface WorkItemCardView {
   scope: WorkItemScope
   title: string
   stage: WorkItemStage | null
+  publication_phase?: WorkItemPublicationPhase | null
   needs: WorkItemNeed
   needs_headline: string | null
   next_actor: WorkItemNextActor

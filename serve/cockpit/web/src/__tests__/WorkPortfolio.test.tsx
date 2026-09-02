@@ -1505,6 +1505,7 @@ it('reconciles a pending publication checkpoint from the Change publication view
     next_actor: 'agent',
     next_step: 'Reconcile the final checkpoint',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    publication_phase: 'checkpoint-pending',
     progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
     action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
   })
@@ -1543,8 +1544,7 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(inspector).toHaveTextContent('Checkpoint triggers: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
   expect(publicationRow).toHaveTextContent('Checkpoint pending')
-  expect(within(publicationRow).getByText('Ready')).toHaveAttribute('data-status-tone', 'ready')
-  expect(within(publicationRow).getByText('Ready')).not.toHaveTextContent('Checkpoint pending')
+  expect(within(publicationRow).getByText('Checkpoint pending', { selector: '[data-status-tone]' })).toHaveAttribute('data-status-tone', 'active')
   fireEvent.click(within(inspector).getByText('Publish checkpoint'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/publication/reconcile',
@@ -1733,7 +1733,7 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent(`Target head${'1'.repeat(40)}`)
-  expect(inspector).toHaveTextContent(`Merged Change head${'3'.repeat(40)}`)
+  expect(inspector).toHaveTextContent(`Target-sync merge result${'3'.repeat(40)}`)
   expect(inspector).toHaveTextContent('Last target sync: main (merge commit)')
   fireEvent.click(within(inspector).getByText('Merge latest target into Change'))
   fireEvent.click(screen.getByText('Confirm target update'))
@@ -2640,9 +2640,10 @@ it('presents a draft pull request as publication work', async () => {
     title: 'Change publication',
     stage: null,
     next_actor: 'agent',
-    next_step: 'Make the pull request ready for review',
+    next_step: 'Mark the pull request ready through Delivery',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'publication', label: 'Pull request is draft', done: null, total: null },
+    publication_phase: 'pull-request-draft',
+    progress: { kind: 'publication', label: 'Delivery ready state not recorded', done: null, total: null },
     action: { kind: 'mark-ready', label: 'Make PR ready for review', command: null },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
@@ -2650,8 +2651,10 @@ it('presents a draft pull request as publication work', async () => {
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
-  expect(table).toHaveTextContent('Pull request is draft')
+  expect(table).toHaveTextContent('Delivery ready state not recorded')
   expect(table).toHaveTextContent('Make PR ready for review')
+  const publicationRow = screen.getByLabelText('Change publication for Portfolio redesign')
+  expect(publicationRow.querySelector('[data-status-tone]')).toHaveTextContent('Delivery ready state not recorded')
   const readyLink = within(table).getByText('Make PR ready for review').closest('p-link-pure') as HTMLElement & { href: string }
   expect(readyLink.href).toBe('/delivery/change-alpha/publication')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')

@@ -482,7 +482,7 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   'review-repair': 'Review feedback repair',
   'ready-for-finalization': 'Ready for finalization',
   'checkpoint-pending': 'Checkpoint pending',
-  'pull-request-draft': 'Pull request draft',
+  'pull-request-draft': 'Delivery ready state not recorded',
   'awaiting-merge': 'Awaiting merge in GitHub',
   'acceptance-observed': 'Acceptance observed',
   deferred: 'Change deferred',
@@ -981,7 +981,7 @@ function PublicationSection(props: WorkItemDetailProps) {
         <IdentityRow label="Observed head" value={publication.invalidated_observed_head} />
         <IdentityRow label="Merged at" value={publication.merged_at} />
         <IdentityRow label="Target head" value={publication.target_sync?.target_head ?? null} />
-        <IdentityRow label="Merged Change head" value={publication.target_sync?.merged_head ?? null} />
+        <IdentityRow label="Target-sync merge result" value={publication.target_sync?.merged_head ?? null} />
       </dl>
       <PublicationChecksSection {...props} />
       {publication.target_sync ? (

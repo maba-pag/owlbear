@@ -226,6 +226,7 @@ class WorkItemCardView(_ProjectionModel):
     scope: WorkItemScope
     title: str = Field(min_length=1)
     stage: WorkItemStage | None
+    publication_phase: WorkItemPublicationPhase | None = None
     needs: WorkItemNeed
     needs_headline: str | None = None
     next_actor: WorkItemNextActor
@@ -614,6 +615,7 @@ class WorkItemProjector:
                 scope=WorkItemScope.CHANGE_PUBLICATION,
                 title="Change publication",
                 stage=None,
+                publication_phase=self._publication_phase(),
                 needs=WorkItemNeed.NONE,
                 next_actor=WorkItemNextActor.NONE,
                 next_step="Change abandoned",
@@ -629,6 +631,7 @@ class WorkItemProjector:
                 scope=WorkItemScope.CHANGE_PUBLICATION,
                 title="Change publication",
                 stage=None,
+                publication_phase=self._publication_phase(),
                 needs=WorkItemNeed.YOU,
                 needs_headline="Change is deferred",
                 next_actor=WorkItemNextActor.YOU,
@@ -677,12 +680,7 @@ class WorkItemProjector:
             next_step, progress = "Reconcile the final checkpoint", "Checkpoint pending"
             action = WorkItemAction(kind=WorkItemActionKind.RECONCILE_CHECKPOINT, label="Publish checkpoint")
         elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
-            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
-            next_step, progress = "Make the pull request ready for review", "Pull request is draft"
-            action = WorkItemAction(
-                kind=WorkItemActionKind.MARK_READY,
-                label="Make PR ready for review",
-            )
+            return self._draft_publication_card(phase)
         elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
             needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
             next_step, progress = headline, "Awaiting merge in GitHub"
@@ -701,6 +699,49 @@ class WorkItemProjector:
             scope=WorkItemScope.CHANGE_PUBLICATION,
             title="Change publication",
             stage=None,
+            publication_phase=phase,
+            needs=needs,
+            needs_headline=headline,
+            next_actor=next_actor,
+            next_step=next_step,
+            activity=activity,
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
+            action=action,
+        )
+
+    def _draft_publication_card(self, phase: WorkItemPublicationPhase) -> WorkItemCardView:
+        if self._publication_head_requires_reconciliation():
+            needs, headline, next_actor = (
+                WorkItemNeed.YOU,
+                "Pull request head differs from finalized Change",
+                WorkItemNextActor.YOU,
+            )
+            next_step, progress = (
+                "Review the current pull-request head before continuing",
+                "Publication head needs reconciliation",
+            )
+            action = WorkItemAction()
+        else:
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress = (
+                "Mark the pull request ready through Delivery",
+                "Delivery ready state not recorded",
+            )
+            action = WorkItemAction(
+                kind=WorkItemActionKind.MARK_READY,
+                label="Make PR ready for review",
+            )
+        activity = WorkItemActivity(
+            state=WorkItemActivityState.IDLE if next_actor == WorkItemNextActor.YOU else WorkItemActivityState.READY
+        )
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=phase,
             needs=needs,
             needs_headline=headline,
             next_actor=next_actor,
@@ -738,6 +779,7 @@ class WorkItemProjector:
             scope=WorkItemScope.CHANGE_PUBLICATION,
             title="Change publication",
             stage=None,
+            publication_phase=self._publication_phase(),
             needs=WorkItemNeed.YOU,
             needs_headline="Change attention requires resolution",
             next_actor=WorkItemNextActor.YOU,
@@ -765,6 +807,7 @@ class WorkItemProjector:
             scope=WorkItemScope.CHANGE_PUBLICATION,
             title="Change publication",
             stage=None,
+            publication_phase=self._publication_phase(),
             needs=WorkItemNeed.YOU,
             needs_headline="Pull request head changed",
             next_actor=WorkItemNextActor.YOU,
@@ -795,6 +838,7 @@ class WorkItemProjector:
             scope=WorkItemScope.CHANGE_PUBLICATION,
             title="Change publication",
             stage=None,
+            publication_phase=self._publication_phase(),
             needs=WorkItemNeed.YOU,
             needs_headline=headline,
             next_actor=WorkItemNextActor.YOU,
@@ -819,6 +863,13 @@ class WorkItemProjector:
             and all(binding.active_claim is None for binding in frontier.bindings)
             and frontier.integration_repair_claim is None
         )
+
+    def _publication_head_requires_reconciliation(self) -> bool:
+        """Return whether the current publication head cannot satisfy finalization authority."""
+        frontier = self._snapshot.frontier
+        history = frontier.change_publication_history
+        finalization = frontier.finalization
+        return history is not None and finalization is not None and history.current.head_sha != finalization.exact_head
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
         frontier = self._snapshot.frontier
@@ -894,8 +945,13 @@ class WorkItemProjector:
         ready = frontier.ready
         attention_publication = frontier.change_disposition_publication
         merged = frontier.merged_pull_request_latch
-        publication_identity = ready or merged or attention_publication
         publication_history = frontier.change_publication_history
+        publication_identity = (
+            ready
+            or merged
+            or attention_publication
+            or (publication_history.current if publication_history is not None else None)
+        )
         target_sync = frontier.target_sync_receipt
         return WorkItemPublicationView(
             phase=self._publication_phase(),

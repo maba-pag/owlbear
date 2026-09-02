@@ -679,6 +679,44 @@ def test_publication_history_projects_ordered_transport_free_generations() -> No
     ]
 
 
+def test_publication_head_mismatch_keeps_identity_and_withholds_ready_action() -> None:
+    finalization = _finalization()
+    publication = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_sha="4" * 40,
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "change_publication_history": DeliveryChangePublicationHistory.create(publication),
+            },
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert card.publication_phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT
+    assert (card.needs, card.next_actor, card.action.kind, card.progress.label) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        WorkItemActionKind.NONE,
+        "Publication head needs reconciliation",
+    )
+    assert detail.publication is not None
+    assert (
+        detail.publication.repository,
+        detail.publication.pull_request_number,
+        detail.publication.pull_request_head,
+    ) == (publication.repository, publication.number, publication.head_sha)
+
+
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
     finalization = _finalization()
     bindings = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
@@ -695,7 +733,7 @@ def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
 
     assert checkpoint.group_view().lifecycle == "publication"
     assert checkpoint.group_view().items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
-    assert draft.group_view().items[-1].progress.label == "Pull request is draft"
+    assert draft.group_view().items[-1].progress.label == "Delivery ready state not recorded"
     assert draft.group_view().items[-1].action.kind == WorkItemActionKind.MARK_READY
 
 
