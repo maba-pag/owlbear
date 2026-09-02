@@ -89,6 +89,12 @@ class ChangeParams(_TargetProtocolModel):
     change_id: ChangeId
 
 
+class AbortReviewRepairParams(ChangeParams):
+    """Validate one exact review-repair invalidation identity."""
+
+    expected_invalidation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ResolveChangeDispositionParams(ChangeParams):
     """Validate one exact Change attention identity for explicit resolution."""
 
@@ -552,6 +558,10 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, AdmitDeliveryChangeParams)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type AbortReviewRepairRequest = Annotated[
+    AbortReviewRepairParams,
+    BeforeValidator(partial(_parse_json_model, AbortReviewRepairParams)),
+]
 type DeferChangeRequest = Annotated[
     DeferChangeParams,
     BeforeValidator(partial(_parse_json_model, DeferChangeParams)),
@@ -663,6 +673,8 @@ type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_
 __all__ = [
     "AbandonChangeParams",
     "AbandonChangeRequest",
+    "AbortReviewRepairParams",
+    "AbortReviewRepairRequest",
     "AdmitDeliveryChangeParams",
     "AdmitDeliveryChangeRequest",
     "ChangeBlockedImplementationRecoveryResponse",

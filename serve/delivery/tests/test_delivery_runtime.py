@@ -646,6 +646,48 @@ def test_review_repair_rejects_finalizing_the_unchanged_head(tmp_path: Path) -> 
         )
 
 
+def test_review_repair_abort_is_replayable_and_requires_fresh_finalization(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, "3" * 40))
+    invalidation = runtime.prepare_review_repair(
+        finalization.finalization_id,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+    )
+
+    marker = runtime.abort_review_repair(
+        invalidation.invalidation_id,
+        datetime(2026, 8, 11, 17, tzinfo=UTC),
+    )
+
+    assert marker is not None
+    assert marker.reason == "review-repair-aborted"
+    assert marker.source_invalidation_id == invalidation.invalidation_id
+    assert marker.invalidation_id != invalidation.invalidation_id
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert runtime.abort_review_repair(invalidation.invalidation_id, datetime(2026, 8, 11, 18, tzinfo=UTC)) == marker
+    assert runtime.abort_review_repair(marker.invalidation_id, datetime(2026, 8, 11, 19, tzinfo=UTC)) == marker
+    with pytest.raises(DeliveryRuntimeConflictError, match="abort identity is stale"):
+        runtime.abort_review_repair("f" * 64, datetime(2026, 8, 11, 20, tzinfo=UTC))
+
+    fresh_finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 21, tzinfo=UTC),
+    )
+
+    assert fresh_finalization.finalization_id != finalization.finalization_id
+    assert fresh_finalization.exact_head == finalization.exact_head
+    assert runtime.finalization_invalidation() is None
+    assert runtime.finalization() == fresh_finalization
+
+
 def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
     tmp_path: Path,
 ) -> None:
@@ -1856,6 +1898,47 @@ def test_empty_checkpoint_invalidation_preserves_valid_anchor() -> None:
     )
 
     assert invalidate_checkpoint_publication(pending, set()) is pending
+
+
+def test_checkpoint_failure_metadata_survives_reload_and_reanchors_by_head(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    initial = DeliveryPendingCheckpoint(
+        head="1" * 40,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=initial)
+
+    state = runtime.checkpoint_publication_state()
+    assert state.pending_checkpoint is not None
+    failed = runtime.record_checkpoint_failure(
+        state.pending_checkpoint,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        "ERR_PROVIDER_UNAVAILABLE",
+        "The provider is unavailable.",
+    )
+
+    pending = failed.pending_checkpoint
+    assert pending is not None
+    assert pending.attempt_count == 1
+    assert pending.last_attempted_at == datetime(2026, 8, 11, 16, tzinfo=UTC)
+    assert pending.last_error_code == "ERR_PROVIDER_UNAVAILABLE"
+    assert pending.last_error_detail == "The provider is unavailable."
+    assert DeliveryRuntime(tmp_path, _contract()).checkpoint_publication_state() == failed
+
+    same_head = pending.model_copy(
+        update={
+            "triggers": (*pending.triggers, DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION))
+        }
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=same_head)
+    assert runtime.checkpoint_publication_state().pending_checkpoint == same_head
+
+    reanchored = DeliveryPendingCheckpoint(
+        head="2" * 40,
+        triggers=same_head.triggers,
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=reanchored)
+    assert runtime.checkpoint_publication_state().pending_checkpoint == reanchored
 
 
 def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path: Path) -> None:

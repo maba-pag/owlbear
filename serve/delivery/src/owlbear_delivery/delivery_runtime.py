@@ -524,7 +524,8 @@ class DeliveryFinalizationInvalidation(_DeliveryModel):
     finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reason: Literal["head-drift", "target-sync-conflict", "review-repair"] = "head-drift"
+    reason: Literal["head-drift", "target-sync-conflict", "review-repair", "review-repair-aborted"] = "head-drift"
+    source_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     invalidated_at: datetime
 
 
@@ -541,17 +542,23 @@ class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
         """Create one finalization invalidation using the canonical digest."""
         values = invalidation.model_dump()
         candidate = cls.model_construct(invalidation_id="0" * 64, **values)
-        return cls(invalidation_id=_receipt_digest(candidate, "invalidation_id"), **values)
+        return cls(invalidation_id=_finalization_invalidation_digest(candidate), **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
-        if self.expected_head == self.observed_head and self.reason != "review-repair":
+        if self.expected_head == self.observed_head and self.reason not in {"review-repair", "review-repair-aborted"}:
             message = "Delivery finalization invalidation requires head drift"
+            raise ValueError(message)
+        if self.reason == "review-repair-aborted" and self.source_invalidation_id is None:
+            message = "aborted review repair requires its source invalidation identity"
+            raise ValueError(message)
+        if self.reason != "review-repair-aborted" and self.source_invalidation_id is not None:
+            message = "only an aborted review repair may reference a source invalidation"
             raise ValueError(message)
         if self.invalidated_at.tzinfo is None:
             message = "Delivery finalization invalidation timestamp must include a timezone"
             raise ValueError(message)
-        if self.invalidation_id != _receipt_digest(self, "invalidation_id"):
+        if self.invalidation_id != _finalization_invalidation_digest(self):
             message = "Delivery finalization invalidation identity is invalid"
             raise ValueError(message)
         return self
@@ -719,6 +726,10 @@ class DeliveryPendingCheckpoint(_DeliveryModel):
 
     head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     triggers: tuple[DeliveryCheckpointTrigger, ...] = Field(min_length=1)
+    attempt_count: int = Field(default=0, ge=0)
+    last_attempted_at: datetime | None = None
+    last_error_code: str | None = Field(default=None, min_length=1, max_length=120)
+    last_error_detail: str | None = Field(default=None, min_length=1, max_length=240)
 
     @model_validator(mode="after")
     def _validate_triggers(self) -> DeliveryPendingCheckpoint:
@@ -731,6 +742,9 @@ class DeliveryPendingCheckpoint(_DeliveryModel):
         )
         if len(identities) != len(set(identities)):
             message = "pending checkpoint trigger kinds must be unique per scope"
+            raise ValueError(message)
+        if self.last_attempted_at is not None and self.last_attempted_at.tzinfo is None:
+            message = "pending checkpoint attempt timestamp must include a timezone"
             raise ValueError(message)
         return self
 
@@ -1374,6 +1388,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_design_package_snapshot",
         "queue_admitted_design_checkpoint",
         "acknowledge_checkpoint_publication",
+        "record_checkpoint_failure",
         "record_publication_identity",
         "record_publication_successor",
         "record_target_sync",
@@ -1389,6 +1404,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "complete_change",
         "finalize_change",
         "prepare_review_repair",
+        "abort_review_repair",
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
@@ -1851,7 +1867,7 @@ class DeliveryRuntime:
         if current.head == receipt.snapshot_head:
             return self.checkpoint_publication_state()
         updated = frontier.model_copy(
-            update={"pending_checkpoint": current.model_copy(update={"head": receipt.snapshot_head})}
+            update={"pending_checkpoint": _checkpoint_with_head(current, receipt.snapshot_head)}
         )
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
@@ -1908,6 +1924,36 @@ class DeliveryRuntime:
         pending = current.model_copy(update={"triggers": retained}) if retained else None
         updated = frontier.model_copy(update={"pending_checkpoint": pending})
         self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def record_checkpoint_failure(
+        self,
+        expected: DeliveryPendingCheckpoint,
+        attempted_at: datetime,
+        error_code: str,
+        error_detail: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Persist one failed checkpoint attempt without changing its obligation."""
+        if attempted_at.tzinfo is None:
+            message = "pending checkpoint failure timestamp must include a timezone"
+            raise ValueError(message)
+        if not error_code or not error_detail:
+            message = "pending checkpoint failure requires an error code and detail"
+            raise ValueError(message)
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_checkpoint_failure", allow_attention=True)
+        current = frontier.pending_checkpoint
+        if current is None or current != expected:
+            _conflict("checkpoint failure no longer matches the durable queue")
+        updated_pending = current.model_copy(
+            update={
+                "attempt_count": current.attempt_count + 1,
+                "last_attempted_at": attempted_at,
+                "last_error_code": error_code,
+                "last_error_detail": error_detail,
+            }
+        )
+        self._replace(previous, frontier.model_copy(update={"pending_checkpoint": updated_pending}))
         return self.checkpoint_publication_state()
 
     def finalization(self) -> DeliveryFinalizationReceipt | None:
@@ -2412,6 +2458,48 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return invalidation
 
+    def abort_review_repair(
+        self,
+        expected_invalidation_id: str,
+        aborted_at: datetime,
+    ) -> DeliveryFinalizationInvalidationReceipt | None:
+        """Abort one review repair without restoring stale finalization authority."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "abort_review_repair", allow_attention=True)
+        invalidation = frontier.finalization_invalidation
+        if invalidation is None:
+            return None
+        if invalidation.reason == "review-repair-aborted":
+            if expected_invalidation_id not in {
+                invalidation.invalidation_id,
+                invalidation.source_invalidation_id,
+            }:
+                _conflict("review repair abort identity is stale")
+            return invalidation
+        if invalidation.reason != "review-repair":
+            _conflict("review repair is not active")
+        if invalidation.invalidation_id != expected_invalidation_id:
+            _conflict("review repair invalidation identity is stale")
+        if frontier.change_disposition is not None:
+            _conflict("review repair requires current Change attention resolution")
+        _require_no_active_change_claim(frontier, "review repair abort")
+        if aborted_at.tzinfo is None:
+            message = "review repair abort timestamp must include a timezone"
+            raise ValueError(message)
+        marker = DeliveryFinalizationInvalidationReceipt.create(
+            DeliveryFinalizationInvalidation(
+                change_id=invalidation.change_id,
+                finalization_id=invalidation.finalization_id,
+                expected_head=invalidation.expected_head,
+                observed_head=invalidation.expected_head,
+                reason="review-repair-aborted",
+                source_invalidation_id=invalidation.invalidation_id,
+                invalidated_at=aborted_at,
+            )
+        )
+        self._replace(previous, frontier.model_copy(update={"finalization_invalidation": marker}))
+        return marker
+
     def record_target_sync(
         self,
         receipt: ChangeTargetSyncReceipt,
@@ -2421,6 +2509,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_target_sync")
         _require_no_active_change_claim(frontier, "target synchronization")
+        _require_no_review_repair(frontier, "target synchronization")
         if receipt.change_id != self._contract.change_id:
             _conflict("target synchronization receipt does not match the admitted Change")
         existing = frontier.target_sync_receipt
@@ -2441,6 +2530,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_external_head_adoption")
         _require_no_active_change_claim(frontier, "external Change head adoption")
+        _require_no_review_repair(frontier, "external Change head adoption")
         if adopted_at.tzinfo is None:
             message = "external Change head adoption timestamp must include a timezone"
             raise ValueError(message)
@@ -2464,6 +2554,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_external_head_promotion")
         _require_no_active_change_claim(frontier, "external Change head promotion")
+        _require_no_review_repair(frontier, "external Change head promotion")
         if promoted_at.tzinfo is None:
             message = "external Change head promotion timestamp must include a timezone"
             raise ValueError(message)
@@ -2586,9 +2677,10 @@ class DeliveryRuntime:
                 "finalization": finalization,
                 "finalization_invalidation": invalidation,
                 "ready": ready,
-                "pending_checkpoint": DeliveryPendingCheckpoint(
-                    head=receipt.merged_head,
-                    triggers=triggers,
+                "pending_checkpoint": _checkpoint_with_head(
+                    pending,
+                    receipt.merged_head,
+                    triggers,
                 ),
             }
         )
@@ -2633,9 +2725,10 @@ class DeliveryRuntime:
                 "finalization": finalization,
                 "finalization_invalidation": invalidation,
                 "ready": ready,
-                "pending_checkpoint": DeliveryPendingCheckpoint(
-                    head=receipt.adopted_head,
-                    triggers=triggers,
+                "pending_checkpoint": _checkpoint_with_head(
+                    pending,
+                    receipt.adopted_head,
+                    triggers,
                 ),
             }
         )
@@ -3399,6 +3492,13 @@ def _require_no_active_change_claim(frontier: DeliveryFrontier, operation: str) 
         _conflict(f"{operation} cannot overlap an active mutation claim")
 
 
+def _require_no_review_repair(frontier: DeliveryFrontier, operation: str) -> None:
+    """Reject head mutations while external review repair owns the Change boundary."""
+    invalidation = frontier.finalization_invalidation
+    if invalidation is not None and invalidation.reason == "review-repair":
+        _conflict(f"{operation} cannot overlap an active review repair")
+
+
 def is_acceptance_waiting_observation(
     observation: PublicationPullRequestObservationReceipt,
 ) -> bool:
@@ -3561,9 +3661,10 @@ def _queue_promoted_result_checkpoint(
     combined = (*(() if pending is None else pending.triggers), *triggers)
     return replacement.model_copy(
         update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=candidate.result.completed_commit,
-                triggers=tuple(dict.fromkeys(combined)),
+            "pending_checkpoint": _checkpoint_with_head(
+                pending,
+                candidate.result.completed_commit,
+                tuple(dict.fromkeys(combined)),
             )
         }
     )
@@ -3574,12 +3675,7 @@ def _queue_finalization_checkpoint(frontier: DeliveryFrontier, exact_head: str) 
     trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION)
     combined = (*(() if pending is None else pending.triggers), trigger)
     return frontier.model_copy(
-        update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=exact_head,
-                triggers=tuple(dict.fromkeys(combined)),
-            )
-        }
+        update={"pending_checkpoint": _checkpoint_with_head(pending, exact_head, tuple(dict.fromkeys(combined)))}
     )
 
 
@@ -3593,7 +3689,7 @@ def _invalidate_finalization_checkpoint(
     )
     if not retained:
         return None
-    return pending.model_copy(update={"head": None, "triggers": retained})
+    return _checkpoint_with_head(pending, None, retained)
 
 
 def _has_checkpoint_trigger(
@@ -3619,7 +3715,19 @@ def invalidate_checkpoint_publication(
     )
     if not retained:
         return None
-    return pending.model_copy(update={"head": None, "triggers": retained})
+    return _checkpoint_with_head(pending, None, retained)
+
+
+def _checkpoint_with_head(
+    previous: DeliveryPendingCheckpoint | None,
+    head: str | None,
+    triggers: tuple[DeliveryCheckpointTrigger, ...] | None = None,
+) -> DeliveryPendingCheckpoint:
+    """Create or re-anchor one checkpoint, retaining retry metadata only for the same head."""
+    next_triggers = triggers if triggers is not None else (() if previous is None else previous.triggers)
+    if previous is not None and previous.head == head:
+        return previous.model_copy(update={"triggers": next_triggers})
+    return DeliveryPendingCheckpoint(head=head, triggers=next_triggers)
 
 
 def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:
@@ -3686,6 +3794,15 @@ def _model_content(model: BaseModel) -> bytes:
 
 def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
     payload = receipt.model_dump(mode="json", exclude={identity_field})
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(content).hexdigest()
+
+
+def _finalization_invalidation_digest(receipt: DeliveryFinalizationInvalidationReceipt) -> str:
+    exclude = {"invalidation_id"}
+    if receipt.source_invalidation_id is None:
+        exclude.add("source_invalidation_id")
+    payload = receipt.model_dump(mode="json", exclude=exclude)
     content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(content).hexdigest()
 

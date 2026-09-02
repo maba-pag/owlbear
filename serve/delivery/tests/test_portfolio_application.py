@@ -1499,6 +1499,33 @@ def test_external_head_adoption_demotes_ready_pull_request_before_moving_managed
     assert receipt.adopted_head == adopted_head
 
 
+def test_external_head_adoption_retains_attention_after_demotion_then_movement_failure(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    provider.set_pull_request_draft_state.reset_mock()
+    with (
+        patch.object(
+            application._workspace_manager,
+            "_run_git",
+            return_value=subprocess.CompletedProcess(("git", "merge"), 1, b"", b"fast-forward failed"),
+        ),
+        pytest.raises(PortfolioApplicationError, match="external Change head could not be adopted"),
+    ):
+        application.adopt_external_head("change-a", exact_head, adopted_head, "adopt-after-demotion")
+
+    attention = runtime.change_disposition()
+    assert attention is not None
+    assert attention.kind.value == "publication-attention"
+    assert attention.diagnostics[:2] == (
+        "external-head-adoption-movement-failed",
+        "external-head-adoption-operation:adopt-after-demotion",
+    )
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+
+
 def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path: Path) -> None:
     application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     repository = application._workspace_manager.repository
@@ -2682,6 +2709,120 @@ def test_prepare_review_repair_does_not_mutate_provider_with_existing_attention(
     assert runtime.ready_receipt() is not None
 
 
+def test_abort_review_repair_is_replayable_with_original_identity(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    invalidation = application.prepare_review_repair("change-a")
+    provider.read_pull_request.reset_mock()
+    provider.set_pull_request_draft_state.reset_mock()
+
+    marker = application.abort_review_repair("change-a", invalidation.invalidation_id)
+
+    assert marker.reason == "review-repair-aborted"
+    assert marker.source_invalidation_id == invalidation.invalidation_id
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_not_called()
+
+    provider.read_pull_request.reset_mock()
+    replayed = application.abort_review_repair("change-a", invalidation.invalidation_id)
+
+    assert replayed == marker
+    provider.read_pull_request.assert_not_called()
+
+
+def test_abort_review_repair_rejects_provider_failure_without_runtime_mutation(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    invalidation = application.prepare_review_repair("change-a")
+    provider.read_pull_request.reset_mock()
+    provider.read_pull_request.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "read_pull_request",
+        "GitHub is unavailable",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PublicationProviderError, match="GitHub is unavailable"):
+        application.abort_review_repair("change-a", invalidation.invalidation_id)
+
+    current = runtime.finalization_invalidation()
+    assert current is not None
+    assert current.reason == "review-repair"
+    assert current.invalidation_id == invalidation.invalidation_id
+    assert state["pull_request"].draft is True
+
+
+def test_abort_review_repair_rejects_after_a_repair_commit(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    invalidation = application.prepare_review_repair("change-a")
+    coordination = application._workspace_manager.show("change-a")
+    repaired_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "review-fix.txt",
+        "review fix\n",
+        "address review feedback",
+    )
+    provider.read_pull_request.reset_mock()
+
+    with pytest.raises(PortfolioApplicationError, match="no repair commit"):
+        application.abort_review_repair("change-a", invalidation.invalidation_id)
+
+    assert repaired_head != exact_head
+    assert runtime.finalization_invalidation() == invalidation
+    provider.read_pull_request.assert_not_called()
+    assert state["pull_request"].head_sha == exact_head
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["sync", "adopt", "promote"],
+)
+def test_review_repair_fences_external_head_mutations_before_workspace_side_effects(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    application.prepare_review_repair("change-a")
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.update_pull_request.reset_mock()
+    workspace_method = {
+        "sync": "sync_with_target",
+        "adopt": "adopt_external_head",
+        "promote": "promote_external_head",
+    }[operation]
+    operation_call = {
+        "sync": lambda: application.sync_change_with_target("change-a", "2" * 40, "sync-during-review-repair"),
+        "adopt": lambda: application.adopt_external_head(
+            "change-a",
+            exact_head,
+            "5" * 40,
+            "adopt-during-review-repair",
+        ),
+        "promote": lambda: application.promote_external_head(
+            "change-a",
+            exact_head,
+            "promote-during-review-repair",
+        ),
+    }[operation]
+
+    with (
+        patch.object(application._workspace_manager, workspace_method) as workspace_operation,
+        pytest.raises(
+            PortfolioApplicationError,
+            match="review repair",
+        ),
+    ):
+        operation_call()
+
+    workspace_operation.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    provider.update_pull_request.assert_not_called()
+    assert state["pull_request"].head_sha == exact_head
+    assert runtime.finalization_invalidation() is not None
+    assert runtime.finalization_invalidation().reason == "review-repair"
+
+
 def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
     application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     invalidation = application.prepare_review_repair("change-a")
@@ -2693,7 +2834,6 @@ def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_
         "review fix\n",
         "address review feedback",
     )
-    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": repaired_head})
     provider.observe_checks.return_value = PublicationCheckSnapshot(
         repository="example/project",
         number=7,
@@ -2707,9 +2847,15 @@ def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_
 
     provider.update_pull_request.side_effect = update_summary
     branch_publisher = Mock()
-    branch_publisher.publish.side_effect = _requested_branch_receipt
+
+    def publish_branch(request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
+        state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": repaired_head})
+        return _requested_branch_receipt(request)
+
+    branch_publisher.publish.side_effect = publish_branch
     application._change_branch_publisher = branch_publisher
 
+    assert state["pull_request"].head_sha == exact_head
     finalization = application.finalize_change(
         "change-a",
         _finalization_request("change-a", repaired_head),
@@ -2718,6 +2864,7 @@ def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_
     assert invalidation.expected_head == exact_head
     assert finalization.finalization_id != invalidation.finalization_id
     assert runtime.finalization_invalidation() is None
+    assert state["pull_request"].head_sha == exact_head
     result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled is True
@@ -3754,6 +3901,87 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert history.current.head_sha == snapshot.snapshot_head
 
 
+def test_background_checkpoint_failure_persists_error_and_waits_before_retry(tmp_path: Path) -> None:
+    current = [datetime(2026, 8, 4, tzinfo=UTC)]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=current[0].isoformat,
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(
+            DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, outcome_id="OUT-001"),
+        ),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "publish_change_branch",
+        "Provider unavailable while publishing the Change branch.",
+        retry_safe=True,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    first = application.reconcile_pending_checkpoints()
+
+    assert len(first) == 1
+    assert first[0].error_code == PublicationProviderFailureCode.UNAVAILABLE
+    recorded = first[0].state.pending_checkpoint
+    assert recorded is not None
+    assert recorded.attempt_count == 1
+    assert recorded.last_attempted_at == current[0]
+    assert recorded.last_error_detail == "Provider unavailable while publishing the Change branch."
+    assert application.reconcile_pending_checkpoints() == ()
+
+    current[0] += timedelta(seconds=5)
+    second = application.reconcile_pending_checkpoints()
+
+    assert len(second) == 1
+    assert second[0].state.pending_checkpoint is not None
+    assert second[0].state.pending_checkpoint.attempt_count == 2
+    assert branch_publisher.publish.call_count == 2
+
+
+def test_background_checkpoint_selection_excludes_review_required_merge(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    target_sync = ChangeTargetSyncReceipt.create(
+        operation_id="review-required-sync",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=head,
+        merged_head=head,
+        merge_commit=False,
+        review_required=True,
+    )
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+    )
+    path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
+    path.write_bytes(
+        _canonical(frontier.model_copy(update={"target_sync_receipt": target_sync, "pending_checkpoint": pending}))
+    )
+    branch_publisher = Mock()
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    result = application.reconcile_pending_checkpoints()
+
+    assert result == ()
+    branch_publisher.publish.assert_not_called()
+
+
 def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -3823,7 +4051,13 @@ def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unk
     retained = runtimes["change-a"].change_disposition()
     assert retained is not None
     assert retained.kind.value == "publication-attention"
-    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
+    retained = runtimes["change-a"].checkpoint_publication_state().pending_checkpoint
+    assert retained is not None
+    assert retained.head == pending.head
+    assert retained.triggers == pending.triggers
+    assert retained.attempt_count == 1
+    assert retained.last_error_code == "ERR_PUBLICATION_BASELINE_UNAVAILABLE"
+    assert retained.last_error_detail is not None
 
 
 def test_reconcile_checkpoint_preserves_baseline_error_when_attention_conflicts(tmp_path: Path) -> None:

@@ -211,6 +211,12 @@ _MAX_PR_GOAL_LENGTH = 1_200
 _MAX_PR_INTENT_LENGTH = 1_600
 _MAX_PR_OUTCOME_TITLE_LENGTH = 180
 _MAX_PR_OUTCOME_PROMISE_LENGTH = 480
+_CHECKPOINT_RETRY_BASE_SECONDS = 5
+_CHECKPOINT_RETRY_MAX_SECONDS = 5 * 60
+_CHECKPOINT_RETRY_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"
+_CHECKPOINT_REVIEW_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
+_CHECKPOINT_MISSING_HEAD_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
+_MAX_CHECKPOINT_ERROR_DETAIL_LENGTH = 240
 _INTENT_SUMMARY_HEADING = "Problem And Product Promise"
 
 
@@ -263,6 +269,33 @@ def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
 def _checkpoint_operation_id(kind: str, *parts: str) -> str:
     payload = json.dumps((kind, *parts), separators=(",", ":"))
     return f"checkpoint-{kind}-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+
+def _checkpoint_retry_ready(pending: DeliveryPendingCheckpoint, now: datetime) -> bool:
+    """Return whether a failed checkpoint has waited its bounded retry delay."""
+    if pending.last_attempted_at is None or pending.attempt_count == 0:
+        return True
+    exponent = min(max(pending.attempt_count - 1, 0), 6)
+    delay_seconds = min(_CHECKPOINT_RETRY_MAX_SECONDS, _CHECKPOINT_RETRY_BASE_SECONDS * 2**exponent)
+    return now >= pending.last_attempted_at + timedelta(seconds=delay_seconds)
+
+
+def _checkpoint_error_detail(value: str, fallback: str) -> str:
+    """Bound provider or Git text retained in checkpoint diagnostics."""
+    printable = "".join(character if character.isprintable() else " " for character in value)
+    return (" ".join(printable.split()) or fallback)[:_MAX_CHECKPOINT_ERROR_DETAIL_LENGTH]
+
+
+def _checkpoint_error_code(exc: BaseException) -> str:
+    """Return a stable bounded code for one checkpoint reconciliation failure."""
+    value = getattr(exc, "code", None)
+    return value[:120] if isinstance(value, str) and value else _CHECKPOINT_RETRY_ERROR_CODE
+
+
+def _checkpoint_awaits_review(runtime: DeliveryRuntime) -> bool:
+    """Return whether target synchronization requires fresh finalization before publication."""
+    target_sync = runtime.target_sync_receipt()
+    return target_sync is not None and target_sync.review_required and runtime.finalization() is None
 
 
 def _dirty_recovery_operation_id(change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> str:
@@ -701,6 +734,7 @@ class DeliveryFinalizationContext(_ApplicationModel):
     readiness_diagnostics: tuple[str, ...]
     finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    finalization_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
@@ -1131,6 +1165,7 @@ class PortfolioApplication:
         )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             self._require_target_sync_change_mutable(runtime)
+            self._require_no_review_repair(runtime, "target synchronization")
             if runtime.change_disposition() is not None:
                 self._fail("target synchronization requires Change attention resolution first")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
@@ -1191,20 +1226,51 @@ class PortfolioApplication:
         )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             self._require_external_head_adoption_change_mutable(runtime)
+            self._require_no_review_repair(runtime, "external Change head adoption")
             if runtime.change_disposition() is not None:
                 self._fail("external Change head adoption requires Change attention resolution first")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("external Change head adoption cannot overlap an active Delivery claim")
+            publication_identity = runtime.change_disposition_publication()
+            if publication_identity is None:
+                ready = runtime.ready_receipt()
+                if ready is not None:
+                    publication_identity = DeliveryChangePublicationIdentity(
+                        change_id=ready.change_id,
+                        repository=ready.repository,
+                        number=ready.number,
+                        node_id=ready.node_id,
+                        head_sha=ready.head_sha,
+                    )
+            demoted = False
+
+            def demote_before_head_change() -> None:
+                nonlocal demoted
+                self._return_publication_to_draft_before_head_change(
+                    change_id,
+                    runtime,
+                    operation_id,
+                )
+                demoted = True
+
             try:
                 receipt = self._workspace_manager.adopt_external_head(
                     request,
-                    before_head_change=lambda: self._return_publication_to_draft_before_head_change(
-                        change_id,
-                        runtime,
-                        operation_id,
-                    ),
+                    before_head_change=demote_before_head_change,
                 )
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                if demoted:
+                    with suppress(DeliveryRuntimeConflictError):
+                        runtime.capture_publication_attention(
+                            _timestamp(self._clock()),
+                            (
+                                "external-head-adoption-movement-failed",
+                                f"external-head-adoption-operation:{operation_id}",
+                                f"expected-head:{expected_head}",
+                                f"adopted-head:{adopted_head}",
+                            ),
+                            publication_identity=publication_identity,
+                        )
                 self._fail("external Change head could not be adopted", exc)
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
             return receipt
@@ -1281,6 +1347,7 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             self._require_external_head_promotion_change_mutable(runtime)
+            self._require_no_review_repair(runtime, "external Change head promotion")
             if runtime.change_disposition() is not None:
                 self._fail("external Change-head promotion requires Change attention resolution first")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
@@ -1793,6 +1860,15 @@ class PortfolioApplication:
             self._fail("finalization context could not resolve the managed Change head", exc)
         ready, diagnostics = runtime.finalization_readiness()
         finalization = runtime.finalization()
+        invalidation = runtime.finalization_invalidation()
+        if (
+            ready
+            and invalidation is not None
+            and invalidation.reason == "review-repair"
+            and change_head == invalidation.expected_head
+        ):
+            ready = False
+            diagnostics = (*diagnostics, "review repair requires a new Change commit before finalization")
         if ready:
             try:
                 self._workspace_manager.validate_finalization_head(
@@ -1814,6 +1890,7 @@ class PortfolioApplication:
             readiness_diagnostics=diagnostics,
             finalization_id=finalization.finalization_id if finalization is not None else None,
             finalized_head=finalization.exact_head if finalization is not None else None,
+            finalization_invalidation_id=invalidation.invalidation_id if invalidation is not None else None,
         )
 
     def finalize_change(
@@ -1998,6 +2075,60 @@ class PortfolioApplication:
             self._publish_delivery_state(change_id, runtime, f"review-repair-{invalidation.invalidation_id}")
             return invalidation
 
+    def abort_review_repair(
+        self,
+        change_id: str,
+        expected_invalidation_id: str,
+    ) -> DeliveryFinalizationInvalidationReceipt:
+        """Abort an uncommitted review repair after revalidating its open draft pull request."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "review repair requires a publication provider"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id, for_mutation=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            invalidation = runtime.finalization_invalidation()
+            if invalidation is None:
+                message = "review repair is not active"
+                raise PortfolioApplicationError(message)
+            if invalidation.reason == "review-repair-aborted":
+                if expected_invalidation_id not in {
+                    invalidation.invalidation_id,
+                    invalidation.source_invalidation_id,
+                }:
+                    message = "review repair abort identity is stale"
+                    raise PortfolioApplicationError(message)
+                return invalidation
+            if invalidation.reason != "review-repair":
+                message = "review repair is not active"
+                raise PortfolioApplicationError(message)
+            authority = self._review_repair_authority(runtime)
+            try:
+                change_head = self._workspace_manager.reviewed_source_head(change_id)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("review repair abort requires a clean managed Change head", exc)
+            if change_head != authority.expected_head:
+                message = "review repair abort requires no repair commit on the managed Change"
+                raise PortfolioApplicationError(message)
+            observation = self._observe_review_repair_pull_request(change_id, publisher, authority)
+            if not observation.snapshot.draft:
+                publisher.return_to_draft(
+                    ReturnChangePullRequestToDraft(
+                        change_id=change_id,
+                        operation_id=f"review-repair-abort-draft-{authority.expected_finalization_id}",
+                        finalization_id=authority.expected_finalization_id,
+                        exact_head=authority.expected_head,
+                    )
+                )
+            marker = runtime.abort_review_repair(
+                expected_invalidation_id,
+                _timestamp(self._clock()),
+            )
+            if marker is None:
+                self._fail("review repair abort lost its active invalidation")
+            self._publish_delivery_state(change_id, runtime, f"review-repair-aborted-{marker.invalidation_id}")
+            return marker
+
     @staticmethod
     def _review_repair_authority(runtime: DeliveryRuntime) -> _ReviewRepairAuthority:
         """Validate local review-repair authority and return its exact publication fence."""
@@ -2036,6 +2167,12 @@ class PortfolioApplication:
             number=identity.number,
             node_id=identity.node_id,
         )
+
+    def _require_no_review_repair(self, runtime: DeliveryRuntime, operation: str) -> None:
+        """Reject Change head movement while external review repair owns the boundary."""
+        invalidation = runtime.finalization_invalidation()
+        if invalidation is not None and invalidation.reason == "review-repair":
+            self._fail(f"{operation} requires review repair to be aborted or finalized first")
 
     @staticmethod
     def _observe_review_repair_pull_request(
@@ -2629,7 +2766,31 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return self._reconcile_change_checkpoint(change_id, runtime)
+            try:
+                return self._reconcile_change_checkpoint(change_id, runtime)
+            except (
+                PublicationProviderError,
+                PublicationBaselineUnavailableError,
+                DeliveryRuntimeConflictError,
+                OSError,
+                RuntimeError,
+                subprocess.SubprocessError,
+                ValueError,
+            ) as exc:
+                state = runtime.checkpoint_publication_state()
+                pending = state.pending_checkpoint
+                if pending is not None:
+                    with suppress(DeliveryRuntimeConflictError):
+                        runtime.record_checkpoint_failure(
+                            pending,
+                            _timestamp(self._clock()),
+                            _checkpoint_error_code(exc),
+                            _checkpoint_error_detail(
+                                str(exc),
+                                "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+                            ),
+                        )
+                raise
 
     def reconcile_pending_checkpoints(
         self,
@@ -2643,10 +2804,16 @@ class PortfolioApplication:
             message = "checkpoint reconciliation limit must be positive"
             raise ValueError(message)
         self._reconcile_runtimes()
+        now = _timestamp(self._clock())
         pending_change_ids = tuple(
             change_id
             for change_id, runtime in sorted(self._runtimes.items())
-            if runtime.checkpoint_publication_state().pending_checkpoint is not None
+            if (
+                (pending := runtime.checkpoint_publication_state().pending_checkpoint) is not None
+                and pending.head is not None
+                and not _checkpoint_awaits_review(runtime)
+                and _checkpoint_retry_ready(pending, now)
+            )
         )[:limit]
         results = []
         for change_id in pending_change_ids:
@@ -2677,15 +2844,28 @@ class PortfolioApplication:
                 ValueError,
             ) as exc:
                 state = runtime.checkpoint_publication_state()
+                pending = state.pending_checkpoint
+                error_code = _checkpoint_error_code(exc)
+                error_detail = _checkpoint_error_detail(
+                    str(exc),
+                    "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+                )
+                if pending is not None:
+                    with suppress(DeliveryRuntimeConflictError):
+                        state = runtime.record_checkpoint_failure(
+                            pending,
+                            now,
+                            error_code,
+                            error_detail,
+                        )
                 results.append(
                     DeliveryCheckpointReconciliationResult(
                         change_id=change_id,
-                        attempted_head=state.pending_checkpoint.head if state.pending_checkpoint else None,
+                        attempted_head=pending.head if pending else None,
                         state=state,
                         reconciled=False,
-                        error_code=getattr(exc, "code", "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"),
-                        error_detail=str(exc)
-                        or "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+                        error_code=error_code,
+                        error_detail=error_detail,
                     )
                 )
         return tuple(results)
@@ -2717,6 +2897,10 @@ class PortfolioApplication:
                 attempted_head=None,
                 state=initial,
                 reconciled=False,
+                error_code=_CHECKPOINT_MISSING_HEAD_ERROR_CODE,
+                error_detail=(
+                    "Checkpoint publication is waiting for a reviewed Change head after authority invalidation."
+                ),
             )
 
         target_sync = runtime.target_sync_receipt()
@@ -2726,6 +2910,8 @@ class PortfolioApplication:
                 attempted_head=None,
                 state=initial,
                 reconciled=False,
+                error_code=_CHECKPOINT_REVIEW_ERROR_CODE,
+                error_detail="Checkpoint publication awaits fresh finalization review after target synchronization.",
             )
 
         head = pending.head

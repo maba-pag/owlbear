@@ -12,7 +12,21 @@ reviewer comments may be correct, incorrect, stale, duplicated, or outside the C
 The workflow owns repair work only. It does not add external review to Delivery's internal review
 receipts or replace the finalization review.
 
-## Step 0 - Bind The Change And Pull Request
+The prompt accepts `mode=start` or `mode=resume`; omitted mode means `start`. `start` owns thread
+binding, triage, preparation, and repair commits. `resume` is entered only after fresh finalization
+and owns checkpoint publication, exact-head verification, thread replies, and thread resolution.
+Never run preparation again in `resume` mode.
+
+## Step 0 - Route The Requested Mode
+
+Validate the supplied mode before any mutation. Reject any value other than `start` or `resume`.
+Both modes bind the same native `change_id`, managed branch, and one open unmerged pull request.
+
+For `start`, continue through Steps 1-5. For `resume`, skip preparation, triage, repair, and handoff
+entirely and continue directly to Step 6 after rebinding current provider and Delivery identities. A stale
+resume request cannot silently restart repair.
+
+## Step 1 - Bind The Change And Pull Request
 
 Require one native Delivery `change_id` from the prompt. Use the Delivery MCP surface for Change
 authority and the `gh` CLI for GitHub review data. Do not use a GitHub MCP server for this workflow.
@@ -57,7 +71,9 @@ Do not call `gh pr checkout`, `gh pr merge`, `gh pr ready --undo`, or a raw `git
 Change worktree and Delivery operations own source custody, draft state, finalization, and branch
 publication.
 
-## Step 1 - Critically Triage Every Thread
+## Step 2 - Critically Triage Every Thread
+
+Run this step only in `start` mode.
 
 Before changing code, inspect the current managed Change worktree, the exact Change context, the
 reviewed diff, relevant requirements, and focused tests. For each unresolved non-outdated thread,
@@ -90,7 +106,9 @@ If there are no unresolved actionable threads, report `no-actionable-feedback` a
 PR or create commits. Never turn a style preference or unsupported concern into implementation
 work without a concrete behavior or authority boundary.
 
-## Step 2 - Prepare The Provider And Delivery State
+## Step 3 - Prepare The Provider And Delivery State
+
+Run this step only in `start` mode.
 
 When at least one `fix` classification is ready to implement, call the Delivery MCP operation
 `prepare_review_repair` before the first edit. It verifies the exact open, unmerged PR, returns a
@@ -109,7 +127,15 @@ consistent before editing. The finalization ID must be absent while repair is in
 finalization reappears before a repair commit, stop with `authority-gap: review-repair-was-reversed`.
 Never enter or modify the user's primary checkout.
 
-## Step 3 - Repair One Thread At A Time
+If preparation completed but no accepted thread produced a commit, verify that the managed Change
+head is still the exact pre-repair head and call `abort_review_repair` with that exact
+`expected_invalidation_id`. This records `review-repair-aborted`; it does not restore finalization
+or ready authority. Run fresh `/finalize-change <change-id>` and checkpoint publication before any
+ready-state decision.
+
+## Step 4 - Repair One Thread At A Time
+
+Run this step only in `start` mode.
 
 Process `fix` threads in a stable order. For each thread:
 
@@ -138,15 +164,17 @@ an empty or duplicate commit.
 A clean commit does not by itself authorize publication or acceptance. The repaired branch remains
 unpublished until the normal finalization and checkpoint publication steps.
 
-## Step 4 - Hand Off To Finalization
+## Step 5 - Hand Off To Finalization
+
+Run this step only in `start` mode.
 
 After all eligible repairs:
 
 1. Re-read the PR threads and current Delivery context. Require every repaired thread to have a
    recorded commit. Do not resolve repaired threads yet.
 2. Re-read `show_finalization_context`. A repaired Change should be in
-   `finalization-invalidated` or `ready-for-finalization` with the managed worktree at the new
-   exact head and clean.
+   `finalization-invalidated`, `review-repair`, or `ready-for-finalization` with the managed
+   worktree at the new exact head and clean.
 3. Do not construct finalization evidence inside this workflow. Give the user the exact next
    command and stop:
 
@@ -157,14 +185,19 @@ After all eligible repairs:
 The first invocation stops here. It must not reply to or resolve a thread before the repaired head
 is finalized and published.
 
-## Step 5 - Publish Then Reply And Resolve Threads
+## Step 6 - Publish Then Reply And Resolve Threads
 
-Resume `/address-pr-feedback <change-id>` after `/finalize-change` succeeds. On that resumed
-invocation:
+Run this step only in `resume` mode. Do not call `prepare_review_repair`, `abort_review_repair`, or
+any repair-edit route here.
+
+Resume `/address-pr-feedback <change-id> mode=resume` after `/finalize-change` succeeds. On that
+resumed invocation:
 
 1. Re-bind the exact open, unmerged pull request and re-read the unresolved review threads.
-2. Call Delivery `reconcile_change_checkpoint` to publish the new Change head and update the
-   existing PR. Verify the repaired commit is the current PR head before changing any thread.
+2. Require `show_finalization_context` to report a fresh finalization ID at the new exact managed
+   head and no active review-repair invalidation. Call Delivery `reconcile_change_checkpoint` to
+   publish the new Change head and update the existing PR. Verify the repaired commit is the current
+   PR head before changing any thread.
 3. Use `gh api graphql` mutations, never a GitHub MCP server, to reply to each eligible thread.
    For a repaired thread, include the full commit SHA and URL when available, the accepted problem
    and fix, and the focused proof that passed. For `no-change`, `duplicate`, or `stale`, include
@@ -193,8 +226,8 @@ invocation:
    Delivery records the user-owned merge later through `observe_acceptance`.
 
 The workflow may finish immediately when no code repair was needed. A repair run stops for
-finalization and is resumed only after the user invokes this prompt again. It must not mark the PR
-ready, merge the PR, or claim completion.
+finalization and is resumed only after the user invokes this prompt again with `mode=resume`. It
+must not mark the PR ready, merge the PR, or claim completion.
 
 ## Output Template
 
@@ -213,7 +246,7 @@ threads:
     response_posted: true | false
     resolved: true | false
     proof: <bounded proof or reason>
-next_command: /finalize-change <change-id> | /address-pr-feedback <change-id> | none
+next_command: /finalize-change <change-id> | /address-pr-feedback <change-id> mode=resume | none
 remaining_blocker: <non-empty reason or none>
 ```
 
@@ -227,7 +260,8 @@ GitHub response, and observed state evidence.
 - Returning a PR to draft is a Delivery state transition, not a reason to reset a branch or checkout
   the PR in the user's repository.
 - `prepare_review_repair` invalidates old finalization authority; it does not finalize or publish the
-  repaired head.
+   repaired head. `abort_review_repair` records an aborted repair and also never restores stale
+   finalization or ready authority.
 - Never amend a reviewed commit, combine independent comment fixes, force-update a branch, hand-edit
   Delivery state, or resolve a thread before its reply is posted.
 - External review remains outside the product's internal review receipts; only the resulting repair
