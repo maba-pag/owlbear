@@ -646,48 +646,6 @@ def test_review_repair_rejects_finalizing_the_unchanged_head(tmp_path: Path) -> 
         )
 
 
-def test_review_repair_abort_is_replayable_and_requires_fresh_finalization(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
-        datetime(2026, 8, 11, 14, tzinfo=UTC),
-    )
-    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, "3" * 40))
-    invalidation = runtime.prepare_review_repair(
-        finalization.finalization_id,
-        datetime(2026, 8, 11, 16, tzinfo=UTC),
-    )
-
-    marker = runtime.abort_review_repair(
-        invalidation.invalidation_id,
-        datetime(2026, 8, 11, 17, tzinfo=UTC),
-    )
-
-    assert marker is not None
-    assert marker.reason == "review-repair-aborted"
-    assert marker.source_invalidation_id == invalidation.invalidation_id
-    assert marker.invalidation_id != invalidation.invalidation_id
-    assert runtime.finalization() is None
-    assert runtime.ready_receipt() is None
-    assert runtime.abort_review_repair(invalidation.invalidation_id, datetime(2026, 8, 11, 18, tzinfo=UTC)) == marker
-    assert runtime.abort_review_repair(marker.invalidation_id, datetime(2026, 8, 11, 19, tzinfo=UTC)) == marker
-    with pytest.raises(DeliveryRuntimeConflictError, match="abort identity is stale"):
-        runtime.abort_review_repair("f" * 64, datetime(2026, 8, 11, 20, tzinfo=UTC))
-
-    fresh_finalization = runtime.finalize_change(
-        _finalization_request("3" * 40),
-        datetime(2026, 8, 11, 21, tzinfo=UTC),
-    )
-
-    assert fresh_finalization.finalization_id != finalization.finalization_id
-    assert fresh_finalization.exact_head == finalization.exact_head
-    assert runtime.finalization_invalidation() is None
-    assert runtime.finalization() == fresh_finalization
-
-
 def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
     tmp_path: Path,
 ) -> None:

@@ -71,7 +71,6 @@ DELIVERY_TOOLS = {
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
-    "abort_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",

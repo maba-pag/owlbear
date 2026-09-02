@@ -524,8 +524,7 @@ class DeliveryFinalizationInvalidation(_DeliveryModel):
     finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reason: Literal["head-drift", "target-sync-conflict", "review-repair", "review-repair-aborted"] = "head-drift"
-    source_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    reason: Literal["head-drift", "target-sync-conflict", "review-repair"] = "head-drift"
     invalidated_at: datetime
 
 
@@ -546,14 +545,8 @@ class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
-        if self.expected_head == self.observed_head and self.reason not in {"review-repair", "review-repair-aborted"}:
+        if self.expected_head == self.observed_head and self.reason != "review-repair":
             message = "Delivery finalization invalidation requires head drift"
-            raise ValueError(message)
-        if self.reason == "review-repair-aborted" and self.source_invalidation_id is None:
-            message = "aborted review repair requires its source invalidation identity"
-            raise ValueError(message)
-        if self.reason != "review-repair-aborted" and self.source_invalidation_id is not None:
-            message = "only an aborted review repair may reference a source invalidation"
             raise ValueError(message)
         if self.invalidated_at.tzinfo is None:
             message = "Delivery finalization invalidation timestamp must include a timezone"
@@ -1404,7 +1397,6 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "complete_change",
         "finalize_change",
         "prepare_review_repair",
-        "abort_review_repair",
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
@@ -2457,48 +2449,6 @@ class DeliveryRuntime:
         )
         self._replace(previous, updated)
         return invalidation
-
-    def abort_review_repair(
-        self,
-        expected_invalidation_id: str,
-        aborted_at: datetime,
-    ) -> DeliveryFinalizationInvalidationReceipt | None:
-        """Abort one review repair without restoring stale finalization authority."""
-        frontier, previous = self._read()
-        _require_change_mutable(frontier, "abort_review_repair", allow_attention=True)
-        invalidation = frontier.finalization_invalidation
-        if invalidation is None:
-            return None
-        if invalidation.reason == "review-repair-aborted":
-            if expected_invalidation_id not in {
-                invalidation.invalidation_id,
-                invalidation.source_invalidation_id,
-            }:
-                _conflict("review repair abort identity is stale")
-            return invalidation
-        if invalidation.reason != "review-repair":
-            _conflict("review repair is not active")
-        if invalidation.invalidation_id != expected_invalidation_id:
-            _conflict("review repair invalidation identity is stale")
-        if frontier.change_disposition is not None:
-            _conflict("review repair requires current Change attention resolution")
-        _require_no_active_change_claim(frontier, "review repair abort")
-        if aborted_at.tzinfo is None:
-            message = "review repair abort timestamp must include a timezone"
-            raise ValueError(message)
-        marker = DeliveryFinalizationInvalidationReceipt.create(
-            DeliveryFinalizationInvalidation(
-                change_id=invalidation.change_id,
-                finalization_id=invalidation.finalization_id,
-                expected_head=invalidation.expected_head,
-                observed_head=invalidation.expected_head,
-                reason="review-repair-aborted",
-                source_invalidation_id=invalidation.invalidation_id,
-                invalidated_at=aborted_at,
-            )
-        )
-        self._replace(previous, frontier.model_copy(update={"finalization_invalidation": marker}))
-        return marker
 
     def record_target_sync(
         self,
@@ -3799,10 +3749,7 @@ def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
 
 
 def _finalization_invalidation_digest(receipt: DeliveryFinalizationInvalidationReceipt) -> str:
-    exclude = {"invalidation_id"}
-    if receipt.source_invalidation_id is None:
-        exclude.add("source_invalidation_id")
-    payload = receipt.model_dump(mode="json", exclude=exclude)
+    payload = receipt.model_dump(mode="json", exclude={"invalidation_id"})
     content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(content).hexdigest()
 

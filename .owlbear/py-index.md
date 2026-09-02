@@ -1708,6 +1708,7 @@ Background reconciliation for durable Delivery checkpoint obligations.
 ### Imports
 
 - `__future__`
+- `contextlib`
 - `threading`
 - `typing`
 
@@ -2168,7 +2169,6 @@ Mechanical Delivery state and worker-owned transitions.
   - `def finalize_change(self, request: FinalizeDeliveryChange, finalized_at: datetime, *, additional_participants: tuple[ReplacementTransactionParticipant, ...] = ()) -> DeliveryFinalizationReceipt`
   - `def reconcile_finalization_head(self, observed_head: str, invalidated_at: datetime) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None`
   - `def prepare_review_repair(self, expected_finalization_id: str, invalidated_at: datetime) -> DeliveryFinalizationInvalidationReceipt`
-  - `def abort_review_repair(self, expected_invalidation_id: str, aborted_at: datetime) -> DeliveryFinalizationInvalidationReceipt | None`
   - `def record_target_sync(self, receipt: ChangeTargetSyncReceipt, synced_at: datetime) -> ChangeTargetSyncReceipt`
   - `def record_external_head_adoption(self, receipt: ChangeExternalHeadAdoptionReceipt, adopted_at: datetime) -> ChangeExternalHeadAdoptionReceipt`
   - `def record_external_head_promotion(self, receipt: ChangeExternalHeadPromotionReceipt, promoted_at: datetime) -> ChangeExternalHeadPromotionReceipt`
@@ -2701,7 +2701,6 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _record_required_check_attention(runtime: DeliveryRuntime, observation: PublicationCheckObservationReceipt, failures: tuple[PublicationCheck, ...], ready: PullRequestReadyReceipt) -> None`
   - `def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt`
   - `def prepare_review_repair(self, change_id: str) -> DeliveryFinalizationInvalidationReceipt`
-  - `def abort_review_repair(self, change_id: str, expected_invalidation_id: str) -> DeliveryFinalizationInvalidationReceipt`
   - `def _review_repair_authority(runtime: DeliveryRuntime) -> _ReviewRepairAuthority`
   - `def _require_no_review_repair(self, runtime: DeliveryRuntime, operation: str) -> None`
   - `def _observe_review_repair_pull_request(change_id: str, publisher: DraftPullRequestPublisher, authority: _ReviewRepairAuthority) -> PublicationPullRequestObservationReceipt`
@@ -3485,7 +3484,6 @@ Protocol models for the target delivery MCP surface.
 - `class TargetDiagnostic(_TargetProtocolModel)`
 - `class EmptyParams(_TargetProtocolModel)`
 - `class ChangeParams(_TargetProtocolModel)`
-- `class AbortReviewRepairParams(ChangeParams)`
 - `class ResolveChangeDispositionParams(ChangeParams)`
 - `class DeferChangeParams(ChangeParams)`
 - `class AbandonChangeParams(ChangeParams)`
@@ -3590,7 +3588,6 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]`
   - `async def mark_change_ready(self, request: MarkChangeReadyRequest) -> dict[str, object]`
   - `async def prepare_review_repair(self, request: ChangeRequest) -> dict[str, object]`
-  - `async def abort_review_repair(self, request: AbortReviewRepairRequest) -> dict[str, object]`
   - `async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None`
   - `async def reconcile_change_checkpoint(self, request: ChangeRequest) -> dict[str, object]`
   - `async def supersede_publication(self, request: SupersedePublicationRequest) -> DeliveryPublicationSupersessionResponse`

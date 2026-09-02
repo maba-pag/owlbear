@@ -2075,60 +2075,6 @@ class PortfolioApplication:
             self._publish_delivery_state(change_id, runtime, f"review-repair-{invalidation.invalidation_id}")
             return invalidation
 
-    def abort_review_repair(
-        self,
-        change_id: str,
-        expected_invalidation_id: str,
-    ) -> DeliveryFinalizationInvalidationReceipt:
-        """Abort an uncommitted review repair after revalidating its open draft pull request."""
-        publisher = self._draft_pull_request_publisher
-        if publisher is None:
-            message = "review repair requires a publication provider"
-            raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            invalidation = runtime.finalization_invalidation()
-            if invalidation is None:
-                message = "review repair is not active"
-                raise PortfolioApplicationError(message)
-            if invalidation.reason == "review-repair-aborted":
-                if expected_invalidation_id not in {
-                    invalidation.invalidation_id,
-                    invalidation.source_invalidation_id,
-                }:
-                    message = "review repair abort identity is stale"
-                    raise PortfolioApplicationError(message)
-                return invalidation
-            if invalidation.reason != "review-repair":
-                message = "review repair is not active"
-                raise PortfolioApplicationError(message)
-            authority = self._review_repair_authority(runtime)
-            try:
-                change_head = self._workspace_manager.reviewed_source_head(change_id)
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                self._fail("review repair abort requires a clean managed Change head", exc)
-            if change_head != authority.expected_head:
-                message = "review repair abort requires no repair commit on the managed Change"
-                raise PortfolioApplicationError(message)
-            observation = self._observe_review_repair_pull_request(change_id, publisher, authority)
-            if not observation.snapshot.draft:
-                publisher.return_to_draft(
-                    ReturnChangePullRequestToDraft(
-                        change_id=change_id,
-                        operation_id=f"review-repair-abort-draft-{authority.expected_finalization_id}",
-                        finalization_id=authority.expected_finalization_id,
-                        exact_head=authority.expected_head,
-                    )
-                )
-            marker = runtime.abort_review_repair(
-                expected_invalidation_id,
-                _timestamp(self._clock()),
-            )
-            if marker is None:
-                self._fail("review repair abort lost its active invalidation")
-            self._publish_delivery_state(change_id, runtime, f"review-repair-aborted-{marker.invalidation_id}")
-            return marker
-
     @staticmethod
     def _review_repair_authority(runtime: DeliveryRuntime) -> _ReviewRepairAuthority:
         """Validate local review-repair authority and return its exact publication fence."""

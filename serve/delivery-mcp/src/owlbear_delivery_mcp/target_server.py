@@ -37,8 +37,6 @@ from owlbear_delivery.portfolio_application import (
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
-    AbortReviewRepairParams,
-    AbortReviewRepairRequest,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
     ChangeBlockedImplementationRecoveryResponse,
@@ -137,7 +135,6 @@ DELIVERY_OPERATION_NAMES = (
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
-    "abort_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -372,18 +369,6 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.prepare_review_repair(params.change_id),
-        )
-
-    async def abort_review_repair(self, request: AbortReviewRepairRequest) -> dict[str, object]:
-        """Abort one exact uncommitted external review repair."""
-        params = self._validate(AbortReviewRepairParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.abort_review_repair(
-                params.change_id,
-                params.expected_invalidation_id,
-            ),
         )
 
     async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:

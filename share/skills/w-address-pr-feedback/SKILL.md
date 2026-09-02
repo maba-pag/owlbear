@@ -127,11 +127,10 @@ consistent before editing. The finalization ID must be absent while repair is in
 finalization reappears before a repair commit, stop with `authority-gap: review-repair-was-reversed`.
 Never enter or modify the user's primary checkout.
 
-If preparation completed but no accepted thread produced a commit, verify that the managed Change
-head is still the exact pre-repair head and call `abort_review_repair` with that exact
-`expected_invalidation_id`. This records `review-repair-aborted`; it does not restore finalization
-or ready authority. Run fresh `/finalize-change <change-id>` and checkpoint publication before any
-ready-state decision.
+If preparation completed but no accepted thread produced a commit, leave the Change in its prepared
+repair state or abandon it. Do not restore finalization or ready authority. A repair commit must be
+handled through fresh `/finalize-change <change-id>` and checkpoint publication before any ready-state
+decision.
 
 ## Step 4 - Repair One Thread At A Time
 
@@ -187,8 +186,7 @@ is finalized and published.
 
 ## Step 6 - Publish Then Reply And Resolve Threads
 
-Run this step only in `resume` mode. Do not call `prepare_review_repair`, `abort_review_repair`, or
-any repair-edit route here.
+Run this step only in `resume` mode. Do not call `prepare_review_repair` or any repair-edit route here.
 
 Resume `/address-pr-feedback <change-id> mode=resume` after `/finalize-change` succeeds. On that
 resumed invocation:
@@ -260,8 +258,8 @@ GitHub response, and observed state evidence.
 - Returning a PR to draft is a Delivery state transition, not a reason to reset a branch or checkout
   the PR in the user's repository.
 - `prepare_review_repair` invalidates old finalization authority; it does not finalize or publish the
-   repaired head. `abort_review_repair` records an aborted repair and also never restores stale
-   finalization or ready authority.
+   repaired head. Review repair is a one-way handoff and never restores stale finalization or ready
+   authority.
 - Never amend a reviewed commit, combine independent comment fixes, force-update a branch, hand-edit
   Delivery state, or resolve a thread before its reply is posted.
 - External review remains outside the product's internal review receipts; only the resulting repair
