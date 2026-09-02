@@ -91,12 +91,15 @@ test.describe('assembled Delivery portfolio', () => {
 
     const table = page.getByTestId('work-portfolio-table')
     await expect(table).toBeVisible()
-    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(await visibleRows(page)).toHaveCount(9)
     await expect(table).toContainText('Work portfolio E2E')
     for (const column of ['Work', 'State']) {
       await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
-      await expect(table.getByRole('columnheader', { name: column }).first()).not.toBeVisible()
     }
+    const tableHeaders = table.locator('thead')
+    await expect(tableHeaders).toHaveCount(2)
+    await expect(tableHeaders.nth(0)).toHaveClass(/sr-only/)
+    await expect(tableHeaders.nth(1)).toHaveClass(/sr-only/)
     await expect(table).toContainText('Decision required')
     await expect(table).toContainText('Ready for finalization')
     await expect(table).toContainText('Waiting on OUT-002')
@@ -117,7 +120,7 @@ test.describe('assembled Delivery portfolio', () => {
     await needsYou.click()
     await expect(needsYou).toHaveAttribute('aria-pressed', 'false')
     await expect(page.getByTestId('work-filter-chip-needs')).not.toBeVisible()
-    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(await visibleRows(page)).toHaveCount(9)
 
     const guidance = page.getByLabel('Delivery guidance')
     await expect(guidance).toContainText('Review 2 items that need you')
@@ -293,7 +296,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page.getByTestId('design-work-section')).not.toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(1)
     await page.getByTestId('work-filters-reset').click()
-    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(await visibleRows(page)).toHaveCount(9)
     await page.getByTestId('work-filters-toggle').click()
 
     const returnedRow = (await visibleRows(page)).filter({ hasText: 'Plan release notes' })
@@ -378,7 +381,7 @@ test.describe('assembled Delivery portfolio', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/delivery')
 
-    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(await visibleRows(page)).toHaveCount(9)
     await expect(page.getByTestId('design-work-section')).toBeVisible()
     const guidance = page.getByLabel('Delivery guidance')
     await expect(guidance.getByTestId('portfolio-next-session').locator('li')).toHaveCount(3)
@@ -424,10 +427,10 @@ test.describe('assembled Delivery portfolio', () => {
     await page.goto('/delivery')
 
     const rows = await visibleRows(page)
-    await expect(rows).toHaveCount(8)
+    await expect(rows).toHaveCount(9)
     const publicationRow = page.getByLabel('Change publication for Publication release')
     await expect(publicationRow.locator('dt')).toHaveText(['Work', 'State'])
-    await expect(publicationRow.locator('dt').first()).not.toBeVisible()
+    await expect(publicationRow.locator('dt').first()).toHaveClass(/sr-only/)
     await expect(publicationRow.locator('dd')).toHaveCount(2)
     await expect(publicationRow).toHaveAttribute('aria-label', 'Change publication for Publication release')
     await expectNoHorizontalOverflow(page)
@@ -542,7 +545,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page.getByRole('button', { name: 'Current delivery', exact: true })).toBeFocused()
     const historyResponse = page.waitForResponse((response) =>
       response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
     expect((await historyResponse).status()).toBe(200)
     await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
     await expect(page.getByText('Alpha delivery', { exact: true })).toBeVisible()
@@ -610,7 +613,7 @@ test.describe('assembled Delivery portfolio', () => {
     try {
       await page.goto('/delivery')
       await expect(page.getByText('Work portfolio E2E', { exact: true })).toBeVisible()
-      await page.getByRole('button', { name: 'Completed history' }).click()
+      await page.getByRole('button', { name: 'Change history' }).click()
       await expect(page.getByTestId('completed-history-workspace')).toBeVisible()
 
       refreshPortfolio = true
@@ -627,7 +630,7 @@ test.describe('assembled Delivery portfolio', () => {
 
     const historyResponse = page.waitForResponse((response) =>
       response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
     expect((await historyResponse).status()).toBe(200)
     const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
     await expect(receiptRecord).toBeVisible()
@@ -644,7 +647,7 @@ test.describe('assembled Delivery portfolio', () => {
 
   test('browser Back from completed history detail restores record focus', async ({ page }) => {
     await page.goto('/delivery')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
 
     const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
     const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
@@ -662,7 +665,7 @@ test.describe('assembled Delivery portfolio', () => {
 
   test('completed history detail survives reload and restores workspace focus', async ({ page }) => {
     await page.goto('/delivery')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
 
     const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
     await receiptRecord.getByRole('button', { name: 'Inspect' }).click()
@@ -682,7 +685,7 @@ test.describe('assembled Delivery portfolio', () => {
 
   test('completed history detail closes with its Close button and restores record focus', async ({ page }) => {
     await page.goto('/delivery')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
 
     const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
     const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
@@ -698,7 +701,7 @@ test.describe('assembled Delivery portfolio', () => {
   test('completed history detail closes from the backdrop and restores record focus', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 760 })
     await page.goto('/delivery')
-    await page.getByRole('button', { name: 'Completed history' }).click()
+    await page.getByRole('button', { name: 'Change history' }).click()
 
     const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
     const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
@@ -730,7 +733,7 @@ test.describe('assembled Delivery portfolio', () => {
 
     try {
       await page.goto('/delivery')
-      await page.getByRole('button', { name: 'Completed history' }).click()
+      await page.getByRole('button', { name: 'Change history' }).click()
       await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
 
       const searchInput = page.locator('p-input-search[name="completed-history-search"]').locator('input')
@@ -765,7 +768,7 @@ test.describe('assembled Delivery portfolio', () => {
 
     try {
       await page.goto('/delivery')
-      await page.getByRole('button', { name: 'Completed history' }).click()
+      await page.getByRole('button', { name: 'Change history' }).click()
       await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
 
       const searchInput = page.locator('p-input-search[name="completed-history-search"]').locator('input')
@@ -802,7 +805,7 @@ test.describe('assembled Delivery portfolio', () => {
 
     try {
       await page.goto('/delivery')
-      await page.getByRole('button', { name: 'Completed history' }).click()
+      await page.getByRole('button', { name: 'Change history' }).click()
       await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
 
       const search = page.locator('p-input-search[name="completed-history-search"]')
@@ -845,7 +848,7 @@ test.describe('assembled Delivery portfolio', () => {
     try {
       await page.goto('/delivery')
       await inspect(page, 'Build operator controls')
-      const historyView = page.getByRole('button', { name: 'Completed history' })
+      const historyView = page.getByRole('button', { name: 'Change history' })
       removeSelectedChange = true
       await page.waitForResponse((response) =>
         response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items')

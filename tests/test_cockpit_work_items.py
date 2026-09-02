@@ -745,6 +745,8 @@ def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
                     detail="Persisted Change contract identity is invalid",
                     change_id="quarantined-change",
                     path=".owlbear/delivery/runtime/changes/quarantined-change",
+                    remote_head="a" * 40,
+                    repairable=True,
                 ),
             ),
         ),
@@ -763,6 +765,8 @@ def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
                 "change_id": "quarantined-change",
                 "path": ".owlbear/delivery/runtime/changes/quarantined-change",
                 "retry_safe": False,
+                "remote_head": "a" * 40,
+                "repairable": True,
             },
         ],
     }

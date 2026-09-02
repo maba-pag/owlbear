@@ -135,6 +135,8 @@ class DeliveryHealthDiagnosticResponse(_TargetHTTPModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
+    remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    repairable: bool = False
 
 
 class DeliveryHealthResponse(_TargetHTTPModel):
