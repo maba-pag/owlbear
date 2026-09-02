@@ -210,10 +210,11 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
     if (!error) setConfirmOpen(false)
   }
   return (
-    <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="change-disposition-heading">
-      <PHeading id="change-disposition-heading" tag="h3" size="md">Change controls</PHeading>
-      {phase === 'deferred' ? <p className="mt-static-xs text-sm">This Change is deferred and retains its worktree.</p> : null}
+    <details className="border-t border-contrast-low pt-static-sm" aria-labelledby="change-disposition-heading">
+      <summary id="change-disposition-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">Change lifecycle</summary>
       <div className="mt-static-md grid gap-static-sm">
+        <p className="text-sm text-contrast-medium">Use only when the Change should leave its current delivery path. Abandonment is permanent.</p>
+        {phase === 'deferred' ? <p className="text-sm">This Change is deferred and retains its worktree.</p> : null}
         <PInputText
           compact
           name="change-disposition-reason"
@@ -225,7 +226,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
         />
         <div className="flex flex-wrap gap-static-sm">
           {phase !== 'deferred' ? (
-            <PButton type="button" compact disabled={!canSubmit} onClick={() => void props.onDeferChange(reason.trim())}>
+            <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => void props.onDeferChange(reason.trim())}>
               {props.pendingAction === 'change-defer' ? 'Deferring...' : 'Defer Change'}
             </PButton>
           ) : null}
@@ -248,7 +249,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
           </ConfirmationContent>
         </PModal>
       ) : null}
-    </section>
+    </details>
   )
 }
 
@@ -781,9 +782,11 @@ function TargetSyncSection(props: WorkItemDetailProps) {
     if (!error) setConfirmOpen(false)
   }
   return (
-    <>
+    <section className="border-t border-contrast-low pt-static-sm" aria-labelledby="target-sync-heading">
+      <h4 id="target-sync-heading" className="text-xs font-semibold uppercase text-contrast-medium">Change maintenance</h4>
+      <p className="mt-static-xs text-sm text-contrast-medium">Bring the latest integration target into the Change before continuing delivery.</p>
       <PButton
-        className="mt-static-md"
+        className="mt-static-sm"
         type="button"
         compact
         variant="secondary"
@@ -807,7 +810,7 @@ function TargetSyncSection(props: WorkItemDetailProps) {
           </ConfirmationContent>
         </PModal>
       ) : null}
-    </>
+    </section>
   )
 }
 
@@ -933,10 +936,19 @@ function PublicationSection(props: WorkItemDetailProps) {
         : action.kind === 'resolve-attention'
           ? props.pendingAction === 'attention-resolve'
           : props.pendingAction === 'change-resume'
+  const invalidationReason = publication.invalidated_expected_head && publication.invalidated_observed_head
+    ? `The Change head moved from ${publication.invalidated_expected_head.slice(0, 12)} to ${publication.invalidated_observed_head.slice(0, 12)}, so the previous finalization no longer matches.`
+    : null
   return (
-    <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
-      <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
-      <p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.card.next_step}</p>
+    <section className="min-w-0" aria-labelledby="work-publication-heading">
+      <div className="border-l-4 border-warning bg-warning-low p-static-md">
+        <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
+        <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
+        {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
+        {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
+        {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
+        {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      </div>
       {finalizationBlocked ? (
         <section className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="status" data-testid="finalization-readiness">
           <PHeading tag="h4" size="sm">Finalization unavailable</PHeading>
@@ -961,6 +973,8 @@ function PublicationSection(props: WorkItemDetailProps) {
         </div>
       ) : null}
       <ExternalHeadAdoptionSection {...props} />
+      <details className="mt-static-md border-t border-contrast-low pt-static-sm">
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">Publication evidence</summary>
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
         <IdentityRow label="Repository" value={publication.repository} />
         {publication.repository && publication.pull_request_number ? (
@@ -1002,18 +1016,15 @@ function PublicationSection(props: WorkItemDetailProps) {
           </ol>
         </div>
       ) : null}
-      {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
-      {publication.pending_checkpoint_head
-        || publication.pending_checkpoint_triggers.length > 0
-        || (publication.pending_checkpoint_attempt_count ?? 0) > 0 ? (
+      {((publication.pending_checkpoint_attempt_count ?? 0) > 0
+        || publication.pending_checkpoint_error_code) ? (
         <div className="mt-static-sm border-l-4 border-warning bg-surface p-static-sm text-sm" data-testid="checkpoint-diagnostics" role={publication.pending_checkpoint_error_code ? 'alert' : 'status'}>
-          <p>Checkpoint attempts: {publication.pending_checkpoint_attempt_count ?? 0}</p>
+          <p><strong>Checkpoint recovery</strong></p>
+          <p className="mt-static-xs">{publication.pending_checkpoint_attempt_count ?? 0} attempt{publication.pending_checkpoint_attempt_count === 1 ? '' : 's'} recorded</p>
           {publication.pending_checkpoint_last_attempted_at ? <p className="mt-static-xs text-xs text-contrast-medium">Last attempt: <time dateTime={publication.pending_checkpoint_last_attempted_at}>{publication.pending_checkpoint_last_attempted_at}</time></p> : null}
           {publication.pending_checkpoint_error_code ? <p className="mt-static-xs break-words"><strong>{publication.pending_checkpoint_error_code}</strong>{publication.pending_checkpoint_error_detail ? `: ${publication.pending_checkpoint_error_detail}` : ''}</p> : null}
         </div>
       ) : null}
-      {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
-      {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
       {canSupersede ? (
         <PButton
           className="mt-static-md"
@@ -1027,6 +1038,7 @@ function PublicationSection(props: WorkItemDetailProps) {
           {props.pendingAction === 'publication-supersede' ? 'Superseding...' : 'Supersede publication'}
         </PButton>
       ) : null}
+      </details>
       <TargetSyncSection {...props} />
       <WorktreeRecoverySection {...props} />
       <WorktreeCleanupSection {...props} />
@@ -1056,7 +1068,6 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <ChangeDispositionSection {...props} />
         <BlockSection {...props} />
         <RequestsSection {...props} />
         <PublicationSection {...props} />
@@ -1065,6 +1076,7 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
         <ClaimSection {...props} />
         <ExceptionalStateSection detail={props.detail} />
         <BackwardMoveSection {...props} />
+        <ChangeDispositionSection {...props} />
       </div>
     </div>
   )

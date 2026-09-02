@@ -1579,7 +1579,6 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(inspector).toHaveTextContent('Checkpoint pending')
   expect(inspector).toHaveTextContent('Finalized head')
   expect(inspector).toHaveTextContent('1'.repeat(40))
-  expect(inspector).toHaveTextContent('Checkpoint triggers: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
   expect(publicationRow).toHaveTextContent('Checkpoint pending')
   expect(within(publicationRow).getByText('Checkpoint pending', { selector: '[data-status-tone]' })).toHaveAttribute('data-status-tone', 'active')
@@ -1647,7 +1646,7 @@ it('shows persisted checkpoint retry diagnostics and structured reconciliation e
 
   const inspector = await screen.findByTestId('work-item-detail')
   const diagnostics = within(inspector).getByTestId('checkpoint-diagnostics')
-  expect(diagnostics).toHaveTextContent('Checkpoint attempts: 2')
+  expect(diagnostics).toHaveTextContent('2 attempts recorded')
   expect(diagnostics).toHaveTextContent('Last attempt: 2026-08-11T17:00:00+00:00')
   expect(diagnostics).toHaveTextContent('ERR_DELIVERY_CHECKPOINT_HEAD_MISSING')
   fireEvent.click(within(inspector).getByText('Publish checkpoint'))
@@ -2091,7 +2090,7 @@ it('keeps invalidated finalization heads distinct and offers re-finalization', a
   expect(within(inspector).getByRole('region', { name: 'Finalization invalidated' })).toBeInTheDocument()
   expect(inspector).toHaveTextContent(`Expected head${'1'.repeat(40)}`)
   expect(inspector).toHaveTextContent(`Observed head${'2'.repeat(40)}`)
-  expect(inspector).toHaveTextContent('Re-finalize the current Change head')
+  expect(inspector).toHaveTextContent('Next: Re-finalize the current Change head')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
 })
 
