@@ -12,7 +12,7 @@ description: "Temporary recovery/exception: diagnose and resolve one exact Deliv
 > one of those capabilities still depends on it; ordinary Change attention controls are not enough
 > to satisfy this condition.
 
-Attention: ${input:attention:Change ID followed by the exact 64-character Integration attention ID}
+Attention: ${input:attention:Change ID followed by either a 64-character attention ID or an OUT-nnn outcome ID}
 
 Read and follow `../skills/w-delivery-attention-resolution/SKILL.md`. Bind the supplied change and
 attention identities before inspecting current evidence. Present every material user choice with
