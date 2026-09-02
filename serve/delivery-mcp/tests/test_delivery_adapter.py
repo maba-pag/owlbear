@@ -38,7 +38,9 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMovePreview,
     DeliveryAcceptanceWaitingError,
+    DeliveryBlock,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangePublicationHistory,
@@ -46,13 +48,18 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPlanCandidate,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestResolution,
     DeliveryResultCandidate,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntimeReferenceError,
+    DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     FinalizeDeliveryChange,
+    OutcomeAuthorityBinding,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
@@ -61,7 +68,10 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
-from owlbear_delivery.portfolio_application import DeliveryChangePublicationSupersessionReceipt
+from owlbear_delivery.portfolio_application import (
+    DeliveryChangePublicationSupersessionReceipt,
+    DeliveryOperatorContext,
+)
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -230,7 +240,7 @@ class _RecordingApplication:
         self.failures = failures or {}
 
     def __getattr__(self, name: str) -> Any:  # noqa: C901
-        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901
+        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
             if failure is not None:
@@ -289,6 +299,57 @@ class _RecordingApplication:
                     expected_resume_commit=COMMIT,
                     reviewed_head="a" * 40,
                     preserved_ref="refs/owlbear/recoveries/change-a/recover-blocked",
+                )
+            elif name == "show_operator_context":
+                result = DeliveryOperatorContext(
+                    change_id=CHANGE,
+                    outcome_id="OUT-001",
+                    stage=DeliveryStage.PLANNING,
+                    block=DeliveryBlock(
+                        block_id="block",
+                        reason="Need user action",
+                        unblock_condition="Action is complete",
+                        expected_evidence=("completion evidence",),
+                        locators=("request",),
+                        request_id="request",
+                    ),
+                    requests=(
+                        DeliveryRequest(
+                            request_id="request",
+                            kind=DeliveryRequestKind.ACTION,
+                            outcome_id="OUT-001",
+                            summary="Complete the action",
+                        ),
+                    ),
+                )
+            elif name == "resolve_request":
+                result = DeliveryRequest(
+                    request_id="request",
+                    kind=DeliveryRequestKind.ACTION,
+                    outcome_id="OUT-001",
+                    summary="Complete the action",
+                    resolution=DeliveryRequestResolution(response_text="Completed."),
+                )
+            elif name == "clear_block":
+                result = OutcomeAuthorityBinding(
+                    outcome_id="OUT-001",
+                    plan_scope_id="SCOPE-001",
+                    block=DeliveryBlock(
+                        block_id="block",
+                        reason="Need operator evidence",
+                        unblock_condition="Evidence is recorded",
+                        expected_evidence=("operator evidence",),
+                        locators=("operator-note",),
+                        resolution_note="Verified.",
+                        resolution_locators=("operator-note",),
+                    ),
+                )
+            elif name == "preview_administrative_move":
+                result = AdministrativeDeliveryMovePreview(
+                    outcome_id="OUT-001",
+                    target=DeliveryStage.PLANNING,
+                    snapshot_version=DIGEST,
+                    invalidated_outcome_ids=("OUT-001",),
                 )
             elif name == "publish_delivery_plan":
                 request = args[1]
@@ -436,6 +497,24 @@ def _requests() -> dict[str, dict[str, object]]:
         "list_work_items": {},
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
+        "show_operator_context": {**change, "outcome_id": "OUT-001"},
+        "resolve_request": {
+            **change,
+            "request_id": "request",
+            "resolution": {"response_text": "Completed."},
+        },
+        "clear_block": {
+            **change,
+            "outcome_id": "OUT-001",
+            "block_id": "block",
+            "operator_note": "Verified.",
+            "locators": ["operator-note"],
+        },
+        "preview_administrative_move": {
+            **change,
+            "outcome_id": "OUT-001",
+            "target": "planning",
+        },
         "acquire_frontier_work": {},
         "show_plan_context": claim,
         "show_build_context": claim,
@@ -580,7 +659,9 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
-async def test_each_delivery_operation_validates_delegates_once_and_serializes(operation_name: str) -> None:  # noqa: C901
+async def test_each_delivery_operation_validates_delegates_once_and_serializes(  # noqa: C901, PLR0912, PLR0915
+    operation_name: str,
+) -> None:
     application = _RecordingApplication()
     adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
 
@@ -588,6 +669,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
 
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
+        "show_operator_context": (CHANGE, "OUT-001"),
+        "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
+        "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
+        "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
         "reconcile_finalization_head": (CHANGE,),
         "observe_acceptance": (CHANGE,),
         "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
@@ -668,6 +753,25 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
         assert result.output.output_id == result.candidate_id
+    elif operation_name == "show_operator_context":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.block.block_id == "block"
+        assert result.requests[0].request_id == "request"
+    elif operation_name == "resolve_request":
+        assert result.change_id == CHANGE
+        assert result.request.request_id == "request"
+        assert result.request.resolution.response_text == "Completed."
+    elif operation_name == "clear_block":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.block.resolution_note == "Verified."
+        assert "tasks" not in result.model_dump(mode="json")
+        assert "results" not in result.model_dump(mode="json")
+    elif operation_name == "preview_administrative_move":
+        assert result.outcome_id == "OUT-001"
+        assert result.target == DeliveryStage.PLANNING
+        assert result.snapshot_version == DIGEST
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
@@ -714,6 +818,8 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "list_work_items",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_operator_context",
+        "preview_administrative_move",
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
@@ -724,7 +830,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_completed_change",
     }
     prohibited = {
-        "resolve_request",
         "create_request",
         "unblock_delivery",
         "list_semantic_updates",
@@ -753,7 +858,9 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
             }
         )
         assert tool_annotations.read_only_hint is (name in reads)
-        assert tool_annotations.idempotent_hint is (name != "acquire_frontier_work")
+        assert tool_annotations.idempotent_hint is (
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+        )
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 
 

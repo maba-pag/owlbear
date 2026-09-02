@@ -30,7 +30,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_operator_context resolve_request clear_block preview_administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -42,6 +42,14 @@ current state and stop without mutation. Never substitute a newer attention sile
 
 Treat the returned code, heads, target, diagnostics, and retry condition as retained evidence, not
 as permission to edit a worktree or target.
+
+For a blocked outcome, call `show_operator_context(change_id, outcome_id)` before presenting a
+remedy. If the context contains a pending request, present exactly one user decision and, after the
+answer, call `resolve_request(change_id, request_id, resolution)` with the selected option or
+response text. If the context contains a requestless block, present the evidence requirement and,
+after explicit user confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note,
+locators)`. Re-read the exact operator context before either mutation; neither operation restores
+later-stage authority or selects a Delivery transition.
 
 ## Step 1 - Diagnose Current State Read-Only
 
@@ -226,3 +234,5 @@ owned route.
   clears attention only; reconciliation and ready-marking are separate authority steps.
 - **Choosing for the user:** preservation, adoption, and discard have materially different outcomes.
 - **Resolving the wrong attention:** bind and revalidate the exact attention ID before every mutation.
+- **Operator mutation without context:** read `show_operator_context` first and require the exact
+  request or block identity before resolving it.

@@ -62,6 +62,10 @@ DELIVERY_TOOLS = {
     "list_work_items",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_operator_context",
+    "resolve_request",
+    "clear_block",
+    "preview_administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -106,6 +110,8 @@ READ_TOOLS = {
     "list_work_items",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_operator_context",
+    "preview_administrative_move",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
@@ -120,7 +126,6 @@ EXCLUDED_TOOLS = {
     "show_change",
     "validate_change",
     "admit_change",
-    "resolve_request",
     "create_request",
     "unblock_delivery",
     "list_semantic_updates",
@@ -321,7 +326,9 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
     for name, tool in tools.items():
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
-        assert tool.annotations.idempotent_hint is (name != "acquire_frontier_work")
+        assert tool.annotations.idempotent_hint is (
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+        )
         assert tool.annotations.destructive_hint is (
             name
             in {

@@ -24,19 +24,24 @@ from owlbear_delivery.change_workspace import (
 )
 from owlbear_delivery.completed_history import CompletedHistoryError
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMovePreview,
     DeliveryPlanCandidate,
+    DeliveryRequest,
     DeliveryResultCandidate,
+    OutcomeAuthorityBinding,
 )
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryOperatorContext,
     PortfolioApplication,
 )
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
+    AdministrativeMovePreviewResponse,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
     ChangeBlockedImplementationRecoveryResponse,
@@ -57,12 +62,16 @@ from owlbear_delivery_mcp.target_models import (
     CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
+    ClearBlockParams,
+    ClearBlockRequest,
+    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
     DeferChangeParams,
     DeferChangeRequest,
+    DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
@@ -76,6 +85,10 @@ from owlbear_delivery_mcp.target_models import (
     FinalizeDeliveryChangeRequest,
     MarkChangeReadyParams,
     MarkChangeReadyRequest,
+    OperatorContextParams,
+    OperatorContextRequest,
+    PreviewAdministrativeMoveParams,
+    PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -90,6 +103,9 @@ from owlbear_delivery_mcp.target_models import (
     RepairClaimContextRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
+    ResolvedDeliveryRequestResponse,
+    ResolveRequestParams,
+    ResolveRequestRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -112,6 +128,7 @@ from owlbear_delivery_mcp.target_models import (
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
 _WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False)
+_OPERATOR_WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 _CLEANUP = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=True)
 _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 
@@ -126,6 +143,10 @@ DELIVERY_OPERATION_NAMES = (
     "list_work_items",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_operator_context",
+    "resolve_request",
+    "clear_block",
+    "preview_administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -171,6 +192,8 @@ _DELIVERY_READS = frozenset(
         "list_work_items",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_operator_context",
+        "preview_administrative_move",
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
@@ -181,6 +204,7 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"resolve_request", "clear_block"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
@@ -193,6 +217,8 @@ DELIVERY_OPERATION_ANNOTATIONS = {
         "cleanup_abandoned_change_worktree_after_target_sync_discard",
         "cleanup_completed_change_worktree",
     }
+    else _OPERATOR_WRITE
+    if name in _DELIVERY_NON_IDEMPOTENT_WRITES
     else _WRITE
     for name in DELIVERY_OPERATION_NAMES
 }
@@ -303,6 +329,74 @@ class TargetMCPAdapter:
         """Show one exact bounded work item."""
         params = self._validate(WorkItemParams, request)
         return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
+
+    async def show_operator_context(self, request: OperatorContextRequest) -> DeliveryOperatorContextResponse:
+        """Show bounded operator state for one exact outcome or Change."""
+        params = self._validate(OperatorContextParams, request)
+        context = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.show_operator_context(params.change_id, params.outcome_id),
+            DeliveryOperatorContext,
+        )
+        return DeliveryOperatorContextResponse.from_context(context)
+
+    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
+        """Persist one user-owned answer for a retained Delivery request."""
+        params = self._validate(ResolveRequestParams, request)
+        resolved = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.resolve_request(
+                params.change_id,
+                params.request_id,
+                params.resolution,
+            ),
+            DeliveryRequest,
+        )
+        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
+
+    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
+        """Clear one requestless block with explicit operator evidence."""
+        params = self._validate(ClearBlockParams, request)
+        binding = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.clear_block(
+                params.change_id,
+                params.outcome_id,
+                params.block_id,
+                params.operator_note,
+                params.locators,
+            ),
+            OutcomeAuthorityBinding,
+        )
+        if binding.block is None:
+            message = "unsupported cleared block output: missing block"
+            raise TypeError(message)
+        return ClearedDeliveryBlockResponse(
+            change_id=params.change_id,
+            outcome_id=binding.outcome_id,
+            block=binding.block,
+        )
+
+    async def preview_administrative_move(
+        self,
+        request: PreviewAdministrativeMoveRequest,
+    ) -> AdministrativeMovePreviewResponse:
+        """Preview one backward movement without changing Delivery state."""
+        params = self._validate(PreviewAdministrativeMoveParams, request)
+        preview = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.preview_administrative_move(
+                params.change_id,
+                params.outcome_id,
+                params.target,
+            ),
+            AdministrativeDeliveryMovePreview,
+        )
+        return AdministrativeMovePreviewResponse.from_preview(preview)
 
     async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
         """Acquire currently available frontier work."""
