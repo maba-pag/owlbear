@@ -3,6 +3,7 @@ import { PButton, PHeading, PIcon, PInputSearch, PFlyout, PModal, PTag } from '@
 import { useLocation, useNavigate } from 'react-router'
 import { WorkItemApiError, cleanupAbandonedWorkItemChange, completedChangeRecordId, discardAbandonedTargetSyncAndCleanup, type AbandonedChangeRecord, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'
 import { useCopyToClipboard } from './CopyCommand'
+import { SectionCard, StatusChip } from './DeliveryPrimitives'
 import { useCompletedChange, useCompletedHistory } from '../hooks/useWorkItems'
 import WorkspaceViewHeader, { WorkspaceViewCount } from './WorkspaceViewHeader'
 
@@ -104,15 +105,14 @@ function CompletedRecord({
   onSelect: (trigger: HTMLElement) => void
 }) {
   return (
-    <article
-      className={[
-        'relative grid gap-x-static-lg gap-y-static-sm border-b border-contrast-low py-static-md',
-        stale ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
-        'md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start',
-      ].join(' ')}
-      aria-label={stale ? `${record.title}, previous search result` : undefined}
-      data-stale={stale ? 'true' : undefined}
-      data-testid="completed-change-record"
+    <SectionCard
+      as="article"
+      interactive={!stale}
+      muted={stale}
+      ariaLabel={stale ? `${record.title}, previous search result` : undefined}
+      dataStale={stale}
+      dataTestId="completed-change-record"
+      className="relative grid gap-x-static-lg gap-y-static-sm border-b-0 py-static-md md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start"
     >
       <div className="min-w-0">
         <PHeading tag="h3" size="small">
@@ -138,12 +138,12 @@ function CompletedRecord({
           </div>
         ) : isAbandoned(record) ? (
           <div className="mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs text-xs text-contrast-medium">
-            <PTag compact>Abandoned</PTag>
+            <StatusChip label="Abandoned" tone="neutral" />
             <time dateTime={record.abandoned_at}>{formatCompletedAt(record.abandoned_at)}</time>
           </div>
         ) : null}
       </div>
-    </article>
+    </SectionCard>
   )
 }
 

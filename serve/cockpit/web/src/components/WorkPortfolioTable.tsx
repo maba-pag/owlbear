@@ -6,10 +6,10 @@ import type {
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
 import CopyCommand from './CopyCommand'
+import { StatusChip, WorkRow } from './DeliveryPrimitives'
 import {
   PROGRESS_STAGE_LABELS,
   workItemStatus,
-  workItemStatusClassName,
 } from './workItemPresentation'
 
 interface WorkPortfolioTableProps {
@@ -112,7 +112,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
   const state = workItemStatus(item)
   return (
     <span>
-      <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(state.tone)}`} data-status-tone={state.tone}>{state.label}</span>
+      <StatusChip label={state.label} tone={state.tone} />
       {state.detail ? <span className="mt-1 block text-xs text-contrast-medium">{state.detail}</span> : null}
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
       {item.action.kind !== 'none' ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
@@ -167,17 +167,12 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
       {outcomes.map((item) => {
         const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
         return (
-          <article
-            key={workItemIdentity(item)}
-            className={['relative grid gap-static-sm rounded-lg border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
-            data-work-item={workItemIdentity(item)}
-            aria-label={`${item.title} work item`}
-          >
+          <WorkRow key={workItemIdentity(item)} selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`${item.title} work item`} className="grid gap-static-sm p-static-sm">
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
             <span className="text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
             <ProgressState item={item} />
             <CurrentState item={item} onSelect={onSelect} />
-          </article>
+          </WorkRow>
         )
       })}
     </div>
@@ -191,15 +186,7 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
   return (
-    <section
-      className={[
-        'relative mt-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md md:px-0 md:py-0',
-        attentionBorder(item),
-        isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
-      ].join(' ')}
-      aria-label={`Change publication for ${group.title}`}
-      data-work-item={workItemIdentity(item)}
-    >
+    <WorkRow selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`Change publication for ${group.title}`} className="mt-static-sm px-static-sm py-static-md md:px-0 md:py-0">
       <dl className="grid gap-static-sm md:grid-cols-[minmax(0,60fr)_minmax(0,40fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
           <dt className="sr-only">Work</dt>
@@ -223,7 +210,7 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
           <dd><CurrentState item={item} onSelect={onSelect} /></dd>
         </div>
       </dl>
-    </section>
+    </WorkRow>
   )
 }
 

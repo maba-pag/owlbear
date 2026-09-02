@@ -1,8 +1,8 @@
 import { Link } from 'react-router'
 import type { PortfolioChangeLifecycleStatus } from '../api/workItems'
 import CopyCommand from './CopyCommand'
+import { StatusChip, WorkRow } from './DeliveryPrimitives'
 import { designCommand, designWorkTitle } from './designWorkPresentation'
-import { workItemStatusClassName } from './workItemPresentation'
 
 interface DesignWorkSectionProps {
   statuses: PortfolioChangeLifecycleStatus[]
@@ -21,14 +21,7 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
           const changeId = status.change_id
           const selected = selectedChangeId === changeId
           return (
-            <article
-              key={changeId}
-              className={[
-                'relative min-w-0 rounded-lg border border-l-4 border-contrast-lower px-static-sm py-static-sm text-sm',
-                selected ? 'bg-canvas' : 'bg-frosted-soft hover:bg-canvas',
-              ].join(' ')}
-              data-design-work={changeId}
-            >
+            <WorkRow key={changeId} selected={selected} dataWorkItem={changeId} className="px-static-sm py-static-sm text-sm" ariaLabel={`${designWorkTitle(changeId)} Design work`}>
               <dl className="grid gap-static-sm md:grid-cols-[minmax(0,60fr)_minmax(0,40fr)] md:gap-0">
                 <div className="min-w-0 md:pr-static-sm">
                   <dt className="sr-only">Work</dt>
@@ -51,12 +44,12 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
                   <dd>
                     <strong className="block font-medium text-primary">Design</strong>
                     <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
-                    <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName('ready')}`} data-status-tone="ready">Needs design</span>
+                    <StatusChip label="Needs design" tone="ready" />
                     <CopyCommand command={designCommand(changeId)} className="mt-1" />
                   </dd>
                 </div>
               </dl>
-            </article>
+            </WorkRow>
           )
         })}
       </div>

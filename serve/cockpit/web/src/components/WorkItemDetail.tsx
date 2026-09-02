@@ -24,10 +24,10 @@ import {
 import {
   PROGRESS_STAGE_LABELS,
   workItemStatus,
-  workItemStatusClassName,
   workItemStatusLabel,
 } from './workItemPresentation'
 import CopyCommand from './CopyCommand'
+import { SectionCard, StatusChip } from './DeliveryPrimitives'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -117,7 +117,7 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Publication'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
-        <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(workItemStatus(card).tone)}`}>{workItemStatusLabel(card)}</span>
+        <StatusChip label={workItemStatusLabel(card)} tone={workItemStatus(card).tone} />
       </div>
     </div>
   )
@@ -941,14 +941,14 @@ function PublicationSection(props: WorkItemDetailProps) {
     : null
   return (
     <section className="min-w-0" aria-labelledby="work-publication-heading">
-      <div className="border-l-4 border-warning bg-warning-low p-static-md">
+      <SectionCard tone="warning" className="border-l-4 p-static-md">
         <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
         <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
         {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
         {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
-      </div>
+      </SectionCard>
       {finalizationBlocked ? (
         <section className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="status" data-testid="finalization-readiness">
           <PHeading tag="h4" size="sm">Finalization unavailable</PHeading>
