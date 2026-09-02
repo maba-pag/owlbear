@@ -65,20 +65,13 @@ it('renders Not Found for an unmatched path', () => {
   expect(screen.getByText('Go to Delivery portfolio')).toBeInTheDocument()
 })
 
-it('renders active Delivery commands and separates recovery', () => {
+it('does not render a generic command footer', () => {
   render(
     <MemoryRouter initialEntries={['/delivery']}>
       <CockpitShell />
     </MemoryRouter>,
   )
 
-  const reference = screen.getByTestId('command-reference')
-  expect(reference).toHaveTextContent('Commands')
-  expect(reference).toHaveTextContent('Recovery')
-  expect(screen.getByRole('button', { name: 'Copy command /ideate' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Copy command /design <change-id>' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Copy command /orchestrate' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Copy command /finalize-change <change-id>' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Copy command /resolve-delivery-attention <change-id> <attention-id>' })).toBeInTheDocument()
-  expect(reference).not.toHaveTextContent('/publish-change')
+  expect(screen.queryByTestId('command-reference')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Copy command /finalize-change <change-id>' })).not.toBeInTheDocument()
 })

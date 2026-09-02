@@ -810,9 +810,8 @@ it('classifies Design and Delivery entries from explicit lifecycle statuses', as
   expect(table).toHaveTextContent('Task plan not published')
   expect(table).toHaveTextContent('Admitted Design re-entry')
 
-  const unavailable = screen.getByTestId('delivery-status-section')
+  const unavailable = screen.getByTestId('delivery-issues-section')
   expect(unavailable).toHaveTextContent('unavailable-change')
-  expect(unavailable).toHaveTextContent('Admitted to Delivery')
   expect(unavailable).toHaveTextContent('Runtime unavailable')
   expect(unavailable).toHaveTextContent('Persisted admission is valid, but runtime composition is unavailable.')
   expect(unavailable).not.toHaveTextContent('Not admitted to Delivery')
@@ -849,8 +848,8 @@ it('shows bounded Delivery health diagnostics for quarantined state', async () =
 
   renderPage()
 
-  const health = await screen.findByTestId('delivery-health-section')
-  expect(health).toHaveTextContent('Delivery health')
+  const health = await screen.findByTestId('delivery-issues-section')
+  expect(health).toHaveTextContent('Delivery issues')
   expect(health).toHaveTextContent('Quarantined state is hidden from dispatch.')
   expect(health).toHaveTextContent('quarantined-change')
   expect(health).toHaveTextContent('local-runtime / contract-identity-invalid')
@@ -864,8 +863,7 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Portfolio redesign')
   expect(table).toHaveTextContent('Work')
-  expect(table).toHaveTextContent('Progress')
-  expect(table).toHaveTextContent('Status')
+  expect(table).toHaveTextContent('State')
   expect(table).toHaveTextContent('Working')
   expect(table).toHaveTextContent('Builder')
   expect(table).toHaveTextContent('Decision required')
@@ -913,8 +911,8 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(designWork).toHaveTextContent('Not admitted to Delivery')
   expect(designWork).toHaveTextContent('/design design-draft')
   expect(within(designWork).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
-  expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
-  expect(within(designWork).getAllByRole('definition')).toHaveLength(3)
+  expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'State'])
+  expect(within(designWork).getAllByRole('definition')).toHaveLength(2)
   const status = screen.getByLabelText('Delivery portfolio status')
   expect(status).toHaveTextContent('2Changes')
   expect(status).toHaveTextContent('1Design')
@@ -1576,8 +1574,8 @@ it('reconciles a pending publication checkpoint from the Change publication view
 
   const inspector = await screen.findByTestId('work-item-detail')
   const publicationRow = screen.getByLabelText('Change publication for Portfolio redesign')
-  expect(within(publicationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
-  expect(within(publicationRow).getAllByRole('definition')).toHaveLength(3)
+  expect(within(publicationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'State'])
+  expect(within(publicationRow).getAllByRole('definition')).toHaveLength(2)
   expect(inspector).toHaveTextContent('Checkpoint pending')
   expect(inspector).toHaveTextContent('Finalized head')
   expect(inspector).toHaveTextContent('1'.repeat(40))
@@ -2046,7 +2044,8 @@ it('offers the finalization command from the Change publication row and detail v
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
-  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(2)
+  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(3)
+  expect(within(screen.getByTestId('portfolio-commands')).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
 })
 
 it('keeps invalidated finalization heads distinct and offers re-finalization', async () => {

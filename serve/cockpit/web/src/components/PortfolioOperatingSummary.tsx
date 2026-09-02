@@ -44,6 +44,11 @@ interface PortfolioHeaderSummaryProps {
   onNeedsFilter: (value: WorkItemNeed | '') => void
 }
 
+interface PortfolioOperatingSummaryProps {
+  operating: PortfolioOperatingView
+  commands?: string[]
+}
+
 interface AttentionMetricProps {
   count: number
   filter: Exclude<WorkItemNeed, 'none'>
@@ -155,14 +160,26 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
   )
 }
 
-export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView }) {
-  if (operating.guidance.length === 0) return null
+export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps) {
+  if (operating.guidance.length === 0 && commands.length === 0) return null
   return (
-    <aside className="grid min-w-0 gap-static-xs px-static-sm text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-static-md" aria-label="Session suggestions">
-      <strong className="text-primary">Session suggestions</strong>
-      <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0">
-        {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
-      </ul>
+    <aside className="grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-x-static-md" aria-label="Session suggestions">
+      {operating.guidance.length > 0 ? (
+        <>
+          <strong className="text-primary">Next session</strong>
+          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0">
+            {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
+          </ul>
+        </>
+      ) : null}
+      {commands.length > 0 ? (
+        <>
+          <strong className="text-primary">Available commands</strong>
+          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-lg gap-y-static-xs p-0" data-testid="portfolio-commands">
+            {commands.map((command) => <li className="min-w-0" key={command}><Command>{command}</Command></li>)}
+          </ul>
+        </>
+      ) : null}
     </aside>
   )
 }

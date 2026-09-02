@@ -318,80 +318,47 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
-function DeliveryStatusSection({ statuses }: { statuses: PortfolioChangeLifecycleStatus[] }) {
-  if (statuses.length === 0) return null
+function DeliveryIssuesSection({ health, statuses }: { health: DeliveryHealthResponse; statuses: PortfolioChangeLifecycleStatus[] }) {
+  const diagnostics = health.status === 'attention' ? health.diagnostics : []
+  const statusChangeIds = new Set(statuses.map((status) => status.change_id))
+  const additionalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.change_id === null || !statusChangeIds.has(diagnostic.change_id))
+  const diagnosticByChangeId = new Map(diagnostics.flatMap((diagnostic) => diagnostic.change_id ? [[diagnostic.change_id, diagnostic] as const] : []))
+  const issueCount = statuses.length + additionalDiagnostics.length
+  if (issueCount === 0) return null
   return (
-    <section className="min-w-0" aria-labelledby="delivery-status-heading" data-testid="delivery-status-section">
-      <h2 id="delivery-status-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Delivery status</h2>
-      <div className="grid gap-static-sm">
+    <details className="min-w-0 rounded-lg border border-warning bg-warning-low" data-testid="delivery-issues-section">
+      <summary className="flex cursor-pointer list-none items-center gap-static-sm px-static-sm py-static-sm text-sm font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+        <PIcon name="warning" size="small" aria-hidden="true" />
+        <span>Delivery issues</span>
+        <span className="ml-auto rounded-full border border-warning px-static-xs py-1 text-xs tabular-nums">{issueCount}</span>
+      </summary>
+      <div className="grid gap-static-sm border-t border-warning px-static-sm py-static-sm" role="list">
         {statuses.map((status) => (
-          <article
-            key={status.change_id}
-            className="relative min-w-0 rounded-lg border border-l-4 border-warning bg-surface px-static-sm py-static-sm text-sm"
-            data-delivery-status={status.change_id}
-          >
-            <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:gap-0">
-              <div className="min-w-0 md:pr-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Change</dt>
-                <dd>
-                  <strong className="font-semibold text-primary">Change</strong>
-                  <code className="block text-xs text-contrast-medium">{status.change_id}</code>
-                </dd>
-              </div>
-              <div className="md:px-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
-                <dd>
-                  <strong className="font-medium text-primary">{status.stage ? CHANGE_STAGE_LABELS[status.stage] : 'Delivery'}</strong>
-                  <span className="block text-xs text-contrast-medium">Admitted to Delivery</span>
-                </dd>
-              </div>
-              <div className="md:pl-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
-                <dd>
-                  <span className="inline-flex items-center rounded-sm border border-warning bg-warning-low px-static-xs py-1 text-xs font-semibold leading-none text-primary">Runtime unavailable</span>
-                  {status.diagnostic_detail ? <span className="mt-1 block text-xs text-contrast-medium">{status.diagnostic_detail}</span> : null}
-                </dd>
-              </div>
+          <article key={status.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-status={status.change_id} role="listitem">
+            <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
+              <strong className="font-semibold text-primary">{status.change_id}</strong>
+              <span className="text-xs text-contrast-medium">{status.stage ? CHANGE_STAGE_LABELS[status.stage] : 'Delivery'}</span>
+            </div>
+            {diagnosticByChangeId.has(status.change_id) ? <p className="mt-1 font-medium text-primary">Quarantined state is hidden from dispatch.</p> : null}
+            <p className="mt-1 text-xs text-contrast-medium">Runtime unavailable{status.diagnostic_detail ? `: ${status.diagnostic_detail}` : ''}</p>
+            {diagnosticByChangeId.get(status.change_id) ? <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{diagnosticByChangeId.get(status.change_id)?.source}</code><span aria-hidden="true"> / </span><code>{diagnosticByChangeId.get(status.change_id)?.code}</code></p> : null}
+          </article>
+        ))}
+        {additionalDiagnostics.map((diagnostic, index) => (
+          <article key={`${diagnostic.change_id ?? 'portfolio'}-${diagnostic.code}-${index}`} className="min-w-0 bg-surface p-static-sm text-sm" role="listitem">
+            <p className="font-medium text-primary">Quarantined state is hidden from dispatch.</p>
+            <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+              <dt className="text-contrast-medium">Change</dt>
+              <dd className="break-words font-mono">{diagnostic.change_id ?? 'Delivery portfolio'}</dd>
+              <dt className="text-contrast-medium">Source / code</dt>
+              <dd className="break-words"><code>{diagnostic.source}</code><span aria-hidden="true"> / </span><code>{diagnostic.code}</code></dd>
+              <dt className="text-contrast-medium">Detail</dt>
+              <dd className="break-words">{diagnostic.detail}{diagnostic.path ? <span className="mt-1 block break-all font-mono text-2xs">{diagnostic.path}</span> : null}</dd>
             </dl>
           </article>
         ))}
       </div>
-    </section>
-  )
-}
-
-function DeliveryHealthSection({ health }: { health: DeliveryHealthResponse }) {
-  if (health.status !== 'attention' || health.diagnostics.length === 0) return null
-  return (
-    <section className="min-w-0" aria-labelledby="delivery-health-heading" data-testid="delivery-health-section">
-      <h2 id="delivery-health-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Delivery health</h2>
-      <div className="grid gap-static-sm" role="list">
-        {health.diagnostics.map((diagnostic, index) => (
-          <article
-            key={`${diagnostic.change_id ?? 'portfolio'}-${diagnostic.code}-${index}`}
-            className="min-w-0 rounded-sm border border-l-4 border-warning bg-surface px-static-sm py-static-sm text-sm"
-            role="listitem"
-          >
-            <p className="mb-static-sm font-medium text-primary">Quarantined state is hidden from dispatch.</p>
-            <dl className="grid gap-static-sm md:grid-cols-[minmax(0,24fr)_minmax(0,24fr)_minmax(0,52fr)] md:gap-0">
-              <div className="min-w-0 md:pr-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Change</dt>
-                <dd className="break-words font-mono text-xs text-contrast-medium">{diagnostic.change_id ?? 'Delivery portfolio'}</dd>
-              </div>
-              <div className="min-w-0 md:px-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Source / code</dt>
-                <dd className="break-words text-xs text-contrast-medium"><code>{diagnostic.source}</code><span aria-hidden="true"> / </span><code>{diagnostic.code}</code></dd>
-              </div>
-              <div className="min-w-0 md:pl-static-sm">
-                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Detail</dt>
-                <dd className="break-words text-xs text-contrast-medium">{diagnostic.detail}</dd>
-                {diagnostic.path ? <dd className="mt-1 break-all font-mono text-2xs text-contrast-medium">{diagnostic.path}</dd> : null}
-              </div>
-            </dl>
-          </article>
-        ))}
-      </div>
-    </section>
+    </details>
   )
 }
 
@@ -474,6 +441,9 @@ export default function WorkPortfolioPage() {
   const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length
   const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
+  const availableCommands = Array.from(new Set(
+    filteredGroups.flatMap((group) => group.items.map((item) => item.action.command).filter((command): command is string => Boolean(command))),
+  ))
 
   const closeInspector = (destination: FocusDestination = 'trigger') => {
     restoreFocusAfterClose.current = true
@@ -632,7 +602,7 @@ export default function WorkPortfolioPage() {
 
             {hasData ? (
               <>
-                <DeliveryHealthSection health={portfolio.health} />
+                <DeliveryIssuesSection health={portfolio.health} statuses={visibleUnavailableStatuses} />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}
@@ -642,9 +612,6 @@ export default function WorkPortfolioPage() {
                       lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
                     }}
                   />
-                ) : null}
-                {visibleUnavailableStatuses.length > 0 ? (
-                  <DeliveryStatusSection statuses={visibleUnavailableStatuses} />
                 ) : null}
                 {visibleDesignWorkStatuses.length > 0 ? (
                   <DesignWorkSection
@@ -659,7 +626,7 @@ export default function WorkPortfolioPage() {
                 {filteredGroups.length === 0 && visibleUnavailableStatuses.length === 0 && visibleDesignWorkStatuses.length === 0 ? (
                   <EmptyPortfolioState filtered={isFiltered} />
                 ) : null}
-                <PortfolioOperatingSummary operating={portfolio.operating} />
+                <PortfolioOperatingSummary operating={portfolio.operating} commands={availableCommands} />
               </>
             ) : null}
           </>

@@ -3,7 +3,6 @@ import { PButtonPure, PFlyout, PHeading, PIcon, PLinkPure } from '@porsche-desig
 import { useLocation, useNavigate } from 'react-router'
 import { routeConfig, routeForPath } from './routes'
 import ThemeToggle from './components/ThemeToggle'
-import CopyCommand from './components/CopyCommand'
 import WorkspaceStatus from './components/WorkspaceStatus'
 import { useWorkspaceHealth } from './hooks/useWorkspaceHealth'
 
@@ -61,30 +60,6 @@ function ProductNavigation({ activePath, compact = false, onNavigate }: ProductN
         </PLinkPure>
       ))}
     </nav>
-  )
-}
-
-function CommandReference() {
-  return (
-    <footer
-      className="border-t border-contrast-low bg-surface px-static-md py-static-sm md:px-static-lg"
-      aria-label="Command reference"
-      data-testid="command-reference"
-    >
-      <div className="flex min-w-0 flex-wrap items-center gap-x-static-lg gap-y-static-xs text-xs">
-        <strong className="shrink-0 text-primary">Commands</strong>
-        <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs p-0">
-          {['/ideate', '/design <change-id>', '/orchestrate', '/finalize-change <change-id>'].map((command) => (
-            <li key={command} className="min-w-0">
-              <CopyCommand command={command} />
-            </li>
-          ))}
-        </ul>
-        <span className="h-4 border-l border-contrast-low" aria-hidden="true" />
-        <span className="shrink-0 text-contrast-medium">Recovery</span>
-        <CopyCommand command="/resolve-delivery-attention <change-id> <attention-id>" />
-      </div>
-    </footer>
   )
 }
 
@@ -175,7 +150,6 @@ export default function CockpitShell() {
             )}
           </Suspense>
         </div>
-        <CommandReference />
       </div>
     </div>
   )

@@ -16,11 +16,6 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
   return (
     <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
       <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
-      <div className="mb-static-sm hidden grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] text-2xs font-semibold uppercase text-contrast-high md:grid" aria-hidden="true">
-        <span className="px-static-sm py-static-xs">Work</span>
-        <span className="px-static-sm py-static-xs">Progress</span>
-        <span className="px-static-sm py-static-xs">Status</span>
-      </div>
       <div className="grid gap-static-sm">
         {designStatuses.map((status) => {
           const changeId = status.change_id
@@ -34,7 +29,7 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
               ].join(' ')}
               data-design-work={changeId}
             >
-              <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:gap-0">
+              <dl className="grid gap-static-sm md:grid-cols-[minmax(0,60fr)_minmax(0,40fr)] md:gap-0">
                 <div className="min-w-0 md:pr-static-sm">
                   <dt className="sr-only">Work</dt>
                   <dd>
@@ -51,16 +46,11 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
                     <code className="text-xs text-contrast-medium">{changeId}</code>
                   </dd>
                 </div>
-                <div className="md:px-static-sm">
-                  <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
-                  <dd>
-                    <strong className="font-medium text-primary">Design</strong>
-                    <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
-                  </dd>
-                </div>
                 <div className="md:pl-static-sm">
-                  <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
+                  <dt className="sr-only">State</dt>
                   <dd>
+                    <strong className="block font-medium text-primary">Design</strong>
+                    <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
                     <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName('ready')}`} data-status-tone="ready">Needs design</span>
                     <CopyCommand command={designCommand(changeId)} className="mt-1" />
                   </dd>

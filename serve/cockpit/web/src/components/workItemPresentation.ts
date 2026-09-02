@@ -20,6 +20,10 @@ export interface WorkItemStatusPresentation {
   detail: string | null
 }
 
+function distinctDetail(label: string, detail: string | null): string | null {
+  return detail && detail !== label ? detail : null
+}
+
 const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   'finalization-invalidated': 'Finalization invalidated',
   'review-repair': 'Review feedback needed',
@@ -38,14 +42,14 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
     return {
       label: 'Publication attention',
       tone: 'attention',
-      detail: item.needs_headline ?? item.next_step,
+      detail: distinctDetail('Publication attention', item.needs_headline ?? item.next_step),
     }
   }
   if (item.publication_phase === 'pull-request-draft' && item.needs === 'you') {
     return {
       label: 'Publication needs reconciliation',
       tone: 'attention',
-      detail: item.needs_headline ?? item.next_step,
+      detail: distinctDetail('Publication needs reconciliation', item.needs_headline ?? item.next_step),
     }
   }
   const tone: WorkItemStatusTone = item.publication_phase === 'acceptance-observed'
@@ -60,7 +64,7 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
   return {
     label: PUBLICATION_PHASE_LABELS[item.publication_phase],
     tone,
-    detail: item.needs_headline,
+    detail: distinctDetail(PUBLICATION_PHASE_LABELS[item.publication_phase], item.needs_headline),
   }
 }
 
