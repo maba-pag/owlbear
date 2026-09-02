@@ -5,7 +5,6 @@ import type {
   WorkItemCardView,
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
-import CopyCommand from './CopyCommand'
 import { StatusChip, WorkRow } from './DeliveryPrimitives'
 import {
   PROGRESS_STAGE_LABELS,
@@ -56,10 +55,7 @@ function ItemLink({
 
 function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
   const navigate = useNavigate()
-  if (item.action.kind === 'none' || !item.action.label) return null
-  if (item.action.command) {
-    return <CopyCommand command={item.action.command} />
-  }
+  if (item.action.kind === 'none' || !item.action.label || item.action.command) return null
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
   return (
@@ -84,7 +80,8 @@ function ProgressState({ item }: { item: WorkItemCardView }) {
   const stage = item.stage === null ? null : PROGRESS_STAGE_LABELS[item.stage]
   const quantified = item.progress.done !== null && item.progress.total !== null && item.progress.total > 0
   const complete = quantified && item.progress.done === item.progress.total
-  if (complete) return null
+  const state = workItemStatus(item)
+  if (complete || (!stage && item.progress.label === state.label)) return null
   const percentage = quantified
     ? Math.min(100, Math.round((item.progress.done as number / (item.progress.total as number)) * 100))
     : null
@@ -115,7 +112,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
       <StatusChip label={state.label} tone={state.tone} />
       {state.detail ? <span className="mt-1 block text-xs text-contrast-medium">{state.detail}</span> : null}
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
+      {item.action.kind !== 'none' && !item.action.command ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
     </span>
   )
 }

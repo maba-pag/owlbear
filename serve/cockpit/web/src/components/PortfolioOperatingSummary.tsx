@@ -6,7 +6,6 @@ import type {
   WorkItemPortfolioTotals,
 } from '../api/workItems'
 import CopyCommand from './CopyCommand'
-import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
@@ -25,15 +24,15 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case 'intervene':
       return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return <>Continue Design with:{guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}</>
+      return <>Continue Design for: {guidance.change_ids.join(', ')}.</>
     case 'start-orchestration':
-      return <>Process {countLabel(guidance.work_count, 'queued work item')} with:<Command>/orchestrate</Command></>
+      return <>Process {countLabel(guidance.work_count, 'queued work item')}.</>
     case 'work-underway':
-      return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
+      return <>An orchestration session is already working; no new session is needed.</>
     case 'wait':
       return <>No session action needed.</>
     case 'create-change':
-      return <>Start with:<Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command></>
+      return <>Start a new Change.</>
   }
 }
 
@@ -163,11 +162,11 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
 export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps) {
   if (operating.guidance.length === 0 && commands.length === 0) return null
   return (
-    <aside className="grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-x-static-md" aria-label="Session suggestions">
+    <aside className="grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-x-static-md" aria-label="Delivery guidance">
       {operating.guidance.length > 0 ? (
         <>
           <strong className="text-primary">Next session</strong>
-          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0">
+          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0" data-testid="portfolio-next-session">
             {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
           </ul>
         </>

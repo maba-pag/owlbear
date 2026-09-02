@@ -1,11 +1,11 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChangeGroupView, DeliveryHealthResponse, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'
+import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
 import DesignWorkSection from '../components/DesignWorkSection'
-import { designWorkTitle } from '../components/designWorkPresentation'
+import { designCommand, designWorkTitle } from '../components/designWorkPresentation'
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
 import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
@@ -318,21 +318,25 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
-function DeliveryIssuesSection({ health, statuses }: { health: DeliveryHealthResponse; statuses: PortfolioChangeLifecycleStatus[] }) {
-  const diagnostics = health.status === 'attention' ? health.diagnostics : []
+function DeliveryIssuesSection({ diagnostics, statuses }: { diagnostics: DeliveryHealthDiagnostic[]; statuses: PortfolioChangeLifecycleStatus[] }) {
   const statusChangeIds = new Set(statuses.map((status) => status.change_id))
   const additionalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.change_id === null || !statusChangeIds.has(diagnostic.change_id))
   const diagnosticByChangeId = new Map(diagnostics.flatMap((diagnostic) => diagnostic.change_id ? [[diagnostic.change_id, diagnostic] as const] : []))
   const issueCount = statuses.length + additionalDiagnostics.length
   if (issueCount === 0) return null
   return (
-    <details className="min-w-0 rounded-lg border border-warning bg-warning-low" data-testid="delivery-issues-section">
-      <summary className="flex cursor-pointer list-none items-center gap-static-sm px-static-sm py-static-sm text-sm font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+    <section className="min-w-0 rounded-lg border border-warning bg-warning-low" data-testid="delivery-issues-section" aria-labelledby="delivery-issues-heading">
+      <div className="flex items-center gap-static-sm px-static-sm py-static-sm">
         <PIcon name="warning" size="small" aria-hidden="true" />
-        <span>Delivery issues</span>
+        <div className="min-w-0 flex-1">
+          <h2 id="delivery-issues-heading" className="m-0 text-sm font-semibold text-primary">Delivery issues</h2>
+          <p className="mt-1 text-xs text-contrast-medium">{statuses.length > 0 ? `${statuses.length} Change${statuses.length === 1 ? '' : 's'} unavailable to Delivery.` : `${issueCount} Delivery issue${issueCount === 1 ? '' : 's'} need review.`}</p>
+        </div>
         <span className="ml-auto rounded-full border border-warning px-static-xs py-1 text-xs tabular-nums">{issueCount}</span>
-      </summary>
-      <div className="grid gap-static-sm border-t border-warning px-static-sm py-static-sm" role="list">
+      </div>
+      <details className="border-t border-warning">
+        <summary className="cursor-pointer px-static-sm py-static-xs text-xs font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">View issue details</summary>
+        <div className="grid gap-static-sm border-t border-warning px-static-sm py-static-sm" role="list">
         {statuses.map((status) => (
           <article key={status.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-status={status.change_id} role="listitem">
             <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
@@ -357,9 +361,25 @@ function DeliveryIssuesSection({ health, statuses }: { health: DeliveryHealthRes
             </dl>
           </article>
         ))}
-      </div>
-    </details>
+        </div>
+      </details>
+    </section>
   )
+}
+
+function guidanceCommands(guidance: PortfolioGuidance): string[] {
+  switch (guidance.kind) {
+    case 'resume-design':
+      return guidance.change_ids.map((changeId) => designCommand(changeId))
+    case 'start-orchestration':
+    case 'work-underway':
+      return ['/orchestrate']
+    case 'create-change':
+      return ['/ideate', '/design <change-id>']
+    case 'intervene':
+    case 'wait':
+      return []
+  }
 }
 
 function EmptyDetail({
@@ -438,11 +458,23 @@ export default function WorkPortfolioPage() {
   const visibleUnavailableStatuses = designMatchesAttention && (!deferredChange || unavailableStatuses.some((status) => status.change_id === deferredChange))
     ? unavailableStatuses.filter((status) => !deferredChange || status.change_id === deferredChange)
     : []
+  const visibleHealthDiagnostics = designMatchesAttention && portfolio.health.status === 'attention'
+    ? portfolio.health.diagnostics.filter((diagnostic) => !deferredChange || diagnostic.change_id === deferredChange)
+    : []
   const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length
   const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
   const availableCommands = Array.from(new Set(
-    filteredGroups.flatMap((group) => group.items.map((item) => item.action.command).filter((command): command is string => Boolean(command))),
+    [
+      ...filteredGroups.flatMap((group) => group.items.map((item) => item.action.command).filter((command): command is string => Boolean(command))),
+      ...visibleDesignWorkStatuses.map((status) => designCommand(status.change_id)),
+      ...portfolio.operating.guidance.flatMap(guidanceCommands),
+    ].filter((command) => {
+      if (!selected) return true
+      if (selected.itemKey === 'design') return command !== designCommand(selected.changeId)
+      return !filteredGroups.some((group) => group.change_id === selected.changeId
+        && group.items.some((item) => item.item_key === selected.itemKey && item.action.command === command))
+    }),
   ))
 
   const closeInspector = (destination: FocusDestination = 'trigger') => {
@@ -602,7 +634,7 @@ export default function WorkPortfolioPage() {
 
             {hasData ? (
               <>
-                <DeliveryIssuesSection health={portfolio.health} statuses={visibleUnavailableStatuses} />
+                <DeliveryIssuesSection diagnostics={visibleHealthDiagnostics} statuses={visibleUnavailableStatuses} />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}

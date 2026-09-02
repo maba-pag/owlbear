@@ -936,12 +936,20 @@ function PublicationSection(props: WorkItemDetailProps) {
         : action.kind === 'resolve-attention'
           ? props.pendingAction === 'attention-resolve'
           : props.pendingAction === 'change-resume'
+  const statusTone = workItemStatus({ ...props.detail.item.card, publication_phase: publication.phase }).tone
+  const situationTone = statusTone === 'attention' || statusTone === 'blocked'
+    ? 'warning'
+    : statusTone === 'active'
+      ? 'info'
+    : statusTone === 'complete'
+      ? 'success'
+      : 'neutral'
   const invalidationReason = publication.invalidated_expected_head && publication.invalidated_observed_head
     ? `The Change head moved from ${publication.invalidated_expected_head.slice(0, 12)} to ${publication.invalidated_observed_head.slice(0, 12)}, so the previous finalization no longer matches.`
     : null
   return (
     <section className="min-w-0" aria-labelledby="work-publication-heading">
-      <SectionCard tone="warning" className="border-l-4 p-static-md">
+      <SectionCard tone={situationTone} className="border-l-4 p-static-md">
         <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
         <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
@@ -975,7 +983,7 @@ function PublicationSection(props: WorkItemDetailProps) {
       <ExternalHeadAdoptionSection {...props} />
       <details className="mt-static-md border-t border-contrast-low pt-static-sm">
         <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">Publication evidence</summary>
-      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
+        <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
         <IdentityRow label="Repository" value={publication.repository} />
         {publication.repository && publication.pull_request_number ? (
           <>
@@ -997,7 +1005,6 @@ function PublicationSection(props: WorkItemDetailProps) {
         <IdentityRow label="Target head" value={publication.target_sync?.target_head ?? null} />
         <IdentityRow label="Target-sync merge result" value={publication.target_sync?.merged_head ?? null} />
       </dl>
-      <PublicationChecksSection {...props} />
       {publication.target_sync ? (
         <p className="mt-static-sm text-xs text-contrast-medium">
           Last target sync: {publication.target_sync.target_branch}
@@ -1016,15 +1023,21 @@ function PublicationSection(props: WorkItemDetailProps) {
           </ol>
         </div>
       ) : null}
-      {((publication.pending_checkpoint_attempt_count ?? 0) > 0
-        || publication.pending_checkpoint_error_code) ? (
-        <div className="mt-static-sm border-l-4 border-warning bg-surface p-static-sm text-sm" data-testid="checkpoint-diagnostics" role={publication.pending_checkpoint_error_code ? 'alert' : 'status'}>
+      {publication.phase === 'checkpoint-pending' && ((publication.pending_checkpoint_attempt_count ?? 0) > 0
+        || publication.pending_checkpoint_error_code
+        || publication.pending_checkpoint_head
+        || publication.pending_checkpoint_triggers.length > 0) ? (
+        <div className={`mt-static-sm border-l-2 p-static-sm text-sm ${publication.pending_checkpoint_error_code || (publication.pending_checkpoint_attempt_count ?? 0) > 0 ? 'border-warning bg-surface' : 'border-info bg-info-low'}`} data-testid="checkpoint-diagnostics" role={publication.pending_checkpoint_error_code ? 'alert' : 'status'}>
           <p><strong>Checkpoint recovery</strong></p>
-          <p className="mt-static-xs">{publication.pending_checkpoint_attempt_count ?? 0} attempt{publication.pending_checkpoint_attempt_count === 1 ? '' : 's'} recorded</p>
+          {(publication.pending_checkpoint_attempt_count ?? 0) > 0 ? <p className="mt-static-xs">{publication.pending_checkpoint_attempt_count} attempt{publication.pending_checkpoint_attempt_count === 1 ? '' : 's'} recorded</p> : null}
+          {publication.pending_checkpoint_head ? <p className="mt-static-xs break-all text-xs text-contrast-medium">Pending head: <code>{publication.pending_checkpoint_head}</code></p> : null}
+          {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-xs break-words text-xs text-contrast-medium">Triggered by: {Array.from(new Set(publication.pending_checkpoint_triggers)).join(', ')}</p> : null}
           {publication.pending_checkpoint_last_attempted_at ? <p className="mt-static-xs text-xs text-contrast-medium">Last attempt: <time dateTime={publication.pending_checkpoint_last_attempted_at}>{publication.pending_checkpoint_last_attempted_at}</time></p> : null}
           {publication.pending_checkpoint_error_code ? <p className="mt-static-xs break-words"><strong>{publication.pending_checkpoint_error_code}</strong>{publication.pending_checkpoint_error_detail ? `: ${publication.pending_checkpoint_error_detail}` : ''}</p> : null}
         </div>
       ) : null}
+      </details>
+      <PublicationChecksSection {...props} />
       {canSupersede ? (
         <PButton
           className="mt-static-md"
@@ -1038,7 +1051,6 @@ function PublicationSection(props: WorkItemDetailProps) {
           {props.pendingAction === 'publication-supersede' ? 'Superseding...' : 'Supersede publication'}
         </PButton>
       ) : null}
-      </details>
       <TargetSyncSection {...props} />
       <WorktreeRecoverySection {...props} />
       <WorktreeCleanupSection {...props} />

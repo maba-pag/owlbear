@@ -872,10 +872,10 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(within(table).getAllByText('OUT-001', { selector: 'code' }).length).toBeGreaterThan(0)
   expect(within(table).getAllByText('Portfolio redesign')).toHaveLength(1)
   expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1Running')
-  const guidance = screen.getByLabelText('Session suggestions')
+  const guidance = screen.getByLabelText('Delivery guidance')
   expect(guidance).toHaveTextContent('Review 1 item that needs you')
-  expect(guidance).toHaveTextContent('/orchestrate is already working')
-  expect(within(guidance).getByText('/orchestrate', { selector: 'code' })).toBeInTheDocument()
+  expect(guidance).toHaveTextContent('An orchestration session is already working')
+  expect(within(guidance).getByTestId('portfolio-commands')).toHaveTextContent('/orchestrate')
   expect(within(guidance).getByRole('button', { name: 'Copy command /orchestrate' })).toBeInTheDocument()
   expect(guidance).not.toHaveTextContent('Start /orchestrate')
   expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -888,7 +888,7 @@ it('copies empty-portfolio session commands with the shared compact control', as
   currentPortfolio = portfolio([])
   renderPage()
 
-  const guidance = await screen.findByLabelText('Session suggestions')
+  const guidance = await screen.findByLabelText('Delivery guidance')
   const ideateCommand = within(guidance).getByRole('button', { name: 'Copy command /ideate' })
   fireEvent.click(ideateCommand)
 
@@ -909,8 +909,8 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   const designWork = await screen.findByTestId('design-work-section')
   expect(designWork).toHaveTextContent('Design Draft')
   expect(designWork).toHaveTextContent('Not admitted to Delivery')
-  expect(designWork).toHaveTextContent('/design design-draft')
-  expect(within(designWork).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
+  expect(designWork).not.toHaveTextContent('/design design-draft')
+  expect(within(designWork).queryByRole('button', { name: 'Copy command /design design-draft' })).not.toBeInTheDocument()
   expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'State'])
   expect(within(designWork).getAllByRole('definition')).toHaveLength(2)
   const status = screen.getByLabelText('Delivery portfolio status')
@@ -927,10 +927,9 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   fireEvent.click(screen.getByText('Design', { selector: 'summary' }))
   expect(detailView).toHaveTextContent('Keep authority explicit.')
   expect(requests.some(({ url }) => url === '/api/design-work/design-draft')).toBe(true)
-  const guidance = screen.getByLabelText('Session suggestions')
-  expect(guidance).toHaveTextContent('Continue Design with')
-  expect(within(guidance).getByText('/design design-draft', { selector: 'code' })).toBeInTheDocument()
-  expect(within(guidance).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
+  const guidance = screen.getByLabelText('Delivery guidance')
+  expect(guidance).toHaveTextContent('Continue Design for: design-draft')
+  expect(within(guidance).queryByTestId('portfolio-commands')).not.toBeInTheDocument()
 })
 
 it('uses Design-specific unavailable detail copy and retry action', async () => {
@@ -1124,7 +1123,7 @@ it('opens routed semantic detail with acceptance and bounded task evidence', asy
   fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(screen.getByLabelText('Session suggestions')).toBeInTheDocument()
+  expect(screen.getByLabelText('Delivery guidance')).toBeInTheDocument()
   expect(screen.getByTestId('work-portfolio-table')).toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Current delivery' })).not.toBeInTheDocument()
   expect(inspector).toHaveTextContent('Portfolio redesign / OUT-001')
@@ -1579,6 +1578,8 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(inspector).toHaveTextContent('Checkpoint pending')
   expect(inspector).toHaveTextContent('Finalized head')
   expect(inspector).toHaveTextContent('1'.repeat(40))
+  expect(inspector).toHaveTextContent('Pending head:')
+  expect(inspector).toHaveTextContent('Triggered by: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
   expect(publicationRow).toHaveTextContent('Checkpoint pending')
   expect(within(publicationRow).getByText('Checkpoint pending', { selector: '[data-status-tone]' })).toHaveAttribute('data-status-tone', 'active')
@@ -1647,6 +1648,7 @@ it('shows persisted checkpoint retry diagnostics and structured reconciliation e
   const inspector = await screen.findByTestId('work-item-detail')
   const diagnostics = within(inspector).getByTestId('checkpoint-diagnostics')
   expect(diagnostics).toHaveTextContent('2 attempts recorded')
+  expect(diagnostics).toHaveTextContent('Triggered by: verified-outcome')
   expect(diagnostics).toHaveTextContent('Last attempt: 2026-08-11T17:00:00+00:00')
   expect(diagnostics).toHaveTextContent('ERR_DELIVERY_CHECKPOINT_HEAD_MISSING')
   fireEvent.click(within(inspector).getByText('Publish checkpoint'))
@@ -1841,6 +1843,9 @@ it('shows publication history and keeps ordinary attention remedies available', 
   expect(inspector).toHaveTextContent(`Generation 2: owlbear/example #42 / ${'1'.repeat(40)}`)
   expect(within(inspector).getAllByText('Resolve publication attention')).not.toHaveLength(0)
   expect(within(inspector).getByTestId('publication-supersede')).toBeInTheDocument()
+  const evidence = within(inspector).getByText('Publication evidence', { selector: 'summary' }).closest('details')
+  expect(evidence).not.toHaveAttribute('open')
+  expect(within(inspector).getByTestId('publication-supersede')).toBeVisible()
 
   fireEvent.click(within(inspector).getByTestId('publication-supersede'))
   await waitFor(() => expect(requests).toContainEqual({
@@ -2043,8 +2048,8 @@ it('offers the finalization command from the Change publication row and detail v
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
-  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(3)
-  expect(within(screen.getByTestId('portfolio-commands')).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
+  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(1)
+  expect(within(screen.getByTestId('portfolio-commands')).queryByLabelText('Copy command /finalize-change change-alpha')).not.toBeInTheDocument()
 })
 
 it('keeps invalidated finalization heads distinct and offers re-finalization', async () => {
@@ -2092,6 +2097,7 @@ it('keeps invalidated finalization heads distinct and offers re-finalization', a
   expect(inspector).toHaveTextContent(`Observed head${'2'.repeat(40)}`)
   expect(inspector).toHaveTextContent('Next: Re-finalize the current Change head')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
+  expect(inspector.querySelector('[data-section-tone]')).toHaveAttribute('data-section-tone', 'warning')
 })
 
 it('shows GitHub merge as user-owned work with observation as the only Cockpit control', async () => {
@@ -3025,6 +3031,7 @@ it('shows finalized and accepted merge heads as distinct identities', async () =
   expect(detailView).toHaveTextContent(`Finalized head${'1'.repeat(40)}`)
   expect(detailView).toHaveTextContent(`Accepted merge commit${'2'.repeat(40)}`)
   expect(detailView).not.toHaveTextContent(/ancestor|descendant|merge method/i)
+  expect(detailView.querySelector('[data-section-tone]')).toHaveAttribute('data-section-tone', 'success')
 })
 
 it('moves a completed selected Change into completed history instead of leaving a dead route', async () => {

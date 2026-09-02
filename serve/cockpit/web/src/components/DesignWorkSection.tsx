@@ -1,8 +1,7 @@
 import { Link } from 'react-router'
 import type { PortfolioChangeLifecycleStatus } from '../api/workItems'
-import CopyCommand from './CopyCommand'
 import { StatusChip, WorkRow } from './DeliveryPrimitives'
-import { designCommand, designWorkTitle } from './designWorkPresentation'
+import { designWorkTitle } from './designWorkPresentation'
 
 interface DesignWorkSectionProps {
   statuses: PortfolioChangeLifecycleStatus[]
@@ -45,7 +44,6 @@ export default function DesignWorkSection({ statuses, selectedChangeId, onSelect
                     <strong className="block font-medium text-primary">Design</strong>
                     <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
                     <StatusChip label="Needs design" tone="ready" />
-                    <CopyCommand command={designCommand(changeId)} className="mt-1" />
                   </dd>
                 </div>
               </dl>

@@ -93,9 +93,9 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(table).toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(8)
     await expect(table).toContainText('Work portfolio E2E')
-    for (const column of ['Work', 'Progress', 'Status']) {
+    for (const column of ['Work', 'State']) {
       await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
-      await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
+      await expect(table.getByRole('columnheader', { name: column }).first()).not.toBeVisible()
     }
     await expect(table).toContainText('Decision required')
     await expect(table).toContainText('Ready for finalization')
@@ -119,11 +119,11 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page.getByTestId('work-filter-chip-needs')).not.toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(8)
 
-    const guidance = page.getByLabel('Session suggestions')
+    const guidance = page.getByLabel('Delivery guidance')
     await expect(guidance).toContainText('Review 2 items that need you')
     await expect(guidance).toContainText('No session action needed.')
-    await expect(guidance).toContainText('Continue Design with:')
-    await expect(guidance.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
+    await expect(guidance).toContainText('Continue Design for:')
+    await expect(guidance.getByTestId('portfolio-commands').getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
     const tableBox = await table.boundingBox()
     const guidanceBox = await guidance.boundingBox()
     expect(tableBox).not.toBeNull()
@@ -134,8 +134,8 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(publicationRow).toContainText('Publication')
     await expect(publicationRow).toContainText('Change: Publication release')
     await expect(publicationRow).toContainText('Ready for finalization')
-    await expect(publicationRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
-    await expect(publicationRow.locator('dd')).toHaveCount(3)
+    await expect(publicationRow.locator('dt')).toHaveText(['Work', 'State'])
+    await expect(publicationRow.locator('dd')).toHaveCount(2)
 
     const normalOutcome = (await visibleRows(page)).filter({ hasText: 'Publish operator guide' }).locator('td').first()
     await expect(normalOutcome).toHaveCSS('border-left-width', '4px')
@@ -186,40 +186,35 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(designSection).toContainText('Design Operations Roadmap')
     await expect(designSection).toContainText('Not admitted to Delivery')
     await expect(designSection.getByRole('heading', { name: 'Design work' })).toHaveCSS('border-bottom-width', '1px')
-    const designRow = designSection.locator('[data-design-work]')
+    const designRow = designSection.locator('[data-work-item]')
     await expect(designRow).toHaveCSS('border-left-width', '4px')
     await expect(designRow).toHaveCSS('border-top-left-radius', '8px')
-    await expect(designRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
-    await expect(designRow.locator('dd')).toHaveCount(3)
+    await expect(designRow.locator('dt')).toHaveText(['Work', 'State'])
+    await expect(designRow.locator('dd')).toHaveCount(2)
     const firstChange = table.locator(':scope > section').first()
-    const [changeHeadingBox, changeLabelsBox, changeRowBox, designBox, designHeadingBox, designLabelsBox, designRowBox] = await Promise.all([
+    const [changeHeadingBox, changeRowBox, designBox, designHeadingBox, designRowBox] = await Promise.all([
       firstChange.getByRole('heading').first().boundingBox(),
-      firstChange.locator('thead').boundingBox(),
       firstChange.locator('tbody tr').first().boundingBox(),
       designSection.boundingBox(),
       designSection.getByRole('heading', { name: 'Design work' }).boundingBox(),
-      designSection.locator(':scope > div[aria-hidden="true"]').boundingBox(),
       designRow.boundingBox(),
     ])
     expect(changeHeadingBox).not.toBeNull()
-    expect(changeLabelsBox).not.toBeNull()
     expect(changeRowBox).not.toBeNull()
     expect(designBox).not.toBeNull()
     expect(designHeadingBox).not.toBeNull()
-    expect(designLabelsBox).not.toBeNull()
     expect(designRowBox).not.toBeNull()
-    expect(changeLabelsBox!.y - (changeHeadingBox!.y + changeHeadingBox!.height)).toBeCloseTo(8, 0)
-    expect(changeRowBox!.y - (changeLabelsBox!.y + changeLabelsBox!.height)).toBeCloseTo(8, 0)
-    expect(designLabelsBox!.y - (designHeadingBox!.y + designHeadingBox!.height)).toBeCloseTo(8, 0)
-    expect(designRowBox!.y - (designLabelsBox!.y + designLabelsBox!.height)).toBeCloseTo(8, 0)
+    expect(changeRowBox!.y).toBeGreaterThanOrEqual(changeHeadingBox!.y + changeHeadingBox!.height)
+    expect(designRowBox!.y - (designHeadingBox!.y + designHeadingBox!.height)).toBeCloseTo(8, 0)
     expect(designBox!.y - (tableBox!.y + tableBox!.height)).toBeCloseTo(32, 0)
     expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(32, 0)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     const designCommand = '/design design-operations-roadmap'
     const designCommandButton = designRow.getByRole('button', { name: `Copy command ${designCommand}` })
+    await expect(designCommandButton).toHaveCount(0)
     await guidance.scrollIntoViewIfNeeded()
-    const guidanceCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
-    for (const commandButton of [designCommandButton, guidanceCommand]) {
+    const guidanceCommand = guidance.getByTestId('portfolio-commands').getByRole('button', { name: `Copy command ${designCommand}` })
+    for (const commandButton of [guidanceCommand]) {
       const visualContract = await commandButton.evaluate((button) => {
         const code = button.querySelector('code')
         const icon = button.querySelector('p-icon')
@@ -242,19 +237,7 @@ test.describe('assembled Delivery portfolio', () => {
       expect(visualContract!.centerDelta).toBeLessThanOrEqual(1)
       expect(visualContract!.codeInsideButton).toBe(true)
     }
-    const guidanceSpacing = await guidanceCommand.evaluate((button) => {
-      const wrapper = button.parentElement
-      const item = button.closest('li')
-      if (!wrapper || !item) return null
-      const prose = [...item.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
-      if (!prose) return null
-      const proseRange = document.createRange()
-      proseRange.selectNodeContents(prose)
-      return wrapper.getBoundingClientRect().left - proseRange.getBoundingClientRect().right
-    })
-    expect(guidanceSpacing).not.toBeNull()
-    expect(guidanceSpacing!).toBeCloseTo(8, 0)
-    const guidanceItems = guidance.locator('li')
+    const guidanceItems = guidance.getByTestId('portfolio-next-session').locator('li')
     const guidanceLayout = await guidanceItems.evaluateAll((items) => {
       const list = items[0]?.parentElement
       const boxes = items.map((item) => item.getBoundingClientRect())
@@ -267,10 +250,8 @@ test.describe('assembled Delivery portfolio', () => {
     expect(guidanceLayout.adjacentGap).not.toBeNull()
     expect(guidanceLayout.adjacentGap!).toBeGreaterThanOrEqual(32)
     expect(guidanceLayout.adjacentGap!).toBeLessThanOrEqual(64)
+    await expect(designCommandButton).toHaveCount(0)
     await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
-    await designCommandButton.locator('code').click()
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
-    await expect(page).toHaveURL(/\/delivery$/)
     await guidanceCommand.locator('code').click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
     await expect(page).toHaveURL(/\/delivery$/)
@@ -350,6 +331,8 @@ test.describe('assembled Delivery portfolio', () => {
     inspected = await inspect(page, 'Publication')
     await expect(inspected.detail).toContainText('Ready for finalization')
     await expect(inspected.detail).toContainText('Finalize the reviewed Change')
+    await expect(inspected.detail.locator('[data-section-tone="neutral"]')).toBeVisible()
+    await expect(inspected.detail.locator('[data-section-tone="warning"]')).toHaveCount(0)
     await expect(inspected.detail).not.toContainText(/merge now/i)
     await page.screenshot({ path: testInfo.outputPath('delivery-wide-publication-detail.png'), fullPage: true })
     await returnToPortfolio(page, inspected.trigger)
@@ -397,8 +380,8 @@ test.describe('assembled Delivery portfolio', () => {
 
     await expect(await visibleRows(page)).toHaveCount(8)
     await expect(page.getByTestId('design-work-section')).toBeVisible()
-    const guidance = page.getByLabel('Session suggestions')
-    await expect(guidance.locator('li')).toHaveCount(3)
+    const guidance = page.getByLabel('Delivery guidance')
+    await expect(guidance.getByTestId('portfolio-next-session').locator('li')).toHaveCount(3)
     await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
     await expectNoHorizontalOverflow(page)
 
@@ -443,9 +426,9 @@ test.describe('assembled Delivery portfolio', () => {
     const rows = await visibleRows(page)
     await expect(rows).toHaveCount(8)
     const publicationRow = page.getByLabel('Change publication for Publication release')
-    for (const field of ['Progress', 'Status']) {
-      await expect(publicationRow.getByText(field, { exact: true })).toBeVisible()
-    }
+    await expect(publicationRow.locator('dt')).toHaveText(['Work', 'State'])
+    await expect(publicationRow.locator('dt').first()).not.toBeVisible()
+    await expect(publicationRow.locator('dd')).toHaveCount(2)
     await expect(publicationRow).toHaveAttribute('aria-label', 'Change publication for Publication release')
     await expectNoHorizontalOverflow(page)
     const accessibility = await new AxeBuilder({ page }).analyze()

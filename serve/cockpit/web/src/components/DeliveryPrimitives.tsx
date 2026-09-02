@@ -48,7 +48,7 @@ export function WorkRow({ children, selected = false, needs = 'none', ariaLabel,
 }
 
 type SectionCardElement = 'section' | 'article' | 'div' | 'details'
-type SectionCardTone = 'neutral' | 'warning' | 'danger' | 'info'
+type SectionCardTone = 'neutral' | 'warning' | 'danger' | 'info' | 'success'
 
 interface SectionCardProps {
   children: ReactNode
@@ -67,6 +67,7 @@ const TONE_CLASS_NAMES: Record<SectionCardTone, string> = {
   warning: 'border-warning bg-warning-low',
   danger: 'border-danger bg-surface',
   info: 'border-info bg-info-low',
+  success: 'border-success bg-success-low',
 }
 
 export function SectionCard({
@@ -91,6 +92,7 @@ export function SectionCard({
         className,
       ].join(' ')}
       aria-label={ariaLabel}
+      data-section-tone={tone}
       data-stale={dataStale ? 'true' : undefined}
       data-testid={dataTestId}
     >

@@ -112,7 +112,7 @@ function CompletedRecord({
       ariaLabel={stale ? `${record.title}, previous search result` : undefined}
       dataStale={stale}
       dataTestId="completed-change-record"
-      className="relative grid gap-x-static-lg gap-y-static-sm border-b-0 py-static-md md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start"
+      className="relative grid gap-x-static-lg gap-y-static-sm p-static-sm md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start"
     >
       <div className="min-w-0">
         <PHeading tag="h3" size="small">
@@ -489,7 +489,7 @@ export default function CompletedHistoryWorkspace() {
           aria-describedby={showingStaleResults ? 'completed-history-stale-status' : undefined}
           data-testid="completed-history-results"
         >
-          <div className="min-w-0">
+          <div className="grid min-w-0 gap-static-sm">
             {history.page.records.map((record) => (
               <CompletedRecord
                 key={completedChangeRecordId(record)}
