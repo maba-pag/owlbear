@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -25,9 +26,7 @@ from owlbear_delivery.delivery_admission import DeliveryAuthorityRegistry
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     DeliveryDiscoveryRootError,
-    DeliveryDiscoveryStartupError,
     discover_persisted_changes,
-    require_startup_contracts,
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionKind,
@@ -51,6 +50,7 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
 )
+from owlbear_delivery.portfolio_operating import DeliveryHealthDiagnostic
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 
 if TYPE_CHECKING:
@@ -108,6 +108,13 @@ class DeliveryApplicationLoadError(RuntimeError):
 
 
 _REMOTE_REF_MISSING = 2
+_RECOVERABLE_ADMISSION_ERRORS = frozenset(
+    {
+        DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
+        DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
+    }
+)
+_logger = logging.getLogger(__name__)
 
 
 def _load_error(field: str, detail: str) -> DeliveryApplicationLoadError:
@@ -241,34 +248,38 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
             raise _load_error(field_name, detail)
 
 
-def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
+def _load_contracts(
+    runtime_root: Path,
+) -> tuple[dict[str, DeliveryContract], tuple[DeliveryHealthDiagnostic, ...]]:
     try:
         observations = discover_persisted_changes(runtime_root)
     except DeliveryDiscoveryRootError as exc:
         error = _load_error("runtime_root", exc.detail)
         raise error from exc
-    try:
-        return require_startup_contracts(observations)
-    except DeliveryDiscoveryStartupError as exc:
-        discovery_error = exc.observation.error
-        code = discovery_error.code if discovery_error is not None else None
-        if code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED:
-            detail = discovery_error.detail
-            error = _load_error("runtime_root", detail)
-            raise error from DeliveryRuntimeMigrationError(detail)
-        if code is DeliveryDiscoveryErrorCode.CONTRACT_IDENTITY_INVALID:
-            detail = "Delivery state identity is invalid"
-        elif code in {
-            DeliveryDiscoveryErrorCode.FRONTIER_UNAVAILABLE,
-            DeliveryDiscoveryErrorCode.FRONTIER_INVALID,
-            DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID,
-            DeliveryDiscoveryErrorCode.ADMISSION_FRONTIER_MISMATCH,
-        }:
-            detail = "Delivery runtime state is invalid"
-        else:
-            detail = "Delivery state is invalid"
-        error = _load_error("runtime_root", detail)
-        raise error from exc
+    contracts: dict[str, DeliveryContract] = {}
+    diagnostics: list[DeliveryHealthDiagnostic] = []
+    for observation in observations:
+        if observation.error is not None:
+            if observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED:
+                detail = observation.error.detail
+                error = _load_error("runtime_root", detail)
+                raise error from DeliveryRuntimeMigrationError(detail)
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code=observation.diagnostic_code or "runtime-unavailable",
+                    detail=observation.diagnostic_detail or "Persisted Delivery state is unavailable.",
+                    change_id=observation.change_id,
+                    path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                )
+            )
+        if (
+            observation.contract is not None
+            and observation.contract.change_id == observation.change_id
+            and (observation.error is None or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS)
+        ):
+            contracts[observation.change_id] = observation.contract
+    return contracts, tuple(diagnostics)
 
 
 def _load_host_config_model[T: BaseModel](path: Path, model: type[T], default: T) -> T:
@@ -330,7 +341,7 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
 def _bootstrap_remote_state(
     config: DeliveryStartupConfig,
     paths: _DeliveryPaths,
-) -> None:
+) -> tuple[DeliveryHealthDiagnostic, ...]:
     """Restore missing local Delivery state from remote semantic snapshots."""
     package_store = DesignPackageStore(
         paths.package_root,
@@ -343,14 +354,31 @@ def _bootstrap_remote_state(
             remote=config.remote,
             state_branch=config.delivery_state_branch,
         )
-        snapshots = state_publisher.read_snapshots()
+        inventory = state_publisher.read_snapshot_inventory()
     except DeliveryStatePublicationError as exc:
-        if _local_runtime_change_ids(paths.runtime_root):
-            return
-        error = _load_error("runtime_root", "remote Delivery-state snapshots are unavailable")
-        raise error from exc
-    if not snapshots:
-        return
+        return (
+            DeliveryHealthDiagnostic(
+                source="remote-state",
+                code="remote-state-unavailable",
+                detail=_bounded_health_detail(
+                    str(exc),
+                    "Remote Delivery-state snapshots are unavailable; local state was retained.",
+                ),
+                retry_safe=exc.retry_safe,
+            ),
+        )
+    diagnostics = [
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code=item.code,
+            detail=item.detail,
+            change_id=item.change_id,
+            path=item.path,
+        )
+        for item in inventory.diagnostics
+    ]
+    if not inventory.snapshots:
+        return tuple(diagnostics)
     coordinator = PortfolioCoordinator(paths.runtime_root)
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
@@ -360,18 +388,35 @@ def _bootstrap_remote_state(
         config.remote,
     )
     local_change_ids = _local_runtime_change_ids(paths.runtime_root)
-    for snapshot in snapshots:
+    for snapshot in inventory.snapshots:
         try:
             if snapshot.change_id in local_change_ids:
                 _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
             else:
                 _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
         except _DeferredRemoteStateReconciliationError:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-change-head-ahead",
+                    detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
+                    change_id=snapshot.change_id,
+                )
+            )
             continue
-        except DeliveryApplicationLoadError:
-            raise
-        except (OSError, RuntimeError, ValueError) as exc:
-            _bootstrap_failure("remote Delivery state could not be reconciled", exc)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-state-reconciliation-required",
+                    detail=_bounded_health_detail(
+                        str(exc),
+                        "Remote Delivery state could not be reconciled and was quarantined.",
+                    ),
+                    change_id=snapshot.change_id,
+                )
+            )
+    return tuple(diagnostics)
 
 
 def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each independent state owner.
@@ -777,12 +822,18 @@ def _bootstrap_failure(detail: str, cause: Exception | None = None) -> Never:
     raise error from cause
 
 
-def _compose_application(
+def _bounded_health_detail(detail: str, fallback: str) -> str:
+    compact = " ".join(detail.split())
+    return (compact or fallback)[:240]
+
+
+def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independent authority owners.
     config: DeliveryStartupConfig,
     host_config: DeliveryHostConfig,
     paths: _DeliveryPaths,
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
+    health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(
         paths.package_root,
@@ -802,7 +853,7 @@ def _compose_application(
         remote=config.remote,
         state_branch=config.delivery_state_branch,
     )
-    runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
+    runtimes, runtime_diagnostics = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
         package_store=package_store,
@@ -837,6 +888,7 @@ def _compose_application(
             if publication_provider is not None
             else None
         ),
+        health_diagnostics=(*health_diagnostics, *runtime_diagnostics),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
@@ -851,12 +903,25 @@ def _composed_runtimes(
     runtime_root: Path,
     contracts: dict[str, DeliveryContract],
     workspace_manager: ChangeWorkspaceManager,
-) -> dict[str, DeliveryRuntime]:
+) -> tuple[dict[str, DeliveryRuntime], tuple[DeliveryHealthDiagnostic, ...]]:
     runtimes = {}
+    diagnostics: list[DeliveryHealthDiagnostic] = []
     for change_id, contract in contracts.items():
         try:
             reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
-        except CoordinationConflictError:
+        except CoordinationConflictError as exc:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code="coordination-unavailable",
+                    detail=_bounded_health_detail(
+                        str(exc),
+                        "Delivery Change coordination is unavailable and was quarantined.",
+                    ),
+                    change_id=change_id,
+                    path=f".owlbear/delivery/runtime/coordination/changes/{change_id}.json",
+                )
+            )
             continue
         runtimes[change_id] = DeliveryRuntime(
             runtime_root,
@@ -864,7 +929,7 @@ def _composed_runtimes(
             workspace_manager=workspace_manager,
             migration_reviewed_head=reviewed_head,
         )
-    return runtimes
+    return runtimes, tuple(diagnostics)
 
 
 def load_delivery_application(
@@ -877,7 +942,24 @@ def load_delivery_application(
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
+    remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     if "delivery_state_branch" in config.model_fields_set:
-        _bootstrap_remote_state(config, paths)
-    contracts = _load_contracts(paths.runtime_root)
-    return _compose_application(config, host_config, paths, contracts, publication_provider)
+        remote_diagnostics = _bootstrap_remote_state(config, paths)
+    contracts, local_diagnostics = _load_contracts(paths.runtime_root)
+    health_diagnostics = (*remote_diagnostics, *local_diagnostics)
+    for diagnostic in health_diagnostics:
+        _logger.warning(
+            "Delivery health attention: source=%s code=%s change_id=%s detail=%s",
+            diagnostic.source,
+            diagnostic.code,
+            diagnostic.change_id or "portfolio",
+            diagnostic.detail,
+        )
+    return _compose_application(
+        config,
+        host_config,
+        paths,
+        contracts,
+        publication_provider,
+        health_diagnostics,
+    )

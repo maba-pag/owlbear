@@ -73,6 +73,10 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
     dependency_waits: [],
     guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
   },
+  health: {
+    status: 'healthy',
+    diagnostics: [],
+  },
 }
 
 const EMPTY_HISTORY: CompletedChangePage = { records: [], total_count: 0, next_cursor: null }

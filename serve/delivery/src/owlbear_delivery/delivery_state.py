@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NoReturn
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
@@ -151,6 +151,22 @@ class DeliveryStateSnapshot(_StateModel):
     def canonical_bytes(self) -> bytes:
         """Return canonical bytes for Git publication."""
         return _canonical_bytes(self)
+
+
+class DeliveryStateSnapshotDiagnostic(_StateModel):
+    """Bounded read-side diagnostic for one remote snapshot that cannot be used."""
+
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+
+
+class DeliveryStateSnapshotInventory(_StateModel):
+    """Valid remote snapshots and isolated diagnostics from one state-branch read."""
+
+    snapshots: tuple[DeliveryStateSnapshot, ...] = ()
+    diagnostics: tuple[DeliveryStateSnapshotDiagnostic, ...] = ()
 
 
 def _validate_snapshot_metadata(snapshot: DeliveryStateSnapshot) -> None:
@@ -330,6 +346,65 @@ class DeliveryStatePublisher:
                 continue
             snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path)))
         return tuple(sorted(snapshots, key=lambda item: item.change_id))
+
+    def read_snapshot_inventory(self) -> DeliveryStateSnapshotInventory:
+        """Fetch all remote snapshots while quarantining invalid per-Change records."""
+        remote_head = self._refresh_remote_head()
+        if remote_head is None:
+            return DeliveryStateSnapshotInventory()
+        paths = self._git("ls-tree", "-r", "--name-only", remote_head, "--", _STATE_ROOT).splitlines()
+        snapshots = []
+        diagnostics = []
+        for path in paths:
+            if not path.endswith("/snapshot.json"):
+                continue
+            change_id = _snapshot_path_change_id(path)
+            if change_id is None:
+                diagnostics.append(
+                    DeliveryStateSnapshotDiagnostic(
+                        path=path,
+                        code="snapshot-path-invalid",
+                        detail="Remote Delivery snapshot path is invalid and was quarantined.",
+                    )
+                )
+                continue
+            try:
+                snapshot = DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path))
+            except (OSError, RuntimeError, subprocess.SubprocessError):
+                diagnostics.append(
+                    DeliveryStateSnapshotDiagnostic(
+                        change_id=change_id,
+                        path=path,
+                        code="snapshot-unreadable",
+                        detail="Remote Delivery snapshot could not be read and was quarantined.",
+                    )
+                )
+                continue
+            except (TypeError, ValueError, ValidationError) as exc:
+                diagnostics.append(
+                    DeliveryStateSnapshotDiagnostic(
+                        change_id=change_id,
+                        path=path,
+                        code=_snapshot_validation_code(exc),
+                        detail=_snapshot_validation_detail(exc),
+                    )
+                )
+                continue
+            if snapshot.change_id != change_id:
+                diagnostics.append(
+                    DeliveryStateSnapshotDiagnostic(
+                        change_id=change_id,
+                        path=path,
+                        code="snapshot-path-identity-mismatch",
+                        detail="Remote Delivery snapshot Change identity does not match its state path.",
+                    )
+                )
+                continue
+            snapshots.append(snapshot)
+        return DeliveryStateSnapshotInventory(
+            snapshots=tuple(sorted(snapshots, key=lambda item: item.change_id)),
+            diagnostics=tuple(sorted(diagnostics, key=lambda item: item.path)),
+        )
 
     def read_snapshot(self, change_id: str) -> DeliveryStateSnapshot | None:
         """Fetch and read one remote Change snapshot."""
@@ -534,6 +609,33 @@ def _snapshot_path(change_id: str) -> str:
     return f"{_STATE_ROOT}/{change_id}/snapshot.json"
 
 
+def _snapshot_path_change_id(path: str) -> str | None:
+    prefix = f"{_STATE_ROOT}/"
+    suffix = "/snapshot.json"
+    if not path.startswith(prefix) or not path.endswith(suffix):
+        return None
+    change_id = path[len(prefix) : -len(suffix)]
+    return change_id if _CHANGE_ID_PATTERN.fullmatch(change_id) is not None else None
+
+
+def _snapshot_validation_code(error: Exception) -> str:
+    if "snapshot identity is invalid" in str(error):
+        return "snapshot-identity-invalid"
+    return "snapshot-invalid"
+
+
+def _snapshot_validation_detail(error: Exception) -> str:
+    if isinstance(error, ValidationError):
+        errors = error.errors(include_url=False, include_context=False, include_input=False)
+        if errors:
+            first = errors[0]
+            location = first.get("loc")
+            field = ".".join(str(part) for part in location) if isinstance(location, tuple | list) else "snapshot"
+            message = " ".join(str(first.get("msg", "invalid value")).split())
+            return f"Remote Delivery snapshot field {field} is invalid: {message}"[:240]
+    return "Remote Delivery snapshot is invalid and was quarantined."
+
+
 def _validate_change_id(change_id: str) -> None:
     if _CHANGE_ID_PATTERN.fullmatch(change_id) is None:
         message = "Delivery-state Change identity is invalid"
@@ -588,6 +690,18 @@ def _raise_state_conflict(detail: str) -> NoReturn:
 
 def _raise_state_value_error(detail: str) -> NoReturn:
     raise ValueError(detail)
+
+
+__all__ = [
+    "DeliveryStateConflictError",
+    "DeliveryStatePublicationError",
+    "DeliveryStatePublicationReceipt",
+    "DeliveryStatePublisher",
+    "DeliveryStateResponseUnknownError",
+    "DeliveryStateSnapshot",
+    "DeliveryStateSnapshotDiagnostic",
+    "DeliveryStateSnapshotInventory",
+]
 
 
 def _raise_state_response_unknown(detail: str) -> NoReturn:

@@ -49,6 +49,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
     PortfolioChangeAdmission,
     PortfolioChangeLifecycleStatus,
     PortfolioGuidance,
@@ -109,9 +112,14 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
 
 
 class _DeliveryApplicationFake:
-    def __init__(self, failures: dict[str, Exception] | None = None) -> None:
+    def __init__(
+        self,
+        failures: dict[str, Exception] | None = None,
+        health: DeliveryHealthView | None = None,
+    ) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self.failures = failures or {}
+        self.health = health or DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
@@ -122,6 +130,7 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(
             groups=self._work_item_groups(),
             operating=self._portfolio_operating_view(),
+            health=self.health,
         )
 
     @staticmethod
@@ -563,8 +572,11 @@ class _DeliveryApplicationFake:
         return records[1] if args[1] == "1" * 64 else records[0]
 
 
-def _client(failures: dict[str, Exception] | None = None) -> tuple[TestClient, _DeliveryApplicationFake]:
-    application = _DeliveryApplicationFake(failures)
+def _client(
+    failures: dict[str, Exception] | None = None,
+    health: DeliveryHealthView | None = None,
+) -> tuple[TestClient, _DeliveryApplicationFake]:
+    application = _DeliveryApplicationFake(failures, health)
     return TestClient(assemble_target_app(application)), application  # type: ignore[arg-type]
 
 
@@ -720,6 +732,40 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         ("portfolio", ()),
         ("show", ("change-a", "outcome:OUT-001")),
     ]
+
+
+def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
+    client, _application = _client(
+        health=DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION,
+            diagnostics=(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code="contract-identity-invalid",
+                    detail="Persisted Change contract identity is invalid",
+                    change_id="quarantined-change",
+                    path=".owlbear/delivery/runtime/changes/quarantined-change",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get("/api/work-items")
+
+    assert response.status_code == 200
+    assert response.json()["health"] == {
+        "status": "attention",
+        "diagnostics": [
+            {
+                "source": "local-runtime",
+                "code": "contract-identity-invalid",
+                "detail": "Persisted Change contract identity is invalid",
+                "change_id": "quarantined-change",
+                "path": ".owlbear/delivery/runtime/changes/quarantined-change",
+                "retry_safe": False,
+            },
+        ],
+    }
 
 
 def test_detail_target_sync_uses_target_branch_wire_contract() -> None:

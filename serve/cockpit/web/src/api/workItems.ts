@@ -155,10 +155,27 @@ export interface PortfolioOperatingView {
   guidance: PortfolioGuidance[]
 }
 
+export type DeliveryHealthStatus = 'healthy' | 'attention'
+
+export interface DeliveryHealthDiagnostic {
+  source: string
+  code: string
+  detail: string
+  change_id: string | null
+  path: string | null
+  retry_safe: boolean
+}
+
+export interface DeliveryHealthResponse {
+  status: DeliveryHealthStatus
+  diagnostics: DeliveryHealthDiagnostic[]
+}
+
 export interface WorkItemPortfolioResponse {
   groups: ChangeGroupView[]
   totals: WorkItemPortfolioTotals
   operating: PortfolioOperatingView
+  health: DeliveryHealthResponse
 }
 
 export type AcceptanceReconciliationStatus =

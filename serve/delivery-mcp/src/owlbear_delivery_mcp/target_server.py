@@ -38,6 +38,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryOperatorContext,
     PortfolioApplication,
 )
+from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
@@ -71,6 +72,7 @@ from owlbear_delivery_mcp.target_models import (
     CreateDesignSessionRequest,
     DeferChangeParams,
     DeferChangeRequest,
+    DeliveryHealthResponse,
     DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
@@ -141,6 +143,7 @@ DELIVERY_OPERATION_NAMES = (
     "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_operator_context",
@@ -190,6 +193,7 @@ _DELIVERY_READS = frozenset(
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_operator_context",
@@ -314,6 +318,12 @@ class TargetMCPAdapter:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
+        """Return bounded diagnostics for quarantined or unavailable Delivery state."""
+        params = self._validate(EmptyParams, request)
+        health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
+        return DeliveryHealthResponse.from_view(health)
 
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""

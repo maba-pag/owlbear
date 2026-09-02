@@ -86,6 +86,7 @@ _TARGET_ROLE_TOOLS = {
     "orchestrator": {
         "list_work_items",
         "acquire_frontier_work",
+        "delivery_health",
         "transition_delivery",
         "recover_claim",
         "recover_integration_repair_claim",

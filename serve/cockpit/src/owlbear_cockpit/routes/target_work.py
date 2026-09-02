@@ -28,6 +28,7 @@ from owlbear_cockpit.target_models import (
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
+    DeliveryHealthResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
     NeedsCounts,
@@ -59,6 +60,7 @@ from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_deliv
 from owlbear_delivery.portfolio_application import (
     PortfolioApplication,  # noqa: TC001 - FastAPI evaluates this annotation.
 )
+from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemActivityState,
@@ -82,10 +84,12 @@ class TargetCockpitService:
     ) -> WorkItemPortfolioResponse:
         """Return Change-grouped current Work Items from exact snapshots."""
         view = self._invoke(self._application.portfolio_read_view)
+        health = getattr(view, "health", DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY))
         return WorkItemPortfolioResponse(
             groups=view.groups,
             totals=_portfolio_totals(view.groups),
             operating=PortfolioOperatingResponse.from_view(view.operating),
+            health=DeliveryHealthResponse.from_view(health),
         )
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:

@@ -25,7 +25,7 @@ The main public areas are:
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
-| Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
+| Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, task progress, and bounded Delivery health diagnostics |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
@@ -47,6 +47,14 @@ discovered or replaced contract when the persisted evidence is actionable, and r
 membership when persisted authority is removed. Frontier access remains read-through. A read-side
 reconciliation does not publish authority, allocate worktrees, or rewrite a valid frontier.
 
+Startup reads remote snapshots and local Change entries independently. A malformed snapshot, identity
+mismatch, missing per-Change authority file, or Change-specific coordination failure is quarantined
+as bounded health attention; valid sibling Changes remain available. Quarantined Changes stay visible
+in status and health projections when a last-known view exists, but they are excluded from work-item
+queues, claims, acquisition, and dispatch. Use the read-only `delivery_health()` operation through
+the MCP adapter, or the Cockpit Delivery health section, to inspect the source, code, Change ID, and
+bounded detail. Workspace, Git, configuration, and unfinished migration failures remain startup-fatal.
+
 The operating projection exposes explicit status axes instead of inferring lifecycle from runtime
 map membership: `admission`, `stage`, `actionable_runtime`, `diagnostic_code`, and
 `diagnostic_detail`. Its active status population is built from verified package IDs plus persisted
@@ -60,9 +68,8 @@ genuine Design packages visible. Completed history remains a separate surface.
 | Admitted Change explicitly returned to Design | `admission=admitted` and `stage=design`; it is included in `design_required_change_ids`, not the draft list. |
 | Admitted Change without an actionable runtime | Admission remains visible with `actionable_runtime=false` and the generic `runtime_unavailable` diagnostic; it is never recast as unadmitted Design. |
 
-Cause-specific missing-coordination classification is a separate follow-up Change. The Delivery MCP
-operation inventory is also unchanged by this remediation; user-control parity remains a separate,
-explicitly user-directed follow-up.
+The Delivery MCP operation inventory includes the read-only `delivery_health` projection. User-control
+parity remains a separate, explicitly user-directed follow-up.
 
 Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
 The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,

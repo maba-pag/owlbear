@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from owlbear_delivery.delivery_runtime import DeliveryChangeStage, DeliveryStage
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthStatus,
+    DeliveryHealthView,
     PortfolioChangeAdmission,
     PortfolioChangeLifecycleStatus,
     PortfolioGuidance,
@@ -124,12 +126,41 @@ class PortfolioOperatingResponse(_TargetHTTPModel):
         )
 
 
+class DeliveryHealthDiagnosticResponse(_TargetHTTPModel):
+    """Expose one bounded Delivery diagnostic to the Cockpit operator."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool
+
+
+class DeliveryHealthResponse(_TargetHTTPModel):
+    """Expose current Delivery availability and quarantined-state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnosticResponse, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: DeliveryHealthView) -> DeliveryHealthResponse:
+        """Adapt shared Delivery health without deriving new Cockpit state."""
+        return cls(
+            status=view.status,
+            diagnostics=tuple(
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
+            ),
+        )
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
     """Return Change-grouped current Work Items and independent totals."""
 
     groups: tuple[ChangeGroupView, ...]
     totals: WorkItemPortfolioTotals
     operating: PortfolioOperatingResponse
+    health: DeliveryHealthResponse
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):

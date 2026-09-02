@@ -72,6 +72,11 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
 )
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+)
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -238,6 +243,21 @@ class _RecordingApplication:
     def __init__(self, failures: dict[str, Exception] | None = None) -> None:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
         self.failures = failures or {}
+
+    def delivery_health(self) -> DeliveryHealthView:
+        self.calls.append(("delivery_health", (), {}))
+        return DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION,
+            diagnostics=(
+                DeliveryHealthDiagnostic(
+                    source="test",
+                    code="runtime-unavailable",
+                    detail="The fixture Change requires reconciliation.",
+                    change_id=CHANGE,
+                    retry_safe=True,
+                ),
+            ),
+        )
 
     def __getattr__(self, name: str) -> Any:  # noqa: C901
         def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912
@@ -495,6 +515,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "validate_delivery_contract": change,
         "admit_delivery_change": {"request": {"change_id": CHANGE, "active_claim_ids": []}},
         "list_work_items": {},
+        "delivery_health": {},
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
         "show_operator_context": {**change, "outcome_id": "OUT-001"},
@@ -772,6 +793,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.outcome_id == "OUT-001"
         assert result.target == DeliveryStage.PLANNING
         assert result.snapshot_version == DIGEST
+    elif operation_name == "delivery_health":
+        assert result.status is DeliveryHealthStatus.ATTENTION
+        assert result.diagnostics[0].change_id == CHANGE
+        assert result.diagnostics[0].retry_safe is True
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
@@ -816,6 +841,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_operator_context",

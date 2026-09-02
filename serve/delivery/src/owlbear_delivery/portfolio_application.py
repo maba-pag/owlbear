@@ -132,6 +132,9 @@ from owlbear_delivery.draft_pull_request import (
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
     PortfolioChangeAdmission,
     PortfolioChangeLifecycleStatus,
     PortfolioGuidanceFacts,
@@ -198,6 +201,11 @@ def _timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _health_detail(detail: str | None, fallback: str) -> str:
+    compact = " ".join((detail or "").split())
+    return (compact or fallback)[:_MAX_HEALTH_DETAIL_LENGTH]
+
+
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
 _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS = 2.0
@@ -217,6 +225,8 @@ _CHECKPOINT_RETRY_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"
 _CHECKPOINT_REVIEW_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
 _CHECKPOINT_MISSING_HEAD_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
 _MAX_CHECKPOINT_ERROR_DETAIL_LENGTH = 240
+_MAX_HEALTH_DETAIL_LENGTH = 240
+_MAX_HEALTH_DIAGNOSTICS = 64
 _INTENT_SUMMARY_HEADING = "Problem And Product Promise"
 
 
@@ -696,6 +706,7 @@ class DeliveryAcquisitionResult(_ApplicationModel):
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
+    health_hint: str | None = Field(default=None, max_length=240)
 
 
 class DeliveryPlanContext(_ApplicationModel):
@@ -882,6 +893,7 @@ class PortfolioReadView(_ApplicationModel):
 
     groups: tuple[ChangeGroupView, ...]
     operating: PortfolioOperatingView
+    health: DeliveryHealthView = DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
 
 
 class DeliveryCheckpointReconciliationResult(_ApplicationModel):
@@ -1024,6 +1036,7 @@ class PortfolioApplicationDependencies:
     delivery_state_publisher: DeliveryStatePublisher | None = None
     change_branch_publisher: ChangeBranchPublisher | None = None
     draft_pull_request_publisher: DraftPullRequestPublisher | None = None
+    health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1115,6 +1128,7 @@ class PortfolioApplication:
         self._delivery_state_publisher = dependencies.delivery_state_publisher
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
+        self._startup_health_diagnostics = dependencies.health_diagnostics
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -3186,6 +3200,8 @@ class PortfolioApplication:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
         for snapshot in self._portfolio_snapshots():
+            if snapshot.contract.change_id in self._runtime_reconciliation_errors:
+                continue
             if not self._is_work_portfolio_visible(snapshot):
                 continue
             projections.extend(WorkItemProjector(snapshot).list_items())
@@ -3205,6 +3221,7 @@ class PortfolioApplication:
         return tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in self._portfolio_snapshots()
+            if snapshot.contract.change_id not in self._runtime_reconciliation_errors
             if self._is_work_portfolio_visible(snapshot)
         )
 
@@ -3214,11 +3231,13 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
+            if snapshot.contract.change_id not in self._runtime_reconciliation_errors
             if self._is_work_portfolio_visible(snapshot)
         )
         return PortfolioReadView(
             groups=groups,
             operating=self._portfolio_operating_view(snapshots, groups),
+            health=self._delivery_health_view(),
         )
 
     def portfolio_operating_view(self) -> PortfolioOperatingView:
@@ -3227,9 +3246,70 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
+            if snapshot.contract.change_id not in self._runtime_reconciliation_errors
             if self._is_work_portfolio_visible(snapshot)
         )
         return self._portfolio_operating_view(snapshots, groups)
+
+    def delivery_health(self) -> DeliveryHealthView:
+        """Return bounded diagnostics for state excluded from Delivery authority."""
+        self._reconcile_runtimes()
+        return self._delivery_health_view()
+
+    def _delivery_health_view(self) -> DeliveryHealthView:
+        diagnostics: list[DeliveryHealthDiagnostic] = list(self._startup_health_diagnostics)
+        diagnostics.extend(
+            DeliveryHealthDiagnostic(
+                source="local-runtime",
+                code=observation.diagnostic_code or "runtime-unavailable",
+                detail=_health_detail(
+                    observation.diagnostic_detail,
+                    "Persisted Delivery state is unavailable.",
+                ),
+                change_id=observation.change_id,
+                path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+            )
+            for observation in self._discovered_changes.values()
+            if observation.error is not None
+        )
+        diagnostic_change_ids = {diagnostic.change_id for diagnostic in diagnostics if diagnostic.change_id is not None}
+        diagnostics.extend(
+            DeliveryHealthDiagnostic(
+                source="runtime-reconciliation",
+                code="runtime-reconciliation-required",
+                detail=_health_detail(detail, "Delivery runtime reconciliation is required."),
+                change_id=change_id,
+            )
+            for change_id, detail in self._runtime_reconciliation_errors.items()
+            if change_id not in diagnostic_change_ids
+        )
+        unique = {
+            (
+                diagnostic.source,
+                diagnostic.code,
+                diagnostic.detail,
+                diagnostic.change_id,
+                diagnostic.path,
+                diagnostic.retry_safe,
+            ): diagnostic
+            for diagnostic in diagnostics
+        }
+        ordered = tuple(
+            sorted(
+                unique.values(),
+                key=lambda item: (
+                    item.change_id or "",
+                    item.source,
+                    item.code,
+                    item.path or "",
+                ),
+            )
+        )
+        bounded = ordered[:_MAX_HEALTH_DIAGNOSTICS]
+        return DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION if bounded else DeliveryHealthStatus.HEALTHY,
+            diagnostics=bounded,
+        )
 
     def _portfolio_operating_view(
         self,
@@ -3237,7 +3317,10 @@ class PortfolioApplication:
         groups: tuple[ChangeGroupView, ...],
     ) -> PortfolioOperatingView:
         verified_package_ids = {package.change_id for package in self._package_store.list_verified()}
-        status_ids = sorted((*verified_package_ids, *self._discovered_changes))
+        health_change_ids = tuple(
+            diagnostic.change_id for diagnostic in self._startup_health_diagnostics if diagnostic.change_id is not None
+        )
+        status_ids = sorted((*verified_package_ids, *self._discovered_changes, *health_change_ids))
         change_statuses = tuple(
             status
             for status in (
@@ -3253,15 +3336,21 @@ class PortfolioApplication:
             for status in change_statuses
             if status.admitted and status.stage == DeliveryChangeStage.DESIGN
         )
-        claimed = self._claimed_work(snapshots)
-        queued = self._queued_work(snapshots)
+        operational_snapshots = tuple(
+            snapshot for snapshot in snapshots if snapshot.contract.change_id not in self._runtime_reconciliation_errors
+        )
+        claimed = self._claimed_work(operational_snapshots)
+        queued = self._queued_work(operational_snapshots)
+        operational_groups = tuple(
+            group for group in groups if group.change_id not in self._runtime_reconciliation_errors
+        )
         interventions = tuple(
             PortfolioWorkReference(
                 change_id=item.change_id,
                 item_key=item.item_key,
                 scope=_operating_scope(item.scope),
             )
-            for group in groups
+            for group in operational_groups
             for item in group.items
             if item.needs == WorkItemNeed.YOU
         )
@@ -3271,23 +3360,41 @@ class PortfolioApplication:
                 item_key=item.item_key,
                 scope=_operating_scope(item.scope),
             )
-            for group in groups
+            for group in operational_groups
             for item in group.items
             if item.needs == WorkItemNeed.DEPENDENCY
         )
-        snapshot_ids = {snapshot.contract.change_id for snapshot in snapshots}
+        snapshot_ids = {snapshot.contract.change_id for snapshot in operational_snapshots}
         unavailable_frontiers = tuple(
             observation.frontier
             for change_id, observation in sorted(self._discovered_changes.items())
-            if observation.admitted and change_id not in snapshot_ids and observation.frontier is not None
+            if (observation.admitted and change_id not in snapshot_ids and observation.frontier is not None)
         )
-        unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots) + sum(
-            not is_change_terminal(frontier) for frontier in unavailable_frontiers
+        unfinished_runtime_count = sum(
+            not is_change_terminal(snapshot.frontier) for snapshot in operational_snapshots
+        ) + sum(not is_change_terminal(frontier) for frontier in unavailable_frontiers)
+        unfinished_runtime_count += len(
+            {
+                diagnostic.change_id
+                for diagnostic in self._delivery_health_view().diagnostics
+                if diagnostic.change_id is not None
+            }
+            - snapshot_ids
+            - set(self._discovered_changes)
+        )
+        unfinished_runtime_count += len(
+            {
+                change_id
+                for change_id in self._runtime_reconciliation_errors
+                if change_id not in snapshot_ids
+                and change_id in self._discovered_changes
+                and self._discovered_changes[change_id].frontier is None
+            }
         )
         unfinished_change_count = unfinished_runtime_count
-        completed_change_count = sum(snapshot.frontier.change_completion is not None for snapshot in snapshots) + sum(
-            frontier.change_completion is not None for frontier in unavailable_frontiers
-        )
+        completed_change_count = sum(
+            snapshot.frontier.change_completion is not None for snapshot in operational_snapshots
+        ) + sum(frontier.change_completion is not None for frontier in unavailable_frontiers)
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
             PortfolioGuidanceFacts(
@@ -3312,25 +3419,50 @@ class PortfolioApplication:
             guidance=guidance,
         )
 
-    @staticmethod
     def _change_lifecycle_status(
+        self,
         change_id: str,
         observation: DeliveryChangeObservation | None,
     ) -> PortfolioChangeLifecycleStatus:
+        reconciliation_error = self._runtime_reconciliation_errors.get(change_id)
+        health_diagnostic = next(
+            (diagnostic for diagnostic in self._startup_health_diagnostics if diagnostic.change_id == change_id),
+            None,
+        )
         if observation is None or not observation.admitted:
+            if health_diagnostic is not None:
+                return PortfolioChangeLifecycleStatus(
+                    change_id=change_id,
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=None,
+                    actionable_runtime=False,
+                    diagnostic_code=health_diagnostic.code,
+                    diagnostic_detail=_health_detail(
+                        health_diagnostic.detail,
+                        "Delivery state requires reconciliation.",
+                    ),
+                )
             return PortfolioChangeLifecycleStatus(
                 change_id=change_id,
                 admission=PortfolioChangeAdmission.UNADMITTED,
                 stage=DeliveryChangeStage.DESIGN,
                 actionable_runtime=False,
             )
+        diagnostic_code = observation.diagnostic_code
+        diagnostic_detail = observation.diagnostic_detail
+        if diagnostic_code is None and reconciliation_error is not None:
+            diagnostic_code = "runtime-reconciliation-required"
+        if diagnostic_detail is None and reconciliation_error is not None:
+            diagnostic_detail = reconciliation_error
         return PortfolioChangeLifecycleStatus(
             change_id=change_id,
             admission=PortfolioChangeAdmission.ADMITTED,
             stage=observation.stage,
-            actionable_runtime=observation.actionable_runtime,
-            diagnostic_code=observation.diagnostic_code,
-            diagnostic_detail=observation.diagnostic_detail,
+            actionable_runtime=observation.actionable_runtime and reconciliation_error is None,
+            diagnostic_code=diagnostic_code,
+            diagnostic_detail=_health_detail(diagnostic_detail, "Delivery state requires reconciliation")
+            if diagnostic_detail is not None
+            else None,
         )
 
     def _claimed_work(
@@ -3339,6 +3471,8 @@ class PortfolioApplication:
     ) -> tuple[PortfolioWorkReference, ...]:
         claimed = []
         for snapshot in snapshots:
+            if snapshot.contract.change_id in self._runtime_reconciliation_errors:
+                continue
             claimed.extend(
                 PortfolioWorkReference(
                     change_id=snapshot.contract.change_id,
@@ -3370,7 +3504,8 @@ class PortfolioApplication:
         snapshot: DeliveryPortfolioSnapshot,
     ) -> tuple[int, int, int, str, PortfolioWorkReference] | None:
         if (
-            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING
+            snapshot.contract.change_id in self._runtime_reconciliation_errors
+            or self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING
             or snapshot.frontier.change_disposition is not None
             or self._snapshot_has_active_claims(snapshot)
         ):
@@ -3611,7 +3746,11 @@ class PortfolioApplication:
         observations = {observation.change_id: observation for observation in discovered}
         previous_runtimes = self._runtimes
         reconciled: dict[str, DeliveryRuntime] = {}
-        reconciliation_errors: dict[str, str] = {}
+        reconciliation_errors = {
+            diagnostic.change_id: f"{diagnostic.code}: {diagnostic.detail}"
+            for diagnostic in self._startup_health_diagnostics
+            if diagnostic.change_id is not None
+        }
         initial_reconciliation = not self._has_reconciled_runtimes
 
         for change_id, runtime in previous_runtimes.items():
@@ -3625,7 +3764,7 @@ class PortfolioApplication:
             )
             if reconciled_runtime is not None:
                 reconciled[change_id] = reconciled_runtime
-            if error is not None:
+            if error is not None and change_id not in reconciliation_errors:
                 reconciliation_errors[change_id] = error
 
         for change_id, observation in observations.items():
@@ -3634,7 +3773,7 @@ class PortfolioApplication:
             runtime, error = self._reconcile_new_runtime(observation)
             if runtime is not None:
                 reconciled[change_id] = runtime
-            if error is not None:
+            if error is not None and change_id not in reconciliation_errors:
                 reconciliation_errors[change_id] = error
 
         self._runtimes = reconciled
@@ -3702,7 +3841,7 @@ class PortfolioApplication:
         try:
             return self._compose_runtime(observation), None
         except (OSError, RuntimeError, ValueError) as exc:
-            return None, str(exc) or "runtime is unavailable"
+            return None, _health_detail(str(exc), "runtime is unavailable")
 
     def _compose_runtime(self, observation: DeliveryChangeObservation) -> DeliveryRuntime:
         if observation.contract is None:
@@ -3746,6 +3885,10 @@ class PortfolioApplication:
                 snapshot = self._runtime_snapshots.get(change_id)
                 if snapshot is None:
                     continue
+                self._runtime_reconciliation_errors.setdefault(
+                    change_id,
+                    "Delivery runtime snapshot could not be refreshed.",
+                )
             retained_snapshots[change_id] = snapshot
             snapshots.append(snapshot)
         self._runtime_snapshots = retained_snapshots
@@ -3896,7 +4039,18 @@ class PortfolioApplication:
         recoveries: list[DeliveryClaimRecoveryResult] = []
         failures: list[DeliveryAcquisitionFailure] = []
         for change_id, runtime in sorted(self._runtimes.items()):
-            for outcome_id, claim in runtime.active_claims():
+            try:
+                active_claims = runtime.active_claims()
+            except (OSError, RuntimeError, ValueError) as exc:
+                self._runtime_reconciliation_errors.setdefault(
+                    change_id,
+                    _health_detail(
+                        str(exc),
+                        "Delivery claim state is unavailable and requires reconciliation.",
+                    ),
+                )
+                continue
+            for outcome_id, claim in active_claims:
                 try:
                     if _timestamp(claim.started_at) > cutoff:
                         continue
@@ -3974,6 +4128,11 @@ class PortfolioApplication:
                 integration_attention=self._integration_attention_statuses(pre_claim_snapshots),
                 recoveries=recoveries,
                 failures=tuple(failures),
+                health_hint=(
+                    "Call delivery_health for current Delivery diagnostics."
+                    if self._delivery_health_view().diagnostics
+                    else None
+                ),
             )
 
     def show_plan_context(

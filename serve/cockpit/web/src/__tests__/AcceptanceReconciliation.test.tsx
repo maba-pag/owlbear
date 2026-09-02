@@ -50,6 +50,7 @@ function portfolio(changeIds: string[], lifecycle: 'awaiting-merge' | 'acceptanc
       dependency_waits: [],
       guidance: [],
     },
+    health: { status: 'healthy', diagnostics: [] },
   }
 }
 

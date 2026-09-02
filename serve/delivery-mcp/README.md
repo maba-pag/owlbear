@@ -32,7 +32,7 @@ The server exposes these operation groups:
 | Area | Tools |
 | --- | --- |
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
-| Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
+| Portfolio | `list_work_items`, `delivery_health`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `recover_blocked_implementation`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
@@ -41,6 +41,13 @@ The server exposes these operation groups:
 The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
 creation operation. These operations expose and recover current typed Integration attention; current
 work uses sequential Change outcomes and user-owned pull-request acceptance.
+
+Delivery startup isolates malformed or identity-mismatched per-Change state as bounded attention so
+valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch
+but remain visible through the Cockpit health section and the read-only `delivery_health` tool. The
+orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
+`health_hint`; healthy acquisitions remain quiet. Global workspace, Git, configuration, and unfinished
+migration failures still fail closed at startup.
 
 ## Configuration
 

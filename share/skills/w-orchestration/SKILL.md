@@ -15,10 +15,10 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
-`recover_claim`, and `recover_integration_repair_claim`. Run one focused `tool_search` for each
+`recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
 missing operation. If any binding remains unavailable or its focused search returns a tool error,
 report the exact missing operation and end the session without acquisition. Transition and recovery
 are required dispatch safety authority, not optional operations to discover after a claim has been
@@ -26,7 +26,10 @@ acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
-typed `integration_attention`, and acquisition failures. Active claims remain occupied until the
+typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
+`health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
+diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
+diagnostics; quarantined Changes have no actionable launch authority. Active claims remain occupied until the
 exact recovery operation completes. `recover_claim` automatically preserves dirty Builder bytes in
 an isolated quarantine ref, cleans the managed worktree, releases stale custody, and permits the
 next acquisition; it returns attention only when preservation or exact custody verification fails.

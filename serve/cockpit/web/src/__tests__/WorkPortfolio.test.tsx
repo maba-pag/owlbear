@@ -6,6 +6,7 @@ import type {
   AbandonedChangeRecord,
   ChangeGroupView,
   CompletedChangeRecord,
+  DeliveryHealthResponse,
   DesignWorkDetailResponse,
   PortfolioChangeLifecycleStatus,
   PortfolioOperatingView,
@@ -78,7 +79,10 @@ function changeStatus(changeId: string, overrides: Partial<PortfolioChangeLifecy
   }
 }
 
-function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResponse {
+function portfolio(
+  groups: ChangeGroupView[] = [group()],
+  health: DeliveryHealthResponse = { status: 'healthy', diagnostics: [] },
+): WorkItemPortfolioResponse {
   const items = groups.flatMap((item) => item.items)
   const reference = (item: WorkItemCardView) => ({
     change_id: item.change_id,
@@ -123,6 +127,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
       dependency_waits: dependencyWaits,
       guidance,
     },
+    health,
   }
 }
 
@@ -816,6 +821,41 @@ it('classifies Design and Delivery entries from explicit lifecycle statuses', as
   expect(summary).toHaveTextContent('4Changes')
   expect(summary).toHaveTextContent('2Design')
   expect(summary).toHaveTextContent('2Delivery')
+})
+
+it('shows bounded Delivery health diagnostics for quarantined state', async () => {
+  const basePortfolio = portfolio([], {
+    status: 'attention',
+    diagnostics: [{
+      source: 'local-runtime',
+      code: 'contract-identity-invalid',
+      detail: 'Persisted Change contract identity is invalid',
+      change_id: 'quarantined-change',
+      path: '.owlbear/delivery/runtime/changes/quarantined-change',
+      retry_safe: false,
+    }],
+  })
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [changeStatus('quarantined-change', {
+        actionable_runtime: false,
+        diagnostic_code: 'runtime_unavailable',
+        diagnostic_detail: 'Persisted Change contract identity is invalid',
+      })],
+    },
+  }
+
+  renderPage()
+
+  const health = await screen.findByTestId('delivery-health-section')
+  expect(health).toHaveTextContent('Delivery health')
+  expect(health).toHaveTextContent('Quarantined state is hidden from dispatch.')
+  expect(health).toHaveTextContent('quarantined-change')
+  expect(health).toHaveTextContent('local-runtime / contract-identity-invalid')
+  expect(health).toHaveTextContent('Persisted Change contract identity is invalid')
+  expect(screen.queryByTestId('work-portfolio-table')).not.toBeInTheDocument()
 })
 
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {

@@ -766,8 +766,11 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
             + "\n"
         ).encode()
     )
-    with pytest.raises(
-        DeliveryApplicationLoadError,
-        match=r"local Delivery runtime artifact differs from its remote snapshot: frontier\.json",
-    ):
-        load_delivery_application(config, workspace_root=fresh)
+    degraded = load_delivery_application(config, workspace_root=fresh)
+    health = degraded.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == change_id and diagnostic.code == "remote-state-reconciliation-required"
+        for diagnostic in health.diagnostics
+    )
+    assert degraded.list_work_items() == ()

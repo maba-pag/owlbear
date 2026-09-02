@@ -928,6 +928,7 @@ def test_acquisition_charges_noncomposable_change_from_persisted_claims(tmp_path
     assert observation.frontier is not None
     assert sum(binding.active_claim is not None for binding in observation.frontier.bindings) == 1
     assert application._runtime_reconciliation_errors["blocked-change"]
+    assert acquired.health_hint == "Call delivery_health for current Delivery diagnostics."
 
 
 def test_acquisition_uses_maximum_observed_occupancy_once_per_change(tmp_path: Path) -> None:
@@ -3667,7 +3668,9 @@ def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(
     view = application.portfolio_read_view()
 
     assert application._runtimes["change-a"] is previous_runtime
-    assert view.groups[0].title == previous_runtime.contract.title
+    assert view.groups == ()
+    assert view.health.status.value == "attention"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
     with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
         application.defer_change("change-a", "runtime replacement requires reconciliation")
     assert exc_info.value.code == "ERR_DELIVERY_RUNTIME_RECONCILIATION"
@@ -3695,7 +3698,9 @@ def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavaila
     view = application.portfolio_read_view()
 
     assert application._runtimes["change-a"] is previous_runtime
-    assert view.groups[0].title == previous_runtime.contract.title
+    assert view.groups == ()
+    assert view.health.status.value == "attention"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
     assert view.operating.unfinished_change_count == 1
     assert view.operating.draft_design_change_ids == ()
     status = next(item for item in view.operating.statuses if item.change_id == "change-a")
@@ -3705,6 +3710,7 @@ def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavaila
     assert status.diagnostic_detail is not None
     assert len(status.diagnostic_detail) <= 240
     assert application._discovered_changes["change-a"].diagnostic_code == "runtime_unavailable"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
     with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
         application.defer_change("change-a", "runtime entry requires retry")
     assert exc_info.value.retry_safe is True
@@ -5524,12 +5530,17 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     change_root.mkdir(parents=True)
     contract = _contract("change-b", b"intent\n", b"design\n")
     (change_root / "contract.json").write_bytes(_canonical(contract))
-    with pytest.raises(DeliveryApplicationLoadError) as state_error:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-    assert state_error.value.field == "runtime_root"
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+    )
+    health = application.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == "change-a" and diagnostic.code == "contract-identity-invalid"
+        for diagnostic in health.diagnostics
+    )
+    assert application.list_work_items() == ()
     assert not (state_root / "capacity-ledger.json").exists()
 
     runtime_repository = _repository(tmp_path / "invalid-runtime")
@@ -5539,13 +5550,17 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     valid_contract = _contract("change-a", b"intent\n", b"design\n")
     (runtime_change / "contract.json").write_bytes(_canonical(valid_contract))
     (runtime_change / "frontier.json").write_bytes(b"not-json\n")
-    with pytest.raises(DeliveryApplicationLoadError) as runtime_error:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=runtime_repository,
-        )
-    assert runtime_error.value.field == "runtime_root"
-    assert runtime_error.value.detail == "Delivery runtime state is invalid"
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=runtime_repository,
+    )
+    health = application.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == "change-a" and diagnostic.code == "frontier-invalid"
+        for diagnostic in health.diagnostics
+    )
+    assert application.list_work_items() == ()
     assert not (runtime_root / "capacity-ledger.json").exists()
 
 

@@ -81,6 +81,31 @@ class PortfolioChangeLifecycleStatus(_OperatingModel):
         return self.admission is PortfolioChangeAdmission.ADMITTED
 
 
+class DeliveryHealthStatus(StrEnum):
+    """Overall availability of the current Delivery application."""
+
+    HEALTHY = "healthy"
+    ATTENTION = "attention"
+
+
+class DeliveryHealthDiagnostic(_OperatingModel):
+    """Bounded diagnostic for state excluded from Delivery authority."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool = False
+
+
+class DeliveryHealthView(_OperatingModel):
+    """Current Delivery availability and bounded state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnostic, ...] = Field(default=(), max_length=64)
+
+
 class PortfolioOperatingView(_OperatingModel):
     """Current operating facts and derived guidance for the whole portfolio.
 

@@ -164,6 +164,8 @@ from owlbear_delivery.delivery_state import (
     DeliveryStatePublisher,
     DeliveryStateResponseUnknownError,
     DeliveryStateSnapshot,
+    DeliveryStateSnapshotDiagnostic,
+    DeliveryStateSnapshotInventory,
 )
 from owlbear_delivery.design_package import (
     CompletionPackageManifest,
@@ -228,6 +230,9 @@ from owlbear_delivery.portfolio_application import (
     RequiredPublicationChecksFailedError,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
     PortfolioGuidance,
     PortfolioGuidanceKind,
     PortfolioOperatingView,
@@ -430,6 +435,9 @@ __all__ = [
     "DeliveryFinalizationInvalidationReceipt",
     "DeliveryFinalizationReceipt",
     "DeliveryFrontier",
+    "DeliveryHealthDiagnostic",
+    "DeliveryHealthStatus",
+    "DeliveryHealthView",
     "DeliveryHostConfig",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
@@ -478,6 +486,8 @@ __all__ = [
     "DeliveryStatePublisher",
     "DeliveryStateResponseUnknownError",
     "DeliveryStateSnapshot",
+    "DeliveryStateSnapshotDiagnostic",
+    "DeliveryStateSnapshotInventory",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
     "DeliveryTransition",

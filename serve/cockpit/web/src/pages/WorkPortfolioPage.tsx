@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChangeGroupView, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'
+import type { ChangeGroupView, DeliveryHealthResponse, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
 import DesignWorkSection from '../components/DesignWorkSection'
@@ -360,6 +360,41 @@ function DeliveryStatusSection({ statuses }: { statuses: PortfolioChangeLifecycl
   )
 }
 
+function DeliveryHealthSection({ health }: { health: DeliveryHealthResponse }) {
+  if (health.status !== 'attention' || health.diagnostics.length === 0) return null
+  return (
+    <section className="min-w-0" aria-labelledby="delivery-health-heading" data-testid="delivery-health-section">
+      <h2 id="delivery-health-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Delivery health</h2>
+      <div className="grid gap-static-sm" role="list">
+        {health.diagnostics.map((diagnostic, index) => (
+          <article
+            key={`${diagnostic.change_id ?? 'portfolio'}-${diagnostic.code}-${index}`}
+            className="min-w-0 rounded-sm border border-l-4 border-warning bg-surface px-static-sm py-static-sm text-sm"
+            role="listitem"
+          >
+            <p className="mb-static-sm font-medium text-primary">Quarantined state is hidden from dispatch.</p>
+            <dl className="grid gap-static-sm md:grid-cols-[minmax(0,24fr)_minmax(0,24fr)_minmax(0,52fr)] md:gap-0">
+              <div className="min-w-0 md:pr-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Change</dt>
+                <dd className="break-words font-mono text-xs text-contrast-medium">{diagnostic.change_id ?? 'Delivery portfolio'}</dd>
+              </div>
+              <div className="min-w-0 md:px-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Source / code</dt>
+                <dd className="break-words text-xs text-contrast-medium"><code>{diagnostic.source}</code><span aria-hidden="true"> / </span><code>{diagnostic.code}</code></dd>
+              </div>
+              <div className="min-w-0 md:pl-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high">Detail</dt>
+                <dd className="break-words text-xs text-contrast-medium">{diagnostic.detail}</dd>
+                {diagnostic.path ? <dd className="mt-1 break-all font-mono text-2xs text-contrast-medium">{diagnostic.path}</dd> : null}
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EmptyDetail({
   error,
   retry,
@@ -597,6 +632,7 @@ export default function WorkPortfolioPage() {
 
             {hasData ? (
               <>
+                <DeliveryHealthSection health={portfolio.health} />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}

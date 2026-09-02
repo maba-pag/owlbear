@@ -52,6 +52,10 @@ from owlbear_delivery.portfolio_application import (
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
 )
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+)
 
 
 class _TargetProtocolModel(BaseModel):
@@ -87,6 +91,34 @@ class TargetDiagnostic(_TargetProtocolModel):
     detail: str = Field(min_length=1)
     current_authority_identity: str = Field(min_length=1)
     retry_safe: bool
+
+
+class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
+    """Bounded MCP diagnostic for Delivery state excluded from authority."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool
+
+
+class DeliveryHealthResponse(_TargetProtocolModel):
+    """Current Delivery health and quarantined-state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnosticResponse, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: DeliveryHealthView) -> DeliveryHealthResponse:
+        """Project the shared Delivery health view into the MCP contract."""
+        return cls(
+            status=view.status,
+            diagnostics=tuple(
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
+            ),
+        )
 
 
 class EmptyParams(_TargetProtocolModel):
@@ -866,6 +898,8 @@ __all__ = [
     "CreateDesignSessionRequest",
     "DeferChangeParams",
     "DeferChangeRequest",
+    "DeliveryHealthDiagnosticResponse",
+    "DeliveryHealthResponse",
     "DeliveryOperatorClaimResponse",
     "DeliveryOperatorContextResponse",
     "DeliveryOperatorIntegrationAttentionResponse",
