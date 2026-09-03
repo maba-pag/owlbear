@@ -29,6 +29,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
     DeliveryRuntimeMigrationError,
@@ -113,7 +114,6 @@ _RECOVERABLE_ADMISSION_ERRORS = frozenset(
         DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
     }
 )
-_REPAIRABLE_SNAPSHOT_CODES = frozenset({"snapshot-invalid", "snapshot-identity-invalid"})
 _logger = logging.getLogger(__name__)
 
 
@@ -528,14 +528,16 @@ def _validate_local_snapshot(
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
-    frontier_bytes, _frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    local_attention_successor = _is_unpublished_acceptance_attention_successor(snapshot.frontier, frontier)
     _fetch_snapshot_change_head(
         snapshot,
         config,
         paths.repository_root,
         allow_local_branch=True,
+        allow_local_descendant=local_attention_successor,
     )
-    if frontier_bytes != expected["frontier.json"]:
+    if frontier_bytes != expected["frontier.json"] and not local_attention_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     _validate_local_snapshot_artifacts(relative_root, expected)
     try:
@@ -586,6 +588,7 @@ def _fetch_snapshot_change_head(
     repository: Path,
     *,
     allow_local_branch: bool = False,
+    allow_local_descendant: bool = False,
 ) -> tuple[str, bool]:
     """Fetch the remote Change branch or use the configured target for finalized authority."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
@@ -595,6 +598,7 @@ def _fetch_snapshot_change_head(
         snapshot,
         repository,
         allow_local_branch=allow_local_branch,
+        allow_local_descendant=allow_local_descendant,
     )
     if local_head is not None:
         return local_head, False
@@ -637,6 +641,7 @@ def _local_snapshot_change_head(
     repository: Path,
     *,
     allow_local_branch: bool,
+    allow_local_descendant: bool,
 ) -> str | None:
     """Return the snapshot head when a retained local branch is safe to use."""
     if not allow_local_branch or snapshot.frontier.change_completion is not None:
@@ -649,7 +654,36 @@ def _local_snapshot_change_head(
     )
     if local_branch == snapshot.change_head:
         return snapshot.change_head
+    if (
+        allow_local_descendant
+        and local_branch is not None
+        and _loader_git_is_ancestor(repository, snapshot.change_head, local_branch)
+    ):
+        return snapshot.change_head
     return None
+
+
+def _is_unpublished_acceptance_attention_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local acceptance attention captured after the last state snapshot."""
+    disposition = local_frontier.change_disposition
+    if (
+        snapshot_frontier.change_disposition is not None
+        or disposition is None
+        or disposition.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+        or local_frontier.change_disposition_resolution is not None
+        or local_frontier.ready is not None
+    ):
+        return False
+    attention_fields = {
+        "change_disposition": None,
+        "change_disposition_publication": None,
+        "change_disposition_resolution": None,
+        "ready": None,
+    }
+    return snapshot_frontier.model_copy(update=attention_fields) == local_frontier.model_copy(update=attention_fields)
 
 
 def _fetch_completed_snapshot_change_head(

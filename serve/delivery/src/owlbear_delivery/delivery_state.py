@@ -852,26 +852,6 @@ def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
 
 
-def _repair_metadata(raw: bytes | None) -> tuple[int, str | None]:
-    if raw is None:
-        return 1, None
-    try:
-        payload = json.loads(raw)
-    except (TypeError, ValueError):
-        return 1, None
-    if not isinstance(payload, dict):
-        return 1, None
-    sequence = payload.get("sequence")
-    previous_snapshot_id = payload.get("snapshot_id")
-    next_sequence = sequence + 1 if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0 else 1
-    previous_id = (
-        previous_snapshot_id
-        if isinstance(previous_snapshot_id, str) and re.fullmatch(r"[0-9a-f]{64}", previous_snapshot_id)
-        else None
-    )
-    return next_sequence, previous_id
-
-
 def _repair_digest(receipt: DeliveryStateRepairReceipt) -> str:
     return hashlib.sha256(_canonical_bytes(receipt.model_copy(update={"repair_id": ""}))).hexdigest()
 

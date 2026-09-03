@@ -90,6 +90,7 @@ from owlbear_delivery import (
     DeliveryRuntimeMigrationError,
     DeliveryStage,
     DeliveryStartupConfig,
+    DeliveryStatePublicationError,
     DeliveryStateRepairReceipt,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -522,6 +523,18 @@ def _repair_health_diagnostic(change_id: str, remote_head: str) -> DeliveryHealt
     )
 
 
+def _frontier_repair_health_diagnostic(change_id: str, remote_head: str) -> DeliveryHealthDiagnostic:
+    return DeliveryHealthDiagnostic(
+        source="local-runtime",
+        code="frontier-migration-required",
+        detail="Persisted Delivery frontier contains a retired receipt schema.",
+        change_id=change_id,
+        path=f".owlbear/delivery/runtime/changes/{change_id}",
+        remote_head=remote_head,
+        repairable=True,
+    )
+
+
 def _prepare_repairable_application(tmp_path: Path) -> tuple[PortfolioApplication, Path, Path, bytes]:
     application, _runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -535,7 +548,10 @@ def _prepare_repairable_application(tmp_path: Path) -> tuple[PortfolioApplicatio
     coordination_path = state_root / "coordination/changes/change-a.json"
     coordination_path.write_bytes(_canonical(coordinator.show("change-a")))
     diagnostic = _repair_health_diagnostic("change-a", "a" * 40)
-    application._startup_health_diagnostics = (diagnostic,)
+    application._startup_health_diagnostics = (
+        diagnostic,
+        _frontier_repair_health_diagnostic("change-a", "a" * 40),
+    )
     return application, frontier_path, coordination_path, legacy_frontier
 
 
@@ -2597,6 +2613,41 @@ def test_reconcile_acceptance_publishes_new_attention_authority(tmp_path: Path) 
     assert publication["change_id"] == "change-a"
     assert publication["operation_id"] == f"acceptance-attention-{disposition.disposition_id}"
     assert publication["runtime"] is runtime
+
+
+def test_latch_regression_preserves_domain_error_when_attention_publication_fails(tmp_path: Path) -> None:
+    application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    merged = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    state["pull_request"] = merged
+    observation = application._draft_pull_request_publisher.observe_pull_request(
+        ObserveChangePublicationPullRequest(change_id="change-a")
+    )
+    assert observation is not None
+    runtime.latch_merged_pull_request(observation)
+
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = state_publisher
+    state["pull_request"] = merged.model_copy(update={"state": "open", "merged": False, "merged_at": None})
+
+    with pytest.raises(PortfolioApplicationError, match="regressed from the established merged observation"):
+        application.observe_acceptance("change-a")
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.LATCH_REGRESSION
+    state_publisher.publish.assert_called_once()
 
 
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:

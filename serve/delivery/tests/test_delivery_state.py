@@ -11,9 +11,13 @@ import pytest
 
 from owlbear_delivery import (
     ChangeExternalHeadAdoptionReceipt,
+    DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryChangeCompletion,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
+    DeliveryChangeStage,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -53,6 +57,7 @@ from owlbear_delivery.delivery_application_loader import (
     _can_defer_remote_state_reconciliation,
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
+    _is_unpublished_acceptance_attention_successor,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -276,6 +281,40 @@ def test_loader_accepts_local_descendant_when_active_remote_branch_was_deleted(t
         match="remote Change branch is missing for an active Delivery snapshot",
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository, allow_local_branch=True)
+
+
+def test_loader_accepts_unpublished_acceptance_attention_successor(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-acceptance-attention-fallback"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    local_frontier = snapshot.frontier.model_copy(
+        update={
+            "change_disposition": DeliveryChangeDisposition.create(
+                kind=DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION,
+                change_id=change_id,
+                entered_from=DeliveryChangeStage.AWAITING_MERGE,
+                recorded_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+                diagnostics=("provider acceptance evidence regressed",),
+                acceptance_reason=DeliveryAcceptanceAttentionReason.LATCH_REGRESSION,
+            ),
+        }
+    )
+    _commit_descendant(worktree, "acceptance-attention.txt", "acceptance attention")
+
+    assert _is_unpublished_acceptance_attention_successor(snapshot.frontier, local_frontier)
+    with patch(
+        "owlbear_delivery.delivery_application_loader._remote_branch_head",
+        return_value=None,
+    ):
+        assert _fetch_snapshot_change_head(
+            snapshot,
+            _startup_config(),
+            repository,
+            allow_local_branch=True,
+            allow_local_descendant=True,
+        ) == (snapshot.change_head, False)
 
 
 def test_loader_accepts_finalized_snapshot_when_remote_change_branch_was_deleted(tmp_path: Path) -> None:

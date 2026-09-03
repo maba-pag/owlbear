@@ -2453,7 +2453,11 @@ class PortfolioApplication:
         result = outcome if outcome is not None else self._reconcile_merged_acceptance(change_id, runtime)
         disposition = runtime.change_disposition()
         if disposition is not None:
-            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{disposition.disposition_id}")
+            self._publish_acceptance_attention(
+                change_id,
+                runtime,
+                f"acceptance-attention-{disposition.disposition_id}",
+            )
         return result
 
     def _reconcile_awaiting_acceptance_locked(
@@ -2687,7 +2691,11 @@ class PortfolioApplication:
                     ("provider pull request does not satisfy acceptance authority",),
                     reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
                 )
-                self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
+                self._publish_acceptance_attention(
+                    change_id,
+                    runtime,
+                    f"acceptance-attention-{observation.observation_id}",
+                )
                 message = "provider pull request does not satisfy acceptance authority"
                 raise PortfolioApplicationError(message)
             latch = self._latch_acceptance_observation(change_id, runtime, observation)
@@ -2733,6 +2741,11 @@ class PortfolioApplication:
             try:
                 return runtime.latch_merged_pull_request(observation)
             except DeliveryRuntimeConflictError as exc:
+                self._publish_acceptance_attention(
+                    change_id,
+                    runtime,
+                    observation.observation_id,
+                )
                 message = "provider acceptance evidence regressed from the established merged observation"
                 raise PortfolioApplicationError(message) from exc
         if is_acceptance_waiting_observation(observation):
@@ -2745,7 +2758,11 @@ class PortfolioApplication:
                 ("provider pull request does not satisfy acceptance authority",),
                 reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
-            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
+            self._publish_acceptance_attention(
+                change_id,
+                runtime,
+                f"acceptance-attention-{observation.observation_id}",
+            )
             message = "provider pull request does not satisfy acceptance authority"
             raise PortfolioApplicationError(message)
         if snapshot.merge_commit_sha is None or snapshot.merged_at is None:
@@ -2754,10 +2771,25 @@ class PortfolioApplication:
                 ("provider pull request is missing merge evidence",),
                 reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
-            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
+            self._publish_acceptance_attention(
+                change_id,
+                runtime,
+                f"acceptance-attention-{observation.observation_id}",
+            )
             message = "provider pull request does not satisfy acceptance authority"
             raise PortfolioApplicationError(message)
         return runtime.latch_merged_pull_request(observation)
+
+    def _publish_acceptance_attention(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        operation_id: str,
+    ) -> None:
+        try:
+            self._publish_delivery_state(change_id, runtime, operation_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+            return
 
     def _reconcile_finalization_head_locked(
         self,
@@ -3435,7 +3467,6 @@ class PortfolioApplication:
             change_id,
             expected_diagnostic_code,
             expected_remote_head,
-            diagnostic,
         )
         return receipt
 
@@ -3517,11 +3548,17 @@ class PortfolioApplication:
         change_id: str,
         expected_diagnostic_code: str,
         expected_remote_head: str,
-        diagnostic: DeliveryHealthDiagnostic,
     ) -> None:
-        diagnostic_key = _health_diagnostic_key(diagnostic)
+        diagnostic_keys = {
+            _health_diagnostic_key(item)
+            for item in self._startup_health_diagnostics
+            if item.change_id == change_id
+            and item.remote_head == expected_remote_head
+            and item.repairable
+            and item.code in {expected_diagnostic_code, "frontier-migration-required"}
+        }
         prior_cleared = self._cleared_startup_health_diagnostics
-        self._cleared_startup_health_diagnostics = {*prior_cleared, diagnostic_key}
+        self._cleared_startup_health_diagnostics = {*prior_cleared, *diagnostic_keys}
         try:
             self._runtime_reconciliation_errors.pop(change_id, None)
             self._runtime_snapshots.pop(change_id, None)
