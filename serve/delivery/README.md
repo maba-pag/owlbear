@@ -3,8 +3,9 @@
 `owlbear-delivery` is the transport-free control plane for Change delivery. It projects semantic work
 items from admitted Design authority, owns deterministic Planning and Build transitions, coordinates
 bounded execution, publishes reviewed Change checkpoints, observes user-owned
-pull-request acceptance, and projects recoverable completed history. It retains legacy Target cutover
-and evidence contracts for historical consumers; canonical Change delivery does not use them.
+pull-request acceptance, and projects recoverable completed history. Historical completion packages
+under `.owlbear/legacy/completed` remain available through the read-only history catalog for
+information; they are not Delivery runtime authority.
 
 **Use this guide when:** you need to extend or integrate the core Change authority, understand its
 worktree and publication boundaries, or call its public stores and runtimes.
@@ -28,9 +29,8 @@ The main public areas are:
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, task progress, and bounded Delivery health diagnostics |
 | Coordination | Per-Change writer custody under `runtime/coordination/changes`, one shared execution budget, warm worktrees, and reviewed source boundaries |
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
-| Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
+| Completed history | Receipt-backed completed Change projections plus read-only Git-backed historical package search |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
-| State repair | Explicit, CAS-protected conversion of one supported retired remote snapshot from verified local authority |
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -54,8 +54,7 @@ as bounded health attention; valid sibling Changes remain available. Quarantined
 in status and health projections when a last-known view exists, but they are excluded from work-item
 queues, claims, acquisition, and dispatch. Use the read-only `delivery_health()` operation through
 the MCP adapter, or the Cockpit Delivery health section, to inspect the source, code, Change ID, and
-bounded detail. Workspace, Git, and configuration failures remain startup-fatal. Supported retired
-receipt shapes are quarantined until explicit repair; unsupported or unfinished migrations remain
+bounded detail. Workspace, Git, configuration, and unsupported persisted-state failures remain
 startup-fatal.
 
 The operating projection exposes explicit status axes instead of inferring lifecycle from runtime
@@ -71,19 +70,11 @@ genuine Design packages visible. Completed history remains a separate surface.
 | Admitted Change explicitly returned to Design | `admission=admitted` and `stage=design`; it is included in `design_required_change_ids`, not the draft list. |
 | Admitted Change without an actionable runtime | Admission remains visible with `actionable_runtime=false` and the generic `runtime_unavailable` diagnostic; it is never recast as unadmitted Design. |
 
-The Delivery MCP operation inventory includes the read-only `delivery_health` projection and the
-explicit `repair_delivery_state` operation. A repairable diagnostic includes the exact observed
-state-branch head; after user confirmation, the operation converts only the supported retired
-serialization, commits the local frontier and coordination conversion transactionally, rebuilds a
-strict current-schema snapshot from verified local authority, and publishes it after an expected
-remote-head check with a non-force Git push.
-The old remote commit remains in Git history. Normal runtime readers stay strict current-schema and
-never accept the retired shape. Choose one `operation_id` before the first repair attempt and reuse
-that exact value for any retry-safe retry, including a retry after remote publication when local
-proof fails. `delivery_health` reports startup-captured remote evidence plus local reconciliation;
-it does not refresh the remote state branch during the running process. Restart or reload Delivery
-when a fresh remote observation is required. `list_work_items` remains a pure list and does not
-become a health or repair response.
+The Delivery MCP operation inventory includes the read-only `delivery_health` projection. Current
+runtime readers accept only the current persisted schema; unsupported state is a startup failure and
+requires a fresh current workspace. `delivery_health` reports remote evidence plus local
+reconciliation; it does not mutate or repair persisted state. `list_work_items` remains a pure list
+and does not become a health response.
 
 Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
 The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,
@@ -101,7 +92,6 @@ same typed configuration directly.
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
 | `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `execution_capacity` defaults to `3`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; both values must be positive integers. | Tracked baseline configuration |
 | `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
-| `.owlbear/delivery/runtime/capacity-ledger.json` | Legacy migration export; do not edit | Historical `CapacityLedger` data may retain active-holder fields for migration validation. It is not current runtime authority and is absent from new runtime state. | Historical migration authority |
 
 `execution_capacity` is the maximum number of active Planner or Builder outcome claims across the
 portfolio. Each acquired Change has exact per-Change writer custody; there is no separate global

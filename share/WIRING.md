@@ -68,7 +68,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
-| `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change, Integration, or repairable state attention before interactive diagnosis; uses exact health evidence for `repair_delivery_state`; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
+| `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |

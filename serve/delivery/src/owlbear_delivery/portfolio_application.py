@@ -33,7 +33,6 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
-    BlockedImplementationRecoveryReceipt,
     ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
@@ -50,12 +49,10 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
-    RecoverBlockedImplementation,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
-    repair_change_coordination,
 )
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_contract_discovery import (
@@ -113,9 +110,7 @@ from owlbear_delivery.delivery_runtime import (
     integration_attention_disposition,
     is_acceptance_waiting_observation,
     is_change_terminal,
-    repair_delivery_frontier,
 )
-from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublicationHistory,
@@ -154,7 +149,6 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     failed_required_publication_checks,
 )
-from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -188,14 +182,13 @@ if TYPE_CHECKING:
         DeliveryAdmissionResult,
         DeliveryAuthorityRegistry,
     )
-    from owlbear_delivery.delivery_state import DeliveryStatePublisher, DeliveryStateRepairReceipt
+    from owlbear_delivery.delivery_state import DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
     )
-    from owlbear_delivery.target_contract import DeliveryContract
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
 
@@ -219,34 +212,8 @@ def _health_diagnostic_key(diagnostic: DeliveryHealthDiagnostic) -> tuple[object
         diagnostic.detail,
         diagnostic.change_id,
         diagnostic.path,
-        diagnostic.remote_head,
-        diagnostic.repairable,
         diagnostic.retry_safe,
     )
-
-
-def _read_repair_authority_file(path: Path) -> bytes:
-    if path.is_symlink() or not path.is_file():
-        message = f"Delivery repair authority file is missing or unsafe: {path.name}"
-        raise ValueError(message)
-    return path.read_bytes()
-
-
-def _repair_replacement(
-    root: Path,
-    path: Path,
-    previous: bytes,
-    replacement: bytes,
-) -> ReplacementTransactionParticipant | None:
-    if previous == replacement:
-        return None
-    return ReplacementTransactionParticipant(root, path.relative_to(root), previous, replacement)
-
-
-def _read_repair_frontier(runtime_root: Path, change_id: str) -> DeliveryFrontier:
-    frontier_path = runtime_root / "changes" / change_id / "frontier.json"
-    frontier, _content = repair_delivery_frontier(_read_repair_authority_file(frontier_path))
-    return frontier
 
 
 def _canonical_model_bytes(model: BaseModel) -> bytes:
@@ -909,21 +876,6 @@ class PortfolioApplicationError(RuntimeError):
     code = "ERR_DELIVERY_PORTFOLIO"
 
 
-class DeliveryStateRepairProofError(PortfolioApplicationError):
-    """A remote state repair succeeded but local proof remains retryable."""
-
-    code = "ERR_DELIVERY_STATE_REPAIR_PROOF"
-    retry_safe = True
-
-    def __init__(self, operation_id: str, proof_detail: str) -> None:
-        self.operation_id = operation_id
-        self.proof_detail = proof_detail
-        super().__init__(
-            "Delivery state repair was published but local proof is incomplete: "
-            f"{proof_detail}; retry operation {operation_id}."
-        )
-
-
 class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError):
     """A runtime map entry changed or became unreadable during a read-side reconciliation."""
 
@@ -1163,18 +1115,6 @@ class _ReviewRepairAuthority:
     node_id: str
 
 
-@dataclass(frozen=True)
-class _DeliveryStateRepairContext:
-    change_id: str
-    operation_id: str
-    diagnostic: DeliveryHealthDiagnostic
-    expected_remote_head: str
-    coordination: ChangeCoordination
-    contract: DeliveryContract
-    admission: DeliveryAdmissionReceipt
-    package: VerifiedDesignPackage
-
-
 class PortfolioApplication:
     """Compose Delivery runtimes, source packages, and warm workspace custody."""
 
@@ -1204,7 +1144,6 @@ class PortfolioApplication:
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._startup_health_diagnostics = dependencies.health_diagnostics
-        self._cleared_startup_health_diagnostics: set[tuple[object, ...]] = set()
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -2369,41 +2308,6 @@ class PortfolioApplication:
                 operation_id,
             )
 
-    def recover_blocked_implementation(  # noqa: PLR0913
-        self,
-        change_id: str,
-        outcome_id: str,
-        expected_resume_commit: str,
-        expected_reviewed_head: str,
-        operation_id: str,
-        *,
-        confirmed_recovery: Literal[True],
-    ) -> BlockedImplementationRecoveryReceipt:
-        """Recover one released blocked Implementation candidate after confirmation."""
-        if confirmed_recovery is not True:
-            self._fail("blocked Implementation recovery requires explicit confirmation")
-        runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
-                self._fail("blocked Implementation recovery cannot overlap an active claim")
-            binding = runtime.show_binding(outcome_id)
-            block = binding.block
-            if binding.stage != DeliveryStage.IMPLEMENTATION or block is None:
-                self._fail("blocked Implementation recovery requires a blocked Implementation outcome")
-            if not block.resolved:
-                self._fail("blocked Implementation recovery requires a resolved request")
-            if block.resume_commit != expected_resume_commit:
-                self._fail("blocked Implementation recovery candidate differs from the resolved block")
-            return self._workspace_manager.recover_blocked_implementation(
-                RecoverBlockedImplementation(
-                    change_id=change_id,
-                    outcome_id=outcome_id,
-                    expected_resume_commit=expected_resume_commit,
-                    expected_reviewed_head=expected_reviewed_head,
-                    operation_id=operation_id,
-                )
-            )
-
     def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
         """Retain one nonterminal Change and pause its claimable frontier."""
         runtime = self._runtime(change_id, for_mutation=True)
@@ -3287,7 +3191,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             self._workspace_manager.validate_recovery(request.change_id, request.recovery_reviewed_head)
             result = self._authority_registry.admit(request)
-            coordination = self._workspace_manager.ensure(
+            self._workspace_manager.ensure(
                 request.change_id,
                 recovery_reviewed_head=request.recovery_reviewed_head,
             )
@@ -3295,7 +3199,6 @@ class PortfolioApplication:
                 self._target_root,
                 result.contract,
                 workspace_manager=self._workspace_manager,
-                migration_reviewed_head=coordination.last_reviewed_commit,
             )
             runtime = self._runtimes[request.change_id]
             package = self._package_store.read_verified(request.change_id)
@@ -3451,282 +3354,9 @@ class PortfolioApplication:
         self._reconcile_runtimes()
         return self._delivery_health_view()
 
-    def repair_delivery_state(
-        self,
-        change_id: str,
-        expected_diagnostic_code: str,
-        expected_remote_head: str,
-        operation_id: str,
-        *,
-        confirmed_repair: Literal[True],
-    ) -> DeliveryStateRepairReceipt:
-        """Convert one exact retired state shape and restore its strict Delivery authority."""
-        if confirmed_repair is not True:
-            self._fail("Delivery state repair requires explicit confirmation")
-        if self._delivery_state_publisher is None:
-            self._fail("Delivery state repair requires the Delivery-state publisher")
-        self._reconcile_runtimes()
-        diagnostic = self._repair_health_diagnostic(change_id, expected_diagnostic_code, expected_remote_head)
-        observation = self._discovered_changes.get(change_id)
-        if observation is None or observation.contract is None or observation.admission is None:
-            self._fail("Delivery state repair requires validated local contract and admission authority")
-        package = self._package_store.read_verified(change_id)
-        with (
-            locked_roots((self._checkpoint_lock_root(change_id),)),
-            self._coordinator.publication_lock(change_id),
-        ):
-            diagnostic = self._repair_health_diagnostic(change_id, expected_diagnostic_code, expected_remote_head)
-            repaired_coordination = self._prepare_repair(
-                change_id,
-                operation_id,
-                observation.contract,
-                observation.admission,
-                package,
-            )
-            receipt = self._publish_repair(
-                _DeliveryStateRepairContext(
-                    change_id=change_id,
-                    operation_id=operation_id,
-                    diagnostic=diagnostic,
-                    expected_remote_head=expected_remote_head,
-                    coordination=repaired_coordination,
-                    contract=observation.contract,
-                    admission=observation.admission,
-                    package=package,
-                )
-            )
-        self._prove_repair(
-            change_id,
-            expected_diagnostic_code,
-            expected_remote_head,
-            operation_id,
-        )
-        return receipt
-
-    def _prepare_repair(
-        self,
-        change_id: str,
-        operation_id: str,
-        contract: DeliveryContract,
-        admission: DeliveryAdmissionReceipt,
-        package: VerifiedDesignPackage,
-    ) -> ChangeCoordination:
-        frontier_path = self._target_root / "changes" / change_id / "frontier.json"
-        coordination_path = self._target_root / "coordination" / "changes" / f"{change_id}.json"
-        frontier_content = _read_repair_authority_file(frontier_path)
-        coordination_content = _read_repair_authority_file(coordination_path)
-        try:
-            repaired_frontier, repaired_frontier_content = repair_delivery_frontier(frontier_content)
-            repaired_coordination, repaired_coordination_content = repair_change_coordination(coordination_content)
-        except (TypeError, ValueError) as exc:
-            self._fail("Delivery state repair input is not a supported current-schema conversion", exc)
-        self._validate_repair_authority(
-            change_id,
-            contract,
-            admission,
-            repaired_coordination,
-            repaired_frontier,
-        )
-        self._validate_repair_package_authority(contract, package)
-        participants = tuple(
-            participant
-            for participant in (
-                _repair_replacement(self._target_root, frontier_path, frontier_content, repaired_frontier_content),
-                _repair_replacement(
-                    self._target_root,
-                    coordination_path,
-                    coordination_content,
-                    repaired_coordination_content,
-                ),
-            )
-            if participant is not None
-        )
-        if participants:
-            try:
-                RuntimeTransaction(
-                    self._target_root,
-                    f"delivery-state-repair-local-{change_id}-{operation_id}",
-                    participants,
-                ).commit()
-            except (OSError, RuntimeError, ValueError) as exc:
-                self._fail("local Delivery state repair could not be committed", exc)
-        return repaired_coordination
-
-    def _publish_repair(
-        self,
-        context: _DeliveryStateRepairContext,
-    ) -> DeliveryStateRepairReceipt:
-        runtime = DeliveryRuntime(
-            self._target_root,
-            context.contract,
-            workspace_manager=self._workspace_manager,
-            migration_reviewed_head=context.coordination.last_reviewed_commit,
-        )
-        try:
-            return self._delivery_state_publisher.repair_snapshot(
-                change_id=context.change_id,
-                package_id=context.package.package_id,
-                coordination=context.coordination,
-                runtime=runtime,
-                admission=context.admission,
-                operation_id=context.operation_id,
-                captured_at=_timestamp(self._clock()),
-                expected_remote_head=context.diagnostic.remote_head or context.expected_remote_head,
-            )
-        except DeliveryStatePublicationError:
-            raise
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-            self._fail("remote Delivery state repair could not be published", exc)
-
-    def _prove_repair(
-        self,
-        change_id: str,
-        expected_diagnostic_code: str,
-        expected_remote_head: str,
-        operation_id: str,
-    ) -> None:
-        diagnostic_keys = {
-            _health_diagnostic_key(item)
-            for item in self._startup_health_diagnostics
-            if item.change_id == change_id
-            and item.remote_head == expected_remote_head
-            and item.repairable
-            and item.code in {expected_diagnostic_code, "frontier-migration-required"}
-        }
-        prior_cleared = self._cleared_startup_health_diagnostics
-        self._cleared_startup_health_diagnostics = {*prior_cleared, *diagnostic_keys}
-        try:
-            self._runtime_reconciliation_errors.pop(change_id, None)
-            self._runtime_snapshots.pop(change_id, None)
-            self._reconcile_runtimes()
-            if change_id not in self._runtimes or change_id in self._runtime_reconciliation_errors:
-                self._fail("Delivery state repair was published but the Change did not recompose")
-            remaining = tuple(item for item in self._delivery_health_view().diagnostics if item.change_id == change_id)
-            if remaining:
-                self._fail("Delivery state repair was published but Change health still requires attention")
-        except Exception as exc:
-            self._cleared_startup_health_diagnostics = prior_cleared
-            self._runtime_reconciliation_errors.pop(change_id, None)
-            self._runtime_snapshots.pop(change_id, None)
-            proof_detail = str(exc) or type(exc).__name__
-            raise DeliveryStateRepairProofError(operation_id, proof_detail) from exc
-        self._cleared_startup_health_diagnostics = prior_cleared
-        self._clear_repair_diagnostics(change_id, expected_diagnostic_code, expected_remote_head)
-        self._runtime_reconciliation_errors.pop(change_id, None)
-        self._runtime_snapshots.pop(change_id, None)
-
-    def _repair_health_diagnostic(
-        self,
-        change_id: str,
-        expected_code: str,
-        expected_remote_head: str,
-    ) -> DeliveryHealthDiagnostic:
-        matches = tuple(
-            diagnostic
-            for diagnostic in self._startup_health_diagnostics
-            if diagnostic.source == "remote-state"
-            and diagnostic.change_id == change_id
-            and diagnostic.code == expected_code
-            and diagnostic.remote_head == expected_remote_head
-            and diagnostic.repairable
-            and _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
-        )
-        if len(matches) != 1:
-            self._fail("Delivery state repair diagnostic is absent, stale, or ambiguous")
-        return matches[0]
-
-    def _validate_repair_authority(
-        self,
-        change_id: str,
-        contract: DeliveryContract,
-        admission: DeliveryAdmissionReceipt,
-        coordination: ChangeCoordination,
-        frontier: DeliveryFrontier,
-    ) -> None:
-        self._validate_repair_coordination(change_id, coordination)
-        self._validate_repair_admission(change_id, admission, coordination, contract)
-        self._validate_repair_frontier(frontier)
-        self._validate_repair_frontier_contract(contract, frontier)
-        self._validate_repair_workspace(change_id, coordination)
-
-    def _validate_repair_coordination(self, change_id: str, coordination: ChangeCoordination) -> None:
-        if coordination.change_id != change_id or coordination.branch != f"owlbear/change/{change_id}":
-            self._fail("Delivery state repair coordination identity is invalid")
-        if coordination.writer is not None or coordination.publication_lease is not None:
-            self._fail("Delivery state repair requires idle Change custody")
-        if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
-            self._fail("Delivery state repair cannot overlap Change worktree cleanup")
-        if coordination.target_sync_conflict is not None:
-            self._fail("Delivery state repair cannot overlap a target synchronization conflict")
-
-    def _validate_repair_admission(
-        self,
-        change_id: str,
-        admission: DeliveryAdmissionReceipt,
-        coordination: ChangeCoordination,
-        contract: DeliveryContract,
-    ) -> None:
-        if admission.change_id != change_id or admission.integration_target != coordination.integration_target:
-            self._fail("Delivery state repair admission authority does not match coordination")
-        if admission.contract_digest != hashlib.sha256(_canonical_model_bytes(contract)).hexdigest():
-            self._fail("Delivery state repair admission does not match the contract")
-
-    def _validate_repair_frontier(self, frontier: DeliveryFrontier) -> None:
-        if any(binding.active_claim is not None for binding in frontier.bindings):
-            self._fail("Delivery state repair requires no active Outcome claims")
-
-    def _validate_repair_frontier_contract(
-        self,
-        contract: DeliveryContract,
-        frontier: DeliveryFrontier,
-    ) -> None:
-        expected = tuple((scope.outcome_id, scope.scope_id) for scope in contract.plan_scopes)
-        actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
-        if actual != expected:
-            self._fail("Delivery state repair frontier does not match its admitted contract")
-
-    def _validate_repair_package_authority(
-        self,
-        contract: DeliveryContract,
-        package: VerifiedDesignPackage,
-    ) -> None:
-        if (
-            hashlib.sha256(package.authority_bytes).hexdigest()
-            != hashlib.sha256(_canonical_model_bytes(contract)).hexdigest()
-        ):
-            self._fail("active package authority does not match the Delivery runtime")
-        source_digests = {binding.source_name: binding.sha256 for binding in contract.source_bindings}
-        if source_digests != {
-            "intent.md": package.manifest.intent_sha256,
-            "design.md": package.manifest.design_sha256,
-        }:
-            self._fail("active package sources do not match admitted Delivery bindings")
-
-    def _validate_repair_workspace(self, change_id: str, coordination: ChangeCoordination) -> None:
-        try:
-            retained = self._workspace_manager.inspect_retained(change_id, coordination)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-            self._fail("Delivery state repair requires retained Change workspace authority", exc)
-        if retained.writer is not None or retained.publication_expiry is not None or retained.attention:
-            self._fail("Delivery state repair requires reconciled Change workspace custody")
-        if retained.branch != coordination.branch or retained.branch_head != coordination.last_reviewed_commit:
-            self._fail("Delivery state repair reviewed head does not match Change workspace authority")
-
-    def _clear_repair_diagnostics(self, change_id: str, expected_code: str, expected_remote_head: str) -> None:
-        for diagnostic in self._startup_health_diagnostics:
-            if (
-                diagnostic.change_id == change_id
-                and diagnostic.remote_head == expected_remote_head
-                and diagnostic.repairable
-                and diagnostic.code in {expected_code, "frontier-migration-required"}
-            ):
-                self._cleared_startup_health_diagnostics.add(_health_diagnostic_key(diagnostic))
-
     def _delivery_health_view(self) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [
-            diagnostic
-            for diagnostic in self._startup_health_diagnostics
-            if _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
+            *self._startup_health_diagnostics,
         ]
         diagnostics.extend(
             DeliveryHealthDiagnostic(
@@ -3761,8 +3391,6 @@ class PortfolioApplication:
                 diagnostic.detail,
                 diagnostic.change_id,
                 diagnostic.path,
-                diagnostic.remote_head,
-                diagnostic.repairable,
                 diagnostic.retry_safe,
             ): diagnostic
             for diagnostic in diagnostics
@@ -4098,19 +3726,6 @@ class PortfolioApplication:
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
         """Show current bounded operator state from one exact runtime binding."""
         runtime = self._runtime(change_id)
-        if outcome_id == change_id:
-            if (
-                runtime.change_stage() != DeliveryChangeStage.BUILDING
-                or any(binding.stage != DeliveryStage.COMPLETED for binding in runtime.bindings())
-                or runtime.finalization_invalidation() is not None
-            ):
-                self._fail("change work item is not eligible for retained legacy attention context")
-            return DeliveryOperatorContext(
-                change_id=change_id,
-                outcome_id=outcome_id,
-                stage=DeliveryStage.COMPLETED,
-                integration_attention=_operator_integration_attention(runtime.integration_attention()),
-            )
         binding = runtime.show_binding(outcome_id)
         return DeliveryOperatorContext(
             change_id=change_id,
@@ -4229,7 +3844,6 @@ class PortfolioApplication:
             diagnostic.change_id: f"{diagnostic.code}: {diagnostic.detail}"
             for diagnostic in self._startup_health_diagnostics
             if diagnostic.change_id is not None
-            and _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
         }
         initial_reconciliation = not self._has_reconciled_runtimes
 
@@ -4302,7 +3916,6 @@ class PortfolioApplication:
         return (
             active
             or not initial_reconciliation
-            or observation.diagnostic_code == "frontier-migration-required"
             or (
                 initial_reconciliation
                 and observation.frontier is not None
@@ -4326,15 +3939,10 @@ class PortfolioApplication:
     def _compose_runtime(self, observation: DeliveryChangeObservation) -> DeliveryRuntime:
         if observation.contract is None:
             self._fail("reconciled Change contract is unavailable")
-        try:
-            reviewed_head = self._workspace_manager.show(observation.change_id).last_reviewed_commit
-        except CoordinationConflictError:
-            reviewed_head = None
         return DeliveryRuntime(
             self._target_root,
             observation.contract,
             workspace_manager=self._workspace_manager,
-            migration_reviewed_head=reviewed_head,
         )
 
     @staticmethod

@@ -22,9 +22,6 @@ from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncReceipt,
-    convert_external_head_promotion_receipt_for_repair,
-    convert_legacy_external_head_adoption_receipt_for_repair,
-    convert_legacy_target_sync_receipt_for_repair,
 )
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
@@ -652,11 +649,7 @@ class DeliveryChangeDisposition(_DeliveryModel):
             message = "Change disposition timestamp must include a timezone"
             raise ValueError(message)
         expected_id = _receipt_digest(self, "disposition_id")
-        if self.acceptance_reason is None:
-            expected_ids = {expected_id, _legacy_change_disposition_digest(self)}
-        else:
-            expected_ids = {expected_id}
-        if self.disposition_id not in expected_ids:
+        if self.disposition_id != expected_id:
             message = "Change disposition identity is invalid"
             raise ValueError(message)
         return self
@@ -904,16 +897,6 @@ def integration_attention_disposition(
     if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
         return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
     return DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
-
-
-class DeliveryIntegrationCompletion(_DeliveryModel):
-    """Committed identity of one atomic Integration publication."""
-
-    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    completion_path: str = Field(min_length=1)
 
 
 class DeliveryIntegrationAttention(_DeliveryModel):
@@ -1357,23 +1340,13 @@ class DeliveryRuntimeReferenceError(ValueError):
     code = "ERR_DELIVERY_RUNTIME_REFERENCE"
 
 
-class DeliveryRuntimeMigrationError(ValueError):
-    """A retired frontier shape is not accepted by the current runtime."""
-
-
 _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
 _FRONTIER_SCHEMA_VERSION = 17
-_FINALIZATION_SCHEMA_VERSION = 2
-# These names describe rejected obsolete fields; the current parser never reads historical authority.
-_LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
-_LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
-_CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1457,12 +1430,10 @@ class DeliveryRuntime:
         contract: DeliveryContract,
         *,
         workspace_manager: ChangeWorkspaceManager | None = None,
-        migration_reviewed_head: str | None = None,
     ) -> None:
         self._target_root = runtime_root.resolve()
         self._contract = contract
         self._workspace_manager = workspace_manager
-        self._migration_reviewed_head = migration_reviewed_head
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
         self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
@@ -3345,11 +3316,7 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            frontier, canonical = parse_delivery_frontier(
-                content,
-                migration_reviewed_head=self._migration_reviewed_head,
-                require_checkpoint_backfill=True,
-            )
+            frontier, canonical = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
             if canonical != content:
                 self._replace_content(content, canonical)
@@ -3462,159 +3429,15 @@ def is_acceptance_waiting_observation(
 
 def parse_delivery_frontier(
     content: bytes,
-    *,
-    migration_reviewed_head: str | None = None,
-    require_checkpoint_backfill: bool = False,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse canonical frontier bytes and reduce safe pre-Assembly-removal state."""
+    """Parse one canonical current-schema frontier."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
-    schema_version = _normalize_frontier_schema(payload)
-    _reject_legacy_finalization(payload)
-    frontier = DeliveryFrontier.model_validate_json(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")),
-    )
-    if schema_version in _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS:
-        frontier = _backfill_checkpoint_state(
-            frontier,
-            migration_reviewed_head,
-            required=require_checkpoint_backfill,
-        )
-    return frontier, _model_content(frontier)
-
-
-def repair_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
-    """Convert the known retired receipt shape into one current frontier."""
-    try:
-        current = DeliveryFrontier.model_validate_json(content)
-    except (TypeError, ValueError):
-        current = None
-    if current is not None:
-        return current, _model_content(current)
-    payload = json.loads(content)
-    if not isinstance(payload, dict) or payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
-        message = "Delivery frontier is not a supported repair input"
-        raise DeliveryRuntimeMigrationError(message)
-    repaired = dict(payload)
-    target_sync = repaired.get("target_sync_receipt")
-    if isinstance(target_sync, dict) and target_sync.get("schema_version") == 1:
-        repaired["target_sync_receipt"] = convert_legacy_target_sync_receipt_for_repair(target_sync).model_dump(
-            mode="json"
-        )
-    adoption = repaired.get("external_head_adoption_receipt")
-    if isinstance(adoption, dict) and adoption.get("schema_version") == 1:
-        converted_adoption = convert_legacy_external_head_adoption_receipt_for_repair(adoption)
-        repaired["external_head_adoption_receipt"] = converted_adoption.model_dump(mode="json")
-        promotion = repaired.get("external_head_promotion_receipt")
-        if isinstance(promotion, dict) and promotion.get("adoption_receipt_id") == adoption.get("receipt_id"):
-            repaired["external_head_promotion_receipt"] = convert_external_head_promotion_receipt_for_repair(
-                promotion,
-                adoption_receipt_id=converted_adoption.receipt_id,
-            ).model_dump(mode="json")
-    frontier = DeliveryFrontier.model_validate_json(
-        json.dumps(repaired, sort_keys=True, separators=(",", ":")),
-    )
-    return frontier, _model_content(frontier)
-
-
-def is_repairable_delivery_frontier(content: bytes) -> bool:
-    """Return whether explicit repair can convert one retired receipt shape."""
-    try:
-        payload = json.loads(content)
-    except (TypeError, ValueError):
-        return False
-    if not isinstance(payload, dict) or payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
-        return False
-    try:
-        DeliveryFrontier.model_validate_json(content)
-    except (TypeError, ValueError, DeliveryRuntimeMigrationError):
-        if not any(
-            isinstance(payload.get(key), dict) and payload[key].get("schema_version") == 1
-            for key in ("target_sync_receipt", "external_head_adoption_receipt")
-        ):
-            return False
-        try:
-            repair_delivery_frontier(content)
-        except (TypeError, ValueError, DeliveryRuntimeMigrationError):
-            return False
-    return True
-
-
-def _normalize_frontier_schema(payload: dict[str, object]) -> int:
-    schema_version = payload.get("schema_version")
-    if schema_version == 1:
-        _normalize_schema_one_bindings(payload)
-    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
-        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+    if payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
-    _normalize_legacy_integration_completion(payload)
-    return schema_version
-
-
-def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
-    bindings = payload.get("bindings")
-    if not isinstance(bindings, list):
-        raise TypeError
-    for binding in bindings:
-        if not isinstance(binding, dict) or binding.get("stage") == "assembly":
-            raise ValueError
-        assembly_required = binding.pop("assembly_required", False)
-        if assembly_required is not False:
-            raise ValueError
-    payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-
-
-def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None:
-    # Current parser guard: retired completion fields must never be accepted as present authority.
-    result_id = payload.pop("integration_result_id", None)
-    completion = payload.pop("integration_completion", None)
-    if result_id is not None or completion is not None:
-        raise DeliveryRuntimeMigrationError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
-
-
-def _reject_legacy_finalization(payload: dict[str, object]) -> None:
-    # Current-schema integrity guard; this does not read or translate historical state.
-    finalization = payload.get("finalization")
-    if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
-        raise DeliveryRuntimeMigrationError(_LEGACY_FINALIZATION_MESSAGE)
-
-
-def _backfill_checkpoint_state(
-    frontier: DeliveryFrontier,
-    reviewed_head: str | None,
-    *,
-    required: bool,
-) -> DeliveryFrontier:
-    result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
-    if not result_bindings:
-        return frontier
-    if reviewed_head is None:
-        if required:
-            raise ValueError
-        return frontier
-    triggers = [
-        DeliveryCheckpointTrigger(
-            kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-        )
-    ]
-    triggers.extend(
-        DeliveryCheckpointTrigger(
-            kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
-            outcome_id=binding.outcome_id,
-        )
-        for binding in frontier.bindings
-        if binding.stage == DeliveryStage.COMPLETED
-    )
-    return frontier.model_copy(
-        update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=reviewed_head,
-                triggers=tuple(triggers),
-            )
-        }
-    )
+    frontier = DeliveryFrontier.model_validate_json(content)
+    return frontier, _model_content(frontier)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -3814,12 +3637,6 @@ def _finalization_invalidation_digest(receipt: DeliveryFinalizationInvalidationR
     return hashlib.sha256(content).hexdigest()
 
 
-def _legacy_change_disposition_digest(disposition: DeliveryChangeDisposition) -> str:
-    payload = disposition.model_dump(mode="json", exclude={"disposition_id", "acceptance_reason"})
-    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(content).hexdigest()
-
-
 def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryChangePublicationIdentity | None:
     if ready is None:
         return None
@@ -3902,7 +3719,6 @@ __all__ = [
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
-    "DeliveryIntegrationCompletion",
     "DeliveryMergedPullRequestLatch",
     "DeliveryObservation",
     "DeliveryObservationReceipt",
@@ -3920,7 +3736,6 @@ __all__ = [
     "DeliveryReviewReceipt",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
-    "DeliveryRuntimeMigrationError",
     "DeliveryRuntimeReferenceError",
     "DeliveryStage",
     "DeliveryTaskDefinition",
@@ -3936,5 +3751,4 @@ __all__ = [
     "invalidate_checkpoint_publication",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
-    "is_repairable_delivery_frontier",
 ]

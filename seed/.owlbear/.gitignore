@@ -15,11 +15,6 @@ delivery/runtime/*
 !delivery/runtime/host.json
 delivery/worktrees/
 worktrees/
-delivery/migration.json
-delivery/integration-retirement.json
-scratch/delivery-integration-retirement/
-target/target-runtime/capacity.json
-target/target-runtime/integration-verification/
 
 # Lock files (transient runtime artifacts)
 .storage.lock

@@ -17,9 +17,7 @@ from owlbear_delivery.delivery_admission import (
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryFrontier,
-    DeliveryRuntimeMigrationError,
     derive_change_stage,
-    is_repairable_delivery_frontier,
     parse_delivery_frontier,
 )
 from owlbear_delivery.target_contract import DeliveryContract
@@ -43,7 +41,6 @@ class DeliveryDiscoveryErrorCode(StrEnum):
     ADMISSION_IDENTITY_INVALID = "admission-identity-invalid"
     FRONTIER_UNAVAILABLE = "frontier-unavailable"
     FRONTIER_INVALID = "frontier-invalid"
-    FRONTIER_MIGRATION_REQUIRED = "frontier-migration-required"
     FRONTIER_BINDING_INVALID = "frontier-binding-invalid"
     ADMISSION_CONTRACT_MISMATCH = "admission-contract-mismatch"
     ADMISSION_FRONTIER_MISMATCH = "admission-frontier-mismatch"
@@ -231,22 +228,7 @@ def _parse_frontier(
         )
     try:
         frontier = parse_delivery_frontier(content)[0]
-    except DeliveryRuntimeMigrationError as exc:
-        return (
-            None,
-            None,
-            _error(DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED, str(exc)),
-        )
     except (TypeError, ValueError, ValidationError):
-        if is_repairable_delivery_frontier(content):
-            return (
-                None,
-                None,
-                _error(
-                    DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED,
-                    "Persisted Delivery frontier contains a retired receipt schema and requires explicit repair",
-                ),
-            )
         return (
             None,
             None,

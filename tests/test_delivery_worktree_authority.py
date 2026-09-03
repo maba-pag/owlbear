@@ -76,7 +76,6 @@ _REMOVE_WORKTREE_CALLERS = frozenset(
     {
         ("ChangeWorkspaceManager", "cleanup"),
         ("ChangeWorkspaceManager", "recover"),
-        ("<module>", "_remove_worktrees"),
     }
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})

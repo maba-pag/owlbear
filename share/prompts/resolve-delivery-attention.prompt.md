@@ -19,13 +19,3 @@ attention identities before inspecting current evidence. Present every material 
 pros, cons, risks, confidence, and expected outcomes, then use `askQuestions` for exactly one
 decision at a time. Perform only the selected operation that current Delivery authority explicitly
 permits; report an authority gap instead of substituting destructive Git or filesystem commands.
-
-For a repairable remote-state condition, use `delivery_health` as the read-only diagnosis surface.
-Present the exact Change ID, diagnostic code, and observed remote state-branch head, ask for explicit
-confirmation, re-read the same startup evidence and local reconciliation, and call
-`repair_delivery_state` only with `confirmed_repair=true` and the exact values. Health does not
-refresh the remote branch during the running process; restart or reload Delivery when a fresh remote
-observation is required. Verify the returned receipt with the local health and Change projection;
-never hand-edit local Delivery state or the remote state branch. Choose the `operation_id` before
-the first repair attempt and reuse it for any retry-safe retry, including a retry after remote
-publication when local proof fails.

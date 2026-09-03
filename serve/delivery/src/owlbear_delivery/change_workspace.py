@@ -231,64 +231,6 @@ class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
         return self
 
 
-class RecoverBlockedImplementation(_WorkspaceModel):
-    """Exact authority for recovering one released Implementation block candidate."""
-
-    change_id: ChangeId
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-
-
-class BlockedImplementationRecoveryReceipt(_WorkspaceModel):
-    """Content-addressed evidence for one released Implementation recovery."""
-
-    schema_version: Literal[1] = 1
-    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-    change_id: ChangeId
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    preserved_ref: str = Field(min_length=1)
-    preserved_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-    @classmethod
-    def create(  # noqa: PLR0913
-        cls,
-        *,
-        operation_id: str,
-        change_id: str,
-        outcome_id: str,
-        expected_resume_commit: str,
-        reviewed_head: str,
-        preserved_ref: str,
-    ) -> Self:
-        """Create deterministic evidence for one preserved blocked candidate."""
-        values = {
-            "operation_id": operation_id,
-            "change_id": change_id,
-            "outcome_id": outcome_id,
-            "expected_resume_commit": expected_resume_commit,
-            "reviewed_head": reviewed_head,
-            "preserved_ref": preserved_ref,
-            "preserved_commit": expected_resume_commit,
-        }
-        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
-        return cls(receipt_id=_blocked_implementation_recovery_digest(candidate), **values)
-
-    @model_validator(mode="after")
-    def _validate_receipt(self) -> Self:
-        if self.preserved_commit != self.expected_resume_commit:
-            message = "blocked Implementation recovery receipt names different preserved commits"
-            raise ValueError(message)
-        if self.receipt_id != _blocked_implementation_recovery_digest(self):
-            message = "blocked Implementation recovery receipt identity is invalid"
-            raise ValueError(message)
-        return self
-
-
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
@@ -973,7 +915,7 @@ class ChangeTargetSyncConflictError(RuntimeError):
 
 
 class CapacityLedger(_WorkspaceModel):
-    """Historical writer-capacity payload retained for legacy migration."""
+    """Current writer-capacity payload."""
 
     schema_version: Literal[1] = 1
     capacity: int = Field(gt=0)
@@ -1012,10 +954,8 @@ class PortfolioCoordinator:
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
         self._coordination_root = state_root / "coordination" / "changes"
-        self._legacy_coordination_root = state_root / "claims" / "changes"
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
-        self._migrate_legacy_coordination()
 
     def recover_pending_transactions(self) -> None:
         """Complete pending coordinator transactions before reading ownership state."""
@@ -1312,34 +1252,6 @@ class PortfolioCoordinator:
     @staticmethod
     def _publication_timestamp(value: str) -> datetime:
         return _publication_timestamp(value)
-
-    def _migrate_legacy_coordination(self) -> None:
-        # Remove this bridge after the runtime-path cleanup TODO is cleared.
-        canonical_present = self._coordination_root.exists() or self._coordination_root.is_symlink()
-        legacy_present = self._legacy_coordination_root.exists() or self._legacy_coordination_root.is_symlink()
-        if canonical_present:
-            if legacy_present:
-                _coordination_conflict("both coordination directories are present")
-            if self._coordination_root.is_symlink() or not self._coordination_root.is_dir():
-                _coordination_conflict("coordination directory is unsafe")
-            return
-        if not legacy_present:
-            return
-        if self._legacy_coordination_root.is_symlink() or not self._legacy_coordination_root.is_dir():
-            _coordination_conflict("legacy coordination directory is unsafe")
-        parent = self._coordination_root.parent
-        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
-            _coordination_conflict("coordination directory parent is unsafe")
-        parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self._legacy_coordination_root.rename(self._coordination_root)
-        except OSError as exc:
-            if self._coordination_root.is_dir() and not self._legacy_coordination_root.exists():
-                return
-            try:
-                _coordination_conflict("legacy coordination directory could not be migrated")
-            except CoordinationConflictError as error:
-                raise error from exc
 
     def _coordination_path(self, change_id: str) -> Path:
         if not change_id or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in change_id):
@@ -2001,7 +1913,7 @@ class ChangeWorkspaceManager:
         publication_base_head: str,
         operation_id: str,
     ) -> PublicationBaselineRecoveryReceipt:
-        """Persist one explicitly confirmed baseline for legacy publication authority."""
+        """Persist one explicitly confirmed baseline for publication authority."""
         if _COMMIT_PATTERN.fullmatch(expected_change_head) is None:
             message = "expected Change head is not an exact commit identity"
             raise ValueError(message)
@@ -2049,82 +1961,6 @@ class ChangeWorkspaceManager:
                 lock=lock,
             )
             return candidate
-
-    def recover_blocked_implementation(
-        self,
-        request: RecoverBlockedImplementation,
-    ) -> BlockedImplementationRecoveryReceipt:
-        """Preserve and re-anchor one released blocked Implementation candidate."""
-        preserved_ref = _blocked_implementation_recovery_ref(request.change_id, request.operation_id)
-        self._git("check-ref-format", preserved_ref)
-        candidate = BlockedImplementationRecoveryReceipt.create(
-            operation_id=request.operation_id,
-            change_id=request.change_id,
-            outcome_id=request.outcome_id,
-            expected_resume_commit=request.expected_resume_commit,
-            reviewed_head=request.expected_reviewed_head,
-            preserved_ref=preserved_ref,
-        )
-        with self._coordinator.publication_lock(request.change_id) as lock:
-            coordination = self._coordinator.show(request.change_id)
-            if coordination.writer is not None or coordination.publication_lease is not None:
-                _coordination_conflict("blocked Implementation recovery requires an idle Change")
-            if (
-                coordination.worktree_cleanup_intent is not None
-                or coordination.worktree_cleanup is not None
-                or coordination.target_sync_conflict is not None
-                or coordination.external_head_adoption_intent is not None
-            ):
-                _coordination_conflict("blocked Implementation recovery cannot overlap workspace attention")
-            if coordination.last_reviewed_commit != request.expected_reviewed_head:
-                _coordination_conflict("blocked Implementation recovery reviewed head is stale")
-            branch_head = self._resolve(coordination.branch)
-            if branch_head not in {request.expected_resume_commit, request.expected_reviewed_head}:
-                _coordination_conflict("blocked Implementation recovery branch head is outside the request")
-            preserved = self._resolve(preserved_ref, missing_ok=True)
-            if preserved is not None and preserved != request.expected_resume_commit:
-                _coordination_conflict("blocked Implementation recovery preserved ref differs from the request")
-            if branch_head == request.expected_resume_commit:
-                self._require_ancestor(request.expected_reviewed_head, branch_head)
-                self._require_worktree(
-                    request.change_id,
-                    coordination.worktree_path,
-                    coordination.branch,
-                    branch_head,
-                )
-                self._require_clean_worktree(coordination.worktree_path)
-                if preserved is None:
-                    self._git("update-ref", preserved_ref, request.expected_resume_commit, "0" * 40)
-                self._git(
-                    "update-ref",
-                    f"refs/heads/{coordination.branch}",
-                    request.expected_reviewed_head,
-                    request.expected_resume_commit,
-                )
-                self._git("reset", "--hard", request.expected_reviewed_head, cwd=coordination.worktree_path)
-            elif preserved != request.expected_resume_commit:
-                _coordination_conflict("blocked Implementation recovery candidate was not preserved")
-            self._verify_blocked_implementation_recovery(coordination, candidate)
-            self._coordinator.update(coordination, lock=lock)
-            return candidate
-
-    def _verify_blocked_implementation_recovery(
-        self,
-        coordination: ChangeCoordination,
-        receipt: BlockedImplementationRecoveryReceipt,
-    ) -> None:
-        """Verify one replayed blocked-candidate recovery without changing state."""
-        if self._resolve(receipt.preserved_ref) != receipt.preserved_commit:
-            _workspace_failure("blocked Implementation recovery ref differs from its receipt")
-        if self._resolve(coordination.branch) != receipt.reviewed_head:
-            _workspace_failure("blocked Implementation recovery branch was not re-anchored")
-        self._require_worktree(
-            receipt.change_id,
-            coordination.worktree_path,
-            coordination.branch,
-            receipt.reviewed_head,
-        )
-        self._require_clean_worktree(coordination.worktree_path)
 
     def _replay_target_sync_receipt(
         self,
@@ -3984,54 +3820,6 @@ def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def convert_legacy_target_sync_receipt_for_repair(payload: object) -> ChangeTargetSyncReceipt:
-    """Convert one verified schema-1 target-sync receipt for explicit repair only."""
-    if not isinstance(payload, dict):
-        message = "target synchronization repair input is invalid"
-        raise TypeError(message)
-    expected_keys = {
-        "schema_version",
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "integration_target",
-        "expected_target",
-        "target_head",
-        "change_head_before",
-        "merged_head",
-        "merge_commit",
-    }
-    allowed_keys = expected_keys | {"review_required"}
-    if payload.get("schema_version") != 1 or set(payload) not in (expected_keys, allowed_keys):
-        message = "target synchronization receipt is not a supported repair input"
-        raise ValueError(message)
-    if payload.get("review_required", False) is not False:
-        message = "target synchronization receipt is not a supported repair input"
-        raise ValueError(message)
-    receipt_id = payload.get("receipt_id")
-    if not isinstance(receipt_id, str):
-        message = "target synchronization receipt identity is invalid"
-        raise TypeError(message)
-    identity_payload = {key: value for key, value in payload.items() if key not in {"receipt_id", "review_required"}}
-    expected_receipt_id = hashlib.sha256(
-        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    if receipt_id != expected_receipt_id:
-        message = "target synchronization receipt identity is invalid"
-        raise ValueError(message)
-    return ChangeTargetSyncReceipt.create(
-        operation_id=payload["operation_id"],
-        change_id=payload["change_id"],
-        integration_target=payload["integration_target"],
-        expected_target=payload["expected_target"],
-        target_head=payload["target_head"],
-        change_head_before=payload["change_head_before"],
-        merged_head=payload["merged_head"],
-        merge_commit=payload["merge_commit"],
-        review_required=False,
-    )
-
-
 def _target_sync_conflict_digest(conflict: ChangeTargetSyncConflictState) -> str:
     payload = conflict.model_dump(mode="json", exclude={"conflict_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -4050,181 +3838,16 @@ def _publication_baseline_recovery_digest(receipt: PublicationBaselineRecoveryRe
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _blocked_implementation_recovery_ref(change_id: str, operation_id: str) -> str:
-    return f"refs/owlbear/recoveries/{change_id}/{operation_id}"
-
-
-def _blocked_implementation_recovery_digest(receipt: BlockedImplementationRecoveryReceipt) -> str:
-    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def _external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
-def convert_legacy_external_head_adoption_receipt_for_repair(
-    payload: object,
-) -> ChangeExternalHeadAdoptionReceipt:
-    """Convert one verified schema-1 head-adoption receipt for explicit repair only."""
-    if not isinstance(payload, dict):
-        message = "external Change-head repair input is invalid"
-        raise TypeError(message)
-    expected_keys = {
-        "schema_version",
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "branch",
-        "expected_head",
-        "adopted_head",
-    }
-    allowed_keys = expected_keys | {"provenance"}
-    if payload.get("schema_version") != 1 or set(payload) not in (expected_keys, allowed_keys):
-        message = "external Change-head adoption receipt is not a supported repair input"
-        raise ValueError(message)
-    if payload.get("provenance", "fast-forward") != "fast-forward":
-        message = "external Change-head adoption receipt is not a supported repair input"
-        raise ValueError(message)
-    receipt_id = payload.get("receipt_id")
-    if not isinstance(receipt_id, str):
-        message = "external Change-head adoption receipt identity is invalid"
-        raise TypeError(message)
-    identity_payload = {key: value for key, value in payload.items() if key not in {"receipt_id", "provenance"}}
-    expected_receipt_id = hashlib.sha256(
-        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    if receipt_id != expected_receipt_id:
-        message = "external Change-head adoption receipt identity is invalid"
-        raise ValueError(message)
-    return ChangeExternalHeadAdoptionReceipt.create(
-        operation_id=payload["operation_id"],
-        change_id=payload["change_id"],
-        branch=payload["branch"],
-        expected_head=payload["expected_head"],
-        adopted_head=payload["adopted_head"],
-        provenance="fast-forward",
-    )
-
-
-def convert_external_head_promotion_receipt_for_repair(
-    payload: object,
-    *,
-    adoption_receipt_id: str,
-) -> ChangeExternalHeadPromotionReceipt:
-    """Rebind one promotion receipt to a converted adoption identity for explicit repair only."""
-    if not isinstance(payload, dict):
-        message = "external Change-head promotion repair input is invalid"
-        raise TypeError(message)
-    receipt = ChangeExternalHeadPromotionReceipt.model_validate(payload)
-    return ChangeExternalHeadPromotionReceipt.create(
-        operation_id=receipt.operation_id,
-        change_id=receipt.change_id,
-        branch=receipt.branch,
-        adoption_receipt_id=adoption_receipt_id,
-        promoted_head=receipt.promoted_head,
-        provenance=receipt.provenance,
-    )
-
-
-def repair_change_coordination(content: bytes) -> tuple[ChangeCoordination, bytes]:
-    """Convert retired receipt shapes in one coordination record for explicit repair only."""
-    payload = json.loads(content)
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        message = "Change coordination is not a supported repair input"
-        raise ValueError(message)
-    repaired = dict(payload)
-    adoption_ids: dict[str, str] = {}
-    repaired["target_sync_receipt"] = _repair_target_sync_payload(repaired.get("target_sync_receipt"))
-    repaired["external_head_adoption_receipt"] = _repair_adoption_payload(
-        repaired.get("external_head_adoption_receipt"),
-        adoption_ids,
-    )
-    adoption_history = repaired.get("external_head_adoption_receipts", [])
-    if not isinstance(adoption_history, list):
-        message = "external Change-head adoption history repair input is invalid"
-        raise TypeError(message)
-    repaired["external_head_adoption_receipts"] = [
-        _repair_adoption_payload(item, adoption_ids) for item in adoption_history
-    ]
-    repaired["external_head_promotion_receipt"] = _repair_promotion_payload(
-        repaired.get("external_head_promotion_receipt"),
-        adoption_ids,
-    )
-    promotion_history = repaired.get("external_head_promotion_receipts", [])
-    if not isinstance(promotion_history, list):
-        message = "external Change-head promotion history repair input is invalid"
-        raise TypeError(message)
-    repaired["external_head_promotion_receipts"] = [
-        _repair_promotion_payload(item, adoption_ids) for item in promotion_history
-    ]
-    coordination = ChangeCoordination.model_validate_json(
-        json.dumps(repaired, sort_keys=True, separators=(",", ":")),
-    )
-    return coordination, _model_content(coordination)
-
-
-def _repair_target_sync_payload(payload: object) -> object:
-    if payload is None:
-        return None
-    if not isinstance(payload, dict):
-        message = "target synchronization repair input is invalid"
-        raise TypeError(message)
-    if payload.get("schema_version") == 1:
-        return convert_legacy_target_sync_receipt_for_repair(payload).model_dump(mode="json")
-    return ChangeTargetSyncReceipt.model_validate_json(_model_content_from_payload(payload)).model_dump(mode="json")
-
-
-def _repair_adoption_payload(payload: object, adoption_ids: dict[str, str]) -> object:
-    if payload is None:
-        return None
-    if not isinstance(payload, dict):
-        message = "external Change-head adoption repair input is invalid"
-        raise TypeError(message)
-    previous_id = payload.get("receipt_id")
-    if not isinstance(previous_id, str):
-        message = "external Change-head adoption receipt identity is invalid"
-        raise TypeError(message)
-    receipt = (
-        convert_legacy_external_head_adoption_receipt_for_repair(payload)
-        if payload.get("schema_version") == 1
-        else ChangeExternalHeadAdoptionReceipt.model_validate_json(_model_content_from_payload(payload))
-    )
-    adoption_ids[previous_id] = receipt.receipt_id
-    adoption_ids[receipt.receipt_id] = receipt.receipt_id
-    return receipt.model_dump(mode="json")
-
-
-def _repair_promotion_payload(payload: object, adoption_ids: dict[str, str]) -> object:
-    if payload is None:
-        return None
-    if not isinstance(payload, dict):
-        message = "external Change-head promotion repair input is invalid"
-        raise TypeError(message)
-    previous_id = payload.get("adoption_receipt_id")
-    if not isinstance(previous_id, str):
-        message = "external Change-head promotion adoption identity is invalid"
-        raise TypeError(message)
-    adoption_id = adoption_ids.get(previous_id, previous_id)
-    receipt = (
-        convert_external_head_promotion_receipt_for_repair(payload, adoption_receipt_id=adoption_id)
-        if adoption_id != previous_id
-        else ChangeExternalHeadPromotionReceipt.model_validate_json(_model_content_from_payload(payload))
-    )
-    return receipt.model_dump(mode="json")
-
-
 def _external_head_promotion_digest(receipt: ChangeExternalHeadPromotionReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
-
-
-def _model_content_from_payload(payload: object) -> bytes:
-    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def _design_package_snapshot_intent_digest(intent: ChangeDesignPackageSnapshotIntent) -> str:

@@ -15,7 +15,6 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery.change_workspace import (
-    BlockedImplementationRecoveryReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
@@ -30,7 +29,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
@@ -46,7 +44,6 @@ from owlbear_delivery_mcp.target_models import (
     AdministrativeMovePreviewResponse,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
-    ChangeBlockedImplementationRecoveryResponse,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
@@ -78,7 +75,6 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
-    DeliveryStateRepairResponse,
     EmptyParams,
     EmptyRequest,
     ExternalHeadAdoptionParams,
@@ -97,16 +93,12 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
-    RecoverBlockedImplementationParams,
-    RecoverBlockedImplementationRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
-    RepairDeliveryStateParams,
-    RepairDeliveryStateRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
     ResolvedDeliveryRequestResponse,
@@ -148,7 +140,6 @@ DELIVERY_OPERATION_NAMES = (
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
-    "repair_delivery_state",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_operator_context",
@@ -183,7 +174,6 @@ DELIVERY_OPERATION_NAMES = (
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
-    "recover_blocked_implementation",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -329,23 +319,6 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
-
-    async def repair_delivery_state(self, request: RepairDeliveryStateRequest) -> DeliveryStateRepairResponse:
-        """Convert one exact repairable Delivery state after explicit confirmation."""
-        params = self._validate(RepairDeliveryStateParams, request)
-        receipt = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.repair_delivery_state(
-                params.change_id,
-                params.expected_diagnostic_code,
-                params.expected_remote_head,
-                params.operation_id,
-                confirmed_repair=params.confirmed_repair,
-            ),
-            DeliveryStateRepairReceipt,
-        )
-        return DeliveryStateRepairResponse.from_receipt(receipt)
 
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""
@@ -768,33 +741,6 @@ class TargetMCPAdapter:
             PublicationBaselineRecoveryReceipt,
         )
         return ChangePublicationBaselineRecoveryResponse.from_receipt(receipt)
-
-    async def recover_blocked_implementation(
-        self,
-        request: RecoverBlockedImplementationRequest,
-    ) -> ChangeBlockedImplementationRecoveryResponse:
-        """Repair legacy released-at-candidate Implementation state.
-
-        Normal blocked Implementations do not use this migration operation. Alert the user that
-        recovery preserves the candidate commit under a recovery ref and re-anchors the managed
-        worktree at the reviewed head; it does not resolve the block or admit candidate work.
-        Invoke only after the user explicitly confirms these effects.
-        """
-        params = self._validate(RecoverBlockedImplementationParams, request)
-        receipt = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.recover_blocked_implementation(
-                params.change_id,
-                params.outcome_id,
-                params.expected_resume_commit,
-                params.expected_reviewed_head,
-                params.operation_id,
-                confirmed_recovery=params.confirmed_recovery,
-            ),
-            BlockedImplementationRecoveryReceipt,
-        )
-        return ChangeBlockedImplementationRecoveryResponse.from_receipt(receipt)
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""

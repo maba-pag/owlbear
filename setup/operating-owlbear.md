@@ -43,7 +43,7 @@ Running `init.py` writes the following files into your project directory:
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and removes retired root rules on rerun |
+| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and merges current managed rules on rerun |
 | `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
@@ -66,14 +66,7 @@ For a fresh workspace, `init.py` writes tracked Delivery configuration and the v
 Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
 Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
 is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
-profiles, or retired task, decision, board, accept, or audit stores. Existing legacy state is
-preserved unchanged.
-
-When upgrading an existing workspace, remove the obsolete `writer_capacity` field from
-`.owlbear/delivery/runtime/host.json` and any `.owlbear/delivery/runtime/host.local.json` override
-before restarting Delivery. Rerunning `init.py` preserves `host.json`, and startup rejects the stale
-field rather than rewriting it. If no host-specific values are needed, recreate `host.json` from the
-seeded `execution_capacity: 3` baseline. Leave historical `capacity-ledger.json` data untouched.
+profiles, or retired task, decision, board, accept, or audit stores.
 
 Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
 checks and procedures may differ by Change; Delivery retains their typed observations and an
@@ -264,7 +257,8 @@ provide bounded list, search, and exact lookup of receipt-backed history.
 - Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
   configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
-  authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
+  authority. Files under `.owlbear/legacy/completed/` are read-only historical completion evidence
+  available through the completed-history search.
 
 ```text
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
@@ -300,7 +294,7 @@ resolve the typed attention before acquiring work.
 ## Cockpit details
 
 Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
-completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root
+completed history, Memory, Ideas, and read-only historical completion search. Launch it from the project root
 so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.

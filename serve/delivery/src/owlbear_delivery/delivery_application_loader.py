@@ -33,9 +33,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
-    DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
-    is_repairable_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
     DeliveryStatePublicationError,
@@ -134,29 +132,6 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "workspace_root"
         detail = "Delivery state parents must not be symlinks"
         raise _load_error(field, detail)
-    # Current startup refuses unfinished transition journals instead of treating them as authority.
-    migration_journal = delivery_root / "migration.json"
-    if migration_journal.exists():
-        field = "runtime_root"
-        detail = "interrupted Delivery migration must be recovered before startup"
-        raise _load_error(field, detail)
-    retirement_journal = delivery_root / "integration-retirement.json"
-    if retirement_journal.exists():
-        field = "runtime_root"
-        detail = "interrupted Integration retirement must be recovered before startup"
-        raise _load_error(field, detail)
-    # Current startup also rejects pre-current roots so state cannot be silently orphaned.
-    for field, legacy_root in (
-        ("runtime_root", repository_root / ".owlbear/target"),
-        ("worktree_root", repository_root / ".owlbear/worktrees"),
-    ):
-        try:
-            has_legacy_state = legacy_root.exists() and any(legacy_root.iterdir())
-        except OSError as exc:
-            error = _load_error(field, "legacy Delivery path cannot be inspected")
-            raise error from exc
-        if has_legacy_state:
-            raise _load_error(field, "legacy Delivery state must be migrated before startup")
     paths = _DeliveryPaths(
         package_root=delivery_root / "packages",
         runtime_root=delivery_root / "runtime",
@@ -241,18 +216,9 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
         field = "workspace_root"
         detail = "Delivery must start from the primary Git worktree"
         raise _load_error(field, detail)
-    legacy_root = primary_worktree / ".owlbear/worktrees"
-    for registered in registered_worktrees:
-        if registered == legacy_root or legacy_root in registered.parents:
-            field_name = "worktree_root"
-            detail = "legacy Git worktree registrations must be migrated before startup"
-            raise _load_error(field_name, detail)
 
 
-def _load_contracts(
-    runtime_root: Path,
-    remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
-) -> tuple[dict[str, DeliveryContract], tuple[DeliveryHealthDiagnostic, ...]]:
+def _load_contracts(runtime_root: Path) -> tuple[dict[str, DeliveryContract], tuple[DeliveryHealthDiagnostic, ...]]:
     try:
         observations = discover_persisted_changes(runtime_root)
     except DeliveryDiscoveryRootError as exc:
@@ -262,39 +228,7 @@ def _load_contracts(
     diagnostics: list[DeliveryHealthDiagnostic] = []
     for observation in observations:
         if observation.error is not None:
-            remote_diagnostic = next(
-                (
-                    diagnostic
-                    for diagnostic in remote_diagnostics
-                    if diagnostic.source == "remote-state"
-                    and diagnostic.change_id == observation.change_id
-                    and diagnostic.repairable
-                ),
-                None,
-            )
-            frontier_path = runtime_root / "changes" / observation.change_id / "frontier.json"
-            try:
-                local_frontier_repairable = is_repairable_delivery_frontier(frontier_path.read_bytes())
-            except OSError:
-                local_frontier_repairable = False
-            locally_repairable = (
-                observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED
-                and local_frontier_repairable
-            )
-            if (
-                observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED
-                and not locally_repairable
-            ):
-                detail = observation.error.detail
-                error = _load_error("runtime_root", detail)
-                raise error from DeliveryRuntimeMigrationError(detail)
-            repairable = locally_repairable and remote_diagnostic is not None
             detail = observation.diagnostic_detail or "Persisted Delivery state is unavailable."
-            if locally_repairable and remote_diagnostic is None:
-                detail = (
-                    "Persisted Delivery frontier contains a retired receipt schema; "
-                    "remote state must be reachable before explicit repair is available"
-                )
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="local-runtime",
@@ -302,18 +236,12 @@ def _load_contracts(
                     detail=detail,
                     change_id=observation.change_id,
                     path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
-                    remote_head=remote_diagnostic.remote_head if repairable else None,
-                    repairable=repairable,
                 )
             )
         if (
             observation.contract is not None
             and observation.contract.change_id == observation.change_id
-            and (
-                observation.error is None
-                or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS
-                or (observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED and repairable)
-            )
+            and (observation.error is None or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS)
         ):
             contracts[observation.change_id] = observation.contract
     return contracts, tuple(diagnostics)
@@ -411,8 +339,6 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
-            remote_head=inventory.remote_head,
-            repairable=item.repairable,
         )
         for item in inventory.diagnostics
     ]
@@ -440,7 +366,6 @@ def _bootstrap_remote_state(
                     code="remote-change-head-ahead",
                     detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
                     change_id=snapshot.change_id,
-                    remote_head=inventory.remote_head,
                 )
             )
             continue
@@ -454,7 +379,6 @@ def _bootstrap_remote_state(
                         "Remote Delivery state could not be reconciled and was quarantined.",
                     ),
                     change_id=snapshot.change_id,
-                    remote_head=inventory.remote_head,
                 )
             )
     return tuple(diagnostics)
@@ -948,7 +872,6 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
         paths.runtime_root,
         contracts,
         workspace_manager,
-        health_diagnostics,
     )
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
@@ -999,38 +922,15 @@ def _composed_runtimes(
     runtime_root: Path,
     contracts: dict[str, DeliveryContract],
     workspace_manager: ChangeWorkspaceManager,
-    health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
 ) -> tuple[dict[str, DeliveryRuntime], tuple[DeliveryHealthDiagnostic, ...]]:
     runtimes = {}
     diagnostics: list[DeliveryHealthDiagnostic] = []
     for change_id, contract in contracts.items():
-        if any(
-            diagnostic.change_id == change_id and diagnostic.source == "local-runtime" and diagnostic.repairable
-            for diagnostic in health_diagnostics
-        ):
-            continue
-        try:
-            reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
-        except CoordinationConflictError as exc:
-            diagnostics.append(
-                DeliveryHealthDiagnostic(
-                    source="local-runtime",
-                    code="coordination-unavailable",
-                    detail=_bounded_health_detail(
-                        str(exc),
-                        "Delivery Change coordination is unavailable and was quarantined.",
-                    ),
-                    change_id=change_id,
-                    path=f".owlbear/delivery/runtime/coordination/changes/{change_id}.json",
-                )
-            )
-            continue
         try:
             runtimes[change_id] = DeliveryRuntime(
                 runtime_root,
                 contract,
                 workspace_manager=workspace_manager,
-                migration_reviewed_head=reviewed_head,
             )
         except (OSError, RuntimeError, ValueError) as exc:
             diagnostics.append(
@@ -1061,7 +961,7 @@ def load_delivery_application(
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     if "delivery_state_branch" in config.model_fields_set:
         remote_diagnostics = _bootstrap_remote_state(config, paths)
-    contracts, local_diagnostics = _load_contracts(paths.runtime_root, remote_diagnostics)
+    contracts, local_diagnostics = _load_contracts(paths.runtime_root)
     health_diagnostics = (*remote_diagnostics, *local_diagnostics)
     if health_diagnostics:
         change_count = len(

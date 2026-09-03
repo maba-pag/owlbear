@@ -13,7 +13,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import (
-    BlockedImplementationRecoveryReceipt,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
@@ -61,7 +60,7 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.delivery_state import DeliveryStatePublicationError, DeliveryStateRepairReceipt
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
@@ -311,25 +310,6 @@ class _RecordingApplication:
                     expected_change_head=COMMIT,
                     publication_base_head="a" * 40,
                 )
-            elif name == "recover_blocked_implementation":
-                result = BlockedImplementationRecoveryReceipt.create(
-                    operation_id="recover-blocked",
-                    change_id=CHANGE,
-                    outcome_id="OUT-001",
-                    expected_resume_commit=COMMIT,
-                    reviewed_head="a" * 40,
-                    preserved_ref="refs/owlbear/recoveries/change-a/recover-blocked",
-                )
-            elif name == "repair_delivery_state":
-                result = DeliveryStateRepairReceipt.create(
-                    operation_id="repair-change-a",
-                    change_id=CHANGE,
-                    state_branch="owlbear/delivery-state",
-                    expected_remote_head="a" * 40,
-                    previous_snapshot_id=None,
-                    repaired_snapshot_id=DIGEST,
-                    published_head="c" * 40,
-                )
             elif name == "show_operator_context":
                 result = DeliveryOperatorContext(
                     change_id=CHANGE,
@@ -526,13 +506,6 @@ def _requests() -> dict[str, dict[str, object]]:
         "admit_delivery_change": {"request": {"change_id": CHANGE, "active_claim_ids": []}},
         "list_work_items": {},
         "delivery_health": {},
-        "repair_delivery_state": {
-            **change,
-            "confirmed_repair": True,
-            "expected_diagnostic_code": "snapshot-invalid",
-            "expected_remote_head": "a" * 40,
-            "operation_id": "repair-change-a",
-        },
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
         "show_operator_context": {**change, "outcome_id": "OUT-001"},
@@ -634,14 +607,6 @@ def _requests() -> dict[str, dict[str, object]]:
             "publication_base_head": "a" * 40,
             "operation_id": "recover-baseline",
         },
-        "recover_blocked_implementation": {
-            **change,
-            "confirmed_recovery": True,
-            "outcome_id": "OUT-001",
-            "expected_resume_commit": COMMIT,
-            "expected_reviewed_head": "a" * 40,
-            "operation_id": "recover-blocked",
-        },
         "transition_delivery": {
             **change,
             "request": {
@@ -708,12 +673,6 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
         "show_operator_context": (CHANGE, "OUT-001"),
-        "repair_delivery_state": (
-            CHANGE,
-            "snapshot-invalid",
-            "a" * 40,
-            "repair-change-a",
-        ),
         "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
@@ -733,16 +692,11 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
-    if operation_name == "repair_delivery_state":
-        assert application.calls[0][2] == {"confirmed_repair": True}
     if operation_name == "recover_change_worktree":
         assert application.calls[0][1] == (CHANGE, COMMIT)
         assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "recover_publication_baseline":
         assert application.calls[0][1] == (CHANGE, COMMIT, "a" * 40, "recover-baseline")
-        assert application.calls[0][2] == {"confirmed_recovery": True}
-    if operation_name == "recover_blocked_implementation":
-        assert application.calls[0][1] == (CHANGE, "OUT-001", COMMIT, "a" * 40, "recover-blocked")
         assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
@@ -770,20 +724,6 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "change_id": CHANGE,
             "expected_change_head": COMMIT,
             "publication_base_head": "a" * 40,
-        },
-        "recover_blocked_implementation": {
-            "change_id": CHANGE,
-            "outcome_id": "OUT-001",
-            "expected_resume_commit": COMMIT,
-            "reviewed_head": "a" * 40,
-            "preserved_ref": "refs/owlbear/recoveries/change-a/recover-blocked",
-        },
-        "repair_delivery_state": {
-            "change_id": CHANGE,
-            "state_branch": "owlbear/delivery-state",
-            "expected_remote_head": "a" * 40,
-            "repaired_snapshot_id": DIGEST,
-            "published_head": "c" * 40,
         },
     }
     if operation_name == "list_retained_change_worktrees":

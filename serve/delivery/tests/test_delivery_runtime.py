@@ -25,7 +25,6 @@ from owlbear_delivery import (
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
-    DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryChangeAbandonment,
@@ -45,7 +44,6 @@ from owlbear_delivery import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
-    DeliveryIntegrationCompletion,
     DeliveryMergedPullRequestLatch,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -79,11 +77,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
-from owlbear_delivery.delivery_runtime import (
-    invalidate_checkpoint_publication,
-    parse_delivery_frontier,
-    repair_delivery_frontier,
-)
+from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
@@ -817,51 +811,6 @@ def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
 
 
-def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 9
-    payload.pop("change_disposition")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert migrated.change_disposition() is None
-
-
-def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 10
-    payload.pop("change_disposition_resolution")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["change_disposition_resolution"] is None
-
-
-def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 11
-    payload.pop("change_disposition_publication")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["change_disposition_publication"] is None
-
-
 def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     recorded_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
@@ -895,33 +844,6 @@ def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) 
     )
     with pytest.raises(DeliveryRuntimeConflictError, match="requires attention"):
         _activate(runtime, "OUT-001", "claim-001")
-
-
-def test_legacy_change_disposition_identity_remains_loadable(tmp_path: Path) -> None:
-    runtime = _awaiting_merge_runtime(tmp_path)
-    disposition = runtime.capture_acceptance_attention(
-        _pull_request_observation(),
-        ("provider acceptance evidence does not match authority",),
-        reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    legacy = payload["change_disposition"]
-    legacy.pop("acceptance_reason")
-    legacy["disposition_id"] = hashlib.sha256(
-        json.dumps(
-            {key: value for key, value in legacy.items() if key != "disposition_id"},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
-    payload["change_disposition"] = legacy
-    (tmp_path / "changes/delivery-runtime/frontier.json").write_text(json.dumps(payload), encoding="utf-8")
-
-    restored = DeliveryRuntime(tmp_path, _contract())
-
-    assert restored.change_disposition() == disposition.model_copy(
-        update={"disposition_id": legacy["disposition_id"], "acceptance_reason": None}
-    )
 
 
 def test_change_attention_resolution_is_exact_idempotent_and_preserves_ready_invalidation(tmp_path: Path) -> None:
@@ -1235,23 +1157,6 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
         DeliveryFrontier.model_validate(attention_payload)
 
 
-def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 12
-    payload.pop("change_deferral")
-    payload.pop("change_abandonment")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert migrated.change_deferral() is None
-    assert migrated.change_abandonment() is None
-
-
 def test_pull_request_draft_regression_persists_publication_attention(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -1477,236 +1382,6 @@ def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: 
     assert promoted.candidate is None
     assert promoted.stage == DeliveryStage.IMPLEMENTATION
     assert runtime.claimable_task_ids("OUT-001") == ("TASK-001",)
-
-
-def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 1
-    for binding in payload["bindings"]:
-        binding["assembly_required"] = False
-    payload["integration_result_id"] = None
-    payload["integration_completion"] = None
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert all("assembly_required" not in binding for binding in canonical["bindings"])
-    assert "integration_result_id" not in canonical
-    assert "integration_completion" not in canonical
-    assert json.loads(path.read_bytes()) == canonical
-
-
-def test_frontier_migration_rejects_non_null_legacy_integration_completion(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    payload = json.loads(runtime.frontier_bytes())
-    completion = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="1" * 40,
-        completion_path=".owlbear/completed/delivery-runtime.json",
-    )
-    payload["schema_version"] = 15
-    payload["integration_result_id"] = completion.completion_id
-    payload["integration_completion"] = completion.model_dump(mode="json")
-
-    with pytest.raises(ValueError, match="requires retirement"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["published_head"] is None
-    assert canonical["pending_checkpoint"] is None
-    assert json.loads(path.read_bytes()) == canonical
-
-
-def test_runtime_rejects_legacy_embedded_finalization_authority(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    exact_head = runtime.bindings()[0].results[0].completed_commit
-    runtime.finalize_change(
-        _finalization_request(exact_head),
-        datetime(2026, 8, 11, 14, tzinfo=UTC),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 8
-    payload["finalization"]["schema_version"] = 1
-
-    with pytest.raises(ValueError, match="explicit re-finalization"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-def test_repair_delivery_frontier_rebinds_converted_adoption_promotion() -> None:
-    adoption = ChangeExternalHeadAdoptionReceipt.create(
-        operation_id="repair-adoption",
-        change_id="delivery-runtime",
-        branch="owlbear/change/delivery-runtime",
-        expected_head="1" * 40,
-        adopted_head="2" * 40,
-    )
-    legacy_adoption = adoption.model_dump(mode="json")
-    legacy_adoption["schema_version"] = 1
-    legacy_adoption.pop("provenance")
-    legacy_adoption["receipt_id"] = hashlib.sha256(
-        json.dumps(
-            {key: value for key, value in legacy_adoption.items() if key != "receipt_id"},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
-    promotion = ChangeExternalHeadPromotionReceipt.create(
-        operation_id="repair-promotion",
-        change_id="delivery-runtime",
-        branch="owlbear/change/delivery-runtime",
-        adoption_receipt_id=legacy_adoption["receipt_id"],
-        promoted_head="2" * 40,
-        provenance="explicit",
-    )
-    frontier = DeliveryFrontier(
-        bindings=tuple(
-            OutcomeAuthorityBinding(
-                outcome_id=f"OUT-{index:03}",
-                plan_scope_id=f"SCOPE-{index:03}",
-            )
-            for index in range(1, 4)
-        ),
-    )
-    payload = json.loads(_canonical(frontier))
-    payload["external_head_adoption_receipt"] = legacy_adoption
-    payload["external_head_promotion_receipt"] = promotion.model_dump(mode="json")
-
-    repaired, canonical = repair_delivery_frontier(json.dumps(payload).encode())
-
-    assert repaired.external_head_adoption_receipt is not None
-    assert repaired.external_head_adoption_receipt.schema_version == 2
-    assert repaired.external_head_promotion_receipt is not None
-    assert repaired.external_head_promotion_receipt.adoption_receipt_id == (
-        repaired.external_head_adoption_receipt.receipt_id
-    )
-    assert json.loads(canonical)["external_head_promotion_receipt"]["receipt_id"] == (
-        repaired.external_head_promotion_receipt.receipt_id
-    )
-
-
-@pytest.mark.parametrize("schema_version", [3, 4, 5, 6, 7])
-def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint(
-    tmp_path: Path,
-    schema_version: int,
-) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    exact_head = "3" * 40
-    runtime.finalize_change(
-        _finalization_request(exact_head),
-        datetime(2026, 8, 11, 14, tzinfo=UTC),
-    )
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = schema_version
-    if schema_version < 7:
-        payload.pop("merged_pull_request_latch")
-    payload.pop("change_completion")
-    expected_checkpoint = payload["pending_checkpoint"]
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(
-        tmp_path,
-        _contract(),
-        migration_reviewed_head="f" * 40,
-    )
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["pending_checkpoint"] == expected_checkpoint
-    assert canonical["pending_checkpoint"]["head"] == exact_head
-    assert canonical["pending_checkpoint"]["triggers"][-1] == {
-        "kind": DeliveryCheckpointTriggerKind.FINALIZATION,
-        "outcome_id": None,
-    }
-
-
-def test_runtime_rejects_schema_three_result_history_without_exact_commit_evidence(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.PLANNING, DeliveryStage.PLANNING),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 3
-    result = payload["bindings"][0]["results"][0]
-    result.pop("observations")
-    result.pop("review")
-
-    with pytest.raises(ValidationError, match="observations"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.PLANNING),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-
-    migrated, _canonical_bytes = parse_delivery_frontier(
-        json.dumps(payload).encode(),
-        migration_reviewed_head="f" * 40,
-        require_checkpoint_backfill=True,
-    )
-
-    assert migrated.pending_checkpoint is not None
-    assert migrated.pending_checkpoint.head == "f" * 40
-    assert tuple((trigger.kind, trigger.outcome_id) for trigger in migrated.pending_checkpoint.triggers) == (
-        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
-    )
-
-
-@pytest.mark.parametrize(
-    ("stage", "assembly_required_value"),
-    [("planning", "true"), ("assembly", "false")],
-)
-def test_runtime_rejects_irreducible_assembly_authority(
-    tmp_path: Path,
-    stage: str,
-    assembly_required_value: str,
-) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 1
-    payload["bindings"][0]["stage"] = stage
-    payload["bindings"][0]["assembly_required"] = assembly_required_value == "true"
-    original = json.dumps(payload).encode()
-    path.write_bytes(original)
-
-    with pytest.raises(DeliveryRuntimeReferenceError, match="missing or invalid"):
-        DeliveryRuntime(tmp_path, _contract())
-
-    assert path.read_bytes() == original
 
 
 def test_plan_publication_rejects_unresolved_or_cyclic_graph_without_mutation(tmp_path: Path) -> None:

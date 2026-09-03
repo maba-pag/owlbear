@@ -344,12 +344,13 @@
 - ## `Launch / Usage`
 - ### `Tools`
 - ## `Configuration`
-- ### `External-head response compatibility`
+- ### `External-head responses`
 - ## `Dependencies`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [core Delivery configuration reference](../serve/delivery/README.md#configuration)
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -588,7 +589,6 @@
 - ## `Troubleshooting`
 
 ### Outbound links
-- [Delivery state migration procedure](../serve/tools/README.md)
 - [installation verification](../setup/setup-guide.md#verify-the-installation)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
@@ -1128,7 +1128,7 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 ## share/skills/w-delivery-attention-resolution/SKILL.md
 - # `Delivery Attention Resolution`
 - ## `Lifecycle Status`
-- ## `Step 0 - Bind The Exact Current Attention`
+- ## `Step 0 - Bind The Exact Current Attention Or Blocked Outcome`
 - ## `Step 1 - Diagnose Current State Read-Only`
 - ## `Step 2 - Present One Decision`
 - ## `Step 3 - Apply Only Existing Authority`
@@ -1238,24 +1238,14 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ## share/skills/w-test-curation/SKILL.md
 - # `Test Curation`
-- ## `Goal`
-- ## `Discovery`
-- ### `Inventory command`
-- ### `Finding transient tests`
-- ### `Filtering`
-- ## `Triage`
-- ### `Zero-value patterns (delete without mining)`
-- ### `Negative assertions`
-- ### `Potential-value patterns (read before deciding)`
-- ### `Mixed-file verdicts`
-- ## `Mining`
-- ### `Python`
-- ### `Frontend (Vitest/Jest)`
-- ### `E2E (Playwright)`
-- ## `Verify & Delete`
-- ## `Full Suite Gate`
-- ## `Commit`
-- ## `Output`
+- ## `Scope And Ownership`
+- ## `Step 1 - Bind The Scope`
+- ## `Step 2 - Discover Current Tests`
+- ## `Step 3 - Apply Durable Test Admission`
+- ## `Step 4 - Change The Smallest Set`
+- ## `Step 5 - Verify The Result`
+- ## `Step 6 - Report And Commit`
+- ## `Output Template`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
 

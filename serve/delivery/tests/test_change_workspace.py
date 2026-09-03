@@ -12,7 +12,6 @@ import pytest
 
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
-    BlockedImplementationRecoveryReceipt,
     CapacityLedger,
     ChangeCoordination,
     ChangeDesignPackageSnapshotReceipt,
@@ -27,10 +26,8 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
-    RecoverBlockedImplementation,
     SyncChangeWithTarget,
     WriterIdentity,
-    repair_change_coordination,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_delivery.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
@@ -109,29 +106,6 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
             "change-a",
             ChangeWriter(**_identity("change-a").model_dump(), job_id=3, kind="build"),
         )
-
-
-def test_coordinator_migrates_legacy_coordination_directory(tmp_path: Path) -> None:
-    state_root = tmp_path / "state"
-    legacy_root = state_root / "claims/changes"
-    legacy_root.mkdir(parents=True)
-    coordination = _coordination(tmp_path, "legacy-coordination")
-    (legacy_root / "legacy-coordination.json").write_bytes(coordination.model_dump_json().encode())
-
-    coordinator = PortfolioCoordinator(state_root)
-
-    assert coordinator.show("legacy-coordination") == coordination
-    assert (state_root / "coordination/changes/legacy-coordination.json").is_file()
-    assert not legacy_root.exists()
-
-
-def test_coordinator_rejects_both_coordination_directories(tmp_path: Path) -> None:
-    state_root = tmp_path / "state"
-    (state_root / "coordination/changes").mkdir(parents=True)
-    (state_root / "claims/changes").mkdir(parents=True)
-
-    with pytest.raises(CoordinationConflictError, match="both coordination directories"):
-        PortfolioCoordinator(state_root)
 
 
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
@@ -547,41 +521,6 @@ def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -
     assert recovered.publication_baseline_recovery == receipt
     with pytest.raises(CoordinationConflictError, match="different authority"):
         manager.recover_publication_baseline(coordination.change_id, reviewed_head, initial, "other-operation")
-
-
-def test_released_blocked_implementation_recovery_preserves_and_reanchors_candidate(tmp_path: Path) -> None:
-    repository, initial = _repository(tmp_path)
-    coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.ensure("blocked-recovery")
-    candidate = _commit_new_file(
-        coordination.worktree_path,
-        "candidate.txt",
-        "preserve this candidate\n",
-        "preserve blocked candidate",
-    )
-    request = RecoverBlockedImplementation(
-        change_id=coordination.change_id,
-        outcome_id="OUT-001",
-        expected_resume_commit=candidate,
-        expected_reviewed_head=initial,
-        operation_id="recover-blocked-candidate",
-    )
-
-    receipt = manager.recover_blocked_implementation(request)
-    replayed = manager.recover_blocked_implementation(request)
-
-    assert isinstance(receipt, BlockedImplementationRecoveryReceipt)
-    assert replayed == receipt
-    assert receipt.preserved_commit == candidate
-    assert receipt.reviewed_head == initial
-    assert _git(repository, "rev-parse", coordination.branch) == initial
-    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
-    assert _git(repository, "rev-parse", receipt.preserved_ref) == candidate
-    recovered = coordinator.show(coordination.change_id)
-    assert "blocked_implementation_recovery" not in recovered.model_dump(mode="json")
-
-    with pytest.raises(CoordinationConflictError, match="candidate was not preserved"):
-        manager.recover_blocked_implementation(request.model_copy(update={"operation_id": "other-operation"}))
 
 
 @pytest.mark.parametrize("custody", ["writer", "publication lease"])
@@ -1452,73 +1391,6 @@ def test_external_head_adoption_receipt_rejects_legacy_fast_forward_schema(tmp_p
 
     with pytest.raises(ValueError, match="schema_version"):
         ChangeExternalHeadAdoptionReceipt.model_validate(legacy_payload)
-
-
-def test_repair_change_coordination_rebinds_adoption_promotion_history(tmp_path: Path) -> None:
-    _repository(tmp_path)
-    adoption = ChangeExternalHeadAdoptionReceipt.create(
-        operation_id="repair-coordination-adoption",
-        change_id="repair-coordination",
-        branch="owlbear/change/repair-coordination",
-        expected_head="a" * 40,
-        adopted_head="b" * 40,
-    )
-    legacy_adoption = adoption.model_dump(mode="json")
-    legacy_adoption["schema_version"] = 1
-    legacy_adoption.pop("provenance")
-    legacy_adoption["receipt_id"] = hashlib.sha256(
-        json.dumps(
-            {key: value for key, value in legacy_adoption.items() if key != "receipt_id"},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
-    promotion = ChangeExternalHeadPromotionReceipt.create(
-        operation_id="repair-coordination-promotion",
-        change_id="repair-coordination",
-        branch="owlbear/change/repair-coordination",
-        adoption_receipt_id=legacy_adoption["receipt_id"],
-        promoted_head="b" * 40,
-        provenance="explicit",
-    )
-    payload = {
-        "schema_version": 1,
-        "change_id": "repair-coordination",
-        "branch": "owlbear/change/repair-coordination",
-        "worktree_path": str(tmp_path / "worktree"),
-        "integration_target": "main",
-        "target_head": "c" * 40,
-        "publication_base_head": None,
-        "publication_baseline_recovery": None,
-        "last_reviewed_commit": "a" * 40,
-        "design_package_snapshot_intent": None,
-        "design_package_snapshot": None,
-        "writer": None,
-        "publication_lease": None,
-        "target_sync_receipt": None,
-        "target_sync_conflict": None,
-        "target_sync_abort_receipt": None,
-        "external_head_adoption_intent": None,
-        "external_head_adoption_receipt": legacy_adoption,
-        "external_head_adoption_receipts": [legacy_adoption],
-        "external_head_promotion_receipt": promotion.model_dump(mode="json"),
-        "external_head_promotion_receipts": [promotion.model_dump(mode="json")],
-        "worktree_cleanup_intent": None,
-        "worktree_cleanup": None,
-        "dirty_worktree_quarantine": None,
-    }
-
-    repaired, canonical = repair_change_coordination(json.dumps(payload).encode())
-
-    assert repaired.external_head_adoption_receipt is not None
-    assert repaired.external_head_adoption_receipt.schema_version == 2
-    assert repaired.external_head_adoption_receipts[0].schema_version == 2
-    assert repaired.external_head_promotion_receipt is not None
-    assert repaired.external_head_promotion_receipt.adoption_receipt_id == (
-        repaired.external_head_adoption_receipt.receipt_id
-    )
-    assert repaired.external_head_promotion_receipts[0] == repaired.external_head_promotion_receipt
-    assert json.loads(canonical)["external_head_adoption_receipt"]["schema_version"] == 2
 
 
 def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tmp_path: Path) -> None:

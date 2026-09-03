@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import json
 from functools import partial
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
-    BlockedImplementationRecoveryReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
@@ -57,9 +56,6 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 
-if TYPE_CHECKING:
-    from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
-
 
 class _TargetProtocolModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
@@ -105,8 +101,6 @@ class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
-    remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    repairable: bool = False
 
 
 class DeliveryHealthResponse(_TargetProtocolModel):
@@ -126,25 +120,6 @@ class DeliveryHealthResponse(_TargetProtocolModel):
         )
 
 
-class DeliveryStateRepairResponse(_TargetProtocolModel):
-    """Receipt returned after one explicit current-schema state repair."""
-
-    schema_version: Literal[1] = 1
-    repair_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-    change_id: ChangeId
-    state_branch: str = Field(min_length=1)
-    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    previous_snapshot_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    repaired_snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-    @classmethod
-    def from_receipt(cls, receipt: DeliveryStateRepairReceipt) -> DeliveryStateRepairResponse:
-        """Project one core repair receipt into the MCP contract."""
-        return cls(**receipt.model_dump(mode="json"))
-
-
 class EmptyParams(_TargetProtocolModel):
     """Validate an operation that accepts no parameters."""
 
@@ -153,15 +128,6 @@ class ChangeParams(_TargetProtocolModel):
     """Validate one exact Delivery change identity."""
 
     change_id: ChangeId
-
-
-class RepairDeliveryStateParams(ChangeParams):
-    """Validate one explicit repair of an exact Delivery health diagnostic."""
-
-    confirmed_repair: Literal[True]
-    expected_diagnostic_code: str = Field(min_length=1)
-    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class ResolveChangeDispositionParams(ChangeParams):
@@ -211,16 +177,6 @@ class RecoverPublicationBaselineParams(ChangeParams):
     confirmed_recovery: Literal[True]
     expected_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     publication_base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-
-
-class RecoverBlockedImplementationParams(ChangeParams):
-    """Validate explicit recovery of one released blocked Implementation candidate."""
-
-    confirmed_recovery: Literal[True]
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -456,28 +412,6 @@ class ChangePublicationBaselineRecoveryResponse(_TargetProtocolModel):
         cls,
         receipt: PublicationBaselineRecoveryReceipt,
     ) -> ChangePublicationBaselineRecoveryResponse:
-        """Convert one domain recovery receipt into transport form."""
-        return cls(**receipt.model_dump())
-
-
-class ChangeBlockedImplementationRecoveryResponse(_TargetProtocolModel):
-    """Strict MCP receipt for one released blocked Implementation recovery."""
-
-    schema_version: int = 1
-    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-    change_id: ChangeId
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    expected_resume_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    preserved_ref: str = Field(min_length=1)
-    preserved_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-    @classmethod
-    def from_receipt(
-        cls,
-        receipt: BlockedImplementationRecoveryReceipt,
-    ) -> ChangeBlockedImplementationRecoveryResponse:
         """Convert one domain recovery receipt into transport form."""
         return cls(**receipt.model_dump())
 
@@ -819,10 +753,6 @@ type RecoverPublicationBaselineRequest = Annotated[
     RecoverPublicationBaselineParams,
     BeforeValidator(partial(_parse_json_model, RecoverPublicationBaselineParams)),
 ]
-type RecoverBlockedImplementationRequest = Annotated[
-    RecoverBlockedImplementationParams,
-    BeforeValidator(partial(_parse_json_model, RecoverBlockedImplementationParams)),
-]
 type ClaimContextRequest = Annotated[
     ClaimContextParams,
     BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
@@ -836,10 +766,6 @@ type CreateDesignSessionRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
 ]
 type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
-type RepairDeliveryStateRequest = Annotated[
-    RepairDeliveryStateParams,
-    BeforeValidator(partial(_parse_json_model, RepairDeliveryStateParams)),
-]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -909,7 +835,6 @@ __all__ = [
     "AdministrativeMovePreviewResponse",
     "AdmitDeliveryChangeParams",
     "AdmitDeliveryChangeRequest",
-    "ChangeBlockedImplementationRecoveryResponse",
     "ChangeExternalHeadAdoptionResponse",
     "ChangeExternalHeadPromotionResponse",
     "ChangeParams",
@@ -946,7 +871,6 @@ __all__ = [
     "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
-    "DeliveryStateRepairResponse",
     "EmptyParams",
     "EmptyRequest",
     "ExternalHeadAdoptionParams",
@@ -965,16 +889,12 @@ __all__ = [
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
     "PublishDeliveryResultRequest",
-    "RecoverBlockedImplementationParams",
-    "RecoverBlockedImplementationRequest",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
-    "RepairDeliveryStateParams",
-    "RepairDeliveryStateRequest",
     "ResolveChangeDispositionParams",
     "ResolveChangeDispositionRequest",
     "ResolveRequestParams",

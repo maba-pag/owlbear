@@ -203,8 +203,8 @@ repair-candidate and reviewed-repair admission flow used by
 `PortfolioApplication.admit_reviewed_integration_repair()`.
 There were no production callers of the old method or its result types. The old method and its result
 types are now removed. This closure also removes the legacy runtime completion-capture and Integration
-attention/completion writers; persisted frontier readers and reviewed-repair transformations remain for
-compatibility.
+attention/completion writers; current frontier readers and reviewed-repair transformations remain as
+live current behavior.
 
 The retirement was performed by exact symbol closure, not by an `Integration*` name sweep. Removed
 symbols are:
@@ -253,10 +253,10 @@ does not promise backward compatibility, but the surface change must still be ex
   `test_publishes_and_replays_exact_change_branch_without_mutating_target_or_user_checkout`.
 2. Closed: neither the historical
   `.owlbear/target/target-runtime/integration-findings/*.json` path nor the current host-local
-  `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. The current
-  runtime is gitignored, `delivery_migration.py` does not migrate either namespace, and no reader
-  remains after producer removal. They are inert historical bytes, so no retirement inventory or
-  cleanup authority is added; the retirement tool continues to handle only known authoritative paths.
+  `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. They are
+  inert historical bytes and no longer participate in runtime discovery or authority. The retained
+  `.owlbear/legacy/completed` catalog is read-only information for completed-history search, not
+  executable or runtime state.
 
 The first prerequisite is now covered by the independent-application contention regression. No local
 Integration producer remains; a future GitHub-backed acceptance slice must establish the external

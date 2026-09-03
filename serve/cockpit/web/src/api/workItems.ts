@@ -164,25 +164,11 @@ export interface DeliveryHealthDiagnostic {
   change_id: string | null
   path: string | null
   retry_safe: boolean
-  remote_head?: string | null
-  repairable?: boolean
 }
 
 export interface DeliveryHealthResponse {
   status: DeliveryHealthStatus
   diagnostics: DeliveryHealthDiagnostic[]
-}
-
-export interface DeliveryStateRepairResponse {
-  schema_version: 1
-  repair_id: string
-  operation_id: string
-  change_id: string
-  state_branch: string
-  expected_remote_head: string
-  previous_snapshot_id: string | null
-  repaired_snapshot_id: string
-  published_head: string
 }
 
 export interface WorkItemPortfolioResponse {
@@ -796,24 +782,6 @@ export function resolveWorkItemAttention(changeId: string, expectedDispositionId
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
     { expected_disposition_id: expectedDispositionId },
-  )
-}
-
-export function repairDeliveryState(
-  changeId: string,
-  expectedDiagnosticCode: string,
-  expectedRemoteHead: string,
-  operationId: string,
-): Promise<DeliveryStateRepairResponse> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/state/repair`,
-    'ERR_WORK_ITEM_STATE_REPAIR',
-    {
-      confirmed_repair: true,
-      expected_diagnostic_code: expectedDiagnosticCode,
-      expected_remote_head: expectedRemoteHead,
-      operation_id: operationId,
-    },
   )
 }
 

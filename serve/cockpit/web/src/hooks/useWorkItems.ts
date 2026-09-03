@@ -18,7 +18,6 @@ import {
   recoverWorkItemClaim,
   recoverWorkItemChange,
   reconcileWorkItemAcceptance,
-  repairDeliveryState,
   resolveWorkItemTargetSync,
   resolveWorkItemAttention,
   resumeWorkItemChange,
@@ -773,43 +772,6 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     ),
     retry: polling.refetch,
   }
-}
-
-export function useDeliveryStateRepair(onChanged: () => void) {
-  const operationIds = useRef(new Map<string, string>())
-  const [pendingChangeId, setPendingChangeId] = useState<string | null>(null)
-  const [error, setError] = useState<Error | null>(null)
-
-  const repair = async (diagnostic: {
-    change_id: string
-    code: string
-    remote_head: string
-  }): Promise<Error | null> => {
-    const operationId = operationIds.current.get(diagnostic.change_id)
-      ?? `cockpit-delivery-state-repair-${crypto.randomUUID()}`
-    operationIds.current.set(diagnostic.change_id, operationId)
-    setPendingChangeId(diagnostic.change_id)
-    setError(null)
-    try {
-      await repairDeliveryState(diagnostic.change_id, diagnostic.code, diagnostic.remote_head, operationId)
-      operationIds.current.delete(diagnostic.change_id)
-      onChanged()
-      return null
-    } catch (caught: unknown) {
-      const nextError = caught instanceof Error ? caught : new Error('Delivery state repair failed')
-      setError(nextError)
-      const retainOperation = nextError instanceof WorkItemApiError
-        && (nextError.retrySafe || nextError.code === 'ERR_DELIVERY_STATE_RESPONSE_UNKNOWN')
-      if (!retainOperation) {
-        operationIds.current.delete(diagnostic.change_id)
-      }
-      return nextError
-    } finally {
-      setPendingChangeId(null)
-    }
-  }
-
-  return { pendingChangeId, error, repair }
 }
 
 export function workItemIdentity(item: WorkItemCardView): string {

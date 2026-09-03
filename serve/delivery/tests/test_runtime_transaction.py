@@ -61,40 +61,6 @@ def test_recovery_completes_lifecycle_job_and_activity_participants(tmp_path: Pa
     assert not list((change_root / "transactions").glob("*.yaml"))
 
 
-def test_recovery_migrates_legacy_transaction_directory(tmp_path: Path) -> None:
-    manifest_root = tmp_path / "change"
-    work_root = tmp_path / "work"
-    transaction = RuntimeTransaction(
-        manifest_root,
-        "legacy-directory",
-        (TransactionParticipant(work_root, Path("jobs/plan.yaml"), b"plan"),),
-    )
-
-    def interrupt(stage: str) -> None:
-        if stage == "before-publication":
-            message = "interrupted"
-            raise RuntimeError(message)
-
-    with pytest.raises(RuntimeError, match="interrupted"):
-        transaction.commit(failure=interrupt)
-    (manifest_root / "transactions").rename(manifest_root / ".runtime-transactions")
-
-    RuntimeTransaction.recover_all(manifest_root, roots=(manifest_root, work_root))
-
-    assert (work_root / "jobs/plan.yaml").read_bytes() == b"plan"
-    assert not (manifest_root / ".runtime-transactions").exists()
-    assert not list((manifest_root / "transactions").glob("*.yaml"))
-
-
-def test_recovery_rejects_both_transaction_directories(tmp_path: Path) -> None:
-    manifest_root = tmp_path / "change"
-    (manifest_root / "transactions").mkdir(parents=True)
-    (manifest_root / ".runtime-transactions").mkdir()
-
-    with pytest.raises(TransactionManifestError, match="both transaction directories"):
-        RuntimeTransaction.recover_all(manifest_root)
-
-
 @pytest.mark.parametrize(
     "interruption",
     ["before-publication", "after-first-publication", "before-manifest-cleanup", "during-replay"],

@@ -259,7 +259,6 @@
 - `import { useLocation, useNavigate } from 'react-router'`
 - `import { routeConfig, routeForPath } from './routes'`
 - `import ThemeToggle from './components/ThemeToggle'`
-- `import CopyCommand from './components/CopyCommand'`
 - `import WorkspaceStatus from './components/WorkspaceStatus'`
 - `import { useWorkspaceHealth } from './hooks/useWorkspaceHealth'`
 
@@ -268,7 +267,6 @@
 - `const ICONS`
 - `interface ProductNavigationProps`
 - `function ProductNavigation({ activePath, compact = false, onNavigate }: ProductNavigationProps)`
-- `function CommandReference()`
 - `export default function CockpitShell()`
 
 ## serve/cockpit/web/src/main.tsx
@@ -426,6 +424,9 @@
 - `export interface PortfolioWorkReference`
 - `export interface PortfolioGuidance`
 - `export interface PortfolioOperatingView`
+- `export type DeliveryHealthStatus = 'healthy' | 'attention'`
+- `export interface DeliveryHealthDiagnostic`
+- `export interface DeliveryHealthResponse`
 - `export interface WorkItemPortfolioResponse`
 - `export type AcceptanceReconciliationStatus = | 'completed' | 'waiting' | 'head-moved' | 'attention' | 'provider-unavailable' | 'skipped'`
 - `export interface AcceptanceReconciliationOutcome`
@@ -516,6 +517,7 @@
 - `import { useLocation, useNavigate } from 'react-router'`
 - `import { WorkItemApiError, cleanupAbandonedWorkItemChange, completedChangeRecordId, discardAbandonedTargetSyncAndCleanup, type AbandonedChangeRecord, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'`
 - `import { useCopyToClipboard } from './CopyCommand'`
+- `import { SectionCard, StatusChip } from './DeliveryPrimitives'`
 - `import { useCompletedChange, useCompletedHistory } from '../hooks/useWorkItems'`
 - `import WorkspaceViewHeader, { WorkspaceViewCount } from './WorkspaceViewHeader'`
 
@@ -551,6 +553,26 @@
 - `export function useCopyToClipboard()`
 - `export default function CopyCommand({ command, className = '' }: CopyCommandProps)`
 
+## serve/cockpit/web/src/components/DeliveryPrimitives.tsx
+
+### Imports
+
+- `import type { ReactNode } from 'react'`
+- `import type { WorkItemNeed } from '../api/workItems'`
+- `import { workItemStatusClassName, type WorkItemStatusTone } from './workItemPresentation'`
+
+### Interfaces
+
+- `interface StatusChipProps`
+- `export function StatusChip({ label, tone, testId }: StatusChipProps)`
+- `interface WorkRowProps`
+- `export function WorkRow({ children, selected = false, needs = 'none', ariaLabel, dataWorkItem, className = '' }: WorkRowProps)`
+- `type SectionCardElement = 'section' | 'article' | 'div' | 'details'`
+- `type SectionCardTone = 'neutral' | 'warning' | 'danger' | 'info' | 'success'`
+- `interface SectionCardProps`
+- `const TONE_CLASS_NAMES: Record<SectionCardTone, string>`
+- `export function SectionCard({ children, as = 'section', tone = 'neutral', muted = false, interactive = false, ariaLabel, dataTestId, dataStale, className = '', }: SectionCardProps)`
+
 ## serve/cockpit/web/src/components/DesignWorkDetail.tsx
 
 ### Imports
@@ -571,9 +593,8 @@
 
 - `import { Link } from 'react-router'`
 - `import type { PortfolioChangeLifecycleStatus } from '../api/workItems'`
-- `import CopyCommand from './CopyCommand'`
-- `import { designCommand, designWorkTitle } from './designWorkPresentation'`
-- `import { workItemStatusClassName } from './workItemPresentation'`
+- `import { StatusChip, WorkRow } from './DeliveryPrimitives'`
+- `import { designWorkTitle } from './designWorkPresentation'`
 
 ### Interfaces
 
@@ -622,7 +643,6 @@
 - `import { PIcon } from '@porsche-design-system/components-react'`
 - `import type { PortfolioGuidance, PortfolioOperatingView, WorkItemNeed, WorkItemPortfolioTotals, } from '../api/workItems'`
 - `import CopyCommand from './CopyCommand'`
-- `import { designCommand } from './designWorkPresentation'`
 
 ### Interfaces
 
@@ -630,11 +650,12 @@
 - `function Command({ children }: { children: string })`
 - `function Guidance({ guidance }: { guidance: PortfolioGuidance })`
 - `interface PortfolioHeaderSummaryProps`
+- `interface PortfolioOperatingSummaryProps`
 - `interface AttentionMetricProps`
 - `function AttentionMetric({ count, filter, icon, label, selected, onSelect }: AttentionMetricProps)`
 - `function ActivityMetric({ count, icon, label }: { count: number; icon: 'play' | 'list'; label: string })`
 - `export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter }: PortfolioHeaderSummaryProps)`
-- `export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView })`
+- `export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps)`
 
 ## serve/cockpit/web/src/components/ThemeToggle.tsx
 
@@ -664,8 +685,9 @@
 - `import { type ReactNode, useEffect, useState } from 'react'`
 - `import { PButton, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from '@porsche-design-system/components-react'`
 - `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemDetailResponse, type PublicationCheckBlockingState, type PublicationChecksObservationResponse, type WorkItemPublicationPhase, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
-- `import { PROGRESS_STAGE_LABELS, workItemStatus, workItemStatusClassName, workItemStatusLabel, } from './workItemPresentation'`
+- `import { PROGRESS_STAGE_LABELS, workItemStatus, workItemStatusLabel, } from './workItemPresentation'`
 - `import CopyCommand from './CopyCommand'`
+- `import { SectionCard, StatusChip } from './DeliveryPrimitives'`
 
 ### Interfaces
 
@@ -713,8 +735,8 @@
 - `import { Link, useNavigate } from 'react-router'`
 - `import type { ChangeGroupView, WorkItemCardView, } from '../api/workItems'`
 - `import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'`
-- `import CopyCommand from './CopyCommand'`
-- `import { PROGRESS_STAGE_LABELS, workItemStatus, workItemStatusClassName, } from './workItemPresentation'`
+- `import { StatusChip, WorkRow } from './DeliveryPrimitives'`
+- `import { PROGRESS_STAGE_LABELS, workItemStatus, } from './workItemPresentation'`
 
 ### Interfaces
 
@@ -802,7 +824,7 @@
 
 ### Imports
 
-- `import type { DeliveryWorkerRole, WorkItemCardView, WorkItemStage } from '../api/workItems'`
+- `import type { DeliveryWorkerRole, WorkItemCardView, WorkItemPublicationPhase, WorkItemStage } from '../api/workItems'`
 
 ### Interfaces
 
@@ -810,6 +832,9 @@
 - `const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string>`
 - `export type WorkItemStatusTone = 'attention' | 'blocked' | 'active' | 'ready' | 'complete' | 'neutral'`
 - `export interface WorkItemStatusPresentation`
+- `function distinctDetail(label: string, detail: string | null): string | null`
+- `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
+- `function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation | null`
 - `export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation`
 - `export function workItemStatusClassName(tone: WorkItemStatusTone): string`
 - `export function workItemStatusLabel(item: WorkItemCardView): string`
@@ -1003,11 +1028,11 @@
 - `import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'`
 - `import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'`
 - `import { useLocation, useNavigate } from 'react-router'`
-- `import type { ChangeGroupView, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'`
+- `import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'`
 - `import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'`
 - `import DesignWorkDetail from '../components/DesignWorkDetail'`
 - `import DesignWorkSection from '../components/DesignWorkSection'`
-- `import { designWorkTitle } from '../components/designWorkPresentation'`
+- `import { designCommand, designWorkTitle } from '../components/designWorkPresentation'`
 - `import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'`
 - `import { WorkspaceHeader } from '../components/WorkspaceHeader'`
 - `import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'`
@@ -1034,6 +1059,7 @@
 - `function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void })`
 - `function PortfolioWorkspace({ groups, selected, emptyMessage, onSelect, }: { groups: ChangeGroupView[] selected: WorkItemIdentity | null emptyMessage?: string onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void })`
 - `function EmptyPortfolioState({ filtered }: { filtered: boolean })`
-- `function DeliveryStatusSection({ statuses }: { statuses: PortfolioChangeLifecycleStatus[] })`
+- `function DeliveryIssuesSection({ diagnostics, statuses, }: { diagnostics: DeliveryHealthDiagnostic[] statuses: PortfolioChangeLifecycleStatus[] })`
+- `function guidanceCommands(guidance: PortfolioGuidance): string[]`
 - `function EmptyDetail({ error, retry, onClose, subject = 'Work Item', retryLabel = 'Retry item', }: { error: Error | null retry: () => void onClose: () => void subject?: string retryLabel?: string })`
 - `export default function WorkPortfolioPage()`

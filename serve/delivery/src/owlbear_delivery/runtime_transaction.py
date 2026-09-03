@@ -128,7 +128,6 @@ class RuntimeTransaction:
     def commit(self, *, failure: Callable[[str], None] | None = None) -> None:
         """Stage, record, and publish all participants exactly once."""
         with locked_roots(self._locked_roots()):
-            self._migrate_legacy_directory(self._manifest_root)
             self._prepare_manifest()
             if failure:
                 failure("before-publication")
@@ -140,7 +139,6 @@ class RuntimeTransaction:
     def recover(self) -> None:
         """Deterministically complete a previously staged transaction."""
         with locked_roots(self._locked_roots()):
-            self._migrate_legacy_directory(self._manifest_root)
             if self._manifest_path.exists():
                 self._publish(None)
                 self._cleanup()
@@ -148,7 +146,6 @@ class RuntimeTransaction:
     def abort(self) -> None:
         """Restore prepared participant bytes after a handled publication failure."""
         with locked_roots(self._locked_roots()):
-            self._migrate_legacy_directory(self._manifest_root)
             if not self._manifest_path.exists():
                 return
             if self._abort_snapshot is None:
@@ -165,39 +162,11 @@ class RuntimeTransaction:
         """Complete every valid pending transaction rooted at ``manifest_root``."""
         resolved_root = manifest_root.resolve()
         allowed_roots = tuple(root.resolve() for root in (roots or (resolved_root,)))
-        cls._migrate_legacy_directory(resolved_root)
         directory = resolved_root / "transactions"
         manifest_paths = tuple(sorted(directory.glob("*.yaml"))) if directory.is_dir() else ()
         for manifest_path in manifest_paths:
             transaction = cls._from_manifest(resolved_root, manifest_path, allowed_roots)
             transaction.recover()
-
-    @classmethod
-    def _migrate_legacy_directory(cls, manifest_root: Path) -> None:
-        # Transitional input only; current recovery uses transactions/.
-        directory = manifest_root / "transactions"
-        legacy_directory = manifest_root / ".runtime-transactions"
-        canonical_present = directory.exists() or directory.is_symlink()
-        legacy_present = legacy_directory.exists() or legacy_directory.is_symlink()
-        if canonical_present:
-            if legacy_present:
-                _manifest_error("both transaction directories are present")
-            if directory.is_symlink() or not directory.is_dir():
-                _manifest_error("transaction directory is unsafe")
-            return
-        if not legacy_present:
-            return
-        if legacy_directory.is_symlink() or not legacy_directory.is_dir():
-            _manifest_error("legacy transaction directory is unsafe")
-        try:
-            legacy_directory.rename(directory)
-        except OSError as exc:
-            if directory.is_dir() and not legacy_directory.exists():
-                return
-            try:
-                _manifest_error("legacy transaction directory could not be migrated")
-            except TransactionManifestError as error:
-                raise error from exc
 
     @classmethod
     def _from_manifest(

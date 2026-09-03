@@ -24,7 +24,6 @@ from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import (
     DeliveryRuntimeReconciliationError,
-    DeliveryStateRepairProofError,
     PortfolioApplicationError,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError
@@ -108,7 +107,6 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
     elif isinstance(
         error,
         (
-            DeliveryStateRepairProofError,
             DeliveryAcceptanceWaitingError,
             DeliveryRuntimeReconciliationError,
             DeliveryRuntimeConflictError,

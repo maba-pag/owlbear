@@ -51,7 +51,6 @@ from owlbear_delivery import (
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
-    DeliveryBlock,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionResolution,
     DeliveryChangePublicationIdentity,
@@ -68,7 +67,6 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
-    DeliveryHealthDiagnostic,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -87,13 +85,9 @@ from owlbear_delivery import (
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
-    DeliveryRuntimeMigrationError,
     DeliveryStage,
     DeliveryStartupConfig,
     DeliveryStatePublicationError,
-    DeliveryStateRepairProofError,
-    DeliveryStateRepairReceipt,
-    DeliveryStateResponseUnknownError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
@@ -479,84 +473,6 @@ def _set_checkpoint(
     return path
 
 
-def _legacy_target_sync_payload(coordination) -> dict[str, object]:
-    receipt = ChangeTargetSyncReceipt.create(
-        operation_id="repair-target-sync",
-        change_id=coordination.change_id,
-        integration_target=coordination.integration_target,
-        expected_target=coordination.target_head,
-        target_head=coordination.target_head,
-        change_head_before=coordination.last_reviewed_commit,
-        merged_head=coordination.last_reviewed_commit,
-        merge_commit=True,
-    )
-    payload = receipt.model_dump(mode="json")
-    payload["schema_version"] = 1
-    payload.pop("review_required")
-    payload["receipt_id"] = _receipt_id({key: value for key, value in payload.items() if key != "receipt_id"})
-    return payload
-
-
-def _install_legacy_repair_frontier(
-    state_root: Path,
-    change_id: str,
-    coordination,
-    *,
-    plan_scope_id: str = "SCOPE-001",
-) -> tuple[Path, bytes]:
-    path = state_root / f"changes/{change_id}/frontier.json"
-    payload = json.loads(path.read_bytes())
-    payload["bindings"][0]["plan_scope_id"] = plan_scope_id
-    payload["target_sync_receipt"] = _legacy_target_sync_payload(coordination)
-    content = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    path.write_bytes(content)
-    return path, content
-
-
-def _repair_health_diagnostic(change_id: str, remote_head: str) -> DeliveryHealthDiagnostic:
-    return DeliveryHealthDiagnostic(
-        source="remote-state",
-        code="snapshot-identity-invalid",
-        detail="Remote Delivery snapshot identity is invalid.",
-        change_id=change_id,
-        path=f".owlbear/delivery/state/{change_id}/snapshot.json",
-        remote_head=remote_head,
-        repairable=True,
-    )
-
-
-def _frontier_repair_health_diagnostic(change_id: str, remote_head: str) -> DeliveryHealthDiagnostic:
-    return DeliveryHealthDiagnostic(
-        source="local-runtime",
-        code="frontier-migration-required",
-        detail="Persisted Delivery frontier contains a retired receipt schema.",
-        change_id=change_id,
-        path=f".owlbear/delivery/runtime/changes/{change_id}",
-        remote_head=remote_head,
-        repairable=True,
-    )
-
-
-def _prepare_repairable_application(tmp_path: Path) -> tuple[PortfolioApplication, Path, Path, bytes]:
-    application, _runtimes, coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
-    )
-    frontier_path, legacy_frontier = _install_legacy_repair_frontier(
-        state_root,
-        "change-a",
-        coordinator.show("change-a"),
-    )
-    coordination_path = state_root / "coordination/changes/change-a.json"
-    coordination_path.write_bytes(_canonical(coordinator.show("change-a")))
-    diagnostic = _repair_health_diagnostic("change-a", "a" * 40)
-    application._startup_health_diagnostics = (
-        diagnostic,
-        _frontier_repair_health_diagnostic("change-a", "a" * 40),
-    )
-    return application, frontier_path, coordination_path, legacy_frontier
-
-
 def _policies() -> tuple[DeliveryRolePolicy, ...]:
     return (
         DeliveryRolePolicy(
@@ -692,148 +608,6 @@ def _portfolio(
         ),
     )
     return application, runtimes, coordinator, state_root
-
-
-def test_delivery_state_repair_rejects_frontier_mismatch_before_local_write(tmp_path: Path) -> None:
-    application, _frontier_path, coordination_path, legacy_frontier = _prepare_repairable_application(tmp_path)
-    frontier_path = application._target_root / "changes/change-a/frontier.json"
-    application._delivery_state_publisher = Mock()
-    _invalid_frontier_path, invalid_frontier = _install_legacy_repair_frontier(
-        application._target_root,
-        "change-a",
-        application._coordinator.show("change-a"),
-        plan_scope_id="SCOPE-999",
-    )
-    before_coordination = coordination_path.read_bytes()
-
-    with pytest.raises(PortfolioApplicationError, match="frontier does not match"):
-        application.repair_delivery_state(
-            "change-a",
-            "snapshot-identity-invalid",
-            "a" * 40,
-            "repair-rejected",
-            confirmed_repair=True,
-        )
-
-    assert _invalid_frontier_path == frontier_path
-    assert frontier_path.read_bytes() == invalid_frontier
-    assert frontier_path.read_bytes() != legacy_frontier
-    assert coordination_path.read_bytes() == before_coordination
-    application._delivery_state_publisher.repair_snapshot.assert_not_called()
-
-
-def test_delivery_state_repair_converts_target_coordination_without_global_parse(tmp_path: Path) -> None:
-    application, frontier_path, coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
-    coordination = application._coordinator.show("change-a")
-    legacy_coordination = coordination.model_dump(mode="json")
-    legacy_coordination["target_sync_receipt"] = _legacy_target_sync_payload(coordination)
-    legacy_coordination["target_sync_receipt"]["schema_version"] = 1
-    legacy_coordination["target_sync_receipt"]["receipt_id"] = _receipt_id(
-        {key: value for key, value in legacy_coordination["target_sync_receipt"].items() if key != "receipt_id"}
-    )
-    coordination_path.write_bytes(
-        (json.dumps(legacy_coordination, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    )
-    unrelated_path = application._target_root / "coordination/changes/unrelated.json"
-    unrelated_path.write_bytes(b"not-json\n")
-    publisher = Mock()
-    publisher.repair_snapshot.return_value = DeliveryStateRepairReceipt.create(
-        operation_id="repair-coordination",
-        change_id="change-a",
-        state_branch="owlbear/delivery-state",
-        expected_remote_head="a" * 40,
-        previous_snapshot_id=None,
-        repaired_snapshot_id="c" * 64,
-        published_head="d" * 40,
-    )
-    application._delivery_state_publisher = publisher
-
-    application.repair_delivery_state(
-        "change-a",
-        "snapshot-identity-invalid",
-        "a" * 40,
-        "repair-coordination",
-        confirmed_repair=True,
-    )
-
-    assert coordination_path.read_bytes() == _canonical(application._coordinator.show("change-a"))
-    assert application._coordinator.show("change-a").target_sync_receipt is not None
-    assert application._coordinator.show("change-a").target_sync_receipt.schema_version == 2
-    assert unrelated_path.read_bytes() == b"not-json\n"
-    assert frontier_path.read_bytes() != _legacy_frontier
-
-
-def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(tmp_path: Path) -> None:
-    application, frontier_path, coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
-    application._reconcile_runtimes()
-    repair = DeliveryStateRepairReceipt.create(
-        operation_id="repair-retry",
-        change_id="change-a",
-        state_branch="owlbear/delivery-state",
-        expected_remote_head="a" * 40,
-        previous_snapshot_id="b" * 64,
-        repaired_snapshot_id="c" * 64,
-        published_head="d" * 40,
-    )
-    publisher = Mock()
-    publisher.repair_snapshot.return_value = repair
-    application._delivery_state_publisher = publisher
-
-    with (
-        patch.object(
-            application,
-            "_reconcile_runtimes",
-            side_effect=(None, RuntimeError("recomposition failed")),
-        ),
-        pytest.raises(DeliveryStateRepairProofError, match="recomposition failed; retry operation repair-retry"),
-    ):
-        application.repair_delivery_state(
-            "change-a",
-            "snapshot-identity-invalid",
-            "a" * 40,
-            "repair-retry",
-            confirmed_repair=True,
-        )
-
-    assert publisher.repair_snapshot.call_count == 1
-    assert frontier_path.read_bytes() != _legacy_frontier
-    assert coordination_path.read_bytes() == _canonical(application._coordinator.show("change-a"))
-
-    replayed = application.repair_delivery_state(
-        "change-a",
-        "snapshot-identity-invalid",
-        "a" * 40,
-        "repair-retry",
-        confirmed_repair=True,
-    )
-
-    assert replayed == repair
-    assert publisher.repair_snapshot.call_count == 2
-    assert DeliveryFrontier.model_validate_json(frontier_path.read_bytes()).schema_version == 17
-    assert application.delivery_health().diagnostics == ()
-
-
-def test_delivery_state_repair_preserves_typed_publication_error(tmp_path: Path) -> None:
-    application, _frontier_path, _coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
-    error = DeliveryStateResponseUnknownError(
-        "Delivery-state snapshot push outcome could not be verified",
-        retry_safe=False,
-    )
-    publisher = Mock()
-    publisher.repair_snapshot.side_effect = error
-    application._delivery_state_publisher = publisher
-
-    with pytest.raises(DeliveryStateResponseUnknownError, match="could not be verified") as exc_info:
-        application.repair_delivery_state(
-            "change-a",
-            "snapshot-identity-invalid",
-            "a" * 40,
-            "repair-response-unknown",
-            confirmed_repair=True,
-        )
-
-    assert exc_info.value is error
-    assert error.retry_safe is False
 
 
 def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
@@ -5615,126 +5389,6 @@ def test_delivery_discovery_retains_admission_for_unavailable_runtime(tmp_path: 
     assert not observation.actionable_runtime
 
 
-def test_admission_replay_recovers_isolated_legacy_change_at_exact_reviewed_head(tmp_path: Path) -> None:
-    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
-    intent = b"""# Recovered Delivery
-
-```yaml target-contract
-kind: commitment
-id: COM-001
-class: agreed-path
-provenance: recovery test
-statement: Preserve reviewed recovery authority.
-```
-
-```yaml target-contract
-kind: outcome
-id: OUT-001
-title: Recover authority
-promise: Restore exact reviewed coordination.
-acceptance: [Recovery is observable.]
-commitments: [COM-001]
-dependencies: []
-```
-"""
-    application.create_design_session("change-a", intent, b"# Architecture\n")
-    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
-    reviewed_head = coordinator.show("change-a").last_reviewed_commit
-    task = _task()
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(
-                    _task_result(
-                        "RESULT-001",
-                        "change-a",
-                        hashlib.sha256(admitted.contract_bytes).hexdigest(),
-                        task,
-                        reviewed_head,
-                    ),
-                ),
-            ),
-        )
-    )
-    payload = frontier.model_dump(mode="json")
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier_path.write_text(json.dumps(payload), encoding="utf-8")
-    legacy_frontier = frontier_path.read_bytes()
-    (state_root / "coordination/changes/change-a.json").unlink()
-    del application._runtimes["change-a"]
-    request = DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=())
-
-    with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
-        application.admit_delivery_change(request)
-    assert frontier_path.read_bytes() == legacy_frontier
-
-    recovered = application.admit_delivery_change(request.model_copy(update={"recovery_reviewed_head": reviewed_head}))
-
-    assert recovered.replayed
-    assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
-    assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 17
-
-
-def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    coordinator = PortfolioCoordinator(runtime_root)
-    manager = ChangeWorkspaceManager(
-        repository,
-        repository / ".owlbear/delivery/worktrees",
-        coordinator,
-        "main",
-    )
-    coordination = manager.ensure("change-a")
-    contract = _contract("change-a", b"intent", b"design")
-    task = _task()
-    result = _task_result(
-        "RESULT-001",
-        "change-a",
-        hashlib.sha256(_canonical(contract)).hexdigest(),
-        task,
-        coordination.last_reviewed_commit,
-    )
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(result,),
-            ),
-        )
-    )
-    payload = frontier.model_dump(mode="json")
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    change_root = runtime_root / "changes/change-a"
-    change_root.mkdir(parents=True)
-    (change_root / "contract.json").write_bytes(_canonical(contract))
-    (change_root / "frontier.json").write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
-    (change_root / "admission.json").write_text("{}\n", encoding="utf-8")
-
-    application = load_delivery_application(_startup_config(), workspace_root=repository)
-    state = application.show_change_checkpoint_publication("change-a")
-
-    assert state.pending_checkpoint is not None
-    assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 17
-
-
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     provider = Mock()
@@ -5779,33 +5433,6 @@ def test_delivery_loader_without_provider_fails_closed_for_checkpoint_operations
         application.observe_change_publication_checks("change-a")
 
 
-@pytest.mark.parametrize(
-    ("legacy_path", "field"),
-    [
-        (".owlbear/target/delivery/changes/change-a/frontier.json", "runtime_root"),
-        (".owlbear/worktrees/change-a/.git", "worktree_root"),
-    ],
-)
-def test_delivery_loader_rejects_unmigrated_owned_state_before_owner_mutation(
-    tmp_path: Path,
-    legacy_path: str,
-    field: str,
-) -> None:
-    repository = _repository(tmp_path)
-    path = repository / legacy_path
-    path.parent.mkdir(parents=True)
-    path.write_text("unmigrated\n", encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == field
-    assert not (repository / ".owlbear/delivery/runtime").exists()
-
-
 @pytest.mark.parametrize("symlinked_parent", [".owlbear", ".owlbear/delivery"])
 def test_delivery_loader_rejects_symlinked_canonical_state_parent(
     tmp_path: Path,
@@ -5828,40 +5455,6 @@ def test_delivery_loader_rejects_symlinked_canonical_state_parent(
     assert exc_info.value.field == "workspace_root"
     assert "symlink" in exc_info.value.detail
     assert not (external / "runtime").exists()
-
-
-def test_delivery_loader_rejects_stale_legacy_git_worktree_registration(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    worktree = repository / ".owlbear/worktrees/change-a"
-    _git(repository, "worktree", "add", "--detach", str(worktree), "HEAD")
-    shutil.rmtree(worktree)
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == "worktree_root"
-    assert "Git worktree registrations" in exc_info.value.detail
-    assert not (repository / ".owlbear/delivery/runtime").exists()
-
-
-def test_delivery_loader_rejects_interrupted_migration_journal(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    journal = repository / ".owlbear/delivery/migration.json"
-    journal.parent.mkdir(parents=True)
-    journal.write_text("{}\n", encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == "runtime_root"
-    assert exc_info.value.detail == "interrupted Delivery migration must be recovered before startup"
-    assert not (repository / ".owlbear/delivery/runtime").exists()
 
 
 def test_delivery_loader_rejects_startup_from_linked_worktree(tmp_path: Path) -> None:
@@ -5929,35 +5522,6 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
         for diagnostic in health.diagnostics
     )
     assert application.list_work_items() == ()
-    assert not (runtime_root / "capacity-ledger.json").exists()
-
-
-def test_delivery_loader_preserves_legacy_integration_retirement_diagnostic(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    change_root = runtime_root / "changes/change-a"
-    change_root.mkdir(parents=True)
-    contract = _contract("change-a", b"intent\n", b"design\n")
-    (change_root / "contract.json").write_bytes(_canonical(contract))
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-            ),
-        )
-    )
-    payload = frontier.model_dump(mode="json")
-    payload["integration_result_id"] = "legacy-result"
-    payload["integration_completion"] = {}
-    (change_root / "frontier.json").write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(_startup_config(), workspace_root=repository)
-
-    assert exc_info.value.field == "runtime_root"
-    assert exc_info.value.detail == "legacy Integration completion requires retirement before frontier migration"
-    assert isinstance(exc_info.value.__cause__, DeliveryRuntimeMigrationError)
     assert not (runtime_root / "capacity-ledger.json").exists()
 
 
@@ -6500,30 +6064,6 @@ def test_dirty_abandoned_publication_detail_blocks_cleanup(tmp_path: Path) -> No
     assert detail.publication.worktree_cleanup.blocked_reason == "worktree-attention"
 
 
-def test_change_level_legacy_context_requires_completed_building_change(tmp_path: Path) -> None:
-    completed_root = tmp_path / "completed"
-    completed_root.mkdir()
-    completed_application, _runtimes, _coordinator, _state_root = _portfolio(
-        completed_root,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-
-    context = completed_application.show_operator_context("change-a", "change-a")
-
-    assert context.stage == DeliveryStage.COMPLETED
-    assert completed_application.acquire_frontier_work().launch_packages == ()
-    assert completed_application.portfolio_operating_view().queued_for_orchestration == ()
-
-    in_flight_root = tmp_path / "in-flight"
-    in_flight_root.mkdir()
-    in_flight_application, _runtimes, _coordinator, _state_root = _portfolio(
-        in_flight_root,
-        {"change-a": DeliveryStage.PLANNING},
-    )
-    with pytest.raises(PortfolioApplicationError, match="legacy attention context"):
-        in_flight_application.show_operator_context("change-a", "change-a")
-
-
 def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -6657,65 +6197,6 @@ def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_pat
     )
     assert build_context.requests[0].resolution == resolved.resolution
     assert runtimes["change-a"].show_binding("OUT-001").active_claim_id == resumed_launch.claim.claim_id
-
-
-def test_recover_legacy_released_implementation_block_reanchors_candidate(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
-    )
-    launch = application.acquire_frontier_work().launch_packages[0]
-    reviewed_head = coordinator.show("change-a").last_reviewed_commit
-    candidate_path = launch.worktree_path / "candidate.txt"
-    candidate_path.write_text("legacy blocked candidate\n", encoding="utf-8")
-    _git(launch.worktree_path, "add", candidate_path.name)
-    _git(launch.worktree_path, "commit", "-m", "legacy blocked candidate")
-    candidate_head = _git(launch.worktree_path, "rev-parse", "HEAD")
-    request = DeliveryRequest(
-        request_id="request-legacy-implementation",
-        kind=DeliveryRequestKind.ACTION,
-        outcome_id="OUT-001",
-        summary="Repair the legacy runtime prerequisite.",
-        resolution=DeliveryRequestResolution(response_text="The prerequisite is repaired."),
-    )
-    application._workspace_manager.release_writer_at_head(
-        "change-a",
-        launch.claim.claim_id,
-        candidate_head,
-    )
-    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
-    block = DeliveryBlock(
-        block_id="block-legacy-implementation",
-        reason="The legacy runtime prerequisite is unavailable.",
-        unblock_condition="The prerequisite is repaired.",
-        expected_evidence=("Successful implementation proof",),
-        locators=("TASK-001",),
-        request_id=request.request_id,
-        resolution_note=request.resolution.response_text,
-        resolution_locators=(request.request_id,),
-        resume_commit=candidate_head,
-    )
-    binding = frontier.bindings[0].model_copy(update={"active_claim": None, "block": block, "requests": (request,)})
-    (state_root / "changes/change-a/frontier.json").write_bytes(
-        _canonical(frontier.model_copy(update={"bindings": (binding,)}))
-    )
-
-    receipt = application.recover_blocked_implementation(
-        "change-a",
-        "OUT-001",
-        candidate_head,
-        reviewed_head,
-        "recover-legacy-implementation",
-        confirmed_recovery=True,
-    )
-
-    assert receipt.expected_resume_commit == candidate_head
-    assert receipt.reviewed_head == reviewed_head
-    assert _git(launch.worktree_path, "rev-parse", "HEAD") == reviewed_head
-    assert _git(launch.worktree_path, "rev-parse", receipt.preserved_ref) == candidate_head
-    resumed = application.acquire_frontier_work().launch_packages
-    assert len(resumed) == 1
-    assert resumed[0].source_head == reviewed_head
 
 
 def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -> None:
