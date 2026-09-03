@@ -2648,6 +2648,7 @@ def test_latch_regression_preserves_domain_error_when_attention_publication_fail
     assert disposition is not None
     assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.LATCH_REGRESSION
     state_publisher.publish.assert_called_once()
+    assert state_publisher.publish.call_args.kwargs["operation_id"].startswith("acceptance-attention-")
 
 
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:

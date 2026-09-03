@@ -22,6 +22,7 @@ from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncReceipt,
+    convert_external_head_promotion_receipt_for_repair,
     convert_legacy_external_head_adoption_receipt_for_repair,
     convert_legacy_target_sync_receipt_for_repair,
 )
@@ -3507,10 +3508,10 @@ def repair_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
         repaired["external_head_adoption_receipt"] = converted_adoption.model_dump(mode="json")
         promotion = repaired.get("external_head_promotion_receipt")
         if isinstance(promotion, dict) and promotion.get("adoption_receipt_id") == adoption.get("receipt_id"):
-            repaired["external_head_promotion_receipt"] = _repair_promotion_receipt(
+            repaired["external_head_promotion_receipt"] = convert_external_head_promotion_receipt_for_repair(
                 promotion,
-                converted_adoption.receipt_id,
-            )
+                adoption_receipt_id=converted_adoption.receipt_id,
+            ).model_dump(mode="json")
     frontier = DeliveryFrontier.model_validate_json(
         json.dumps(repaired, sort_keys=True, separators=(",", ":")),
     )
@@ -3538,19 +3539,6 @@ def is_repairable_delivery_frontier(content: bytes) -> bool:
         except (TypeError, ValueError, DeliveryRuntimeMigrationError):
             return False
     return True
-
-
-def _repair_promotion_receipt(payload: dict[str, object], adoption_receipt_id: str) -> dict[str, object]:
-    legacy_receipt = ChangeExternalHeadPromotionReceipt.model_validate(payload)
-    repaired_receipt = ChangeExternalHeadPromotionReceipt.create(
-        operation_id=legacy_receipt.operation_id,
-        change_id=legacy_receipt.change_id,
-        branch=legacy_receipt.branch,
-        adoption_receipt_id=adoption_receipt_id,
-        promoted_head=legacy_receipt.promoted_head,
-        provenance=legacy_receipt.provenance,
-    )
-    return repaired_receipt.model_dump(mode="json")
 
 
 def _normalize_frontier_schema(payload: dict[str, object]) -> int:

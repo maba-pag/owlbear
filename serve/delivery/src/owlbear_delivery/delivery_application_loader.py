@@ -966,7 +966,10 @@ def _composed_runtimes(
     runtimes = {}
     diagnostics: list[DeliveryHealthDiagnostic] = []
     for change_id, contract in contracts.items():
-        if any(diagnostic.change_id == change_id and diagnostic.repairable for diagnostic in health_diagnostics):
+        if any(
+            diagnostic.change_id == change_id and diagnostic.source == "local-runtime" and diagnostic.repairable
+            for diagnostic in health_diagnostics
+        ):
             continue
         try:
             reviewed_head = workspace_manager.show(change_id).last_reviewed_commit

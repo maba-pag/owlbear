@@ -2744,7 +2744,7 @@ class PortfolioApplication:
                 self._publish_acceptance_attention(
                     change_id,
                     runtime,
-                    observation.observation_id,
+                    f"acceptance-attention-{observation.observation_id}",
                 )
                 message = "provider acceptance evidence regressed from the established merged observation"
                 raise PortfolioApplicationError(message) from exc

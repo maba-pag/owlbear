@@ -29,6 +29,8 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
 _REMOTE_REF_MISSING = 2
+_SINGLE_COMMIT_FIELD_COUNT = 1
+_SINGLE_PARENT_COMMIT_FIELD_COUNT = 2
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -415,9 +417,10 @@ class DeliveryStatePublisher:
             _raise_state_conflict("remote Delivery snapshot is already valid; refresh Delivery health")
         if remote_head != expected_remote_head:
             _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
-        normalized, previous_snapshot_id = _normalize_snapshot_for_repair(raw)
+        normalized = _normalize_snapshot_for_repair(raw)
         if not _same_snapshot_authority(normalized, package_id, coordination, runtime, admission):
             _raise_state_conflict("remote Delivery snapshot does not match verified local authority")
+        sequence, previous_snapshot_id = self._verified_repair_lineage(remote_head, change_id)
         snapshot = DeliveryStateSnapshot.create(
             operation_id=operation_id,
             change_id=change_id,
@@ -425,7 +428,7 @@ class DeliveryStatePublisher:
             coordination=coordination,
             runtime=runtime,
             admission=admission,
-            sequence=normalized.sequence + 1,
+            sequence=sequence,
             parent_snapshot_id=previous_snapshot_id,
             base_head=remote_head,
             captured_at=captured_at,
@@ -572,6 +575,35 @@ class DeliveryStatePublisher:
         path = _snapshot_path(change_id)
         result = self._run_git("show", f"{commit}:{path}", check=False)
         return None if result.returncode != 0 else result.stdout
+
+    def _verified_repair_lineage(
+        self,
+        remote_head: str,
+        change_id: str,
+    ) -> tuple[int, str | None]:
+        """Derive repair lineage from the state branch parent and its valid snapshot."""
+        parent_result = self._run_git(
+            "rev-list",
+            "--parents",
+            "-n",
+            "1",
+            remote_head,
+            check=False,
+        )
+        if parent_result.returncode != 0:
+            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+        commits = parent_result.stdout.decode(errors="replace").strip().split()
+        if len(commits) == _SINGLE_COMMIT_FIELD_COUNT:
+            return 1, None
+        if len(commits) != _SINGLE_PARENT_COMMIT_FIELD_COUNT:
+            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+        previous_raw = self._read_snapshot_bytes(commits[1], change_id)
+        if previous_raw is None:
+            return 1, None
+        previous = _validated_snapshot(previous_raw)
+        if previous is None:
+            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+        return previous.sequence + 1, previous.snapshot_id
 
     def _commit_snapshot(self, base: str | None, snapshot: DeliveryStateSnapshot) -> str:
         index_fd, index_path = tempfile.mkstemp(prefix="owlbear-delivery-state-index-")
@@ -739,7 +771,7 @@ def is_repairable_delivery_snapshot(raw: bytes) -> bool:
     return True
 
 
-def _normalize_snapshot_for_repair(raw: bytes) -> tuple[DeliveryStateSnapshot, str | None]:
+def _normalize_snapshot_for_repair(raw: bytes) -> DeliveryStateSnapshot:
     try:
         payload = json.loads(raw)
     except (TypeError, ValueError) as exc:
@@ -785,8 +817,7 @@ def _normalize_snapshot_for_repair(raw: bytes) -> tuple[DeliveryStateSnapshot, s
     except (TypeError, ValueError, ValidationError) as exc:
         message = "remote Delivery snapshot cannot be normalized from verified state"
         raise DeliveryStatePublicationError(message, retry_safe=False) from exc
-    previous_snapshot_id = raw_snapshot_id if re.fullmatch(r"[0-9a-f]{64}", raw_snapshot_id) else None
-    return normalized, previous_snapshot_id
+    return normalized
 
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:

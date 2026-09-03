@@ -24,6 +24,7 @@ from owlbear_delivery import (
     DeliveryFinalization,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHealthDiagnostic,
     DeliveryMergedPullRequestLatch,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -55,6 +56,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
     _can_defer_remote_state_reconciliation,
+    _composed_runtimes,
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
     _is_unpublished_acceptance_attention_successor,
@@ -254,6 +256,31 @@ def test_loader_defers_active_remote_descendant_drift(tmp_path: Path) -> None:
         pytest.raises(_DeferredRemoteStateReconciliationError),
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+
+def test_loader_keeps_local_runtime_for_remote_only_repairable_diagnostic(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-remote-repair"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    diagnostic = DeliveryHealthDiagnostic(
+        source="remote-state",
+        code="snapshot-identity-invalid",
+        detail="Remote Delivery snapshot identity is invalid.",
+        change_id=change_id,
+        repairable=True,
+    )
+
+    runtimes, diagnostics = _composed_runtimes(
+        tmp_path / "state",
+        {change_id: contract},
+        manager,
+        (diagnostic,),
+    )
+
+    assert change_id in runtimes
+    assert diagnostics == ()
+    assert DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).schema_version == 17
 
 
 def test_loader_accepts_local_descendant_when_active_remote_branch_was_deleted(tmp_path: Path) -> None:
@@ -784,7 +811,14 @@ def test_state_publisher_repairs_invalid_snapshot_and_replays_append_only(tmp_pa
     initial = _publish(publisher, runtime, manager, "state-repair", "e" * 64, "state-repair-initial")
     valid = publisher.read_snapshot("state-repair")
     assert valid is not None
-    invalid = valid.model_copy(update={"snapshot_id": "0" * 64})
+    invalid = valid.model_copy(
+        update={
+            "snapshot_id": "0" * 64,
+            "sequence": 999,
+            "parent_snapshot_id": "f" * 64,
+            "base_head": "e" * 40,
+        }
+    )
     invalid_commit = publisher._commit_snapshot(initial.published_head, invalid)  # noqa: SLF001
     publisher._push_snapshot(invalid_commit, initial.published_head)  # noqa: SLF001
     runtime.capture_publication_attention(
@@ -818,10 +852,10 @@ def test_state_publisher_repairs_invalid_snapshot_and_replays_append_only(tmp_pa
     assert isinstance(repaired, DeliveryStateRepairReceipt)
     assert replayed == repaired
     assert repaired.expected_remote_head == invalid_commit
-    assert repaired.previous_snapshot_id == invalid.snapshot_id
+    assert repaired.previous_snapshot_id == valid.snapshot_id
     assert repaired.repaired_snapshot_id == restored.snapshot_id
     assert restored.sequence == valid.sequence + 1
-    assert restored.parent_snapshot_id == invalid.snapshot_id
+    assert restored.parent_snapshot_id == valid.snapshot_id
     assert restored.frontier.change_disposition is not None
     assert publisher.read_snapshot_inventory().diagnostics == ()
 
