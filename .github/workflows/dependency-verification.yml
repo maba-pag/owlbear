@@ -32,9 +32,10 @@ name: Dependency verification
       - serve/tools/src/owlbear_tools/megalinter.py
       - tests/test_dependency_verification_workflow.py
       - uv.lock
+  workflow_dispatch:
 
 concurrency:
-  group: dependency-verification-${{ github.event.pull_request.number }}
+  group: dependency-verification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -42,6 +43,31 @@ permissions:
   contents: read
 
 jobs:
+  resolve_runtimes:
+    name: Resolve Python runtimes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python_matrix: ${{ steps.runtime.outputs.python_matrix }}
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve pinned Python runtimes
+        id: runtime
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python_upper="$(tr -d '\r\n' < .python-version)"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            printf 'python_matrix=["3.12.14","3.13.15","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
+          else
+            printf 'python_matrix=["3.12.14","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
+          fi
+
   classify:
     name: Classify dependency surfaces
     runs-on: ubuntu-latest
@@ -62,10 +88,10 @@ jobs:
       shared_node_runtime: ${{ steps.scope.outputs.shared_node_runtime }}
       workflows: ${{ steps.scope.outputs.workflows }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -74,18 +100,29 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-          git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
-          git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
-          python3 serve/tools/src/owlbear_tools/dependency_ci.py \
-            --paths-file "$RUNNER_TEMP/dependency-paths" \
-            --diff-file "$RUNNER_TEMP/dependency.diff" \
-            --base-ref "$MERGE_BASE" \
-            --head-ref "$HEAD_SHA" \
-            --repository-root "$GITHUB_WORKSPACE" \
-            --github-output "$GITHUB_OUTPUT" \
-            --summary "$GITHUB_STEP_SUMMARY"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            : > "$RUNNER_TEMP/dependency-paths"
+            for output in \
+              python node shared_node_runtime root_node diagrams pds precommit \
+              ruff_toolchain workflows megalinter renovate applicable compatibility
+            do
+              echo "$output=true" >> "$GITHUB_OUTPUT"
+            done
+          else
+            MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
+            git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
+            python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+              --paths-file "$RUNNER_TEMP/dependency-paths" \
+              --diff-file "$RUNNER_TEMP/dependency.diff" \
+              --base-ref "$MERGE_BASE" \
+              --head-ref "$HEAD_SHA" \
+              --repository-root "$GITHUB_WORKSPACE" \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Protect dependency proof tooling
         id: proof_tooling
@@ -120,24 +157,23 @@ jobs:
 
   proof-python:
     name: Prove Python ${{ matrix.python }} compatibility
-    needs: classify
+    needs:
+      - classify
+      - resolve_runtimes
     if: needs.classify.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python:
-          - "3.12.14"
-          - "3.13.15"
-          - "3.14.7"
+        python: ${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}
     env:
       UV_PROJECT_ENVIRONMENT: .venv-${{ matrix.python }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup uv
@@ -184,10 +220,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -243,10 +279,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup uv
@@ -300,6 +336,7 @@ jobs:
     name: Verify dependency update
     needs:
       - classify
+      - resolve_runtimes
       - proof-python
       - proof-node
       - compatibility

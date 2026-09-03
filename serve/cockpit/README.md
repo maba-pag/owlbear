@@ -94,19 +94,26 @@ uv run test-e2e
 Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
 workspaces use the prebuilt bundle and do not run this developer-only procedure.
 
-Run the explicit cross-engine compatibility smoke gate when validating browser support:
+Run the Chromium compatibility smoke gate used by pull requests:
 
 ```shell
 cd /path/to/owlbear/serve/cockpit/web
-npx playwright install chromium firefox webkit
+npx playwright install chromium
 npm run test:e2e:compat
 ```
 
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
-smoke scenarios against the Playwright-pinned current Chromium, Firefox, and WebKit engines. It
-does not execute the exact minimum browser versions in the output-target table. On Ubuntu CI, the
-same installation also uses `--with-deps` so WebKit's host libraries are present. The maintained
-fast and assembled suites remain Chromium-only.
+smoke scenarios against the Playwright-pinned Chromium engine. To run the full cross-engine matrix
+locally, install all three engines and use the explicit full-suite command:
+
+```shell
+npx playwright install chromium firefox webkit
+npm run test:e2e:compat:all
+```
+
+The full matrix does not execute the exact minimum browser versions in the output-target table.
+On Ubuntu CI, manual workflow dispatch runs the full matrix with `--with-deps`; pull-request CI
+uses the Chromium-only gate. The maintained fast and assembled suites remain Chromium-only.
 
 ## Delivery Evidence
 

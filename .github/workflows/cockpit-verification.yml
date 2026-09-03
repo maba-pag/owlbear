@@ -14,33 +14,52 @@ name: Cockpit verification
       - opened
       - reopened
       - synchronize
+  workflow_dispatch:
 
 concurrency:
-  group: cockpit-verification-${{ github.event.pull_request.number }}
+  group: cockpit-verification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  resolve_runtimes:
+    name: Resolve Cockpit runtimes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      node_matrix: ${{ steps.runtime.outputs.node_matrix }}
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve pinned Node runtimes
+        id: runtime
+        run: |
+          node_upper="$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
+          printf 'node_matrix=["24.16.0","%s"]\n' "$node_upper" >> "$GITHUB_OUTPUT"
+
   proof:
     name: Prove Cockpit on Node ${{ matrix.node }}
+    needs: resolve_runtimes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        node:
-          - "24.16.0"
-          - "24.19.0"
+        node: ${{ fromJSON(needs.resolve_runtimes.outputs.node_matrix) }}
     defaults:
       run:
         working-directory: serve/cockpit/web
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -81,11 +100,13 @@ jobs:
     defaults:
       run:
         working-directory: serve/cockpit/web
+    env:
+      E2E_COMPAT_BROWSERS: ${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -100,7 +121,7 @@ jobs:
 
       - name: Install Playwright browser engines and Linux dependencies
         timeout-minutes: 10
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install --with-deps $E2E_COMPAT_BROWSERS
 
       - name: Run cross-engine compatibility smoke tests
         run: npm run test:e2e:compat

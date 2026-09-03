@@ -118,6 +118,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "uv.lock",
     }
     assert "if" not in _job(workflow, "classify")
+    assert "workflow_dispatch" in workflow["on"]
 
 
 def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> None:
@@ -146,13 +147,19 @@ def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> No
 def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> None:
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
+    resolve = _job(workflow, "resolve_runtimes")
     proof_python = _job(workflow, "proof-python")
     proof_node = _job(workflow, "proof-node")
 
+    assert resolve["outputs"] == {"python_matrix": "${{ steps.runtime.outputs.python_matrix }}"}
+    assert "python_upper=\"$(tr -d '\\r\\n' < .python-version)\"" in text
+    assert 'python_matrix=["3.12.14","3.13.15","%s"]' in text
+    assert 'python_matrix=["3.12.14","%s"]' in text
     assert proof_python["strategy"] == {
         "fail-fast": False,
-        "matrix": {"python": ["3.12.14", "3.13.15", "3.14.7"]},
+        "matrix": {"python": "${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}"},
     }
+    assert proof_python["needs"] == ["classify", "resolve_runtimes"]
     assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
     assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
     assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
@@ -338,6 +345,7 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     assert gate["if"] == "always()"
     assert gate["needs"] == [
         "classify",
+        "resolve_runtimes",
         "proof-python",
         "proof-node",
         "compatibility",
@@ -626,9 +634,11 @@ def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: 
 
 def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     workflow = _workflow(COCKPIT_VERIFY_PATH)
+    resolve = _job(workflow, "resolve_runtimes")
     proof = _job(workflow, "proof")
     browser = _job(workflow, "browser_compatibility")
     text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
+    package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
 
     assert workflow["on"]["pull_request"]["paths"] == [
         "serve/cockpit/web/**",
@@ -638,14 +648,27 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     ]
     assert proof["strategy"] == {
         "fail-fast": False,
-        "matrix": {"node": ["24.16.0", "24.19.0"]},
+        "matrix": {"node": "${{ fromJSON(needs.resolve_runtimes.outputs.node_matrix) }}"},
     }
+    assert resolve["outputs"] == {"node_matrix": "${{ steps.runtime.outputs.node_matrix }}"}
+    assert proof["needs"] == "resolve_runtimes"
+    assert "node_upper=\"$(tr -d '\\r\\n' < serve/cockpit/web/.nvmrc)\"" in text
     assert "npm ci --engine-strict" in text
     assert "npm run build" in text
     assert browser["needs"] == "proof"
     assert browser["if"] == "needs.proof.result == 'success'"
-    assert "npx playwright install --with-deps chromium firefox webkit" in text
+    assert "workflow_dispatch:" in text
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
+    assert browser["env"] == {
+        "E2E_COMPAT_BROWSERS": (
+            "${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}"
+        )
+    }
+    assert "npx playwright install --with-deps $E2E_COMPAT_BROWSERS" in text
     assert "npm run test:e2e:compat" in text
+    assert package["scripts"]["test:e2e:compat:all"] == (
+        "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs"
+    )
 
 
 def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
