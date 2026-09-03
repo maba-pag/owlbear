@@ -134,6 +134,8 @@ class _PullResponse(_GitHubModel):
     draft: bool
     state: str
     merged: bool
+    mergeable: bool | None = None
+    mergeable_state: str | None = Field(default=None, min_length=1)
     merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None
     merged_by: _PullUser | None
@@ -182,6 +184,8 @@ class _PullRequestRead:
     draft: bool
     state: str
     merged: bool
+    mergeable: bool | None
+    merge_state_status: str | None
     merge_commit_sha: str | None
     merged_at: datetime | None
     merged_by_login: str | None
@@ -927,6 +931,8 @@ class GitHubCliPublicationProvider:
             draft=response.draft,
             state=response.state,
             merged=response.merged,
+            mergeable=response.mergeable,
+            merge_state_status=response.mergeable_state,
             merge_commit_sha=response.merge_commit_sha,
             merged_at=self._timestamp(response.merged_at, operation, retry_safe=retry_safe),
             merged_by_login=response.merged_by.login if response.merged_by is not None else None,
@@ -952,6 +958,8 @@ class GitHubCliPublicationProvider:
                 draft=pull_request.draft,
                 state=pull_request.state,
                 merged=pull_request.merged,
+                mergeable=pull_request.mergeable,
+                merge_state_status=pull_request.merge_state_status,
                 merge_commit_sha=pull_request.merge_commit_sha,
                 merged_at=pull_request.merged_at,
                 merged_by_login=pull_request.merged_by_login,

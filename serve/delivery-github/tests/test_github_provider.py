@@ -42,8 +42,14 @@ class _CheckResponseOptions:
     repository: object = ...
 
 
-def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object]:
-    return {
+def _pull_response(
+    *,
+    draft: bool = True,
+    head: str = _HEAD,
+    mergeable: object = _MISSING,
+    mergeable_state: object = _MISSING,
+) -> dict[str, object]:
+    response: dict[str, object] = {
         "number": 7,
         "node_id": "PR_node_7",
         "head": {"ref": "owlbear/change/example", "sha": head},
@@ -57,6 +63,11 @@ def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object
         "merged_at": None,
         "merged_by": None,
     }
+    if mergeable is not _MISSING:
+        response["mergeable"] = mergeable
+    if mergeable_state is not _MISSING:
+        response["mergeable_state"] = mergeable_state
+    return response
 
 
 def _merged_pull_response(
@@ -247,6 +258,17 @@ def test_reads_open_pull_request_without_merge_oid_through_rest_only() -> None:
     assert pull_request.merge_commit_sha is None
     assert len(runner.calls) == 1
     assert runner.calls[0][0][-1] == "repos/example/project/pulls/7"
+
+
+def test_reads_open_pull_request_mergeability_through_rest() -> None:
+    provider, _runner = _provider(
+        _completed(_pull_response(mergeable=False, mergeable_state="dirty")),
+    )
+
+    pull_request = provider.read_pull_request(_REPOSITORY, 7)
+
+    assert pull_request.mergeable is False
+    assert pull_request.merge_state_status == "dirty"
 
 
 def test_reads_merged_pull_request_with_fixed_graphql_evidence() -> None:
