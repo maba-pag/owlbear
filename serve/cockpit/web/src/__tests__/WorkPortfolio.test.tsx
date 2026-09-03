@@ -1086,19 +1086,35 @@ it('refreshes open Design detail after an authored package revision', async () =
 })
 
 it('shows stale Design detail state and retries the refresh in place', async () => {
-  renderPage('/delivery/design-draft/design')
-  const detailView = await screen.findByTestId('design-work-detail')
-  designFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/design-draft/design')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const detailView = screen.getByTestId('design-work-detail')
+    designFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful Design detail; live updates paused.')
-  expect(alert).toHaveTextContent('Design source temporarily unavailable')
-  expect(detailView).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful Design detail; live updates paused.')
+    expect(alert).toHaveTextContent('Design source temporarily unavailable')
+    expect(detailView).toBeInTheDocument()
 
-  designFailure = false
-  fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
-  await waitFor(() => expect(screen.queryByText('Showing the last successful Design detail; live updates paused.')).not.toBeInTheDocument())
-  expect(screen.getByTestId('design-work-detail')).toBeInTheDocument()
+    designFailure = false
+    fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.queryByText('Showing the last successful Design detail; live updates paused.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('design-work-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('closes removed Design detail after a portfolio refresh', async () => {
@@ -2858,56 +2874,83 @@ it('does not offer publication-check observation outside draft and awaiting-merg
 })
 
 it('clears publication-check results when the polled published head changes', async () => {
-  const publicationCard = publicationCardForChecks()
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge'),
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+  vi.useFakeTimers()
+  try {
+    const publicationCard = publicationCardForChecks()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge'),
+    })
+    currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+    renderPage('/delivery/change-alpha/publication')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-  await within(inspector).findByText('Unit tests')
+    const inspector = screen.getByTestId('work-item-detail')
+    fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
 
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge', '2'.repeat(40)),
-  })
-  await waitFor(
-    () => expect(within(inspector).getByTestId('publication-checks-status')).toHaveTextContent('Previous check results were cleared'),
-    { timeout: 6_000 },
-  )
-  expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge', '2'.repeat(40)),
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(within(inspector).getByTestId('publication-checks-status')).toHaveTextContent('Previous check results were cleared')
+    expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('keeps observed publication checks visible across a phase change with the same head', async () => {
-  const publicationCard = publicationCardForChecks()
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge'),
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+  vi.useFakeTimers()
+  try {
+    const publicationCard = publicationCardForChecks()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge'),
+    })
+    currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+    renderPage('/delivery/change-alpha/publication')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-  await within(inspector).findByText('Unit tests')
+    const inspector = screen.getByTestId('work-item-detail')
+    fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
 
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      ...publicationForChecks('awaiting-merge'),
-      phase: 'checkpoint-pending',
-      pending_checkpoint_head: '1'.repeat(40),
-      pending_checkpoint_triggers: ['finalization'],
-    },
-  })
-  await waitFor(() => {
+    currentDetail = detail({
+      card: publicationCard,
+      publication: {
+        ...publicationForChecks('awaiting-merge'),
+        phase: 'checkpoint-pending',
+        pending_checkpoint_head: '1'.repeat(40),
+        pending_checkpoint_triggers: ['finalization'],
+      },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
     expect(within(inspector).getByText('Checkpoint pending')).toBeInTheDocument()
     expect(within(inspector).queryByTestId('publication-checks-observe')).not.toBeInTheDocument()
-  }, { timeout: 6_000 })
-  expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('disables publication-check observation while another publication action is pending', async () => {
@@ -3008,32 +3051,60 @@ it('shows typed provider failure for publication-check observation', async () =>
 })
 
 it('keeps cached routed detail visible when a background refresh fails', async () => {
-  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
-  const detailView = await screen.findByTestId('work-item-detail')
-  portfolioFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const detailView = screen.getByTestId('work-item-detail')
+    portfolioFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful refresh — live updates paused.')
-  expect(alert).toHaveTextContent('Temporary polling failure')
-  expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
-  expect(detailView).toBeInTheDocument()
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful refresh — live updates paused.')
+    expect(alert).toHaveTextContent('Temporary polling failure')
+    expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
+    expect(detailView).toBeInTheDocument()
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('shows stale Work Item detail state and retries the refresh in place', async () => {
-  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
-  await screen.findByTestId('work-item-detail')
-  detailFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    detailFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful Work Item detail; live updates paused.')
-  expect(alert).toHaveTextContent('Delivery runtime is absent: change-alpha')
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful Work Item detail; live updates paused.')
+    expect(alert).toHaveTextContent('Delivery runtime is absent: change-alpha')
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
 
-  detailFailure = false
-  fireEvent.click(within(alert).getByText('Retry Work Item', { exact: true }))
-  await waitFor(() => expect(screen.queryByText('Showing the last successful Work Item detail; live updates paused.')).not.toBeInTheDocument())
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    detailFailure = false
+    fireEvent.click(within(alert).getByText('Retry Work Item', { exact: true }))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.queryByText('Showing the last successful Work Item detail; live updates paused.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('keeps backend detail collapsed when a selected Work Item is unavailable', async () => {
