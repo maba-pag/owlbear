@@ -350,11 +350,6 @@ COMMANDS = (
     _internal_command("commit-owned", "uv run commit-owned [OPTIONS] -- PATH ...", "Create a scoped commit."),
     _internal_command("test-root", "uv run test-root PATH ...", "Resolve test toolchains and working directories."),
     _internal_command(
-        "test-curation-inventory",
-        "uv run test-curation-inventory [--json] [--root PATH]",
-        "Inventory task-looking tests and legacy provenance.",
-    ),
-    _internal_command(
         "migrate-delivery-state",
         "uv run migrate-delivery-state [PATH] [--apply]",
         "Preview or apply the one-way Delivery live-state migration.",

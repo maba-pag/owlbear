@@ -48,7 +48,7 @@ validates it.
 
 ### Durable Test Admission
 
-Create or retain a durable test only when it passes the pipeline Rent Test and protects at least one
+Create or retain a durable test only when it passes Durable Test Admission and protects at least one
 of these:
 
 - observable behavior or a public interface used by callers;
@@ -82,13 +82,12 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 
 | Tier | File naming | Lifespan | Authority |
 | --- | --- | --- | --- |
-| **Task-scoped proof** (transient) | Project test root with task ID when executable scaffolding is necessary | Until task archive | Proves task completion; test-curator deletes it or mines behavior worth retaining. |
 | **Durable behavioral test** | Owning package or configured test root, named for behavior | While the protected contract exists | Maintained regression suite for product behavior and risk boundaries. |
 
+- Product work adds tests in the owning canonical suite when the task requires them; there is no
+  separate task-test lifecycle.
 - Discover durable locations from pytest `testpaths`, package manifests, and the nearest existing test
   for the owning behavior; do not assume a repository root such as `serve/` or `src/`.
-- Task-scoped executable scaffolding is exceptional, not the default proof for every change. After
-  archive, the test-curator removes it or mines only assertions that pass Durable Test Admission.
 - Durable test names describe behavior or risk, not task IDs or acceptance-criteria numbering.
 - Builder and independent proof roles run commands proportional to packet and change risk. There is no mandatory GREEN phase or coverage target.
 

@@ -52,7 +52,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
 | finalizer | GPT-5.6 Sol | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-5.6 Luna | `w-test-curation` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
+| test-curator | GPT-5.6 Luna | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
 | memory-curator | GPT-5.6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
@@ -76,7 +76,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
 | `memory-audit` | Current agent directed by prompt | Loads memory structure and MCP memory before review; pending inspection uses preflight metadata and hands curation to `memory-curator` |
-| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation` and `w-test-curation`; uses its prompt-defined read-only audit procedure |
+| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation`; uses its prompt-defined read-only audit procedure |
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
 project-local skills in addition to the shared surface.
@@ -115,6 +115,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `w-orchestration` | orchestrator |
 | `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
+| `r-workspace-governance` | builder, test-curator |
 | `w-mem-curation` | memory-curator |
 | `h-knowledge-ops` | knowledge-ingestor, knowledge-enricher |
 | `w-knowledge-enrichment` | knowledge-enricher |

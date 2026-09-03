@@ -259,7 +259,7 @@ Commit per `r-workspace-governance` → Commit Discipline.
 
 **Step 0 applies to:** Workflows that consume an engine-started job or immutable candidate.
 
-**No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped inventory, not task-scoped).
+**No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped review, not archive-scoped).
 
 **Workflow skills must NOT contain:**
 

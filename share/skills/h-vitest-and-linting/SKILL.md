@@ -106,7 +106,7 @@ tests for generated branches, DOM shape, component internals, or compiler output
 
 ## Durable Frontend Test Admission
 
-A committed test must pass the pipeline Rent Test and protect observable behavior, a public API or
+A committed test must pass Durable Test Admission and protect observable behavior, a public API or
 component contract, a non-obvious state transition, a realistic failure boundary, or a previously
 observed regression.
 

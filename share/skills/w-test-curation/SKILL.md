@@ -1,214 +1,169 @@
 ---
 name: w-test-curation
-description: "Workflow: Remove low-value transient proof tests and preserve durable regressions"
+description: "Workflow: Review and remove low-value tests from current suites"
 user-invocable: false
 ---
 
 # Test Curation
 
-Remove transient proof tests that no longer provide project value. Mine useful assertions into durable tests before deleting. The goal is not to reduce test count — it is to stop spending compute on tests whose only purpose was proving one completed change.
+Review current test suites for low-value coverage and remove only what no longer protects
+observable behavior. This is a user-invoked maintenance workflow for existing tests, not a
+task-archive or acceptance-criteria lifecycle.
 
-**Non-blocking:** Runs on demand via prompt. Never gates Delivery. Coverage may help locate
-unexamined code, but it never justifies keeping or adding a test.
+The goal is a smaller, clearer suite without sacrificing regression protection. A test's age,
+filename, class name, coverage contribution, or passing status is not enough to remove it.
 
-## Goal
+## Scope And Ownership
 
-A transient proof test has **no ongoing value** when:
+The user supplies a package, directory, test file, or changed-commit range. If no scope is
+supplied, inspect the active test roots and choose one bounded package or suite for review. Do not
+claim that the whole repository was reviewed from a collection run alone.
 
-- Its immutable legacy provenance is complete and the test only proved one change's acceptance
-- The test verifies something was *removed* — once removed, the test is tautological
-- The test verifies a configuration was *added* — and the configuration is now exercised by product tests
-- The test exercises code paths already covered by durable module or integration tests
-- The test is a proof-of-concept, benchmark, or visual snapshot tied to a completed investigation
+Operate in the current checkout. Do not edit a managed Delivery worktree or a path with unrelated
+uncommitted changes. The test-curator may edit test files and scratch files only; production code,
+Delivery authority, generated output, and configuration are outside this workflow.
 
-A transient proof test **still has value** when:
+Normal product work keeps its test changes inside the owning Delivery task. Suite-wide maintenance
+is a direct user-requested test operation and does not create a parallel Delivery task for every
+deletion.
 
-- It exercises a code path no other test covers (regression guard)
-- It documents an edge case or boundary condition that is hard to re-derive
-- It protects against a bug that was actually hit (not hypothetical)
+## Step 1 - Bind The Scope
 
-## Discovery
+1. Read the supplied scope and inspect `git status --short`, `git diff`, and `git diff --cached`.
+2. Identify the owning package and runner from the nearest manifest and the repository test
+  configuration. Use `uv run test-root` when the owning boundary is unclear.
+3. Protect pre-existing changes unless the user explicitly included those paths.
+4. Record the test roots, toolchain, and exclusions used for this curation pass.
 
-Scan **all** directories listed in `testpaths` (from `pyproject.toml` or equivalent config) plus any package-local test directories (`serve/*/tests/`, `packages/*/tests/`, etc.). Legacy transient tests may use a numeric work identifier in the filename or module header.
+Do not use retired task IDs, acceptance-criteria names, legacy manifests, or archive records to
+decide whether a current test is removable.
 
-### Inventory command
+## Step 2 - Discover Current Tests
 
-From the repository root, run the read-only inventory before making curation decisions:
+Use the configured runner and current repository layout to identify the tests in scope:
 
-```shell
-uv run test-curation-inventory --json
-```
+- Python: configured pytest roots and package-local `tests/` directories;
+- Vitest or Jest: the owning frontend package's configured test files;
+- Playwright: the owning package's configured E2E specs.
 
-The inventory reports each candidate's path, discovery signal, task ID, and immutable provenance:
+Use collection output, `git log`, `git diff`, and runner-reported timing when available. These are
+discovery evidence only. Do not create a persistent inventory, infer value from file age, or treat
+coverage as a quality score.
 
-- `verified`: a matching archived or completed manifest record exists and its SHA-256 matches;
-- `unverified`: a matching record exists but the preserved bytes do not match;
-- `missing`: no matching immutable record was found.
+Candidate signals include:
 
-Only `verified` candidates are eligible for deletion or node removal. Protect `unverified` and
-`missing` candidates and report them as `skip` until provenance is repaired. The inventory treats
-`Mined from #...` as provenance on a durable test, not as a new task-ownership signal.
+- a one-time structural or migration assertion whose subject no longer exists;
+- duplicate assertions at the same or a more expensive test layer;
+- a test for an obsolete interface, route, configuration, or implementation branch;
+- assertions that cannot distinguish the claimed behavior from an incorrect implementation;
+- a slow or complex test with an equivalent, cheaper test that protects the same observable.
 
-### Finding transient tests
+Do not nominate a test solely because it is large, old, task-labelled, named unusually, lightly
+covered, or difficult to understand. Read its assertions and the behavior they exercise first.
 
-1. **Python:** Find files matching `test_*_[0-9]*.py` recursively in all test directories. New transient suites must use `test_{behavior}_{task_id}.py`; durable suites use behavior names without task IDs.
-2. **Vitest/Jest:** Find files matching `*[._-][0-9][0-9][0-9]*.test.{ts,tsx}` in the frontend test directories.
-3. **Playwright:** Find files matching `*[-_][0-9][0-9][0-9]*.spec.ts` in E2E directories.
-4. **Legacy Python:** Inspect only each file's module docstring and header comments before the first import for explicit task ownership, such as `RED-phase tests for #1517` or `Task 1517 proof`. Treat the referenced numeric ID as a candidate even when the filename has no ID.
+## Step 3 - Apply Durable Test Admission
 
-Adapt filename patterns to the project's naming convention, but preserve the requirement for an
-unambiguous numeric task ID. A `TestFromAC_*` class or function name is not task provenance: it may
-describe durable behavioral coverage and must never make a file a curation candidate by itself.
+For every candidate, write a short decision record answering:
 
-### Filtering
+1. What observable behavior, public interface, invariant, or risk does this test protect?
+2. Which realistic regression would make it fail?
+3. Is that behavior protected elsewhere, and at which test layer?
+4. Is a cheaper or clearer test able to provide the same protection?
 
-1. Start from the inventory output. Record each candidate's path, signal (`filename` or `header`), task ID, and provenance status.
-2. Read only the hash-verified immutable legacy snapshot under `.owlbear/legacy/`; require the manifest and preserved record to identify the work as archived or completed.
-3. Protect candidates with missing, unverifiable, or nonterminal provenance.
-4. Protect files imported or referenced by another maintained test.
-5. Treat discovery as a triage input, never a deletion decision; inspect candidate assertions under the Rent Test before mining or deletion.
+Use these actions:
 
-If no immutable legacy-proof candidates exist across any suite, report "nothing to curate" and stop.
-
-## Triage
-
-For each candidate, answer one question: **does this test provide ongoing project value?**
-
-### Zero-value patterns (delete without mining)
-
-| Pattern | Example | Reasoning |
-| --- | --- | --- |
-| Removal proof | Test asserts an old import raises or a deleted file is gone | The thing is gone; the test is tautological |
-| Config addition proof | Test asserts a config key exists in a manifest | Config is exercised by the system it configures |
-| Structural assertion | Test asserts a file exists or a module exports a name | The code that imports it is the real test |
-| Duplicate coverage | Same assertions already exist in durable module tests | Redundant compute |
-| Pipeline artifact proof | Test asserts compiler output, DOM budgets, or generated internals | Brittle to implementation details, not product behavior |
-| RED-phase scaffolding | Test was written before implementation and never evolved beyond AC parroting | No unique assertions beyond what the implementation naturally tests |
-
-### Negative assertions
-
-Distinguish one-time migration proof from a standing negative contract. Delete an assertion that
-only proves a completed implementation was removed, such as an obsolete helper or old file. Keep
-an assertion when it protects a rule that must remain true, such as forbidden dependency imports,
-excluded HTTP routes, security boundaries, or authority isolation. A negative assertion earns rent
-when reintroducing the forbidden behavior would be a real regression.
-
-### Potential-value patterns (read before deciding)
-
-| Pattern | Action |
+| Action | Use when |
 | --- | --- |
-| Tests a non-obvious edge case | Mine into durable test |
-| Tests error handling / boundary validation | Mine into durable test |
-| Tests integration between two modules | Mine if not covered elsewhere |
-| Tests a bug fix (regression guard) | Mine — these are high-value |
+| `keep` | The test protects unique behavior, a non-obvious edge case, or a real risk boundary. |
+| `rewrite lower` | The behavior matters, but a focused public-boundary test can replace a brittle higher-level test. |
+| `merge` | Multiple tests protect the same observable and a smaller combined set remains clear. |
+| `retire` | The test is structural, tautological, obsolete, or demonstrably duplicated. |
 
-**Decision rule:** Uncertainty alone is not evidence of value. Inspect the public behavior and nearby
-durable coverage; if no plausible ongoing regression can be named, delete the test. Use `skip` only
-when concrete missing context prevents a responsible decision.
+Keep standing negative contracts when reintroducing the forbidden behavior would be a real
+regression. Remove negative assertions that only prove a completed one-time deletion.
 
-### Mixed-file verdicts
+Do not turn flakiness or slowness into a low-value verdict. A flaky test with valuable behavior is
+an unhealthy test, not evidence that the behavior no longer matters. Repair it when it is within
+the supplied test scope; otherwise retain it and report the health problem.
 
-Not every transient suite is a whole file. Record one of these explicit actions per candidate:
+## Step 4 - Change The Smallest Set
 
-- `delete file`: every test is zero-value proof;
-- `remove nodes`: delete only zero-value tests from a mixed module;
-- `mine in place`: retain a meaningful guard in the same durable module with a descriptive name;
-- `keep`: the candidate is a durable regression or standing contract;
-- `skip`: provenance, fixture context, or ownership is unavailable.
+For `keep`, make no edit. For `rewrite lower` or `merge`, preserve the smallest assertions that
+distinguish the named behavior and keep the test in its owning canonical suite. For `retire`:
 
-## Mining
+1. Check imports, fixtures, shared helpers, and test references that would make the candidate a
+  maintained dependency.
+2. Run the narrowest relevant baseline test command when the candidate is shared or the removal is
+  uncertain.
+3. Remove the file or selected nodes, or replace them with the clearer lower-level test.
+4. Re-run the owning test scope.
 
-When a task-test has assertions worth preserving:
+A green run after removal proves only that no remaining test depended on the removed file, fixture,
+or import. It does not prove that the removed test had no unique behavioral value. The decision to
+retire must come from the assertion and coverage comparison, not from a green deletion alone.
 
-### Python
+If removal breaks collection, fixtures, or a maintained test, restore the change and keep the
+candidate. If the candidate contains unique behavior that cannot be expressed safely in the
+existing suite, keep it rather than inventing a holding directory.
 
-1. Identify the durable test target — the module-level or package-level test file covering the same source module. If none exists, create one.
-2. Move assertions in with descriptive names (not `TestFromAC_*`).
-3. Preserve only the smallest assertion set that distinguishes the named regression.
-4. Add provenance: `# Mined from #{task_id}: {behavior}`.
-5. Adjust imports/fixtures for the durable context.
+## Step 5 - Verify The Result
 
-The `Mined from` marker records history only; it must not make the durable file a future candidate.
+Run the affected tests with the owning runner. Use the repository's maintained commands where they
+cover the selected scope:
 
-### Frontend (Vitest/Jest)
+- Python: `uv run test {paths}` or a focused `uv run pytest` command;
+- Cockpit unit tests: `npm test` from `serve/cockpit/web`, or the repository path-aware runner;
+- Cockpit E2E tests: `uv run test-e2e {specs}` or the package's maintained E2E script.
 
-1. Identify the durable test covering the same component, hook, or API module.
-2. Move assertions that protect product behavior, public contracts, or API payloads.
-3. Drop assertions about compiler output, DOM budgets, or implementation details.
-4. Run from the frontend package root — never from the repo root.
+Run applicable lint, typecheck, build, or browser checks when the edited test surface requires
+them. Run the full maintained suite after a batch that changes shared test helpers, package
+boundaries, or multiple test layers. A full-suite pass confirms integration; it does not replace
+assertion-level value reasoning.
 
-### E2E (Playwright)
+Also run `git diff --check` and inspect the complete diff. Leave unrelated worktree and index
+changes untouched.
 
-1. Keep only durable browser-level contracts that unit tests cannot cover.
-2. Prefer a small fast gate over comprehensive sweeps.
-3. Delete snapshot directories alongside their spec files.
+## Step 6 - Report And Commit
 
-## Verify & Delete
+Return one concise decision table for the selected scope. Include the protected behavior or the
+reason no behavior remains, the evidence used, and the action taken.
 
-After mining (or for zero-value tests, directly):
+Commit only when the user explicitly requests it. Follow `r-workspace-governance` for the scoped
+commit helper and explicit owned paths. Never stage or commit a broad directory, unrelated work,
+or a source-file change from this role.
 
-1. **Run affected tests** to confirm nothing breaks. Run the relevant command directly (pytest for Python, vitest/jest for frontend, playwright for E2E).
-2. **Run applicable static gates** for touched surfaces: `git diff --check`, focused Ruff or the
- configured Python lint, and for Cockpit frontend changes `uv run typecheck-cockpit`, the package
- build, and the configured frontend lint. These prove file and type contracts that unit tests do
- not cover.
-3. **Delete or edit** according to the mixed-file verdict. Do not delete a whole module when only
- selected nodes are transient.
-4. **Rollback** on failure: if durable tests or static gates break after mining, restore the durable
- edit and keep the task-test. Log as `skip`.
-
-## Full Suite Gate
-
-After all deletions or node removals, run the full configured suite. If failures appear, identify
-which decision caused the break, restore that task-test or durable edit, and log it. Re-run
-`git diff --check` after any formatter or repair.
-
-## Commit
-
-Commit only when the user explicitly requests a commit. Never use `git add -A`, `git commit -a`,
-or a broad directory path. Inspect the complete diff and commit only the owned paths with the
-repository helper:
-
-```shell
-uv --project {owlbear-root} run commit-owned \
-  -m "test: curate {N} task-tests — {D} deleted, {M} mined (test-curator)" \
-  -- {owned_path_1} {owned_path_2}
-```
-
-Verify the resulting commit's path list and leave unrelated staged or unstaged work untouched.
-
-## Output
+## Output Template
 
 ```markdown
 ## Test Curation
 ### Summary
-- Candidates found: {modules} modules / {nodes} test nodes (Python: {py}, Frontend: {fe}, E2E: {e2e})
-- Removed zero-value nodes: {D}
-- Durable guards mined or retained from candidates: {G}
-- Pre-existing durable tests untouched: {U}
-- Skipped (protected/uncertain): {S}
-
-For Channel A, `G` means candidate assertions deliberately preserved or mined, not every test
-currently collected in a touched module.
+- Scope: {package, directory, file, or commit range}
+- Tests reviewed: {files and test nodes}
+- Retired: {count}
+- Merged or rewritten: {count}
+- Retained: {count}
+- Health findings: {count, or none}
 
 ### Decisions
-| File | Legacy provenance | Nodes reviewed | Verdict | Protected behavior / reason |
-|---|---|---|---|---|
-| test_core_removal_1234.py | #1234 (verified archived) | 3 | delete file | removal proof; no ongoing behavior |
-| test_engine_edge_1200.py | #1200 (verified archived) | 4 | mine in place | malformed input remains atomic |
-| Shell.tab-routing_1639.test.tsx | #1639 (verified archived) | 2 | keep | standing route contract |
+| Test | Protected behavior or reason | Evidence | Action |
+|---|---|---|---|
+| path::node | named observable or zero-value reason | assertion and neighboring coverage | keep/merge/rewrite lower/retire |
 ```
 
 ## Known Pitfalls
 
-- **Package-local tests.** Task-tests in package test directories mine into the same directory's durable files, not into a different location.
-- **Shared fixtures.** Task-tests may use fixtures from their local `conftest.py` or setup file. Verify fixture availability in the durable target.
-- **Maintained dependencies.** Protect any candidate imported or referenced by another maintained test.
-- **Coverage ≠ value.** A module at 95% coverage may still benefit from a mined edge-case test. Read the assertions before deleting.
+- Current test placement is authoritative; do not move tests into a permanent candidate folder.
+- A task label or historical name is not proof that a current test is disposable.
+- A passing test may still be the only regression guard for an important behavior.
+- A green post-removal run proves lack of coupling, not lack of value.
+- Coverage identifies unexamined code; it does not establish test quality or justify deletion.
+- Do not replace a source defect with a test deletion, and do not edit production code to make
+  curation pass.
 
 ## Companion Skills
 
 | Skill | When | Purpose |
 | --- | --- | --- |
-| `h-python-conventions` | Mining Python assertions | Naming and structure |
-| `h-vitest-and-linting` | Frontend/E2E curation | Frontend tooling commands |
+| `h-python-conventions` | Python test review or edits | Python test admission and assertion conventions |
+| `h-vitest-and-linting` | Frontend or E2E review or edits | Frontend test admission and runner proof |
+| `r-workspace-governance` | Explicit commit requested | Owned paths and scoped commit rules |
