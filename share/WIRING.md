@@ -110,7 +110,6 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, finalizer |
 | `h-module-design` | designer-challenger, planner-challenger |
 | `h-frontend-design` | conceptual-design-reviewer |
-| `r-workspace-governance` | builder |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
 | `w-change-finalization` | finalizer |

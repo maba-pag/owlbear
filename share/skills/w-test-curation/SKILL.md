@@ -98,6 +98,10 @@ distinguish the named behavior and keep the test in its owning canonical suite. 
 3. Remove the file or selected nodes, or replace them with the clearer lower-level test.
 4. Re-run the owning test scope.
 
+When a baseline was run, compare the post-removal result with it. Treat only newly failing tests
+or newly broken collection, fixtures, or maintained references as curation-caused; report
+pre-existing failures as health findings and do not attribute them to the removal.
+
 A green run after removal proves only that no remaining test depended on the removed file, fixture,
 or import. It does not prove that the removed test had no unique behavioral value. The decision to
 retire must come from the assertion and coverage comparison, not from a green deletion alone.
