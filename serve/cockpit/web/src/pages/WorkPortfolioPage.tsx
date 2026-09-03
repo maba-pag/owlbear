@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PModal, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
+import { WorkItemApiError } from '../api/workItems'
 import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
@@ -375,7 +376,7 @@ function RepairDeliveryStateControl({
               <dt className="text-contrast-medium">Diagnostic</dt><dd><code>{diagnostic.code}</code></dd>
               <dt className="text-contrast-medium">Remote state head</dt><dd><code>{remoteHead}</code></dd>
             </dl>
-            {actionFailed && error ? <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">Delivery state repair failed: {error.message}</p> : null}
+            {actionFailed && error ? <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">{error instanceof WorkItemApiError ? error.code : 'ERR_DELIVERY_STATE_REPAIR'}: {error.message}</p> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={pending} onClick={() => void repair()}>

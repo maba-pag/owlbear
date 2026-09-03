@@ -240,6 +240,15 @@ def _canonical_payload(payload: object) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+class _RawSnapshot:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self.change_id = payload["change_id"]
+        self._payload = payload
+
+    def canonical_bytes(self) -> bytes:
+        return _canonical_payload(self._payload)
+
+
 def _legacy_nested_receipt(receipt: object, removed_field: str) -> dict[str, object]:
     payload = receipt.model_dump(mode="json")
     payload["schema_version"] = 1
@@ -259,7 +268,7 @@ def _publish_raw_snapshot(
     base: str,
     payload: dict[str, object],
 ) -> str:
-    candidate = DeliveryStateSnapshot.model_construct(**payload)
+    candidate = _RawSnapshot(payload)
     commit = publisher._commit_snapshot(base, candidate)  # noqa: SLF001
     publisher._push_snapshot(commit, base)  # noqa: SLF001
     return commit

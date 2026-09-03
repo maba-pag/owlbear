@@ -798,7 +798,9 @@ export function useDeliveryStateRepair(onChanged: () => void) {
     } catch (caught: unknown) {
       const nextError = caught instanceof Error ? caught : new Error('Delivery state repair failed')
       setError(nextError)
-      if (!(nextError instanceof WorkItemApiError) || !nextError.retrySafe) {
+      const retainOperation = nextError instanceof WorkItemApiError
+        && (nextError.retrySafe || nextError.code === 'ERR_DELIVERY_STATE_RESPONSE_UNKNOWN')
+      if (!retainOperation) {
         operationIds.current.delete(diagnostic.change_id)
       }
       return nextError

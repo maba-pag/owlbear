@@ -308,6 +308,7 @@ let mutationFailurePath: string | null
 let designFailure: boolean
 let acceptanceObservationFailure: boolean
 let acceptanceReconciliationProviderUnavailable: boolean
+let repairResponseUnknown: boolean
 let publicationChecksFailure: boolean
 let publicationChecksResponse: PublicationChecksObservationResponse
 let supersedeFailuresRemaining: number
@@ -436,6 +437,16 @@ function installFetch() {
       })
     }
     if (method === 'POST' && url.endsWith('/state/repair')) {
+      if (repairResponseUnknown) {
+        return response({
+          detail: {
+            code: 'ERR_DELIVERY_STATE_RESPONSE_UNKNOWN',
+            detail: 'The Delivery state repair outcome could not be verified.',
+            authority: 'delivery',
+            retry_safe: false,
+          },
+        }, 409)
+      }
       currentPortfolio = portfolio([], { status: 'healthy', diagnostics: [] })
       return response({
         schema_version: 1,
@@ -662,6 +673,7 @@ beforeEach(() => {
   designFailure = false
   acceptanceObservationFailure = false
   acceptanceReconciliationProviderUnavailable = false
+  repairResponseUnknown = false
   publicationChecksFailure = false
   publicationReconciliationResult = {
     change_id: 'change-alpha',
@@ -925,6 +937,7 @@ it('confirms an exact repairable Delivery diagnostic before refreshing health', 
 
   fireEvent.click(within(health).getByTestId('repair-delivery-state-quarantined-change'))
   const reopened = (await screen.findByText('Confirm Delivery state repair')).closest('p-modal')!
+  repairResponseUnknown = true
   fireEvent.click(within(reopened).getByText('Confirm repair'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/quarantined-change/state/repair',
@@ -936,6 +949,15 @@ it('confirms an exact repairable Delivery diagnostic before refreshing health', 
       operation_id: expect.any(String),
     },
   }))
+  const repairRequests = requests.filter((request) => request.url.endsWith('/state/repair'))
+  const operationId = (repairRequests[0].body as { operation_id: string }).operation_id
+  expect(within(reopened).getByRole('alert')).toHaveTextContent('ERR_DELIVERY_STATE_RESPONSE_UNKNOWN')
+
+  repairResponseUnknown = false
+  fireEvent.click(within(reopened).getByText('Confirm repair'))
+  await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/state/repair'))).toHaveLength(2))
+  expect((requests.filter((request) => request.url.endsWith('/state/repair'))[1].body as { operation_id: string }).operation_id)
+    .toBe(operationId)
   await waitFor(() => expect(screen.queryByTestId('delivery-issues-section')).not.toBeInTheDocument())
 })
 
