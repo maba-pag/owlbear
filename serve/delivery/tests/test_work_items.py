@@ -40,7 +40,11 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.draft_pull_request import (
+    PublicationPullRequestObservationReceipt,
+    PullRequestReadyReceipt,
+)
+from owlbear_delivery.publication_provider import PublicationPullRequest
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -202,6 +206,7 @@ def _snapshot(
     *,
     operator_moves: tuple[DeliveryOperatorMove, ...] = (),
     frontier_updates: dict[str, object] | None = None,
+    publication_observation: PublicationPullRequestObservationReceipt | None = None,
 ) -> DeliveryPortfolioSnapshot:
     frontier = DeliveryFrontier(
         bindings=bindings,
@@ -213,7 +218,50 @@ def _snapshot(
     return DeliveryPortfolioSnapshot.capture(
         _contract(),
         content,
+        publication_observation=publication_observation,
     )
+
+
+def _publication_observation(
+    *,
+    mergeable: bool | None,
+    merge_state_status: str | None,
+    head_sha: str = "3" * 40,
+) -> PublicationPullRequestObservationReceipt:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_branch="owlbear/change/portfolio-change",
+        head_sha=head_sha,
+        base_branch="main",
+        title="Portfolio Change",
+        body="Generated summary",
+        draft=True,
+        state="open",
+        merged=False,
+        mergeable=mergeable,
+        merge_state_status=merge_state_status,
+    )
+    observed_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+    payload = {
+        "schema_version": 1,
+        "change_id": "portfolio-change",
+        "observed_at": observed_at,
+        "snapshot": snapshot,
+        "provider_evidence_digest": hashlib.sha256(
+            json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
+    observation_id = hashlib.sha256(
+        json.dumps(
+            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
 
 
 def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
@@ -715,6 +763,42 @@ def test_publication_head_mismatch_keeps_identity_and_withholds_ready_action() -
         detail.publication.pull_request_number,
         detail.publication.pull_request_head,
     ) == (publication.repository, publication.number, publication.head_sha)
+
+
+def test_conflicting_draft_publication_offers_resolution_prompt_and_keeps_ready_action() -> None:
+    finalization = _finalization()
+    publication = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_sha=finalization.exact_head,
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "change_publication_history": DeliveryChangePublicationHistory.create(publication),
+            },
+            publication_observation=_publication_observation(mergeable=False, merge_state_status="dirty"),
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert (card.needs, card.next_actor, card.next_step, card.action.kind, card.action.label, card.action.command) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        "Resolve pull-request conflicts before making it ready",
+        WorkItemActionKind.MARK_READY,
+        "Make PR ready for review",
+        "/resolve-target-conflict portfolio-change",
+    )
+    assert detail.publication is not None
+    assert (detail.publication.mergeable, detail.publication.merge_state_status) == (False, "dirty")
 
 
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:

@@ -116,6 +116,7 @@ from owlbear_delivery import (
     PublicationCheckKind,
     PublicationCheckSnapshot,
     PublicationLease,
+    PublicationPullRequestObservationReceipt,
     PublishChangeBranch,
     PublishDeliveryPlan,
     PublishDeliveryResult,
@@ -275,6 +276,50 @@ def _summary_receipt(head: str, *, number: int = 7) -> GeneratedPullRequestSumma
         "provider_evidence_digest": "4" * 64,
     }
     return GeneratedPullRequestSummaryReceipt(receipt_id=_receipt_id(payload), **payload)
+
+
+def _publication_observation(
+    change_id: str,
+    head: str,
+    *,
+    mergeable: bool | None,
+    merge_state_status: str | None,
+) -> PublicationPullRequestObservationReceipt:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=7,
+        node_id="PR_7",
+        head_branch=f"owlbear/change/{change_id}",
+        head_sha=head,
+        base_branch="main",
+        title=f"Delivery {change_id}",
+        body="Generated summary",
+        draft=True,
+        state="open",
+        merged=False,
+        mergeable=mergeable,
+        merge_state_status=merge_state_status,
+    )
+    observed_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+    evidence_digest = hashlib.sha256(
+        json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    payload = {
+        "schema_version": 1,
+        "change_id": change_id,
+        "observed_at": observed_at,
+        "snapshot": snapshot,
+        "provider_evidence_digest": evidence_digest,
+    }
+    candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
+    observation_id = hashlib.sha256(
+        json.dumps(
+            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
 
 
 def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
@@ -3931,6 +3976,42 @@ def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) 
     assert state.change_id == "change-a"
     assert state.published_head is None
     assert state.pending_checkpoint is None
+
+
+def test_portfolio_projects_current_pull_request_mergeability(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", head))
+    publication = DeliveryChangePublicationIdentity(
+        change_id="change-a",
+        repository="example/project",
+        number=7,
+        node_id="PR_7",
+        head_sha=head,
+    )
+    runtimes["change-a"].record_publication_identity(publication)
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    frontier_path.write_bytes(
+        _canonical(frontier.model_copy(update={"published_head": head, "pending_checkpoint": None}))
+    )
+    observation = _publication_observation("change-a", head, mergeable=False, merge_state_status="dirty")
+    publisher = Mock()
+    publisher.observe_pull_request.return_value = observation
+    application._draft_pull_request_publisher = publisher
+
+    group = application.list_work_item_groups()[0]
+    card = group.items[-1]
+    detail = application.show_work_item_view("change-a", "publication")
+
+    assert card.action.command == "/resolve-target-conflict change-a"
+    assert detail.publication is not None
+    assert detail.publication.mergeable is False
+    assert detail.publication.merge_state_status == "dirty"
+    publisher.observe_pull_request.assert_called_once_with(ObserveChangePublicationPullRequest(change_id="change-a"))
 
 
 def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_path: Path) -> None:
