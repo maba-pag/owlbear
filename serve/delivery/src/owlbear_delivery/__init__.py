@@ -50,6 +50,7 @@ from owlbear_delivery.change_workspace import (
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
     WriterIdentity,
+    repair_change_coordination,
 )
 from owlbear_delivery.checkpoint_supervisor import DeliveryCheckpointSupervisor
 from owlbear_delivery.completed_history import (
@@ -156,12 +157,14 @@ from owlbear_delivery.delivery_runtime import (
     integration_attention_disposition,
     is_acceptance_waiting_observation,
     is_change_terminal,
+    repair_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
     DeliveryStateConflictError,
     DeliveryStatePublicationError,
     DeliveryStatePublicationReceipt,
     DeliveryStatePublisher,
+    DeliveryStateRepairReceipt,
     DeliveryStateResponseUnknownError,
     DeliveryStateSnapshot,
     DeliveryStateSnapshotDiagnostic,
@@ -484,6 +487,7 @@ __all__ = [
     "DeliveryStatePublicationError",
     "DeliveryStatePublicationReceipt",
     "DeliveryStatePublisher",
+    "DeliveryStateRepairReceipt",
     "DeliveryStateResponseUnknownError",
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
@@ -620,4 +624,6 @@ __all__ = [
     "is_acceptance_waiting_observation",
     "is_change_terminal",
     "load_delivery_application",
+    "repair_change_coordination",
+    "repair_delivery_frontier",
 ]

@@ -43,8 +43,6 @@ _PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH = 4
 _DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.json")
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_PARENT_COUNT = 2
-_EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION = 2
-_TARGET_SYNC_REVIEW_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -294,7 +292,7 @@ class BlockedImplementationRecoveryReceipt(_WorkspaceModel):
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
-    schema_version: Literal[1, 2] = 1
+    schema_version: Literal[2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -305,19 +303,6 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
     review_required: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalize_legacy_receipt(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        schema_version = value.get("schema_version")
-        if schema_version in {None, 1}:
-            legacy = dict(value)
-            legacy["schema_version"] = 1
-            legacy.setdefault("review_required", False)
-            return legacy
-        return value
 
     @classmethod
     def create(  # noqa: PLR0913
@@ -335,7 +320,7 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
     ) -> Self:
         """Create a content-addressed receipt from one completed target merge."""
         values = {
-            "schema_version": 2 if review_required else 1,
+            "schema_version": 2,
             "operation_id": operation_id,
             "change_id": change_id,
             "integration_target": integration_target,
@@ -347,19 +332,14 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
             "review_required": review_required,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
-        digest = _target_sync_digest(candidate) if review_required else _legacy_target_sync_digest(candidate)
-        return cls(receipt_id=digest, **values)
+        return cls(receipt_id=_target_sync_digest(candidate), **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> Self:
         if self.expected_target != self.target_head:
             message = "target synchronization receipt names a different fetched target"
             raise ValueError(message)
-        if (self.schema_version == _TARGET_SYNC_REVIEW_SCHEMA_VERSION) != self.review_required:
-            message = "target synchronization review metadata does not match its schema version"
-            raise ValueError(message)
-        expected_digest = _legacy_target_sync_digest(self) if self.schema_version == 1 else _target_sync_digest(self)
-        if self.receipt_id != expected_digest:
+        if self.receipt_id != _target_sync_digest(self):
             message = "target synchronization receipt identity is invalid"
             raise ValueError(message)
         return self
@@ -450,30 +430,14 @@ class ChangeTargetSyncAbortReceipt(_WorkspaceModel):
 class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
     """Content-addressed evidence that one remote Change descendant was adopted or observed."""
 
-    schema_version: Literal[1, 2] = 2
+    schema_version: Literal[2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
     branch: str = Field(min_length=1)
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    provenance: Literal["fast-forward", "observed"] = "fast-forward"
-
-    @model_validator(mode="before")
-    @classmethod
-    def _require_v2_provenance(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        schema_version = value.get("schema_version")
-        if schema_version in {None, 1}:
-            legacy = dict(value)
-            legacy["schema_version"] = 1
-            legacy.setdefault("provenance", "fast-forward")
-            return legacy
-        if schema_version == _EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION and "provenance" not in value:
-            message = "schema v2 external Change-head adoption receipts require provenance"
-            raise ValueError(message)
-        return value
+    provenance: Literal["fast-forward", "observed"]
 
     @classmethod
     def create(  # noqa: PLR0913 - adoption receipt binds each exact provenance input.
@@ -488,7 +452,7 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
     ) -> Self:
         """Create deterministic evidence for one adopted remote Change head."""
         values = {
-            "schema_version": _EXTERNAL_HEAD_ADOPTION_SCHEMA_VERSION,
+            "schema_version": 2,
             "operation_id": operation_id,
             "change_id": change_id,
             "branch": branch,
@@ -504,15 +468,7 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
         if self.expected_head == self.adopted_head:
             message = "external Change head adoption requires head movement"
             raise ValueError(message)
-        if self.schema_version == 1 and self.provenance != "fast-forward":
-            message = "schema v1 external Change-head adoption receipts require fast-forward provenance"
-            raise ValueError(message)
-        expected_id = (
-            _legacy_external_head_adoption_digest(self)
-            if self.schema_version == 1
-            else _external_head_adoption_digest(self)
-        )
-        if self.receipt_id != expected_id:
+        if self.receipt_id != _external_head_adoption_digest(self):
             message = "external Change head adoption receipt identity is invalid"
             raise ValueError(message)
         return self
@@ -4016,10 +3972,52 @@ def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _legacy_target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
-    payload = receipt.model_dump(mode="json", exclude={"receipt_id", "review_required"})
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+def convert_legacy_target_sync_receipt_for_repair(payload: object) -> ChangeTargetSyncReceipt:
+    """Convert one verified schema-1 target-sync receipt for explicit repair only."""
+    if not isinstance(payload, dict):
+        message = "target synchronization repair input is invalid"
+        raise TypeError(message)
+    expected_keys = {
+        "schema_version",
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "integration_target",
+        "expected_target",
+        "target_head",
+        "change_head_before",
+        "merged_head",
+        "merge_commit",
+    }
+    allowed_keys = expected_keys | {"review_required"}
+    if payload.get("schema_version") != 1 or set(payload) not in (expected_keys, allowed_keys):
+        message = "target synchronization receipt is not a supported repair input"
+        raise ValueError(message)
+    if payload.get("review_required", False) is not False:
+        message = "target synchronization receipt is not a supported repair input"
+        raise ValueError(message)
+    receipt_id = payload.get("receipt_id")
+    if not isinstance(receipt_id, str):
+        message = "target synchronization receipt identity is invalid"
+        raise TypeError(message)
+    identity_payload = {key: value for key, value in payload.items() if key not in {"receipt_id", "review_required"}}
+    expected_receipt_id = hashlib.sha256(
+        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if receipt_id != expected_receipt_id:
+        message = "target synchronization receipt identity is invalid"
+        raise ValueError(message)
+    return ChangeTargetSyncReceipt.create(
+        operation_id=payload["operation_id"],
+        change_id=payload["change_id"],
+        integration_target=payload["integration_target"],
+        expected_target=payload["expected_target"],
+        target_head=payload["target_head"],
+        change_head_before=payload["change_head_before"],
+        merged_head=payload["merged_head"],
+        merge_commit=payload["merge_commit"],
+        review_required=False,
+    )
 
 
 def _target_sync_conflict_digest(conflict: ChangeTargetSyncConflictState) -> str:
@@ -4056,16 +4054,165 @@ def _external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _legacy_external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -> str:
-    payload = receipt.model_dump(mode="json", exclude={"receipt_id", "provenance"})
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+def convert_legacy_external_head_adoption_receipt_for_repair(
+    payload: object,
+) -> ChangeExternalHeadAdoptionReceipt:
+    """Convert one verified schema-1 head-adoption receipt for explicit repair only."""
+    if not isinstance(payload, dict):
+        message = "external Change-head repair input is invalid"
+        raise TypeError(message)
+    expected_keys = {
+        "schema_version",
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "branch",
+        "expected_head",
+        "adopted_head",
+    }
+    allowed_keys = expected_keys | {"provenance"}
+    if payload.get("schema_version") != 1 or set(payload) not in (expected_keys, allowed_keys):
+        message = "external Change-head adoption receipt is not a supported repair input"
+        raise ValueError(message)
+    if payload.get("provenance", "fast-forward") != "fast-forward":
+        message = "external Change-head adoption receipt is not a supported repair input"
+        raise ValueError(message)
+    receipt_id = payload.get("receipt_id")
+    if not isinstance(receipt_id, str):
+        message = "external Change-head adoption receipt identity is invalid"
+        raise TypeError(message)
+    identity_payload = {key: value for key, value in payload.items() if key not in {"receipt_id", "provenance"}}
+    expected_receipt_id = hashlib.sha256(
+        json.dumps(identity_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if receipt_id != expected_receipt_id:
+        message = "external Change-head adoption receipt identity is invalid"
+        raise ValueError(message)
+    return ChangeExternalHeadAdoptionReceipt.create(
+        operation_id=payload["operation_id"],
+        change_id=payload["change_id"],
+        branch=payload["branch"],
+        expected_head=payload["expected_head"],
+        adopted_head=payload["adopted_head"],
+        provenance="fast-forward",
+    )
+
+
+def convert_external_head_promotion_receipt_for_repair(
+    payload: object,
+    *,
+    adoption_receipt_id: str,
+) -> ChangeExternalHeadPromotionReceipt:
+    """Rebind one promotion receipt to a converted adoption identity for explicit repair only."""
+    if not isinstance(payload, dict):
+        message = "external Change-head promotion repair input is invalid"
+        raise TypeError(message)
+    receipt = ChangeExternalHeadPromotionReceipt.model_validate(payload)
+    return ChangeExternalHeadPromotionReceipt.create(
+        operation_id=receipt.operation_id,
+        change_id=receipt.change_id,
+        branch=receipt.branch,
+        adoption_receipt_id=adoption_receipt_id,
+        promoted_head=receipt.promoted_head,
+        provenance=receipt.provenance,
+    )
+
+
+def repair_change_coordination(content: bytes) -> tuple[ChangeCoordination, bytes]:
+    """Convert retired receipt shapes in one coordination record for explicit repair only."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        message = "Change coordination is not a supported repair input"
+        raise ValueError(message)
+    repaired = dict(payload)
+    adoption_ids: dict[str, str] = {}
+    repaired["target_sync_receipt"] = _repair_target_sync_payload(repaired.get("target_sync_receipt"))
+    repaired["external_head_adoption_receipt"] = _repair_adoption_payload(
+        repaired.get("external_head_adoption_receipt"),
+        adoption_ids,
+    )
+    adoption_history = repaired.get("external_head_adoption_receipts", [])
+    if not isinstance(adoption_history, list):
+        message = "external Change-head adoption history repair input is invalid"
+        raise TypeError(message)
+    repaired["external_head_adoption_receipts"] = [
+        _repair_adoption_payload(item, adoption_ids) for item in adoption_history
+    ]
+    repaired["external_head_promotion_receipt"] = _repair_promotion_payload(
+        repaired.get("external_head_promotion_receipt"),
+        adoption_ids,
+    )
+    promotion_history = repaired.get("external_head_promotion_receipts", [])
+    if not isinstance(promotion_history, list):
+        message = "external Change-head promotion history repair input is invalid"
+        raise TypeError(message)
+    repaired["external_head_promotion_receipts"] = [
+        _repair_promotion_payload(item, adoption_ids) for item in promotion_history
+    ]
+    coordination = ChangeCoordination.model_validate_json(
+        json.dumps(repaired, sort_keys=True, separators=(",", ":")),
+    )
+    return coordination, _model_content(coordination)
+
+
+def _repair_target_sync_payload(payload: object) -> object:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        message = "target synchronization repair input is invalid"
+        raise TypeError(message)
+    if payload.get("schema_version") == 1:
+        return convert_legacy_target_sync_receipt_for_repair(payload).model_dump(mode="json")
+    return ChangeTargetSyncReceipt.model_validate_json(_model_content_from_payload(payload)).model_dump(mode="json")
+
+
+def _repair_adoption_payload(payload: object, adoption_ids: dict[str, str]) -> object:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        message = "external Change-head adoption repair input is invalid"
+        raise TypeError(message)
+    previous_id = payload.get("receipt_id")
+    if not isinstance(previous_id, str):
+        message = "external Change-head adoption receipt identity is invalid"
+        raise TypeError(message)
+    receipt = (
+        convert_legacy_external_head_adoption_receipt_for_repair(payload)
+        if payload.get("schema_version") == 1
+        else ChangeExternalHeadAdoptionReceipt.model_validate_json(_model_content_from_payload(payload))
+    )
+    adoption_ids[previous_id] = receipt.receipt_id
+    adoption_ids[receipt.receipt_id] = receipt.receipt_id
+    return receipt.model_dump(mode="json")
+
+
+def _repair_promotion_payload(payload: object, adoption_ids: dict[str, str]) -> object:
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        message = "external Change-head promotion repair input is invalid"
+        raise TypeError(message)
+    previous_id = payload.get("adoption_receipt_id")
+    if not isinstance(previous_id, str):
+        message = "external Change-head promotion adoption identity is invalid"
+        raise TypeError(message)
+    adoption_id = adoption_ids.get(previous_id, previous_id)
+    receipt = (
+        convert_external_head_promotion_receipt_for_repair(payload, adoption_receipt_id=adoption_id)
+        if adoption_id != previous_id
+        else ChangeExternalHeadPromotionReceipt.model_validate_json(_model_content_from_payload(payload))
+    )
+    return receipt.model_dump(mode="json")
 
 
 def _external_head_promotion_digest(receipt: ChangeExternalHeadPromotionReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _model_content_from_payload(payload: object) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def _design_package_snapshot_intent_digest(intent: ChangeDesignPackageSnapshotIntent) -> str:

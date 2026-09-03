@@ -30,6 +30,7 @@ from owlbear_delivery.change_workspace import (
     RecoverBlockedImplementation,
     SyncChangeWithTarget,
     WriterIdentity,
+    repair_change_coordination,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_delivery.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
@@ -1425,7 +1426,7 @@ def test_adopt_external_head_rejects_local_only_advanced_head(tmp_path: Path) ->
     assert coordinator.show(coordination.change_id) == before
 
 
-def test_external_head_adoption_loads_legacy_fast_forward_receipt(tmp_path: Path) -> None:
+def test_external_head_adoption_receipt_rejects_legacy_fast_forward_schema(tmp_path: Path) -> None:
     _repository(tmp_path)
     receipt = ChangeExternalHeadAdoptionReceipt.create(
         operation_id="legacy-adoption",
@@ -1434,6 +1435,10 @@ def test_external_head_adoption_loads_legacy_fast_forward_receipt(tmp_path: Path
         expected_head="a" * 40,
         adopted_head="b" * 40,
     )
+    assert receipt.schema_version == 2
+    assert receipt.provenance == "fast-forward"
+    assert ChangeExternalHeadAdoptionReceipt.model_validate_json(receipt.model_dump_json()) == receipt
+
     legacy_payload = receipt.model_dump(mode="json")
     legacy_payload["schema_version"] = 1
     legacy_payload.pop("provenance")
@@ -1445,24 +1450,75 @@ def test_external_head_adoption_loads_legacy_fast_forward_receipt(tmp_path: Path
         ).encode()
     ).hexdigest()
 
-    restored = ChangeExternalHeadAdoptionReceipt.model_validate(legacy_payload)
+    with pytest.raises(ValueError, match="schema_version"):
+        ChangeExternalHeadAdoptionReceipt.model_validate(legacy_payload)
 
-    assert restored.schema_version == 1
-    assert restored.provenance == "fast-forward"
-    assert restored.receipt_id == legacy_payload["receipt_id"]
 
-    v1_with_new_digest = dict(legacy_payload)
-    v1_with_new_digest["provenance"] = "fast-forward"
-    v1_with_new_digest["receipt_id"] = hashlib.sha256(
+def test_repair_change_coordination_rebinds_adoption_promotion_history(tmp_path: Path) -> None:
+    _repository(tmp_path)
+    adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="repair-coordination-adoption",
+        change_id="repair-coordination",
+        branch="owlbear/change/repair-coordination",
+        expected_head="a" * 40,
+        adopted_head="b" * 40,
+    )
+    legacy_adoption = adoption.model_dump(mode="json")
+    legacy_adoption["schema_version"] = 1
+    legacy_adoption.pop("provenance")
+    legacy_adoption["receipt_id"] = hashlib.sha256(
         json.dumps(
-            {key: value for key, value in v1_with_new_digest.items() if key != "receipt_id"},
+            {key: value for key, value in legacy_adoption.items() if key != "receipt_id"},
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
+    promotion = ChangeExternalHeadPromotionReceipt.create(
+        operation_id="repair-coordination-promotion",
+        change_id="repair-coordination",
+        branch="owlbear/change/repair-coordination",
+        adoption_receipt_id=legacy_adoption["receipt_id"],
+        promoted_head="b" * 40,
+        provenance="explicit",
+    )
+    payload = {
+        "schema_version": 1,
+        "change_id": "repair-coordination",
+        "branch": "owlbear/change/repair-coordination",
+        "worktree_path": str(tmp_path / "worktree"),
+        "integration_target": "main",
+        "target_head": "c" * 40,
+        "publication_base_head": None,
+        "publication_baseline_recovery": None,
+        "last_reviewed_commit": "a" * 40,
+        "design_package_snapshot_intent": None,
+        "design_package_snapshot": None,
+        "writer": None,
+        "publication_lease": None,
+        "target_sync_receipt": None,
+        "target_sync_conflict": None,
+        "target_sync_abort_receipt": None,
+        "external_head_adoption_intent": None,
+        "external_head_adoption_receipt": legacy_adoption,
+        "external_head_adoption_receipts": [legacy_adoption],
+        "external_head_promotion_receipt": promotion.model_dump(mode="json"),
+        "external_head_promotion_receipts": [promotion.model_dump(mode="json")],
+        "worktree_cleanup_intent": None,
+        "worktree_cleanup": None,
+        "dirty_worktree_quarantine": None,
+    }
 
-    with pytest.raises(ValueError, match="receipt identity is invalid"):
-        ChangeExternalHeadAdoptionReceipt.model_validate(v1_with_new_digest)
+    repaired, canonical = repair_change_coordination(json.dumps(payload).encode())
+
+    assert repaired.external_head_adoption_receipt is not None
+    assert repaired.external_head_adoption_receipt.schema_version == 2
+    assert repaired.external_head_adoption_receipts[0].schema_version == 2
+    assert repaired.external_head_promotion_receipt is not None
+    assert repaired.external_head_promotion_receipt.adoption_receipt_id == (
+        repaired.external_head_adoption_receipt.receipt_id
+    )
+    assert repaired.external_head_promotion_receipts[0] == repaired.external_head_promotion_receipt
+    assert json.loads(canonical)["external_head_adoption_receipt"]["schema_version"] == 2
 
 
 def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tmp_path: Path) -> None:

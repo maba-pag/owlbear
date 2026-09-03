@@ -14,10 +14,6 @@ from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
     DeliveryChangeCompletion,
-    DeliveryChangeDisposition,
-    DeliveryChangeDispositionKind,
-    DeliveryChangePublicationIdentity,
-    DeliveryChangeStage,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -36,6 +32,7 @@ from owlbear_delivery import (
     DeliveryStateConflictError,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
+    DeliveryStateRepairReceipt,
     DeliveryStateResponseUnknownError,
     DeliveryStateSnapshot,
     DeliveryWorkerRole,
@@ -56,7 +53,6 @@ from owlbear_delivery.delivery_application_loader import (
     _can_defer_remote_state_reconciliation,
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
-    _is_unpublished_acceptance_attention_successor,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -275,49 +271,76 @@ def test_loader_accepts_local_descendant_when_active_remote_branch_was_deleted(t
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository, allow_local_branch=True)
 
-    assert _fetch_snapshot_change_head(
-        snapshot,
-        _startup_config(),
-        repository,
-        allow_local_branch=True,
-        allow_local_descendant=True,
-    ) == (
-        snapshot.change_head,
-        False,
-    )
+    with pytest.raises(
+        DeliveryApplicationLoadError,
+        match="remote Change branch is missing for an active Delivery snapshot",
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository, allow_local_branch=True)
 
 
-def test_loader_accepts_unpublished_local_acceptance_attention(tmp_path: Path) -> None:
-    repository, _remote, _initial = _repository(tmp_path)
-    change_id = "state-local-attention"
+def test_loader_accepts_finalized_snapshot_when_remote_change_branch_was_deleted(tmp_path: Path) -> None:
+    repository, _remote, initial = _repository(tmp_path)
+    change_id = "state-finalized-fallback"
     contract, _intent, _design = _contract(change_id)
     runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
     snapshot = _snapshot(runtime, manager, change_id)
-    attention = DeliveryChangeDisposition.create(
-        kind=DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION,
-        change_id=change_id,
-        entered_from=DeliveryChangeStage.AWAITING_MERGE,
-        recorded_at=datetime(2026, 8, 23, tzinfo=UTC),
-        diagnostics=("provider acceptance evidence does not match authority",),
+    observed_at = datetime(2026, 8, 23, 12, tzinfo=UTC)
+    operation_id = "finalize-state-finalized-fallback"
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=operation_id,
+            exact_commit=initial,
+            observation_kind="snapshot-test",
+            command_or_procedure="finalized snapshot target fallback",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
     )
-    local_frontier = snapshot.frontier.model_copy(
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=initial,
+            author_id="snapshot-finalization-author",
+            reviewer_id="snapshot-finalization-reviewer",
+            evidence=("The finalized snapshot exact head is present on the target.",),
+            reviewed_at=observed_at,
+        )
+    )
+    finalization = DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            operation_id=operation_id,
+            change_id=change_id,
+            exact_head=initial,
+            authority_digest=runtime.authority_digest,
+            result_digests=("a" * 64,),
+            observations=(observation,),
+            review=review,
+            finalized_at=observed_at,
+        )
+    )
+    finalized_frontier = snapshot.frontier.model_copy(
         update={
-            "change_disposition": attention,
-            "change_disposition_publication": DeliveryChangePublicationIdentity(
-                change_id=change_id,
-                repository="example/project",
-                number=7,
-                node_id="PR_node_7",
-                head_sha=snapshot.change_head,
+            "bindings": (
+                OutcomeAuthorityBinding(
+                    outcome_id="OUT-001",
+                    plan_scope_id="SCOPE-001",
+                    stage=DeliveryStage.COMPLETED,
+                ),
             ),
+            "finalization": finalization,
         }
     )
+    finalized_snapshot = snapshot.model_copy(update={"frontier": finalized_frontier})
 
-    assert _is_unpublished_acceptance_attention_successor(snapshot.frontier, local_frontier)
-    assert not _is_unpublished_acceptance_attention_successor(
-        snapshot.frontier,
-        local_frontier.model_copy(update={"published_head": "a" * 40}),
-    )
+    with patch(
+        "owlbear_delivery.delivery_application_loader._remote_branch_head",
+        return_value=None,
+    ):
+        assert _fetch_snapshot_change_head(finalized_snapshot, _startup_config(), repository) == (initial, False)
+
+    assert finalized_snapshot.frontier.ready is None
+    assert finalized_snapshot.frontier.change_completion is None
 
 
 def test_loader_does_not_defer_completed_remote_descendant_drift(tmp_path: Path) -> None:
@@ -379,7 +402,7 @@ def test_loader_rejects_divergent_remote_branch_drift(tmp_path: Path) -> None:
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
 
 
-def test_state_snapshot_accepts_legacy_outer_digest_for_v1_adoption_receipt(tmp_path: Path) -> None:
+def test_state_snapshot_rejects_legacy_adoption_receipt_schema(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     change_id = "legacy-snapshot"
     contract, _intent, _design = _contract(change_id)
@@ -404,20 +427,49 @@ def test_state_snapshot_accepts_legacy_outer_digest_for_v1_adoption_receipt(tmp_
     ).hexdigest()
     payload = snapshot.model_dump(mode="json")
     payload["frontier"]["external_head_adoption_receipt"] = legacy_adoption
+
     payload["snapshot_id"] = ""
-    snapshot_id = hashlib.sha256(
+    payload["snapshot_id"] = hashlib.sha256(
         (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
-    payload["snapshot_id"] = snapshot_id
 
-    restored = DeliveryStateSnapshot.model_validate_json(json.dumps(payload))
+    with pytest.raises(ValueError, match="schema_version"):
+        DeliveryStateSnapshot.model_validate_json(json.dumps(payload))
 
-    assert restored.snapshot_id == snapshot_id
-    assert restored.frontier.external_head_adoption_receipt is not None
-    assert restored.frontier.external_head_adoption_receipt.provenance == "fast-forward"
 
-    payload["snapshot_id"] = "0" * 64
-    with pytest.raises(ValueError, match="snapshot identity is invalid"):
+def test_state_snapshot_rejects_legacy_target_sync_receipt_schema(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "legacy-target-sync"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    target_sync = {
+        "schema_version": 1,
+        "receipt_id": "a" * 64,
+        "operation_id": "legacy-target-sync",
+        "change_id": change_id,
+        "integration_target": "main",
+        "expected_target": "b" * 40,
+        "target_head": "b" * 40,
+        "change_head_before": "a" * 40,
+        "merged_head": "c" * 40,
+        "merge_commit": True,
+    }
+    target_sync["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in target_sync.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    payload = snapshot.model_dump(mode="json")
+    payload["frontier"]["target_sync_receipt"] = target_sync
+    payload["snapshot_id"] = ""
+    payload["snapshot_id"] = hashlib.sha256(
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    ).hexdigest()
+
+    with pytest.raises(ValueError, match="schema_version"):
         DeliveryStateSnapshot.model_validate_json(json.dumps(payload))
 
 
@@ -682,6 +734,57 @@ def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(
     replayed = _publish(publisher, runtime, manager, "state-response-unknown", "d" * 64, "state-unknown")
 
     assert replayed.snapshot_id == publisher.read_snapshot("state-response-unknown").snapshot_id
+
+
+def test_state_publisher_repairs_invalid_snapshot_and_replays_append_only(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-repair")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-repair", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    initial = _publish(publisher, runtime, manager, "state-repair", "e" * 64, "state-repair-initial")
+    valid = publisher.read_snapshot("state-repair")
+    assert valid is not None
+    invalid = valid.model_copy(update={"snapshot_id": "0" * 64})
+    invalid_commit = publisher._commit_snapshot(initial.published_head, invalid)  # noqa: SLF001
+    publisher._push_snapshot(invalid_commit, initial.published_head)  # noqa: SLF001
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 23, 0, 30, tzinfo=UTC),
+        ("local frontier is newer than the invalid remote snapshot",),
+    )
+
+    repaired = publisher.repair_snapshot(
+        change_id="state-repair",
+        package_id="e" * 64,
+        coordination=manager.show("state-repair"),
+        runtime=runtime,
+        admission=_admission(runtime, manager, "state-repair"),
+        operation_id="state-repair-current-schema",
+        captured_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+        expected_remote_head=invalid_commit,
+    )
+    replayed = publisher.repair_snapshot(
+        change_id="state-repair",
+        package_id="e" * 64,
+        coordination=manager.show("state-repair"),
+        runtime=runtime,
+        admission=_admission(runtime, manager, "state-repair"),
+        operation_id="state-repair-current-schema",
+        captured_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+        expected_remote_head=invalid_commit,
+    )
+
+    restored = publisher.read_snapshot("state-repair")
+    assert restored is not None
+    assert isinstance(repaired, DeliveryStateRepairReceipt)
+    assert replayed == repaired
+    assert repaired.expected_remote_head == invalid_commit
+    assert repaired.previous_snapshot_id == invalid.snapshot_id
+    assert repaired.repaired_snapshot_id == restored.snapshot_id
+    assert restored.sequence == valid.sequence + 1
+    assert restored.parent_snapshot_id == invalid.snapshot_id
+    assert restored.frontier.change_disposition is not None
+    assert publisher.read_snapshot_inventory().diagnostics == ()
 
 
 def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:

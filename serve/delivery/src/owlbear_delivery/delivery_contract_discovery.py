@@ -19,6 +19,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryRuntimeMigrationError,
     derive_change_stage,
+    is_repairable_delivery_frontier,
     parse_delivery_frontier,
 )
 from owlbear_delivery.target_contract import DeliveryContract
@@ -237,6 +238,15 @@ def _parse_frontier(
             _error(DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED, str(exc)),
         )
     except (TypeError, ValueError, ValidationError):
+        if is_repairable_delivery_frontier(content):
+            return (
+                None,
+                None,
+                _error(
+                    DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED,
+                    "Persisted Delivery frontier contains a retired receipt schema and requires explicit repair",
+                ),
+            )
         return (
             None,
             None,

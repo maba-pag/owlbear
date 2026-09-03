@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_runtime import DeliveryFrontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, repair_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.target_contract import DeliveryContract
@@ -131,16 +131,7 @@ class DeliveryStateSnapshot(_StateModel):
 
     @model_validator(mode="after")
     def _validate_identity(self) -> DeliveryStateSnapshot:
-        valid_ids = {_snapshot_digest(self)}
-        if self.frontier.external_head_adoption_receipt is not None:
-            receipt = self.frontier.external_head_adoption_receipt
-            if receipt.schema_version == 1:
-                valid_ids.add(_legacy_snapshot_digest(self))
-        if self.frontier.change_disposition is not None:
-            disposition = self.frontier.change_disposition
-            if disposition.acceptance_reason is None:
-                valid_ids.add(_legacy_snapshot_digest(self))
-        if self.snapshot_id not in valid_ids:
+        if self.snapshot_id != _snapshot_digest(self):
             message = "Delivery-state snapshot identity is invalid"
             raise ValueError(message)
         _validate_snapshot_metadata(self)
@@ -160,11 +151,13 @@ class DeliveryStateSnapshotDiagnostic(_StateModel):
     path: str = Field(min_length=1)
     code: str = Field(min_length=1)
     detail: str = Field(min_length=1, max_length=240)
+    repairable: bool = False
 
 
 class DeliveryStateSnapshotInventory(_StateModel):
     """Valid remote snapshots and isolated diagnostics from one state-branch read."""
 
+    remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     snapshots: tuple[DeliveryStateSnapshot, ...] = ()
     diagnostics: tuple[DeliveryStateSnapshotDiagnostic, ...] = ()
 
@@ -268,6 +261,52 @@ class DeliveryStatePublicationReceipt(_StateModel):
         return self
 
 
+class DeliveryStateRepairReceipt(_StateModel):
+    """Content-addressed evidence that one invalid remote snapshot was replaced."""
+
+    schema_version: Literal[1] = 1
+    repair_id: Digest
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    state_branch: str = Field(min_length=1)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    previous_snapshot_id: Digest | None = None
+    repaired_snapshot_id: Digest
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - repair evidence binds each exact remote input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        state_branch: str,
+        expected_remote_head: str,
+        previous_snapshot_id: str | None,
+        repaired_snapshot_id: str,
+        published_head: str,
+    ) -> DeliveryStateRepairReceipt:
+        """Create deterministic evidence for one repaired remote snapshot."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "state_branch": state_branch,
+            "expected_remote_head": expected_remote_head,
+            "previous_snapshot_id": previous_snapshot_id,
+            "repaired_snapshot_id": repaired_snapshot_id,
+            "published_head": published_head,
+        }
+        candidate = cls.model_construct(repair_id="0" * 64, **values)
+        return cls(repair_id=_repair_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryStateRepairReceipt:
+        if self.repair_id != _repair_digest(self):
+            message = "Delivery-state repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryStatePublisher:
     """Publish sparse state snapshots without using a checkout index."""
 
@@ -334,6 +373,78 @@ class DeliveryStatePublisher:
             published_head=commit,
         )
 
+    def repair_snapshot(  # noqa: PLR0913 - repair binds each exact local authority input.
+        self,
+        *,
+        change_id: str,
+        package_id: str,
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime,
+        admission: DeliveryAdmissionReceipt,
+        operation_id: str,
+        captured_at: datetime,
+        expected_remote_head: str,
+    ) -> DeliveryStateRepairReceipt:
+        """Replace one invalid remote snapshot with a verified local projection."""
+        _validate_change_id(change_id)
+        remote_head = self._refresh_remote_head()
+        if remote_head is None:
+            _raise_state_conflict("remote Delivery-state branch is absent during snapshot repair")
+        raw = self._read_snapshot_bytes(remote_head, change_id)
+        if raw is None:
+            _raise_state_conflict("remote Delivery snapshot is absent during snapshot repair")
+        current = _validated_snapshot(raw)
+        if current is not None:
+            if (
+                remote_head != expected_remote_head
+                and current.operation_id == operation_id
+                and current.base_head == expected_remote_head
+                and _same_snapshot_inputs(current, package_id, coordination, runtime, admission)
+            ):
+                return DeliveryStateRepairReceipt.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    state_branch=self._state_branch,
+                    expected_remote_head=expected_remote_head,
+                    previous_snapshot_id=current.parent_snapshot_id,
+                    repaired_snapshot_id=current.snapshot_id,
+                    published_head=remote_head,
+                )
+            if remote_head != expected_remote_head:
+                _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
+            _raise_state_conflict("remote Delivery snapshot is already valid; refresh Delivery health")
+        if remote_head != expected_remote_head:
+            _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
+        normalized, previous_snapshot_id = _normalize_snapshot_for_repair(raw)
+        if not _same_snapshot_authority(normalized, package_id, coordination, runtime, admission):
+            _raise_state_conflict("remote Delivery snapshot does not match verified local authority")
+        snapshot = DeliveryStateSnapshot.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            package_id=package_id,
+            coordination=coordination,
+            runtime=runtime,
+            admission=admission,
+            sequence=normalized.sequence + 1,
+            parent_snapshot_id=previous_snapshot_id,
+            base_head=remote_head,
+            captured_at=captured_at,
+        )
+        commit = self._commit_snapshot(remote_head, snapshot)
+        self._push_snapshot(commit, remote_head)
+        verified = DeliveryStateSnapshot.model_validate_json(self._git_blob(commit, _snapshot_path(change_id)))
+        if verified != snapshot:
+            _raise_state_response_unknown("repaired Delivery-state snapshot could not be verified")
+        return DeliveryStateRepairReceipt.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            state_branch=self._state_branch,
+            expected_remote_head=remote_head,
+            previous_snapshot_id=previous_snapshot_id,
+            repaired_snapshot_id=snapshot.snapshot_id,
+            published_head=commit,
+        )
+
     def read_snapshots(self) -> tuple[DeliveryStateSnapshot, ...]:
         """Fetch and read all remote snapshots in stable path order."""
         remote_head = self._refresh_remote_head()
@@ -369,7 +480,8 @@ class DeliveryStatePublisher:
                 )
                 continue
             try:
-                snapshot = DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path))
+                raw = self._git_blob(remote_head, path)
+                snapshot = DeliveryStateSnapshot.model_validate_json(raw)
             except (OSError, RuntimeError, subprocess.SubprocessError):
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
@@ -387,6 +499,7 @@ class DeliveryStatePublisher:
                         path=path,
                         code=_snapshot_validation_code(exc),
                         detail=_snapshot_validation_detail(exc),
+                        repairable=is_repairable_delivery_snapshot(raw),
                     )
                 )
                 continue
@@ -402,6 +515,7 @@ class DeliveryStatePublisher:
                 continue
             snapshots.append(snapshot)
         return DeliveryStateSnapshotInventory(
+            remote_head=remote_head,
             snapshots=tuple(sorted(snapshots, key=lambda item: item.change_id)),
             diagnostics=tuple(sorted(diagnostics, key=lambda item: item.path)),
         )
@@ -451,11 +565,13 @@ class DeliveryStatePublisher:
         return line[0].split("\t", 1)[0]
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
+        raw = self._read_snapshot_bytes(commit, change_id)
+        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw)
+
+    def _read_snapshot_bytes(self, commit: str, change_id: str) -> bytes | None:
         path = _snapshot_path(change_id)
         result = self._run_git("show", f"{commit}:{path}", check=False)
-        if result.returncode != 0:
-            return None
-        return DeliveryStateSnapshot.model_validate_json(result.stdout)
+        return None if result.returncode != 0 else result.stdout
 
     def _commit_snapshot(self, base: str | None, snapshot: DeliveryStateSnapshot) -> str:
         index_fd, index_path = tempfile.mkstemp(prefix="owlbear-delivery-state-index-")
@@ -578,9 +694,21 @@ def _same_snapshot_inputs(
     runtime: DeliveryRuntime,
     admission: DeliveryAdmissionReceipt,
 ) -> bool:
-    frontier = _portable_frontier(runtime)
+    return _same_snapshot_authority(
+        current, package_id, coordination, runtime, admission
+    ) and current.frontier == _portable_frontier(runtime)
+
+
+def _same_snapshot_authority(
+    current: DeliveryStateSnapshot,
+    package_id: str,
+    coordination: ChangeCoordination,
+    runtime: DeliveryRuntime,
+    admission: DeliveryAdmissionReceipt,
+) -> bool:
     return (
-        current.package_id == package_id
+        current.change_id == coordination.change_id
+        and current.package_id == package_id
         and current.authority_digest == runtime.authority_digest
         and current.branch == coordination.branch
         and current.change_head == coordination.last_reviewed_commit
@@ -590,9 +718,73 @@ def _same_snapshot_inputs(
         and current.last_reviewed_commit == coordination.last_reviewed_commit
         and current.admission == admission
         and current.contract == runtime.contract
-        and current.frontier == frontier
-        and current.completion == runtime.completion_bundle()
     )
+
+
+def _validated_snapshot(raw: bytes) -> DeliveryStateSnapshot | None:
+    try:
+        return DeliveryStateSnapshot.model_validate_json(raw)
+    except (TypeError, ValueError, ValidationError):
+        return None
+
+
+def is_repairable_delivery_snapshot(raw: bytes) -> bool:
+    """Return whether explicit repair can normalize the raw snapshot."""
+    try:
+        _normalize_snapshot_for_repair(raw)
+    except (DeliveryStatePublicationError, TypeError, ValueError, ValidationError):
+        return False
+    return True
+
+
+def _normalize_snapshot_for_repair(raw: bytes) -> tuple[DeliveryStateSnapshot, str | None]:
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        message = "remote Delivery snapshot is not valid JSON"
+        raise DeliveryStatePublicationError(message, retry_safe=False) from exc
+    if not isinstance(payload, dict):
+        _raise_state_error("remote Delivery snapshot is not a JSON object", retry_safe=False)
+    raw_snapshot_id = payload.get("snapshot_id")
+    if not isinstance(raw_snapshot_id, str) or re.fullmatch(r"[0-9a-f]{64}", raw_snapshot_id) is None:
+        _raise_state_error("remote Delivery snapshot identity cannot be preserved", retry_safe=False)
+    frontier_payload = payload.get("frontier")
+    if not isinstance(frontier_payload, dict):
+        _raise_state_error("remote Delivery snapshot frontier is not a JSON object", retry_safe=False)
+    has_retired_receipt = any(
+        isinstance(frontier_payload.get(key), dict) and frontier_payload[key].get("schema_version") == 1
+        for key in ("target_sync_receipt", "external_head_adoption_receipt")
+    )
+    if has_retired_receipt:
+        historical_payload = dict(payload)
+        historical_payload["snapshot_id"] = ""
+        historical_identity = hashlib.sha256(_canonical_payload(historical_payload)).hexdigest()
+        if raw_snapshot_id != historical_identity:
+            _raise_state_error(
+                "remote Delivery snapshot historical identity cannot be verified",
+                retry_safe=False,
+            )
+    try:
+        try:
+            frontier = DeliveryFrontier.model_validate_json(_canonical_payload(frontier_payload))
+            frontier_bytes = _canonical_bytes(frontier)
+        except (TypeError, ValueError, ValidationError):
+            frontier, frontier_bytes = repair_delivery_frontier(_canonical_payload(frontier_payload))
+    except (TypeError, ValueError, ValidationError) as exc:
+        message = "remote Delivery snapshot contains unsupported repair state"
+        raise DeliveryStatePublicationError(message, retry_safe=False) from exc
+    normalized_payload = dict(payload)
+    normalized_payload["frontier"] = json.loads(frontier_bytes)
+    normalized_payload["snapshot_id"] = ""
+    normalized_identity = hashlib.sha256(_canonical_payload(normalized_payload)).hexdigest()
+    normalized_payload["snapshot_id"] = normalized_identity
+    try:
+        normalized = DeliveryStateSnapshot.model_validate_json(_canonical_payload(normalized_payload))
+    except (TypeError, ValueError, ValidationError) as exc:
+        message = "remote Delivery snapshot cannot be normalized from verified state"
+        raise DeliveryStatePublicationError(message, retry_safe=False) from exc
+    previous_snapshot_id = raw_snapshot_id if re.fullmatch(r"[0-9a-f]{64}", raw_snapshot_id) else None
+    return normalized, previous_snapshot_id
 
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
@@ -630,7 +822,11 @@ def _snapshot_validation_detail(error: Exception) -> str:
         if errors:
             first = errors[0]
             location = first.get("loc")
-            field = ".".join(str(part) for part in location) if isinstance(location, tuple | list) else "snapshot"
+            field = (
+                ".".join(str(part) for part in location)
+                if isinstance(location, tuple | list) and location
+                else "snapshot"
+            )
             message = " ".join(str(first.get("msg", "invalid value")).split())
             return f"Remote Delivery snapshot field {field} is invalid: {message}"[:240]
     return "Remote Delivery snapshot is invalid and was quarantined."
@@ -650,30 +846,32 @@ def _canonical_payload(payload: object) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def _legacy_frontier_payload(frontier: DeliveryFrontier) -> dict[str, object]:
-    payload = frontier.model_dump(mode="json")
-    adoption = payload.get("external_head_adoption_receipt")
-    if isinstance(adoption, dict) and adoption.get("schema_version") == 1:
-        adoption.pop("provenance", None)
-    disposition = payload.get("change_disposition")
-    if isinstance(disposition, dict) and disposition.get("acceptance_reason") is None:
-        disposition.pop("acceptance_reason", None)
-    return payload
-
-
-def _legacy_frontier_bytes(frontier: DeliveryFrontier) -> bytes:
-    return _canonical_payload(_legacy_frontier_payload(frontier))
-
-
 def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
 
 
-def _legacy_snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
-    payload = snapshot.model_dump(mode="json")
-    payload["snapshot_id"] = ""
-    payload["frontier"] = _legacy_frontier_payload(snapshot.frontier)
-    return hashlib.sha256(_canonical_payload(payload)).hexdigest()
+def _repair_metadata(raw: bytes | None) -> tuple[int, str | None]:
+    if raw is None:
+        return 1, None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return 1, None
+    if not isinstance(payload, dict):
+        return 1, None
+    sequence = payload.get("sequence")
+    previous_snapshot_id = payload.get("snapshot_id")
+    next_sequence = sequence + 1 if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0 else 1
+    previous_id = (
+        previous_snapshot_id
+        if isinstance(previous_snapshot_id, str) and re.fullmatch(r"[0-9a-f]{64}", previous_snapshot_id)
+        else None
+    )
+    return next_sequence, previous_id
+
+
+def _repair_digest(receipt: DeliveryStateRepairReceipt) -> str:
+    return hashlib.sha256(_canonical_bytes(receipt.model_copy(update={"repair_id": ""}))).hexdigest()
 
 
 def _publication_digest(receipt: DeliveryStatePublicationReceipt) -> str:
@@ -697,10 +895,12 @@ __all__ = [
     "DeliveryStatePublicationError",
     "DeliveryStatePublicationReceipt",
     "DeliveryStatePublisher",
+    "DeliveryStateRepairReceipt",
     "DeliveryStateResponseUnknownError",
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
+    "is_repairable_delivery_snapshot",
 ]
 
 

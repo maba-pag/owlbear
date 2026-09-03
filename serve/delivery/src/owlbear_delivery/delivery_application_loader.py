@@ -29,17 +29,16 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
-    DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
     DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
+    is_repairable_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
     DeliveryStateSnapshot,
-    _legacy_frontier_bytes,
 )
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
@@ -114,6 +113,7 @@ _RECOVERABLE_ADMISSION_ERRORS = frozenset(
         DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
     }
 )
+_REPAIRABLE_SNAPSHOT_CODES = frozenset({"snapshot-invalid", "snapshot-identity-invalid"})
 _logger = logging.getLogger(__name__)
 
 
@@ -250,6 +250,7 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
 
 def _load_contracts(
     runtime_root: Path,
+    remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
 ) -> tuple[dict[str, DeliveryContract], tuple[DeliveryHealthDiagnostic, ...]]:
     try:
         observations = discover_persisted_changes(runtime_root)
@@ -260,23 +261,49 @@ def _load_contracts(
     diagnostics: list[DeliveryHealthDiagnostic] = []
     for observation in observations:
         if observation.error is not None:
-            if observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED:
+            remote_diagnostic = next(
+                (
+                    diagnostic
+                    for diagnostic in remote_diagnostics
+                    if diagnostic.source == "remote-state"
+                    and diagnostic.change_id == observation.change_id
+                    and diagnostic.repairable
+                ),
+                None,
+            )
+            frontier_path = runtime_root / "changes" / observation.change_id / "frontier.json"
+            try:
+                local_frontier_repairable = is_repairable_delivery_frontier(frontier_path.read_bytes())
+            except OSError:
+                local_frontier_repairable = False
+            repairable = (
+                observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED
+                and local_frontier_repairable
+                and remote_diagnostic is not None
+            )
+            if observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED and not repairable:
                 detail = observation.error.detail
                 error = _load_error("runtime_root", detail)
                 raise error from DeliveryRuntimeMigrationError(detail)
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="local-runtime",
-                    code=observation.diagnostic_code or "runtime-unavailable",
+                    code=observation.error.code.value,
                     detail=observation.diagnostic_detail or "Persisted Delivery state is unavailable.",
                     change_id=observation.change_id,
                     path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                    remote_head=remote_diagnostic.remote_head if repairable else None,
+                    repairable=repairable,
                 )
             )
         if (
             observation.contract is not None
             and observation.contract.change_id == observation.change_id
-            and (observation.error is None or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS)
+            and (
+                observation.error is None
+                or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS
+                or (observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED and repairable)
+            )
         ):
             contracts[observation.change_id] = observation.contract
     return contracts, tuple(diagnostics)
@@ -374,6 +401,8 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
+            remote_head=inventory.remote_head,
+            repairable=item.repairable,
         )
         for item in inventory.diagnostics
     ]
@@ -401,6 +430,7 @@ def _bootstrap_remote_state(
                     code="remote-change-head-ahead",
                     detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
                     change_id=snapshot.change_id,
+                    remote_head=inventory.remote_head,
                 )
             )
             continue
@@ -414,6 +444,7 @@ def _bootstrap_remote_state(
                         "Remote Delivery state could not be reconciled and was quarantined.",
                     ),
                     change_id=snapshot.change_id,
+                    remote_head=inventory.remote_head,
                 )
             )
     return tuple(diagnostics)
@@ -497,19 +528,14 @@ def _validate_local_snapshot(
         "frontier.json": _canonical_model(snapshot.frontier),
         "admission.json": _canonical_model(snapshot.admission),
     }
-    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
-    local_attention_successor = _is_unpublished_acceptance_attention_successor(snapshot.frontier, frontier)
+    frontier_bytes, _frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
     _fetch_snapshot_change_head(
         snapshot,
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor,
     )
-    if not (
-        frontier_bytes in {expected["frontier.json"], _legacy_frontier_bytes(snapshot.frontier)}
-        or local_attention_successor
-    ):
+    if frontier_bytes != expected["frontier.json"]:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     _validate_local_snapshot_artifacts(relative_root, expected)
     try:
@@ -540,29 +566,6 @@ def _validate_local_snapshot_artifacts(
         _validate_local_snapshot_artifact(relative_root / name, name, expected[name])
 
 
-def _is_unpublished_acceptance_attention_successor(
-    snapshot_frontier: DeliveryFrontier,
-    local_frontier: DeliveryFrontier,
-) -> bool:
-    """Recognize a local acceptance attention captured after the last state snapshot."""
-    disposition = local_frontier.change_disposition
-    if (
-        snapshot_frontier.change_disposition is not None
-        or disposition is None
-        or disposition.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
-        or local_frontier.change_disposition_resolution is not None
-        or local_frontier.ready is not None
-    ):
-        return False
-    attention_slots = {
-        "change_disposition": None,
-        "change_disposition_publication": None,
-        "change_disposition_resolution": None,
-        "ready": None,
-    }
-    return snapshot_frontier.model_copy(update=attention_slots) == local_frontier.model_copy(update=attention_slots)
-
-
 def _validate_local_snapshot_artifact(
     path: Path,
     name: str,
@@ -583,9 +586,8 @@ def _fetch_snapshot_change_head(
     repository: Path,
     *,
     allow_local_branch: bool = False,
-    allow_local_descendant: bool = False,
 ) -> tuple[str, bool]:
-    """Fetch the remote Change branch or use the configured target for completion."""
+    """Fetch the remote Change branch or use the configured target for finalized authority."""
     remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
     if remote_branch is not None:
         return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
@@ -593,11 +595,15 @@ def _fetch_snapshot_change_head(
         snapshot,
         repository,
         allow_local_branch=allow_local_branch,
-        allow_local_descendant=allow_local_descendant,
     )
     if local_head is not None:
         return local_head, False
-    return _fetch_completed_snapshot_change_head(snapshot, config, repository)
+    if snapshot.frontier.change_completion is not None:
+        return _fetch_completed_snapshot_change_head(snapshot, config, repository)
+    if snapshot.frontier.finalization is not None:
+        return _fetch_finalized_snapshot_change_head(snapshot, config, repository)
+    message = "remote Change branch is missing for an active Delivery snapshot"
+    return _bootstrap_failure(message)
 
 
 def _fetch_remote_snapshot_change_head(
@@ -631,7 +637,6 @@ def _local_snapshot_change_head(
     repository: Path,
     *,
     allow_local_branch: bool,
-    allow_local_descendant: bool,
 ) -> str | None:
     """Return the snapshot head when a retained local branch is safe to use."""
     if not allow_local_branch or snapshot.frontier.change_completion is not None:
@@ -643,12 +648,6 @@ def _local_snapshot_change_head(
         f"refs/heads/{snapshot.branch}^{{commit}}",
     )
     if local_branch == snapshot.change_head:
-        return snapshot.change_head
-    if (
-        allow_local_descendant
-        and local_branch is not None
-        and _loader_git_is_ancestor(repository, snapshot.change_head, local_branch)
-    ):
         return snapshot.change_head
     return None
 
@@ -681,6 +680,26 @@ def _fetch_completed_snapshot_change_head(
     ):
         _bootstrap_failure("accepted merge commit is not present on the configured target")
     return latch.accepted_merge_commit, False
+
+
+def _fetch_finalized_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+) -> tuple[str, bool]:
+    """Validate finalized authority against the configured target after branch deletion."""
+    finalization = snapshot.frontier.finalization
+    if finalization is None:
+        _bootstrap_failure("finalized Delivery snapshot has no finalization authority")
+    if finalization.exact_head != snapshot.change_head:
+        _bootstrap_failure("finalized Delivery snapshot head does not match its finalization authority")
+    target_ref = f"refs/remotes/{config.remote}/{config.target_branch}"
+    target_head = _loader_git_output(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+    if target_head is None:
+        _bootstrap_failure("configured target head is unavailable for a finalized snapshot")
+    if not _loader_git_is_ancestor(repository, finalization.exact_head, target_ref):
+        _bootstrap_failure("finalized Change head is not present on the configured target")
+    return finalization.exact_head, False
 
 
 class _DeferredRemoteStateReconciliationError(Exception):
@@ -853,7 +872,12 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
         remote=config.remote,
         state_branch=config.delivery_state_branch,
     )
-    runtimes, runtime_diagnostics = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
+    runtimes, runtime_diagnostics = _composed_runtimes(
+        paths.runtime_root,
+        contracts,
+        workspace_manager,
+        health_diagnostics,
+    )
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
         package_store=package_store,
@@ -903,10 +927,13 @@ def _composed_runtimes(
     runtime_root: Path,
     contracts: dict[str, DeliveryContract],
     workspace_manager: ChangeWorkspaceManager,
+    health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
 ) -> tuple[dict[str, DeliveryRuntime], tuple[DeliveryHealthDiagnostic, ...]]:
     runtimes = {}
     diagnostics: list[DeliveryHealthDiagnostic] = []
     for change_id, contract in contracts.items():
+        if any(diagnostic.change_id == change_id and diagnostic.repairable for diagnostic in health_diagnostics):
+            continue
         try:
             reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
         except CoordinationConflictError as exc:
@@ -923,12 +950,26 @@ def _composed_runtimes(
                 )
             )
             continue
-        runtimes[change_id] = DeliveryRuntime(
-            runtime_root,
-            contract,
-            workspace_manager=workspace_manager,
-            migration_reviewed_head=reviewed_head,
-        )
+        try:
+            runtimes[change_id] = DeliveryRuntime(
+                runtime_root,
+                contract,
+                workspace_manager=workspace_manager,
+                migration_reviewed_head=reviewed_head,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code="runtime-unavailable",
+                    detail=_bounded_health_detail(
+                        str(exc),
+                        "Delivery runtime is unavailable and was quarantined.",
+                    ),
+                    change_id=change_id,
+                    path=f".owlbear/delivery/runtime/changes/{change_id}",
+                )
+            )
     return runtimes, tuple(diagnostics)
 
 
@@ -945,15 +986,16 @@ def load_delivery_application(
     remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     if "delivery_state_branch" in config.model_fields_set:
         remote_diagnostics = _bootstrap_remote_state(config, paths)
-    contracts, local_diagnostics = _load_contracts(paths.runtime_root)
+    contracts, local_diagnostics = _load_contracts(paths.runtime_root, remote_diagnostics)
     health_diagnostics = (*remote_diagnostics, *local_diagnostics)
-    for diagnostic in health_diagnostics:
+    if health_diagnostics:
+        change_count = len(
+            {diagnostic.change_id for diagnostic in health_diagnostics if diagnostic.change_id is not None}
+        )
         _logger.warning(
-            "Delivery health attention: source=%s code=%s change_id=%s detail=%s",
-            diagnostic.source,
-            diagnostic.code,
-            diagnostic.change_id or "portfolio",
-            diagnostic.detail,
+            "Delivery started with %d health attention item(s) across %d Change(s); call delivery_health for details.",
+            len(health_diagnostics),
+            change_count,
         )
     return _compose_application(
         config,

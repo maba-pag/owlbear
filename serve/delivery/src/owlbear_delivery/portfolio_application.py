@@ -54,6 +54,7 @@ from owlbear_delivery.change_workspace import (
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
+    repair_change_coordination,
 )
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_contract_discovery import (
@@ -111,6 +112,7 @@ from owlbear_delivery.delivery_runtime import (
     integration_attention_disposition,
     is_acceptance_waiting_observation,
     is_change_terminal,
+    repair_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
@@ -150,6 +152,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     failed_required_publication_checks,
 )
+from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -183,13 +186,14 @@ if TYPE_CHECKING:
         DeliveryAdmissionResult,
         DeliveryAuthorityRegistry,
     )
-    from owlbear_delivery.delivery_state import DeliveryStatePublisher
+    from owlbear_delivery.delivery_state import DeliveryStatePublisher, DeliveryStateRepairReceipt
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
     )
+    from owlbear_delivery.target_contract import DeliveryContract
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
 
@@ -204,6 +208,47 @@ def _timestamp(value: str) -> datetime:
 def _health_detail(detail: str | None, fallback: str) -> str:
     compact = " ".join((detail or "").split())
     return (compact or fallback)[:_MAX_HEALTH_DETAIL_LENGTH]
+
+
+def _health_diagnostic_key(diagnostic: DeliveryHealthDiagnostic) -> tuple[object, ...]:
+    return (
+        diagnostic.source,
+        diagnostic.code,
+        diagnostic.detail,
+        diagnostic.change_id,
+        diagnostic.path,
+        diagnostic.remote_head,
+        diagnostic.repairable,
+        diagnostic.retry_safe,
+    )
+
+
+def _read_repair_authority_file(path: Path) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        message = f"Delivery repair authority file is missing or unsafe: {path.name}"
+        raise ValueError(message)
+    return path.read_bytes()
+
+
+def _repair_replacement(
+    root: Path,
+    path: Path,
+    previous: bytes,
+    replacement: bytes,
+) -> ReplacementTransactionParticipant | None:
+    if previous == replacement:
+        return None
+    return ReplacementTransactionParticipant(root, path.relative_to(root), previous, replacement)
+
+
+def _read_repair_frontier(runtime_root: Path, change_id: str) -> DeliveryFrontier:
+    frontier_path = runtime_root / "changes" / change_id / "frontier.json"
+    frontier, _content = repair_delivery_frontier(_read_repair_authority_file(frontier_path))
+    return frontier
+
+
+def _canonical_model_bytes(model: BaseModel) -> bytes:
+    return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
@@ -1129,6 +1174,7 @@ class PortfolioApplication:
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._startup_health_diagnostics = dependencies.health_diagnostics
+        self._cleared_startup_health_diagnostics: set[tuple[object, ...]] = set()
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -1205,10 +1251,12 @@ class PortfolioApplication:
                     ),
                     publication_identity=history.current if history is not None else None,
                 )
+                self._publish_delivery_state(change_id, runtime, f"target-sync-attention-{exc.operation_id}")
                 raise
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
             return receipt
 
     def sync_change_with_current_target(
@@ -1285,8 +1333,10 @@ class PortfolioApplication:
                             ),
                             publication_identity=publication_identity,
                         )
+                        self._publish_delivery_state(change_id, runtime, f"adoption-attention-{operation_id}")
                 self._fail("external Change head could not be adopted", exc)
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"adoption-{receipt.receipt_id}")
             return receipt
 
     def adopt_external_head_after_acceptance_attention(
@@ -1349,6 +1399,7 @@ class PortfolioApplication:
             resolved_at = _timestamp(self._clock())
             runtime.resolve_change_disposition(expected_disposition_id, resolved_at)
             runtime.record_external_head_adoption(receipt, resolved_at)
+            self._publish_delivery_state(change_id, runtime, f"adoption-{receipt.receipt_id}")
             return receipt
 
     def promote_external_head(
@@ -1388,6 +1439,7 @@ class PortfolioApplication:
             if promoted is None:
                 self._fail("external Change-head promotion has no adopted head to promote")
             runtime.record_external_head_promotion(promoted, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"promotion-{promoted.receipt_id}")
             return promoted
 
     def abort_target_sync_conflict(
@@ -1421,11 +1473,12 @@ class PortfolioApplication:
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization conflict could not be aborted", exc)
             if attention_active:
-                runtime.record_target_sync_abort(
+                resolution = runtime.record_target_sync_abort(
                     expected_disposition_id,
                     operation_id,
                     _timestamp(self._clock()),
                 )
+                self._publish_delivery_state(change_id, runtime, f"target-sync-abort-{resolution.resolution_id}")
             return receipt
 
     def resolve_target_sync_conflict(
@@ -1437,50 +1490,88 @@ class PortfolioApplication:
     ) -> ChangeTargetSyncReceipt:
         """Record one exact semantic target merge and clear its attention."""
         runtime = self._runtime(change_id, for_mutation=True)
+        request = TargetSyncConflictRequest(
+            change_id=change_id,
+            target_head=target_head,
+            operation_id=operation_id,
+        )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             existing = runtime.target_sync_receipt()
             if existing is not None:
-                if existing.operation_id != operation_id or existing.target_head != target_head:
-                    self._fail("target synchronization resolution identity differs from runtime evidence")
-                if runtime.change_disposition() is not None:
-                    runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
-                else:
-                    resolution = runtime.change_disposition_resolution()
-                    if resolution is None or resolution.disposition_id != expected_disposition_id:
-                        self._fail("target synchronization resolution attention identity differs from runtime evidence")
-                try:
-                    receipt = self._workspace_manager.resolve_target_sync_conflict(
-                        TargetSyncConflictRequest(
-                            change_id=change_id,
-                            target_head=target_head,
-                            operation_id=operation_id,
-                        )
-                    )
-                except (OSError, subprocess.SubprocessError, ValueError) as exc:
-                    self._fail("target synchronization conflict could not be resolved", exc)
-                if receipt != existing:
-                    self._fail("target synchronization resolution differs from runtime evidence")
-                return receipt
-            runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
-            self._require_target_sync_change_mutable(runtime)
-            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
-                self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
-            try:
-                receipt = self._workspace_manager.resolve_target_sync_conflict(
-                    TargetSyncConflictRequest(
-                        change_id=change_id,
-                        target_head=target_head,
-                        operation_id=operation_id,
-                    )
+                return self._replay_target_sync_resolution(
+                    runtime,
+                    existing,
+                    expected_disposition_id,
+                    request,
                 )
-            except (OSError, subprocess.SubprocessError, ValueError) as exc:
-                self._fail("target synchronization conflict could not be resolved", exc)
-            return runtime.record_resolved_target_sync(
-                receipt,
+            return self._record_target_sync_resolution(
+                runtime,
                 expected_disposition_id,
-                operation_id,
-                _timestamp(self._clock()),
+                request,
             )
+
+    def _replay_target_sync_resolution(
+        self,
+        runtime: DeliveryRuntime,
+        existing: ChangeTargetSyncReceipt,
+        expected_disposition_id: str,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncReceipt:
+        if existing.operation_id != request.operation_id or existing.target_head != request.target_head:
+            self._fail("target synchronization resolution identity differs from runtime evidence")
+        if runtime.change_disposition() is not None:
+            runtime.validate_target_sync_conflict(expected_disposition_id, request.operation_id)
+        else:
+            resolution = runtime.change_disposition_resolution()
+            if resolution is None or resolution.disposition_id != expected_disposition_id:
+                self._fail("target synchronization resolution attention identity differs from runtime evidence")
+        receipt = self._resolve_target_sync_workspace(request)
+        if receipt != existing:
+            self._fail("target synchronization resolution differs from runtime evidence")
+        resolution = runtime.change_disposition_resolution()
+        if resolution is not None:
+            self._publish_delivery_state(
+                request.change_id,
+                runtime,
+                f"target-sync-resolution-{resolution.resolution_id}",
+            )
+        return receipt
+
+    def _record_target_sync_resolution(
+        self,
+        runtime: DeliveryRuntime,
+        expected_disposition_id: str,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncReceipt:
+        runtime.validate_target_sync_conflict(expected_disposition_id, request.operation_id)
+        self._require_target_sync_change_mutable(runtime)
+        if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+            self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
+        receipt = self._resolve_target_sync_workspace(request)
+        receipt = runtime.record_resolved_target_sync(
+            receipt,
+            expected_disposition_id,
+            request.operation_id,
+            _timestamp(self._clock()),
+        )
+        resolution = runtime.change_disposition_resolution()
+        if resolution is None:
+            self._fail("target synchronization resolution did not record attention resolution")
+        self._publish_delivery_state(
+            request.change_id,
+            runtime,
+            f"target-sync-resolution-{resolution.resolution_id}",
+        )
+        return receipt
+
+    def _resolve_target_sync_workspace(
+        self,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncReceipt:
+        try:
+            return self._workspace_manager.resolve_target_sync_conflict(request)
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("target synchronization conflict could not be resolved", exc)
 
     def supersede_publication(
         self,
@@ -1527,6 +1618,9 @@ class PortfolioApplication:
                 runtime_history,
                 predecessor,
                 provider_receipt,
+            )
+            self._publish_delivery_state(
+                change_id, runtime, f"supersession-{provider_receipt.successor_publication.receipt_id}"
             )
             return DeliveryChangePublicationSupersessionReceipt.create(
                 operation_id=operation_id,
@@ -2208,7 +2302,9 @@ class PortfolioApplication:
                     time.sleep(min(_ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS, remaining))
                 else:
                     break
-            return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+            resolution = runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"attention-resolution-{resolution.resolution_id}")
+            return resolution
 
     def recover_publication_baseline(
         self,
@@ -2579,9 +2675,10 @@ class PortfolioApplication:
                     ("provider pull request does not satisfy acceptance authority",),
                     reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
                 )
+                self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
                 message = "provider pull request does not satisfy acceptance authority"
                 raise PortfolioApplicationError(message)
-            latch = self._latch_acceptance_observation(runtime, observation)
+            latch = self._latch_acceptance_observation(change_id, runtime, observation)
             checks = self._draft_pull_request_publisher.read_check_observations(
                 ReadChangePublicationCheckObservations(
                     change_id=change_id,
@@ -2615,6 +2712,7 @@ class PortfolioApplication:
 
     def _latch_acceptance_observation(
         self,
+        change_id: str,
         runtime: DeliveryRuntime,
         observation: PublicationPullRequestObservationReceipt,
     ) -> DeliveryMergedPullRequestLatch:
@@ -2635,6 +2733,7 @@ class PortfolioApplication:
                 ("provider pull request does not satisfy acceptance authority",),
                 reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
+            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
             message = "provider pull request does not satisfy acceptance authority"
             raise PortfolioApplicationError(message)
         if snapshot.merge_commit_sha is None or snapshot.merged_at is None:
@@ -2643,6 +2742,7 @@ class PortfolioApplication:
                 ("provider pull request is missing merge evidence",),
                 reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
+            self._publish_delivery_state(change_id, runtime, f"acceptance-attention-{observation.observation_id}")
             message = "provider pull request does not satisfy acceptance authority"
             raise PortfolioApplicationError(message)
         return runtime.latch_merged_pull_request(observation)
@@ -2717,7 +2817,26 @@ class PortfolioApplication:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return self._reconcile_finalization_head_locked(change_id, runtime)
+            before_frontier = runtime.frontier_bytes()
+            before_coordination = self._workspace_manager.show(change_id)
+            result = self._reconcile_finalization_head_locked(change_id, runtime)
+            if (
+                runtime.frontier_bytes() != before_frontier
+                or self._workspace_manager.show(change_id) != before_coordination
+            ):
+                operation_suffix = (
+                    result.invalidation_id
+                    if isinstance(result, DeliveryFinalizationInvalidationReceipt)
+                    else result.finalization_id
+                    if isinstance(result, DeliveryFinalizationReceipt)
+                    else "state"
+                )
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    f"finalization-reconciliation-{operation_suffix}",
+                )
+            return result
 
     def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
         """Reconcile one durable checkpoint without accepting caller-supplied external fences."""
@@ -3256,8 +3375,192 @@ class PortfolioApplication:
         self._reconcile_runtimes()
         return self._delivery_health_view()
 
+    def repair_delivery_state(
+        self,
+        change_id: str,
+        expected_diagnostic_code: str,
+        expected_remote_head: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryStateRepairReceipt:
+        """Convert one exact retired state shape and restore its strict Delivery authority."""
+        if confirmed_repair is not True:
+            self._fail("Delivery state repair requires explicit confirmation")
+        if self._delivery_state_publisher is None:
+            self._fail("Delivery state repair requires the Delivery-state publisher")
+        self._reconcile_runtimes()
+        diagnostic = self._repair_health_diagnostic(change_id, expected_diagnostic_code, expected_remote_head)
+        observation = self._discovered_changes.get(change_id)
+        if observation is None or observation.contract is None or observation.admission is None:
+            self._fail("Delivery state repair requires validated local contract and admission authority")
+        package = self._package_store.read_verified(change_id)
+        with (
+            locked_roots((self._checkpoint_lock_root(change_id),)),
+            self._coordinator.publication_lock(change_id),
+        ):
+            diagnostic = self._repair_health_diagnostic(change_id, expected_diagnostic_code, expected_remote_head)
+            frontier_path = self._target_root / "changes" / change_id / "frontier.json"
+            coordination_path = self._target_root / "coordination" / "changes" / f"{change_id}.json"
+            frontier_content = _read_repair_authority_file(frontier_path)
+            coordination_content = _read_repair_authority_file(coordination_path)
+            try:
+                _frontier, repaired_frontier_content = repair_delivery_frontier(frontier_content)
+                repaired_coordination, repaired_coordination_content = repair_change_coordination(coordination_content)
+            except (TypeError, ValueError) as exc:
+                self._fail("Delivery state repair input is not a supported current-schema conversion", exc)
+            participants = tuple(
+                participant
+                for participant in (
+                    _repair_replacement(
+                        self._target_root,
+                        frontier_path,
+                        frontier_content,
+                        repaired_frontier_content,
+                    ),
+                    _repair_replacement(
+                        self._target_root,
+                        coordination_path,
+                        coordination_content,
+                        repaired_coordination_content,
+                    ),
+                )
+                if participant is not None
+            )
+            if participants:
+                try:
+                    RuntimeTransaction(
+                        self._target_root,
+                        f"delivery-state-repair-local-{change_id}-{operation_id}",
+                        participants,
+                    ).commit()
+                except (OSError, RuntimeError, ValueError) as exc:
+                    self._fail("local Delivery state repair could not be committed", exc)
+            self._validate_repair_authority(
+                change_id,
+                observation.contract,
+                observation.admission,
+                repaired_coordination,
+            )
+            runtime = DeliveryRuntime(
+                self._target_root,
+                observation.contract,
+                workspace_manager=self._workspace_manager,
+                migration_reviewed_head=repaired_coordination.last_reviewed_commit,
+            )
+            self._validate_package_authority(runtime, package)
+            try:
+                receipt = self._delivery_state_publisher.repair_snapshot(
+                    change_id=change_id,
+                    package_id=package.package_id,
+                    coordination=repaired_coordination,
+                    runtime=runtime,
+                    admission=observation.admission,
+                    operation_id=operation_id,
+                    captured_at=_timestamp(self._clock()),
+                    expected_remote_head=diagnostic.remote_head or expected_remote_head,
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("remote Delivery state repair could not be published", exc)
+        self._clear_repair_diagnostics(change_id, expected_diagnostic_code, expected_remote_head)
+        self._runtime_reconciliation_errors.pop(change_id, None)
+        self._runtime_snapshots.pop(change_id, None)
+        self._reconcile_runtimes()
+        if change_id not in self._runtimes or change_id in self._runtime_reconciliation_errors:
+            self._fail("Delivery state repair was published but the Change did not recompose")
+        remaining = tuple(item for item in self._delivery_health_view().diagnostics if item.change_id == change_id)
+        if remaining:
+            self._fail("Delivery state repair was published but Change health still requires attention")
+        return receipt
+
+    def _repair_health_diagnostic(
+        self,
+        change_id: str,
+        expected_code: str,
+        expected_remote_head: str,
+    ) -> DeliveryHealthDiagnostic:
+        matches = tuple(
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if diagnostic.source == "remote-state"
+            and diagnostic.change_id == change_id
+            and diagnostic.code == expected_code
+            and diagnostic.remote_head == expected_remote_head
+            and diagnostic.repairable
+            and _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
+        )
+        if len(matches) != 1:
+            self._fail("Delivery state repair diagnostic is absent, stale, or ambiguous")
+        return matches[0]
+
+    def _validate_repair_authority(
+        self,
+        change_id: str,
+        contract: DeliveryContract,
+        admission: DeliveryAdmissionReceipt,
+        coordination: ChangeCoordination,
+    ) -> None:
+        self._validate_repair_coordination(change_id, coordination)
+        self._validate_repair_admission(change_id, admission, coordination, contract)
+        self._validate_repair_frontier(change_id)
+        self._validate_repair_workspace(change_id, coordination)
+
+    def _validate_repair_coordination(self, change_id: str, coordination: ChangeCoordination) -> None:
+        if coordination.change_id != change_id or coordination.branch != f"owlbear/change/{change_id}":
+            self._fail("Delivery state repair coordination identity is invalid")
+        if coordination.writer is not None or coordination.publication_lease is not None:
+            self._fail("Delivery state repair requires idle Change custody")
+        if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
+            self._fail("Delivery state repair cannot overlap Change worktree cleanup")
+        if coordination.target_sync_conflict is not None:
+            self._fail("Delivery state repair cannot overlap a target synchronization conflict")
+
+    def _validate_repair_admission(
+        self,
+        change_id: str,
+        admission: DeliveryAdmissionReceipt,
+        coordination: ChangeCoordination,
+        contract: DeliveryContract,
+    ) -> None:
+        if admission.change_id != change_id or admission.integration_target != coordination.integration_target:
+            self._fail("Delivery state repair admission authority does not match coordination")
+        if admission.contract_digest != hashlib.sha256(_canonical_model_bytes(contract)).hexdigest():
+            self._fail("Delivery state repair admission does not match the contract")
+
+    def _validate_repair_frontier(self, change_id: str) -> None:
+        if any(
+            binding.active_claim is not None for binding in _read_repair_frontier(self._target_root, change_id).bindings
+        ):
+            self._fail("Delivery state repair requires no active Outcome claims")
+
+    def _validate_repair_workspace(self, change_id: str, coordination: ChangeCoordination) -> None:
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        if retained is None:
+            self._fail("Delivery state repair requires retained Change workspace authority")
+        if retained.writer is not None or retained.publication_expiry is not None or retained.attention:
+            self._fail("Delivery state repair requires reconciled Change workspace custody")
+        if retained.branch != coordination.branch or retained.branch_head != coordination.last_reviewed_commit:
+            self._fail("Delivery state repair reviewed head does not match Change workspace authority")
+
+    def _clear_repair_diagnostics(self, change_id: str, expected_code: str, expected_remote_head: str) -> None:
+        for diagnostic in self._startup_health_diagnostics:
+            if (
+                diagnostic.change_id == change_id
+                and diagnostic.remote_head == expected_remote_head
+                and diagnostic.repairable
+                and diagnostic.code in {expected_code, "frontier-migration-required"}
+            ):
+                self._cleared_startup_health_diagnostics.add(_health_diagnostic_key(diagnostic))
+
     def _delivery_health_view(self) -> DeliveryHealthView:
-        diagnostics: list[DeliveryHealthDiagnostic] = list(self._startup_health_diagnostics)
+        diagnostics: list[DeliveryHealthDiagnostic] = [
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
+        ]
         diagnostics.extend(
             DeliveryHealthDiagnostic(
                 source="local-runtime",
@@ -3271,6 +3574,7 @@ class PortfolioApplication:
             )
             for observation in self._discovered_changes.values()
             if observation.error is not None
+            and not any(diagnostic.change_id == observation.change_id for diagnostic in diagnostics)
         )
         diagnostic_change_ids = {diagnostic.change_id for diagnostic in diagnostics if diagnostic.change_id is not None}
         diagnostics.extend(
@@ -3290,6 +3594,8 @@ class PortfolioApplication:
                 diagnostic.detail,
                 diagnostic.change_id,
                 diagnostic.path,
+                diagnostic.remote_head,
+                diagnostic.repairable,
                 diagnostic.retry_safe,
             ): diagnostic
             for diagnostic in diagnostics
@@ -3750,6 +4056,7 @@ class PortfolioApplication:
             diagnostic.change_id: f"{diagnostic.code}: {diagnostic.detail}"
             for diagnostic in self._startup_health_diagnostics
             if diagnostic.change_id is not None
+            and _health_diagnostic_key(diagnostic) not in self._cleared_startup_health_diagnostics
         }
         initial_reconciliation = not self._has_reconciled_runtimes
 

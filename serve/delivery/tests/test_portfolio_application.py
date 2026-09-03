@@ -53,6 +53,7 @@ from owlbear_delivery import (
     DeliveryAuthorityRegistry,
     DeliveryBlock,
     DeliveryChangeDispositionBusyError,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
@@ -1699,6 +1700,40 @@ def test_resolving_change_attention_retries_short_checkpoint_contention(tmp_path
 
     assert resolution.disposition_id == disposition.disposition_id
     assert runtimes["change-a"].change_disposition() is None
+
+
+def test_resolving_change_attention_publishes_and_replays_delivery_state(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+    resolution = DeliveryChangeDispositionResolution.create(
+        change_id="change-a",
+        disposition_id=disposition.disposition_id,
+        resolved_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+    )
+
+    with patch(
+        "owlbear_delivery.portfolio_application._timestamp",
+        return_value=resolution.resolved_at,
+    ):
+        first = application.resolve_change_disposition("change-a", disposition.disposition_id)
+        second = application.resolve_change_disposition("change-a", disposition.disposition_id)
+
+    assert first == second == resolution
+    assert publisher.publish.call_count == 2
+    assert publisher.publish.call_args_list[0].kwargs["operation_id"] == (
+        f"attention-resolution-{resolution.resolution_id}"
+    )
+    assert publisher.publish.call_args_list[1].kwargs["operation_id"] == (
+        f"attention-resolution-{resolution.resolution_id}"
+    )
 
 
 def test_application_records_semantic_target_resolution_with_exact_runtime_receipt(tmp_path: Path) -> None:

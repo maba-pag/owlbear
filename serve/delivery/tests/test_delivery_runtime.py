@@ -79,7 +79,11 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
-from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import (
+    invalidate_checkpoint_publication,
+    parse_delivery_frontier,
+    repair_delivery_frontier,
+)
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
@@ -1548,6 +1552,58 @@ def test_runtime_rejects_legacy_embedded_finalization_authority(tmp_path: Path) 
 
     with pytest.raises(ValueError, match="explicit re-finalization"):
         parse_delivery_frontier(json.dumps(payload).encode())
+
+
+def test_repair_delivery_frontier_rebinds_converted_adoption_promotion() -> None:
+    adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="repair-adoption",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        expected_head="1" * 40,
+        adopted_head="2" * 40,
+    )
+    legacy_adoption = adoption.model_dump(mode="json")
+    legacy_adoption["schema_version"] = 1
+    legacy_adoption.pop("provenance")
+    legacy_adoption["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in legacy_adoption.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    promotion = ChangeExternalHeadPromotionReceipt.create(
+        operation_id="repair-promotion",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        adoption_receipt_id=legacy_adoption["receipt_id"],
+        promoted_head="2" * 40,
+        provenance="explicit",
+    )
+    frontier = DeliveryFrontier(
+        bindings=tuple(
+            OutcomeAuthorityBinding(
+                outcome_id=f"OUT-{index:03}",
+                plan_scope_id=f"SCOPE-{index:03}",
+            )
+            for index in range(1, 4)
+        ),
+    )
+    payload = json.loads(_canonical(frontier))
+    payload["external_head_adoption_receipt"] = legacy_adoption
+    payload["external_head_promotion_receipt"] = promotion.model_dump(mode="json")
+
+    repaired, canonical = repair_delivery_frontier(json.dumps(payload).encode())
+
+    assert repaired.external_head_adoption_receipt is not None
+    assert repaired.external_head_adoption_receipt.schema_version == 2
+    assert repaired.external_head_promotion_receipt is not None
+    assert repaired.external_head_promotion_receipt.adoption_receipt_id == (
+        repaired.external_head_adoption_receipt.receipt_id
+    )
+    assert json.loads(canonical)["external_head_promotion_receipt"]["receipt_id"] == (
+        repaired.external_head_promotion_receipt.receipt_id
+    )
 
 
 @pytest.mark.parametrize("schema_version", [3, 4, 5, 6, 7])

@@ -22,6 +22,8 @@ from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncReceipt,
+    convert_legacy_external_head_adoption_receipt_for_repair,
+    convert_legacy_target_sync_receipt_for_repair,
 )
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
@@ -3481,6 +3483,76 @@ def parse_delivery_frontier(
     return frontier, _model_content(frontier)
 
 
+def repair_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
+    """Convert the known retired receipt shape into one current frontier."""
+    try:
+        current = DeliveryFrontier.model_validate_json(content)
+    except (TypeError, ValueError):
+        current = None
+    if current is not None:
+        return current, _model_content(current)
+    payload = json.loads(content)
+    if not isinstance(payload, dict) or payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
+        message = "Delivery frontier is not a supported repair input"
+        raise DeliveryRuntimeMigrationError(message)
+    repaired = dict(payload)
+    target_sync = repaired.get("target_sync_receipt")
+    if isinstance(target_sync, dict) and target_sync.get("schema_version") == 1:
+        repaired["target_sync_receipt"] = convert_legacy_target_sync_receipt_for_repair(target_sync).model_dump(
+            mode="json"
+        )
+    adoption = repaired.get("external_head_adoption_receipt")
+    if isinstance(adoption, dict) and adoption.get("schema_version") == 1:
+        converted_adoption = convert_legacy_external_head_adoption_receipt_for_repair(adoption)
+        repaired["external_head_adoption_receipt"] = converted_adoption.model_dump(mode="json")
+        promotion = repaired.get("external_head_promotion_receipt")
+        if isinstance(promotion, dict) and promotion.get("adoption_receipt_id") == adoption.get("receipt_id"):
+            repaired["external_head_promotion_receipt"] = _repair_promotion_receipt(
+                promotion,
+                converted_adoption.receipt_id,
+            )
+    frontier = DeliveryFrontier.model_validate_json(
+        json.dumps(repaired, sort_keys=True, separators=(",", ":")),
+    )
+    return frontier, _model_content(frontier)
+
+
+def is_repairable_delivery_frontier(content: bytes) -> bool:
+    """Return whether explicit repair can convert one retired receipt shape."""
+    try:
+        payload = json.loads(content)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, dict) or payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
+        return False
+    try:
+        DeliveryFrontier.model_validate_json(content)
+    except (TypeError, ValueError, DeliveryRuntimeMigrationError):
+        if not any(
+            isinstance(payload.get(key), dict) and payload[key].get("schema_version") == 1
+            for key in ("target_sync_receipt", "external_head_adoption_receipt")
+        ):
+            return False
+        try:
+            repair_delivery_frontier(content)
+        except (TypeError, ValueError, DeliveryRuntimeMigrationError):
+            return False
+    return True
+
+
+def _repair_promotion_receipt(payload: dict[str, object], adoption_receipt_id: str) -> dict[str, object]:
+    legacy_receipt = ChangeExternalHeadPromotionReceipt.model_validate(payload)
+    repaired_receipt = ChangeExternalHeadPromotionReceipt.create(
+        operation_id=legacy_receipt.operation_id,
+        change_id=legacy_receipt.change_id,
+        branch=legacy_receipt.branch,
+        adoption_receipt_id=adoption_receipt_id,
+        promoted_head=legacy_receipt.promoted_head,
+        provenance=legacy_receipt.provenance,
+    )
+    return repaired_receipt.model_dump(mode="json")
+
+
 def _normalize_frontier_schema(payload: dict[str, object]) -> int:
     schema_version = payload.get("schema_version")
     if schema_version == 1:
@@ -3876,4 +3948,5 @@ __all__ = [
     "invalidate_checkpoint_publication",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
+    "is_repairable_delivery_frontier",
 ]
