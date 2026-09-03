@@ -309,6 +309,7 @@ let designFailure: boolean
 let acceptanceObservationFailure: boolean
 let acceptanceReconciliationProviderUnavailable: boolean
 let repairResponseUnknown: boolean
+let repairTransportFailure: boolean
 let publicationChecksFailure: boolean
 let publicationChecksResponse: PublicationChecksObservationResponse
 let supersedeFailuresRemaining: number
@@ -437,6 +438,7 @@ function installFetch() {
       })
     }
     if (method === 'POST' && url.endsWith('/state/repair')) {
+      if (repairTransportFailure) throw new TypeError('Failed to fetch')
       if (repairResponseUnknown) {
         return response({
           detail: {
@@ -644,12 +646,52 @@ function renderPage(path = '/delivery') {
   )
 }
 
+function configureRepairableRemoteDiagnostic() {
+  const basePortfolio = portfolio([], {
+    status: 'attention',
+    diagnostics: [
+      {
+        source: 'local-runtime',
+        code: 'frontier-migration-required',
+        detail: 'The local frontier requires the explicit state repair.',
+        change_id: 'quarantined-change',
+        path: '.owlbear/delivery/runtime/changes/quarantined-change/frontier.json',
+        retry_safe: false,
+        remote_head: 'a'.repeat(40),
+        repairable: true,
+      },
+      {
+        source: 'remote-state',
+        code: 'snapshot-invalid',
+        detail: 'Remote Delivery snapshot is invalid.',
+        change_id: 'quarantined-change',
+        path: '.owlbear/delivery/state/quarantined-change/snapshot.json',
+        retry_safe: false,
+        remote_head: 'a'.repeat(40),
+        repairable: true,
+      },
+    ],
+  })
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [changeStatus('quarantined-change', {
+        actionable_runtime: false,
+        diagnostic_code: 'snapshot-invalid',
+        diagnostic_detail: 'Remote Delivery snapshot is invalid.',
+      })],
+    },
+  }
+}
+
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="test-location">{location.pathname}</output>
 }
 
 beforeEach(() => {
+  window.sessionStorage.clear()
   currentPortfolio = portfolio()
   currentDetail = detail()
   currentDesignWork = {
@@ -674,6 +716,7 @@ beforeEach(() => {
   acceptanceObservationFailure = false
   acceptanceReconciliationProviderUnavailable = false
   repairResponseUnknown = false
+  repairTransportFailure = false
   publicationChecksFailure = false
   publicationReconciliationResult = {
     change_id: 'change-alpha',
@@ -884,42 +927,7 @@ it('shows bounded Delivery health diagnostics for quarantined state', async () =
 })
 
 it('confirms an exact repairable Delivery diagnostic before refreshing health', async () => {
-  const basePortfolio = portfolio([], {
-    status: 'attention',
-    diagnostics: [
-      {
-        source: 'local-runtime',
-        code: 'frontier-migration-required',
-        detail: 'The local frontier requires the explicit state repair.',
-        change_id: 'quarantined-change',
-        path: '.owlbear/delivery/runtime/changes/quarantined-change/frontier.json',
-        retry_safe: false,
-        remote_head: 'a'.repeat(40),
-        repairable: true,
-      },
-      {
-        source: 'remote-state',
-        code: 'snapshot-invalid',
-        detail: 'Remote Delivery snapshot is invalid.',
-        change_id: 'quarantined-change',
-        path: '.owlbear/delivery/state/quarantined-change/snapshot.json',
-        retry_safe: false,
-        remote_head: 'a'.repeat(40),
-        repairable: true,
-      },
-    ],
-  })
-  currentPortfolio = {
-    ...basePortfolio,
-    operating: {
-      ...basePortfolio.operating,
-      statuses: [changeStatus('quarantined-change', {
-        actionable_runtime: false,
-        diagnostic_code: 'snapshot-invalid',
-        diagnostic_detail: 'Remote Delivery snapshot is invalid.',
-      })],
-    },
-  }
+  configureRepairableRemoteDiagnostic()
 
   renderPage()
 
@@ -955,6 +963,58 @@ it('confirms an exact repairable Delivery diagnostic before refreshing health', 
 
   repairResponseUnknown = false
   fireEvent.click(within(reopened).getByText('Confirm repair'))
+  await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/state/repair'))).toHaveLength(2))
+  expect((requests.filter((request) => request.url.endsWith('/state/repair'))[1].body as { operation_id: string }).operation_id)
+    .toBe(operationId)
+  await waitFor(() => expect(screen.queryByTestId('delivery-issues-section')).not.toBeInTheDocument())
+})
+
+it('retains a repair operation ID after a transport failure', async () => {
+  configureRepairableRemoteDiagnostic()
+  renderPage()
+
+  const health = await screen.findByTestId('delivery-issues-section')
+  fireEvent.click(within(health).getByTestId('repair-delivery-state-quarantined-change'))
+  const dialog = (await screen.findByText('Confirm Delivery state repair')).closest('p-modal')!
+  repairTransportFailure = true
+  fireEvent.click(within(dialog).getByText('Confirm repair'))
+  await waitFor(() => expect(within(dialog).getByRole('alert')).toHaveTextContent('ERR_DELIVERY_STATE_REPAIR'))
+
+  const firstRequest = requests.find((request) => request.url.endsWith('/state/repair'))
+  expect(firstRequest).toBeDefined()
+  const operationId = (firstRequest?.body as { operation_id: string }).operation_id
+  repairTransportFailure = false
+  fireEvent.click(within(dialog).getByText('Confirm repair'))
+
+  await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/state/repair'))).toHaveLength(2))
+  expect((requests.filter((request) => request.url.endsWith('/state/repair'))[1].body as { operation_id: string }).operation_id)
+    .toBe(operationId)
+  await waitFor(() => expect(screen.queryByTestId('delivery-issues-section')).not.toBeInTheDocument())
+})
+
+it('restores a pending repair operation ID after a page remount', async () => {
+  configureRepairableRemoteDiagnostic()
+  const firstPage = renderPage()
+
+  const firstHealth = await screen.findByTestId('delivery-issues-section')
+  fireEvent.click(within(firstHealth).getByTestId('repair-delivery-state-quarantined-change'))
+  const firstDialog = (await screen.findByText('Confirm Delivery state repair')).closest('p-modal')!
+  repairTransportFailure = true
+  fireEvent.click(within(firstDialog).getByText('Confirm repair'))
+  await waitFor(() => expect(within(firstDialog).getByRole('alert')).toHaveTextContent('ERR_DELIVERY_STATE_REPAIR'))
+
+  const firstRequest = requests.find((request) => request.url.endsWith('/state/repair'))
+  expect(firstRequest).toBeDefined()
+  const operationId = (firstRequest?.body as { operation_id: string }).operation_id
+  firstPage.unmount()
+
+  repairTransportFailure = false
+  renderPage()
+  const secondHealth = await screen.findByTestId('delivery-issues-section')
+  fireEvent.click(within(secondHealth).getByTestId('repair-delivery-state-quarantined-change'))
+  const secondDialog = (await screen.findByText('Confirm Delivery state repair')).closest('p-modal')!
+  fireEvent.click(within(secondDialog).getByText('Confirm repair'))
+
   await waitFor(() => expect(requests.filter((request) => request.url.endsWith('/state/repair'))).toHaveLength(2))
   expect((requests.filter((request) => request.url.endsWith('/state/repair'))[1].body as { operation_id: string }).operation_id)
     .toBe(operationId)

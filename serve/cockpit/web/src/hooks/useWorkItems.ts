@@ -84,6 +84,38 @@ const EMPTY_HISTORY: CompletedChangePage = { records: [], total_count: 0, next_c
 
 const ACCEPTANCE_RECONCILIATION_INTERVAL_MS = 30_000
 const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS = 5 * 60_000
+const DELIVERY_STATE_REPAIR_OPERATION_IDS_KEY = 'owlbear.delivery-state-repair-operation-ids'
+const DELIVERY_STATE_REPAIR_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+function loadDeliveryStateRepairOperationIds(): Map<string, string> {
+  try {
+    const stored = window.sessionStorage.getItem(DELIVERY_STATE_REPAIR_OPERATION_IDS_KEY)
+    if (!stored) return new Map()
+    const parsed: unknown = JSON.parse(stored)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return new Map()
+    const entries = Object.entries(parsed).filter(([, operationId]) => (
+      typeof operationId === 'string' && DELIVERY_STATE_REPAIR_OPERATION_ID_PATTERN.test(operationId)
+    ))
+    return new Map(entries as [string, string][])
+  } catch {
+    return new Map()
+  }
+}
+
+function persistDeliveryStateRepairOperationIds(operationIds: Map<string, string>): void {
+  try {
+    if (operationIds.size === 0) {
+      window.sessionStorage.removeItem(DELIVERY_STATE_REPAIR_OPERATION_IDS_KEY)
+      return
+    }
+    window.sessionStorage.setItem(
+      DELIVERY_STATE_REPAIR_OPERATION_IDS_KEY,
+      JSON.stringify(Object.fromEntries(operationIds)),
+    )
+  } catch {
+    return
+  }
+}
 
 function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
   return portfolio.groups
@@ -776,7 +808,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
 }
 
 export function useDeliveryStateRepair(onChanged: () => void) {
-  const operationIds = useRef(new Map<string, string>())
+  const operationIds = useRef(loadDeliveryStateRepairOperationIds())
   const [pendingChangeId, setPendingChangeId] = useState<string | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
@@ -788,20 +820,24 @@ export function useDeliveryStateRepair(onChanged: () => void) {
     const operationId = operationIds.current.get(diagnostic.change_id)
       ?? `cockpit-delivery-state-repair-${crypto.randomUUID()}`
     operationIds.current.set(diagnostic.change_id, operationId)
+    persistDeliveryStateRepairOperationIds(operationIds.current)
     setPendingChangeId(diagnostic.change_id)
     setError(null)
     try {
       await repairDeliveryState(diagnostic.change_id, diagnostic.code, diagnostic.remote_head, operationId)
       operationIds.current.delete(diagnostic.change_id)
+      persistDeliveryStateRepairOperationIds(operationIds.current)
       onChanged()
       return null
     } catch (caught: unknown) {
       const nextError = caught instanceof Error ? caught : new Error('Delivery state repair failed')
       setError(nextError)
-      const retainOperation = nextError instanceof WorkItemApiError
-        && (nextError.retrySafe || nextError.code === 'ERR_DELIVERY_STATE_RESPONSE_UNKNOWN')
+      const retainOperation = !(nextError instanceof WorkItemApiError)
+        || nextError.retrySafe
+        || nextError.code === 'ERR_DELIVERY_STATE_RESPONSE_UNKNOWN'
       if (!retainOperation) {
         operationIds.current.delete(diagnostic.change_id)
+        persistDeliveryStateRepairOperationIds(operationIds.current)
       }
       return nextError
     } finally {
