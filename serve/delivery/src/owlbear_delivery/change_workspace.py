@@ -1479,7 +1479,7 @@ class ChangeWorkspaceManager:
             coordination = self._coordinator.show(change_id)
             existing = coordination.design_package_snapshot
             if existing is not None:
-                self._validate_design_package_snapshot_replay(existing, package_id, operation_id)
+                self._validate_design_package_snapshot_replay(existing, package_id)
                 return existing
             intent = coordination.design_package_snapshot_intent
             branch_head = self._resolve(coordination.branch)
@@ -1525,9 +1525,8 @@ class ChangeWorkspaceManager:
         self,
         receipt: ChangeDesignPackageSnapshotReceipt,
         package_id: str,
-        operation_id: str,
     ) -> None:
-        if receipt.package_id != package_id or receipt.operation_id != operation_id:
+        if receipt.package_id != package_id:
             _coordination_conflict("Design package snapshot differs from the request")
         self._require_worktree(
             receipt.change_id,
