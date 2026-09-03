@@ -22,8 +22,8 @@
     "test:e2e:all": "node scripts/run-e2e-all.mjs"
   },
   "dependencies": {
-    "@porsche-design-system/components-js": "^4.5.0",
-    "@porsche-design-system/components-react": "^4.5.0",
+    "@porsche-design-system/components-js": "^4.6.0",
+    "@porsche-design-system/components-react": "^4.6.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
