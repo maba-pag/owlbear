@@ -347,21 +347,57 @@ def test_loader_accepts_unpublished_acceptance_attention_successor(tmp_path: Pat
 
 
 def test_loader_accepts_unpublished_head_moved_acceptance_successor(tmp_path: Path) -> None:
-    repository, _remote, _initial = _repository(tmp_path)
+    repository, _remote, initial = _repository(tmp_path)
     change_id = "state-head-moved-fallback"
     contract, _intent, _design = _contract(change_id)
     runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
     snapshot = _snapshot(runtime, manager, change_id)
-    local_frontier = snapshot.frontier.model_copy(
+    observed_at = datetime(2026, 8, 23, 1, tzinfo=UTC)
+    operation_id = "finalize-state-head-moved-fallback"
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=operation_id,
+            exact_commit=initial,
+            observation_kind="snapshot-test",
+            command_or_procedure="head moved acceptance fallback",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=initial,
+            author_id="snapshot-head-moved-author",
+            reviewer_id="snapshot-head-moved-reviewer",
+            evidence=("The head-moved successor retains its invalidation authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    finalization = DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            operation_id=operation_id,
+            change_id=change_id,
+            exact_head=initial,
+            authority_digest=runtime.authority_digest,
+            result_digests=("a" * 64,),
+            observations=(observation,),
+            review=review,
+            finalized_at=observed_at,
+        )
+    )
+    snapshot_frontier = snapshot.frontier.model_copy(update={"finalization": finalization, "published_head": initial})
+    local_frontier = snapshot_frontier.model_copy(
         update={
-            "published_head": "a" * 40,
+            "finalization": None,
             "finalization_invalidation": DeliveryFinalizationInvalidationReceipt.create(
                 DeliveryFinalizationInvalidation(
                     change_id=change_id,
-                    finalization_id="b" * 64,
-                    expected_head=snapshot.change_head,
+                    finalization_id=finalization.finalization_id,
+                    expected_head=finalization.exact_head,
                     observed_head="c" * 40,
-                    invalidated_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+                    invalidated_at=observed_at,
                 )
             ),
             "change_disposition": DeliveryChangeDisposition.create(
@@ -376,7 +412,22 @@ def test_loader_accepts_unpublished_head_moved_acceptance_successor(tmp_path: Pa
     )
     _commit_descendant(worktree, "head-moved.txt", "head moved")
 
-    assert _is_unpublished_acceptance_attention_successor(snapshot.frontier, local_frontier)
+    assert _is_unpublished_acceptance_attention_successor(snapshot_frontier, local_frontier)
+    assert not _is_unpublished_acceptance_attention_successor(
+        snapshot_frontier,
+        local_frontier.model_copy(update={"finalization": finalization}),
+    )
+    with patch(
+        "owlbear_delivery.delivery_application_loader._remote_branch_head",
+        return_value=None,
+    ):
+        assert _fetch_snapshot_change_head(
+            snapshot,
+            _startup_config(),
+            repository,
+            allow_local_branch=True,
+            allow_local_descendant=True,
+        ) == (snapshot.change_head, False)
 
 
 def test_loader_accepts_finalized_snapshot_when_remote_change_branch_was_deleted(tmp_path: Path) -> None:
@@ -887,10 +938,10 @@ def test_state_publisher_repairs_invalid_snapshot_and_replays_append_only(tmp_pa
     assert isinstance(repaired, DeliveryStateRepairReceipt)
     assert replayed == repaired
     assert repaired.expected_remote_head == invalid_commit
-    assert repaired.previous_snapshot_id == valid.snapshot_id
+    assert repaired.previous_snapshot_id == invalid.snapshot_id
     assert repaired.repaired_snapshot_id == restored.snapshot_id
     assert restored.sequence == valid.sequence + 1
-    assert restored.parent_snapshot_id == valid.snapshot_id
+    assert restored.parent_snapshot_id == invalid.snapshot_id
     assert restored.frontier.change_disposition is not None
     assert publisher.read_snapshot_inventory().diagnostics == ()
 
@@ -932,11 +983,11 @@ def test_state_publisher_repairs_snapshot_after_another_change_published(tmp_pat
         expected_remote_head=invalid_commit,
     )
 
-    assert repaired.previous_snapshot_id == valid_a.snapshot_id
+    assert repaired.previous_snapshot_id == invalid_a.snapshot_id
     restored = publisher.read_snapshot("state-repair-a")
     assert restored is not None
     assert restored.sequence == valid_a.sequence + 1
-    assert restored.parent_snapshot_id == valid_a.snapshot_id
+    assert restored.parent_snapshot_id == invalid_a.snapshot_id
 
 
 def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:

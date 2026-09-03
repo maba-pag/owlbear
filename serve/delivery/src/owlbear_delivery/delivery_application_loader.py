@@ -29,6 +29,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceAttentionReason,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
@@ -677,16 +678,41 @@ def _is_unpublished_acceptance_attention_successor(
         or local_frontier.ready is not None
     ):
         return False
-    attention_fields = {
+    common_attention_fields = {
         "change_disposition": None,
         "change_disposition_publication": None,
         "change_disposition_resolution": None,
-        "finalization": None,
-        "finalization_invalidation": None,
-        "published_head": None,
         "ready": None,
     }
-    return snapshot_frontier.model_copy(update=attention_fields) == local_frontier.model_copy(update=attention_fields)
+    if (
+        snapshot_frontier.finalization == local_frontier.finalization
+        and snapshot_frontier.finalization_invalidation == local_frontier.finalization_invalidation
+        and snapshot_frontier.model_copy(update=common_attention_fields)
+        == local_frontier.model_copy(update=common_attention_fields)
+    ):
+        return True
+    if disposition.acceptance_reason != DeliveryAcceptanceAttentionReason.HEAD_MOVED:
+        return False
+    snapshot_finalization = snapshot_frontier.finalization
+    local_invalidation = local_frontier.finalization_invalidation
+    if (
+        snapshot_finalization is None
+        or snapshot_frontier.finalization_invalidation is not None
+        or local_frontier.finalization is not None
+        or local_invalidation is None
+        or local_invalidation.change_id != snapshot_finalization.change_id
+        or local_invalidation.finalization_id != snapshot_finalization.finalization_id
+        or local_invalidation.expected_head != snapshot_finalization.exact_head
+        or local_invalidation.observed_head == snapshot_finalization.exact_head
+        or local_invalidation.reason != "head-drift"
+    ):
+        return False
+    transition_fields = {
+        **common_attention_fields,
+        "finalization": None,
+        "finalization_invalidation": None,
+    }
+    return snapshot_frontier.model_copy(update=transition_fields) == local_frontier.model_copy(update=transition_fields)
 
 
 def _fetch_completed_snapshot_change_head(

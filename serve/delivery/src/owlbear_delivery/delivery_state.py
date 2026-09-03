@@ -415,10 +415,10 @@ class DeliveryStatePublisher:
             _raise_state_conflict("remote Delivery snapshot is already valid; refresh Delivery health")
         if remote_head != expected_remote_head:
             _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
-        normalized = _normalize_snapshot_for_repair(raw)
+        normalized, previous_snapshot_id = _normalize_snapshot_for_repair(raw)
         if not _same_snapshot_authority(normalized, package_id, coordination, runtime, admission):
             _raise_state_conflict("remote Delivery snapshot does not match verified local authority")
-        sequence, previous_snapshot_id = self._verified_repair_lineage(remote_head, change_id, raw)
+        sequence = self._verified_repair_lineage(remote_head, change_id, raw)
         snapshot = DeliveryStateSnapshot.create(
             operation_id=operation_id,
             change_id=change_id,
@@ -579,7 +579,7 @@ class DeliveryStatePublisher:
         remote_head: str,
         change_id: str,
         current_raw: bytes,
-    ) -> tuple[int, str | None]:
+    ) -> int:
         """Derive repair lineage from the latest usable snapshot for this Change."""
         history_result = self._run_git(
             "log",
@@ -593,14 +593,24 @@ class DeliveryStatePublisher:
         if history_result.returncode != 0:
             _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
         commits = tuple(line for line in history_result.stdout.decode(errors="replace").splitlines() if line)
-        for commit in commits:
+        if not commits:
+            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+        for commit_index, commit in enumerate(commits):
             previous_raw = self._read_snapshot_bytes(commit, change_id)
-            if previous_raw is None or previous_raw == current_raw:
+            if previous_raw == current_raw:
                 continue
+            if previous_raw is None:
+                _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
             previous = _validated_snapshot(previous_raw)
-            if previous is not None:
-                return previous.sequence + 1, previous.snapshot_id
-        return max(len(commits), 1), None
+            if commit_index == 0:
+                _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+            if previous is None:
+                previous = _verified_historical_repair_snapshot(previous_raw)
+            return previous.sequence + 1
+        if len(commits) == 1:
+            return 1
+        _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+        return 1
 
     def _commit_snapshot(self, base: str | None, snapshot: DeliveryStateSnapshot) -> str:
         index_fd, index_path = tempfile.mkstemp(prefix="owlbear-delivery-state-index-")
@@ -768,7 +778,7 @@ def is_repairable_delivery_snapshot(raw: bytes) -> bool:
     return True
 
 
-def _normalize_snapshot_for_repair(raw: bytes) -> DeliveryStateSnapshot:
+def _normalize_snapshot_for_repair(raw: bytes) -> tuple[DeliveryStateSnapshot, str]:
     try:
         payload = json.loads(raw)
     except (TypeError, ValueError) as exc:
@@ -814,7 +824,26 @@ def _normalize_snapshot_for_repair(raw: bytes) -> DeliveryStateSnapshot:
     except (TypeError, ValueError, ValidationError) as exc:
         message = "remote Delivery snapshot cannot be normalized from verified state"
         raise DeliveryStatePublicationError(message, retry_safe=False) from exc
-    return normalized
+    return normalized, raw_snapshot_id
+
+
+def _verified_historical_repair_snapshot(raw: bytes) -> DeliveryStateSnapshot:
+    """Normalize one authenticated retired snapshot for lineage only."""
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+    frontier = payload.get("frontier") if isinstance(payload, dict) else None
+    if not isinstance(frontier, dict) or not any(
+        isinstance(frontier.get(key), dict) and frontier[key].get("schema_version") == 1
+        for key in ("target_sync_receipt", "external_head_adoption_receipt")
+    ):
+        _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+    try:
+        repaired, _raw_snapshot_id = _normalize_snapshot_for_repair(raw)
+    except (DeliveryStatePublicationError, TypeError, ValueError, ValidationError):
+        _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
+    return repaired
 
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
