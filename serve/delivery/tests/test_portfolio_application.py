@@ -785,7 +785,7 @@ def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(
             "_reconcile_runtimes",
             side_effect=(None, RuntimeError("recomposition failed")),
         ),
-        pytest.raises(DeliveryStateRepairProofError, match="retry operation repair-retry"),
+        pytest.raises(DeliveryStateRepairProofError, match="recomposition failed; retry operation repair-retry"),
     ):
         application.repair_delivery_state(
             "change-a",

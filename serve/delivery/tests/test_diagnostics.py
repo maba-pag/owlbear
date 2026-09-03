@@ -117,10 +117,13 @@ def test_busy_change_attention_resolution_is_retryable_conflict() -> None:
 
 
 def test_repair_proof_failure_is_retryable() -> None:
-    classification = classify_delivery_failure(DeliveryStateRepairProofError("repair-operation"))
+    classification = classify_delivery_failure(
+        DeliveryStateRepairProofError("repair-operation", "Change did not recompose")
+    )
 
     assert classification is not None
     assert classification.code == "ERR_DELIVERY_STATE_REPAIR_PROOF"
+    assert "Change did not recompose" in classification.detail
     assert classification.retry_safe is True
     assert classification.category is DeliveryFailureCategory.CONFLICT
 

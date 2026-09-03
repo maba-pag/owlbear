@@ -915,10 +915,12 @@ class DeliveryStateRepairProofError(PortfolioApplicationError):
     code = "ERR_DELIVERY_STATE_REPAIR_PROOF"
     retry_safe = True
 
-    def __init__(self, operation_id: str) -> None:
+    def __init__(self, operation_id: str, proof_detail: str) -> None:
         self.operation_id = operation_id
+        self.proof_detail = proof_detail
         super().__init__(
-            f"Delivery state repair was published but local proof is incomplete; retry operation {operation_id}."
+            "Delivery state repair was published but local proof is incomplete: "
+            f"{proof_detail}; retry operation {operation_id}."
         )
 
 
@@ -3606,7 +3608,8 @@ class PortfolioApplication:
             self._cleared_startup_health_diagnostics = prior_cleared
             self._runtime_reconciliation_errors.pop(change_id, None)
             self._runtime_snapshots.pop(change_id, None)
-            raise DeliveryStateRepairProofError(operation_id) from exc
+            proof_detail = str(exc) or type(exc).__name__
+            raise DeliveryStateRepairProofError(operation_id, proof_detail) from exc
         self._cleared_startup_health_diagnostics = prior_cleared
         self._clear_repair_diagnostics(change_id, expected_diagnostic_code, expected_remote_head)
         self._runtime_reconciliation_errors.pop(change_id, None)
