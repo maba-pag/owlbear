@@ -472,7 +472,7 @@ def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each
     if has_remote_change_branch:
         _restore_local_change_branch(snapshot, paths.repository_root)
     worktree_path = paths.worktree_root / snapshot.change_id
-    if not snapshot.frontier.change_completion and not worktree_path.exists():
+    if has_remote_change_branch and not snapshot.frontier.change_completion and not worktree_path.exists():
         ChangeWorkspaceManager.restore_worktree(
             paths.repository_root,
             worktree_path,

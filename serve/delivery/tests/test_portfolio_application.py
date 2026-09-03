@@ -68,6 +68,7 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHealthDiagnostic,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -89,6 +90,7 @@ from owlbear_delivery import (
     DeliveryRuntimeMigrationError,
     DeliveryStage,
     DeliveryStartupConfig,
+    DeliveryStateRepairReceipt,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
@@ -474,6 +476,69 @@ def _set_checkpoint(
     return path
 
 
+def _legacy_target_sync_payload(coordination) -> dict[str, object]:
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="repair-target-sync",
+        change_id=coordination.change_id,
+        integration_target=coordination.integration_target,
+        expected_target=coordination.target_head,
+        target_head=coordination.target_head,
+        change_head_before=coordination.last_reviewed_commit,
+        merged_head=coordination.last_reviewed_commit,
+        merge_commit=True,
+    )
+    payload = receipt.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload.pop("review_required")
+    payload["receipt_id"] = _receipt_id({key: value for key, value in payload.items() if key != "receipt_id"})
+    return payload
+
+
+def _install_legacy_repair_frontier(
+    state_root: Path,
+    change_id: str,
+    coordination,
+    *,
+    plan_scope_id: str = "SCOPE-001",
+) -> tuple[Path, bytes]:
+    path = state_root / f"changes/{change_id}/frontier.json"
+    payload = json.loads(path.read_bytes())
+    payload["bindings"][0]["plan_scope_id"] = plan_scope_id
+    payload["target_sync_receipt"] = _legacy_target_sync_payload(coordination)
+    content = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    path.write_bytes(content)
+    return path, content
+
+
+def _repair_health_diagnostic(change_id: str, remote_head: str) -> DeliveryHealthDiagnostic:
+    return DeliveryHealthDiagnostic(
+        source="remote-state",
+        code="snapshot-identity-invalid",
+        detail="Remote Delivery snapshot identity is invalid.",
+        change_id=change_id,
+        path=f".owlbear/delivery/state/{change_id}/snapshot.json",
+        remote_head=remote_head,
+        repairable=True,
+    )
+
+
+def _prepare_repairable_application(tmp_path: Path) -> tuple[PortfolioApplication, Path, Path, bytes]:
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    frontier_path, legacy_frontier = _install_legacy_repair_frontier(
+        state_root,
+        "change-a",
+        coordinator.show("change-a"),
+    )
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    coordination_path.write_bytes(_canonical(coordinator.show("change-a")))
+    diagnostic = _repair_health_diagnostic("change-a", "a" * 40)
+    application._startup_health_diagnostics = (diagnostic,)
+    return application, frontier_path, coordination_path, legacy_frontier
+
+
 def _policies() -> tuple[DeliveryRolePolicy, ...]:
     return (
         DeliveryRolePolicy(
@@ -611,6 +676,84 @@ def _portfolio(
     return application, runtimes, coordinator, state_root
 
 
+def test_delivery_state_repair_rejects_frontier_mismatch_before_local_write(tmp_path: Path) -> None:
+    application, _frontier_path, coordination_path, legacy_frontier = _prepare_repairable_application(tmp_path)
+    frontier_path = application._target_root / "changes/change-a/frontier.json"
+    application._delivery_state_publisher = Mock()
+    _invalid_frontier_path, invalid_frontier = _install_legacy_repair_frontier(
+        application._target_root,
+        "change-a",
+        application._coordinator.show("change-a"),
+        plan_scope_id="SCOPE-999",
+    )
+    before_coordination = coordination_path.read_bytes()
+
+    with pytest.raises(PortfolioApplicationError, match="frontier does not match"):
+        application.repair_delivery_state(
+            "change-a",
+            "snapshot-identity-invalid",
+            "a" * 40,
+            "repair-rejected",
+            confirmed_repair=True,
+        )
+
+    assert _invalid_frontier_path == frontier_path
+    assert frontier_path.read_bytes() == invalid_frontier
+    assert frontier_path.read_bytes() != legacy_frontier
+    assert coordination_path.read_bytes() == before_coordination
+    application._delivery_state_publisher.repair_snapshot.assert_not_called()
+
+
+def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(tmp_path: Path) -> None:
+    application, frontier_path, coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
+    application._reconcile_runtimes()
+    repair = DeliveryStateRepairReceipt.create(
+        operation_id="repair-retry",
+        change_id="change-a",
+        state_branch="owlbear/delivery-state",
+        expected_remote_head="a" * 40,
+        previous_snapshot_id="b" * 64,
+        repaired_snapshot_id="c" * 64,
+        published_head="d" * 40,
+    )
+    publisher = Mock()
+    publisher.repair_snapshot.return_value = repair
+    application._delivery_state_publisher = publisher
+
+    with (
+        patch.object(
+            application,
+            "_reconcile_runtimes",
+            side_effect=(None, RuntimeError("recomposition failed")),
+        ),
+        pytest.raises(RuntimeError, match="recomposition failed"),
+    ):
+        application.repair_delivery_state(
+            "change-a",
+            "snapshot-identity-invalid",
+            "a" * 40,
+            "repair-retry",
+            confirmed_repair=True,
+        )
+
+    assert publisher.repair_snapshot.call_count == 1
+    assert frontier_path.read_bytes() != _legacy_frontier
+    assert coordination_path.read_bytes() == _canonical(application._coordinator.show("change-a"))
+
+    replayed = application.repair_delivery_state(
+        "change-a",
+        "snapshot-identity-invalid",
+        "a" * 40,
+        "repair-retry",
+        confirmed_repair=True,
+    )
+
+    assert replayed == repair
+    assert publisher.repair_snapshot.call_count == 2
+    assert DeliveryFrontier.model_validate_json(frontier_path.read_bytes()).schema_version == 17
+    assert application.delivery_health().diagnostics == ()
+
+
 def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
@@ -679,6 +822,19 @@ def _reopen_portfolio(
         hooks,
     )
     return application, coordinator, manager
+
+
+def test_show_work_item_explains_mcp_publication_identity(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    with pytest.raises(
+        PortfolioApplicationError,
+        match=r"invalid for MCP publication lookup.*change-a.*work_item_id",
+    ):
+        application.show_work_item("change-a", "publication")
 
 
 def _shared_acquisition_command() -> str:

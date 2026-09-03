@@ -694,9 +694,11 @@ def _same_snapshot_inputs(
     runtime: DeliveryRuntime,
     admission: DeliveryAdmissionReceipt,
 ) -> bool:
-    return _same_snapshot_authority(
-        current, package_id, coordination, runtime, admission
-    ) and current.frontier == _portable_frontier(runtime)
+    return (
+        _same_snapshot_authority(current, package_id, coordination, runtime, admission)
+        and current.frontier == _portable_frontier(runtime)
+        and current.completion == runtime.completion_bundle()
+    )
 
 
 def _same_snapshot_authority(
