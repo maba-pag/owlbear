@@ -153,7 +153,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
 
     assert resolve["outputs"] == {"python_matrix": "${{ steps.runtime.outputs.python_matrix }}"}
     assert "python_upper=\"$(tr -d '\\r\\n' < .python-version)\"" in text
-    assert 'python_matrix=["3.12.14","3.13.15","%s"]' in text
+    assert 'python_matrix=["3.12.14","3.13","%s"]' in text
     assert 'python_matrix=["3.12.14","%s"]' in text
     assert proof_python["strategy"] == {
         "fail-fast": False,
@@ -220,8 +220,9 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
             ),
         }
     ]
-    assert "dependency-verification.yml|" in text
-    assert "serve/tools/src/owlbear_tools/megalinter.py)" in text
+    assert ".github/workflows/*|" in text
+    assert "serve/tools/src/owlbear_tools/megalinter.py|" in text
+    assert "tests/test_dependency_verification_workflow.py)" in text
 
 
 def test_uv_runtime_check_precedes_uv_commands() -> None:
@@ -637,6 +638,7 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     resolve = _job(workflow, "resolve_runtimes")
     proof = _job(workflow, "proof")
     browser = _job(workflow, "browser_compatibility")
+    gate = _job(workflow, "gate")
     text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
     package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
 
@@ -657,6 +659,9 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert "npm run build" in text
     assert browser["needs"] == "proof"
     assert browser["if"] == "needs.proof.result == 'success'"
+    assert gate["name"] == "Verify Cockpit"
+    assert gate["needs"] == ["resolve_runtimes", "proof", "browser_compatibility"]
+    assert gate["if"] == "always()"
     assert "workflow_dispatch:" in text
     assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
     assert browser["env"] == {

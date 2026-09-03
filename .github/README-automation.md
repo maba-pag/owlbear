@@ -36,6 +36,8 @@ Dependency verification checks the declared Python compatibility floor and curre
 on pull requests. Manual dispatch additionally exercises the intervening Python 3.13 line. Cockpit
 verification follows the Node support floor and the current `serve/cockpit/web/.nvmrc` pin; its
 pull-request browser gate is Chromium-only, while manual dispatch retains the full browser matrix.
+Dependency workflow contract tests own workflow-shape validation; the agent-ecosystem workflow
+focuses on agent, hook, and knowledge surfaces.
 
 ## Changing the sync boundary
 

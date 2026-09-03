@@ -6,7 +6,6 @@ name: Agent ecosystem validation
     branches: [dev]
     paths:
       - .github/workflows/agent-ecosystem.yml
-      - .github/workflows/dependency-verification.yml
       - .owlbear/hooks/**
       - .owlbear/agents/**
       - .owlbear/instructions/**
@@ -16,7 +15,6 @@ name: Agent ecosystem validation
       - .owlbear/scripts/validate_skills.py
       - .owlbear/skills/**
       - .github/scripts/check_uv_version.py
-      - serve/tools/src/owlbear_tools/dependency_ci.py
       - .pre-commit-config.yaml
       - .vscode/mcp.json
       - seed/.vscode/mcp.json
@@ -27,15 +25,10 @@ name: Agent ecosystem validation
       - share/skills/**
       - tests/test_agent_ecosystem_validation.py
       - tests/test_write_guard_hooks.py
-      - tests/test_dependency_verification_workflow.py
       - .python-version
       - conftest.py
       - pyproject.toml
       - serve/knowledge/**
-      - serve/knowledge-mcp/**
-      - share/agents/knowledge-ingestor.agent.md
-      - share/prompts/kb-ingest.prompt.md
-      - share/skills/h-knowledge-ops/SKILL.md
       - tests/test_knowledge_ops_contract.py
       - uv.lock
 
@@ -67,4 +60,3 @@ jobs:
           tests/test_agent_ecosystem_validation.py
           tests/test_write_guard_hooks.py
           tests/test_knowledge_ops_contract.py
-          tests/test_dependency_verification_workflow.py

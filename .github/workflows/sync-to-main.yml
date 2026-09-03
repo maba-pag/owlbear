@@ -137,9 +137,7 @@ jobs:
           done
 
           # If all serve sub-scopes are selected, collapse to "serve".
-          any_serve="false"
           all_serve="false"
-          if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
           if [[ "$selected_serve_count" -eq "$serve_scope_count" ]]; then all_serve="true"; fi
           if [[ "$all_serve" == "true" ]]; then
             scopes="${scopes:+$scopes,}serve"
@@ -160,7 +158,6 @@ jobs:
 
           {
             echo "SCOPES=$scopes"
-            echo "ANY_SERVE=$any_serve"
             echo "ALL_SERVE=$all_serve"
             echo "SHARE_PATHS=$share_paths"
             echo "BROWSER_PATHS=$browser_paths"

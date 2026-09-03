@@ -202,15 +202,21 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
     assert pull_request["branches"] == ["dev"]
     assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
     assert {
-        ".github/workflows/dependency-verification.yml",
         ".owlbear/instructions/**",
-        "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/*-mcp/**",
         "seed/.vscode/mcp.json",
         ".vscode/mcp.json",
         "share/instructions/**",
-        "tests/test_dependency_verification_workflow.py",
     } <= set(pull_request["paths"])
+    assert not {
+        ".github/workflows/dependency-verification.yml",
+        "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "serve/knowledge-mcp/**",
+        "share/agents/knowledge-ingestor.agent.md",
+        "share/prompts/kb-ingest.prompt.md",
+        "share/skills/h-knowledge-ops/SKILL.md",
+        "tests/test_dependency_verification_workflow.py",
+    } & set(pull_request["paths"])
     assert job["timeout-minutes"] == 5
     assert "if" not in job
     assert all(
@@ -219,9 +225,9 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
             "tests/test_agent_ecosystem_validation.py",
             "tests/test_write_guard_hooks.py",
             "tests/test_knowledge_ops_contract.py",
-            "tests/test_dependency_verification_workflow.py",
         )
     )
+    assert "tests/test_dependency_verification_workflow.py" not in pytest_run
 
 
 class _TargetApplicationDouble:

@@ -123,7 +123,7 @@ jobs:
         timeout-minutes: 10
         run: npx playwright install --with-deps $E2E_COMPAT_BROWSERS
 
-      - name: Run cross-engine compatibility smoke tests
+      - name: Run compatibility smoke tests
         run: npm run test:e2e:compat
 
       - name: Upload browser compatibility diagnostics
@@ -136,3 +136,42 @@ jobs:
             serve/cockpit/web/playwright-report
           if-no-files-found: ignore
           retention-days: 15
+
+  gate:
+    name: Verify Cockpit
+    needs:
+      - resolve_runtimes
+      - proof
+      - browser_compatibility
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate Cockpit verification
+        env:
+          RESOLVE: ${{ needs.resolve_runtimes.result }}
+          PROOF: ${{ needs.proof.result }}
+          BROWSER: ${{ needs.browser_compatibility.result }}
+        run: |
+          failed=false
+          [ "$RESOLVE" = success ] || failed=true
+          [ "$PROOF" = success ] || failed=true
+          [ "$BROWSER" = success ] || failed=true
+
+          {
+            echo "## Cockpit verification gate"
+            echo
+            echo "| Proof | Result |"
+            echo "|---|---|"
+            echo "| Runtime resolution | $RESOLVE |"
+            echo "| Node behavior matrix | $PROOF |"
+            echo "| Browser compatibility | $BROWSER |"
+            echo
+            if [ "$failed" = true ]; then
+              echo "At least one Cockpit proof failed."
+            else
+              echo "All Cockpit proofs passed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$failed" = false ]
