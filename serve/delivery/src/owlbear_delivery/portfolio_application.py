@@ -1265,7 +1265,11 @@ class PortfolioApplication:
                     ),
                     publication_identity=history.current if history is not None else None,
                 )
-                self._publish_delivery_state(change_id, runtime, f"target-sync-attention-{exc.operation_id}")
+                self._publish_attention_best_effort(
+                    change_id,
+                    runtime,
+                    f"target-sync-attention-{exc.operation_id}",
+                )
                 raise
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization could not be completed", exc)
@@ -1347,7 +1351,11 @@ class PortfolioApplication:
                             ),
                             publication_identity=publication_identity,
                         )
-                        self._publish_delivery_state(change_id, runtime, f"adoption-attention-{operation_id}")
+                        self._publish_attention_best_effort(
+                            change_id,
+                            runtime,
+                            f"adoption-attention-{operation_id}",
+                        )
                 self._fail("external Change head could not be adopted", exc)
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
             self._publish_delivery_state(change_id, runtime, f"adoption-{receipt.receipt_id}")
@@ -2455,7 +2463,7 @@ class PortfolioApplication:
         result = outcome if outcome is not None else self._reconcile_merged_acceptance(change_id, runtime)
         disposition = runtime.change_disposition()
         if disposition is not None:
-            self._publish_acceptance_attention(
+            self._publish_attention_best_effort(
                 change_id,
                 runtime,
                 f"acceptance-attention-{disposition.disposition_id}",
@@ -2693,7 +2701,7 @@ class PortfolioApplication:
                     ("provider pull request does not satisfy acceptance authority",),
                     reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
                 )
-                self._publish_acceptance_attention(
+                self._publish_attention_best_effort(
                     change_id,
                     runtime,
                     f"acceptance-attention-{observation.observation_id}",
@@ -2743,7 +2751,7 @@ class PortfolioApplication:
             try:
                 return runtime.latch_merged_pull_request(observation)
             except DeliveryRuntimeConflictError as exc:
-                self._publish_acceptance_attention(
+                self._publish_attention_best_effort(
                     change_id,
                     runtime,
                     f"acceptance-attention-{observation.observation_id}",
@@ -2760,7 +2768,7 @@ class PortfolioApplication:
                 ("provider pull request does not satisfy acceptance authority",),
                 reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
-            self._publish_acceptance_attention(
+            self._publish_attention_best_effort(
                 change_id,
                 runtime,
                 f"acceptance-attention-{observation.observation_id}",
@@ -2773,7 +2781,7 @@ class PortfolioApplication:
                 ("provider pull request is missing merge evidence",),
                 reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
-            self._publish_acceptance_attention(
+            self._publish_attention_best_effort(
                 change_id,
                 runtime,
                 f"acceptance-attention-{observation.observation_id}",
@@ -2782,7 +2790,7 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         return runtime.latch_merged_pull_request(observation)
 
-    def _publish_acceptance_attention(
+    def _publish_attention_best_effort(
         self,
         change_id: str,
         runtime: DeliveryRuntime,
@@ -2792,7 +2800,7 @@ class PortfolioApplication:
             self._publish_delivery_state(change_id, runtime, operation_id)
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             _logger.warning(
-                "Acceptance attention publication failed for Change %s (%s): %s",
+                "Delivery attention publication failed for Change %s (%s): %s",
                 change_id,
                 operation_id,
                 exc,

@@ -1744,6 +1744,65 @@ def test_external_head_adoption_retains_attention_after_demotion_then_movement_f
     assert state["pull_request"].draft is True
 
 
+def test_target_sync_conflict_survives_attention_publication_failure(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    publisher = Mock()
+    publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = publisher
+
+    conflict = ChangeTargetSyncConflictError(
+        "change-a",
+        "sync-publication-failure",
+        "2" * 40,
+        ("product.txt",),
+    )
+    with (
+        patch.object(application._workspace_manager, "sync_with_target", side_effect=conflict),
+        pytest.raises(ChangeTargetSyncConflictError, match=r"product\.txt"),
+    ):
+        application.sync_change_with_target("change-a", "2" * 40, "sync-publication-failure")
+
+    assert runtimes["change-a"].change_disposition() is not None
+    publisher.publish.assert_called_once()
+
+
+def test_external_head_adoption_error_survives_attention_publication_failure(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    provider.set_pull_request_draft_state.reset_mock()
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = state_publisher
+    original_run_git = application._workspace_manager._run_git
+
+    def fail_merge(*arguments: str, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if arguments and arguments[0] == "merge":
+            return subprocess.CompletedProcess(arguments, 1, b"", b"fast-forward failed")
+        return original_run_git(*arguments, **kwargs)
+
+    with (
+        patch.object(application._workspace_manager, "_run_git", side_effect=fail_merge),
+        pytest.raises(PortfolioApplicationError, match="external Change head could not be adopted"),
+    ):
+        application.adopt_external_head("change-a", exact_head, adopted_head, "adopt-publication-failure")
+
+    assert runtime.change_disposition() is not None
+    state_publisher.publish.assert_called_once()
+
+
 def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path: Path) -> None:
     application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     repository = application._workspace_manager.repository
