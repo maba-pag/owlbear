@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
+import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PModal, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
@@ -13,6 +13,7 @@ import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioTable from '../components/WorkPortfolioTable'
 import {
   useAcceptanceReconciliation,
+  useDeliveryStateRepair,
   useDesignWorkDetail,
   useWorkItemDetail,
   useWorkPortfolio,
@@ -318,10 +319,99 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
-function DeliveryIssuesSection({ diagnostics, statuses }: { diagnostics: DeliveryHealthDiagnostic[]; statuses: PortfolioChangeLifecycleStatus[] }) {
+function RepairDeliveryStateControl({
+  diagnostic,
+  pending,
+  error,
+  onRepair,
+}: {
+  diagnostic: DeliveryHealthDiagnostic
+  pending: boolean
+  error: Error | null
+  onRepair: (diagnostic: { change_id: string; code: string; remote_head: string }) => Promise<Error | null>
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
+  if (diagnostic.source !== 'remote-state' || !diagnostic.repairable || !diagnostic.change_id || !diagnostic.remote_head) return null
+  const changeId = diagnostic.change_id
+  const remoteHead = diagnostic.remote_head
+  const repair = async () => {
+    const nextError = await onRepair({
+      change_id: changeId,
+      code: diagnostic.code,
+      remote_head: remoteHead,
+    })
+    setActionFailed(nextError !== null)
+    if (!nextError) setConfirmOpen(false)
+  }
+  return (
+    <>
+      <PButton
+        className="mt-static-sm"
+        type="button"
+        compact
+        variant="secondary"
+        data-testid={`repair-delivery-state-${changeId}`}
+        disabled={pending}
+        onClick={() => { setActionFailed(false); setConfirmOpen(true) }}
+      >
+        {pending ? 'Repairing Delivery state...' : 'Repair Delivery state'}
+      </PButton>
+      {confirmOpen ? (
+        <PModal
+          open
+          role="alertdialog"
+          aria-modal="true"
+          dismissButton={false}
+          disableBackdropClick
+          onDismiss={() => setConfirmOpen(false)}
+          aria={{ role: 'alertdialog', 'aria-label': 'Confirm Delivery state repair' }}
+        >
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+            <PHeading tag="h2" size="lg">Confirm Delivery state repair</PHeading>
+            <p className="text-sm">The invalid remote state for this Change will be replaced with a current-schema snapshot built from verified local authority. The old remote commit remains in history.</p>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-sm">
+              <dt className="text-contrast-medium">Change</dt><dd>{changeId}</dd>
+              <dt className="text-contrast-medium">Diagnostic</dt><dd><code>{diagnostic.code}</code></dd>
+              <dt className="text-contrast-medium">Remote state head</dt><dd><code>{remoteHead}</code></dd>
+            </dl>
+            {actionFailed && error ? <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">Delivery state repair failed: {error.message}</p> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={pending} onClick={() => void repair()}>
+                {pending ? 'Repairing Delivery state...' : 'Confirm repair'}
+              </PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
+    </>
+  )
+}
+
+function DeliveryIssuesSection({
+  diagnostics,
+  statuses,
+  pendingRepairChangeId,
+  repairError,
+  onRepair,
+}: {
+  diagnostics: DeliveryHealthDiagnostic[]
+  statuses: PortfolioChangeLifecycleStatus[]
+  pendingRepairChangeId: string | null
+  repairError: Error | null
+  onRepair: (diagnostic: { change_id: string; code: string; remote_head: string }) => Promise<Error | null>
+}) {
   const statusChangeIds = new Set(statuses.map((status) => status.change_id))
   const additionalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.change_id === null || !statusChangeIds.has(diagnostic.change_id))
-  const diagnosticByChangeId = new Map(diagnostics.flatMap((diagnostic) => diagnostic.change_id ? [[diagnostic.change_id, diagnostic] as const] : []))
+  const diagnosticByChangeId = new Map<string, DeliveryHealthDiagnostic>()
+  for (const diagnostic of diagnostics) {
+    if (!diagnostic.change_id) continue
+    const current = diagnosticByChangeId.get(diagnostic.change_id)
+    const preferred = diagnostic.source === 'remote-state' && diagnostic.repairable && Boolean(diagnostic.remote_head)
+    const currentPreferred = current?.source === 'remote-state' && current.repairable && Boolean(current.remote_head)
+    if (!current || (preferred && !currentPreferred)) diagnosticByChangeId.set(diagnostic.change_id, diagnostic)
+  }
   const issueCount = statuses.length + additionalDiagnostics.length
   if (issueCount === 0) return null
   return (
@@ -346,6 +436,7 @@ function DeliveryIssuesSection({ diagnostics, statuses }: { diagnostics: Deliver
             {diagnosticByChangeId.has(status.change_id) ? <p className="mt-1 font-medium text-primary">Quarantined state is hidden from dispatch.</p> : null}
             <p className="mt-1 text-xs text-contrast-medium">Runtime unavailable{status.diagnostic_detail ? `: ${status.diagnostic_detail}` : ''}</p>
             {diagnosticByChangeId.get(status.change_id) ? <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{diagnosticByChangeId.get(status.change_id)?.source}</code><span aria-hidden="true"> / </span><code>{diagnosticByChangeId.get(status.change_id)?.code}</code></p> : null}
+            {diagnosticByChangeId.get(status.change_id) ? <RepairDeliveryStateControl diagnostic={diagnosticByChangeId.get(status.change_id) as DeliveryHealthDiagnostic} pending={pendingRepairChangeId === status.change_id} error={repairError} onRepair={onRepair} /> : null}
           </article>
         ))}
         {additionalDiagnostics.map((diagnostic, index) => (
@@ -359,6 +450,7 @@ function DeliveryIssuesSection({ diagnostics, statuses }: { diagnostics: Deliver
               <dt className="text-contrast-medium">Detail</dt>
               <dd className="break-words">{diagnostic.detail}{diagnostic.path ? <span className="mt-1 block break-all font-mono text-2xs">{diagnostic.path}</span> : null}</dd>
             </dl>
+            <RepairDeliveryStateControl diagnostic={diagnostic} pending={pendingRepairChangeId === diagnostic.change_id} error={repairError} onRepair={onRepair} />
           </article>
         ))}
         </div>
@@ -413,6 +505,7 @@ export default function WorkPortfolioPage() {
   const navigate = useNavigate()
   const [workspace, setWorkspace] = useState<'current' | 'history'>(() => isHistoryRoute(location.pathname) ? 'history' : 'current')
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === 'history')
+  const deliveryStateRepair = useDeliveryStateRepair(retry)
   const acceptanceReconciliation = useAcceptanceReconciliation(portfolio, retry, workspace === 'history')
   const [changeFilter, setChangeFilter] = useState('')
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | ''>('')
@@ -634,7 +727,13 @@ export default function WorkPortfolioPage() {
 
             {hasData ? (
               <>
-                <DeliveryIssuesSection diagnostics={visibleHealthDiagnostics} statuses={visibleUnavailableStatuses} />
+                <DeliveryIssuesSection
+                  diagnostics={visibleHealthDiagnostics}
+                  statuses={visibleUnavailableStatuses}
+                  pendingRepairChangeId={deliveryStateRepair.pendingChangeId}
+                  repairError={deliveryStateRepair.error}
+                  onRepair={deliveryStateRepair.repair}
+                />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
                     groups={filteredGroups}

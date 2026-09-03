@@ -30,6 +30,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     OutcomeAuthorityBinding,
 )
+from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
@@ -77,6 +78,7 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
+    DeliveryStateRepairResponse,
     EmptyParams,
     EmptyRequest,
     ExternalHeadAdoptionParams,
@@ -103,6 +105,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RepairDeliveryStateParams,
+    RepairDeliveryStateRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
     ResolvedDeliveryRequestResponse,
@@ -144,6 +148,7 @@ DELIVERY_OPERATION_NAMES = (
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_delivery_state",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_operator_context",
@@ -324,6 +329,23 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
+
+    async def repair_delivery_state(self, request: RepairDeliveryStateRequest) -> DeliveryStateRepairResponse:
+        """Convert one exact repairable Delivery state after explicit confirmation."""
+        params = self._validate(RepairDeliveryStateParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_delivery_state(
+                params.change_id,
+                params.expected_diagnostic_code,
+                params.expected_remote_head,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStateRepairReceipt,
+        )
+        return DeliveryStateRepairResponse.from_receipt(receipt)
 
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""

@@ -720,6 +720,47 @@ def test_delivery_state_repair_rejects_frontier_mismatch_before_local_write(tmp_
     application._delivery_state_publisher.repair_snapshot.assert_not_called()
 
 
+def test_delivery_state_repair_converts_target_coordination_without_global_parse(tmp_path: Path) -> None:
+    application, frontier_path, coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
+    coordination = application._coordinator.show("change-a")
+    legacy_coordination = coordination.model_dump(mode="json")
+    legacy_coordination["target_sync_receipt"] = _legacy_target_sync_payload(coordination)
+    legacy_coordination["target_sync_receipt"]["schema_version"] = 1
+    legacy_coordination["target_sync_receipt"]["receipt_id"] = _receipt_id(
+        {key: value for key, value in legacy_coordination["target_sync_receipt"].items() if key != "receipt_id"}
+    )
+    coordination_path.write_bytes(
+        (json.dumps(legacy_coordination, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    unrelated_path = application._target_root / "coordination/changes/unrelated.json"
+    unrelated_path.write_bytes(b"not-json\n")
+    publisher = Mock()
+    publisher.repair_snapshot.return_value = DeliveryStateRepairReceipt.create(
+        operation_id="repair-coordination",
+        change_id="change-a",
+        state_branch="owlbear/delivery-state",
+        expected_remote_head="a" * 40,
+        previous_snapshot_id=None,
+        repaired_snapshot_id="c" * 64,
+        published_head="d" * 40,
+    )
+    application._delivery_state_publisher = publisher
+
+    application.repair_delivery_state(
+        "change-a",
+        "snapshot-identity-invalid",
+        "a" * 40,
+        "repair-coordination",
+        confirmed_repair=True,
+    )
+
+    assert coordination_path.read_bytes() == _canonical(application._coordinator.show("change-a"))
+    assert application._coordinator.show("change-a").target_sync_receipt is not None
+    assert application._coordinator.show("change-a").target_sync_receipt.schema_version == 2
+    assert unrelated_path.read_bytes() == b"not-json\n"
+    assert frontier_path.read_bytes() != _legacy_frontier
+
+
 def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(tmp_path: Path) -> None:
     application, frontier_path, coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
     application._reconcile_runtimes()

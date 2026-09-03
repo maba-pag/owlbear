@@ -1833,6 +1833,18 @@ class ChangeWorkspaceManager:
             for change_id in change_ids
         )
 
+    def inspect_retained(self, change_id: str, coordination: ChangeCoordination) -> RetainedChangeWorktree:
+        """Inspect one retained Change worktree without enumerating other coordination records."""
+        if coordination.change_id != change_id:
+            _coordination_conflict("Change workspace inspection identity does not match coordination")
+        return self._retained_worktree(
+            change_id,
+            coordination,
+            self._registered_worktrees().get(change_id),
+            self._change_branch_heads().get(change_id),
+            include_content_attention=True,
+        )
+
     def cleanup(self, change_id: str) -> ChangeWorktreeCleanup:
         """Remove one exact managed Change worktree while retaining its branch and receipt."""
         coordination = self._coordinator.show(change_id)

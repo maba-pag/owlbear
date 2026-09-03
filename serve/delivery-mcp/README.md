@@ -32,7 +32,7 @@ The server exposes these operation groups:
 | Area | Tools |
 | --- | --- |
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
-| Portfolio | `list_work_items`, `delivery_health`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
+| Portfolio | `list_work_items`, `delivery_health`, `repair_delivery_state`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `recover_blocked_implementation`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
@@ -48,6 +48,15 @@ but remain visible through the Cockpit health section and the read-only `deliver
 orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
 `health_hint`; healthy acquisitions remain quiet. Global workspace, Git, configuration, and unfinished
 migration failures still fail closed at startup.
+
+When health returns a repairable remote-state diagnostic, an operator may explicitly confirm
+`repair_delivery_state` with the exact `change_id`, diagnostic `code`, and observed remote state
+branch head. The operation converts only the supported retired serialization, normalizes the local
+frontier and coordination records transactionally, rebuilds a strict current-schema snapshot from
+verified local authority, and publishes an append-only child commit under compare-and-swap. The old
+remote commit remains in history. Normal readers remain strict current-schema; `list_work_items`
+continues to return only work-item projections, and `show_work_item` uses the MCP Work Item ID (the
+Change ID for a publication projection), not Cockpit's `publication` item key.
 
 ## Configuration
 

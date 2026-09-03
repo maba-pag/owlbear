@@ -30,6 +30,7 @@ The main public areas are:
 | Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, review-repair preparation, finalization, acceptance observation, and publication supersession |
 | Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
 | Integration attention | Typed Integration attention and exact repair-claim recovery remain current public operations |
+| State repair | Explicit, CAS-protected conversion of one supported retired remote snapshot from verified local authority |
 
 Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
 still contain reducible Assembly metadata, and legacy completed-history records retain their
@@ -68,8 +69,14 @@ genuine Design packages visible. Completed history remains a separate surface.
 | Admitted Change explicitly returned to Design | `admission=admitted` and `stage=design`; it is included in `design_required_change_ids`, not the draft list. |
 | Admitted Change without an actionable runtime | Admission remains visible with `actionable_runtime=false` and the generic `runtime_unavailable` diagnostic; it is never recast as unadmitted Design. |
 
-The Delivery MCP operation inventory includes the read-only `delivery_health` projection. User-control
-parity remains a separate, explicitly user-directed follow-up.
+The Delivery MCP operation inventory includes the read-only `delivery_health` projection and the
+explicit `repair_delivery_state` operation. A repairable diagnostic includes the exact observed
+state-branch head; after user confirmation, the operation converts only the supported retired
+serialization, commits the local frontier and coordination conversion transactionally, rebuilds a
+strict current-schema snapshot from verified local authority, and publishes it with compare-and-swap.
+The old remote commit remains in Git history. Normal runtime readers stay strict current-schema and
+never accept the retired shape. `list_work_items` remains a pure list and does not become a health
+or repair response.
 
 Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
 The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,

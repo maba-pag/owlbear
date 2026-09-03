@@ -48,6 +48,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionConflictError,
     DeliveryChangeStage,
 )
+from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -407,6 +408,22 @@ class _DeliveryApplicationFake:
         if failure is not None:
             raise failure
         return {"change_id": args[0], "disposition_id": args[1]}
+
+    def repair_delivery_state(
+        self,
+        *args: object,
+        confirmed_repair: bool,
+    ) -> DeliveryStateRepairReceipt:
+        self.calls.append(("state-repair", (*args, confirmed_repair)))
+        return DeliveryStateRepairReceipt.create(
+            operation_id=str(args[3]),
+            change_id=str(args[0]),
+            state_branch="owlbear/delivery-state",
+            expected_remote_head=str(args[2]),
+            previous_snapshot_id="b" * 64,
+            repaired_snapshot_id="c" * 64,
+            published_head="d" * 40,
+        )
 
     def supersede_current_publication(self, *args: object) -> SimpleNamespace:
         self.calls.append(("publication-supersede", args))
@@ -770,6 +787,46 @@ def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
             },
         ],
     }
+
+
+def test_state_repair_requires_exact_confirmation_and_projects_receipt() -> None:
+    client, application = _client()
+
+    rejected = client.post(
+        "/api/changes/change-a/state/repair",
+        json={
+            "confirmed_repair": False,
+            "expected_diagnostic_code": "snapshot-invalid",
+            "expected_remote_head": "a" * 40,
+            "operation_id": "repair-change-a",
+        },
+    )
+    response = client.post(
+        "/api/changes/change-a/state/repair",
+        json={
+            "confirmed_repair": True,
+            "expected_diagnostic_code": "snapshot-invalid",
+            "expected_remote_head": "a" * 40,
+            "operation_id": "repair-change-a",
+        },
+    )
+
+    assert rejected.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {
+        "schema_version": 1,
+        "repair_id": response.json()["repair_id"],
+        "operation_id": "repair-change-a",
+        "change_id": "change-a",
+        "state_branch": "owlbear/delivery-state",
+        "expected_remote_head": "a" * 40,
+        "previous_snapshot_id": "b" * 64,
+        "repaired_snapshot_id": "c" * 64,
+        "published_head": "d" * 40,
+    }
+    assert application.calls == [
+        ("state-repair", ("change-a", "snapshot-invalid", "a" * 40, "repair-change-a", True)),
+    ]
 
 
 def test_detail_target_sync_uses_target_branch_wire_contract() -> None:

@@ -681,6 +681,9 @@ def _is_unpublished_acceptance_attention_successor(
         "change_disposition": None,
         "change_disposition_publication": None,
         "change_disposition_resolution": None,
+        "finalization": None,
+        "finalization_invalidation": None,
+        "published_head": None,
         "ready": None,
     }
     return snapshot_frontier.model_copy(update=attention_fields) == local_frontier.model_copy(update=attention_fields)

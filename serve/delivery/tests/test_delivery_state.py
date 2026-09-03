@@ -22,6 +22,8 @@ from owlbear_delivery import (
     DeliveryCommitmentClass,
     DeliveryContract,
     DeliveryFinalization,
+    DeliveryFinalizationInvalidation,
+    DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
     DeliveryHealthDiagnostic,
@@ -342,6 +344,39 @@ def test_loader_accepts_unpublished_acceptance_attention_successor(tmp_path: Pat
             allow_local_branch=True,
             allow_local_descendant=True,
         ) == (snapshot.change_head, False)
+
+
+def test_loader_accepts_unpublished_head_moved_acceptance_successor(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    change_id = "state-head-moved-fallback"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    snapshot = _snapshot(runtime, manager, change_id)
+    local_frontier = snapshot.frontier.model_copy(
+        update={
+            "published_head": "a" * 40,
+            "finalization_invalidation": DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=change_id,
+                    finalization_id="b" * 64,
+                    expected_head=snapshot.change_head,
+                    observed_head="c" * 40,
+                    invalidated_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+                )
+            ),
+            "change_disposition": DeliveryChangeDisposition.create(
+                kind=DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION,
+                change_id=change_id,
+                entered_from=DeliveryChangeStage.AWAITING_MERGE,
+                recorded_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+                diagnostics=("provider pull request head differs from finalized Change head",),
+                acceptance_reason=DeliveryAcceptanceAttentionReason.HEAD_MOVED,
+            ),
+        }
+    )
+    _commit_descendant(worktree, "head-moved.txt", "head moved")
+
+    assert _is_unpublished_acceptance_attention_successor(snapshot.frontier, local_frontier)
 
 
 def test_loader_accepts_finalized_snapshot_when_remote_change_branch_was_deleted(tmp_path: Path) -> None:
@@ -858,6 +893,50 @@ def test_state_publisher_repairs_invalid_snapshot_and_replays_append_only(tmp_pa
     assert restored.parent_snapshot_id == valid.snapshot_id
     assert restored.frontier.change_disposition is not None
     assert publisher.read_snapshot_inventory().diagnostics == ()
+
+
+def test_state_publisher_repairs_snapshot_after_another_change_published(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract_a, _intent_a, _design_a = _contract("state-repair-a")
+    runtime_a, manager_a, _worktree_a = _runtime(tmp_path, repository, "state-repair-a", contract_a)
+    contract_b, _intent_b, _design_b = _contract("state-repair-b")
+    runtime_b, manager_b, _worktree_b = _runtime(tmp_path, repository, "state-repair-b", contract_b)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    _first_a = _publish(publisher, runtime_a, manager_a, "state-repair-a", "a" * 64, "state-repair-a-initial")
+    first_b = _publish(publisher, runtime_b, manager_b, "state-repair-b", "b" * 64, "state-repair-b-initial")
+    valid_a = publisher.read_snapshot("state-repair-a")
+    assert valid_a is not None
+    invalid_a = valid_a.model_copy(
+        update={
+            "snapshot_id": "0" * 64,
+            "sequence": 999,
+            "parent_snapshot_id": "f" * 64,
+        }
+    )
+    invalid_commit = publisher._commit_snapshot(first_b.published_head, invalid_a)  # noqa: SLF001
+    publisher._push_snapshot(invalid_commit, first_b.published_head)  # noqa: SLF001
+    runtime_a.capture_publication_attention(
+        datetime(2026, 8, 23, 0, 30, tzinfo=UTC),
+        ("local frontier is newer than the invalid remote snapshot",),
+    )
+
+    repaired = publisher.repair_snapshot(
+        change_id="state-repair-a",
+        package_id="a" * 64,
+        coordination=manager_a.show("state-repair-a"),
+        runtime=runtime_a,
+        admission=_admission(runtime_a, manager_a, "state-repair-a"),
+        operation_id="state-repair-a-current-schema",
+        captured_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+        expected_remote_head=invalid_commit,
+    )
+
+    assert repaired.previous_snapshot_id == valid_a.snapshot_id
+    restored = publisher.read_snapshot("state-repair-a")
+    assert restored is not None
+    assert restored.sequence == valid_a.sequence + 1
+    assert restored.parent_snapshot_id == valid_a.snapshot_id
 
 
 def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:

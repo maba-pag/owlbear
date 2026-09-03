@@ -29,6 +29,7 @@ from owlbear_cockpit.target_models import (
     ClearBlockBody,
     ConfirmLostClaimBody,
     DeliveryHealthResponse,
+    DeliveryStateRepairResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
     NeedsCounts,
@@ -36,6 +37,7 @@ from owlbear_cockpit.target_models import (
     PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
+    RepairDeliveryStateBody,
     ResolveChangeAttentionBody,
     SupersedePublicationBody,
     TargetSyncAbortResponse,
@@ -91,6 +93,23 @@ class TargetCockpitService:
             operating=PortfolioOperatingResponse.from_view(view.operating),
             health=DeliveryHealthResponse.from_view(health),
         )
+
+    def repair_delivery_state(
+        self,
+        change_id: str,
+        body: RepairDeliveryStateBody,
+    ) -> DeliveryStateRepairResponse:
+        """Repair one exact current-schema Delivery state after explicit confirmation."""
+        receipt = self._invoke(
+            lambda: self._application.repair_delivery_state(
+                change_id,
+                body.expected_diagnostic_code,
+                body.expected_remote_head,
+                body.operation_id,
+                confirmed_repair=body.confirmed_repair,
+            )
+        )
+        return DeliveryStateRepairResponse.from_receipt(receipt)
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
         """Return semantic and operator detail from one exact snapshot."""
@@ -418,11 +437,25 @@ def _register_queries(router: APIRouter) -> None:
 
 
 def _register_controls(router: APIRouter) -> None:
+    _register_repair_controls(router)
     _register_request_controls(router)
     _register_outcome_controls(router)
     _register_publication_controls(router)
     _register_target_controls(router)
     _register_worktree_controls(router)
+
+
+def _register_repair_controls(router: APIRouter) -> None:
+    @router.post(
+        "/changes/{change_id}/state/repair",
+        response_model=DeliveryStateRepairResponse,
+    )
+    def repair_delivery_state(
+        change_id: str,
+        body: RepairDeliveryStateBody,
+        service: _TargetService,
+    ) -> DeliveryStateRepairResponse:
+        return service.repair_delivery_state(change_id, body)
 
 
 def _register_request_controls(router: APIRouter) -> None:

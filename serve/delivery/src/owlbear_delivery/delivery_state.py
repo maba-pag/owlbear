@@ -29,8 +29,6 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
 _REMOTE_REF_MISSING = 2
-_SINGLE_COMMIT_FIELD_COUNT = 1
-_SINGLE_PARENT_COMMIT_FIELD_COUNT = 2
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -420,7 +418,7 @@ class DeliveryStatePublisher:
         normalized = _normalize_snapshot_for_repair(raw)
         if not _same_snapshot_authority(normalized, package_id, coordination, runtime, admission):
             _raise_state_conflict("remote Delivery snapshot does not match verified local authority")
-        sequence, previous_snapshot_id = self._verified_repair_lineage(remote_head, change_id)
+        sequence, previous_snapshot_id = self._verified_repair_lineage(remote_head, change_id, raw)
         snapshot = DeliveryStateSnapshot.create(
             operation_id=operation_id,
             change_id=change_id,
@@ -580,30 +578,29 @@ class DeliveryStatePublisher:
         self,
         remote_head: str,
         change_id: str,
+        current_raw: bytes,
     ) -> tuple[int, str | None]:
-        """Derive repair lineage from the state branch parent and its valid snapshot."""
-        parent_result = self._run_git(
-            "rev-list",
-            "--parents",
-            "-n",
-            "1",
+        """Derive repair lineage from the latest usable snapshot for this Change."""
+        history_result = self._run_git(
+            "log",
+            "--first-parent",
+            "--format=%H",
             remote_head,
+            "--",
+            _snapshot_path(change_id),
             check=False,
         )
-        if parent_result.returncode != 0:
+        if history_result.returncode != 0:
             _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
-        commits = parent_result.stdout.decode(errors="replace").strip().split()
-        if len(commits) == _SINGLE_COMMIT_FIELD_COUNT:
-            return 1, None
-        if len(commits) != _SINGLE_PARENT_COMMIT_FIELD_COUNT:
-            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
-        previous_raw = self._read_snapshot_bytes(commits[1], change_id)
-        if previous_raw is None:
-            return 1, None
-        previous = _validated_snapshot(previous_raw)
-        if previous is None:
-            _raise_state_error("remote Delivery snapshot lineage cannot be verified", retry_safe=False)
-        return previous.sequence + 1, previous.snapshot_id
+        commits = tuple(line for line in history_result.stdout.decode(errors="replace").splitlines() if line)
+        for commit in commits:
+            previous_raw = self._read_snapshot_bytes(commit, change_id)
+            if previous_raw is None or previous_raw == current_raw:
+                continue
+            previous = _validated_snapshot(previous_raw)
+            if previous is not None:
+                return previous.sequence + 1, previous.snapshot_id
+        return max(len(commits), 1), None
 
     def _commit_snapshot(self, base: str | None, snapshot: DeliveryStateSnapshot) -> str:
         index_fd, index_path = tempfile.mkstemp(prefix="owlbear-delivery-state-index-")

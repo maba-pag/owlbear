@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import logging
 import subprocess
 import time
 import uuid
@@ -273,6 +274,7 @@ _MAX_CHECKPOINT_ERROR_DETAIL_LENGTH = 240
 _MAX_HEALTH_DETAIL_LENGTH = 240
 _MAX_HEALTH_DIAGNOSTICS = 64
 _INTENT_SUMMARY_HEADING = "Problem And Product Promise"
+_logger = logging.getLogger(__name__)
 
 
 def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
@@ -2788,7 +2790,13 @@ class PortfolioApplication:
     ) -> None:
         try:
             self._publish_delivery_state(change_id, runtime, operation_id)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            _logger.warning(
+                "Acceptance attention publication failed for Change %s (%s): %s",
+                change_id,
+                operation_id,
+                exc,
+            )
             return
 
     def _reconcile_finalization_head_locked(
@@ -3666,12 +3674,10 @@ class PortfolioApplication:
             self._fail("active package sources do not match admitted Delivery bindings")
 
     def _validate_repair_workspace(self, change_id: str, coordination: ChangeCoordination) -> None:
-        retained = next(
-            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
-            None,
-        )
-        if retained is None:
-            self._fail("Delivery state repair requires retained Change workspace authority")
+        try:
+            retained = self._workspace_manager.inspect_retained(change_id, coordination)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("Delivery state repair requires retained Change workspace authority", exc)
         if retained.writer is not None or retained.publication_expiry is not None or retained.attention:
             self._fail("Delivery state repair requires reconciled Change workspace custody")
         if retained.branch != coordination.branch or retained.branch_head != coordination.last_reviewed_commit:

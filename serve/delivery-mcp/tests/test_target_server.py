@@ -61,6 +61,7 @@ DELIVERY_TOOLS = {
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_delivery_state",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_operator_context",

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         ChangeTargetSyncAbortReceipt,
         ChangeTargetSyncReceipt,
     )
+    from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
     from owlbear_delivery.portfolio_application import (
         DeliveryAcceptanceReconciliationOutcome,
@@ -154,6 +155,25 @@ class DeliveryHealthResponse(_TargetHTTPModel):
                 DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
             ),
         )
+
+
+class DeliveryStateRepairResponse(_TargetHTTPModel):
+    """Receipt returned after one explicit current-schema state repair."""
+
+    schema_version: Literal[1] = 1
+    repair_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    state_branch: str = Field(min_length=1)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    previous_snapshot_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    repaired_snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryStateRepairReceipt) -> DeliveryStateRepairResponse:
+        """Project one Delivery repair receipt into the HTTP contract."""
+        return cls(**receipt.model_dump(mode="json"))
 
 
 class WorkItemPortfolioResponse(_TargetHTTPModel):
@@ -335,6 +355,15 @@ class ConfirmLostClaimBody(_TargetHTTPModel):
     confirmed_lost: Literal[True]
     attempt_id: str = Field(min_length=1)
     claim_id: str = Field(min_length=1)
+
+
+class RepairDeliveryStateBody(_TargetHTTPModel):
+    """Explicit confirmation bound to one exact repairable Delivery diagnostic."""
+
+    confirmed_repair: Literal[True]
+    expected_diagnostic_code: str = Field(min_length=1)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class ResolveChangeAttentionBody(_TargetHTTPModel):
@@ -577,6 +606,7 @@ __all__ = [
     "CleanupCompletedChangeBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
+    "DeliveryStateRepairResponse",
     "DesignWorkDetailResponse",
     "ExternalHeadAdoptionResponse",
     "NeedsCounts",
@@ -585,6 +615,7 @@ __all__ = [
     "PublicationCheckView",
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
+    "RepairDeliveryStateBody",
     "ResolveChangeAttentionBody",
     "TargetSyncAbortResponse",
     "TargetSyncConflictBody",

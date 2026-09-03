@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import partial
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
@@ -57,6 +57,9 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 
+if TYPE_CHECKING:
+    from owlbear_delivery.delivery_state import DeliveryStateRepairReceipt
+
 
 class _TargetProtocolModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
@@ -102,6 +105,8 @@ class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
+    remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    repairable: bool = False
 
 
 class DeliveryHealthResponse(_TargetProtocolModel):
@@ -121,6 +126,25 @@ class DeliveryHealthResponse(_TargetProtocolModel):
         )
 
 
+class DeliveryStateRepairResponse(_TargetProtocolModel):
+    """Receipt returned after one explicit current-schema state repair."""
+
+    schema_version: Literal[1] = 1
+    repair_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    state_branch: str = Field(min_length=1)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    previous_snapshot_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    repaired_snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryStateRepairReceipt) -> DeliveryStateRepairResponse:
+        """Project one core repair receipt into the MCP contract."""
+        return cls(**receipt.model_dump(mode="json"))
+
+
 class EmptyParams(_TargetProtocolModel):
     """Validate an operation that accepts no parameters."""
 
@@ -129,6 +153,15 @@ class ChangeParams(_TargetProtocolModel):
     """Validate one exact Delivery change identity."""
 
     change_id: ChangeId
+
+
+class RepairDeliveryStateParams(ChangeParams):
+    """Validate one explicit repair of an exact Delivery health diagnostic."""
+
+    confirmed_repair: Literal[True]
+    expected_diagnostic_code: str = Field(min_length=1)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class ResolveChangeDispositionParams(ChangeParams):
@@ -803,6 +836,10 @@ type CreateDesignSessionRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
 ]
 type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
+type RepairDeliveryStateRequest = Annotated[
+    RepairDeliveryStateParams,
+    BeforeValidator(partial(_parse_json_model, RepairDeliveryStateParams)),
+]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -909,6 +946,7 @@ __all__ = [
     "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
+    "DeliveryStateRepairResponse",
     "EmptyParams",
     "EmptyRequest",
     "ExternalHeadAdoptionParams",
@@ -931,8 +969,12 @@ __all__ = [
     "RecoverBlockedImplementationRequest",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
+    "RecoverPublicationBaselineParams",
+    "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "RepairDeliveryStateParams",
+    "RepairDeliveryStateRequest",
     "ResolveChangeDispositionParams",
     "ResolveChangeDispositionRequest",
     "ResolveRequestParams",
