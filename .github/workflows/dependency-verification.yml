@@ -19,8 +19,6 @@ name: Dependency verification
       - .mega-linter.yml
       - .pre-commit-config.yaml
       - .python-version
-      - .owlbear/scripts/export-diagrams/package.json
-      - .owlbear/scripts/export-diagrams/package-lock.json
       - package.json
       - package-lock.json
       - pyproject.toml
@@ -223,7 +221,6 @@ jobs:
       needs.classify.result == 'success' &&
       (needs.classify.outputs.pds == 'true' ||
       needs.classify.outputs.root_node == 'true' ||
-      needs.classify.outputs.diagrams == 'true' ||
       needs.classify.outputs.shared_node_runtime == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -242,27 +239,10 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             serve/cockpit/web/package-lock.json
-            .owlbear/scripts/export-diagrams/package-lock.json
 
       - name: Install locked root dependencies
         if: needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         run: npm ci
-
-      - name: Install locked diagram exporter dependencies
-        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
-        working-directory: .owlbear/scripts/export-diagrams
-        run: npm ci
-
-      - name: Render one maintained diagram
-        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
-        working-directory: .owlbear/scripts/export-diagrams
-        timeout-minutes: 10
-        run: |
-          npx playwright install chromium
-          npm run export:file -- \
-            ../../../share/diagrams/mcp-topology.excalidraw \
-            "$RUNNER_TEMP/mcp-topology.png"
-          test -s "$RUNNER_TEMP/mcp-topology.png"
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'
@@ -363,7 +343,6 @@ jobs:
           NODE_EXPECTED: >-
             ${{ needs.classify.outputs.pds == 'true' ||
             needs.classify.outputs.root_node == 'true' ||
-            needs.classify.outputs.diagrams == 'true' ||
             needs.classify.outputs.shared_node_runtime == 'true' }}
           PYTHON: ${{ needs.proof-python.result }}
           PYTHON_EXPECTED: ${{ needs.classify.outputs.python }}

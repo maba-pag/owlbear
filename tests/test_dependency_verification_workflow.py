@@ -101,8 +101,6 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".github/scripts/check_uv_workspace_lock.py",
         ".github/workflows/**",
         ".mega-linter.yml",
-        ".owlbear/scripts/export-diagrams/package.json",
-        ".owlbear/scripts/export-diagrams/package-lock.json",
         ".pre-commit-config.yaml",
         ".python-version",
         "package.json",
@@ -175,7 +173,6 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "Check Node runtime declaration" in text
     assert "needs.classify.outputs.pds == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
-    assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
 
 
@@ -328,13 +325,11 @@ def test_shared_node_runtime_uses_one_node_proof() -> None:
     condition = _job(workflow, "proof-node")["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
     assert "needs.classify.outputs.root_node == 'true'" in condition
-    assert "needs.classify.outputs.diagrams == 'true'" in condition
 
     gate_env = _job(workflow, "gate")["steps"][0]["env"]
     assert gate_env["NODE_EXPECTED"] == (
         "${{ needs.classify.outputs.pds == 'true' || "
         "needs.classify.outputs.root_node == 'true' || "
-        "needs.classify.outputs.diagrams == 'true' || "
         "needs.classify.outputs.shared_node_runtime == 'true' }}"
     )
 
