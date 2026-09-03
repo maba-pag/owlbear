@@ -4,6 +4,7 @@
 scratch/*
 !scratch/.gitkeep
 !scratch/.instructions.md
+skills/pds-knowledge-*
 
 # Knowledge and memory databases
 knowledge/*.db

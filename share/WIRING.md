@@ -93,6 +93,7 @@ The named caller owns each on-demand condition and timing.
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
+| frontend conventions | package-provided `pds-knowledge-{framework}` | The project declares a PDS wrapper and its generated companion link resolves |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
 | `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Delivery attention or blocked outcome needs interactive diagnosis or a user-selected remedy |
