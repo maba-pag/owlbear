@@ -87,7 +87,7 @@ _FORBIDDEN_PROVIDER_TERMS = re.compile(
 )
 _FORBIDDEN_FIELD_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:merge_method|mergeMethod)(?![A-Za-z0-9])")
 _FORBIDDEN_CAPABILITY_PATTERNS = (
-    re.compile(r"/merge(?:\b|/)", re.IGNORECASE),
+    re.compile(r"(?:['\"`]|/api/)[^\s'\"`]*?/merge(?:\b|/)", re.IGNORECASE),
     re.compile(r"(?:auto.?merge|enablePullRequestAutoMerge)", re.IGNORECASE),
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
 )

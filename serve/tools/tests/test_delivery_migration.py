@@ -273,7 +273,12 @@ def test_migration_moves_owned_worktree_and_preserves_runtime_and_archive(tmp_pa
         ),
         workspace_root=repository,
     )
-    assert tuple(item.change_id for item in application.list_work_items()) == ("change-a",)
+    health = application.delivery_health()
+    assert health.status.value == "attention"
+    assert [(diagnostic.change_id, diagnostic.code) for diagnostic in health.diagnostics] == [
+        ("change-a", "admission-invalid")
+    ]
+    assert application.list_work_items() == ()
     assert plan_delivery_state_migration(repository).already_migrated
 
 
