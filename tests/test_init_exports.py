@@ -15,7 +15,6 @@ def test_target_exports_exclude_retired_cutover_api() -> None:
 
     assert required <= set(owlbear_delivery.__all__)
     assert all(callable(getattr(owlbear_delivery, name)) for name in required)
-    assert not hasattr(owlbear_delivery, "create_legacy_snapshot")
     assert retired.isdisjoint(owlbear_delivery.__all__)
     assert all(not hasattr(owlbear_delivery, name) for name in retired)
 
