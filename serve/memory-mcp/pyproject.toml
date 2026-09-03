@@ -3,7 +3,7 @@ name = "owlbear-memory-mcp"
 version = "0.1.0"
 requires-python = ">=3.12.14"
 description = "OwlBear MCP server — memory operations"
-dependencies = ["mcp>=2,<2.1", "owlbear-memory", "pydantic>=2.13.4"]
+dependencies = ["mcp>=2,<2.2", "owlbear-memory", "pydantic>=2.13.4"]
 
 [tool.uv.sources]
 owlbear-memory = { workspace = true }
