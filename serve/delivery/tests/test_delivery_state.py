@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery import (
     ChangeExternalHeadAdoptionReceipt,
+    ChangeTargetSyncReceipt,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
@@ -62,6 +63,7 @@ from owlbear_delivery.delivery_application_loader import (
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
     _is_unpublished_acceptance_attention_successor,
+    _load_contracts,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -234,11 +236,411 @@ def _snapshot(
     )
 
 
+def _canonical_payload(payload: object) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _legacy_nested_receipt(receipt: object, removed_field: str) -> dict[str, object]:
+    payload = receipt.model_dump(mode="json")
+    payload["schema_version"] = 1
+    payload.pop(removed_field)
+    payload["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in payload.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return payload
+
+
+def _publish_raw_snapshot(
+    publisher: DeliveryStatePublisher,
+    base: str,
+    payload: dict[str, object],
+) -> str:
+    candidate = DeliveryStateSnapshot.model_construct(**payload)
+    commit = publisher._commit_snapshot(base, candidate)  # noqa: SLF001
+    publisher._push_snapshot(commit, base)  # noqa: SLF001
+    return commit
+
+
+def _legacy_target_sync_receipt(coordination: object) -> ChangeTargetSyncReceipt:
+    return ChangeTargetSyncReceipt.create(
+        operation_id="legacy-target-sync",
+        change_id=coordination.change_id,
+        integration_target=coordination.integration_target,
+        expected_target="a" * 40,
+        target_head="a" * 40,
+        change_head_before=coordination.last_reviewed_commit,
+        merged_head="b" * 40,
+        merge_commit=True,
+    )
+
+
 def _commit_descendant(worktree: Path, filename: str, message: str) -> str:
     (worktree / filename).write_text(f"{message}\n", encoding="utf-8")
     _git(worktree, "add", filename)
     _git(worktree, "commit", "-m", message)
     return _git(worktree, "rev-parse", "HEAD")
+
+
+def test_loader_quarantines_repairable_frontier_without_remote_diagnostic(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    state_root = tmp_path / "state"
+
+    healthy_contract, _healthy_intent, _healthy_design = _contract("healthy-sibling")
+    healthy_runtime, healthy_manager, _healthy_worktree = _runtime(
+        tmp_path,
+        repository,
+        "healthy-sibling",
+        healthy_contract,
+    )
+    healthy_root = state_root / "changes/healthy-sibling"
+    healthy_root.joinpath("contract.json").write_bytes(_canonical_payload(healthy_contract.model_dump(mode="json")))
+    healthy_root.joinpath("admission.json").write_bytes(
+        _canonical_payload(_admission(healthy_runtime, healthy_manager, "healthy-sibling").model_dump(mode="json"))
+    )
+
+    repair_contract, _repair_intent, _repair_design = _contract("offline-repair")
+    repair_runtime, repair_manager, _repair_worktree = _runtime(
+        tmp_path,
+        repository,
+        "offline-repair",
+        repair_contract,
+    )
+    repair_coordination = repair_manager.show("offline-repair")
+    current_frontier = DeliveryFrontier.model_validate_json(repair_runtime.frontier_bytes()).model_copy(
+        update={"target_sync_receipt": _legacy_target_sync_receipt(repair_coordination)}
+    )
+    frontier_path = state_root / "changes/offline-repair/frontier.json"
+    frontier_path.write_bytes(_canonical_payload(current_frontier.model_dump(mode="json")))
+    repair_runtime = DeliveryRuntime(state_root, repair_contract, workspace_manager=repair_manager)
+    repair_root = state_root / "changes/offline-repair"
+    repair_root.joinpath("contract.json").write_bytes(_canonical_payload(repair_contract.model_dump(mode="json")))
+    repair_root.joinpath("admission.json").write_bytes(
+        _canonical_payload(_admission(repair_runtime, repair_manager, "offline-repair").model_dump(mode="json"))
+    )
+    legacy_frontier = current_frontier.model_dump(mode="json")
+    legacy_frontier["target_sync_receipt"] = _legacy_nested_receipt(
+        current_frontier.target_sync_receipt,
+        "review_required",
+    )
+    frontier_path.write_bytes(_canonical_payload(legacy_frontier))
+
+    contracts, diagnostics = _load_contracts(state_root)
+
+    assert "healthy-sibling" in contracts
+    assert "offline-repair" not in contracts
+    diagnostic = next(item for item in diagnostics if item.change_id == "offline-repair")
+    assert diagnostic.repairable is False
+    assert diagnostic.remote_head is None
+    assert "remote state must be reachable" in diagnostic.detail
+
+    remote_diagnostic = DeliveryHealthDiagnostic(
+        source="remote-state",
+        code="snapshot-identity-invalid",
+        detail="Remote Delivery snapshot identity is invalid.",
+        change_id="offline-repair",
+        path=".owlbear/delivery/state/offline-repair/snapshot.json",
+        remote_head="a" * 40,
+        repairable=True,
+    )
+    repaired_contracts, repaired_diagnostics = _load_contracts(state_root, (remote_diagnostic,))
+
+    assert "offline-repair" in repaired_contracts
+    local_diagnostic = next(item for item in repaired_diagnostics if item.change_id == "offline-repair")
+    assert local_diagnostic.repairable is True
+    assert local_diagnostic.remote_head == "a" * 40
+
+
+@pytest.mark.parametrize("receipt_kind", ["target-sync", "external-head-adoption"])
+def test_state_publisher_repairs_legacy_nested_receipt_snapshot(
+    tmp_path: Path,
+    receipt_kind: str,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = f"state-repair-{receipt_kind}"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    coordination = manager.show(change_id)
+    if receipt_kind == "target-sync":
+        field_name = "target_sync_receipt"
+        removed_field = "review_required"
+        receipt = _legacy_target_sync_receipt(coordination)
+    else:
+        field_name = "external_head_adoption_receipt"
+        removed_field = "provenance"
+        receipt = ChangeExternalHeadAdoptionReceipt.create(
+            operation_id="legacy-adoption",
+            change_id=change_id,
+            branch=coordination.branch,
+            expected_head="a" * 40,
+            adopted_head="b" * 40,
+        )
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).model_copy(update={field_name: receipt})
+    frontier_path = tmp_path / "state" / "changes" / change_id / "frontier.json"
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(tmp_path / "state", contract, workspace_manager=manager)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    initial = _publish(publisher, runtime, manager, change_id, "e" * 64, f"{change_id}-initial")
+    valid = publisher.read_snapshot(change_id)
+    assert valid is not None
+    payload = valid.model_dump(mode="json")
+    payload["frontier"][field_name] = _legacy_nested_receipt(receipt, removed_field)
+    payload["snapshot_id"] = ""
+    payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
+    invalid_snapshot_id = payload["snapshot_id"]
+    invalid_commit = _publish_raw_snapshot(publisher, initial.published_head, payload)
+
+    inventory = publisher.read_snapshot_inventory()
+    diagnostic = next(item for item in inventory.diagnostics if item.change_id == change_id)
+    assert diagnostic.repairable is True
+
+    repaired = publisher.repair_snapshot(
+        change_id=change_id,
+        package_id="e" * 64,
+        coordination=coordination,
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id=f"{change_id}-repair",
+        captured_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+        expected_remote_head=invalid_commit,
+    )
+
+    restored = publisher.read_snapshot(change_id)
+    assert restored is not None
+    assert repaired.previous_snapshot_id == invalid_snapshot_id
+    assert repaired.repaired_snapshot_id == restored.snapshot_id
+    assert restored.sequence == valid.sequence + 1
+    assert restored.parent_snapshot_id == invalid_snapshot_id
+    assert getattr(restored.frontier, field_name).schema_version == 2
+    assert publisher.read_snapshot_inventory().diagnostics == ()
+
+
+def _seed_loader_change(
+    state_root: Path,
+    manager: ChangeWorkspaceManager,
+    store: DesignPackageStore,
+    change_id: str,
+    *,
+    target_sync: bool,
+) -> tuple[DeliveryRuntime, str]:
+    contract, intent, design = _contract(change_id)
+    package = store.create(change_id, intent, design)
+    published_package = store.publish_contract(
+        change_id,
+        package.package_id,
+        _canonical_payload(contract.model_dump(mode="json")),
+        lambda *_content: None,
+    )
+    coordination = manager.ensure(change_id)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    if target_sync:
+        frontier = frontier.model_copy(update={"target_sync_receipt": _legacy_target_sync_receipt(coordination)})
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    change_root = state_root / "changes" / change_id
+    change_root.joinpath("contract.json").write_bytes(_canonical_payload(contract.model_dump(mode="json")))
+    change_root.joinpath("admission.json").write_bytes(
+        _canonical_payload(_admission(runtime, manager, change_id).model_dump(mode="json"))
+    )
+    return runtime, published_package.package_id
+
+
+def test_loader_starts_with_local_repair_attention_when_remote_state_is_unavailable(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_root = repository / ".owlbear/delivery/packages"
+    worktree_root = repository / ".owlbear/delivery/worktrees"
+    runtime_root.mkdir(parents=True)
+    coordinator = PortfolioCoordinator(runtime_root)
+    manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
+    store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
+    _offline_runtime, _offline_package_id = _seed_loader_change(
+        runtime_root,
+        manager,
+        store,
+        "offline-repair",
+        target_sync=True,
+    )
+    offline_frontier_path = runtime_root / "changes/offline-repair/frontier.json"
+    offline_frontier = json.loads(offline_frontier_path.read_bytes())
+    offline_current_frontier = DeliveryFrontier.model_validate_json(_offline_runtime.frontier_bytes())
+    offline_frontier["target_sync_receipt"] = _legacy_nested_receipt(
+        offline_current_frontier.target_sync_receipt,
+        "review_required",
+    )
+    offline_frontier_path.write_bytes(_canonical_payload(offline_frontier))
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+
+    with patch.object(
+        DeliveryStatePublisher,
+        "read_snapshot_inventory",
+        side_effect=DeliveryStatePublicationError("remote state is unavailable", retry_safe=True),
+    ):
+        application = load_delivery_application(config, workspace_root=repository)
+
+    health = application.delivery_health()
+    assert any(item.source == "remote-state" and item.code == "remote-state-unavailable" for item in health.diagnostics)
+    local_diagnostic = next(item for item in health.diagnostics if item.change_id == "offline-repair")
+    assert local_diagnostic.code == "frontier-migration-required"
+    assert local_diagnostic.repairable is False
+    assert "remote state must be reachable" in local_diagnostic.detail
+    assert application.list_work_items() == ()
+
+
+def test_loader_health_evidence_repairs_invalid_remote_snapshot_with_sibling_preserved(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_root = repository / ".owlbear/delivery/packages"
+    worktree_root = repository / ".owlbear/delivery/worktrees"
+    runtime_root.mkdir(parents=True)
+    coordinator = PortfolioCoordinator(runtime_root)
+    manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
+    store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    repair_runtime, repair_package_id = _seed_loader_change(
+        runtime_root,
+        manager,
+        store,
+        "repairable-change",
+        target_sync=True,
+    )
+    sibling_runtime, sibling_package_id = _seed_loader_change(
+        runtime_root,
+        manager,
+        store,
+        "healthy-sibling",
+        target_sync=False,
+    )
+
+    _publish(
+        publisher,
+        repair_runtime,
+        manager,
+        "repairable-change",
+        repair_package_id,
+        "repairable-change-initial",
+    )
+    sibling_initial = _publish(
+        publisher,
+        sibling_runtime,
+        manager,
+        "healthy-sibling",
+        sibling_package_id,
+        "healthy-sibling-initial",
+    )
+    valid = publisher.read_snapshot("repairable-change")
+    assert valid is not None
+    assert valid.frontier.target_sync_receipt is not None
+    payload = valid.model_dump(mode="json")
+    payload["frontier"]["target_sync_receipt"] = _legacy_nested_receipt(
+        valid.frontier.target_sync_receipt,
+        "review_required",
+    )
+    payload["snapshot_id"] = ""
+    payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
+    invalid_commit = _publish_raw_snapshot(publisher, sibling_initial.published_head, payload)
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    local_frontier_path = runtime_root / "changes/repairable-change/frontier.json"
+    local_frontier = json.loads(local_frontier_path.read_bytes())
+    local_frontier["target_sync_receipt"] = _legacy_nested_receipt(
+        valid.frontier.target_sync_receipt,
+        "review_required",
+    )
+    local_frontier_path.write_bytes(_canonical_payload(local_frontier))
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+
+    application = load_delivery_application(config, workspace_root=repository)
+    health = application.delivery_health()
+    diagnostic = next(
+        item for item in health.diagnostics if item.source == "remote-state" and item.change_id == "repairable-change"
+    )
+    assert diagnostic.repairable is True
+    assert diagnostic.remote_head == invalid_commit
+    assert {item.change_id for item in application.list_work_items()} == {"healthy-sibling"}
+
+    receipt = application.repair_delivery_state(
+        "repairable-change",
+        diagnostic.code,
+        diagnostic.remote_head,
+        "repairable-change-repair",
+        confirmed_repair=True,
+    )
+
+    assert receipt.expected_remote_head == invalid_commit
+    assert not any(item.change_id == "repairable-change" for item in application.delivery_health().diagnostics)
+    assert {item.change_id for item in application.list_work_items()} == {
+        "healthy-sibling",
+        "repairable-change",
+    }
+
+
+def test_state_publisher_rejects_tampered_retired_snapshot_identity(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "state-repair-tampered"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    coordination = manager.show(change_id)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).model_copy(
+        update={"target_sync_receipt": _legacy_target_sync_receipt(coordination)}
+    )
+    frontier_path = tmp_path / "state" / "changes" / change_id / "frontier.json"
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(tmp_path / "state", contract, workspace_manager=manager)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    initial = _publish(publisher, runtime, manager, change_id, "e" * 64, f"{change_id}-initial")
+    valid = publisher.read_snapshot(change_id)
+    assert valid is not None
+    payload = valid.model_dump(mode="json")
+    payload["frontier"]["target_sync_receipt"] = _legacy_nested_receipt(
+        coordination.target_sync_receipt or _legacy_target_sync_receipt(coordination),
+        "review_required",
+    )
+    payload["snapshot_id"] = ""
+    payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
+    payload["snapshot_id"] = "0" * 64
+    invalid_commit = _publish_raw_snapshot(publisher, initial.published_head, payload)
+
+    inventory = publisher.read_snapshot_inventory()
+    diagnostic = next(item for item in inventory.diagnostics if item.change_id == change_id)
+    assert diagnostic.repairable is False
+
+    with pytest.raises(DeliveryStatePublicationError, match="historical identity cannot be verified"):
+        publisher.repair_snapshot(
+            change_id=change_id,
+            package_id="e" * 64,
+            coordination=coordination,
+            runtime=runtime,
+            admission=_admission(runtime, manager, change_id),
+            operation_id=f"{change_id}-repair",
+            captured_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+            expected_remote_head=invalid_commit,
+        )
+
+    assert publisher._remote_head() == invalid_commit  # noqa: SLF001
+    assert publisher.read_snapshot_inventory().remote_head == invalid_commit
 
 
 def test_loader_defers_active_remote_descendant_drift(tmp_path: Path) -> None:

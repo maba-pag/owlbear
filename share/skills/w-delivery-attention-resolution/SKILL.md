@@ -46,14 +46,20 @@ Treat the returned code, heads, target, diagnostics, and retry condition as reta
 as permission to edit a worktree or target.
 
 When `delivery_health` reports a repairable remote-state diagnostic, present the exact Change ID,
-diagnostic code, and observed remote state-branch head. After explicit user confirmation, re-read
-`delivery_health` and require the same repairable diagnostic and head, then call
+diagnostic code, and observed remote state-branch head. The health result is startup-captured remote
+evidence plus current local reconciliation, not a live remote refresh. After explicit user
+confirmation, re-read `delivery_health` and require the same repairable diagnostic and head, then call
 `repair_delivery_state(change_id, expected_diagnostic_code, expected_remote_head, operation_id,
 confirmed_repair=true)`. This one-time route converts only the supported retired serialization,
 rebuilds a strict current-schema snapshot from verified local authority, and publishes it with
-compare-and-swap; it does not accept legacy schemas in normal readers. Re-read health and the Change
-projection after the receipt and report any remaining attention. Never hand-edit the frontier,
-coordination record, or remote state branch.
+an expected remote-head check and non-force Git push; it does not accept legacy schemas in normal readers. Re-read health and the Change
+projection after the receipt and report any remaining attention. If another process may have changed
+the remote state branch, restart or reload Delivery before relying on a newly observed remote health
+result. Never hand-edit the frontier, coordination record, or remote state branch.
+Select `operation_id` before the first call and reuse the exact same value for every retry-safe
+repair attempt, including a retry after the remote snapshot was published but local proof failed.
+Do not generate a new operation ID for that retry; the publisher uses the original operation ID and
+expected remote head to replay the already-published repair safely.
 
 For an `OUT-nnn` identity, call `show_operator_context(change_id, outcome_id)` and require the
 returned context to retain the supplied outcome identity and a current block. If the context

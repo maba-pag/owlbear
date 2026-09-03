@@ -91,7 +91,9 @@ from owlbear_delivery import (
     DeliveryStage,
     DeliveryStartupConfig,
     DeliveryStatePublicationError,
+    DeliveryStateRepairProofError,
     DeliveryStateRepairReceipt,
+    DeliveryStateResponseUnknownError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
@@ -783,7 +785,7 @@ def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(
             "_reconcile_runtimes",
             side_effect=(None, RuntimeError("recomposition failed")),
         ),
-        pytest.raises(RuntimeError, match="recomposition failed"),
+        pytest.raises(DeliveryStateRepairProofError, match="retry operation repair-retry"),
     ):
         application.repair_delivery_state(
             "change-a",
@@ -809,6 +811,29 @@ def test_delivery_state_repair_retries_after_post_publish_recomposition_failure(
     assert publisher.repair_snapshot.call_count == 2
     assert DeliveryFrontier.model_validate_json(frontier_path.read_bytes()).schema_version == 17
     assert application.delivery_health().diagnostics == ()
+
+
+def test_delivery_state_repair_preserves_typed_publication_error(tmp_path: Path) -> None:
+    application, _frontier_path, _coordination_path, _legacy_frontier = _prepare_repairable_application(tmp_path)
+    error = DeliveryStateResponseUnknownError(
+        "Delivery-state snapshot push outcome could not be verified",
+        retry_safe=False,
+    )
+    publisher = Mock()
+    publisher.repair_snapshot.side_effect = error
+    application._delivery_state_publisher = publisher
+
+    with pytest.raises(DeliveryStateResponseUnknownError, match="could not be verified") as exc_info:
+        application.repair_delivery_state(
+            "change-a",
+            "snapshot-identity-invalid",
+            "a" * 40,
+            "repair-response-unknown",
+            confirmed_repair=True,
+        )
+
+    assert exc_info.value is error
+    assert error.retry_safe is False
 
 
 def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:

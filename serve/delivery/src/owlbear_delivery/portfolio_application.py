@@ -115,6 +115,7 @@ from owlbear_delivery.delivery_runtime import (
     is_change_terminal,
     repair_delivery_frontier,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublicationHistory,
@@ -906,6 +907,19 @@ class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
     code = "ERR_DELIVERY_PORTFOLIO"
+
+
+class DeliveryStateRepairProofError(PortfolioApplicationError):
+    """A remote state repair succeeded but local proof remains retryable."""
+
+    code = "ERR_DELIVERY_STATE_REPAIR_PROOF"
+    retry_safe = True
+
+    def __init__(self, operation_id: str) -> None:
+        self.operation_id = operation_id
+        super().__init__(
+            f"Delivery state repair was published but local proof is incomplete; retry operation {operation_id}."
+        )
 
 
 class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError):
@@ -3483,6 +3497,7 @@ class PortfolioApplication:
             change_id,
             expected_diagnostic_code,
             expected_remote_head,
+            operation_id,
         )
         return receipt
 
@@ -3556,6 +3571,8 @@ class PortfolioApplication:
                 captured_at=_timestamp(self._clock()),
                 expected_remote_head=context.diagnostic.remote_head or context.expected_remote_head,
             )
+        except DeliveryStatePublicationError:
+            raise
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("remote Delivery state repair could not be published", exc)
 
@@ -3564,6 +3581,7 @@ class PortfolioApplication:
         change_id: str,
         expected_diagnostic_code: str,
         expected_remote_head: str,
+        operation_id: str,
     ) -> None:
         diagnostic_keys = {
             _health_diagnostic_key(item)
@@ -3584,11 +3602,11 @@ class PortfolioApplication:
             remaining = tuple(item for item in self._delivery_health_view().diagnostics if item.change_id == change_id)
             if remaining:
                 self._fail("Delivery state repair was published but Change health still requires attention")
-        except Exception:
+        except Exception as exc:
             self._cleared_startup_health_diagnostics = prior_cleared
             self._runtime_reconciliation_errors.pop(change_id, None)
             self._runtime_snapshots.pop(change_id, None)
-            raise
+            raise DeliveryStateRepairProofError(operation_id) from exc
         self._cleared_startup_health_diagnostics = prior_cleared
         self._clear_repair_diagnostics(change_id, expected_diagnostic_code, expected_remote_head)
         self._runtime_reconciliation_errors.pop(change_id, None)

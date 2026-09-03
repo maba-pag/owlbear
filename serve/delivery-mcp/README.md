@@ -46,17 +46,24 @@ Delivery startup isolates malformed or identity-mismatched per-Change state as b
 valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch
 but remain visible through the Cockpit health section and the read-only `delivery_health` tool. The
 orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
-`health_hint`; healthy acquisitions remain quiet. Global workspace, Git, configuration, and unfinished
-migration failures still fail closed at startup.
+health_hint`; healthy acquisitions remain quiet. Global workspace, Git, and configuration failures
+still fail closed at startup. The supported retired receipt shape is quarantined instead; only
+unsupported or unfinished migrations fail startup globally.
 
 When health returns a repairable remote-state diagnostic, an operator may explicitly confirm
 `repair_delivery_state` with the exact `change_id`, diagnostic `code`, and observed remote state
 branch head. The operation converts only the supported retired serialization, normalizes the local
 frontier and coordination records transactionally, rebuilds a strict current-schema snapshot from
-verified local authority, and publishes an append-only child commit under compare-and-swap. The old
-remote commit remains in history. Normal readers remain strict current-schema; `list_work_items`
+verified local authority, and publishes an append-only child commit after an expected remote-head
+check with a non-force Git push. The old remote commit remains in history. Normal readers remain
+strict current-schema; `list_work_items`
 continues to return only work-item projections, and `show_work_item` uses the MCP Work Item ID (the
 Change ID for a publication projection), not Cockpit's `publication` item key.
+Choose one `operation_id` before the first repair attempt and reuse that exact value after any
+retry-safe proof or publication response; changing it can turn an already-published repair into a
+false conflict. `delivery_health` is a startup-captured remote projection plus local
+reconciliation, not a live remote refresh; restart or reload the Delivery process when a fresh
+remote observation is required.
 
 ## Configuration
 

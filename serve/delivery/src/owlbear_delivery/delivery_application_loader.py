@@ -277,20 +277,29 @@ def _load_contracts(
                 local_frontier_repairable = is_repairable_delivery_frontier(frontier_path.read_bytes())
             except OSError:
                 local_frontier_repairable = False
-            repairable = (
+            locally_repairable = (
                 observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED
                 and local_frontier_repairable
-                and remote_diagnostic is not None
             )
-            if observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED and not repairable:
+            if (
+                observation.error.code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED
+                and not locally_repairable
+            ):
                 detail = observation.error.detail
                 error = _load_error("runtime_root", detail)
                 raise error from DeliveryRuntimeMigrationError(detail)
+            repairable = locally_repairable and remote_diagnostic is not None
+            detail = observation.diagnostic_detail or "Persisted Delivery state is unavailable."
+            if locally_repairable and remote_diagnostic is None:
+                detail = (
+                    "Persisted Delivery frontier contains a retired receipt schema; "
+                    "remote state must be reachable before explicit repair is available"
+                )
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="local-runtime",
                     code=observation.error.code.value,
-                    detail=observation.diagnostic_detail or "Persisted Delivery state is unavailable.",
+                    detail=detail,
                     change_id=observation.change_id,
                     path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
                     remote_head=remote_diagnostic.remote_head if repairable else None,

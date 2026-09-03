@@ -54,7 +54,9 @@ as bounded health attention; valid sibling Changes remain available. Quarantined
 in status and health projections when a last-known view exists, but they are excluded from work-item
 queues, claims, acquisition, and dispatch. Use the read-only `delivery_health()` operation through
 the MCP adapter, or the Cockpit Delivery health section, to inspect the source, code, Change ID, and
-bounded detail. Workspace, Git, configuration, and unfinished migration failures remain startup-fatal.
+bounded detail. Workspace, Git, and configuration failures remain startup-fatal. Supported retired
+receipt shapes are quarantined until explicit repair; unsupported or unfinished migrations remain
+startup-fatal.
 
 The operating projection exposes explicit status axes instead of inferring lifecycle from runtime
 map membership: `admission`, `stage`, `actionable_runtime`, `diagnostic_code`, and
@@ -73,10 +75,15 @@ The Delivery MCP operation inventory includes the read-only `delivery_health` pr
 explicit `repair_delivery_state` operation. A repairable diagnostic includes the exact observed
 state-branch head; after user confirmation, the operation converts only the supported retired
 serialization, commits the local frontier and coordination conversion transactionally, rebuilds a
-strict current-schema snapshot from verified local authority, and publishes it with compare-and-swap.
+strict current-schema snapshot from verified local authority, and publishes it after an expected
+remote-head check with a non-force Git push.
 The old remote commit remains in Git history. Normal runtime readers stay strict current-schema and
-never accept the retired shape. `list_work_items` remains a pure list and does not become a health
-or repair response.
+never accept the retired shape. Choose one `operation_id` before the first repair attempt and reuse
+that exact value for any retry-safe retry, including a retry after remote publication when local
+proof fails. `delivery_health` reports startup-captured remote evidence plus local reconciliation;
+it does not refresh the remote state branch during the running process. Restart or reload Delivery
+when a fresh remote observation is required. `list_work_items` remains a pure list and does not
+become a health or repair response.
 
 Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
 The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,
