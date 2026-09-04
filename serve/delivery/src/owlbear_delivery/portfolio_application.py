@@ -872,6 +872,58 @@ class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
+class DeliveryTargetSyncRepairReceipt(_ApplicationModel):
+    """Evidence that one target-sync head and its portable state were reconciled."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    target_branch: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    repaired_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    review_required: Literal[True] = True
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        target_sync_operation_id: str,
+        target_branch: str,
+        target_head: str,
+        expected_remote_head: str,
+        repaired_head: str,
+    ) -> DeliveryTargetSyncRepairReceipt:
+        """Create deterministic evidence for one target-sync publication repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "target_sync_operation_id": target_sync_operation_id,
+            "target_branch": target_branch,
+            "target_head": target_head,
+            "expected_remote_head": expected_remote_head,
+            "repaired_head": repaired_head,
+            "review_required": True,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryTargetSyncRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "target-sync publication repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
@@ -3111,13 +3163,14 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         merged_head: str,
-    ) -> None:
+    ) -> ChangeBranchPublicationReceipt | None:
         """Publish a target-sync head before its portable Delivery snapshot."""
         if self._change_branch_publisher is None:
-            return
+            return None
         checkpoint = runtime.checkpoint_publication_state()
         branch_receipt = self._publish_checkpoint_branch(change_id, checkpoint, merged_head)
         runtime.record_checkpoint_branch_publication(checkpoint, branch_receipt.published_head)
+        return branch_receipt
 
     def _prepare_checkpoint_head(
         self,
@@ -3387,6 +3440,119 @@ class PortfolioApplication:
         """Return bounded diagnostics for state excluded from Delivery authority."""
         self._reconcile_runtimes()
         return self._delivery_health_view()
+
+    def repair_target_sync_publication(  # noqa: PLR0913 - repair binds each exact remote and target identity.
+        self,
+        change_id: str,
+        expected_remote_head: str,
+        expected_merged_head: str,
+        target_sync_operation_id: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryTargetSyncRepairReceipt:
+        """Reconcile one quarantined target-sync head through Delivery-owned publication."""
+        if confirmed_repair is not True:
+            self._fail("target-sync publication repair requires explicit confirmation")
+        if self._change_branch_publisher is None or self._delivery_state_publisher is None:
+            self._fail("target-sync publication repair requires configured publishers")
+        self._reconcile_runtimes()
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime = self._target_sync_repair_runtime(
+                change_id,
+                expected_remote_head,
+                expected_merged_head,
+                target_sync_operation_id,
+            )
+            branch_receipt = self._publish_target_sync_branch(change_id, runtime, expected_merged_head)
+            if branch_receipt is None:
+                self._fail("target-sync publication repair could not publish the Change branch")
+            self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
+            self._clear_target_sync_reconciliation(change_id)
+            target_sync = runtime.target_sync_receipt()
+            if target_sync is None:
+                self._fail("target-sync publication repair lost target-sync authority")
+            return DeliveryTargetSyncRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                target_sync_operation_id=target_sync_operation_id,
+                target_branch=target_sync.integration_target,
+                target_head=target_sync.target_head,
+                expected_remote_head=expected_remote_head,
+                repaired_head=branch_receipt.published_head,
+            )
+
+    def _target_sync_repair_runtime(
+        self,
+        change_id: str,
+        expected_remote_head: str,
+        expected_merged_head: str,
+        target_sync_operation_id: str,
+    ) -> DeliveryRuntime:
+        runtime = self._runtimes.get(change_id)
+        if runtime is None:
+            self._fail("target-sync publication repair requires an available Change runtime")
+        reconciliation_error = self._runtime_reconciliation_errors.get(change_id)
+        matching_diagnostics = tuple(
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if (
+                diagnostic.source == "remote-state"
+                and diagnostic.code == "remote-state-reconciliation-required"
+                and diagnostic.change_id == change_id
+                and "remote Change branch differs from Delivery-state snapshot" in diagnostic.detail
+            )
+        )
+        if reconciliation_error is not None and not matching_diagnostics:
+            self._fail("target-sync publication repair diagnostic is absent or incompatible")
+        if any(
+            diagnostic.source == "remote-state"
+            and diagnostic.change_id == change_id
+            and diagnostic.code == "remote-state-reconciliation-required"
+            and diagnostic not in matching_diagnostics
+            for diagnostic in self._startup_health_diagnostics
+        ):
+            self._fail("target-sync publication repair diagnostic is absent or incompatible")
+        target_sync = runtime.target_sync_receipt()
+        if (
+            target_sync is None
+            or not target_sync.review_required
+            or target_sync.operation_id != target_sync_operation_id
+            or target_sync.merged_head != expected_merged_head
+        ):
+            self._fail("target-sync publication repair does not match current target-sync authority")
+        coordination = self._workspace_manager.show(change_id)
+        checkpoint = runtime.checkpoint_publication_state()
+        if (
+            coordination.last_reviewed_commit != expected_merged_head
+            or checkpoint.published_head not in {expected_remote_head, expected_merged_head}
+            or checkpoint.pending_checkpoint is None
+            or checkpoint.pending_checkpoint.head != expected_merged_head
+            or runtime.finalization() is not None
+            or runtime.change_disposition() is not None
+            or runtime.active_claims()
+            or runtime.integration_repair_claim() is not None
+        ):
+            self._fail("target-sync publication repair authority has changed")
+        if self._workspace_manager.source_head(change_id) != expected_merged_head:
+            self._fail("target-sync publication repair local head differs from the expected merge")
+        return runtime
+
+    def _clear_target_sync_reconciliation(self, change_id: str) -> None:
+        self._startup_health_diagnostics = tuple(
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if not (
+                diagnostic.source == "remote-state"
+                and diagnostic.code == "remote-state-reconciliation-required"
+                and diagnostic.change_id == change_id
+            )
+        )
+        self._runtime_reconciliation_errors.pop(change_id, None)
+        self._runtime_snapshots.pop(change_id, None)
+        self._reconcile_runtimes()
+        if change_id in self._runtime_reconciliation_errors:
+            self._fail("target-sync publication repair completed with remaining Change reconciliation errors")
 
     def _delivery_health_view(self) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [

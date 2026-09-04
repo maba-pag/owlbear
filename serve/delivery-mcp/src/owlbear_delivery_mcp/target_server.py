@@ -35,6 +35,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryOperatorContext,
+    DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
@@ -99,6 +100,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RepairTargetSyncPublicationParams,
+    RepairTargetSyncPublicationRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
     ResolvedDeliveryRequestResponse,
@@ -117,6 +120,7 @@ from owlbear_delivery_mcp.target_models import (
     TargetSyncConflictParams,
     TargetSyncConflictRequest,
     TargetSyncParams,
+    TargetSyncPublicationRepairResponse,
     TargetSyncRequest,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
@@ -142,6 +146,7 @@ DELIVERY_OPERATION_NAMES = (
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
@@ -323,6 +328,27 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
+
+    async def repair_target_sync_publication(
+        self,
+        request: RepairTargetSyncPublicationRequest,
+    ) -> TargetSyncPublicationRepairResponse:
+        """Repair one exact quarantined target-sync publication after confirmation."""
+        params = self._validate(RepairTargetSyncPublicationParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_target_sync_publication(
+                params.change_id,
+                params.expected_remote_head,
+                params.expected_merged_head,
+                params.target_sync_operation_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryTargetSyncRepairReceipt,
+        )
+        return TargetSyncPublicationRepairResponse.from_receipt(receipt)
 
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""

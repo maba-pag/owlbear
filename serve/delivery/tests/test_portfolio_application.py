@@ -67,6 +67,7 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHealthDiagnostic,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -2048,6 +2049,78 @@ def test_target_sync_resolution_replays_branch_after_state_publication_failure(t
     assert replayed == receipt
     assert branch_publisher.publish.call_count == 2
     assert state_publisher.publish.call_count == 2
+
+
+def test_target_sync_publication_repair_reconciles_quarantined_state_and_preserves_review_gate(
+    tmp_path: Path,
+) -> None:
+    application, runtime_map, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtime_map["change-a"]
+    initial_head = coordinator.show("change-a").last_reviewed_commit
+    merged_head = _commit_local_descendant(coordinator.show("change-a"), "target-sync-repair.txt")
+    application._workspace_manager.record_reviewed("change-a", merged_head)
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-repair",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=initial_head,
+        merged_head=merged_head,
+        merge_commit=True,
+        review_required=True,
+    )
+    runtime.record_target_sync(receipt, datetime.now(UTC))
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=merged_head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+        ),
+        published_head=initial_head,
+    )
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="remote-state-reconciliation-required",
+            detail="remote Change branch differs from Delivery-state snapshot: change-a",
+            change_id="change-a",
+        ),
+    )
+    application._reconcile_runtimes()
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+
+    def publish_state(**_kwargs: object) -> None:
+        assert branch_publisher.publish.call_count == 1
+        assert runtime.checkpoint_publication_state().published_head == merged_head
+
+    state_publisher.publish.side_effect = publish_state
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    repaired = application.repair_target_sync_publication(
+        "change-a",
+        initial_head,
+        merged_head,
+        "sync-repair",
+        "repair-sync-repair",
+        confirmed_repair=True,
+    )
+
+    assert repaired.repaired_head == merged_head
+    assert repaired.review_required is True
+    assert application.delivery_health().diagnostics == ()
+    assert runtime.finalization() is None
+    blocked = application.reconcile_change_checkpoint("change-a")
+    assert blocked.reconciled is False
+    assert blocked.error_code == "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
 
 
 def test_resolved_target_merge_requires_fresh_finalization_before_checkpoint_publication(tmp_path: Path) -> None:

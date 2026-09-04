@@ -50,6 +50,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryOperatorContext,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
+    DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthStatus,
@@ -313,6 +314,16 @@ class TargetSyncConflictParams(ChangeParams):
 
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairTargetSyncPublicationParams(ChangeParams):
+    """Validate explicit repair of one quarantined target-sync publication."""
+
+    confirmed_repair: Literal[True]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -618,6 +629,29 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
         )
 
 
+class TargetSyncPublicationRepairResponse(_TargetProtocolModel):
+    """MCP response for one exact target-sync publication repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    target_sync_operation_id: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    repaired_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    review_required: Literal[True]
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryTargetSyncRepairReceipt,
+    ) -> TargetSyncPublicationRepairResponse:
+        """Project one target-sync repair receipt into the MCP contract."""
+        return cls(**receipt.model_dump())
+
+
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
     """MCP response for one exact external Change-head adoption or observation receipt."""
 
@@ -800,6 +834,10 @@ type TargetSyncConflictRequest = Annotated[
     TargetSyncConflictParams,
     BeforeValidator(partial(_parse_json_model, TargetSyncConflictParams)),
 ]
+type RepairTargetSyncPublicationRequest = Annotated[
+    RepairTargetSyncPublicationParams,
+    BeforeValidator(partial(_parse_json_model, RepairTargetSyncPublicationParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -905,6 +943,8 @@ __all__ = [
     "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "RepairTargetSyncPublicationParams",
+    "RepairTargetSyncPublicationRequest",
     "ResolveChangeDispositionParams",
     "ResolveChangeDispositionRequest",
     "ResolveRequestParams",
@@ -923,6 +963,7 @@ __all__ = [
     "TargetSyncConflictParams",
     "TargetSyncConflictRequest",
     "TargetSyncParams",
+    "TargetSyncPublicationRepairResponse",
     "TargetSyncRequest",
     "TransitionDeliveryParams",
     "TransitionDeliveryRequest",

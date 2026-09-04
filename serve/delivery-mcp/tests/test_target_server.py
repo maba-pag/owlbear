@@ -61,6 +61,7 @@ DELIVERY_TOOLS = {
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
@@ -566,6 +567,26 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
         "merge_commit",
     } <= set(tools["resolve_target_sync_conflict"].output_schema["required"])
     assert "integration_target" not in tools["resolve_target_sync_conflict"].output_schema["properties"]
+    repair_request = tools["repair_target_sync_publication"].input_schema["$defs"]["RepairTargetSyncPublicationParams"]
+    assert set(repair_request["properties"]) == {
+        "change_id",
+        "confirmed_repair",
+        "expected_remote_head",
+        "expected_merged_head",
+        "target_sync_operation_id",
+        "operation_id",
+    }
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "target_sync_operation_id",
+        "target_branch",
+        "target_head",
+        "expected_remote_head",
+        "repaired_head",
+        "review_required",
+    } <= set(tools["repair_target_sync_publication"].output_schema["required"])
 
 
 @pytest.mark.asyncio
