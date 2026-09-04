@@ -210,13 +210,19 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert archify_step["timeout-minutes"] == 10
     assert archify_step["shell"] == "bash"
     archify_run = archify_step["run"]
+    assert "--check" not in archify_run
     assert '"$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
     assert 'test -s "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert 'manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}' in archify_run
+    assert 'Path("share/diagrams").rglob("*.architecture.json")' in archify_run
+    assert "Archify manifest source coverage mismatch" in archify_run
     assert "while IFS=$'\\t' read -r source artifact; do" in archify_run
     assert 'done < "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
     assert "python3 .owlbear/scripts/diagrams/render.py" in archify_run
     assert "--offline" in archify_run
-    assert 'cmp --silent "$output" "$artifact"' in archify_run
+    assert 'if cmp --silent "$output" "$artifact"; then' in archify_run
+    assert "Archify artifact is stale" in archify_run
+    assert "Regenerate with:" in archify_run
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:

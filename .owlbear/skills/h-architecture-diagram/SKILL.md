@@ -24,7 +24,7 @@ configuration, and server implementations remain authoritative over the picture.
 Resolve the pinned development renderer with:
 
 ```shell
-uv run python .owlbear/scripts/diagrams/sync.py --check --print-root
+uv run python .owlbear/scripts/diagrams/sync.py --print-root
 ```
 
 Validate and render a source with:

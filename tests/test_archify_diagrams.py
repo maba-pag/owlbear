@@ -67,6 +67,16 @@ def _lock(path: Path, digest: str) -> None:
     )
 
 
+def test_manifest_covers_architecture_sources() -> None:
+    manifest = json.loads((_ROOT / "share/diagrams/manifest.json").read_text(encoding="utf-8"))
+    manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}
+    architecture_sources = {
+        path.relative_to(_ROOT).as_posix() for path in (_ROOT / "share/diagrams").rglob("*.architecture.json")
+    }
+
+    assert manifest_sources == architecture_sources
+
+
 def test_ensure_archify_installs_verified_archive_and_reuses_offline_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

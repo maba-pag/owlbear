@@ -265,12 +265,22 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          python3 .owlbear/scripts/diagrams/sync.py --check
+          python3 .owlbear/scripts/diagrams/sync.py
           python3 -c '
           import json
           from pathlib import Path
 
           manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))
+          manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}
+          architecture_sources = {
+              path.as_posix() for path in Path("share/diagrams").rglob("*.architecture.json")
+          }
+          if manifest_sources != architecture_sources:
+              missing = sorted(architecture_sources - manifest_sources)
+              unlisted = sorted(manifest_sources - architecture_sources)
+              raise SystemExit(
+                  f"Archify manifest source coverage mismatch: missing={missing}; unlisted={unlisted}"
+              )
           for diagram in manifest["diagrams"]:
               print("\t".join((diagram["source"], diagram["artifact"])))
           ' > "$RUNNER_TEMP/archify-diagrams.tsv"
@@ -286,7 +296,15 @@ jobs:
               --input "$source" \
               --output "$output" \
               --offline
-            cmp --silent "$output" "$artifact"
+            if cmp --silent "$output" "$artifact"; then
+              :
+            else
+              echo "Archify artifact is stale: $artifact"
+              echo "Regenerate with:"
+              echo "  python3 .owlbear/scripts/diagrams/render.py"
+              echo "    --input \"$source\" --output \"$artifact\" --offline"
+              exit 1
+            fi
             diagram_index=$((diagram_index + 1))
           done < "$RUNNER_TEMP/archify-diagrams.tsv"
 

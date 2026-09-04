@@ -265,13 +265,10 @@ def update_pin(
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse the synchronizer command line."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="ensure the locked release is available")
     parser.add_argument("--offline", action="store_true", help="fail instead of downloading a missing cache")
     parser.add_argument("--print-root", action="store_true", help="print only the resolved Archify root")
     parser.add_argument("--update-pin", metavar="VERSION", help="download and record a new release version")
     arguments = parser.parse_args(argv)
-    if arguments.check and arguments.update_pin:
-        parser.error("--check and --update-pin cannot be combined")
     if arguments.offline and arguments.update_pin:
         parser.error("--offline and --update-pin cannot be combined")
     return arguments
