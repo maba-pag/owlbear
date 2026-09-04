@@ -89,6 +89,9 @@ jobs:
       - name: Run Cockpit behavior tests
         run: npm test
 
+      - name: Type-check Cockpit browser tests
+        run: npm run typecheck:e2e
+
       - name: Check Cockpit sources
         run: |
           npx eslint src e2e --max-warnings 0

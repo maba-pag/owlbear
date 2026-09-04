@@ -14,6 +14,7 @@
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=2048 vitest run --silent=true",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:e2e:compat": "node scripts/run-e2e-compat.mjs",
     "test:e2e:compat:all": "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs",

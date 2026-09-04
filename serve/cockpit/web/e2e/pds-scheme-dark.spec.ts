@@ -6,6 +6,8 @@
  * catch-all registered before specific handlers.
  */
 import { test, expect, type Page } from '@playwright/test'
+import { EMPTY_WORK_ITEM_PORTFOLIO } from './support/api-fixtures'
+import { trackPageErrors, waitForWorkspaceWithoutPageErrors } from './support/page-errors'
 
 // ─── Minimal API fixtures ─────────────────────────────────────────────────────
 
@@ -46,7 +48,9 @@ const TASKS = {
 // Routes registered first have LOWER priority (Playwright LIFO) — catch-all
 // registered first ensures specific handlers always win.
 
-async function stubApis(page: Page): Promise<void> {
+async function stubApis(page: Page) {
+  const pageErrors = trackPageErrors(page)
+
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
 
   await page.route('/api/events', (route) =>
@@ -63,17 +67,29 @@ async function stubApis(page: Page): Promise<void> {
 
   await page.route('/api/tasks', (route) => route.fulfill({ json: TASKS }))
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+  await page.route('/api/work-items', (route) => route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }))
+
+  return pageErrors
 }
 
 async function getRenderedPButtonTextColor(page: Page, mode: 'dark' | 'light'): Promise<string> {
+  await page.evaluate(() => {
+    if (document.querySelector('p-button[data-testid="pds-color-probe"]')) return
+
+    const probe = document.createElement('p-button')
+    probe.dataset.testid = 'pds-color-probe'
+    probe.textContent = 'Color probe'
+    document.body.append(probe)
+  })
+
   await page.waitForFunction(() => {
-    return Array.from(document.querySelectorAll('p-button')).some((host) =>
+    return Array.from(document.querySelectorAll('p-button[data-testid="pds-color-probe"]')).some((host) =>
       host.shadowRoot?.querySelector('button') !== null,
     )
   }, undefined, { timeout: 8_000 })
 
   const color = await page.evaluate(() => {
-    for (const host of Array.from(document.querySelectorAll('p-button'))) {
+    for (const host of Array.from(document.querySelectorAll('p-button[data-testid="pds-color-probe"]'))) {
       const button = host.shadowRoot?.querySelector('button')
       if (button) {
         return window.getComputedStyle(button).color
@@ -114,9 +130,9 @@ test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
       await page.addInitScript(() => {
         localStorage.setItem('owlbear-theme', 'dark')
       })
-      await stubApis(page)
+      const pageErrors = await stubApis(page)
       await page.goto('/')
-      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+      await waitForWorkspaceWithoutPageErrors(page, pageErrors)
 
       const result = await page.evaluate(() => ({
         hasSchemeDark: document.documentElement.classList.contains('scheme-dark'),
@@ -172,9 +188,9 @@ test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
       await page.addInitScript(() => {
         localStorage.setItem('owlbear-theme', 'dark')
       })
-      await stubApis(page)
+      const pageErrors = await stubApis(page)
       await page.goto('/')
-      await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+      await waitForWorkspaceWithoutPageErrors(page, pageErrors)
 
       const darkColor = await getRenderedPButtonTextColor(page, 'dark')
 
@@ -187,9 +203,9 @@ test.describe('TestFromAC_PdsSchemeClassE2E_1555', () => {
         await lightPage.addInitScript(() => {
           localStorage.setItem('owlbear-theme', 'light')
         })
-        await stubApis(lightPage)
+        const lightPageErrors = await stubApis(lightPage)
         await lightPage.goto('/')
-        await lightPage.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+        await waitForWorkspaceWithoutPageErrors(lightPage, lightPageErrors)
 
         const lightColor = await getRenderedPButtonTextColor(lightPage, 'light')
 

@@ -6,7 +6,12 @@
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
-import type { WorkItemPortfolioResponse } from '../src/api/workItems'
+import { EMPTY_WORK_ITEM_PORTFOLIO } from './support/api-fixtures'
+import {
+  trackPageErrors,
+  waitForWorkspaceWithoutPageErrors,
+  type PageErrorTracker,
+} from './support/page-errors'
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
 
@@ -14,33 +19,9 @@ import type { WorkItemPortfolioResponse } from '../src/api/workItems'
 // Routes registered first have LOWER priority (Playwright LIFO) — catch-all
 // registered first ensures specific handlers always win.
 
-const EMPTY_WORK_ITEM_PORTFOLIO = {
-  groups: [],
-  totals: {
-    total: 0,
-    complete: 0,
-    needs: { you: 0, dependency: 0, none: 0 },
-    activity: { idle: 0, ready: 0, working: 0 },
-  },
-  operating: {
-    unfinished_change_count: 0,
-    completed_change_count: 0,
-    statuses: [],
-    draft_design_change_ids: [],
-    design_required_change_ids: [],
-    claimed: [],
-    queued_for_orchestration: [],
-    interventions: [],
-    dependency_waits: [],
-    guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
-  },
-  health: {
-    status: 'healthy',
-    diagnostics: [],
-  },
-} satisfies WorkItemPortfolioResponse
+async function stubApis(page: Page): Promise<PageErrorTracker> {
+  const pageErrors = trackPageErrors(page)
 
-async function stubApis(page: Page): Promise<void> {
   // Catch-all fallback for remaining /api/* routes (decisions, scan, sessions, etc.)
   // Must be registered FIRST so specific routes (registered after) take precedence.
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
@@ -62,6 +43,8 @@ async function stubApis(page: Page): Promise<void> {
   await page.route('/api/work-items', (route) => route.fulfill({
     json: EMPTY_WORK_ITEM_PORTFOLIO,
   }))
+
+  return pageErrors
 }
 
 // ─── AC1: PDS custom elements registered from local bundles ───────────────────
@@ -70,9 +53,9 @@ async function stubApis(page: Page): Promise<void> {
 
 test.describe('TestFromAC_PDSCustomElementsRegistered', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Happy path: p-button is defined (the primary interactive PDS element in nav-rail)
@@ -109,9 +92,9 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
         ;(window as unknown as { __cspViolations__: string[] }).__cspViolations__.push(e.blockedURI)
       })
     })
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Boundary: CDN .com origin must not appear in blockedURIs
@@ -149,9 +132,9 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
 
 test.describe('TestFromAC_PDSShadowRootActivation', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Happy path: p-link-pure (the PDS element ProductNavigation renders) has shadowRoot with child elements
