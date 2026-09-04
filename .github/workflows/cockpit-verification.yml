@@ -134,7 +134,7 @@ jobs:
 
       - name: Install Playwright browser engines and Linux dependencies
         timeout-minutes: 10
-        run: npx playwright install --with-deps $E2E_COMPAT_BROWSERS
+        run: npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"
 
       - name: Run compatibility smoke tests
         run: npm run test:e2e:compat

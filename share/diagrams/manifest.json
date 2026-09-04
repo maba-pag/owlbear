@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "diagrams": [
+    {
+      "source": "share/diagrams/mcp-topology.architecture.json",
+      "artifact": "share/diagrams/mcp-topology.svg",
+      "describes": [
+        "seed/.vscode/mcp.json",
+        "setup/init.py",
+        "serve/*-mcp/src/**",
+        "serve/delivery/src/**",
+        "serve/knowledge/src/**",
+        "serve/memory/src/**",
+        "serve/browser/src/**"
+      ]
+    }
+  ]
+}

@@ -15,7 +15,6 @@
     "megalinter-reports/**",
     "**/scratch/**",
     "**/test-results/**",
-    "**/worktrees/**",
-    "**/*.excalidraw"
+    "**/worktrees/**"
   ]
 }

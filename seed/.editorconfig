@@ -19,9 +19,6 @@ max_line_length = unset
 indent_size = unset
 max_line_length = unset
 
-[*.excalidraw]
-max_line_length = unset
-
 # Delivery runtime is machine-managed structured state
 [.owlbear/delivery/runtime/**]
 max_line_length = unset

@@ -48,6 +48,7 @@ _RETIRED_AGENTS = {
     "verifier-challenger",
 }
 _RETIRED_SKILLS = {
+    "h-excalidraw-diagram",
     "h-mcp-delivery",
     "r-pipeline-protocol",
     "w-spec-shaping",

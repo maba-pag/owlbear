@@ -72,8 +72,9 @@ the agent or workflow that owns the next decision. They should not become a seco
 ## Visual Orientation
 
 The [MCP topology diagram](diagrams/mcp-topology.svg) shows the five seeded stdio servers and the
-runtime surfaces behind them. Its [editable Excalidraw source](diagrams/mcp-topology.excalidraw) is
-descriptive; `seed/.vscode/mcp.json` and the server implementations remain authoritative.
+runtime surfaces behind them. Its [Archify source](diagrams/mcp-topology.architecture.json) and
+[coverage manifest](diagrams/manifest.json) are descriptive; `seed/.vscode/mcp.json` and the server
+implementations remain authoritative.
 
 ## Product Boundary
 

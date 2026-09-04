@@ -66,8 +66,6 @@ MCP memory is canonical.
 The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
 reflection.
 
-See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
-
 ## State Model
 
 Lifecycle transitions are controlled by the memory service. MCP tools expose ordinary curation,

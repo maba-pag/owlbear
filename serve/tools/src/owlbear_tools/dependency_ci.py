@@ -24,10 +24,7 @@ _COCKPIT_NODE_FILES = {
     "serve/cockpit/web/package.json",
 }
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
-_DIAGRAM_NODE_FILES = {
-    ".owlbear/scripts/export-diagrams/package-lock.json",
-    ".owlbear/scripts/export-diagrams/package.json",
-}
+_DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
 _RUFF_TOOLCHAIN_FILES = {
     ".github/scripts/check_ruff_toolchain.py",
 }
@@ -295,7 +292,9 @@ def classify_dependency_change(
     node = bool(changed & _COCKPIT_NODE_FILES)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
-    diagrams = bool(changed & _DIAGRAM_NODE_FILES)
+    diagrams = bool(changed & _DIAGRAM_FILES) or any(
+        path.startswith((".owlbear/scripts/diagrams/", "share/diagrams/")) for path in changed
+    )
     workflows = any(path.startswith(".github/workflows/") for path in changed)
     megalinter = ".mega-linter.yml" in changed
     renovate = ".github/renovate.json" in changed
