@@ -896,6 +896,57 @@ def test_status_context_terminal_state_exposes_conclusion_and_duration() -> None
     assert snapshot.checks[0].duration_seconds == 30
 
 
+def test_check_run_negative_duration_is_unavailable_but_timestamps_are_preserved() -> None:
+    check_run = {
+        "__typename": "CheckRun",
+        "id": "CR_negative",
+        "name": "skipped check",
+        "status": "COMPLETED",
+        "conclusion": "SKIPPED",
+        "startedAt": "2026-08-11T10:00:09Z",
+        "completedAt": "2026-08-11T10:00:00Z",
+        "detailsUrl": None,
+        "isRequired": True,
+    }
+    provider, _ = _provider(_completed(_check_response([check_run])))
+
+    snapshot = provider.observe_checks(
+        ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
+    )
+
+    check = snapshot.checks[0]
+    assert check.started_at is not None
+    assert check.completed_at is not None
+    assert check.completed_at < check.started_at
+    assert check.duration_seconds is None
+    assert check.conclusion == "skipped"
+
+
+def test_status_context_negative_duration_is_unavailable_but_context_remains_valid() -> None:
+    status_context = {
+        "__typename": "StatusContext",
+        "id": "SC_negative",
+        "context": "skipped deployment",
+        "state": "SUCCESS",
+        "createdAt": "2026-08-11T10:00:09Z",
+        "updatedAt": "2026-08-11T10:00:00Z",
+        "targetUrl": None,
+        "isRequired": False,
+    }
+    provider, _ = _provider(_completed(_check_response([status_context])))
+
+    snapshot = provider.observe_checks(
+        ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
+    )
+
+    check = snapshot.checks[0]
+    assert check.started_at is not None
+    assert check.completed_at is not None
+    assert check.completed_at < check.started_at
+    assert check.duration_seconds is None
+    assert check.conclusion == "success"
+
+
 def test_check_observation_rejects_invalid_timestamp_as_retry_safe() -> None:
     check_run = {
         "__typename": "CheckRun",

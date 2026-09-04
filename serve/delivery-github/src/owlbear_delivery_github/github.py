@@ -635,7 +635,7 @@ class GitHubCliPublicationProvider:
                         required=response.required,
                         started_at=started_at,
                         completed_at=completed_at,
-                        duration_seconds=self._duration(started_at, completed_at, operation),
+                        duration_seconds=self._duration(started_at, completed_at),
                         details_url=response.details_url,
                     )
                 )
@@ -659,7 +659,7 @@ class GitHubCliPublicationProvider:
                         required=response.required,
                         started_at=created_at,
                         completed_at=completed_at,
-                        duration_seconds=self._duration(created_at, completed_at, operation),
+                        duration_seconds=self._duration(created_at, completed_at),
                         details_url=response.target_url,
                     )
                 )
@@ -688,13 +688,12 @@ class GitHubCliPublicationProvider:
         self,
         started_at: datetime | None,
         completed_at: datetime | None,
-        operation: str,
     ) -> float | None:
         if started_at is None or completed_at is None:
             return None
         duration = (completed_at - started_at).total_seconds()
         if duration < 0:
-            self._invalid_response(operation, "GitHub returned an invalid check duration", retry_safe=True)
+            return None
         return duration
 
     def _read_open_pull_request(self, repository: str, number: int, operation: str) -> _PullRequestRead:
