@@ -14,6 +14,7 @@ name: Cockpit verification
       - opened
       - reopened
       - synchronize
+      - ready_for_review
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +27,9 @@ permissions:
 jobs:
   resolve_runtimes:
     name: Resolve Cockpit runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -46,6 +50,9 @@ jobs:
   proof:
     name: Prove Cockpit on Node ${{ matrix.node }}
     needs: resolve_runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -82,6 +89,9 @@ jobs:
       - name: Run Cockpit behavior tests
         run: npm test
 
+      - name: Type-check Cockpit browser tests
+        run: npm run typecheck:e2e
+
       - name: Check Cockpit sources
         run: |
           npx eslint src e2e --max-warnings 0
@@ -94,7 +104,10 @@ jobs:
   browser_compatibility:
     name: Prove browser compatibility
     needs: proof
-    if: needs.proof.result == 'success'
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      needs.proof.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -143,7 +156,10 @@ jobs:
       - resolve_runtimes
       - proof
       - browser_compatibility
-    if: always()
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

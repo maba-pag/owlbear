@@ -6,6 +6,12 @@
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
+import { EMPTY_WORK_ITEM_PORTFOLIO } from './support/api-fixtures'
+import {
+  trackPageErrors,
+  waitForWorkspaceWithoutPageErrors,
+  type PageErrorTracker,
+} from './support/page-errors'
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
 
@@ -13,7 +19,9 @@ import { test, expect, type Page } from '@playwright/test'
 // Routes registered first have LOWER priority (Playwright LIFO) — catch-all
 // registered first ensures specific handlers always win.
 
-async function stubApis(page: Page): Promise<void> {
+async function stubApis(page: Page): Promise<PageErrorTracker> {
+  const pageErrors = trackPageErrors(page)
+
   // Catch-all fallback for remaining /api/* routes (decisions, scan, sessions, etc.)
   // Must be registered FIRST so specific routes (registered after) take precedence.
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
@@ -33,8 +41,10 @@ async function stubApis(page: Page): Promise<void> {
 
   // Core data route — registered last so it takes priority over catch-all
   await page.route('/api/work-items', (route) => route.fulfill({
-    json: { items: [], attention_counts: { user: 0, agent: 0, waiting: 0, repair: 0, none: 0 } },
+    json: EMPTY_WORK_ITEM_PORTFOLIO,
   }))
+
+  return pageErrors
 }
 
 // ─── AC1: PDS custom elements registered from local bundles ───────────────────
@@ -43,9 +53,9 @@ async function stubApis(page: Page): Promise<void> {
 
 test.describe('TestFromAC_PDSCustomElementsRegistered', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Happy path: p-button is defined (the primary interactive PDS element in nav-rail)
@@ -82,9 +92,9 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
         ;(window as unknown as { __cspViolations__: string[] }).__cspViolations__.push(e.blockedURI)
       })
     })
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Boundary: CDN .com origin must not appear in blockedURIs
@@ -122,9 +132,9 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
 
 test.describe('TestFromAC_PDSShadowRootActivation', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Happy path: p-link-pure (the PDS element ProductNavigation renders) has shadowRoot with child elements

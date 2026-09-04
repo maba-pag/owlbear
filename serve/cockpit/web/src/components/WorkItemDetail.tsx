@@ -719,6 +719,12 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
     <section className="border-l-4 border-danger bg-surface p-static-md" aria-labelledby="target-sync-conflict-heading">
       <PHeading id="target-sync-conflict-heading" tag="h4" size="sm">Target sync conflict</PHeading>
       <p className="mt-static-xs text-sm">The merge is preserved in the Change worktree. Choose an explicit exit after reviewing the conflict.</p>
+      {props.detail.item.card.action.command ? (
+        <div className="mt-static-md">
+          <p className="text-sm">Run the target conflict workflow before submitting the resolved merge.</p>
+          <CopyCommand className="mt-static-xs" command={props.detail.item.card.action.command} />
+        </div>
+      ) : null}
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
         <IdentityRow label="Operation" value={conflict.operation_id} />
         <IdentityRow label="Target head" value={conflict.target_head} />
@@ -744,6 +750,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
           <PButton
             type="button"
             compact
+            variant="secondary"
             data-testid="target-sync-conflict-resolve"
             disabled={props.pendingAction !== null}
             onClick={() => void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
@@ -837,10 +844,11 @@ function PublicationCheckItem({ check }: { check: PublicationChecksObservationRe
 
 function PublicationChecksSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
-  const observable = publication
+  const observable = Boolean(publication
     && (publication.phase === 'pull-request-draft' || publication.phase === 'awaiting-merge')
     && publication.published_head !== null
-    && publication.publication_generations.length > 0
+    && publication.publication_generations.length > 0)
+  const draftPublication = observable && publication?.phase === 'pull-request-draft'
   const observation = props.publicationChecks
   const retainsEvidence = observation !== null || props.publicationChecksStale
   if (!observable && !retainsEvidence) return null
@@ -853,7 +861,9 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
       ? 'Previous check results were cleared because the published head changed. Observe again for the current head.'
       : observation
         ? `Checks observed for ${observation.exact_commit}.`
-        : 'No publication-check observation recorded for this head.'
+        : draftPublication
+          ? null
+          : 'No checks observed for this head yet.'
   return (
     <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
       <div className="flex flex-wrap items-start justify-between gap-static-sm">
@@ -864,14 +874,20 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
             compact
             variant="secondary"
             data-testid="publication-checks-observe"
-            disabled={props.isObservingPublicationChecks || props.pendingAction !== null}
-            onClick={() => void props.onObservePublicationChecks()}
+            aria-describedby={draftPublication ? 'publication-checks-draft-guidance' : undefined}
+            disabled={draftPublication || props.isObservingPublicationChecks || props.pendingAction !== null}
+            onClick={draftPublication ? undefined : () => void props.onObservePublicationChecks()}
           >
-            {props.isObservingPublicationChecks ? 'Checking CI...' : 'Refresh PR CI'}
+            {props.isObservingPublicationChecks ? 'Checking CI...' : 'Observe current checks'}
           </PButton>
         ) : null}
       </div>
-      <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p>
+      {draftPublication ? (
+        <p id="publication-checks-draft-guidance" className="mt-static-sm text-sm" role="status" data-testid="publication-checks-draft-guidance">
+          You can observe check results here once this pull request is ready for review.
+        </p>
+      ) : null}
+      {status ? <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p> : null}
       {props.publicationChecksError ? (
         <p className="mt-static-sm flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">
           <PIcon name="error" size="sm" aria-hidden="true" />
@@ -905,6 +921,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
 
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
+  const [readyConflictConfirmOpen, setReadyConflictConfirmOpen] = useState(false)
   if (!publication) return null
   const finalizationPhase = publication.phase === 'ready-for-finalization' || publication.phase === 'finalization-invalidated'
   const finalizationBlocked = finalizationPhase && publication.ready_for_finalization === false
@@ -947,6 +964,18 @@ function PublicationSection(props: WorkItemDetailProps) {
   const invalidationReason = publication.invalidated_expected_head && publication.invalidated_observed_head
     ? `The Change head moved from ${publication.invalidated_expected_head.slice(0, 12)} to ${publication.invalidated_observed_head.slice(0, 12)}, so the previous finalization no longer matches.`
     : null
+  const runControl = () => {
+    if (!control) return
+    if (action.kind === 'mark-ready' && publication.mergeable === false) {
+      setReadyConflictConfirmOpen(true)
+      return
+    }
+    void control()
+  }
+  const confirmReadyDespiteConflict = () => {
+    setReadyConflictConfirmOpen(false)
+    if (control) void control()
+  }
   return (
     <section className="min-w-0" aria-labelledby="work-publication-heading">
       <SectionCard tone={situationTone} className="border-l-4 p-static-md">
@@ -954,9 +983,22 @@ function PublicationSection(props: WorkItemDetailProps) {
         <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
-        {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
-        {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+        {action.command && !finalizationBlocked && !targetSyncAttention ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
+        {control && action.label && (!action.command || action.kind === 'mark-ready' || action.kind === 'observe-acceptance') ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={runControl}>{pending ? 'Working...' : action.label}</PButton> : null}
       </SectionCard>
+      {readyConflictConfirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setReadyConflictConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm making conflicted pull request ready' }}>
+          <ConfirmationContent onClose={() => setReadyConflictConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Make conflicted PR ready?</PHeading>
+            <p className="text-sm">GitHub reports conflicts with the integration target. Making the pull request ready will not resolve them, and reviewers will still be unable to merge it.</p>
+            {action.command ? <p className="text-sm">Recommended next step: <CopyCommand command={action.command} /></p> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setReadyConflictConfirmOpen(false)}>Keep PR in draft</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={confirmReadyDespiteConflict}>Make PR ready anyway</PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
       {finalizationBlocked ? (
         <section className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="status" data-testid="finalization-readiness">
           <PHeading tag="h4" size="sm">Finalization unavailable</PHeading>

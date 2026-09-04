@@ -63,6 +63,7 @@ DELIVERY_TOOLS = {
     "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
     "show_operator_context",
     "resolve_request",
     "clear_block",
@@ -111,6 +112,7 @@ READ_TOOLS = {
     "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
     "show_operator_context",
     "preview_administrative_move",
     "show_plan_context",
@@ -357,6 +359,21 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_work_item_view_tool_delegates_exact_publication_key() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "show_work_item_view",
+            {"request": {"change_id": "change-a", "item_key": "publication"}},
+        )
+
+    assert result.structured_content == {"operation": "show_work_item_view"}
+    assert application.calls == ["show_work_item_view"]
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
     parse_delivery_frontier,
 )
+from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -164,18 +165,21 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
     contract: DeliveryContract
     frontier: DeliveryFrontier
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    publication_observation: PublicationPullRequestObservationReceipt | None = None
 
     @classmethod
     def capture(
         cls,
         contract: DeliveryContract,
         frontier_bytes: bytes,
+        publication_observation: PublicationPullRequestObservationReceipt | None = None,
     ) -> DeliveryPortfolioSnapshot:
         """Validate one frontier read and bind its exact content digest."""
         return cls(
             contract=contract,
             frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
+            publication_observation=publication_observation,
         )
 
     @model_validator(mode="after")
@@ -184,6 +188,12 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
         binding_ids = tuple(binding.outcome_id for binding in self.frontier.bindings)
         if binding_ids != contract_ids:
             message = "Delivery snapshot bindings must match contract outcome order"
+            raise ValueError(message)
+        if (
+            self.publication_observation is not None
+            and self.publication_observation.change_id != self.contract.change_id
+        ):
+            message = "Delivery publication observation must match the contract Change"
             raise ValueError(message)
         return self
 
@@ -357,6 +367,9 @@ class WorkItemPublicationView(_ProjectionModel):
     repository: str | None = None
     pull_request_number: int | None = Field(default=None, gt=0)
     pull_request_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    mergeable: bool | None = None
+    merge_state_status: str | None = Field(default=None, min_length=1)
+    mergeability_observed_at: str | None = None
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
     publication_generations: tuple[WorkItemPublicationGenerationView, ...] = ()
@@ -682,9 +695,7 @@ class WorkItemProjector:
         elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
             return self._draft_publication_card(phase)
         elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
-            needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
-            next_step, progress = headline, "Awaiting merge in GitHub"
-            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status")
+            needs, headline, next_actor, next_step, progress, action = self._awaiting_merge_state()
         else:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Record accepted completion", "Merge observed"
@@ -709,7 +720,34 @@ class WorkItemProjector:
             action=action,
         )
 
+    def _awaiting_merge_state(
+        self,
+    ) -> tuple[WorkItemNeed, str | None, WorkItemNextActor, str, str, WorkItemAction]:
+        mergeability = self._current_publication_observation()
+        if mergeability is not None and mergeability.mergeable is False:
+            return (
+                WorkItemNeed.YOU,
+                "Pull request has merge conflicts",
+                WorkItemNextActor.YOU,
+                "Resolve pull-request conflicts before continuing",
+                "Pull request conflicts detected",
+                WorkItemAction(
+                    kind=WorkItemActionKind.OBSERVE_ACCEPTANCE,
+                    label="Check merge status",
+                    command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+                ),
+            )
+        return (
+            WorkItemNeed.YOU,
+            "Merge pull request in GitHub",
+            WorkItemNextActor.YOU,
+            "Merge pull request in GitHub",
+            "Awaiting merge in GitHub",
+            WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status"),
+        )
+
     def _draft_publication_card(self, phase: WorkItemPublicationPhase) -> WorkItemCardView:
+        mergeability = self._current_publication_observation()
         if self._publication_head_requires_reconciliation():
             needs, headline, next_actor = (
                 WorkItemNeed.YOU,
@@ -721,6 +759,21 @@ class WorkItemProjector:
                 "Publication head needs reconciliation",
             )
             action = WorkItemAction()
+        elif mergeability is not None and mergeability.mergeable is False:
+            needs, headline, next_actor = (
+                WorkItemNeed.YOU,
+                "Pull request has merge conflicts",
+                WorkItemNextActor.YOU,
+            )
+            next_step, progress = (
+                "Resolve pull-request conflicts before making it ready",
+                "Pull request conflicts detected",
+            )
+            action = WorkItemAction(
+                kind=WorkItemActionKind.MARK_READY,
+                label="Make PR ready for review",
+                command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+            )
         else:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = (
@@ -770,6 +823,14 @@ class WorkItemProjector:
                 "Publication attention",
                 headline="Publication baseline recovery is required",
                 next_step="Use the attention workflow to recover the publication baseline",
+            )
+        if any(diagnostic.startswith("target-sync-operation:") for diagnostic in disposition.diagnostics):
+            return self._prompt_attention_card(
+                disposition,
+                "Target sync conflict",
+                headline="Target merge conflict needs resolution",
+                next_step="Resolve the target merge conflict before continuing",
+                command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
             )
         label = "Resolve publication attention"
         return WorkItemCardView(
@@ -830,6 +891,7 @@ class WorkItemProjector:
         *,
         headline: str = "Change attention requires resolution",
         next_step: str = "Use the exact attention recovery route",
+        command: str | None = None,
     ) -> WorkItemCardView:
         return WorkItemCardView(
             item_key="publication",
@@ -848,9 +910,8 @@ class WorkItemProjector:
             action=WorkItemAction(
                 kind=WorkItemActionKind.RESOLVE_ATTENTION,
                 label=f"Resolve {label.casefold()}",
-                command=(
-                    f"/resolve-delivery-attention {self._snapshot.contract.change_id} {disposition.disposition_id}"
-                ),
+                command=command
+                or f"/resolve-delivery-attention {self._snapshot.contract.change_id} {disposition.disposition_id}",
                 attention_id=disposition.disposition_id,
             ),
         )
@@ -870,6 +931,28 @@ class WorkItemProjector:
         history = frontier.change_publication_history
         finalization = frontier.finalization
         return history is not None and finalization is not None and history.current.head_sha != finalization.exact_head
+
+    def _current_publication_observation(self) -> PublicationPullRequestObservationReceipt | None:
+        observation = self._snapshot.publication_observation
+        frontier = self._snapshot.frontier
+        history = frontier.change_publication_history
+        published_head = frontier.published_head
+        if observation is None or history is None or published_head is None:
+            return None
+        publication = history.current
+        snapshot = observation.snapshot
+        if (
+            observation.change_id != self._snapshot.contract.change_id
+            or publication.head_sha != published_head
+            or snapshot.repository != publication.repository
+            or snapshot.number != publication.number
+            or snapshot.node_id != publication.node_id
+            or snapshot.head_sha != published_head
+            or snapshot.state != "open"
+            or snapshot.merged
+        ):
+            return None
+        return observation
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
         frontier = self._snapshot.frontier
@@ -952,6 +1035,7 @@ class WorkItemProjector:
             or attention_publication
             or (publication_history.current if publication_history is not None else None)
         )
+        publication_observation = self._current_publication_observation()
         target_sync = frontier.target_sync_receipt
         return WorkItemPublicationView(
             phase=self._publication_phase(),
@@ -971,6 +1055,13 @@ class WorkItemProjector:
             repository=publication_identity.repository if publication_identity is not None else None,
             pull_request_number=publication_identity.number if publication_identity is not None else None,
             pull_request_head=publication_identity.head_sha if publication_identity is not None else None,
+            mergeable=publication_observation.mergeable if publication_observation is not None else None,
+            merge_state_status=(
+                publication_observation.merge_state_status if publication_observation is not None else None
+            ),
+            mergeability_observed_at=(
+                publication_observation.observed_at.isoformat() if publication_observation is not None else None
+            ),
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
             publication_generations=(

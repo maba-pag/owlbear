@@ -32,7 +32,7 @@ The server exposes these operation groups:
 | Area | Tools |
 | --- | --- |
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
-| Portfolio | `list_work_items`, `delivery_health`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
+| Portfolio | `list_work_items`, `delivery_health`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
@@ -50,7 +50,8 @@ health hint; healthy acquisitions remain quiet. Global workspace, Git, configura
 unsupported persisted-state failures still fail closed at startup. Current readers accept only the
 current persisted schema, and health never repairs persisted state. `list_work_items` continues to
 return only work-item projections, and `show_work_item` uses the MCP Work Item ID (the Change ID
-for a publication projection), not Cockpit's `publication` item key.
+for a publication projection), not Cockpit's `publication` item key. `show_work_item_view` accepts
+a detailed view key such as `publication` when a workflow needs richer publication and conflict evidence.
 
 ## Configuration
 

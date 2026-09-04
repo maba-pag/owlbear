@@ -499,7 +499,7 @@ def _pull_request_observation(  # noqa: PLR0913
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **values)
     observation_id = hashlib.sha256(
         json.dumps(
-            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            candidate._identity_payload(),  # noqa: SLF001
             sort_keys=True,
             separators=(",", ":"),
         ).encode()

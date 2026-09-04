@@ -180,9 +180,9 @@ Use only an existing operation whose contract owns the selected result:
 - reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
   Integration repair claim for recovery; do not create a new claim, candidate, review, or admission;
 - target-sync merge conflict: when the Change attention diagnostics identify a preserved target
-  synchronization conflict, retain the managed worktree, `MERGE_HEAD`, and conflict paths and
-  report `authority-gap` unless the current context supplies an exact Delivery-owned operation for
-  conflict resolution, validation, and review. Do not resolve the generic Change disposition,
+  synchronization conflict, hand off to `/resolve-target-conflict <change-id>`. That workflow
+  retains the managed worktree, `MERGE_HEAD`, and conflict paths while the agent resolves content
+  and Delivery validates and commits the merge. Do not resolve the generic Change disposition,
   retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;

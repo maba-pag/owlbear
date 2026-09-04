@@ -218,7 +218,7 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         "tests/test_dependency_verification_workflow.py",
     } & set(pull_request["paths"])
     assert job["timeout-minutes"] == 5
-    assert "if" not in job
+    assert job["if"] == ("github.event_name != 'pull_request' || github.event.pull_request.draft == false")
     assert all(
         path in pytest_run
         for path in (

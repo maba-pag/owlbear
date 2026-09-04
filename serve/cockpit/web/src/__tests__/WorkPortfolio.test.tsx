@@ -1945,7 +1945,12 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
     next_step: 'Choose an explicit target-sync conflict exit',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Finalization invalidated', done: null, total: null },
-    action: { kind: 'resolve-attention', label: 'Resolve attention', command: null, attention_id: dispositionId },
+    action: {
+      kind: 'resolve-attention',
+      label: 'Resolve attention',
+      command: '/resolve-target-conflict change-alpha',
+      attention_id: dispositionId,
+    },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -1993,6 +1998,7 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Target sync conflict')
   expect(inspector).toHaveTextContent('src/app.py')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
   expect(within(inspector).queryByText('Resolve attention')).toBeNull()
   expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
 
@@ -2172,6 +2178,47 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   const waiting = await within(inspector).findByRole('status')
   expect(waiting).toHaveTextContent('ERR_DELIVERY_ACCEPTANCE_WAITING')
   expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
+})
+
+it('keeps conflict guidance and merge-status control for a ready conflicted pull request', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before continuing',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'observe-acceptance',
+      label: 'Check merge status',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('awaiting-merge'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Check merge status'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/acceptance/observe',
+    method: 'POST',
+    body: null,
+  }))
 })
 
 it('surfaces acceptance-reconciliation provider failure with an immediate retry', async () => {
@@ -2719,7 +2766,61 @@ it('presents a draft pull request as publication work', async () => {
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 
-it('observes checks from a draft even when repository and pull request fields are null', async () => {
+it('warns before making a conflicted pull request ready and offers the resolution prompt', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before making it ready',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    publication_phase: 'pull-request-draft',
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'mark-ready',
+      label: 'Make PR ready for review',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('pull-request-draft'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+
+  const dialog = await screen.findByRole('alertdialog')
+  expect(dialog).toHaveTextContent('GitHub reports conflicts with the integration target.')
+  expect(dialog).toHaveTextContent('Making the pull request ready will not resolve them')
+  expect(dialog).toHaveTextContent('/resolve-target-conflict change-alpha')
+  expect(requests.some(({ url, method }) => url.endsWith('/publication/ready') && method === 'POST')).toBe(false)
+
+  fireEvent.click(within(dialog).getByText('Keep PR in draft'))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+  fireEvent.click(await screen.findByText('Make PR ready anyway'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/ready',
+    method: 'POST',
+    body: null,
+  }))
+})
+
+it('keeps check observation discoverable but unavailable for a draft', async () => {
   const publicationCard = publicationCardForChecks()
   currentDetail = detail({
     card: publicationCard,
@@ -2729,28 +2830,16 @@ it('observes checks from a draft even when repository and pull request fields ar
   renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  const portfolioReadsBefore = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(within(inspector).getByTestId('publication-checks-observe')).toBeInTheDocument()
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
+  expect(observe).toBeInTheDocument()
+  expect(observe.disabled).toBe(true)
+  expect(within(inspector).getByTestId('publication-checks-draft-guidance')).toHaveTextContent(
+    'You can observe check results here once this pull request is ready for review.',
+  )
+  expect(within(inspector).queryByTestId('publication-checks-status')).not.toBeInTheDocument()
 
-  await waitFor(() => expect(requests).toContainEqual({
-    url: '/api/changes/change-alpha/publication/checks/observe',
-    method: 'POST',
-    body: null,
-  }))
-  expect(await within(inspector).findByText('Unit tests')).toBeInTheDocument()
-  expect(within(inspector).getByText('Blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Required pending', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Not blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Observed commit').nextElementSibling).toHaveTextContent('1'.repeat(40))
-  expect(within(inspector).getByText('Evidence recorded').nextElementSibling).toHaveTextContent('2026-08-11T16:00:00Z')
-  expect(Array.from(within(inspector).getAllByTestId('publication-check')).map((item) => item.textContent)).toEqual([
-    expect.stringContaining('Unit tests'),
-    expect.stringContaining('Integration tests'),
-    expect.stringContaining('Optional lint'),
-  ])
-  const portfolioReadsAfter = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(portfolioReadsAfter).toBe(portfolioReadsBefore)
+  fireEvent.click(observe)
+  expect(requests.filter(({ url, method }) => url === '/api/changes/change-alpha/publication/checks/observe' && method === 'POST')).toHaveLength(0)
 })
 
 it('does not offer publication-check observation outside draft and awaiting-merge phases', async () => {

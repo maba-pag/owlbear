@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "@playwright/test"]
+  },
+  "include": [
+    "e2e/pds-*.spec.ts",
+    "e2e/smoke.spec.ts",
+    "e2e/support/api-fixtures.ts",
+    "e2e/support/page-errors.ts",
+    "playwright*.ts"
+  ]
+}

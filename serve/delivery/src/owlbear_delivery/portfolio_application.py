@@ -110,6 +110,7 @@ from owlbear_delivery.delivery_runtime import (
     integration_attention_disposition,
     is_acceptance_waiting_observation,
     is_change_terminal,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
@@ -239,6 +240,7 @@ _CHECKPOINT_RETRY_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"
 _CHECKPOINT_REVIEW_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
 _CHECKPOINT_MISSING_HEAD_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
 _MAX_CHECKPOINT_ERROR_DETAIL_LENGTH = 240
+_PUBLICATION_OBSERVATION_CACHE_SECONDS = 15
 _MAX_HEALTH_DETAIL_LENGTH = 240
 _MAX_HEALTH_DIAGNOSTICS = 64
 _INTENT_SUMMARY_HEADING = "Problem And Product Promise"
@@ -1132,6 +1134,10 @@ class PortfolioApplication:
         self._discovered_changes: dict[str, DeliveryChangeObservation] = {}
         self._runtime_reconciliation_errors: dict[str, str] = {}
         self._runtime_snapshots: dict[str, DeliveryPortfolioSnapshot] = {}
+        self._publication_observation_cache: dict[
+            str,
+            tuple[float, str, PublicationPullRequestObservationReceipt | None],
+        ] = {}
         self._has_reconciled_runtimes = False
         self._target_root = dependencies.target_root.resolve()
         self._package_store = dependencies.package_store
@@ -3998,10 +4004,51 @@ class PortfolioApplication:
         return sum(occupancy.values())
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
+        frontier_bytes = runtime.frontier_bytes()
+        frontier = parse_delivery_frontier(frontier_bytes)[0]
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
-            runtime.frontier_bytes(),
+            frontier_bytes,
+            publication_observation=self._publication_observation(runtime.contract.change_id, frontier),
         )
+
+    def _publication_observation(
+        self,
+        change_id: str,
+        frontier: DeliveryFrontier,
+    ) -> PublicationPullRequestObservationReceipt | None:
+        publisher = self._draft_pull_request_publisher
+        history = frontier.change_publication_history
+        published_head = frontier.published_head
+        if publisher is None or history is None or published_head is None or history.current.head_sha != published_head:
+            return None
+        now = time.monotonic()
+        cached = self._publication_observation_cache.get(change_id)
+        if cached is not None and cached[0] > now and cached[1] == published_head:
+            return cached[2]
+        try:
+            observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        except (OSError, PublicationProviderError, RuntimeError, subprocess.SubprocessError, ValueError):
+            observation = None
+        if isinstance(observation, PublicationPullRequestObservationReceipt):
+            snapshot = observation.snapshot
+            publication = history.current
+            if (
+                observation.change_id != change_id
+                or snapshot.repository != publication.repository
+                or snapshot.number != publication.number
+                or snapshot.node_id != publication.node_id
+                or snapshot.head_sha != published_head
+            ):
+                observation = None
+        else:
+            observation = None
+        self._publication_observation_cache[change_id] = (
+            now + _PUBLICATION_OBSERVATION_CACHE_SECONDS,
+            published_head,
+            observation,
+        )
+        return observation
 
     def _retained_change_worktree_view(
         self,

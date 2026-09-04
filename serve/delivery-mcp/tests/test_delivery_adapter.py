@@ -508,6 +508,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "delivery_health": {},
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
+        "show_work_item_view": {**change, "item_key": "publication"},
         "show_operator_context": {**change, "outcome_id": "OUT-001"},
         "resolve_request": {
             **change,
@@ -816,6 +817,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_work_item_view",
         "show_operator_context",
         "preview_administrative_move",
         "show_plan_context",

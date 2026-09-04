@@ -9,6 +9,7 @@ name: Dependency verification
       - opened
       - reopened
       - synchronize
+      - ready_for_review
     paths:
       - .github/renovate.json
       - .github/scripts/check_node_runtime.py
@@ -46,6 +47,9 @@ permissions:
 jobs:
   resolve_runtimes:
     name: Resolve Python runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -71,6 +75,9 @@ jobs:
 
   classify:
     name: Classify dependency surfaces
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -169,7 +176,10 @@ jobs:
     needs:
       - classify
       - resolve_runtimes
-    if: needs.classify.outputs.python == 'true'
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      needs.classify.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -221,6 +231,8 @@ jobs:
     needs:
       - classify
     if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
       needs.classify.result == 'success' &&
       (needs.classify.outputs.pds == 'true' ||
       needs.classify.outputs.root_node == 'true' ||
@@ -296,8 +308,10 @@ jobs:
     name: Prove dependency tooling compatibility
     needs: classify
     if: >-
-      needs.classify.outputs.compatibility == 'true' ||
-      needs.classify.outputs.proof_tooling == 'true'
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      (needs.classify.outputs.compatibility == 'true' ||
+      needs.classify.outputs.proof_tooling == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -362,7 +376,10 @@ jobs:
       - proof-python
       - proof-node
       - compatibility
-    if: always()
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
