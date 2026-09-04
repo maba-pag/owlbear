@@ -394,6 +394,8 @@ class CleanupAbandonedTargetSyncBody(_TargetHTTPModel):
     """Explicit confirmation to discard a preserved target merge before cleanup."""
 
     confirmed_discard: Literal[True]
+    expected_target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class SupersedePublicationBody(_TargetHTTPModel):

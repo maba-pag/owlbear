@@ -2301,6 +2301,8 @@ def test_abandoned_target_sync_conflict_can_be_discarded_and_cleaned(
     receipt = application.cleanup_abandoned_change_worktree_after_target_sync_discard(
         "change-a",
         confirmed_discard=True,
+        expected_target_head=target_head,
+        expected_operation_id="sync-discard-cleanup",
     )
 
     assert receipt.change_id == "change-a"
@@ -5921,7 +5923,6 @@ dependencies: []
     package_bytes = _file_bytes(tmp_path / "packages/composed-delivery")
     replayed = application.create_design_session("composed-delivery", intent, design)
     derived = application.derive_delivery_contract("composed-delivery")
-    validated = application.validate_delivery_contract("composed-delivery")
 
     assert replayed.package_id == created.package_id
     assert replayed.replayed
@@ -5929,7 +5930,6 @@ dependencies: []
     with pytest.raises(DesignPackageConflictError, match="differs"):
         application.create_design_session("composed-delivery", intent + b"changed\n", design)
     assert _file_bytes(tmp_path / "packages/composed-delivery") == package_bytes
-    assert validated == derived
     assert derived.contract is not None
     assert not (state_root / "changes/composed-delivery").exists()
 

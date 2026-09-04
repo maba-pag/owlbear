@@ -21,11 +21,13 @@ from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
+    AdministrativeDeliveryMoveResult,
     DeliveryBlock,
     DeliveryChangePublicationHistory,
     DeliveryChangeStage,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryOperatorMove,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
     DeliveryRequest,
@@ -157,6 +159,8 @@ class CleanupAbandonedTargetSyncParams(ChangeParams):
     """Validate explicit discard of an abandoned target-sync conflict before cleanup."""
 
     confirmed_discard: Literal[True]
+    expected_target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class CleanupCompletedChangeParams(ChangeParams):
@@ -250,34 +254,32 @@ class RepairClaimContextParams(ChangeParams):
     claim_id: str = Field(min_length=1)
 
 
-class AdmitDeliveryChangeParams(_TargetProtocolModel):
-    """Validate source-bound Delivery admission."""
-
-    request: DeliveryAdmissionRequest
-
-
 class PublishDeliveryPlanParams(ChangeParams):
     """Validate one Planning publication."""
 
-    request: PublishDeliveryPlan
+    plan: PublishDeliveryPlan
 
 
 class PublishDeliveryResultParams(ChangeParams):
     """Validate one Build result publication."""
 
-    request: PublishDeliveryResult
+    result: PublishDeliveryResult
 
 
 class FinalizeDeliveryChangeParams(ChangeParams):
     """Validate one exact-head Change finalization request."""
 
-    request: FinalizeDeliveryChange
+    finalization: FinalizeDeliveryChange
 
 
-class MarkChangeReadyParams(_TargetProtocolModel):
-    """Validate one exact finalized pull-request ready transition."""
+class AdministrativeMoveParams(ChangeParams):
+    """Validate one exact operator-directed backward movement."""
 
-    request: MarkChangePullRequestReady
+    move_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    target: DeliveryStage
+    reason: str = Field(min_length=1)
+    expected_version: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class SupersedePublicationParams(ChangeParams):
@@ -567,6 +569,18 @@ class AdministrativeMovePreviewResponse(_TargetProtocolModel):
         return cls(**preview.model_dump())
 
 
+class AdministrativeMoveResponse(_TargetProtocolModel):
+    """Persisted operator movement and its invalidated dependent closure."""
+
+    move: DeliveryOperatorMove
+    invalidated_outcome_ids: tuple[str, ...] = Field(min_length=1)
+
+    @classmethod
+    def from_result(cls, result: AdministrativeDeliveryMoveResult) -> AdministrativeMoveResponse:
+        """Project one domain movement result into the MCP contract."""
+        return cls(**result.model_dump())
+
+
 class DeliveryPublicationSupersessionResponse(_TargetProtocolModel):
     """MCP response for one application-bound publication successor."""
 
@@ -715,7 +729,7 @@ class ChangeTargetSyncAbortResponse(_TargetProtocolModel):
 class TransitionDeliveryParams(ChangeParams):
     """Validate one worker-owned mechanical transition."""
 
-    request: DeliveryTransition
+    transition: DeliveryTransition
 
 
 class CompletedPageParams(_TargetProtocolModel):
@@ -745,8 +759,8 @@ def _parse_json_model[ModelT: BaseModel](model: type[ModelT], value: object) -> 
 
 
 type AdmitDeliveryChangeRequest = Annotated[
-    AdmitDeliveryChangeParams,
-    BeforeValidator(partial(_parse_json_model, AdmitDeliveryChangeParams)),
+    DeliveryAdmissionRequest,
+    BeforeValidator(partial(_parse_json_model, DeliveryAdmissionRequest)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
 type OperatorContextRequest = Annotated[
@@ -764,6 +778,10 @@ type ClearBlockRequest = Annotated[
 type PreviewAdministrativeMoveRequest = Annotated[
     PreviewAdministrativeMoveParams,
     BeforeValidator(partial(_parse_json_model, PreviewAdministrativeMoveParams)),
+]
+type AdministrativeMoveRequest = Annotated[
+    AdministrativeMoveParams,
+    BeforeValidator(partial(_parse_json_model, AdministrativeMoveParams)),
 ]
 type DeferChangeRequest = Annotated[
     DeferChangeParams,
@@ -811,8 +829,8 @@ type FinalizeDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
 ]
 type MarkChangeReadyRequest = Annotated[
-    MarkChangeReadyParams,
-    BeforeValidator(partial(_parse_json_model, MarkChangeReadyParams)),
+    MarkChangePullRequestReady,
+    BeforeValidator(partial(_parse_json_model, MarkChangePullRequestReady)),
 ]
 type SupersedePublicationRequest = Annotated[
     SupersedePublicationParams,
@@ -880,8 +898,10 @@ type WorkItemViewRequest = Annotated[
 __all__ = [
     "AbandonChangeParams",
     "AbandonChangeRequest",
+    "AdministrativeMoveParams",
     "AdministrativeMovePreviewResponse",
-    "AdmitDeliveryChangeParams",
+    "AdministrativeMoveRequest",
+    "AdministrativeMoveResponse",
     "AdmitDeliveryChangeRequest",
     "ChangeExternalHeadAdoptionResponse",
     "ChangeExternalHeadPromotionResponse",
@@ -927,7 +947,6 @@ __all__ = [
     "ExternalHeadPromotionRequest",
     "FinalizeDeliveryChangeParams",
     "FinalizeDeliveryChangeRequest",
-    "MarkChangeReadyParams",
     "MarkChangeReadyRequest",
     "OperatorContextParams",
     "OperatorContextRequest",

@@ -291,6 +291,8 @@ class TargetCockpitService:
             lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
                 change_id,
                 confirmed_discard=body.confirmed_discard,
+                expected_target_head=body.expected_target_head,
+                expected_operation_id=body.expected_operation_id,
             )
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)

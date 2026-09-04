@@ -32,7 +32,7 @@ outcome through `show_operator_context(change_id, outcome_id)` and require a cur
 missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items delivery_health list_retained_change_worktrees show_work_item show_operator_context resolve_request clear_block preview_administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items delivery_health repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -53,6 +53,13 @@ the context contains a requestless block, present the evidence requirement and, 
 confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note, locators)`. Re-read
 the exact operator context before either mutation; neither operation restores later-stage authority
 or selects a Delivery transition.
+
+For an operator-directed backward movement, call `preview_administrative_move(change_id, outcome_id,
+target)` and retain its `snapshot_version` and `invalidated_outcome_ids`. Present the invalidation
+closure and obtain one explicit user decision. If the user approves that exact preview, re-read the
+operator context and call `administrative_move(change_id, move_id, outcome_id, target, reason,
+expected_version=snapshot_version)`. A stale preview, finalized Change, active claim, or changed
+frontier is a hard stop; never invent a new version or bypass Delivery.
 
 ## Step 1 - Diagnose Current State Read-Only
 
@@ -115,6 +122,18 @@ Use only an existing operation whose contract owns the selected result:
   and re-read finalization and checkpoint authority before retrying `mark_change_ready(change_id)`.
   If the exact head changed, reconcile finalization first and hand the Change back to its owning
   finalization/review workflow; do not supersede the publication solely because a check failed.
+- Target-sync publication repair: when Delivery reports a committed target merge whose remote Change
+  branch or Delivery-state publication is inconsistent, bind the exact `expected_remote_head`,
+  `expected_merged_head`, `target_sync_operation_id`, and a fresh `operation_id`. Present one explicit
+  confirmation, then call `repair_target_sync_publication(..., confirmed_repair=true)`. Re-read the
+  returned receipt and finalization context; repair publishes only the already-recorded managed Change
+  head and requires fresh finalization review.
+- Abandoned target-sync discard: after an exact Change is abandoned and its retained worktree reports
+  a preserved target-sync conflict, re-read the conflict's `target_head` and `operation_id`. Present
+  one explicit confirmation, then call
+  `cleanup_abandoned_change_worktree_after_target_sync_discard(change_id,
+  expected_target_head, expected_operation_id, confirmed_discard=true)`. A changed conflict identity,
+  missing worktree, or non-abandoned Change remains blocked; never discard the merge with raw Git.
 - Change attention: use the exact disposition identity and call
   `resolve_change_disposition(change_id, expected_disposition_id)`. This clears the current Change
   attention and retained provider identity; it does not restore ready authority. For a closed,

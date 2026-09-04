@@ -1947,6 +1947,8 @@ class PortfolioApplication:
         change_id: str,
         *,
         confirmed_discard: Literal[True],
+        expected_target_head: str,
+        expected_operation_id: str,
     ) -> DeliveryChangeWorktreeCleanup:
         """Discard one abandoned target merge and then clean its exact Change worktree."""
         if confirmed_discard is not True:
@@ -1956,37 +1958,54 @@ class PortfolioApplication:
             if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
                 self._fail("abandoned target synchronization conflict cleanup requires an abandoned Change")
             coordination = self._workspace_manager.show(change_id)
-            conflict = coordination.target_sync_conflict
-            if conflict is not None:
-                retained = next(
-                    (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
-                    None,
-                )
-                if retained is None:
-                    self._fail("abandoned target synchronization conflict worktree is not registered")
-                if not retained.worktree_present or not retained.git_registered:
-                    try:
-                        coordination = self._workspace_manager.recover(
-                            change_id,
-                            coordination.last_reviewed_commit,
-                        )
-                    except ChangeWorktreeAttentionError:
-                        raise
-                    except CoordinationConflictError:
-                        raise
-                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                        self._fail("abandoned target synchronization conflict worktree could not be recovered", exc)
-                try:
-                    self._workspace_manager.abort_target_sync_conflict(
-                        TargetSyncConflictRequest(
-                            change_id=change_id,
-                            target_head=conflict.target_head,
-                            operation_id=conflict.operation_id,
-                        )
-                    )
-                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                    self._fail("abandoned target synchronization conflict could not be discarded", exc)
+            self._discard_abandoned_target_sync_conflict(
+                change_id,
+                coordination,
+                expected_target_head,
+                expected_operation_id,
+            )
             return self._cleanup_change_worktree_locked(change_id, runtime)
+
+    def _discard_abandoned_target_sync_conflict(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination,
+        expected_target_head: str,
+        expected_operation_id: str,
+    ) -> None:
+        conflict = coordination.target_sync_conflict
+        if conflict is None:
+            return
+        if conflict.target_head != expected_target_head or conflict.operation_id != expected_operation_id:
+            self._fail("abandoned target synchronization conflict evidence is stale")
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        if retained is None:
+            self._fail("abandoned target synchronization conflict worktree is not registered")
+        if not retained.worktree_present or not retained.git_registered:
+            try:
+                coordination = self._workspace_manager.recover(
+                    change_id,
+                    coordination.last_reviewed_commit,
+                )
+            except ChangeWorktreeAttentionError:
+                raise
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("abandoned target synchronization conflict worktree could not be recovered", exc)
+        try:
+            self._workspace_manager.abort_target_sync_conflict(
+                TargetSyncConflictRequest(
+                    change_id=change_id,
+                    target_head=conflict.target_head,
+                    operation_id=conflict.operation_id,
+                )
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("abandoned target synchronization conflict could not be discarded", exc)
 
     def cleanup_completed_change_worktree(
         self,
@@ -3267,10 +3286,6 @@ class PortfolioApplication:
         """Compile one verified package without publishing generated authority."""
         package = self._package_store.read_verified(change_id)
         return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
-
-    def validate_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
-        """Return deterministic compiler diagnostics for one verified package."""
-        return self.derive_delivery_contract(change_id)
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""

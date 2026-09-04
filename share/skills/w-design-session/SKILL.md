@@ -208,8 +208,8 @@ Run these gates against one unchanged package ID:
    feasibility; they do not prove unimplemented behavior.
 4. Call `publish_design_checkpoint(change_id)` and require its returned package ID to equal the
   unchanged current package ID.
-5. Call `validate_delivery_contract(change_id)` and require its contract bytes and digest to equal
-  the derivation from step 1 with no diagnostics.
+5. Call `derive_delivery_contract(change_id)` again and require its contract bytes and digest to
+  equal the derivation from step 1 with no diagnostics.
 
 An `error` or malformed challenge, failing baseline, package-ID mismatch, derivation mismatch,
 compiler diagnostic, or unresolved material authority keeps the package unadmitted. Record and
@@ -229,7 +229,7 @@ certify dependency mechanics.
 
 Record approval against the unchanged package ID and derived contract digest. Call
 `read_design_session(change_id)` again and proceed only when its package ID and complete authored
-bytes match the approved package. Call `validate_delivery_contract(change_id)` again and require the
+bytes match the approved package. Call `derive_delivery_contract(change_id)` again and require the
 same canonical contract bytes and digest, then call `admit_delivery_change` with
 `DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=())`.
 
