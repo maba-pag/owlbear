@@ -66,8 +66,16 @@ def _make_md(tmp_path: Path, rel: str, content: str = "# Title\n") -> Path:
     return p
 
 
-def _make_excalidraw(tmp_path: Path, rel: str, content: str = "{}") -> Path:
-    """Write an Excalidraw file at *rel* relative to *tmp_path* and return the path."""
+def _make_manifest(tmp_path: Path, diagrams: list[dict[str, object]]) -> Path:
+    """Write a diagram manifest under *tmp_path*."""
+    p = tmp_path / "share/diagrams/manifest.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"schema_version": 1, "diagrams": diagrams}))
+    return p
+
+
+def _make_diagram_source(tmp_path: Path, rel: str, content: str = "{}") -> Path:
+    """Write an architecture source at *rel* relative to *tmp_path* and return the path."""
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content)
@@ -88,11 +96,11 @@ class TestDocIndexCollection:
         result = collect_docs(tmp_path)
         assert doc in result
 
-    def test_collects_excalidraw_files(self, tmp_path: Path) -> None:
-        """Happy: .excalidraw diagram files are also collected."""
-        diagram = _make_excalidraw(tmp_path, "share/diagrams/overview.excalidraw")
+    def test_does_not_collect_architecture_sources(self, tmp_path: Path) -> None:
+        """Architecture JSON sources are indexed through the diagram manifest."""
+        source = _make_diagram_source(tmp_path, "share/diagrams/overview.architecture.json")
         result = collect_docs(tmp_path)
-        assert diagram in result
+        assert source not in result
 
     def test_ignores_non_doc_file_extensions(self, tmp_path: Path) -> None:
         """Edge: .py, .json, .yaml, and other non-doc files are not collected."""
@@ -191,18 +199,26 @@ class TestDocIndexMarkdownOutput:
         text = index_path.read_text()
         assert "## share/agents/README.md" in text
 
-    def test_excalidraw_describes_metadata_is_rendered(self, tmp_path: Path) -> None:
-        """Happy: Excalidraw source globs are retained in the generated index."""
-        _make_excalidraw(
+    def test_manifest_diagram_metadata_is_rendered(self, tmp_path: Path) -> None:
+        """Happy: static diagram source, artifact, and source globs reach the index."""
+        _make_manifest(
             tmp_path,
-            "share/diagrams/overview.excalidraw",
-            json.dumps({"type": "excalidraw", "describes": ["serve/**", "share/**"]}),
+            [
+                {
+                    "source": "share/diagrams/overview.architecture.json",
+                    "artifact": "share/diagrams/overview.svg",
+                    "describes": ["serve/**", "share/**"],
+                }
+            ],
         )
         index_path = tmp_path / ".owlbear" / "doc-index.md"
 
         generate_index(tmp_path)
 
-        assert "describes: serve/**, share/**" in index_path.read_text()
+        text = index_path.read_text()
+        assert "## share/diagrams/overview.svg" in text
+        assert "source: share/diagrams/overview.architecture.json" in text
+        assert "describes: serve/**, share/**" in text
 
     def test_headings_are_bullet_backtick_wrapped(self, tmp_path: Path) -> None:
         """Happy: headings in a file are emitted as backtick-wrapped bullets."""
@@ -397,7 +413,8 @@ _WELL_FORMED_INDEX = textwrap.dedent(
     - ## `Installation`
     - ## `Configuration`
 
-    ## share/diagrams/overview.excalidraw
+    ## share/diagrams/overview.svg
+    source: share/diagrams/overview.architecture.json
     describes: serve/**, share/**
     """
 )
@@ -412,12 +429,13 @@ class TestDocIndexParser:
         paths = [e["path"] for e in entries]
         assert "README.md" in paths
         assert "docs/guide.md" in paths
-        assert "share/diagrams/overview.excalidraw" in paths
+        assert "share/diagrams/overview.svg" in paths
 
-    def test_parser_extracts_diagram_describes(self) -> None:
-        """Happy: parser retains Excalidraw source globs from an index entry."""
+    def test_parser_extracts_diagram_source_and_describes(self) -> None:
+        """Happy: parser retains static diagram source and coverage globs."""
         entries = parse_index(_WELL_FORMED_INDEX)
-        diagram = next(e for e in entries if e["path"] == "share/diagrams/overview.excalidraw")
+        diagram = next(e for e in entries if e["path"] == "share/diagrams/overview.svg")
+        assert diagram["source"] == "share/diagrams/overview.architecture.json"
         assert diagram["describes"] == ["serve/**", "share/**"]
 
     def test_parser_extracts_headings_from_entry(self) -> None:

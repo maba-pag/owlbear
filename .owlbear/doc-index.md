@@ -73,26 +73,6 @@
 ### Outbound links
 - [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)
 
-## static-website-knowledge-ingestion-t03-recovery-plan.md
-- # `Static Website Knowledge Ingestion T03 Recovery Plan`
-- ## `1. Context and Question`
-- ## `2. Sources Studied`
-- ## `3. Analysis`
-- ### `3.1 Authority boundary`
-- ### `3.2 Reconciled challenger findings`
-- ### `3.3 Acceptance mapping that must be proved`
-- ### `3.4 Alternatives`
-- ## `4. Implementation Plan`
-- ### `4.1 Operator and state gate`
-- ### `4.2 Orchestrator acquisition`
-- ### `4.3 Reconstruct the candidate`
-- ### `4.4 Shape and commit`
-- ### `4.5 Exact-candidate proof`
-- ### `4.6 Review, publication, and transition`
-- ### `4.7 Follow-up boundaries`
-- ## `5. Verification Checklist`
-- ## `6. Recommendation, Confidence, and Limits`
-
 ## .github/README-automation.md
 - # `GitHub Automation`
 - ## `What lives here`
@@ -173,6 +153,116 @@
 - ### `Status quo`
 - ### `Proposal`
 
+## .owlbear/cache/archify/v2.16.0/archify/SKILL.md
+- # `Archify`
+- ## `Fast authoring path`
+- ## `Update awareness`
+- ## `Type router`
+- ## `Mermaid input`
+- ## `Authoring invariants`
+- ## `Delivery`
+- ## `Optional viewer capabilities`
+- ## `Setup and fallback`
+- ## `Output`
+
+### Outbound links
+- [`renderers/workflow/README.md`](cache/archify/v2.16.0/archify/renderers/workflow/README.md#layout-contracts)
+
+## .owlbear/cache/archify/v2.16.0/archify/brand-marks/README.md
+- # `Built-in brand marks`
+
+## .owlbear/cache/archify/v2.16.0/archify/references/authoring-contract.md
+- # `Authoring contract`
+- ## `Schema lookup`
+- ## `Workflow layout contracts`
+- ## `Legend contract`
+- ## `Language consistency`
+- ## `Visual preset default`
+- ## `Engineering profile default`
+- ## `Title hierarchy`
+- ## `Executable geometry rules`
+- ### `Spacing and labels`
+- ### `Repair order`
+- ## `Mode placement`
+- ### `Architecture`
+- ### `Workflow`
+- ### `Sequence`
+- ### `Dataflow`
+- ### `Lifecycle`
+- ## `Repository evidence`
+- ## `Hand-placed fallback`
+
+### Outbound links
+- [migration and layout-receipt contract](cache/archify/v2.16.0/archify/renderers/workflow/README.md#migration-and-layout-receipt)
+- [layout contracts](cache/archify/v2.16.0/archify/renderers/workflow/README.md#layout-contracts)
+
+## .owlbear/cache/archify/v2.16.0/archify/references/brand-marks.md
+- # `Brand marks`
+- ## `Agent decision path`
+
+## .owlbear/cache/archify/v2.16.0/archify/references/delivery-contract.md
+- # `Delivery contract`
+- ## `Validate and deliver`
+- ## `Automated visual evidence`
+- ## `Optional opening`
+- ## `Last-Good Live Preview`
+- ## `Perceptual delivery gate`
+- ## `Handoff receipt`
+
+## .owlbear/cache/archify/v2.16.0/archify/references/viewer-runtime.md
+- # `Viewer Runtime reference`
+- ## `Exploration`
+- ## `Guided views and story`
+- ## `Motion and presentation`
+- ## `Canonical exports`
+- ### `Share Card`
+- ### `Route Share Card`
+- ### `Reach Share Card`
+- ## `Truth boundary`
+
+## .owlbear/cache/archify/v2.16.0/archify/renderers/dataflow/README.md
+- # `Data Flow Renderer`
+- ## `Input`
+- ## `Legend`
+- ## `Layout budget`
+- ## `Design Rules`
+
+## .owlbear/cache/archify/v2.16.0/archify/renderers/lifecycle/README.md
+- # `Lifecycle Renderer`
+- ## `Input`
+- ## `Legend`
+- ## `Layout budget`
+- ## `Design Rules`
+
+## .owlbear/cache/archify/v2.16.0/archify/renderers/sequence/README.md
+- # `Sequence Renderer`
+- ## `Input`
+- ## `Legend`
+- ## `Layout budget`
+- ### `Column fit`
+- ## `Design Rules`
+
+## .owlbear/cache/archify/v2.16.0/archify/renderers/workflow/README.md
+- # `Workflow Renderer`
+- ## `Input`
+- ## `Migration and layout receipt`
+- ## `Legend`
+- ## `Layout contracts`
+- ### `Fixed v1`
+- ### `Readable v2`
+- ## `Design Rules`
+- ### `Optional semantic checks`
+
+## .owlbear/cache/archify/v2.16.0/archify/schemas/README.md
+- # `Archify JSON IR Schemas`
+- ## `Files`
+- ### `Legend presentation contract`
+- ## `schema_version policy`
+- ## `Shared definitions (common.schema.json)`
+- ## `Runtime validation`
+- ## `Visual quality and engineering truth`
+- ## `Error format`
+
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
 - ## `Dependency Rules`
@@ -224,6 +314,11 @@
 - ### `Interpreting User Input`
 - ### `Decisions And Questions`
 - ### `Session Continuation`
+
+## .owlbear/skills/h-architecture-diagram/SKILL.md
+- # `Static Architecture Diagrams`
+- ## `Source And Coverage`
+- ## `Authoring And Proof`
 
 ## .owlbear/skills/w-agent-audit/SKILL.md
 - # `Agent Ecosystem Audit`
@@ -626,7 +721,8 @@
 - [WIRING.md](../share/WIRING.md)
 - [Validation](../share/README.md#validation)
 - [MCP topology diagram](../share/diagrams/mcp-topology.svg)
-- [editable Excalidraw source](../share/diagrams/mcp-topology.excalidraw)
+- [Archify source](../share/diagrams/mcp-topology.architecture.json)
+- [coverage manifest](../share/diagrams/manifest.json)
 - [WIRING.md](../share/WIRING.md)
 - [WIRING.md](../share/WIRING.md)
 - [WIRING.md](../share/WIRING.md)
@@ -683,9 +779,6 @@
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
-
-## share/diagrams/mcp-topology.excalidraw
-describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/delivery/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**
 
 ## share/instructions/agent-ecosystem.instructions.md
 
@@ -851,73 +944,11 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 - ## `Embed A Request In A Block`
 - ## `Resolution And Resume`
 
-## share/skills/h-excalidraw-diagram/SKILL.md
-- # `Excalidraw Diagram Reference`
-- ## `Design Philosophy`
-- ## `Document Structure`
-- ## `Element Placement Rules`
-- ## `Diagram Patterns`
-- ### `Architecture (Fan-Out)`
-- ### `Flowchart (Diamond Decisions)`
-- ### `Sequence (Timeline)`
-- ### `Tree (Hierarchy)`
-- ### `Convergence (Many-to-One)`
-- ### `Spiral / Cycle`
-- ### `Cloud (Abstract State)`
-- ### `Assembly Line (Transformation)`
-- ### `Side-by-Side (Comparison)`
-- ### `Entity-Relationship (ER)`
-- ## `Shape Meaning`
-- ## `Container vs. Free-Floating Text`
-- ## `Large Diagram Strategy`
-- ## `Delivery`
-- ## `Reference Files`
-- ## `Quality Checklist`
-- ## `Known Gotchas`
-
-### Outbound links
-- [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill)
-
-## share/skills/h-excalidraw-diagram/references/color-palette.md
-- # `Color Palette`
-- ## `Semantic Fill / Stroke Pairs`
-- ## `Text Hierarchy Colors`
-- ## `Evidence Artifact Colors`
-- ## `Stroke Utilities`
-- ## `Usage Rules`
-
-### Outbound links
-- [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill)
-
-## share/skills/h-excalidraw-diagram/references/element-templates.md
-- # `Element Templates`
-- ## `Rectangle`
-- ## `Text (In-Container)`
-- ## `Text (Free-Floating)`
-- ## `Arrow (With Bindings)`
-- ## `Line`
-- ## `Small Marker Dot`
-- ## `Diamond`
-- ## `Ellipse`
-
-### Outbound links
-- [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill)
-
-## share/skills/h-excalidraw-diagram/references/json-schema.md
-- # `JSON Schema Reference`
-- ## `Element Types`
-- ## `Common Properties (All Element Types)`
-- ## `Text-Specific Properties`
-- ## `Arrow-Specific Properties`
-- ## `Binding Format`
-
-### Outbound links
-- [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill)
-
 ## share/skills/h-frontend-conventions/SKILL.md
 - # `Frontend Conventions`
 - ## `Discover Project Policy`
 - ## `Design System`
+- ## `Optional PDS Knowledge Companion`
 - ## `Accessibility and Input`
 - ## `Component and Module Structure`
 - ## `Responsive and Visual Behavior`
@@ -1262,3 +1293,7 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ### Outbound links
 - [development README](../README.md)
+
+## share/diagrams/mcp-topology.svg
+source: share/diagrams/mcp-topology.architecture.json
+describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/delivery/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**
