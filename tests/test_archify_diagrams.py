@@ -190,6 +190,7 @@ def test_render_diagram_validates_then_atomically_writes_svg(
         if command[1] == "validate":
             return render_module.subprocess.CompletedProcess(command, 0, json.dumps({"ok": True}), "")
         html_path = Path(command[4])
+        assert html_path.parent != output.parent
         html_path.write_text(
             "<html><head><style>.c-grid { stroke: #eee; }</style></head>"
             '<body><svg viewBox="0 0 320 240" role="img"><path class="c-grid" /></svg></body></html>',

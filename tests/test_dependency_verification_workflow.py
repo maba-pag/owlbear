@@ -395,9 +395,11 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
     assert "(?<currentValue>v[\\d.]+)" in patterns[0]
     assert "(?<currentDigest>[a-f0-9]{64})" in patterns[0]
     replacement_span = lock[lock.index('"version"') : lock.index('"sha256"') + len('"sha256"')]
-    assert '"version": "v2.16.0"' in replacement_span
+    lock_document = json.loads(lock)
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", lock_document["version"])
+    assert f'"version": "{lock_document["version"]}"' in replacement_span
     assert '"sha256"' in replacement_span
-    assert json.loads(lock)["sha256"] in lock
+    assert lock_document["sha256"] in lock
 
 
 @pytest.mark.parametrize(

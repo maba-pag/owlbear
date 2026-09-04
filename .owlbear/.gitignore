@@ -7,7 +7,7 @@ scratch/*
 skills/pds-knowledge-*
 
 # Archify release cache
-cache/archify/
+cache/
 
 # Knowledge and memory databases
 knowledge/*.db

@@ -250,7 +250,7 @@ def render_diagram(
     cli = _archify_cli(archify_root)
     _validate(cli, archify_root, source, quality)
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary_root = Path(tempfile.mkdtemp(prefix=".archify-render-", dir=output.parent))
+    temporary_root = Path(tempfile.mkdtemp(prefix="owlbear-archify-render-"))
     try:
         html_output = temporary_root / "candidate.html"
         result = _run_node(

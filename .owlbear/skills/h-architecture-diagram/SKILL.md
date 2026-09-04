@@ -38,4 +38,4 @@ uv run python .owlbear/scripts/diagrams/render.py \
 
 Use `quality_profile: "showcase"`. Repair the named Archify diagnostic rather than weakening a
 layout gate or editing the generated SVG by hand. Regenerate the artifact after every source edit
-and verify that the documentation index and manifest remain current.
+or Archify lock bump, and verify that the documentation index and manifest remain current.

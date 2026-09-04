@@ -33,6 +33,7 @@ _EXCLUDED_PATHS = [
     ".owlbear/legacy",
     ".owlbear/target",
     ".owlbear/worktrees",
+    ".owlbear/cache",
     "seed/.github",
     "store",
     "tests",

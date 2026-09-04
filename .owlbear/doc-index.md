@@ -153,116 +153,6 @@
 - ### `Status quo`
 - ### `Proposal`
 
-## .owlbear/cache/archify/v2.16.0/archify/SKILL.md
-- # `Archify`
-- ## `Fast authoring path`
-- ## `Update awareness`
-- ## `Type router`
-- ## `Mermaid input`
-- ## `Authoring invariants`
-- ## `Delivery`
-- ## `Optional viewer capabilities`
-- ## `Setup and fallback`
-- ## `Output`
-
-### Outbound links
-- [`renderers/workflow/README.md`](cache/archify/v2.16.0/archify/renderers/workflow/README.md#layout-contracts)
-
-## .owlbear/cache/archify/v2.16.0/archify/brand-marks/README.md
-- # `Built-in brand marks`
-
-## .owlbear/cache/archify/v2.16.0/archify/references/authoring-contract.md
-- # `Authoring contract`
-- ## `Schema lookup`
-- ## `Workflow layout contracts`
-- ## `Legend contract`
-- ## `Language consistency`
-- ## `Visual preset default`
-- ## `Engineering profile default`
-- ## `Title hierarchy`
-- ## `Executable geometry rules`
-- ### `Spacing and labels`
-- ### `Repair order`
-- ## `Mode placement`
-- ### `Architecture`
-- ### `Workflow`
-- ### `Sequence`
-- ### `Dataflow`
-- ### `Lifecycle`
-- ## `Repository evidence`
-- ## `Hand-placed fallback`
-
-### Outbound links
-- [migration and layout-receipt contract](cache/archify/v2.16.0/archify/renderers/workflow/README.md#migration-and-layout-receipt)
-- [layout contracts](cache/archify/v2.16.0/archify/renderers/workflow/README.md#layout-contracts)
-
-## .owlbear/cache/archify/v2.16.0/archify/references/brand-marks.md
-- # `Brand marks`
-- ## `Agent decision path`
-
-## .owlbear/cache/archify/v2.16.0/archify/references/delivery-contract.md
-- # `Delivery contract`
-- ## `Validate and deliver`
-- ## `Automated visual evidence`
-- ## `Optional opening`
-- ## `Last-Good Live Preview`
-- ## `Perceptual delivery gate`
-- ## `Handoff receipt`
-
-## .owlbear/cache/archify/v2.16.0/archify/references/viewer-runtime.md
-- # `Viewer Runtime reference`
-- ## `Exploration`
-- ## `Guided views and story`
-- ## `Motion and presentation`
-- ## `Canonical exports`
-- ### `Share Card`
-- ### `Route Share Card`
-- ### `Reach Share Card`
-- ## `Truth boundary`
-
-## .owlbear/cache/archify/v2.16.0/archify/renderers/dataflow/README.md
-- # `Data Flow Renderer`
-- ## `Input`
-- ## `Legend`
-- ## `Layout budget`
-- ## `Design Rules`
-
-## .owlbear/cache/archify/v2.16.0/archify/renderers/lifecycle/README.md
-- # `Lifecycle Renderer`
-- ## `Input`
-- ## `Legend`
-- ## `Layout budget`
-- ## `Design Rules`
-
-## .owlbear/cache/archify/v2.16.0/archify/renderers/sequence/README.md
-- # `Sequence Renderer`
-- ## `Input`
-- ## `Legend`
-- ## `Layout budget`
-- ### `Column fit`
-- ## `Design Rules`
-
-## .owlbear/cache/archify/v2.16.0/archify/renderers/workflow/README.md
-- # `Workflow Renderer`
-- ## `Input`
-- ## `Migration and layout receipt`
-- ## `Legend`
-- ## `Layout contracts`
-- ### `Fixed v1`
-- ### `Readable v2`
-- ## `Design Rules`
-- ### `Optional semantic checks`
-
-## .owlbear/cache/archify/v2.16.0/archify/schemas/README.md
-- # `Archify JSON IR Schemas`
-- ## `Files`
-- ### `Legend presentation contract`
-- ## `schema_version policy`
-- ## `Shared definitions (common.schema.json)`
-- ## `Runtime validation`
-- ## `Visual quality and engineering truth`
-- ## `Error format`
-
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
 - ## `Dependency Rules`
@@ -872,6 +762,8 @@
 
 ## share/prompts/resolve-delivery-attention.prompt.md
 
+## share/prompts/resolve-target-conflict.prompt.md
+
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
 
@@ -1266,6 +1158,14 @@
 - ## `Step 5 — Analyze And Compare`
 - ## `Step 6 — Preserve Durable Findings When Useful`
 - ## `Step 7 — Return Evidence To The Caller`
+
+## share/skills/w-target-conflict-resolution/SKILL.md
+- # `Target Conflict Resolution`
+- ## `Step 0 - Bind Current Authority`
+- ## `Step 1 - Resolve In Managed Custody`
+- ## `Step 2 - Handoff`
+- ## `Output Template`
+- ## `Known Pitfalls`
 
 ## share/skills/w-test-curation/SKILL.md
 - # `Test Curation`
