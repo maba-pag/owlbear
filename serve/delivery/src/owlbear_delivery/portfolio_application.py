@@ -3506,7 +3506,11 @@ class PortfolioApplication:
                 diagnostic.source == "remote-state"
                 and diagnostic.code == "remote-state-reconciliation-required"
                 and diagnostic.change_id == change_id
-                and "remote Change branch differs from Delivery-state snapshot" in diagnostic.detail
+                and (
+                    "remote Change branch differs from Delivery-state snapshot" in diagnostic.detail
+                    or "local Delivery runtime artifact differs from its remote snapshot: frontier.json"
+                    in diagnostic.detail
+                )
             )
         )
         if reconciliation_error is not None and not matching_diagnostics:
