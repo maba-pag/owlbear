@@ -12,17 +12,19 @@ owns only the semantic file edits and focused proof needed to make the merge res
 
 ## Step 0 - Bind Current Authority
 
-Require one native `change_id`. Read `list_work_items`, `show_work_item`, and
-`show_finalization_context` before mutation. Bind the current Change, branch, managed worktree,
-reviewed head, integration target, pull-request identity, and any target-sync conflict identity.
+Require one native `change_id`. Read `list_work_items`, `show_work_item_view` with
+`{"change_id": "<change-id>", "item_key": "publication"}`, and `show_finalization_context` before
+mutation. Bind the current Change, branch, managed worktree, reviewed head, integration target,
+pull-request identity, and any target-sync conflict identity from the detailed publication view.
 Read `.owlbear/delivery/config.json` to identify the configured remote and target branch, then read
 that target's remote-tracking commit with Git. Do not infer a target head from the GitHub PR page or
 from an old prompt result.
 
 A current open pull request with no Delivery target-sync conflict is still eligible for this
 workflow: use the exact configured target head and a stable operation ID to call
-`sync_change_with_target`. If Delivery returns a preserved conflict, re-read `show_work_item` and
-bind its exact `disposition_id`, `target_head`, `operation_id`, and conflict paths. If a conflict
+`sync_change_with_target`. If Delivery returns a preserved conflict, re-read
+`show_work_item_view` for `publication` and bind `publication.attention.disposition_id` plus
+`publication.target_sync_conflict.target_head`, `operation_id`, and conflict paths. If a conflict
 is already present, never start a second synchronization attempt.
 
 Use only the one managed Change worktree returned by Delivery. Verify its branch, exact head,
@@ -90,6 +92,17 @@ change_id: <change-id>
 reason: <bounded authority gap or user decision>
 conflict_paths: [<relative paths>]
 next_command: none
+```
+
+When target synchronization completes without conflicts:
+
+```yaml
+kind: synced
+action: sync_change_with_target
+change_id: <change-id>
+target_head: <exact target head>
+merged_head: <exact returned merge head>
+next_command: /finalize-change <change-id>
 ```
 
 ## Known Pitfalls

@@ -583,6 +583,7 @@ def test_identical_check_observation_replays_durable_receipt(tmp_path: Path) -> 
     assert len(tuple((tmp_path / "pull-requests/check-observations/change-a").glob("*.json"))) == 1
 
 
+@pytest.mark.filterwarnings("error::UserWarning")
 def test_observes_and_persists_bound_pull_request_head_drift(tmp_path: Path) -> None:
     provider = _Provider()
     publisher = _publisher(tmp_path, provider)
@@ -600,6 +601,7 @@ def test_observes_and_persists_bound_pull_request_head_drift(tmp_path: Path) -> 
         tmp_path / "pull-requests/pull-request-observations/change-a" / f"{receipt.provider_evidence_digest}.json"
     )
     assert PublicationPullRequestObservationReceipt.model_validate_json(observation_path.read_bytes()) == receipt
+    assert PublicationPullRequestObservationReceipt.model_validate_json(receipt.model_dump_json()) == receipt
 
 
 def test_reads_legacy_pull_request_observation_without_mergeability_metadata() -> None:
@@ -640,6 +642,7 @@ def test_reads_legacy_pull_request_observation_without_mergeability_metadata() -
 
     assert receipt.mergeable is None
     assert receipt.merge_state_status is None
+    assert PublicationPullRequestObservationReceipt.model_validate_json(receipt.model_dump_json()) == receipt
 
 
 def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:

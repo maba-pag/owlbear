@@ -324,7 +324,7 @@ def _publication_observation(
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
     observation_id = hashlib.sha256(
         json.dumps(
-            candidate.model_dump(mode="json", exclude={"observation_id"}, exclude_unset=True),
+            candidate._identity_payload(),
             sort_keys=True,
             separators=(",", ":"),
         ).encode()

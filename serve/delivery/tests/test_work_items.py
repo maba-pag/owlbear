@@ -266,7 +266,7 @@ def _publication_observation(
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
     observation_id = hashlib.sha256(
         json.dumps(
-            candidate.model_dump(mode="json", exclude={"observation_id"}, exclude_unset=True),
+            candidate._identity_payload(),  # noqa: SLF001
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
@@ -961,6 +961,42 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
     assert card.action.label == "Check merge status"
     assert detail.publication is not None
     assert detail.publication.pull_request_number == 42
+
+
+def test_conflicting_ready_pull_request_keeps_status_check_and_resolution_prompt() -> None:
+    finalization = _finalization()
+    ready = _ready(finalization)
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "ready": ready,
+                "change_publication_history": DeliveryChangePublicationHistory.create(
+                    DeliveryChangePublicationIdentity(
+                        change_id="portfolio-change",
+                        repository="example/project",
+                        number=42,
+                        node_id="PR_portfolio_42",
+                        head_sha=finalization.exact_head,
+                    )
+                ),
+            },
+            publication_observation=_publication_observation(mergeable=False, merge_state_status="dirty"),
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert (card.needs, card.next_actor, card.next_step, card.action.kind, card.action.label, card.action.command) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        "Resolve pull-request conflicts before continuing",
+        WorkItemActionKind.OBSERVE_ACCEPTANCE,
+        "Check merge status",
+        "/resolve-target-conflict portfolio-change",
+    )
 
 
 def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:

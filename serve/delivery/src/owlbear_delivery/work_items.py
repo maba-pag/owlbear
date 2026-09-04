@@ -695,9 +695,7 @@ class WorkItemProjector:
         elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
             return self._draft_publication_card(phase)
         elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
-            needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
-            next_step, progress = headline, "Awaiting merge in GitHub"
-            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status")
+            needs, headline, next_actor, next_step, progress, action = self._awaiting_merge_state()
         else:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Record accepted completion", "Merge observed"
@@ -720,6 +718,32 @@ class WorkItemProjector:
             activity=activity,
             progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
             action=action,
+        )
+
+    def _awaiting_merge_state(
+        self,
+    ) -> tuple[WorkItemNeed, str | None, WorkItemNextActor, str, str, WorkItemAction]:
+        mergeability = self._current_publication_observation()
+        if mergeability is not None and mergeability.mergeable is False:
+            return (
+                WorkItemNeed.YOU,
+                "Pull request has merge conflicts",
+                WorkItemNextActor.YOU,
+                "Resolve pull-request conflicts before continuing",
+                "Pull request conflicts detected",
+                WorkItemAction(
+                    kind=WorkItemActionKind.OBSERVE_ACCEPTANCE,
+                    label="Check merge status",
+                    command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+                ),
+            )
+        return (
+            WorkItemNeed.YOU,
+            "Merge pull request in GitHub",
+            WorkItemNextActor.YOU,
+            "Merge pull request in GitHub",
+            "Awaiting merge in GitHub",
+            WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status"),
         )
 
     def _draft_publication_card(self, phase: WorkItemPublicationPhase) -> WorkItemCardView:

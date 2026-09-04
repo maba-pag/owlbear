@@ -199,6 +199,12 @@ class WorkItemParams(ChangeParams):
     work_item_id: str = Field(min_length=1)
 
 
+class WorkItemViewParams(ChangeParams):
+    """Validate one exact detailed Work Item view."""
+
+    item_key: str = Field(min_length=1)
+
+
 class OperatorContextParams(ChangeParams):
     """Validate one exact outcome or Change operator context."""
 
@@ -827,6 +833,10 @@ type TransitionDeliveryRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
 ]
 type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
+type WorkItemViewRequest = Annotated[
+    WorkItemViewParams,
+    BeforeValidator(partial(_parse_json_model, WorkItemViewParams)),
+]
 
 
 __all__ = [
@@ -918,4 +928,6 @@ __all__ = [
     "TransitionDeliveryRequest",
     "WorkItemParams",
     "WorkItemRequest",
+    "WorkItemViewParams",
+    "WorkItemViewRequest",
 ]

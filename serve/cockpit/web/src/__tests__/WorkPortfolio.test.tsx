@@ -2180,6 +2180,47 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
 })
 
+it('keeps conflict guidance and merge-status control for a ready conflicted pull request', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before continuing',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'observe-acceptance',
+      label: 'Check merge status',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('awaiting-merge'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Check merge status'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/acceptance/observe',
+    method: 'POST',
+    body: null,
+  }))
+})
+
 it('surfaces acceptance-reconciliation provider failure with an immediate retry', async () => {
   const publicationCard = card({
     item_key: 'publication',

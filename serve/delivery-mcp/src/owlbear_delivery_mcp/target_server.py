@@ -122,6 +122,8 @@ from owlbear_delivery_mcp.target_models import (
     TransitionDeliveryRequest,
     WorkItemParams,
     WorkItemRequest,
+    WorkItemViewParams,
+    WorkItemViewRequest,
 )
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
@@ -142,6 +144,7 @@ DELIVERY_OPERATION_NAMES = (
     "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
     "show_operator_context",
     "resolve_request",
     "clear_block",
@@ -191,6 +194,7 @@ _DELIVERY_READS = frozenset(
         "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_work_item_view",
         "show_operator_context",
         "preview_administrative_move",
         "show_plan_context",
@@ -334,6 +338,14 @@ class TargetMCPAdapter:
         """Show one exact bounded work item."""
         params = self._validate(WorkItemParams, request)
         return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
+
+    async def show_work_item_view(self, request: WorkItemViewRequest) -> dict[str, object]:
+        """Show one exact detailed Work Item view."""
+        params = self._validate(WorkItemViewParams, request)
+        return self._call(
+            params,
+            lambda: self._application.show_work_item_view(params.change_id, params.item_key),
+        )
 
     async def show_operator_context(self, request: OperatorContextRequest) -> DeliveryOperatorContextResponse:
         """Show bounded operator state for one exact outcome or Change."""

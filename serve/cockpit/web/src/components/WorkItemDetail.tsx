@@ -984,7 +984,7 @@ function PublicationSection(props: WorkItemDetailProps) {
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
         {action.command && !finalizationBlocked && !targetSyncAttention ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
-        {control && action.label && (!action.command || action.kind === 'mark-ready') ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={runControl}>{pending ? 'Working...' : action.label}</PButton> : null}
+        {control && action.label && (!action.command || action.kind === 'mark-ready' || action.kind === 'observe-acceptance') ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={runControl}>{pending ? 'Working...' : action.label}</PButton> : null}
       </SectionCard>
       {readyConflictConfirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setReadyConflictConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm making conflicted pull request ready' }}>
