@@ -19,6 +19,7 @@ name: Dependency verification
       - .mega-linter.yml
       - .pre-commit-config.yaml
       - .python-version
+      - .owlbear/scripts/diagrams/**
       - package.json
       - package-lock.json
       - pyproject.toml
@@ -28,6 +29,7 @@ name: Dependency verification
       - serve/cockpit/web/package-lock.json
       - serve/tools/src/owlbear_tools/dependency_ci.py
       - serve/tools/src/owlbear_tools/megalinter.py
+      - tests/test_archify_diagrams.py
       - tests/test_dependency_verification_workflow.py
       - uv.lock
   workflow_dispatch:
@@ -221,6 +223,7 @@ jobs:
       needs.classify.result == 'success' &&
       (needs.classify.outputs.pds == 'true' ||
       needs.classify.outputs.root_node == 'true' ||
+      needs.classify.outputs.diagrams == 'true' ||
       needs.classify.outputs.shared_node_runtime == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -243,6 +246,19 @@ jobs:
       - name: Install locked root dependencies
         if: needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         run: npm ci
+
+      - name: Verify pinned Archify release and static render
+        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
+        timeout-minutes: 10
+        run: |
+          archify_root="$(python3 .owlbear/scripts/diagrams/sync.py --check --print-root)"
+          python3 .owlbear/scripts/diagrams/render.py \
+            --input "$archify_root/examples/web-app.architecture.json" \
+            --output "$RUNNER_TEMP/archify-example.svg" \
+            --offline
+          test -s "$RUNNER_TEMP/archify-example.svg"
+          grep -q '^<svg ' "$RUNNER_TEMP/archify-example.svg"
+          grep -q 'xmlns="http://www.w3.org/2000/svg"' "$RUNNER_TEMP/archify-example.svg"
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'
@@ -343,6 +359,7 @@ jobs:
           NODE_EXPECTED: >-
             ${{ needs.classify.outputs.pds == 'true' ||
             needs.classify.outputs.root_node == 'true' ||
+            needs.classify.outputs.diagrams == 'true' ||
             needs.classify.outputs.shared_node_runtime == 'true' }}
           PYTHON: ${{ needs.proof-python.result }}
           PYTHON_EXPECTED: ${{ needs.classify.outputs.python }}

@@ -107,7 +107,7 @@ def _selected_npm_roots(*, include_all: bool, include_browsers: bool) -> tuple[t
     if include_all:
         return _NPM_ROOTS
     if include_browsers:
-        return (_NPM_ROOTS[0], _NPM_ROOTS[2])
+        return _BROWSER_ROOTS
     return _NPM_ROOTS[:1]
 
 

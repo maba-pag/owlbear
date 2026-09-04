@@ -24,6 +24,7 @@ _COCKPIT_NODE_FILES = {
     "serve/cockpit/web/package.json",
 }
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
+_DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
 _RUFF_TOOLCHAIN_FILES = {
     ".github/scripts/check_ruff_toolchain.py",
 }
@@ -245,6 +246,7 @@ class DependencyScope:
     node: bool
     shared_node_runtime: bool
     root_node: bool
+    diagrams: bool
     pds: bool
     precommit: bool
     ruff_toolchain: bool
@@ -260,7 +262,14 @@ class DependencyScope:
     @property
     def applicable(self) -> bool:
         """Return whether the diff contains a maintained dependency surface."""
-        return self.python or self.node or self.shared_node_runtime or self.root_node or self.compatibility
+        return (
+            self.python
+            or self.node
+            or self.shared_node_runtime
+            or self.root_node
+            or self.diagrams
+            or self.compatibility
+        )
 
     def github_outputs(self) -> dict[str, str]:
         """Serialize classifications as GitHub Actions boolean outputs."""
@@ -283,6 +292,7 @@ def classify_dependency_change(
     node = bool(changed & _COCKPIT_NODE_FILES)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
+    diagrams = bool(changed & _DIAGRAM_FILES) or any(path.startswith(".owlbear/scripts/diagrams/") for path in changed)
     workflows = any(path.startswith(".github/workflows/") for path in changed)
     megalinter = ".mega-linter.yml" in changed
     renovate = ".github/renovate.json" in changed
@@ -294,6 +304,7 @@ def classify_dependency_change(
         node=node,
         shared_node_runtime=shared_node_runtime,
         root_node=root_node,
+        diagrams=diagrams,
         pds=node and any(package in diff for package in _PDS_PACKAGES),
         precommit=precommit,
         ruff_toolchain=ruff_toolchain,

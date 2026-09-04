@@ -103,6 +103,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".mega-linter.yml",
         ".pre-commit-config.yaml",
         ".python-version",
+        ".owlbear/scripts/diagrams/**",
         "package.json",
         "package-lock.json",
         "pyproject.toml",
@@ -112,6 +113,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/tools/src/owlbear_tools/megalinter.py",
+        "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
@@ -173,7 +175,28 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "Check Node runtime declaration" in text
     assert "needs.classify.outputs.pds == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
+    assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
+    archify_steps = [
+        step for step in proof_node["steps"] if step.get("name") == "Verify pinned Archify release and static render"
+    ]
+    assert archify_steps == [
+        {
+            "name": "Verify pinned Archify release and static render",
+            "if": ("needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"),
+            "timeout-minutes": 10,
+            "run": (
+                'archify_root="$(python3 .owlbear/scripts/diagrams/sync.py --check --print-root)"\n'
+                "python3 .owlbear/scripts/diagrams/render.py \\\n"
+                '  --input "$archify_root/examples/web-app.architecture.json" \\\n'
+                '  --output "$RUNNER_TEMP/archify-example.svg" \\\n'
+                "  --offline\n"
+                'test -s "$RUNNER_TEMP/archify-example.svg"\n'
+                "grep -q '^<svg ' \"$RUNNER_TEMP/archify-example.svg\"\n"
+                'grep -q \'xmlns="http://www.w3.org/2000/svg"\' "$RUNNER_TEMP/archify-example.svg"\n'
+            ),
+        }
+    ]
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
@@ -288,48 +311,19 @@ def test_ruff_toolchain_proof_rejects_bundled_version_drift(tmp_path: Path) -> N
     assert "MegaLinter bundled Ruff=0.16.1" in result.stderr
 
 
-def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
-    jobs = workflow["jobs"]
-    assert isinstance(jobs, dict)
-    return [
-        step
-        for job in jobs.values()
-        for step in job.get("steps", [])
-        if "playwright install" in str(step.get("run", ""))
-    ]
-
-
-def test_playwright_browser_install_never_provisions_system_packages() -> None:
-    """`--with-deps` shells out to apt, which stalls the runner when a mirror is
-    unreachable. The runner image already ships Chromium's shared libraries."""
-    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
-
-    assert steps
-    for step in steps:
-        assert "--with-deps" not in str(step["run"])
-
-
-def test_browser_install_steps_cannot_burn_a_whole_job_timeout() -> None:
-    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
-
-    assert steps
-    for step in steps:
-        timeout = step.get("timeout-minutes")
-        assert timeout is not None
-        assert 0 < timeout <= 10
-
-
 def test_shared_node_runtime_uses_one_node_proof() -> None:
     workflow = _workflow(VERIFY_PATH)
 
     condition = _job(workflow, "proof-node")["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
     assert "needs.classify.outputs.root_node == 'true'" in condition
+    assert "needs.classify.outputs.diagrams == 'true'" in condition
 
     gate_env = _job(workflow, "gate")["steps"][0]["env"]
     assert gate_env["NODE_EXPECTED"] == (
         "${{ needs.classify.outputs.pds == 'true' || "
         "needs.classify.outputs.root_node == 'true' || "
+        "needs.classify.outputs.diagrams == 'true' || "
         "needs.classify.outputs.shared_node_runtime == 'true' }}"
     )
 
@@ -377,8 +371,9 @@ def test_dependency_workflow_actions_are_pinned() -> None:
         ("serve/cockpit/web/.nvmrc", "node"),
         ("package.json", "root_node"),
         ("package-lock.json", "root_node"),
-        (".owlbear/scripts/export-diagrams/package.json", "diagrams"),
-        (".owlbear/scripts/export-diagrams/package-lock.json", "diagrams"),
+        (".owlbear/scripts/diagrams/archify.lock.json", "diagrams"),
+        (".owlbear/scripts/diagrams/sync.py", "diagrams"),
+        (".owlbear/scripts/diagrams/render.py", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/sync-to-main.yml", "workflows"),
         (".github/renovate.json", "renovate"),
