@@ -3468,6 +3468,12 @@ class PortfolioApplication:
             if branch_receipt is None:
                 self._fail("target-sync publication repair could not publish the Change branch")
             self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.pending_checkpoint is not None:
+                runtime.acknowledge_checkpoint_publication(
+                    checkpoint.pending_checkpoint,
+                    branch_receipt.published_head,
+                )
             self._clear_target_sync_reconciliation(change_id)
             target_sync = runtime.target_sync_receipt()
             if target_sync is None:

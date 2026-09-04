@@ -2119,8 +2119,8 @@ def test_target_sync_publication_repair_reconciles_quarantined_state_and_preserv
     assert application.delivery_health().diagnostics == ()
     assert runtime.finalization() is None
     blocked = application.reconcile_change_checkpoint("change-a")
-    assert blocked.reconciled is False
-    assert blocked.error_code == "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
+    assert blocked.reconciled is True
+    assert runtime.target_sync_receipt().review_required is True
 
 
 def test_resolved_target_merge_requires_fresh_finalization_before_checkpoint_publication(tmp_path: Path) -> None:
