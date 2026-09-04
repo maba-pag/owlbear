@@ -294,39 +294,6 @@ svg {width: 100%;
 svg[data-chapter-handoff] [data-node-id][data-chapter-role="stay"] {opacity: 1;}
 svg[data-chapter-handoff] [data-node-id][data-chapter-role="enter"] {opacity: 0.78;}
 svg[data-chapter-handoff] [data-node-id][data-chapter-role="leave"] {opacity: 0.26;}
-/* Force the FULL light palette — including component fills/strokes and
-         lane/arrow colors — so printing from dark theme doesn't put neon
-         strokes and translucent dark fills on white paper. */
-      :root, [data-theme="dark"], [data-theme="light"] {--bg: #ffffff;
-        --grid: transparent;
-        --panel: #ffffff;
-        --panel-border: #e2e8f0;
-        --text: #0f172a;
-        --text-muted: #475569;
-        --text-dim: #94a3b8;
-        --text-faint: #64748b;
-        --mask: #ffffff;
-        --lane-fill: rgba(248, 250, 252, 0.65);
-        --lane-stroke: #cbd5e1;
-        --arrow: #94a3b8;
-        --arrow-emphasis: #059669;
-        --frontend-fill:    rgba(34, 211, 238, 0.15);
-        --frontend-stroke:  #0891b2;
-        --backend-fill:     rgba(52, 211, 153, 0.18);
-        --backend-stroke:   #059669;
-        --database-fill:    rgba(167, 139, 250, 0.2);
-        --database-stroke:  #7c3aed;
-        --cloud-fill:       rgba(251, 191, 36, 0.18);
-        --cloud-stroke:     #d97706;
-        --security-fill:    rgba(251, 113, 133, 0.15);
-        --security-stroke:  #e11d48;
-        --messagebus-fill:  rgba(251, 146, 60, 0.15);
-        --messagebus-stroke:#ea580c;
-        --external-fill:    rgba(148, 163, 184, 0.18);
-        --external-stroke:  #64748b;}
-svg [data-node-id][data-chapter-role] {opacity: 1 !important;}
-svg[data-chapter-preview] [data-node-id],
-      svg[data-chapter-preview] [data-edge-from] {opacity: 1 !important; filter: none !important;}
 [data-theme="light"] #theme-icon {-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='10' cy='10' r='3.1'/%3E%3Cpath d='M10 2.2v1.4M10 16.4v1.4M2.2 10h1.4M16.4 10h1.4M4.5 4.5l1 1M14.5 14.5l1 1M15.5 4.5l-1 1M5.5 14.5l-1 1'/%3E%3C/g%3E%3C/svg%3E");
       mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cg fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='10' cy='10' r='3.1'/%3E%3Cpath d='M10 2.2v1.4M10 16.4v1.4M2.2 10h1.4M16.4 10h1.4M4.5 4.5l1 1M14.5 14.5l1 1M15.5 4.5l-1 1M5.5 14.5l-1 1'/%3E%3C/g%3E%3C/svg%3E");}
 [data-theme="dark"] #theme-icon {-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M15.2 12.7A6.3 6.3 0 017.3 4.8a6.3 6.3 0 107.9 7.9Z' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -684,16 +651,6 @@ svg[data-preset="editorial"][data-animation="trace"] [data-animate="edge"] {filt
       animation-duration: 2.2s;}
 svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {animation-name: archify-editorial-node-pulse;
       animation-duration: 3.5s;}
-svg[data-animation="trace"] [data-animate] {animation: none !important;
-        stroke-dashoffset: 0;}
-.guided-view-chapter,
-      svg[data-chapter-preview] [data-node-id],
-      svg[data-chapter-preview] [data-edge-from] {transition: none !important;}
-svg[data-story-playing="true"] .story-trail-flow {stroke-dasharray: none;
-        stroke-dashoffset: 0;
-        opacity: 0.55;}
-.source-evidence-beacon,
-      svg [data-node-id], svg [data-edge-from], svg [data-detail], svg [data-detail-anchor], svg [data-legend-hit], svg {transition: none !important;}
   ]]></style>
         <title id="archify-diagram-title">OwlBear MCP Topology</title>
         <desc id="archify-diagram-description">Five seeded stdio servers; configuration and implementations remain authoritative.</desc>
