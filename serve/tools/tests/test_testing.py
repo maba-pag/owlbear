@@ -37,7 +37,7 @@ def test_shared_web_content_source_routes_to_owning_package_tests() -> None:
         coverage=False,
     )
 
-    assert commands == [(["uv", "run", "pytest", "serve/web-content/tests"], _ROOT)]
+    assert commands == [(["uv", "run", "--locked", "pytest", "serve/web-content/tests"], _ROOT)]
 
 
 def test_shared_web_content_path_executes_owning_package_suite() -> None:
@@ -48,26 +48,27 @@ def test_shared_web_content_path_executes_owning_package_suite() -> None:
     ):
         run_test()
 
-    call.assert_called_once_with(["uv", "run", "pytest", "serve/web-content/tests"], cwd=_ROOT)
+    call.assert_called_once_with(["uv", "run", "--locked", "pytest", "serve/web-content/tests"], cwd=_ROOT)
 
-    @pytest.mark.parametrize(
-        ("path", "expected_tests"),
-        [
-            ("serve/browser", "serve/browser/tests"),
-            ("serve/tools", "serve/tools/tests"),
-            ("serve/web-content", "serve/web-content/tests"),
-        ],
+
+@pytest.mark.parametrize(
+    ("path", "expected_tests"),
+    [
+        ("serve/browser", "serve/browser/tests"),
+        ("serve/tools", "serve/tools/tests"),
+        ("serve/web-content", "serve/web-content/tests"),
+    ],
+)
+def test_python_package_directory_routes_to_owning_package_tests(path: str, expected_tests: str) -> None:
+    commands = _commands_for_paths(
+        [path],
+        all_tests=False,
+        python_only=False,
+        web_only=False,
+        coverage=False,
     )
-    def test_python_package_directory_routes_to_owning_package_tests(path: str, expected_tests: str) -> None:
-        commands = _commands_for_paths(
-            [path],
-            all_tests=False,
-            python_only=False,
-            web_only=False,
-            coverage=False,
-        )
 
-        assert commands == [(["uv", "run", "pytest", expected_tests], _ROOT)]
+    assert commands == [(["uv", "run", "--locked", "pytest", expected_tests], _ROOT)]
 
 
 def test_frontend_source_routes_to_vitest() -> None:
