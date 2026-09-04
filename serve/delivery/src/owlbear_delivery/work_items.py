@@ -800,6 +800,14 @@ class WorkItemProjector:
                 headline="Publication baseline recovery is required",
                 next_step="Use the attention workflow to recover the publication baseline",
             )
+        if any(diagnostic.startswith("target-sync-operation:") for diagnostic in disposition.diagnostics):
+            return self._prompt_attention_card(
+                disposition,
+                "Target sync conflict",
+                headline="Target merge conflict needs resolution",
+                next_step="Resolve the target merge conflict before continuing",
+                command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+            )
         label = "Resolve publication attention"
         return WorkItemCardView(
             item_key="publication",
@@ -859,6 +867,7 @@ class WorkItemProjector:
         *,
         headline: str = "Change attention requires resolution",
         next_step: str = "Use the exact attention recovery route",
+        command: str | None = None,
     ) -> WorkItemCardView:
         return WorkItemCardView(
             item_key="publication",
@@ -877,9 +886,8 @@ class WorkItemProjector:
             action=WorkItemAction(
                 kind=WorkItemActionKind.RESOLVE_ATTENTION,
                 label=f"Resolve {label.casefold()}",
-                command=(
-                    f"/resolve-delivery-attention {self._snapshot.contract.change_id} {disposition.disposition_id}"
-                ),
+                command=command
+                or f"/resolve-delivery-attention {self._snapshot.contract.change_id} {disposition.disposition_id}",
                 attention_id=disposition.disposition_id,
             ),
         )

@@ -719,6 +719,12 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
     <section className="border-l-4 border-danger bg-surface p-static-md" aria-labelledby="target-sync-conflict-heading">
       <PHeading id="target-sync-conflict-heading" tag="h4" size="sm">Target sync conflict</PHeading>
       <p className="mt-static-xs text-sm">The merge is preserved in the Change worktree. Choose an explicit exit after reviewing the conflict.</p>
+      {props.detail.item.card.action.command ? (
+        <div className="mt-static-md">
+          <p className="text-sm">Run the target conflict workflow before submitting the resolved merge.</p>
+          <CopyCommand className="mt-static-xs" command={props.detail.item.card.action.command} />
+        </div>
+      ) : null}
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
         <IdentityRow label="Operation" value={conflict.operation_id} />
         <IdentityRow label="Target head" value={conflict.target_head} />
@@ -744,6 +750,7 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
           <PButton
             type="button"
             compact
+            variant="secondary"
             data-testid="target-sync-conflict-resolve"
             disabled={props.pendingAction !== null}
             onClick={() => void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
@@ -976,7 +983,7 @@ function PublicationSection(props: WorkItemDetailProps) {
         <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
-        {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
+        {action.command && !finalizationBlocked && !targetSyncAttention ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
         {control && action.label && (!action.command || action.kind === 'mark-ready') ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={runControl}>{pending ? 'Working...' : action.label}</PButton> : null}
       </SectionCard>
       {readyConflictConfirmOpen ? (

@@ -1945,7 +1945,12 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
     next_step: 'Choose an explicit target-sync conflict exit',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Finalization invalidated', done: null, total: null },
-    action: { kind: 'resolve-attention', label: 'Resolve attention', command: null, attention_id: dispositionId },
+    action: {
+      kind: 'resolve-attention',
+      label: 'Resolve attention',
+      command: '/resolve-target-conflict change-alpha',
+      attention_id: dispositionId,
+    },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -1993,6 +1998,7 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Target sync conflict')
   expect(inspector).toHaveTextContent('src/app.py')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
   expect(within(inspector).queryByText('Resolve attention')).toBeNull()
   expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
 

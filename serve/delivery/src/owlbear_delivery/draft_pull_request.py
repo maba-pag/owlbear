@@ -343,11 +343,7 @@ class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservatio
         if self.provider_evidence_digest != _digest(self._provider_evidence()):
             msg = "pull-request observation receipt does not match its provider snapshot"
             raise ValueError(msg)
-        payload = self.model_dump(mode="json", exclude={"observation_id"})
-        if "mergeable" not in self.model_fields_set:
-            payload.pop("mergeable", None)
-        if "merge_state_status" not in self.model_fields_set:
-            payload.pop("merge_state_status", None)
+        payload = self.model_dump(mode="json", exclude={"observation_id"}, exclude_unset=True)
         if self.observation_id != _digest(payload):
             msg = "pull-request observation receipt identity is invalid"
             raise ValueError(msg)

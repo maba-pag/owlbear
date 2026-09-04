@@ -266,7 +266,7 @@ def _publication_observation(
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
     observation_id = hashlib.sha256(
         json.dumps(
-            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            candidate.model_dump(mode="json", exclude={"observation_id"}, exclude_unset=True),
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
@@ -809,6 +809,28 @@ def test_conflicting_draft_publication_offers_resolution_prompt_and_keeps_ready_
     )
     assert detail.publication is not None
     assert (detail.publication.mergeable, detail.publication.merge_state_status) == (False, "dirty")
+
+
+def test_target_sync_attention_offers_resolution_prompt() -> None:
+    disposition = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+        change_id="portfolio-change",
+        entered_from=DeliveryChangeStage.FINALIZED,
+        recorded_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
+        diagnostics=("target-sync-operation:sync-123", "conflict-path:src/app.py"),
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"change_disposition": disposition},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert card.action.kind == WorkItemActionKind.RESOLVE_ATTENTION
+    assert card.action.command == "/resolve-target-conflict portfolio-change"
+    assert card.action.attention_id == disposition.disposition_id
 
 
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
