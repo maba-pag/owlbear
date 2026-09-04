@@ -318,6 +318,9 @@ export interface WorkItemPublicationView {
   repository: string | null
   pull_request_number: number | null
   pull_request_head: string | null
+  mergeable?: boolean | null
+  merge_state_status?: string | null
+  mergeability_observed_at?: string | null
   accepted_merge_commit: string | null
   merged_at: string | null
   publication_generations: WorkItemPublicationGeneration[]
