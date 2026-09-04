@@ -905,6 +905,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
 
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
+  const [readyConflictConfirmOpen, setReadyConflictConfirmOpen] = useState(false)
   if (!publication) return null
   const finalizationPhase = publication.phase === 'ready-for-finalization' || publication.phase === 'finalization-invalidated'
   const finalizationBlocked = finalizationPhase && publication.ready_for_finalization === false
@@ -947,6 +948,18 @@ function PublicationSection(props: WorkItemDetailProps) {
   const invalidationReason = publication.invalidated_expected_head && publication.invalidated_observed_head
     ? `The Change head moved from ${publication.invalidated_expected_head.slice(0, 12)} to ${publication.invalidated_observed_head.slice(0, 12)}, so the previous finalization no longer matches.`
     : null
+  const runControl = () => {
+    if (!control) return
+    if (action.kind === 'mark-ready' && publication.mergeable === false) {
+      setReadyConflictConfirmOpen(true)
+      return
+    }
+    void control()
+  }
+  const confirmReadyDespiteConflict = () => {
+    setReadyConflictConfirmOpen(false)
+    if (control) void control()
+  }
   return (
     <section className="min-w-0" aria-labelledby="work-publication-heading">
       <SectionCard tone={situationTone} className="border-l-4 p-static-md">
@@ -955,8 +968,21 @@ function PublicationSection(props: WorkItemDetailProps) {
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}
         {action.command && !finalizationBlocked ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
-        {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+        {control && action.label && (!action.command || action.kind === 'mark-ready') ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={runControl}>{pending ? 'Working...' : action.label}</PButton> : null}
       </SectionCard>
+      {readyConflictConfirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setReadyConflictConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm making conflicted pull request ready' }}>
+          <ConfirmationContent onClose={() => setReadyConflictConfirmOpen(false)}>
+            <PHeading tag="h2" size="lg">Make conflicted PR ready?</PHeading>
+            <p className="text-sm">GitHub reports conflicts with the integration target. Making the pull request ready will not resolve them, and reviewers will still be unable to merge it.</p>
+            {action.command ? <p className="text-sm">Recommended next step: <CopyCommand command={action.command} /></p> : null}
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setReadyConflictConfirmOpen(false)}>Keep PR in draft</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={confirmReadyDespiteConflict}>Make PR ready anyway</PButton>
+            </div>
+          </ConfirmationContent>
+        </PModal>
+      ) : null}
       {finalizationBlocked ? (
         <section className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="status" data-testid="finalization-readiness">
           <PHeading tag="h4" size="sm">Finalization unavailable</PHeading>

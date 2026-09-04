@@ -2719,6 +2719,60 @@ it('presents a draft pull request as publication work', async () => {
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 
+it('warns before making a conflicted pull request ready and offers the resolution prompt', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before making it ready',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    publication_phase: 'pull-request-draft',
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'mark-ready',
+      label: 'Make PR ready for review',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('pull-request-draft'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+
+  const dialog = await screen.findByRole('alertdialog')
+  expect(dialog).toHaveTextContent('GitHub reports conflicts with the integration target.')
+  expect(dialog).toHaveTextContent('Making the pull request ready will not resolve them')
+  expect(dialog).toHaveTextContent('/resolve-target-conflict change-alpha')
+  expect(requests.some(({ url, method }) => url.endsWith('/publication/ready') && method === 'POST')).toBe(false)
+
+  fireEvent.click(within(dialog).getByText('Keep PR in draft'))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+  fireEvent.click(await screen.findByText('Make PR ready anyway'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/ready',
+    method: 'POST',
+    body: null,
+  }))
+})
+
 it('observes checks from a draft even when repository and pull request fields are null', async () => {
   const publicationCard = publicationCardForChecks()
   currentDetail = detail({
