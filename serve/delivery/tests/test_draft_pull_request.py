@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -598,6 +600,46 @@ def test_observes_and_persists_bound_pull_request_head_drift(tmp_path: Path) -> 
         tmp_path / "pull-requests/pull-request-observations/change-a" / f"{receipt.provider_evidence_digest}.json"
     )
     assert PublicationPullRequestObservationReceipt.model_validate_json(observation_path.read_bytes()) == receipt
+
+
+def test_reads_legacy_pull_request_observation_without_mergeability_metadata() -> None:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=7,
+        node_id="PR_node_7",
+        head_branch="owlbear/change/example",
+        head_sha=_HEAD,
+        base_branch="main",
+        title="Example change",
+        body="Generated summary",
+        draft=True,
+        state="open",
+        merged=False,
+    )
+    payload = {
+        "schema_version": 1,
+        "change_id": "change-a",
+        "observed_at": "2026-08-11T12:00:00Z",
+        "snapshot": snapshot.model_dump(mode="json"),
+        "provider_evidence_digest": hashlib.sha256(
+            json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    legacy = {
+        **payload,
+        "observation_id": hashlib.sha256(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+    }
+
+    receipt = PublicationPullRequestObservationReceipt.model_validate_json(json.dumps(legacy))
+
+    assert receipt.mergeable is None
+    assert receipt.merge_state_status is None
 
 
 def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:

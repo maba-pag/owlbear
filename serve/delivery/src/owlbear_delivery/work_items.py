@@ -735,7 +735,7 @@ class WorkItemProjector:
                 "Publication head needs reconciliation",
             )
             action = WorkItemAction()
-        elif mergeability is not None and mergeability.snapshot.mergeable is False:
+        elif mergeability is not None and mergeability.mergeable is False:
             needs, headline, next_actor = (
                 WorkItemNeed.YOU,
                 "Pull request has merge conflicts",
@@ -1023,9 +1023,9 @@ class WorkItemProjector:
             repository=publication_identity.repository if publication_identity is not None else None,
             pull_request_number=publication_identity.number if publication_identity is not None else None,
             pull_request_head=publication_identity.head_sha if publication_identity is not None else None,
-            mergeable=publication_observation.snapshot.mergeable if publication_observation is not None else None,
+            mergeable=publication_observation.mergeable if publication_observation is not None else None,
             merge_state_status=(
-                publication_observation.snapshot.merge_state_status if publication_observation is not None else None
+                publication_observation.merge_state_status if publication_observation is not None else None
             ),
             mergeability_observed_at=(
                 publication_observation.observed_at.isoformat() if publication_observation is not None else None

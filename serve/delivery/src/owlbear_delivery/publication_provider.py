@@ -66,8 +66,8 @@ class PublicationPullRequest(_ProviderModel):
     draft: bool
     state: str = Field(pattern=r"^(open|closed)$")
     merged: bool
-    mergeable: bool | None = None
-    merge_state_status: str | None = Field(default=None, min_length=1)
+    mergeable: bool | None = Field(default=None, exclude=True)
+    merge_state_status: str | None = Field(default=None, min_length=1, exclude=True)
     merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: datetime | None = None
     merged_by_login: str | None = Field(default=None, min_length=1)

@@ -250,8 +250,18 @@ def _publication_observation(
         "observed_at": observed_at,
         "snapshot": snapshot,
         "provider_evidence_digest": hashlib.sha256(
-            json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+            json.dumps(
+                {
+                    **snapshot.model_dump(mode="json"),
+                    "mergeable": mergeable,
+                    "merge_state_status": merge_state_status,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
         ).hexdigest(),
+        "mergeable": mergeable,
+        "merge_state_status": merge_state_status,
     }
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
     observation_id = hashlib.sha256(
