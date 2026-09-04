@@ -251,9 +251,9 @@ jobs:
       - name: Verify pinned Archify release and static render
         if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         timeout-minutes: 10
+        shell: bash
         run: |
           python3 .owlbear/scripts/diagrams/sync.py --check
-          diagram_index=0
           python3 -c '
           import json
           from pathlib import Path
@@ -261,7 +261,10 @@ jobs:
           manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))
           for diagram in manifest["diagrams"]:
               print("\t".join((diagram["source"], diagram["artifact"])))
-          ' | while IFS=$'\t' read -r source artifact; do
+          ' > "$RUNNER_TEMP/archify-diagrams.tsv"
+          test -s "$RUNNER_TEMP/archify-diagrams.tsv"
+          diagram_index=0
+          while IFS=$'\t' read -r source artifact; do
             test -n "$source"
             test -n "$artifact"
             test -f "$source"
@@ -273,7 +276,7 @@ jobs:
               --offline
             cmp --silent "$output" "$artifact"
             diagram_index=$((diagram_index + 1))
-          done
+          done < "$RUNNER_TEMP/archify-diagrams.tsv"
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'

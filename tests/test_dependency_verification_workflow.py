@@ -181,37 +181,21 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     archify_steps = [
         step for step in proof_node["steps"] if step.get("name") == "Verify pinned Archify release and static render"
     ]
-    assert archify_steps == [
-        {
-            "name": "Verify pinned Archify release and static render",
-            "if": ("needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"),
-            "timeout-minutes": 10,
-            "run": (
-                "python3 .owlbear/scripts/diagrams/sync.py --check\n"
-                "diagram_index=0\n"
-                "python3 -c '\n"
-                "import json\n"
-                "from pathlib import Path\n"
-                "\n"
-                'manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))\n'
-                'for diagram in manifest["diagrams"]:\n'
-                '    print("\\t".join((diagram["source"], diagram["artifact"])))\n'
-                "' | while IFS=$'\\t' read -r source artifact; do\n"
-                '  test -n "$source"\n'
-                '  test -n "$artifact"\n'
-                '  test -f "$source"\n'
-                '  test -f "$artifact"\n'
-                '  output="$RUNNER_TEMP/archify-diagram-${diagram_index}.svg"\n'
-                "  python3 .owlbear/scripts/diagrams/render.py \\\n"
-                '    --input "$source" \\\n'
-                '    --output "$output" \\\n'
-                "    --offline\n"
-                '  cmp --silent "$output" "$artifact"\n'
-                "  diagram_index=$((diagram_index + 1))\n"
-                "done\n"
-            ),
-        }
-    ]
+    assert len(archify_steps) == 1
+    archify_step = archify_steps[0]
+    assert archify_step["if"] == (
+        "needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"
+    )
+    assert archify_step["timeout-minutes"] == 10
+    assert archify_step["shell"] == "bash"
+    archify_run = archify_step["run"]
+    assert '"$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert 'test -s "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert "while IFS=$'\\t' read -r source artifact; do" in archify_run
+    assert 'done < "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert "python3 .owlbear/scripts/diagrams/render.py" in archify_run
+    assert "--offline" in archify_run
+    assert 'cmp --silent "$output" "$artifact"' in archify_run
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
