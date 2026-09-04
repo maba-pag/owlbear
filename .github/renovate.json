@@ -282,10 +282,8 @@
       "managerFilePatterns": [
         "/^\\.owlbear/scripts/diagrams/archify\\.lock\\.json$/"
       ],
-      "matchStringsStrategy": "combination",
       "matchStrings": [
-        "\\\"version\\\"[ \\t]*:[ \\t]*\\\"(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)\\\"",
-        "\\\"sha256\\\"[ \\t]*:[ \\t]*\\\"(?<currentDigest>[a-f0-9]{64})\\\""
+        "version\\D*(?<currentValue>v[\\d.]+)[\\s\\S]*?sha256\\D*(?<currentDigest>[a-f0-9]{64})"
       ],
       "depNameTemplate": "tt-a1i/archify",
       "datasourceTemplate": "github-release-attachments",

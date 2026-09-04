@@ -20,6 +20,7 @@ name: Dependency verification
       - .pre-commit-config.yaml
       - .python-version
       - .owlbear/scripts/diagrams/**
+      - share/diagrams/**
       - package.json
       - package-lock.json
       - pyproject.toml
@@ -251,14 +252,12 @@ jobs:
         if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         timeout-minutes: 10
         run: |
-          archify_root="$(python3 .owlbear/scripts/diagrams/sync.py --check --print-root)"
+          python3 .owlbear/scripts/diagrams/sync.py --check
           python3 .owlbear/scripts/diagrams/render.py \
-            --input "$archify_root/examples/web-app.architecture.json" \
-            --output "$RUNNER_TEMP/archify-example.svg" \
+            --input share/diagrams/mcp-topology.architecture.json \
+            --output "$RUNNER_TEMP/mcp-topology.svg" \
             --offline
-          test -s "$RUNNER_TEMP/archify-example.svg"
-          grep -q '^<svg ' "$RUNNER_TEMP/archify-example.svg"
-          grep -q 'xmlns="http://www.w3.org/2000/svg"' "$RUNNER_TEMP/archify-example.svg"
+          cmp --silent "$RUNNER_TEMP/mcp-topology.svg" share/diagrams/mcp-topology.svg
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'

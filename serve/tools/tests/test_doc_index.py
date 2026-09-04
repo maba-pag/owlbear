@@ -71,6 +71,13 @@ def _make_manifest(tmp_path: Path, diagrams: list[dict[str, object]]) -> Path:
     p = tmp_path / "share/diagrams/manifest.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"schema_version": 1, "diagrams": diagrams}))
+    for diagram in diagrams:
+        for field in ("source", "artifact"):
+            path = diagram[field]
+            assert isinstance(path, str)
+            target = tmp_path / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("{}")
     return p
 
 
@@ -219,6 +226,51 @@ class TestDocIndexMarkdownOutput:
         assert "## share/diagrams/overview.svg" in text
         assert "source: share/diagrams/overview.architecture.json" in text
         assert "describes: serve/**, share/**" in text
+
+    def test_manifest_missing_from_diagram_directory_fails(self, tmp_path: Path) -> None:
+        """Boundary: a diagram directory without its manifest cannot index cleanly."""
+        _make_diagram_source(tmp_path, "share/diagrams/overview.architecture.json")
+
+        with pytest.raises(ValueError, match="manifest is missing"):
+            generate_index(tmp_path)
+
+    def test_manifest_dangling_path_fails(self, tmp_path: Path) -> None:
+        """Boundary: manifest entries must point to existing source and artifact files."""
+        _make_manifest(
+            tmp_path,
+            [
+                {
+                    "source": "share/diagrams/missing.architecture.json",
+                    "artifact": "share/diagrams/overview.svg",
+                    "describes": ["serve/**"],
+                }
+            ],
+        )
+        (tmp_path / "share/diagrams/missing.architecture.json").unlink()
+
+        with pytest.raises(ValueError, match="does not exist"):
+            generate_index(tmp_path)
+
+    def test_manifest_duplicate_artifact_fails(self, tmp_path: Path) -> None:
+        """Boundary: one artifact cannot represent multiple manifest entries."""
+        _make_manifest(
+            tmp_path,
+            [
+                {
+                    "source": "share/diagrams/one.architecture.json",
+                    "artifact": "share/diagrams/overview.svg",
+                    "describes": ["serve/**"],
+                },
+                {
+                    "source": "share/diagrams/two.architecture.json",
+                    "artifact": "share/diagrams/overview.svg",
+                    "describes": ["share/**"],
+                },
+            ],
+        )
+
+        with pytest.raises(ValueError, match="duplicates a path"):
+            generate_index(tmp_path)
 
     def test_headings_are_bullet_backtick_wrapped(self, tmp_path: Path) -> None:
         """Happy: headings in a file are emitted as backtick-wrapped bullets."""

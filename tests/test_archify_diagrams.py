@@ -124,7 +124,8 @@ def test_extract_archive_rejects_unsafe_zip_paths(tmp_path: Path, sync_module: M
 def test_standalone_svg_preserves_static_root_and_filters_viewer_css(render_module: ModuleType) -> None:
     html = """<!DOCTYPE html>
 <html><head><style>
-  html[data-theme="light"] { --grid: #eee; }
+    [data-theme="light"] { --grid: #eee; }
+    @media print { [data-theme="light"] { --grid: transparent; } }
   .c-grid { stroke: var(--grid); }
   .toolbar { display: flex; }
 </style></head><body>
@@ -137,8 +138,23 @@ def test_standalone_svg_preserves_static_root_and_filters_viewer_css(render_modu
     assert 'xmlns="http://www.w3.org/2000/svg"' in output
     assert 'data-theme="light"' in output
     assert ".c-grid" in output
+    assert "--grid: #eee" in output
+    assert "--grid: transparent" not in output
+    assert "@media" not in output
     assert ".toolbar" not in output
     assert output.count("<svg ") == 1
+
+
+def test_standalone_svg_rejects_css_without_static_rules(render_module: ModuleType) -> None:
+    html = """<!DOCTYPE html>
+<html><head><style>
+  @media print { .toolbar { display: none; } }
+</style></head><body>
+<svg viewBox="0 0 320 240" role="img"></svg>
+</body></html>"""
+
+    with pytest.raises(render_module.RenderError, match="usable static SVG CSS"):
+        render_module._standalone_svg(html, "light")  # noqa: SLF001
 
 
 def test_render_diagram_validates_then_atomically_writes_svg(

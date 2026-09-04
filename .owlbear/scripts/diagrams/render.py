@@ -20,7 +20,6 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from sync import SyncError, ensure_archify  # noqa: E402
 
-CSS_RULE_RE = re.compile(r"(?s)([^{}]+)\{([^{}]*)\}")
 SVG_SELECTOR_RE = re.compile(
     r"(^|,)\s*(svg|:root|\[data-theme|\[data-preset|\.semantic-sigil|\.s-|\.c-|\.t-|\.a-|\.m-)"
 )
@@ -52,21 +51,85 @@ def _extract_tag(content: str, tag: str) -> str:
     return content[start : closing + len(tag) + 3]
 
 
+def _consume_css_lexeme(
+    css: str,
+    index: int,
+    quote: str | None,
+    *,
+    comment: bool,
+) -> tuple[int, str | None, bool, bool]:
+    """Consume one CSS string/comment lexeme, if one starts at *index*."""
+    character = css[index]
+    next_character = css[index + 1] if index + 1 < len(css) else ""
+    next_index = index + 1
+    next_quote = quote
+    next_comment = comment
+    consumed = False
+    if comment:
+        consumed = True
+        if character == "*" and next_character == "/":
+            next_index = index + 2
+            next_quote = None
+            next_comment = False
+    elif quote is not None:
+        consumed = True
+        if character == "\\":
+            next_index = index + 2
+        elif character == quote:
+            next_quote = None
+    elif character == "/" and next_character == "*":
+        next_index = index + 2
+        next_comment = True
+        consumed = True
+    elif character in {"'", '"'}:
+        next_quote = character
+        consumed = True
+    return next_index, next_quote, next_comment, consumed
+
+
+def _top_level_css_rules(css: str) -> list[tuple[str, str]]:
+    """Return top-level CSS rules without hoisting nested conditional rules."""
+    rules: list[tuple[str, str]] = []
+    depth = 0
+    rule_start = 0
+    rule_open = -1
+    quote: str | None = None
+    comment = False
+    index = 0
+    while index < len(css):
+        next_index, quote, comment, consumed = _consume_css_lexeme(css, index, quote, comment=comment)
+        if consumed:
+            index = next_index
+            continue
+        character = css[index]
+        if character == "{":
+            if depth == 0:
+                rule_open = index
+            depth += 1
+        elif character == "}":
+            if depth == 0 or rule_open < 0:
+                _fail("Archify stylesheet has an unmatched closing brace.")
+            depth -= 1
+            if depth == 0:
+                header = css[rule_start:rule_open].strip()
+                body = css[rule_open + 1 : index].strip()
+                rules.append((header, body))
+                rule_start = index + 1
+                rule_open = -1
+        index += 1
+    if comment or quote is not None or depth != 0:
+        _fail("Archify stylesheet has an unterminated comment, string, or rule.")
+    return rules
+
+
 def _extract_svg_css(css: str) -> str:
-    """Keep only CSS rules that can affect a standalone Archify SVG."""
+    """Keep only top-level CSS rules that can affect a standalone Archify SVG."""
     rules: list[str] = []
-    for match in CSS_RULE_RE.finditer(css):
-        header = match.group(1).strip()
-        body = match.group(2).strip()
+    for header, body in _top_level_css_rules(css):
         selector_header = COMMENT_RE.sub("", header).strip()
         if body and (re.match(r"^@font-face\b", selector_header) or SVG_SELECTOR_RE.search(selector_header)):
             rules.append(f"{header} {{{body}}}")
-    font_stack = (
-        "svg { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, "
-        "'DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono CJK SC', 'PingFang SC', "
-        "'Hiragino Sans GB', 'Microsoft YaHei', monospace; }"
-    )
-    return "\n".join([font_stack, *rules])
+    return "\n".join(rules)
 
 
 def _replace_attribute(opening: str, name: str, value: str) -> str:
@@ -83,9 +146,15 @@ def _standalone_svg(html: str, theme: str) -> str:
     style = _extract_tag(html, "style")
     svg = _extract_tag(html, "svg")
     style_opening_end = style.find(">")
-    css = _extract_svg_css(style[style_opening_end + 1 : -len("</style>")])
-    if not css or "]] >".replace(" ", "") in css:
+    filtered_css = _extract_svg_css(style[style_opening_end + 1 : -len("</style>")])
+    if not filtered_css or "]] >".replace(" ", "") in filtered_css:
         _fail("Archify output did not contain usable static SVG CSS.")
+    font_stack = (
+        "svg { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, "
+        "'DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono CJK SC', 'PingFang SC', "
+        "'Hiragino Sans GB', 'Microsoft YaHei', monospace; }"
+    )
+    css = f"{font_stack}\n{filtered_css}"
 
     svg_opening_end = svg.find(">")
     opening = svg[:svg_opening_end]

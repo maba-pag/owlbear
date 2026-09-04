@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NotRequired, TypedDict
 from urllib.parse import urlsplit, urlunsplit
 
@@ -71,6 +71,28 @@ class DocEntry(TypedDict):
     outbound_links: list[LinkEntry]
     describes: list[str]
     source: NotRequired[str]
+
+
+class DiagramEntry(TypedDict):
+    """A manifest-backed static diagram entry."""
+
+    source: str
+    artifact: str
+    describes: list[str]
+
+
+class DiagramManifestError(ValueError):
+    """Report an invalid diagram manifest."""
+
+    def __init__(self, manifest_path: Path, detail: str) -> None:
+        super().__init__(f"Invalid diagram manifest {manifest_path}: {detail}.")
+
+
+class DiagramManifestTypeError(TypeError):
+    """Report an invalid manifest field type."""
+
+    def __init__(self, manifest_path: Path, detail: str) -> None:
+        super().__init__(f"Invalid diagram manifest {manifest_path}: {detail}.")
 
 
 def _is_excluded_dir(dirpath: Path, root: Path) -> bool:
@@ -160,34 +182,82 @@ def _rebase_link_target(rel_path: Path, target: str, root: Path) -> str:
     return urlunsplit(("", "", rebased_path, parsed.query, parsed.fragment))
 
 
-def _read_diagram_manifest(root: Path) -> list[dict[str, object]]:
-    """Read valid static diagram metadata from the shared manifest."""
-    manifest_path = root / _DIAGRAM_MANIFEST_PATH
+def _manifest_path(root: Path, value: str, field: str, manifest_path: Path) -> Path:
+    """Resolve one repository-local manifest path or raise a clear error."""
+    relative = PurePosixPath(value)
+    if relative.is_absolute() or "\\" in value or ".." in relative.parts:
+        raise DiagramManifestError(manifest_path, f"{field} must be repository-relative")
+    resolved_root = root.resolve()
+    resolved = (root / Path(*relative.parts)).resolve()
+    if resolved != resolved_root and resolved_root not in resolved.parents:
+        raise DiagramManifestError(manifest_path, f"{field} escapes the repository")
+    if not resolved.is_file():
+        raise DiagramManifestError(manifest_path, f"{field} does not exist: {value}")
+    return resolved
+
+
+def _read_manifest_payload(manifest_path: Path) -> list[object]:
+    """Read the manifest payload and validate its top-level shape."""
+    if not manifest_path.exists():
+        if manifest_path.parent.exists():
+            raise DiagramManifestError(manifest_path, "manifest is missing")
+        return []
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiagramManifestError(manifest_path, f"could not be read: {error}") from error
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        return []
+        raise DiagramManifestError(manifest_path, "schema_version must be 1")
     diagrams = payload.get("diagrams")
     if not isinstance(diagrams, list):
-        return []
-    valid: list[dict[str, object]] = []
-    for diagram in diagrams:
-        if not isinstance(diagram, dict):
-            continue
-        source = diagram.get("source")
-        artifact = diagram.get("artifact")
-        describes = diagram.get("describes")
-        if (
-            isinstance(source, str)
-            and source
-            and isinstance(artifact, str)
-            and artifact
-            and isinstance(describes, list)
-            and all(isinstance(value, str) and value for value in describes)
-        ):
-            valid.append({"source": source, "artifact": artifact, "describes": describes})
+        raise DiagramManifestTypeError(manifest_path, "diagrams must be a list")
+    return diagrams
+
+
+def _read_diagram_entry(
+    root: Path,
+    manifest_path: Path,
+    index: int,
+    diagram: object,
+    seen_paths: tuple[set[str], set[str]],
+) -> DiagramEntry:
+    """Validate and return one manifest diagram entry."""
+    seen_sources, seen_artifacts = seen_paths
+    if not isinstance(diagram, dict):
+        raise DiagramManifestTypeError(manifest_path, f"entry {index} must be an object")
+    source = diagram.get("source")
+    artifact = diagram.get("artifact")
+    describes = diagram.get("describes")
+    if (
+        not isinstance(source, str)
+        or not source
+        or not isinstance(artifact, str)
+        or not artifact
+        or not isinstance(describes, list)
+        or not describes
+        or not all(isinstance(value, str) and value for value in describes)
+    ):
+        raise DiagramManifestError(manifest_path, f"entry {index} has invalid fields")
+    if source in seen_sources or artifact in seen_artifacts:
+        raise DiagramManifestError(manifest_path, f"entry {index} duplicates a path")
+    if source == artifact:
+        raise DiagramManifestError(manifest_path, f"entry {index} reuses one path")
+    _manifest_path(root, source, f"entry {index} source", manifest_path)
+    _manifest_path(root, artifact, f"entry {index} artifact", manifest_path)
+    seen_sources.add(source)
+    seen_artifacts.add(artifact)
+    return {"source": source, "artifact": artifact, "describes": describes}
+
+
+def _read_diagram_manifest(root: Path) -> list[DiagramEntry]:
+    """Read and validate static diagram metadata from the shared manifest."""
+    manifest_path = root / _DIAGRAM_MANIFEST_PATH
+    diagrams = _read_manifest_payload(manifest_path)
+    valid: list[DiagramEntry] = []
+    seen_sources: set[str] = set()
+    seen_artifacts: set[str] = set()
+    for index, diagram in enumerate(diagrams):
+        valid.append(_read_diagram_entry(root, manifest_path, index, diagram, (seen_sources, seen_artifacts)))
     return valid
 
 

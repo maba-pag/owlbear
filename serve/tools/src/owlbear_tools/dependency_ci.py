@@ -292,7 +292,9 @@ def classify_dependency_change(
     node = bool(changed & _COCKPIT_NODE_FILES)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
-    diagrams = bool(changed & _DIAGRAM_FILES) or any(path.startswith(".owlbear/scripts/diagrams/") for path in changed)
+    diagrams = bool(changed & _DIAGRAM_FILES) or any(
+        path.startswith((".owlbear/scripts/diagrams/", "share/diagrams/")) for path in changed
+    )
     workflows = any(path.startswith(".github/workflows/") for path in changed)
     megalinter = ".mega-linter.yml" in changed
     renovate = ".github/renovate.json" in changed

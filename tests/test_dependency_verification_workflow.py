@@ -104,6 +104,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".pre-commit-config.yaml",
         ".python-version",
         ".owlbear/scripts/diagrams/**",
+        "share/diagrams/**",
         "package.json",
         "package-lock.json",
         "pyproject.toml",
@@ -186,14 +187,12 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
             "if": ("needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"),
             "timeout-minutes": 10,
             "run": (
-                'archify_root="$(python3 .owlbear/scripts/diagrams/sync.py --check --print-root)"\n'
+                "python3 .owlbear/scripts/diagrams/sync.py --check\n"
                 "python3 .owlbear/scripts/diagrams/render.py \\\n"
-                '  --input "$archify_root/examples/web-app.architecture.json" \\\n'
-                '  --output "$RUNNER_TEMP/archify-example.svg" \\\n'
+                "  --input share/diagrams/mcp-topology.architecture.json \\\n"
+                '  --output "$RUNNER_TEMP/mcp-topology.svg" \\\n'
                 "  --offline\n"
-                'test -s "$RUNNER_TEMP/archify-example.svg"\n'
-                "grep -q '^<svg ' \"$RUNNER_TEMP/archify-example.svg\"\n"
-                'grep -q \'xmlns="http://www.w3.org/2000/svg"\' "$RUNNER_TEMP/archify-example.svg"\n'
+                'cmp --silent "$RUNNER_TEMP/mcp-topology.svg" share/diagrams/mcp-topology.svg\n'
             ),
         }
     ]
@@ -360,6 +359,23 @@ def test_dependency_workflow_actions_are_pinned() -> None:
         assert all(character in "0123456789abcdef" for character in revision)
 
 
+def test_renovate_archify_match_spans_version_and_digest() -> None:
+    config = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
+    managers = config["customManagers"]
+    archify = next(manager for manager in managers if manager.get("depNameTemplate") == "tt-a1i/archify")
+    patterns = archify["matchStrings"]
+    assert "matchStringsStrategy" not in archify
+    assert len(patterns) == 1
+
+    lock = (ROOT / ".owlbear/scripts/diagrams/archify.lock.json").read_text(encoding="utf-8")
+    assert "(?<currentValue>v[\\d.]+)" in patterns[0]
+    assert "(?<currentDigest>[a-f0-9]{64})" in patterns[0]
+    replacement_span = lock[lock.index('"version"') : lock.index('"sha256"') + len('"sha256"')]
+    assert '"version": "v2.16.0"' in replacement_span
+    assert '"sha256"' in replacement_span
+    assert json.loads(lock)["sha256"] in lock
+
+
 @pytest.mark.parametrize(
     ("path", "surface"),
     [
@@ -374,6 +390,9 @@ def test_dependency_workflow_actions_are_pinned() -> None:
         (".owlbear/scripts/diagrams/archify.lock.json", "diagrams"),
         (".owlbear/scripts/diagrams/sync.py", "diagrams"),
         (".owlbear/scripts/diagrams/render.py", "diagrams"),
+        ("share/diagrams/manifest.json", "diagrams"),
+        ("share/diagrams/mcp-topology.architecture.json", "diagrams"),
+        ("share/diagrams/mcp-topology.svg", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/sync-to-main.yml", "workflows"),
         (".github/renovate.json", "renovate"),
