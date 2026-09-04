@@ -8,6 +8,9 @@ import json
 import os
 import shutil
 import subprocess
+import sys
+import time
+import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -19,11 +22,11 @@ from unittest.mock import Mock, patch, sentinel
 import pytest
 
 from owlbear_delivery import (
+    ActivateDeliveryClaim,
     AdministrativeDeliveryMove,
     AdvanceDelivery,
     BlockDelivery,
     CapacityLedger,
-    CapacityLedgerConflictError,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
@@ -40,11 +43,16 @@ from owlbear_delivery import (
     CompletionReceipt,
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
+    DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
+    DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
+    DeliveryChangeDispositionBusyError,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
@@ -77,9 +85,9 @@ from owlbear_delivery import (
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
-    DeliveryRuntimeMigrationError,
     DeliveryStage,
     DeliveryStartupConfig,
+    DeliveryStatePublicationError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
@@ -108,15 +116,27 @@ from owlbear_delivery import (
     PublicationCheckKind,
     PublicationCheckSnapshot,
     PublicationLease,
+    PublicationPullRequestObservationReceipt,
+    PublishChangeBranch,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
     RetryDelivery,
+    WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
 )
-from owlbear_delivery.portfolio_application import _required_check_diagnostics
+from owlbear_delivery.delivery_contract_discovery import (
+    DeliveryDiscoveryErrorCode,
+    contract_fingerprint,
+    discover_persisted_changes,
+)
+from owlbear_delivery.portfolio_application import (
+    DeliveryRuntimeReconciliationError,
+    _required_check_diagnostics,
+)
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -125,6 +145,7 @@ from owlbear_delivery.publication_provider import (
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
     "clean",
@@ -196,6 +217,11 @@ def _branch_receipt(head: str, expected: str | None = None) -> ChangeBranchPubli
     )
 
 
+def _requested_branch_receipt(request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
+    assert request.expected_published_head is not None
+    return _branch_receipt(request.expected_published_head, request.expected_remote_head)
+
+
 def _draft_receipt(
     head: str,
     *,
@@ -252,6 +278,60 @@ def _summary_receipt(head: str, *, number: int = 7) -> GeneratedPullRequestSumma
     return GeneratedPullRequestSummaryReceipt(receipt_id=_receipt_id(payload), **payload)
 
 
+def _publication_observation(
+    change_id: str,
+    head: str,
+    *,
+    mergeable: bool | None,
+    merge_state_status: str | None,
+) -> PublicationPullRequestObservationReceipt:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=7,
+        node_id="PR_7",
+        head_branch=f"owlbear/change/{change_id}",
+        head_sha=head,
+        base_branch="main",
+        title=f"Delivery {change_id}",
+        body="Generated summary",
+        draft=True,
+        state="open",
+        merged=False,
+        mergeable=mergeable,
+        merge_state_status=merge_state_status,
+    )
+    observed_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+    evidence_digest = hashlib.sha256(
+        json.dumps(
+            {
+                **snapshot.model_dump(mode="json"),
+                "mergeable": mergeable,
+                "merge_state_status": merge_state_status,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    payload = {
+        "schema_version": 1,
+        "change_id": change_id,
+        "observed_at": observed_at,
+        "snapshot": snapshot,
+        "provider_evidence_digest": evidence_digest,
+        "mergeable": mergeable,
+        "merge_state_status": merge_state_status,
+    }
+    candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
+    observation_id = hashlib.sha256(
+        json.dumps(
+            candidate._identity_payload(),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
+
+
 def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
     return DeliveryContract(
         change_id=change_id,
@@ -280,6 +360,26 @@ def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
             {"source_name": "design.md", "sha256": hashlib.sha256(design).hexdigest()},
         ),
     )
+
+
+def _admission_receipt(
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    checkpoint_commit: str,
+) -> DeliveryAdmissionReceipt:
+    source_bindings = [item.model_dump(mode="json") for item in contract.source_bindings]
+    payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": contract_fingerprint(contract),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(source_bindings, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": checkpoint_commit,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    return DeliveryAdmissionReceipt(receipt_id=_receipt_id(payload), **payload)
 
 
 def _task() -> DeliveryTaskDefinition:
@@ -408,7 +508,7 @@ def _runtime(
         )
     )
     path = state_root / "changes" / contract.change_id / "frontier.json"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_canonical(frontier))
     return DeliveryRuntime(state_root, contract, workspace_manager=manager)
 
@@ -507,7 +607,6 @@ def _portfolio(
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
-    writer_capacity: int = 1,
     execution_capacity: int = 3,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
 ):
@@ -522,7 +621,7 @@ def _portfolio(
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
     package_root = tmp_path / "packages"
-    coordinator = PortfolioCoordinator(state_root, capacity=writer_capacity)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
@@ -534,7 +633,13 @@ def _portfolio(
         package = store.create(change_id, intent, design)
         store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
         coordination = manager.ensure(change_id)
-        runtimes[change_id] = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
+        runtime = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
+        runtimes[change_id] = runtime
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+        (state_root / "changes" / change_id / "contract.json").write_bytes(_canonical(contract))
+        (state_root / "changes" / change_id / "admission.json").write_bytes(
+            _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
+        )
     identities = (f"identity-{index:03}" for index in itertools.count(1))
 
     application = PortfolioApplication(
@@ -560,17 +665,52 @@ def _portfolio(
     return application, runtimes, coordinator, state_root
 
 
+def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_root = repository / ".owlbear/delivery/packages"
+    worktree_root = repository / ".owlbear/delivery/worktrees"
+    coordinator = PortfolioCoordinator(runtime_root)
+    manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
+    store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
+    intent = b"loader-composed intent\n"
+    design = b"loader-composed design\n"
+    contract = _contract("change-a", intent, design)
+    package = store.create("change-a", intent, design)
+    store.publish_contract("change-a", package.package_id, _canonical(contract), lambda *_content: None)
+    coordination = manager.ensure("change-a")
+    runtime = _runtime(
+        runtime_root,
+        contract,
+        manager,
+        DeliveryStage.COMPLETED,
+        coordination.last_reviewed_commit,
+    )
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    change_root = runtime_root / "changes" / "change-a"
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "admission.json").write_bytes(
+        _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
+    )
+    return repository, runtime_root
+
+
 def _reopen_portfolio(
     tmp_path: Path,
     state_root: Path,
     runtimes: dict[str, DeliveryRuntime],
+    *,
+    clock: Callable[[], str] | None = None,
 ) -> tuple[PortfolioApplication, PortfolioCoordinator, ChangeWorkspaceManager]:
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
+    hooks = (
+        None if clock is None else PortfolioApplicationHooks(identity_factory=lambda: str(uuid.uuid4()), clock=clock)
+    )
     reopened_runtimes = {
         change_id: DeliveryRuntime(state_root, runtime.contract, workspace_manager=manager)
         for change_id, runtime in runtimes.items()
@@ -590,8 +730,316 @@ def _reopen_portfolio(
             execution_capacity=3,
             role_policies=_policies(),
         ),
+        hooks,
     )
     return application, coordinator, manager
+
+
+def test_show_work_item_explains_mcp_publication_identity(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    with pytest.raises(
+        PortfolioApplicationError,
+        match=r"invalid for MCP publication lookup.*change-a.*work_item_id",
+    ):
+        application.show_work_item("change-a", "publication")
+
+
+def _shared_acquisition_command() -> str:
+    return r"""
+import json
+import sys
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+from owlbear_delivery import (
+    ChangeWorkspaceManager,
+    CompletedHistoryCatalog,
+    DeliveryAuthorityRegistry,
+    DeliveryRolePolicy,
+    DeliveryRuntime,
+    DeliveryWorkerRole,
+    DesignPackageStore,
+    PortfolioApplication,
+    PortfolioApplicationConfig,
+    PortfolioApplicationDependencies,
+    PortfolioCoordinator,
+)
+from owlbear_delivery.delivery_contract_discovery import discover_persisted_changes
+
+state_root, repository, package_root, worktree_root, barrier_root = map(Path, sys.argv[1:6])
+worker_id = sys.argv[6]
+coordinator = PortfolioCoordinator(state_root)
+workspace_manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main")
+package_store = DesignPackageStore(package_root, repository)
+authority_registry = DeliveryAuthorityRegistry(state_root, package_store, integration_target="main")
+observations = discover_persisted_changes(state_root)
+runtimes = {
+    observation.change_id: DeliveryRuntime(state_root, observation.contract, workspace_manager=workspace_manager)
+    for observation in observations
+    if observation.contract is not None
+}
+policies = (
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.PLANNER,
+        worker_agent="planner",
+        reviewer_agent="planner-challenger",
+    ),
+    DeliveryRolePolicy(
+        worker_role=DeliveryWorkerRole.BUILDER,
+        worker_agent="builder",
+        reviewer_agent="build-reviewer",
+    ),
+)
+application = PortfolioApplication(
+    runtimes,
+    PortfolioApplicationDependencies(
+        target_root=state_root,
+        package_store=package_store,
+        authority_registry=authority_registry,
+        coordinator=coordinator,
+        workspace_manager=workspace_manager,
+        completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+    ),
+    PortfolioApplicationConfig(package_root=package_root, execution_capacity=3, role_policies=policies),
+)
+(barrier_root / f"ready-{worker_id}").write_text("ready", encoding="ascii")
+while not (barrier_root / "go").exists():
+    time.sleep(0.01)
+original_lock = coordinator.acquisition_lock
+original_reconcile = application._reconcile_runtimes
+lock_marker = barrier_root / f"lock-{worker_id}"
+outside_marker = barrier_root / f"outside-{worker_id}"
+
+@contextmanager
+def observed_lock():
+    with original_lock():
+        lock_marker.write_text("locked", encoding="ascii")
+        try:
+            yield
+        finally:
+            active = [
+                claim
+                for observation in discover_persisted_changes(state_root)
+                if observation.frontier is not None
+                for binding in observation.frontier.bindings
+                for claim in (binding.active_claim,)
+                if claim is not None
+            ]
+            (barrier_root / f"inside-{worker_id}.json").write_text(
+                json.dumps({"count": len(active), "roles": sorted(claim.worker_role.value for claim in active)}),
+                encoding="utf-8",
+            )
+            lock_marker.unlink(missing_ok=True)
+
+def reconcile():
+    location = "inside" if lock_marker.exists() else "outside"
+    (barrier_root / f"reconcile-{worker_id}-{location}").write_text("reconciled", encoding="ascii")
+    return original_reconcile()
+
+coordinator.acquisition_lock = observed_lock
+application._reconcile_runtimes = reconcile
+result = application.acquire_frontier_work()
+(barrier_root / f"result-{worker_id}.json").write_text(
+    json.dumps({"launches": len(result.launch_packages)}),
+    encoding="utf-8",
+)
+"""
+
+
+def _wait_for_files(paths: tuple[Path, ...], timeout: float = 10) -> None:
+    deadline = time.monotonic() + timeout
+    while not all(path.exists() for path in paths):
+        if time.monotonic() >= deadline:
+            message = f"timed out waiting for {paths}"
+            raise TimeoutError(message)
+        time.sleep(0.01)
+
+
+def test_shared_acquisition_serializes_reconciliation_and_bounds_claims(tmp_path: Path) -> None:
+    _application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.IMPLEMENTATION,
+            "change-c": DeliveryStage.IMPLEMENTATION,
+        },
+        execution_capacity=3,
+    )
+    repository = tmp_path / "repository"
+    package_root = tmp_path / "packages"
+    worktree_root = tmp_path / "worktrees"
+    barrier_root = tmp_path / "acquisition-barrier"
+    barrier_root.mkdir()
+    source_root = Path(__file__).resolve().parents[1] / "src"
+    python_path = os.pathsep.join(filter(None, (str(source_root), os.environ.get("PYTHONPATH"))))
+    processes = [
+        subprocess.Popen(  # noqa: S603
+            (
+                sys.executable,
+                "-c",
+                _shared_acquisition_command(),
+                str(state_root),
+                str(repository),
+                str(package_root),
+                str(worktree_root),
+                str(barrier_root),
+                worker_id,
+            ),
+            cwd=repository,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "PYTHONPATH": python_path},
+        )
+        for worker_id in ("one", "two")
+    ]
+    outputs: list[tuple[str, str]] = []
+    try:
+        _wait_for_files(tuple(barrier_root / f"ready-{worker_id}" for worker_id in ("one", "two")))
+        (barrier_root / "go").write_text("go", encoding="ascii")
+        outputs = [process.communicate(timeout=30) for process in processes]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            if process.returncode is None:
+                process.communicate()
+
+    for process, (_stdout, stderr) in zip(processes, outputs, strict=False):
+        assert process.returncode == 0, stderr
+    assert all((barrier_root / f"reconcile-{worker_id}-inside").is_file() for worker_id in ("one", "two"))
+    assert not list(barrier_root.glob("reconcile-*-outside"))
+    inside = [
+        json.loads((barrier_root / f"inside-{worker_id}.json").read_text(encoding="utf-8"))
+        for worker_id in ("one", "two")
+    ]
+    assert all(item["count"] <= 3 for item in inside)
+    launches = [
+        json.loads((barrier_root / f"result-{worker_id}.json").read_text(encoding="utf-8"))["launches"]
+        for worker_id in ("one", "two")
+    ]
+    assert sorted(launches) == [0, 3]
+    active_claims = [
+        binding.active_claim
+        for observation in discover_persisted_changes(state_root)
+        if observation.frontier is not None
+        for binding in observation.frontier.bindings
+        if binding.active_claim is not None
+    ]
+    assert len(active_claims) == 3
+    assert {claim.worker_role for claim in active_claims} == {
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+    }
+
+
+def test_acquisition_returns_preclaim_attention_and_refreshes_snapshot_cache(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.COMPLETED,
+        },
+        execution_capacity=1,
+    )
+    completed = coordinator.show("change-b")
+    original_activate = application._activate_candidate
+    reconciliation = Mock(wraps=application._reconcile_runtimes)
+
+    def activate(candidate, source):
+        launch = original_activate(candidate, source)
+        _publish_merge_conflict_attention(
+            runtimes,
+            state_root,
+            "change-b",
+            completed.last_reviewed_commit,
+            completed.target_head,
+        )
+        return launch
+
+    with (
+        patch.object(application, "_activate_candidate", side_effect=activate),
+        patch.object(application, "_reconcile_runtimes", new=reconciliation),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a",)
+    assert acquired.integration_attention == ()
+    assert reconciliation.call_count == 1
+    assert application._runtime_snapshots["change-b"].frontier.integration_attention is not None
+
+
+def test_acquisition_charges_noncomposable_change_from_persisted_claims(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+        },
+        execution_capacity=1,
+    )
+    _admit_discovery_change(application, "blocked-change")
+    blocked_runtime = runtimes.get("blocked-change", application._runtimes["blocked-change"])
+    claim = application._new_claim(DeliveryWorkerRole.PLANNER, None)
+    blocked_runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim=claim))
+    (state_root / "changes/blocked-change/contract.json").unlink()
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == ()
+    observation = next(item for item in application._discovered_changes.values() if item.change_id == "blocked-change")
+    assert observation.frontier is not None
+    assert sum(binding.active_claim is not None for binding in observation.frontier.bindings) == 1
+    assert application._runtime_reconciliation_errors["blocked-change"]
+    assert acquired.health_hint == "Call delivery_health for current Delivery diagnostics."
+
+
+def test_acquisition_uses_maximum_observed_occupancy_once_per_change(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=3,
+    )
+    claims = tuple(
+        DeliveryActiveClaim(
+            attempt_id=f"attempt-{index}",
+            claim_id=f"claim-{index}",
+            owner_id=f"owner-{index}",
+            process_id=f"process-{index}",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.PLANNER,
+        )
+        for index in range(3)
+    )
+    invalid_frontier = DeliveryFrontier(
+        bindings=tuple(
+            OutcomeAuthorityBinding(
+                outcome_id=f"OUT-{index + 1:03}",
+                plan_scope_id=f"SCOPE-{index + 1:03}",
+                active_claim=claim,
+            )
+            for index, claim in enumerate(claims)
+        )
+    )
+    (state_root / "changes/change-a/frontier.json").write_bytes(_canonical(invalid_frontier))
+
+    with patch.object(
+        runtimes["change-a"],
+        "active_claims",
+        return_value=(("OUT-001", claims[0]), ("OUT-002", claims[1])),
+    ):
+        acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert application._execution_occupancy() == 3
 
 
 def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path: Path) -> None:
@@ -723,13 +1171,13 @@ def test_finalization_replays_atomic_local_boundary_after_interruption(tmp_path:
         application.finalize_change("change-a", request)
 
     assert coordinator.show("change-a").last_reviewed_commit == initial
-    assert tuple((state_root / ".runtime-transactions").glob("*.yaml"))
+    assert tuple((state_root / "transactions").glob("*.yaml"))
 
     replayed = application.finalize_change("change-a", request)
 
     assert replayed == runtimes["change-a"].finalization()
     assert coordinator.show("change-a").last_reviewed_commit == exact_head
-    assert not tuple((state_root / ".runtime-transactions").glob("*.yaml"))
+    assert not tuple((state_root / "transactions").glob("*.yaml"))
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
@@ -822,6 +1270,31 @@ def test_application_binds_external_head_adoption_without_advancing_reviewed_aut
     publication = runtimes["change-a"].checkpoint_publication_state()
     assert publication.pending_checkpoint is not None
     assert publication.pending_checkpoint.head == "5" * 40
+
+
+def test_application_binds_observed_external_head_without_granting_review_authority(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    expected_head = coordination.last_reviewed_commit
+    repository = tmp_path / "repository"
+    adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, expected_head)
+    _git(
+        repository,
+        "fetch",
+        "origin",
+        f"refs/heads/{coordination.branch}:refs/remotes/origin/{coordination.branch}",
+    )
+    _git(coordination.worktree_path, "merge", "--ff-only", adopted)
+
+    receipt = application.adopt_external_head("change-a", expected_head, adopted, "observe-change-a")
+
+    assert receipt.provenance == "observed"
+    assert runtimes["change-a"].external_head_adoption_receipt() == receipt
+    assert coordinator.show("change-a").last_reviewed_commit == expected_head
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is not None
 
 
 def test_application_requires_adopted_head_promotion_before_build_acquisition(tmp_path: Path) -> None:
@@ -1029,6 +1502,184 @@ def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path
     assert application._workspace_manager.reviewed_source_head("change-a") == receipt.merged_head
 
 
+def test_target_sync_demotes_ready_pull_request_before_moving_managed_branch(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "target-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    coordination = application._workspace_manager.show("change-a")
+    draft_transition_heads: list[tuple[str, str, bool]] = []
+    original_transition = provider.set_pull_request_draft_state.side_effect
+
+    def observe_transition(request):
+        draft_transition_heads.append(
+            (
+                _git(repository, "rev-parse", coordination.branch),
+                request.expected_head_sha,
+                request.draft,
+            )
+        )
+        return original_transition(request)
+
+    provider.set_pull_request_draft_state.side_effect = observe_transition
+
+    receipt = application.sync_change_with_target("change-a", target_head, "sync-before-branch-move")
+
+    assert draft_transition_heads == [(exact_head, exact_head, True)]
+    assert _git(repository, "rev-parse", coordination.branch) == receipt.merged_head
+    assert state["pull_request"].draft is True
+    assert runtime.ready_receipt() is None
+
+
+def test_external_head_adoption_demotes_ready_pull_request_before_moving_managed_branch(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    draft_transition_heads: list[tuple[str, str, bool]] = []
+    original_transition = provider.set_pull_request_draft_state.side_effect
+
+    def observe_transition(request):
+        draft_transition_heads.append(
+            (
+                _git(repository, "rev-parse", coordination.branch),
+                request.expected_head_sha,
+                request.draft,
+            )
+        )
+        return original_transition(request)
+
+    provider.set_pull_request_draft_state.side_effect = observe_transition
+
+    receipt = application.adopt_external_head(
+        "change-a",
+        exact_head,
+        adopted_head,
+        "adopt-before-branch-move",
+    )
+
+    assert draft_transition_heads == [(exact_head, exact_head, True)]
+    assert _git(repository, "rev-parse", coordination.branch) == adopted_head
+    assert state["pull_request"].draft is True
+    assert runtime.ready_receipt() is None
+    assert receipt.adopted_head == adopted_head
+
+
+def test_external_head_adoption_retains_attention_after_demotion_then_movement_failure(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    provider.set_pull_request_draft_state.reset_mock()
+    original_run_git = application._workspace_manager._run_git
+
+    def fail_merge(*arguments: str, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if arguments and arguments[0] == "merge":
+            return subprocess.CompletedProcess(arguments, 1, b"", b"fast-forward failed")
+        return original_run_git(*arguments, **kwargs)
+
+    with (
+        patch.object(application._workspace_manager, "_run_git", side_effect=fail_merge),
+        pytest.raises(PortfolioApplicationError, match="external Change head could not be adopted"),
+    ):
+        application.adopt_external_head("change-a", exact_head, adopted_head, "adopt-after-demotion")
+
+    attention = runtime.change_disposition()
+    assert attention is not None
+    assert attention.kind.value == "publication-attention"
+    assert attention.diagnostics[:2] == (
+        "external-head-adoption-movement-failed",
+        "external-head-adoption-operation:adopt-after-demotion",
+    )
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+
+
+def test_target_sync_conflict_survives_attention_publication_failure(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    publisher = Mock()
+    publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = publisher
+
+    conflict = ChangeTargetSyncConflictError(
+        "change-a",
+        "sync-publication-failure",
+        "2" * 40,
+        ("product.txt",),
+    )
+    with (
+        patch.object(application._workspace_manager, "sync_with_target", side_effect=conflict),
+        pytest.raises(ChangeTargetSyncConflictError, match=r"product\.txt"),
+    ):
+        application.sync_change_with_target("change-a", "2" * 40, "sync-publication-failure")
+
+    assert runtimes["change-a"].change_disposition() is not None
+    publisher.publish.assert_called_once()
+
+
+def test_external_head_adoption_error_survives_attention_publication_failure(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    coordination = application._workspace_manager.show("change-a")
+    adopted_head = _publish_external_change_head(tmp_path, repository, coordination.branch, exact_head)
+    provider.set_pull_request_draft_state.reset_mock()
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = state_publisher
+    original_run_git = application._workspace_manager._run_git
+
+    def fail_merge(*arguments: str, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if arguments and arguments[0] == "merge":
+            return subprocess.CompletedProcess(arguments, 1, b"", b"fast-forward failed")
+        return original_run_git(*arguments, **kwargs)
+
+    with (
+        patch.object(application._workspace_manager, "_run_git", side_effect=fail_merge),
+        pytest.raises(PortfolioApplicationError, match="external Change head could not be adopted"),
+    ):
+        application.adopt_external_head("change-a", exact_head, adopted_head, "adopt-publication-failure")
+
+    assert runtime.change_disposition() is not None
+    state_publisher.publish.assert_called_once()
+
+
+def test_provider_demotion_failure_prevents_target_sync_branch_movement(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "target-failure-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+    branch = application._workspace_manager.show("change-a").branch
+    provider.set_pull_request_draft_state.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "return_to_draft",
+        "provider unavailable",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="target synchronization could not be completed"):
+        application.sync_change_with_target("change-a", target_head, "sync-provider-failure")
+
+    assert _git(repository, "rev-parse", branch) == exact_head
+    assert runtime.ready_receipt() is not None
+
+
 def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -1127,6 +1778,90 @@ def test_application_aborts_target_sync_conflict_and_resolves_exact_attention(tm
     assert runtimes["change-a"].change_disposition_resolution().disposition_id == disposition.disposition_id
 
 
+def test_resolving_change_attention_fails_fast_when_checkpoint_is_busy(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+
+    with (
+        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        locked_roots((state_root / "publications/checkpoints/locks/change-a",)),
+        pytest.raises(DeliveryChangeDispositionBusyError, match="already in progress"),
+    ):
+        application.resolve_change_disposition("change-a", disposition.disposition_id)
+
+    assert runtimes["change-a"].change_disposition() == disposition
+
+
+def test_resolving_change_attention_retries_short_checkpoint_contention(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    lock = locked_roots((state_root / "publications/checkpoints/locks/change-a",))
+    lock.__enter__()
+    released = False
+
+    def release_lock(_delay: float) -> None:
+        nonlocal released
+        lock.__exit__(None, None, None)
+        released = True
+
+    try:
+        with patch("owlbear_delivery.portfolio_application.time.sleep", side_effect=release_lock) as sleep:
+            resolution = application.resolve_change_disposition("change-a", disposition.disposition_id)
+        sleep.assert_called_once()
+    finally:
+        if not released:
+            lock.__exit__(None, None, None)
+
+    assert resolution.disposition_id == disposition.disposition_id
+    assert runtimes["change-a"].change_disposition() is None
+
+
+def test_resolving_change_attention_publishes_and_replays_delivery_state(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+    resolution = DeliveryChangeDispositionResolution.create(
+        change_id="change-a",
+        disposition_id=disposition.disposition_id,
+        resolved_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+    )
+
+    with patch(
+        "owlbear_delivery.portfolio_application._timestamp",
+        return_value=resolution.resolved_at,
+    ):
+        first = application.resolve_change_disposition("change-a", disposition.disposition_id)
+        second = application.resolve_change_disposition("change-a", disposition.disposition_id)
+
+    assert first == second == resolution
+    assert publisher.publish.call_count == 2
+    assert publisher.publish.call_args_list[0].kwargs["operation_id"] == (
+        f"attention-resolution-{resolution.resolution_id}"
+    )
+    assert publisher.publish.call_args_list[1].kwargs["operation_id"] == (
+        f"attention-resolution-{resolution.resolution_id}"
+    )
+
+
 def test_application_records_semantic_target_resolution_with_exact_runtime_receipt(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -1166,6 +1901,52 @@ def test_application_records_semantic_target_resolution_with_exact_runtime_recei
     assert runtimes["change-a"].target_sync_receipt() == receipt
     assert runtimes["change-a"].finalization() is None
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
+
+
+def test_resolved_target_merge_requires_fresh_finalization_before_checkpoint_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "resolved-merge-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    coordination = coordinator.show("change-a")
+    (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    _git(coordination.worktree_path, "commit", "-m", "change branch edit")
+    reviewed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    application._workspace_manager.record_reviewed("change-a", reviewed_head)
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target_head, "sync-resolved-merge")
+
+    disposition = runtimes["change-a"].change_disposition()
+    assert disposition is not None
+    (coordination.worktree_path / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    receipt = application.resolve_target_sync_conflict(
+        "change-a",
+        disposition.disposition_id,
+        target_head,
+        "sync-resolved-merge",
+    )
+    application._change_branch_publisher = Mock()
+    application._draft_pull_request_publisher = Mock()
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert receipt.review_required is True
+    assert receipt.schema_version == 2
+    assert runtimes["change-a"].finalization() is None
+    assert result.reconciled is False
+    assert result.state.pending_checkpoint is not None
+    assert result.state.pending_checkpoint.head == receipt.merged_head
+    application._change_branch_publisher.publish.assert_not_called()
+    application._draft_pull_request_publisher.publish.assert_not_called()
 
 
 @pytest.mark.parametrize("operation", ["abort_target_sync_conflict", "resolve_target_sync_conflict"])
@@ -1265,6 +2046,50 @@ def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tm
     assert ChangeWorktreeAttentionCode.WORKTREE_DIRTY in raised.value.attention
     assert runtimes["change-a"].change_stage() is DeliveryChangeStage.ABANDONED
     assert coordination.worktree_path.exists()
+
+
+@pytest.mark.parametrize("remove_worktree", [False, True])
+def test_abandoned_target_sync_conflict_can_be_discarded_and_cleaned(
+    tmp_path: Path,
+    remove_worktree: bool,  # noqa: FBT001 - pytest parametrization supplies this boolean positionally.
+) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "discard-merge-remote.git"
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    coordination = coordinator.show("change-a")
+    (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    _git(coordination.worktree_path, "commit", "-m", "change branch edit")
+    application._workspace_manager.record_reviewed(
+        "change-a",
+        _git(coordination.worktree_path, "rev-parse", "HEAD"),
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target_head, "sync-discard-cleanup")
+    application.abandon_change("change-a", "Stop the unresolved Change")
+    if remove_worktree:
+        _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+
+    receipt = application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+        "change-a",
+        confirmed_discard=True,
+    )
+
+    assert receipt.change_id == "change-a"
+    assert not coordination.worktree_path.exists()
+    assert _git_ref_exists(repository, coordination.branch)
+    assert runtimes["change-a"].change_stage() is DeliveryChangeStage.ABANDONED
+    assert coordinator.show("change-a").target_sync_conflict is None
+    assert coordinator.show("change-a").target_sync_abort_receipt is not None
+    assert application.list_retained_change_worktrees() == ()
 
 
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
@@ -1708,6 +2533,78 @@ def test_required_check_attention_records_after_ready_without_preexisting_public
     assert provider.set_pull_request_draft_state.call_count == 1
 
 
+def test_mark_change_ready_publishes_ready_authority_to_delivery_state(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
+
+    ready = application.mark_current_change_ready("change-a")
+
+    state_publisher.publish.assert_called_once()
+    publication = state_publisher.publish.call_args.kwargs
+    assert publication["change_id"] == "change-a"
+    assert publication["operation_id"] == f"ready-{ready.receipt_id}"
+    assert publication["runtime"] is runtime
+    assert publication["runtime"].ready_receipt() == ready
+
+
+def test_reconcile_acceptance_publishes_new_attention_authority(tmp_path: Path) -> None:
+    application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
+    state["pull_request"] = state["pull_request"].model_copy(update={"state": "closed"})
+
+    outcomes = application.reconcile_awaiting_acceptance(("change-a",))
+
+    assert outcomes[0].status.value == "attention"
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    state_publisher.publish.assert_called_once()
+    publication = state_publisher.publish.call_args.kwargs
+    assert publication["change_id"] == "change-a"
+    assert publication["operation_id"] == f"acceptance-attention-{disposition.disposition_id}"
+    assert publication["runtime"] is runtime
+
+
+def test_latch_regression_preserves_domain_error_when_attention_publication_fails(tmp_path: Path) -> None:
+    application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    merged = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    state["pull_request"] = merged
+    observation = application._draft_pull_request_publisher.observe_pull_request(
+        ObserveChangePublicationPullRequest(change_id="change-a")
+    )
+    assert observation is not None
+    runtime.latch_merged_pull_request(observation)
+
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = DeliveryStatePublicationError(
+        "Delivery state is unavailable",
+        retry_safe=True,
+    )
+    application._delivery_state_publisher = state_publisher
+    state["pull_request"] = merged.model_copy(update={"state": "open", "merged": False, "merged_at": None})
+
+    with pytest.raises(PortfolioApplicationError, match="regressed from the established merged observation"):
+        application.observe_acceptance("change-a")
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.LATCH_REGRESSION
+    state_publisher.publish.assert_called_once()
+    assert state_publisher.publish.call_args.kwargs["operation_id"].startswith("acceptance-attention-")
+
+
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
     application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,
@@ -1886,13 +2783,6 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
     assert waiting[0].status.value == "waiting"
     assert runtime.change_disposition() is None
 
-    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
-    moved = application.reconcile_awaiting_acceptance(("change-a",))
-    assert moved[0].status.value == "head-moved"
-    assert moved[0].code == "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
-    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
-    assert runtime.change_disposition() is None
-
     provider.read_pull_request.side_effect = PublicationProviderError(
         PublicationProviderFailureCode.UNAVAILABLE,
         "read_pull_request",
@@ -1918,6 +2808,234 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
     assert completed[0].status.value == "completed"
     assert completed[0].completion_id is not None
     assert runtime.completion_receipt() is not None
+
+
+def test_prepare_review_repair_returns_ready_pull_request_to_draft(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+
+    invalidation = application.prepare_review_repair("change-a")
+
+    assert invalidation.reason == "review-repair"
+    assert invalidation.expected_head == invalidation.observed_head == exact_head
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_called_once()
+    assert provider.set_pull_request_draft_state.call_args.args[0].draft is True
+    assert application.prepare_review_repair("change-a") == invalidation
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+def test_prepare_review_repair_accepts_pull_request_already_in_draft(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+
+    invalidation = application.prepare_review_repair("change-a")
+
+    assert invalidation.expected_head == invalidation.observed_head == exact_head
+    assert runtime.finalization() is None
+    assert state["pull_request"].draft is True
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_prepare_review_repair_rejects_merged_pull_request(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    provider.set_pull_request_draft_state.reset_mock()
+
+    with pytest.raises(PortfolioApplicationError, match="open pull request at the finalized head"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_prepare_review_repair_rejects_provider_head_mismatch(tmp_path: Path) -> None:
+    application, runtime, _provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
+
+    with pytest.raises(PortfolioApplicationError, match="open pull request at the finalized head"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.finalization().exact_head == exact_head
+    assert runtime.ready_receipt() is not None
+
+
+def test_prepare_review_repair_preserves_authority_when_draft_transition_fails(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.set_pull_request_draft_state.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "return_to_draft",
+        "GitHub is unavailable",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PublicationProviderError, match="GitHub is unavailable"):
+        application.prepare_review_repair("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+
+
+def test_prepare_review_repair_does_not_mutate_provider_with_existing_attention(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider check failed",),
+    )
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.observe_pull_request.reset_mock()
+
+    with pytest.raises(PortfolioApplicationError, match="current Change attention resolution"):
+        application.prepare_review_repair("change-a")
+
+    assert state["pull_request"].draft is False
+    provider.observe_pull_request.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    assert runtime.finalization() is not None
+    assert runtime.ready_receipt() is not None
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["sync", "adopt", "promote"],
+)
+def test_review_repair_fences_external_head_mutations_before_workspace_side_effects(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    application.prepare_review_repair("change-a")
+    provider.set_pull_request_draft_state.reset_mock()
+    provider.update_pull_request.reset_mock()
+    workspace_method = {
+        "sync": "sync_with_target",
+        "adopt": "adopt_external_head",
+        "promote": "promote_external_head",
+    }[operation]
+    operation_call = {
+        "sync": lambda: application.sync_change_with_target("change-a", "2" * 40, "sync-during-review-repair"),
+        "adopt": lambda: application.adopt_external_head(
+            "change-a",
+            exact_head,
+            "5" * 40,
+            "adopt-during-review-repair",
+        ),
+        "promote": lambda: application.promote_external_head(
+            "change-a",
+            exact_head,
+            "promote-during-review-repair",
+        ),
+    }[operation]
+
+    with (
+        patch.object(application._workspace_manager, workspace_method) as workspace_operation,
+        pytest.raises(
+            PortfolioApplicationError,
+            match="review repair",
+        ),
+    ):
+        operation_call()
+
+    workspace_operation.assert_not_called()
+    provider.set_pull_request_draft_state.assert_not_called()
+    provider.update_pull_request.assert_not_called()
+    assert state["pull_request"].head_sha == exact_head
+    assert runtime.finalization_invalidation() is not None
+    assert runtime.finalization_invalidation().reason == "review-repair"
+
+
+def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    invalidation = application.prepare_review_repair("change-a")
+    coordination = application._workspace_manager.show("change-a")
+    repaired_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "review-fix.txt",
+        "review fix\n",
+        "address review feedback",
+    )
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=repaired_head,
+        checks=(),
+    )
+
+    def update_summary(request):
+        state["pull_request"] = state["pull_request"].model_copy(update={"body": request.body})
+        return state["pull_request"]
+
+    provider.update_pull_request.side_effect = update_summary
+    branch_publisher = Mock()
+
+    def publish_branch(request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
+        state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": repaired_head})
+        return _requested_branch_receipt(request)
+
+    branch_publisher.publish.side_effect = publish_branch
+    application._change_branch_publisher = branch_publisher
+
+    assert state["pull_request"].head_sha == exact_head
+    finalization = application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", repaired_head),
+    )
+
+    assert invalidation.expected_head == exact_head
+    assert finalization.finalization_id != invalidation.finalization_id
+    assert runtime.finalization_invalidation() is None
+    assert state["pull_request"].head_sha == exact_head
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled is True
+    assert result.state.pending_checkpoint is None
+    assert result.state.published_head == repaired_head
+    assert runtime.finalization() == finalization
+    assert state["pull_request"].head_sha == repaired_head
+    assert state["pull_request"].draft is True
+    branch_publisher.publish.assert_called_once()
+
+    ready = application.mark_current_change_ready("change-a")
+
+    assert ready.head_sha == repaired_head
+    assert state["pull_request"].draft is False
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+
+
+def test_reconcile_awaiting_acceptance_repairs_open_head_drift(tmp_path: Path) -> None:
+    application, runtime, provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider.set_pull_request_draft_state.reset_mock()
+
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
+    moved = application.reconcile_awaiting_acceptance(("change-a",))
+
+    assert moved[0].status.value == "head-moved"
+    assert moved[0].code == "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
+    assert runtime.change_stage() == DeliveryChangeStage.ACCEPTANCE_ATTENTION
+    assert runtime.finalization() is None
+    assert runtime.finalization_invalidation() is not None
+    assert runtime.ready_receipt() is None
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.HEAD_MOVED
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_called_once()
 
 
 def test_reconcile_awaiting_acceptance_skips_a_busy_change_without_provider_io(tmp_path: Path) -> None:
@@ -1973,6 +3091,108 @@ def test_observe_acceptance_preserves_user_checkout_states(
     assert receipt.accepted_merge_commit == "f" * 40
     assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
     before.assert_unchanged(repository)
+
+
+def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_completion(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider_calls_before_acceptance = provider.read_pull_request.call_count
+    merge_oid = "e" * 40
+    merged_at = "2026-08-03T23:00:00Z"
+    rest_response = {
+        "number": 7,
+        "node_id": "PR_node_7",
+        "head": {"ref": "owlbear/change/change-a", "sha": exact_head},
+        "base": {"ref": "main", "sha": "b" * 40},
+        "title": "Change A",
+        "body": (
+            "<!-- owlbear-change:change-a -->\n\n"
+            "<!-- owlbear-generated:start -->\n"
+            "Finalized Change A.\n"
+            "<!-- owlbear-generated:end -->\n"
+        ),
+        "draft": False,
+        "state": "closed",
+        "merged": True,
+        "merge_commit_sha": None,
+        "merged_at": merged_at,
+        "merged_by": {"login": "octocat"},
+    }
+    graphql_response = {
+        "data": {
+            "repository": {
+                "nameWithOwner": "example/project",
+                "pullRequest": {
+                    "number": 7,
+                    "headRefOid": exact_head,
+                    "baseRefName": "main",
+                    "merged": True,
+                    "mergedAt": merged_at,
+                    "mergeCommit": {"oid": merge_oid},
+                },
+            },
+        },
+    }
+    incomplete_graphql_response = {
+        "data": {
+            "repository": {
+                "nameWithOwner": "example/project",
+                "pullRequest": {
+                    "number": 7,
+                    "headRefOid": exact_head,
+                    "baseRefName": "main",
+                    "merged": True,
+                    "mergedAt": merged_at,
+                    "mergeCommit": None,
+                },
+            },
+        },
+    }
+
+    def completed(payload: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout=json.dumps(payload).encode(),
+            stderr=b"",
+        )
+
+    runner = Mock(
+        side_effect=(
+            completed(rest_response),
+            completed(incomplete_graphql_response),
+            completed(rest_response),
+            completed(graphql_response),
+        )
+    )
+    github_provider = GitHubCliPublicationProvider(runner=runner)
+    provider.read_pull_request.side_effect = github_provider.read_pull_request
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        application.observe_acceptance("change-a")
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+    assert runtime.completion_receipt() is None
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert provider.read_pull_request.call_count == provider_calls_before_acceptance + 1
+    assert runner.call_count == 2
+
+    receipt = application.observe_acceptance("change-a")
+
+    assert isinstance(receipt, CompletionReceipt)
+    assert receipt.accepted_merge_commit == merge_oid
+    assert receipt.finalized_change_head == exact_head
+    assert receipt.accepted_merge_commit != receipt.finalized_change_head
+    assert runtime.completion_receipt() == receipt
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    provider_calls_after_completion = provider.read_pull_request.call_count
+    runner_calls_after_completion = runner.call_count
+
+    replayed = application.observe_acceptance("change-a")
+
+    assert replayed == receipt
+    assert provider.read_pull_request.call_count == provider_calls_after_completion
+    assert runner.call_count == runner_calls_after_completion
 
 
 def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915 - scenario covers full replay lifecycle.
@@ -2068,6 +3288,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     disposition = runtime.change_disposition()
     assert disposition is not None
     assert disposition.kind.value == "acceptance-attention"
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED
     assert runtime.ready_receipt() is None
     with pytest.raises(PortfolioApplicationError, match="requires attention resolution"):
         application.observe_acceptance("change-a")
@@ -2097,6 +3318,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     disposition = runtime.change_disposition()
     assert disposition is not None
     assert disposition.kind.value == "acceptance-attention"
+    assert disposition.acceptance_reason is DeliveryAcceptanceAttentionReason.LATCH_REGRESSION
     assert runtime.merged_pull_request_latch() == original_latch
     assert runtime.ready_receipt() is None
 
@@ -2277,7 +3499,7 @@ def test_change_worktree_recovery_rebuilds_missing_coordination_without_target_m
     )
     coordination = application._workspace_manager.show("change-a")
     target_head = _git(application._workspace_manager.repository, "rev-parse", "HEAD")
-    (state_root / "claims/changes/change-a.json").unlink()
+    (state_root / "coordination/changes/change-a.json").unlink()
     shutil.rmtree(coordination.worktree_path)
 
     receipt = application.recover_change_worktree(
@@ -2416,7 +3638,7 @@ def test_retained_inventory_blocks_active_writer_and_publication_lease(tmp_path:
 
 
 def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
+    application, runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
         {
             "change-a": DeliveryStage.PLANNING,
@@ -2424,7 +3646,7 @@ def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(t
             "change-c": DeliveryStage.PLANNING,
         },
     )
-    del application._runtimes["change-a"]
+    shutil.rmtree(state_root / "changes/change-a")
     attention_coordination = application._workspace_manager.show("change-b")
     _git(
         application._workspace_manager.repository,
@@ -2465,8 +3687,231 @@ def test_portfolio_operating_view_recommends_resuming_unadmitted_design(tmp_path
     view = application.portfolio_operating_view()
 
     assert view.unfinished_change_count == 0
+    assert view.statuses[0].change_id == "draft-change"
+    assert view.statuses[0].admission.value == "unadmitted"
+    assert view.statuses[0].stage == DeliveryChangeStage.DESIGN
+    assert view.statuses[0].actionable_runtime is False
+    assert view.statuses[0].diagnostic_code is None
+    assert view.statuses[0].diagnostic_detail is None
     assert view.draft_design_change_ids == ("draft-change",)
     assert tuple(item.kind.value for item in view.guidance) == ("resume-design",)
+
+
+def test_portfolio_reader_reconciles_admitted_change_after_warm_start(tmp_path: Path) -> None:
+    reader, _reader_runtimes, _reader_coordinator, state_root = _portfolio(tmp_path, {})
+    writer, _writer_coordinator, _writer_manager = _reopen_portfolio(tmp_path, state_root, {})
+    intent = b"""# Admitted Delivery
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: characterization
+statement: Preserve source-bound admission.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Observe admission
+promise: Make persisted admission observable.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    writer.create_design_session("admitted-change", intent, b"# Architecture\n")
+    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
+
+    delivery_root = state_root / "changes" / "admitted-change"
+    persisted_frontier = DeliveryFrontier.model_validate_json((delivery_root / "frontier.json").read_bytes())
+    persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
+    assert persisted_frontier == admitted.frontier
+    assert persisted_receipt["receipt_id"] == admitted.receipt.receipt_id
+
+    view = reader.portfolio_read_view()
+
+    assert tuple(group.change_id for group in view.groups) == ("admitted-change",)
+    assert tuple(item.work_item_id for item in view.groups[0].items) == (
+        *tuple(outcome.outcome_id for outcome in admitted.contract.outcomes),
+        "admitted-change",
+    )
+    assert view.groups[0].outcome_total == len(admitted.contract.outcomes)
+    assert view.groups[0].outcome_completed == 0
+    assert view.operating.unfinished_change_count == 1
+    assert view.operating.statuses[0].change_id == "admitted-change"
+    assert view.operating.statuses[0].admission.value == "admitted"
+    assert view.operating.statuses[0].stage == DeliveryChangeStage.BUILDING
+    assert view.operating.statuses[0].actionable_runtime is True
+    assert view.operating.statuses[0].diagnostic_code is None
+    assert view.groups[0].items[0].progress.label == "Task plan not published"
+    assert view.operating.draft_design_change_ids == ()
+    assert view.operating.design_required_change_ids == ()
+    assert tuple(item.kind.value for item in view.operating.guidance) == ("start-orchestration",)
+
+
+def test_warm_reader_reconciles_change_admitted_by_second_application(tmp_path: Path) -> None:
+    reader, _reader_runtimes, _reader_coordinator, state_root = _portfolio(tmp_path, {})
+    reader.portfolio_read_view()
+    writer, writer_coordinator, writer_manager = _reopen_portfolio(tmp_path, state_root, {})
+    intent = b"""# Admitted Delivery
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: characterization
+statement: Preserve source-bound admission.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Observe admission
+promise: Make persisted admission observable.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    writer.create_design_session("late-change", intent, b"# Architecture\n")
+    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="late-change", active_claim_ids=()))
+    exact_head = writer_coordinator.show("late-change").last_reviewed_commit
+    _runtime(state_root, admitted.contract, writer_manager, DeliveryStage.COMPLETED, exact_head)
+    finalization = writer.finalize_change("late-change", _finalization_request("late-change", exact_head))
+    writer_runtime = writer._runtimes["late-change"]
+    writer_runtime.record_publication_identity(
+        DeliveryChangePublicationIdentity(
+            change_id="late-change",
+            repository="example/project",
+            number=7,
+            node_id="PR_node_7",
+            head_sha=exact_head,
+        )
+    )
+    ready_payload = {
+        "schema_version": 1,
+        "operation_id": "ready-late-change",
+        "change_id": "late-change",
+        "finalization_id": finalization.finalization_id,
+        "repository": "example/project",
+        "number": 7,
+        "node_id": "PR_node_7",
+        "head_sha": exact_head,
+        "draft": False,
+        "observed_at": datetime(2026, 8, 11, 14, tzinfo=UTC),
+        "provider_evidence_digest": "5" * 64,
+    }
+    writer_runtime.mark_awaiting_merge(
+        PullRequestReadyReceipt(
+            receipt_id=_receipt_id({**ready_payload, "observed_at": "2026-08-11T14:00:00Z"}),
+            **ready_payload,
+        )
+    )
+
+    outcomes = reader.reconcile_awaiting_acceptance()
+
+    assert len(outcomes) == 1
+    assert outcomes[0].change_id == "late-change"
+    assert outcomes[0].status.value == "provider-unavailable"
+
+
+def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.portfolio_read_view()
+    previous_runtime = application._runtimes["change-a"]
+    contract_path = state_root / "changes/change-a/contract.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    replacement = previous_runtime.contract.model_copy(update={"title": "Replacement authority \u00e9"})
+    contract_path.write_bytes(_canonical(replacement))
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(
+            _admission_receipt(
+                replacement,
+                current_frontier,
+                _coordinator.show("change-a").last_reviewed_commit,
+            )
+        )
+    )
+    before = _file_bytes(state_root)
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is not previous_runtime
+    assert view.groups[0].title == "Replacement authority \u00e9"
+    assert _file_bytes(state_root) == before
+
+
+def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.acquire_frontier_work()
+    previous_runtime = application._runtimes["change-a"]
+    contract_path = state_root / "changes/change-a/contract.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    replacement = previous_runtime.contract.model_copy(update={"title": "Active replacement"})
+    contract_path.write_bytes(_canonical(replacement))
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(_admission_receipt(replacement, current_frontier, coordinator.show("change-a").last_reviewed_commit))
+    )
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is previous_runtime
+    assert view.groups == ()
+    assert view.health.status.value == "attention"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
+    with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
+        application.defer_change("change-a", "runtime replacement requires reconciliation")
+    assert exc_info.value.code == "ERR_DELIVERY_RUNTIME_RECONCILIATION"
+    assert exc_info.value.retry_safe is True
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "mid-write"])
+def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavailable_entry(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.portfolio_read_view()
+    previous_runtime = application._runtimes["change-a"]
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    if mutation == "malformed":
+        frontier_path.write_bytes(b"not-json\n")
+    else:
+        frontier_path.unlink()
+    before = _file_bytes(state_root)
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is previous_runtime
+    assert view.groups == ()
+    assert view.health.status.value == "attention"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
+    assert view.operating.unfinished_change_count == 1
+    assert view.operating.draft_design_change_ids == ()
+    status = next(item for item in view.operating.statuses if item.change_id == "change-a")
+    assert status.admission.value == "admitted"
+    assert status.actionable_runtime is False
+    assert status.diagnostic_code == "runtime_unavailable"
+    assert status.diagnostic_detail is not None
+    assert len(status.diagnostic_detail) <= 240
+    assert application._discovered_changes["change-a"].diagnostic_code == "runtime_unavailable"
+    assert any(diagnostic.change_id == "change-a" for diagnostic in view.health.diagnostics)
+    with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
+        application.defer_change("change-a", "runtime entry requires retry")
+    assert exc_info.value.retry_safe is True
+    assert _file_bytes(state_root) == before
 
 
 def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path: Path) -> None:
@@ -2478,6 +3923,11 @@ def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path
     view = application.portfolio_operating_view()
 
     assert tuple(item.item_key for item in view.interventions) == ("outcome:OUT-001",)
+    assert view.statuses[0].admission.value == "admitted"
+    assert view.statuses[0].stage == DeliveryChangeStage.DESIGN
+    assert view.statuses[0].actionable_runtime is True
+    assert view.design_required_change_ids == ("change-a",)
+    assert view.draft_design_change_ids == ()
     assert tuple(item.kind.value for item in view.guidance) == ("intervene", "resume-design")
 
 
@@ -2524,22 +3974,6 @@ def test_portfolio_keeps_deferred_change_visible_without_orchestration_queue(tmp
     assert tuple(item.kind.value for item in view.operating.guidance) == ("intervene",)
 
 
-def test_portfolio_keeps_abandoned_change_visible_but_terminal_and_not_completed(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.PLANNING},
-    )
-    application.abandon_change("change-a", "user stopped the Change")
-
-    view = application.portfolio_read_view()
-
-    assert tuple(group.lifecycle.value for group in view.groups) == ("abandoned",)
-    assert all(item.needs.value == "none" for item in view.groups[0].items)
-    assert view.operating.unfinished_change_count == 0
-    assert view.operating.completed_change_count == 0
-    assert view.operating.queued_for_orchestration == ()
-
-
 def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -2552,6 +3986,42 @@ def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) 
     assert state.change_id == "change-a"
     assert state.published_head is None
     assert state.pending_checkpoint is None
+
+
+def test_portfolio_projects_current_pull_request_mergeability(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", head))
+    publication = DeliveryChangePublicationIdentity(
+        change_id="change-a",
+        repository="example/project",
+        number=7,
+        node_id="PR_7",
+        head_sha=head,
+    )
+    runtimes["change-a"].record_publication_identity(publication)
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    frontier_path.write_bytes(
+        _canonical(frontier.model_copy(update={"published_head": head, "pending_checkpoint": None}))
+    )
+    observation = _publication_observation("change-a", head, mergeable=False, merge_state_status="dirty")
+    publisher = Mock()
+    publisher.observe_pull_request.return_value = observation
+    application._draft_pull_request_publisher = publisher
+
+    group = application.list_work_item_groups()[0]
+    card = group.items[-1]
+    detail = application.show_work_item_view("change-a", "publication")
+
+    assert card.action.command == "/resolve-target-conflict change-a"
+    assert detail.publication is not None
+    assert detail.publication.mergeable is False
+    assert detail.publication.merge_state_status == "dirty"
+    publisher.observe_pull_request.assert_called_once_with(ObserveChangePublicationPullRequest(change_id="change-a"))
 
 
 def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_path: Path) -> None:
@@ -2572,10 +4042,12 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -2583,7 +4055,9 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     replayed = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint is None
     assert replayed.reconciled
     assert replayed.attempted_head is None
@@ -2591,12 +4065,102 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert pull_request_publisher.publish.call_count == 1
     assert pull_request_publisher.update_generated_summary.call_count == 1
     request = pull_request_publisher.publish.call_args.args[0]
-    assert request.published_head == head
-    assert "Verified Outcome `OUT-001`" in request.generated_summary
+    assert request.published_head == snapshot.snapshot_head
+    assert "## Goal" in request.generated_summary
+    assert "## Intent" in request.generated_summary
+    assert "## Promised Outcomes" in request.generated_summary
+    assert "Promised result: Return one bounded launch package." in request.generated_summary
+    assert "Outcome `OUT-001` verified" in request.generated_summary
+    assert "Outcomes complete: 1 of 1" in request.generated_summary
     history = runtimes["change-a"].publication_history()
     assert history is not None
     assert history.current.number == 7
-    assert history.current.head_sha == head
+    assert history.current.head_sha == snapshot.snapshot_head
+
+
+def test_background_checkpoint_failure_persists_error_and_waits_before_retry(tmp_path: Path) -> None:
+    current = [datetime(2026, 8, 4, tzinfo=UTC)]
+
+    def clock() -> str:
+        return current[0].isoformat()
+
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=clock,
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(
+            DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, outcome_id="OUT-001"),
+        ),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "publish_change_branch",
+        "Provider unavailable while publishing the Change branch.",
+        retry_safe=True,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    first = application.reconcile_pending_checkpoints()
+
+    assert len(first) == 1
+    assert first[0].error_code == PublicationProviderFailureCode.UNAVAILABLE
+    recorded = first[0].state.pending_checkpoint
+    assert recorded is not None
+    assert recorded.attempt_count == 1
+    assert recorded.last_attempted_at == current[0]
+    assert recorded.last_error_detail == "Provider unavailable while publishing the Change branch."
+    assert application.reconcile_pending_checkpoints() == ()
+
+    current[0] += timedelta(seconds=5)
+    second = application.reconcile_pending_checkpoints()
+
+    assert len(second) == 1
+    assert second[0].state.pending_checkpoint is not None
+    assert second[0].state.pending_checkpoint.attempt_count == 2
+    assert branch_publisher.publish.call_count == 2
+
+
+def test_background_checkpoint_selection_excludes_review_required_merge(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    target_sync = ChangeTargetSyncReceipt.create(
+        operation_id="review-required-sync",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=head,
+        merged_head=head,
+        merge_commit=False,
+        review_required=True,
+    )
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+    )
+    path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
+    path.write_bytes(
+        _canonical(frontier.model_copy(update={"target_sync_receipt": target_sync, "pending_checkpoint": pending}))
+    )
+    branch_publisher = Mock()
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    result = application.reconcile_pending_checkpoints()
+
+    assert result == ()
+    branch_publisher.publish.assert_not_called()
 
 
 def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path: Path) -> None:
@@ -2611,10 +4175,12 @@ def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path:
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
     long_path = ".github/workflows/" + ("x" * 300) + ".yml"
@@ -2651,7 +4217,7 @@ def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unk
     coordination = coordinator.show("change-a")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    (state_root / "coordination/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     branch_publisher = Mock()
     pull_request_publisher = Mock()
     application._change_branch_publisher = branch_publisher
@@ -2666,7 +4232,13 @@ def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unk
     retained = runtimes["change-a"].change_disposition()
     assert retained is not None
     assert retained.kind.value == "publication-attention"
-    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
+    retained = runtimes["change-a"].checkpoint_publication_state().pending_checkpoint
+    assert retained is not None
+    assert retained.head == pending.head
+    assert retained.triggers == pending.triggers
+    assert retained.attempt_count == 1
+    assert retained.last_error_code == "ERR_PUBLICATION_BASELINE_UNAVAILABLE"
+    assert retained.last_error_detail is not None
 
 
 def test_reconcile_checkpoint_preserves_baseline_error_when_attention_conflicts(tmp_path: Path) -> None:
@@ -2683,7 +4255,7 @@ def test_reconcile_checkpoint_preserves_baseline_error_when_attention_conflicts(
     coordination = coordinator.show("change-a")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    (state_root / "coordination/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     runtimes["change-a"].capture_publication_attention(
         datetime(2026, 8, 12, tzinfo=UTC),
         ("existing-publication-attention",),
@@ -2711,7 +4283,7 @@ def test_recover_publication_baseline_requires_confirmation_and_preserves_attent
     coordination = coordinator.show("change-a")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    (state_root / "coordination/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     runtime = runtimes["change-a"]
     attention = runtime.capture_publication_attention(
         datetime(2026, 8, 12, tzinfo=UTC),
@@ -2747,7 +4319,7 @@ def test_supersede_current_publication_preflights_baseline_before_provider_histo
     coordination = coordinator.show("change-a")
     payload = coordination.model_dump(mode="json")
     payload.pop("publication_base_head")
-    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    (state_root / "coordination/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     provider = Mock()
     application._draft_pull_request_publisher = provider
 
@@ -2780,10 +4352,12 @@ def test_later_checkpoint_reports_cumulative_automation_paths(
     )
     _set_checkpoint(runtimes["change-a"], state_root, first_pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(first_head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(first_head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(first_head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -2805,8 +4379,11 @@ def test_later_checkpoint_reports_cumulative_automation_paths(
             ),
         ),
     )
-    _set_checkpoint(runtimes["change-a"], state_root, second_pending, published_head=first_head)
-    branch_publisher.publish.return_value = _branch_receipt(second_head, first_head)
+    first_snapshot = coordinator.show("change-a").design_package_snapshot
+    assert first_snapshot is not None
+    _set_checkpoint(runtimes["change-a"], state_root, second_pending, published_head=first_snapshot.snapshot_head)
+    branch_publisher.publish.side_effect = None
+    branch_publisher.publish.return_value = _branch_receipt(second_head, first_snapshot.snapshot_head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(second_head)
 
     result = application.reconcile_change_checkpoint("change-a")
@@ -2923,6 +4500,12 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(  # noqa: 
     assert provider_request.expected_predecessor_receipt_id == predecessor.receipt_id
     assert provider_request.successor_branch == successor_branch
     assert provider_request.superseding_head == superseding_head
+    assert "## Goal" in provider_request.generated_summary
+    assert "## Intent" in provider_request.generated_summary
+    assert "## Promised Outcomes" in provider_request.generated_summary
+    assert (
+        f"Publication supersedes provider publication `{predecessor.receipt_id}`" in provider_request.generated_summary
+    )
     assert "### Repository automation changed" in provider_request.generated_summary
     assert "<code>.github/workflows/successor.yml</code>" in provider_request.generated_summary
 
@@ -3065,10 +4648,13 @@ def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_p
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head, number=8)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+        number=8,
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3078,7 +4664,7 @@ def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_p
     history = runtimes["change-a"].publication_history()
     assert history is not None
     assert history.current.number == 7
-    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is not None
 
 
 def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: Path) -> None:
@@ -3109,11 +4695,21 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
         ),
     )
     _set_checkpoint(runtime, state_root, pending)
+    contract_path = state_root / "changes/change-a/contract.json"
+    contract_path.write_bytes(_canonical(runtime.contract))
+    current_frontier = DeliveryFrontier.model_validate_json(
+        (state_root / "changes/change-a/frontier.json").read_bytes()
+    )
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(_admission_receipt(runtime.contract, current_frontier, head))
+    )
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3125,7 +4721,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     assert not request.title.startswith(" ")
     assert "\x00" not in request.title
     assert "owlbear-change:forged" not in request.generated_summary
-    assert "Verified Outcome `OUT-001`" in request.generated_summary
+    assert "Outcome `OUT-001` verified" in request.generated_summary
 
 
 def test_reconcile_later_checkpoint_updates_summary_from_prior_published_head(tmp_path: Path) -> None:
@@ -3181,11 +4777,13 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
         DeliveryPendingCheckpoint(head=head, triggers=triggers),
     )
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
 
-    def create_pull_request(_request):
+    def create_pull_request(request):
         current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
@@ -3194,7 +4792,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
                 )
             )
         )
-        return _draft_receipt(head)
+        return _draft_receipt(request.published_head)
 
     pull_request_publisher.publish.side_effect = create_pull_request
     application._change_branch_publisher = branch_publisher
@@ -3203,7 +4801,9 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     result = application.reconcile_change_checkpoint("change-a")
 
     assert not result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint is not None
     assert result.state.pending_checkpoint.head == newer_head
     assert tuple(trigger.kind for trigger in result.state.pending_checkpoint.triggers) == (
@@ -3231,7 +4831,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     frontier_path = _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
 
-    def publish_branch(_request):
+    def publish_branch(request):
         current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
@@ -3245,7 +4845,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
                 )
             )
         )
-        return _branch_receipt(head)
+        return _branch_receipt(request.expected_published_head)
 
     branch_publisher.publish.side_effect = publish_branch
     pull_request_publisher = Mock()
@@ -3255,7 +4855,9 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     result = application.reconcile_change_checkpoint("change-a")
 
     assert not result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint == DeliveryPendingCheckpoint(head=None, triggers=(first_trigger,))
     assert pull_request_publisher.publish.call_count == 0
 
@@ -3331,12 +4933,12 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
     move_started = Event()
     branch_publisher = Mock()
 
-    def publish_branch(_request):
+    def publish_branch(request):
         branch_started.set()
         if not allow_branch.wait(timeout=5):
             message = "test branch publication remained blocked"
             raise TimeoutError(message)
-        return _branch_receipt(head)
+        return _branch_receipt(request.expected_published_head)
 
     def move_change():
         move_started.set()
@@ -3344,8 +4946,10 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
 
     branch_publisher.publish.side_effect = publish_branch
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3382,10 +4986,12 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
     runtime = runtimes["change-a"]
@@ -3400,7 +5006,9 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     ):
         application.reconcile_change_checkpoint("change-a")
 
-    assert runtime.checkpoint_publication_state().published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert runtime.checkpoint_publication_state().published_head == snapshot.snapshot_head
     replayed = application.reconcile_change_checkpoint("change-a")
 
     assert replayed.reconciled
@@ -3427,10 +5035,7 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.side_effect = (
-        _branch_receipt(first_head),
-        _branch_receipt(second_head, first_head),
-    )
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     provider = Mock()
     provider.read_repository.return_value = PublicationRepository(
         repository="example/project",
@@ -3486,11 +5091,13 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
         application.reconcile_change_checkpoint("change-a")
 
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
     _set_checkpoint(
         runtimes["change-a"],
         state_root,
         pending.model_copy(update={"head": second_head}),
-        published_head=first_head,
+        published_head=snapshot.snapshot_head,
     )
 
     with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):
@@ -3536,35 +5143,77 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
         workspace_root=repository,
     )
     assert application.list_work_items() == ()
-    assert (runtime_root / "capacity.json").is_file()
-    assert CapacityLedger.model_validate_json((runtime_root / "capacity.json").read_bytes()).capacity == 1
-    assert application._execution_capacity == 1
+    assert not (runtime_root / "capacity.json").exists()
+    assert not (runtime_root / "capacity-ledger.json").exists()
+    assert application._execution_capacity == 3
+    assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
 
 
-def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_path: Path) -> None:
+def test_loader_composed_finalization_admits_descendant_and_replays_after_reload(tmp_path: Path) -> None:
+    repository, runtime_root = _seed_loader_composed_completed_change(tmp_path)
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=GitHubCliPublicationProvider(),
+    )
+    coordination = PortfolioCoordinator(runtime_root).show("change-a")
+    exact_head = _commit_local_descendant(coordination, "loader-finalization.txt")
+
+    context = application.show_finalization_context("change-a")
+
+    assert context.ready_for_finalization is True
+    assert context.change_head == exact_head
+    finalization_request = _finalization_request("change-a", exact_head)
+    finalization = application.finalize_change("change-a", finalization_request)
+    assert finalization.exact_head == exact_head
+    assert PortfolioCoordinator(runtime_root).show("change-a").last_reviewed_commit == exact_head
+
+    reloaded = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=GitHubCliPublicationProvider(),
+    )
+    reloaded_context = reloaded.show_finalization_context("change-a")
+
+    assert reloaded_context.finalization_id == finalization.finalization_id
+    assert reloaded_context.finalized_head == exact_head
+    assert reloaded_context.reviewed_change_head == exact_head
+    assert reloaded.finalize_change("change-a", finalization_request) == finalization
+
+
+def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     host_config_path = repository / ".owlbear/delivery/runtime/host.json"
     host_config_path.parent.mkdir(parents=True)
     host_config_path.write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=3).model_dump_json(),
+        DeliveryHostConfig(
+            schema_version=1,
+            execution_capacity=3,
+            claim_timeout_seconds=3600,
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
+    (repository / ".owlbear/delivery/runtime/host.local.json").write_text(
+        '{"execution_capacity": 5, "claim_timeout_seconds": 5}\n',
         encoding="utf-8",
     )
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
-    ledger = CapacityLedger.model_validate_json((repository / ".owlbear/delivery/runtime/capacity.json").read_bytes())
-    assert ledger.capacity == 2
-    assert application._execution_capacity == 3
+    assert application._execution_capacity == 5
+    assert application._claim_timeout == timedelta(seconds=5)
 
 
 @pytest.mark.parametrize(
     ("content", "field"),
     [
         ("not-json\n", "host_config"),
-        ('{"schema_version": 1, "writer_capacity": 0}\n', "writer_capacity"),
+        ('{"schema_version": 1, "writer_capacity": 2}\n', "writer_capacity"),
         ('{"schema_version": 1, "execution_capacity": "3"}\n', "execution_capacity"),
+        ('{"schema_version": 1, "claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
+        ('{"schema_version": 1, "claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
         ('{"schema_version": 1, "unknown": 3}\n', "unknown"),
     ],
 )
@@ -3584,13 +5233,44 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
     assert exc_info.value.field == field
     assert "host.json" in exc_info.value.detail
     assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
+    assert not (repository / ".owlbear/delivery/runtime/capacity-ledger.json").exists()
+    if field == "writer_capacity":
+        assert exc_info.value.__cause__ is not None
+        assert exc_info.value.__cause__.errors()[0]["type"] == "extra_forbidden"
 
 
-def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("content", "field"),
+    [
+        ('{"claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
+        ('{"claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
+        ('{"schema_version": null}\n', "schema_version"),
+        ('{"unknown": 3}\n', "unknown"),
+    ],
+)
+def test_delivery_loader_rejects_invalid_host_local_config_before_ledger_mutation(
+    tmp_path: Path,
+    content: str,
+    field: str,
+) -> None:
+    repository = _repository(tmp_path)
+    host_local_config_path = repository / ".owlbear/delivery/runtime/host.local.json"
+    host_local_config_path.parent.mkdir(parents=True)
+    host_local_config_path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == field
+    assert "host.local.json" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime/capacity-ledger.json").exists()
+
+
+def test_delivery_loader_ignores_legacy_capacity_ledger(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
     runtime_root.mkdir(parents=True)
-    ledger_path = runtime_root / "capacity.json"
+    ledger_path = runtime_root / "capacity-ledger.json"
     ledger_path.write_text(
         CapacityLedger(capacity=2, change_ids=("change-a", "change-b")).model_dump_json(),
         encoding="utf-8",
@@ -3598,55 +5278,14 @@ def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(t
     before = ledger_path.read_bytes()
     host_config_path = runtime_root / "host.json"
     host_config_path.write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
+        DeliveryHostConfig(schema_version=1, execution_capacity=1).model_dump_json(),
         encoding="utf-8",
     )
 
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(_startup_config(), workspace_root=repository)
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
 
-    assert exc_info.value.field == "writer_capacity"
-    assert "active writers" in exc_info.value.detail
-    assert "host.json" in exc_info.value.detail
+    assert application._execution_capacity == 1
     assert ledger_path.read_bytes() == before
-
-
-def test_delivery_loader_reports_capacity_ledger_race_as_runtime_error(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    runtime_root.mkdir(parents=True)
-    (runtime_root / "capacity.json").write_text(
-        CapacityLedger(capacity=2).model_dump_json(),
-        encoding="utf-8",
-    )
-    (runtime_root / "host.json").write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
-        encoding="utf-8",
-    )
-    original_commit = PortfolioCoordinator._commit
-
-    def race(
-        coordinator: PortfolioCoordinator,
-        transaction_id: str,
-        participants: tuple[object, ...],
-    ) -> None:
-        if transaction_id == "reconfigure-capacity":
-            (runtime_root / "capacity.json").write_text(
-                CapacityLedger(capacity=3).model_dump_json(),
-                encoding="utf-8",
-            )
-        original_commit(coordinator, transaction_id, participants)  # type: ignore[arg-type]
-
-    with (
-        patch.object(PortfolioCoordinator, "_commit", new=race),
-        pytest.raises(DeliveryApplicationLoadError) as exc_info,
-    ):
-        load_delivery_application(_startup_config(), workspace_root=repository)
-
-    assert exc_info.value.field == "runtime_root"
-    assert "capacity ledger changed concurrently" in exc_info.value.detail
-    assert "active writers" not in exc_info.value.detail
-    assert isinstance(exc_info.value.__cause__, CapacityLedgerConflictError)
 
 
 def test_delivery_loader_does_not_translate_unrelated_coordination_conflict(tmp_path: Path) -> None:
@@ -3683,123 +5322,162 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     assert application.list_work_items() == ()
 
 
-def test_admission_replay_recovers_isolated_legacy_change_at_exact_reviewed_head(tmp_path: Path) -> None:
-    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
-    intent = b"""# Recovered Delivery
+@pytest.mark.parametrize("admission_content", [None, b"{}\n"])
+def test_delivery_loader_allows_recoverable_admission_partial_state(
+    tmp_path: Path,
+    admission_content: bytes | None,
+) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    contract = _contract("change-a", b"intent", b"design")
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+            ),
+        )
+    )
+    change_root = runtime_root / "changes/change-a"
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    if admission_content is not None:
+        (change_root / "admission.json").write_bytes(admission_content)
+
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert application.list_work_items() == ()
+
+
+def _admit_discovery_change(application: PortfolioApplication, change_id: str):
+    intent = f"""# {change_id}
 
 ```yaml target-contract
 kind: commitment
 id: COM-001
 class: agreed-path
-provenance: recovery test
-statement: Preserve reviewed recovery authority.
+provenance: discovery test
+statement: Preserve persisted admission evidence.
 ```
 
 ```yaml target-contract
 kind: outcome
 id: OUT-001
-title: Recover authority
-promise: Restore exact reviewed coordination.
-acceptance: [Recovery is observable.]
+title: Discover persisted authority
+promise: Make persisted authority observable.
+acceptance: [Admission is observable.]
 commitments: [COM-001]
 dependencies: []
 ```
-"""
-    application.create_design_session("change-a", intent, b"# Architecture\n")
-    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
-    reviewed_head = coordinator.show("change-a").last_reviewed_commit
-    task = _task()
+""".encode()
+    application.create_design_session(change_id, intent, b"# Architecture\n")
+    return application.admit_delivery_change(DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=()))
+
+
+def test_delivery_discovery_returns_valid_admission_and_stable_fingerprint(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "discovered-change")
+
+    observations = discover_persisted_changes(state_root)
+
+    assert len(observations) == 1
+    observation = observations[0]
+    assert observation.change_id == "discovered-change"
+    assert observation.admitted
+    assert observation.admission == admitted.receipt
+    assert observation.contract == admitted.contract
+    assert observation.contract_fingerprint == contract_fingerprint(admitted.contract)
+    assert observation.frontier == admitted.frontier
+    assert observation.stage is DeliveryChangeStage.BUILDING
+    assert observation.error is None
+    assert observation.actionable_runtime
+    assert observation.diagnostic_code is None
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_code"),
+    [
+        ("malformed", DeliveryDiscoveryErrorCode.FRONTIER_INVALID),
+        ("mid-write", DeliveryDiscoveryErrorCode.FRONTIER_UNAVAILABLE),
+    ],
+)
+def test_delivery_discovery_contains_one_bad_entry_and_preserves_unrelated_entries(
+    tmp_path: Path,
+    mutation: str,
+    error_code: DeliveryDiscoveryErrorCode,
+) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    _admit_discovery_change(application, "bad-change")
+    _admit_discovery_change(application, "good-change")
+    frontier_path = state_root / "changes/bad-change/frontier.json"
+    if mutation == "malformed":
+        frontier_path.write_bytes(b"not-json\n")
+    else:
+        frontier_path.unlink()
+
+    observations = {observation.change_id: observation for observation in discover_persisted_changes(state_root)}
+
+    assert set(observations) == {"bad-change", "good-change"}
+    assert observations["bad-change"].error is not None
+    assert observations["bad-change"].error.code == error_code
+    assert observations["good-change"].error is None
+    assert observations["good-change"].admitted
+
+
+def test_delivery_discovery_contains_frontier_binding_mismatch(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    _admit_discovery_change(application, "bad-bindings")
+    _admit_discovery_change(application, "good-change")
     frontier = DeliveryFrontier(
         bindings=(
             OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(
-                    _task_result(
-                        "RESULT-001",
-                        "change-a",
-                        hashlib.sha256(admitted.contract_bytes).hexdigest(),
-                        task,
-                        reviewed_head,
-                    ),
-                ),
+                outcome_id="OUT-999",
+                plan_scope_id="SCOPE-999",
             ),
         )
     )
-    payload = frontier.model_dump(mode="json")
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier_path.write_text(json.dumps(payload), encoding="utf-8")
-    legacy_frontier = frontier_path.read_bytes()
-    (state_root / "claims/changes/change-a.json").unlink()
-    del application._runtimes["change-a"]
-    request = DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=())
+    (state_root / "changes/bad-bindings/frontier.json").write_bytes(_canonical(frontier))
 
-    with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
-        application.admit_delivery_change(request)
-    assert frontier_path.read_bytes() == legacy_frontier
+    observations = {observation.change_id: observation for observation in discover_persisted_changes(state_root)}
 
-    recovered = application.admit_delivery_change(request.model_copy(update={"recovery_reviewed_head": reviewed_head}))
-
-    assert recovered.replayed
-    assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
-    assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 17
+    assert observations["bad-bindings"].error is not None
+    assert observations["bad-bindings"].error.code == DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID
+    assert observations["good-change"].error is None
 
 
-def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    coordinator = PortfolioCoordinator(runtime_root, capacity=1)
-    manager = ChangeWorkspaceManager(
-        repository,
-        repository / ".owlbear/delivery/worktrees",
-        coordinator,
-        "main",
-    )
-    coordination = manager.ensure("change-a")
-    contract = _contract("change-a", b"intent", b"design")
-    task = _task()
-    result = _task_result(
-        "RESULT-001",
-        "change-a",
-        hashlib.sha256(_canonical(contract)).hexdigest(),
-        task,
-        coordination.last_reviewed_commit,
-    )
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(result,),
-            ),
-        )
-    )
-    payload = frontier.model_dump(mode="json")
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    change_root = runtime_root / "changes/change-a"
-    change_root.mkdir(parents=True)
-    (change_root / "contract.json").write_bytes(_canonical(contract))
-    (change_root / "frontier.json").write_text(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
+def test_delivery_discovery_detects_in_place_contract_replacement(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "replaced-change")
+    before = discover_persisted_changes(state_root)[0]
+    replacement = admitted.contract.model_copy(update={"title": "Replacement authority"})
+    (state_root / "changes/replaced-change/contract.json").write_bytes(_canonical(replacement))
 
-    application = load_delivery_application(_startup_config(), workspace_root=repository)
-    state = application.show_change_checkpoint_publication("change-a")
+    after = discover_persisted_changes(state_root)[0]
 
-    assert state.pending_checkpoint is not None
-    assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 17
+    assert before.contract_fingerprint is not None
+    assert after.contract_fingerprint == contract_fingerprint(replacement)
+    assert after.contract_fingerprint != before.contract_fingerprint
+    assert after.admitted
+    assert after.stage is DeliveryChangeStage.BUILDING
+    assert after.diagnostic_code == "runtime_unavailable"
+    assert not after.actionable_runtime
+
+
+def test_delivery_discovery_retains_admission_for_unavailable_runtime(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "unavailable-change")
+    (state_root / "changes/unavailable-change/contract.json").unlink()
+
+    observation = discover_persisted_changes(state_root)[0]
+
+    assert observation.admission == admitted.receipt
+    assert observation.frontier == admitted.frontier
+    assert observation.stage is DeliveryChangeStage.BUILDING
+    assert observation.diagnostic_code == "runtime_unavailable"
+    assert observation.diagnostic_detail is not None
+    assert len(observation.diagnostic_detail) <= 240
+    assert not observation.actionable_runtime
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:
@@ -3846,33 +5524,6 @@ def test_delivery_loader_without_provider_fails_closed_for_checkpoint_operations
         application.observe_change_publication_checks("change-a")
 
 
-@pytest.mark.parametrize(
-    ("legacy_path", "field"),
-    [
-        (".owlbear/target/delivery/changes/change-a/frontier.json", "runtime_root"),
-        (".owlbear/worktrees/change-a/.git", "worktree_root"),
-    ],
-)
-def test_delivery_loader_rejects_unmigrated_owned_state_before_owner_mutation(
-    tmp_path: Path,
-    legacy_path: str,
-    field: str,
-) -> None:
-    repository = _repository(tmp_path)
-    path = repository / legacy_path
-    path.parent.mkdir(parents=True)
-    path.write_text("unmigrated\n", encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == field
-    assert not (repository / ".owlbear/delivery/runtime").exists()
-
-
 @pytest.mark.parametrize("symlinked_parent", [".owlbear", ".owlbear/delivery"])
 def test_delivery_loader_rejects_symlinked_canonical_state_parent(
     tmp_path: Path,
@@ -3895,40 +5546,6 @@ def test_delivery_loader_rejects_symlinked_canonical_state_parent(
     assert exc_info.value.field == "workspace_root"
     assert "symlink" in exc_info.value.detail
     assert not (external / "runtime").exists()
-
-
-def test_delivery_loader_rejects_stale_legacy_git_worktree_registration(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    worktree = repository / ".owlbear/worktrees/change-a"
-    _git(repository, "worktree", "add", "--detach", str(worktree), "HEAD")
-    shutil.rmtree(worktree)
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == "worktree_root"
-    assert "Git worktree registrations" in exc_info.value.detail
-    assert not (repository / ".owlbear/delivery/runtime").exists()
-
-
-def test_delivery_loader_rejects_interrupted_migration_journal(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    journal = repository / ".owlbear/delivery/migration.json"
-    journal.parent.mkdir(parents=True)
-    journal.write_text("{}\n", encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-
-    assert exc_info.value.field == "runtime_root"
-    assert exc_info.value.detail == "interrupted Delivery migration must be recovered before startup"
-    assert not (repository / ".owlbear/delivery/runtime").exists()
 
 
 def test_delivery_loader_rejects_startup_from_linked_worktree(tmp_path: Path) -> None:
@@ -3965,13 +5582,18 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     change_root.mkdir(parents=True)
     contract = _contract("change-b", b"intent\n", b"design\n")
     (change_root / "contract.json").write_bytes(_canonical(contract))
-    with pytest.raises(DeliveryApplicationLoadError) as state_error:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=repository,
-        )
-    assert state_error.value.field == "runtime_root"
-    assert not (state_root / "capacity.json").exists()
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+    )
+    health = application.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == "change-a" and diagnostic.code == "contract-identity-invalid"
+        for diagnostic in health.diagnostics
+    )
+    assert application.list_work_items() == ()
+    assert not (state_root / "capacity-ledger.json").exists()
 
     runtime_repository = _repository(tmp_path / "invalid-runtime")
     runtime_root = runtime_repository / ".owlbear/delivery/runtime"
@@ -3980,43 +5602,18 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     valid_contract = _contract("change-a", b"intent\n", b"design\n")
     (runtime_change / "contract.json").write_bytes(_canonical(valid_contract))
     (runtime_change / "frontier.json").write_bytes(b"not-json\n")
-    with pytest.raises(DeliveryApplicationLoadError) as runtime_error:
-        load_delivery_application(
-            _startup_config(),
-            workspace_root=runtime_repository,
-        )
-    assert runtime_error.value.field == "runtime_root"
-    assert runtime_error.value.detail == "Delivery runtime state is invalid"
-    assert not (runtime_root / "capacity.json").exists()
-
-
-def test_delivery_loader_preserves_legacy_integration_retirement_diagnostic(tmp_path: Path) -> None:
-    repository = _repository(tmp_path)
-    runtime_root = repository / ".owlbear/delivery/runtime"
-    change_root = runtime_root / "changes/change-a"
-    change_root.mkdir(parents=True)
-    contract = _contract("change-a", b"intent\n", b"design\n")
-    (change_root / "contract.json").write_bytes(_canonical(contract))
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-            ),
-        )
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=runtime_repository,
     )
-    payload = frontier.model_dump(mode="json")
-    payload["integration_result_id"] = "legacy-result"
-    payload["integration_completion"] = {}
-    (change_root / "frontier.json").write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
-        load_delivery_application(_startup_config(), workspace_root=repository)
-
-    assert exc_info.value.field == "runtime_root"
-    assert exc_info.value.detail == "legacy Integration completion requires retirement before frontier migration"
-    assert isinstance(exc_info.value.__cause__, DeliveryRuntimeMigrationError)
-    assert not (runtime_root / "capacity.json").exists()
+    health = application.delivery_health()
+    assert health.status.value == "attention"
+    assert any(
+        diagnostic.change_id == "change-a" and diagnostic.code == "frontier-invalid"
+        for diagnostic in health.diagnostics
+    )
+    assert application.list_work_items() == ()
+    assert not (runtime_root / "capacity-ledger.json").exists()
 
 
 def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Path) -> None:
@@ -4036,6 +5633,44 @@ def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Pa
     assert revised.intent_bytes == b"revised intent\n"
     assert revised.design_bytes == b"revised design\n"
     assert revised.authority_bytes == b""
+
+
+def test_admitted_design_revision_is_rejected_without_package_mutation(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    current = application.read_design_session("change-a")
+
+    with pytest.raises(PortfolioApplicationError, match="admitted Delivery Changes"):
+        application.revise_design_session(
+            "change-a",
+            current.package_id,
+            b"changed intent\n",
+            b"changed design\n",
+        )
+
+    assert application.read_design_session("change-a") == current
+
+
+def test_returned_design_revision_is_allowed_for_quiescent_change(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.DESIGN},
+    )
+    runtime = runtimes["change-a"]
+    current = application.read_design_session("change-a")
+
+    revised = application.revise_design_session(
+        "change-a",
+        current.package_id,
+        b"changed intent\n",
+        b"changed design\n",
+    )
+
+    assert revised.package_id != current.package_id
+    assert revised.intent_bytes == b"changed intent\n"
+    assert runtime.change_stage() is DeliveryChangeStage.DESIGN
 
 
 def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
@@ -4092,11 +5727,25 @@ dependencies: []
     assert checkpoint.replayed
     assert _git(tmp_path / "repository", "rev-parse", "main") == product_head
     listed = application.list_work_items()
-    assert tuple((item.change_id, item.work_item_id) for item in listed) == (("composed-delivery", "OUT-001"),)
-    launch = application.acquire_frontier_work().launch_packages[0]
-    assert launch.change_id == "composed-delivery"
-    assert launch.outcome_id == "OUT-001"
-    assert launch.claim.worker_role == DeliveryWorkerRole.PLANNER
+    assert tuple((item.change_id, item.work_item_id) for item in listed) == (
+        ("composed-delivery", "OUT-001"),
+        ("composed-delivery", "composed-delivery"),
+    )
+    coordination = _coordinator.show("composed-delivery")
+    package_paths = {
+        ".owlbear/delivery/packages/composed-delivery/authority.json",
+        ".owlbear/delivery/packages/composed-delivery/design.md",
+        ".owlbear/delivery/packages/composed-delivery/intent.md",
+        ".owlbear/delivery/packages/composed-delivery/manifest.json",
+    }
+    assert set(_git(tmp_path / "repository", "ls-tree", "-r", "--name-only", coordination.branch).splitlines()) >= (
+        package_paths
+    )
+    pending = application.show_change_checkpoint_publication("composed-delivery").pending_checkpoint
+    assert pending is not None
+    assert pending.head == coordination.last_reviewed_commit
+    assert pending.triggers == (DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN),)
+    assert application.acquire_frontier_work().launch_packages == ()
 
     delivery_root = state_root / "changes/composed-delivery"
     admitted_bytes = _file_bytes(delivery_root)
@@ -4119,6 +5768,201 @@ dependencies: []
             )
         )
     assert _file_bytes(delivery_root) == admitted_bytes
+
+
+def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(tmp_path, {})
+    intent = b"""# Initial package
+
+## Problem And Product Promise
+
+The initial package needs a published boundary.
+
+Publish the stable package before workers run.
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: admission test
+statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Publish initial package
+promise: Publish the stable package before workers run.
+acceptance: [The initial package is published.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("change-a", intent, b"# Architecture\n")
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    state_publisher = Mock()
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+    application._delivery_state_publisher = state_publisher
+
+    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+    replayed = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+
+    coordination = coordinator.show("change-a")
+    snapshot = coordination.design_package_snapshot
+    assert snapshot is not None
+    assert coordination.last_reviewed_commit == snapshot.snapshot_head
+    assert admitted.frontier.published_head == snapshot.snapshot_head
+    assert admitted.frontier.pending_checkpoint is None
+    assert replayed.replayed
+    assert replayed.frontier == admitted.frontier
+    assert branch_publisher.publish.call_count == 1
+    assert pull_request_publisher.publish.call_count == 1
+    assert pull_request_publisher.update_generated_summary.call_count == 1
+    assert state_publisher.publish.call_count == 1
+    branch_request = branch_publisher.publish.call_args.args[0]
+    assert branch_request.expected_published_head == snapshot.snapshot_head
+    pull_request = pull_request_publisher.publish.call_args.args[0]
+    assert pull_request.published_head == snapshot.snapshot_head
+    assert "> The initial package needs a published boundary." in pull_request.generated_summary
+    assert "> Publish the stable package before workers run." in pull_request.generated_summary
+    assert "Promised result: Publish the stable package before workers run." in pull_request.generated_summary
+    assert "Outcomes complete: 0 of 1" in pull_request.generated_summary
+    assert "admitted Design package" in pull_request.generated_summary
+    assert "Do not manually change this PR's draft/ready state or push to its branch." in pull_request.generated_summary
+    assert "## Review And Merge" not in pull_request.generated_summary
+    assert "/address-pr-feedback change-a" not in pull_request.generated_summary
+    assert "merge this pull request in GitHub" not in pull_request.generated_summary
+    package_paths = {
+        ".owlbear/delivery/packages/change-a/authority.json",
+        ".owlbear/delivery/packages/change-a/design.md",
+        ".owlbear/delivery/packages/change-a/intent.md",
+        ".owlbear/delivery/packages/change-a/manifest.json",
+    }
+    tree_paths = _git(
+        application._workspace_manager.repository,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        coordination.branch,
+    ).splitlines()
+    assert set(tree_paths) >= package_paths
+
+
+def test_checkpoint_summary_renders_and_escapes_authored_change_content(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    intent = b"""# Safe summary
+
+## Problem And Product Promise
+
+The goal contains <tag>, @team, #123, and https://example.test.
+
+The intent contains <script>, Fixes #456, @team, https://example.test/path, and `literal`.
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: summary test
+statement: Preserve safe summary rendering.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: "Outcome <tag> @team #7"
+promise: "Deliver <script> Fixes #8 @team https://example.test/path `literal`."
+acceptance: [The authored content is rendered safely.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("change-a", intent, b"# Architecture\n")
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+
+    summary = pull_request_publisher.publish.call_args.args[0].generated_summary
+    assert "> The goal contains &lt;tag&gt;, &#64;team, &#35;123, and https&#58;&#47;&#47;example.test." in summary
+    assert (
+        "> The intent contains &lt;script&gt;, Fixes &#35;456, &#64;team, "
+        "https&#58;&#47;&#47;example.test&#47;path, and &#96;literal&#96;."
+    ) in summary
+    assert "Outcome &lt;tag&gt; &#64;team &#35;7" in summary
+    assert (
+        "Promised result: Deliver &lt;script&gt; Fixes &#35;8 &#64;team "
+        "https&#58;&#47;&#47;example.test&#47;path &#96;literal&#96;."
+    ) in summary
+    assert "<script>" not in summary
+    assert "@team" not in summary
+    assert "#123" not in summary
+    assert "https://example.test" not in summary
+    assert summary.count("## Delivery Status") == 1
+    assert "Delivery finalization: recorded" not in summary
+
+
+def test_checkpoint_summary_scopes_finalization_status_to_its_checkpoint(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial_head = coordinator.show("change-a").last_reviewed_commit
+    _set_checkpoint(
+        runtimes["change-a"],
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=initial_head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    application.reconcile_change_checkpoint("change-a")
+    first_summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
+    assert "Delivery finalization: recorded" not in first_summary
+
+    finalized_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", finalized_head))
+    application.reconcile_change_checkpoint("change-a")
+
+    final_summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
+    assert f"As of reviewed checkpoint `{finalized_head}`:" in final_summary
+    assert "Delivery finalization: recorded for this checkpoint" in final_summary
+    assert "Independent exact-commit review: passed for this checkpoint" in final_summary
+    assert "## Review And Merge" in final_summary
+    assert "/address-pr-feedback change-a" in final_summary
+    assert "merge this pull request in GitHub" in final_summary
 
 
 def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path: Path) -> None:
@@ -4249,6 +6093,18 @@ def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Pat
     assert detail.publication.worktree_cleanup.completion_id is None
 
 
+def test_abandoned_change_is_removed_from_current_work_portfolio(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    application.abandon_change("change-a", "User stopped the Change")
+
+    assert application.list_work_item_groups() == ()
+    assert application.portfolio_operating_view().statuses == ()
+
+
 def test_publication_detail_projects_preserved_target_sync_conflict(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -4297,30 +6153,6 @@ def test_dirty_abandoned_publication_detail_blocks_cleanup(tmp_path: Path) -> No
     assert detail.publication.worktree_cleanup is not None
     assert detail.publication.worktree_cleanup.eligible is False
     assert detail.publication.worktree_cleanup.blocked_reason == "worktree-attention"
-
-
-def test_change_level_legacy_context_requires_completed_building_change(tmp_path: Path) -> None:
-    completed_root = tmp_path / "completed"
-    completed_root.mkdir()
-    completed_application, _runtimes, _coordinator, _state_root = _portfolio(
-        completed_root,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-
-    context = completed_application.show_operator_context("change-a", "change-a")
-
-    assert context.stage == DeliveryStage.COMPLETED
-    assert completed_application.acquire_frontier_work().launch_packages == ()
-    assert completed_application.portfolio_operating_view().queued_for_orchestration == ()
-
-    in_flight_root = tmp_path / "in-flight"
-    in_flight_root.mkdir()
-    in_flight_application, _runtimes, _coordinator, _state_root = _portfolio(
-        in_flight_root,
-        {"change-a": DeliveryStage.PLANNING},
-    )
-    with pytest.raises(PortfolioApplicationError, match="legacy attention context"):
-        in_flight_application.show_operator_context("change-a", "change-a")
 
 
 def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: Path) -> None:
@@ -4384,6 +6216,78 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
         resumed.claim.claim_id,
     )
     assert plan_context.requests[0].resolution == resolved.resolution
+
+
+def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    candidate_path = launch.worktree_path / "candidate.txt"
+    candidate_path.write_text("preserved Builder candidate\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", candidate_path.name)
+    _git(launch.worktree_path, "commit", "-m", "preserve Builder candidate")
+    candidate_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+    request = DeliveryRequest(
+        request_id="request-implementation",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Repair the external runtime prerequisite.",
+    )
+
+    blocked = application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-implementation",
+            reason="The external runtime prerequisite is unavailable.",
+            unblock_condition="The prerequisite is repaired.",
+            expected_evidence=("Successful implementation proof",),
+            locators=("TASK-001",),
+            request=request,
+            resume_commit=candidate_head,
+        ),
+    )
+
+    assert blocked.block is not None
+    assert blocked.block.resume_commit == candidate_head
+    assert blocked.active_claim is None
+    coordination = coordinator.show("change-a")
+    assert coordination.last_reviewed_commit == reviewed_head
+    assert coordination.writer is None
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") == reviewed_head
+    assert (
+        _git(
+            launch.worktree_path,
+            "rev-parse",
+            f"refs/owlbear/attempts/change-a/{launch.claim.attempt_id}",
+        )
+        == candidate_head
+    )
+
+    resolved = application.resolve_request(
+        "change-a",
+        request.request_id,
+        DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+    )
+    resumed = application.acquire_frontier_work().launch_packages
+
+    assert len(resumed) == 1
+    resumed_launch = resumed[0]
+    assert resumed_launch.claim.claim_id != launch.claim.claim_id
+    assert resumed_launch.source_head == reviewed_head
+    assert resumed_launch.last_reviewed_commit == reviewed_head
+    build_context = application.show_build_context(
+        "change-a",
+        resumed_launch.outcome_id,
+        resumed_launch.claim.attempt_id,
+        resumed_launch.claim.claim_id,
+    )
+    assert build_context.requests[0].resolution == resolved.resolution
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim_id == resumed_launch.claim.claim_id
 
 
 def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -> None:
@@ -4616,8 +6520,7 @@ def test_acquisition_returns_bounded_stage_packages_without_integration_work(tmp
     assert runtimes["change-d"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-b").writer is not None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ("change-b",)
+    assert not (state_root / "capacity.json").exists()
 
     plan_package, build_package = acquired.launch_packages
     plan_context = application.show_plan_context(
@@ -4677,11 +6580,170 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     )
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
-def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:
+def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+
+    now[0] = "2026-08-04T00:59:59Z"
+    live = application.acquire_frontier_work()
+
+    assert live.launch_packages == ()
+    assert live.failures == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
+
+    now[0] = "2026-08-04T01:00:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.recoveries[0].claim_id == first.claim.claim_id
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert coordinator.show("change-a").writer is None
+    assert not (state_root / "capacity.json").exists()
+
+
+def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+    (first.worktree_path / "product.txt").write_text("attempt\n", encoding="utf-8")
+    _git(first.worktree_path, "add", "product.txt")
+    _git(first.worktree_path, "commit", "-m", "attempt commit")
+    attempt_commit = _git(first.worktree_path, "rev-parse", "HEAD")
+
+    now[0] = "2026-08-04T01:00:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].preserved_commit == attempt_commit
+    assert recovered.recoveries[0].preserved_ref == (f"refs/owlbear/attempts/change-a/{first.claim.attempt_id}")
+    assert _git(first.worktree_path, "rev-parse", recovered.recoveries[0].preserved_ref) == attempt_commit
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert replacement.writer is not None
+    assert replacement.writer.claim_id == replacement.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert coordinator.show("change-a").writer == replacement.writer
+    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
+
+
+def test_acquisition_recovers_expired_dirty_builder_claim_and_relaunches(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+    product = first.worktree_path / "product.txt"
+    product.write_text("uncommitted attempt\n", encoding="utf-8")
+
+    now[0] = "2026-08-04T01:00:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    recovery = recovered.recoveries[0]
+    assert recovery.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovery.quarantine_commit is not None
+    assert recovery.quarantine_ref == f"refs/owlbear/quarantine/change-a/{first.claim.attempt_id}"
+    assert _git(first.worktree_path, "rev-parse", recovery.quarantine_ref) == recovery.quarantine_commit
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert replacement.writer is not None
+    assert coordinator.show("change-a").writer == replacement.writer
+    assert _git(first.worktree_path, "status", "--porcelain") == ""
+    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
+
+
+def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.IMPLEMENTATION,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=2,
+        clock=lambda: now[0],
+    )
+    initial = application.acquire_frontier_work()
+    initial_by_change = {package.change_id: package for package in initial.launch_packages}
+
+    now[0] = "2026-08-04T01:00:00Z"
+    original_snapshot = application._workspace_manager.recovery_snapshot
+
+    def fail_change_a(change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot:
+        if change_id == "change-a":
+            raise subprocess.CalledProcessError(1, ("git", "status"))
+        return original_snapshot(change_id, attempt_id)
+
+    with patch.object(application._workspace_manager, "recovery_snapshot", side_effect=fail_change_a):
+        recovered = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
+    assert len(recovered.failures) == 1
+    assert recovered.failures[0].change_id == "change-a"
+    assert recovered.failures[0].claim_id == initial_by_change["change-a"].claim.claim_id
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].change_id == "change-b"
+    assert runtimes["change-a"].active_claims()
+    assert runtimes["change-b"].active_claims()[0][1].claim_id != initial_by_change["change-b"].claim.claim_id
+    assert coordinator.show("change-a").writer == initial_by_change["change-a"].writer
+
+
+def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        execution_capacity=2,
+        clock=lambda: "2026-08-04T01:00:00Z",
+    )
+    initial = application.acquire_frontier_work()
+    initial_by_change = {package.change_id: package for package in initial.launch_packages}
+    application.recover_claim(
+        "change-b",
+        initial_by_change["change-b"].outcome_id,
+        initial_by_change["change-b"].claim.attempt_id,
+        initial_by_change["change-b"].claim.claim_id,
+    )
+    malformed_path = state_root / "changes/change-a/frontier.json"
+    malformed = json.loads(malformed_path.read_bytes())
+    malformed["bindings"][0]["active_claim"]["started_at"] = "not-a-timestamp"
+    malformed_path.write_bytes((json.dumps(malformed, sort_keys=True, separators=(",", ":")) + "\n").encode())
+
+    recovered = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
+    assert len(recovered.failures) == 1
+    failure = recovered.failures[0]
+    assert failure.change_id == "change-a"
+    assert failure.outcome_id == "OUT-001"
+    assert failure.claim_id == initial_by_change["change-a"].claim.claim_id
+    assert runtimes["change-a"].active_claims()
+    assert coordinator.show("change-a").writer is None
+
+
+def test_execution_capacity_allows_independent_builders_and_planners(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {
@@ -4689,17 +6751,18 @@ def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_pat
             "change-b": DeliveryStage.IMPLEMENTATION,
             "change-c": DeliveryStage.PLANNING,
         },
-        writer_capacity=1,
+        execution_capacity=3,
     )
 
     acquired = application.acquire_frontier_work()
 
-    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a", "change-c")
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a", "change-b", "change-c")
     assert acquired.failures == ()
-    assert runtimes["change-b"].active_claims() == ()
-    assert coordinator.show("change-b").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
+    assert all(runtimes[change_id].active_claims() for change_id in ("change-a", "change-b", "change-c"))
+    assert coordinator.show("change-a").writer is not None
+    assert coordinator.show("change-b").writer is not None
+    assert coordinator.show("change-c").writer is None
+    assert not (state_root / "capacity.json").exists()
 
 
 @pytest.mark.parametrize("stage", [DeliveryStage.PLANNING])
@@ -4718,8 +6781,7 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     assert recovered.preserved_commit is None
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_path: Path) -> None:
@@ -4729,15 +6791,20 @@ def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_
     )
     interrupted = application.acquire_frontier_work().launch_packages[0]
     before_coordination = coordinator.show("change-a")
-    before_capacity = (state_root / "capacity.json").read_bytes()
+    assert not (state_root / "capacity.json").exists()
 
-    reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        runtimes,
+        clock=lambda: "2026-08-04T00:00:00Z",
+    )
     resumed = reopened.acquire_frontier_work()
 
     assert resumed.launch_packages == ()
     assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
     assert coordinator.show("change-a") == before_coordination
-    assert (state_root / "capacity.json").read_bytes() == before_capacity
+    assert not (state_root / "capacity.json").exists()
 
 
 def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Path) -> None:
@@ -4748,7 +6815,7 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     interrupted = application.acquire_frontier_work().launch_packages[0]
     (interrupted.worktree_path / "product.txt").write_text("uncommitted attempt\n", encoding="utf-8")
     before_coordination = coordinator.show("change-a")
-    before_capacity = (state_root / "capacity.json").read_bytes()
+    assert not (state_root / "capacity.json").exists()
 
     resumed = application.acquire_frontier_work()
 
@@ -4756,7 +6823,7 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
     assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is None
     assert coordinator.show("change-a") == before_coordination
-    assert (state_root / "capacity.json").read_bytes() == before_capacity
+    assert not (state_root / "capacity.json").exists()
     assert (interrupted.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
 
 
@@ -4804,8 +6871,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert recovered.preserved_commit == attempt_commit
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
     with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
         runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
 
@@ -4860,12 +6926,11 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ()
+    assert not (state_root / "capacity.json").exists()
 
 
-def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
+def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -4874,23 +6939,147 @@ def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path
     product.write_text("uncommitted attempt\n", encoding="utf-8")
     branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
 
-    retained = application.recover_claim(
+    recovered = application.recover_claim(
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
         package.claim.claim_id,
     )
 
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit is not None
+    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{package.claim.attempt_id}"
+    assert _git(package.worktree_path, "rev-parse", recovered.quarantine_ref) == recovered.quarantine_commit
+    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    assert _git(package.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted attempt"
+    assert product.read_text(encoding="utf-8") == "baseline\n"
+    relaunched = application.acquire_frontier_work().launch_packages[0]
+    assert relaunched.claim.claim_id != package.claim.claim_id
+    assert relaunched.writer is not None
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == branch_head
+
+
+def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    dirty_file = package.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+    with (
+        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after cleanup")),
+        pytest.raises(RuntimeError, match="injected after cleanup"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    interrupted = coordinator.show("change-a")
+    quarantine = interrupted.dirty_worktree_quarantine
+    assert quarantine is not None
+    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer is None
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit == quarantine.quarantine_commit
+    assert recovered.quarantine_ref == quarantine.quarantine_ref
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    relaunched = application.acquire_frontier_work().launch_packages[0]
+    assert relaunched.claim.claim_id != package.claim.claim_id
+    assert relaunched.writer is not None
+
+
+def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    worktree = package.worktree_path
+    (worktree / "product.txt").write_text("attempt\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "attempt commit")
+    rejected = _git(worktree, "rev-parse", "HEAD")
+    (worktree / "uncommitted.bin").write_bytes(b"preserve\x00\xff")
+
+    with (
+        patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected before release")),
+        pytest.raises(CoordinationConflictError, match="injected before release"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    interrupted = coordinator.show("change-a")
+    quarantine = interrupted.dirty_worktree_quarantine
+    assert quarantine is not None
+    assert quarantine.base_head == rejected
+    assert interrupted.writer == package.writer
+    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit == quarantine.quarantine_commit
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+
+
+def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    dirty_file = package.worktree_path / "uncommitted.bin"
+    dirty_file.write_bytes(b"preserve\x00\xff")
+
+    with patch.object(
+        application._workspace_manager,
+        "quarantine_dirty_worktree",
+        side_effect=RuntimeError("injected preservation failure"),
+    ):
+        retained = application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
     assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
     assert retained.attention is not None
     assert retained.attention.custody_retained
-    assert retained.attention.branch_head == branch_head
-    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
-    assert runtimes["change-a"].active_claims()[0][1] == package.claim
-    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention == retained.attention
+    assert "injected preservation failure" in retained.attention.reason
+    assert dirty_file.read_bytes() == b"preserve\x00\xff"
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer == package.writer
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
+    assert not (state_root / "capacity.json").exists()
+    assert coordinator.show("change-a").dirty_worktree_quarantine is None
 
 
 def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path: Path) -> None:
@@ -4923,5 +7112,4 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert retained.attention.writer_claim_id == mismatched.claim_id
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
+    assert not (state_root / "capacity.json").exists()

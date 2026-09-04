@@ -8,7 +8,7 @@ import os
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Never
 
 import yaml
 
@@ -119,7 +119,7 @@ class RuntimeTransaction:
 
     @property
     def _directory(self) -> Path:
-        return self._manifest_root / ".runtime-transactions"
+        return self._manifest_root / "transactions"
 
     @property
     def _manifest_path(self) -> Path:
@@ -162,10 +162,9 @@ class RuntimeTransaction:
         """Complete every valid pending transaction rooted at ``manifest_root``."""
         resolved_root = manifest_root.resolve()
         allowed_roots = tuple(root.resolve() for root in (roots or (resolved_root,)))
-        directory = resolved_root / ".runtime-transactions"
-        if not directory.is_dir():
-            return
-        for manifest_path in sorted(directory.glob("*.yaml")):
+        directory = resolved_root / "transactions"
+        manifest_paths = tuple(sorted(directory.glob("*.yaml"))) if directory.is_dir() else ()
+        for manifest_path in manifest_paths:
             transaction = cls._from_manifest(resolved_root, manifest_path, allowed_roots)
             transaction.recover()
 
@@ -305,6 +304,10 @@ def _load_yaml(path: Path) -> dict[str, object]:
     except yaml.YAMLError as exc:
         raise TransactionManifestError from exc
     return value if isinstance(value, dict) else {}
+
+
+def _manifest_error(detail: str) -> Never:
+    raise TransactionManifestError(detail)
 
 
 def _participant_from_manifest(

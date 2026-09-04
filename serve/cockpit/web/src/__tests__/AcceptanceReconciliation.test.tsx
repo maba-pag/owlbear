@@ -27,7 +27,7 @@ function portfolio(changeIds: string[], lifecycle: 'awaiting-merge' | 'acceptanc
       next_step: 'Merge pull request in GitHub',
       activity: { state: 'idle' as const, worker_role: null, started_at: null, task_id: null },
       progress: { kind: 'publication' as const, label: 'Awaiting merge in GitHub', done: null, total: null },
-      action: { kind: 'observe-acceptance' as const, label: 'Check GitHub acceptance', command: null },
+      action: { kind: 'observe-acceptance' as const, label: 'Check merge status', command: null },
     }],
   }))
   return {
@@ -41,6 +41,7 @@ function portfolio(changeIds: string[], lifecycle: 'awaiting-merge' | 'acceptanc
     operating: {
       unfinished_change_count: groups.length,
       completed_change_count: 0,
+      statuses: [],
       draft_design_change_ids: [],
       design_required_change_ids: [],
       claimed: [],
@@ -49,6 +50,7 @@ function portfolio(changeIds: string[], lifecycle: 'awaiting-merge' | 'acceptanc
       dependency_waits: [],
       guidance: [],
     },
+    health: { status: 'healthy', diagnostics: [] },
   }
 }
 

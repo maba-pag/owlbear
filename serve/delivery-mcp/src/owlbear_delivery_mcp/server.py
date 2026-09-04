@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from owlbear_delivery import (
     DeliveryApplicationLoadError,
+    DeliveryCheckpointSupervisor,
     DeliveryStartupConfig,
     PortfolioApplication,
 )
@@ -109,11 +110,15 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
     workspace_root = Path.cwd().resolve()
     config = load_delivery_config(_delivery_config_path(workspace_root))
-    context = DeliveryAppContext(application=load_delivery_application(config, workspace_root))
+    application = load_delivery_application(config, workspace_root)
+    supervisor = DeliveryCheckpointSupervisor(application)
+    supervisor.start()
+    context = DeliveryAppContext(application=application)
     _live_context = context
     try:
         yield context
     finally:
+        supervisor.stop()
         _live_context = None
 
 

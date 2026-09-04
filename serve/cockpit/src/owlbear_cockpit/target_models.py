@@ -7,8 +7,16 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_delivery.delivery_runtime import DeliveryStage
-from owlbear_delivery.portfolio_operating import PortfolioOperatingView
+from owlbear_delivery.delivery_runtime import DeliveryChangeStage, DeliveryStage
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
+    PortfolioGuidance,
+    PortfolioOperatingView,
+    PortfolioWorkReference,
+)
 from owlbear_delivery.publication_provider import (
     PublicationCheckBlockingState,
     PublicationCheckKind,
@@ -17,13 +25,18 @@ from owlbear_delivery.publication_provider import (
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
-    from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
+    from owlbear_delivery.change_workspace import (
+        ChangeExternalHeadAdoptionReceipt,
+        ChangeTargetSyncAbortReceipt,
+        ChangeTargetSyncReceipt,
+    )
     from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
     from owlbear_delivery.portfolio_application import (
         DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
+        DeliveryCheckpointReconciliationResult,
     )
 
 
@@ -56,12 +69,98 @@ class WorkItemPortfolioTotals(_TargetHTTPModel):
     activity: ActivityCounts
 
 
+class PortfolioChangeLifecycleStatusResponse(_TargetHTTPModel):
+    """Expose independent lifecycle facts for one current Change."""
+
+    change_id: str = Field(min_length=1)
+    admission: PortfolioChangeAdmission
+    stage: DeliveryChangeStage | None = None
+    actionable_runtime: bool
+    diagnostic_code: str | None = Field(default=None, min_length=1)
+    diagnostic_detail: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @classmethod
+    def from_status(
+        cls,
+        status: PortfolioChangeLifecycleStatus,
+    ) -> PortfolioChangeLifecycleStatusResponse:
+        """Adapt one Delivery status without deriving transport state."""
+        return cls(
+            change_id=status.change_id,
+            admission=status.admission,
+            stage=status.stage,
+            actionable_runtime=status.actionable_runtime,
+            diagnostic_code=status.diagnostic_code,
+            diagnostic_detail=status.diagnostic_detail,
+        )
+
+
+class PortfolioOperatingResponse(_TargetHTTPModel):
+    """Expose strict HTTP facts for the current Delivery portfolio."""
+
+    unfinished_change_count: int = Field(ge=0)
+    completed_change_count: int = Field(ge=0)
+    statuses: tuple[PortfolioChangeLifecycleStatusResponse, ...]
+    draft_design_change_ids: tuple[str, ...] = ()
+    design_required_change_ids: tuple[str, ...] = ()
+    claimed: tuple[PortfolioWorkReference, ...] = ()
+    queued_for_orchestration: tuple[PortfolioWorkReference, ...] = ()
+    interventions: tuple[PortfolioWorkReference, ...] = ()
+    dependency_waits: tuple[PortfolioWorkReference, ...] = ()
+    guidance: tuple[PortfolioGuidance, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: PortfolioOperatingView) -> PortfolioOperatingResponse:
+        """Adapt the Delivery operating projection at the Cockpit boundary."""
+        return cls(
+            unfinished_change_count=view.unfinished_change_count,
+            completed_change_count=view.completed_change_count,
+            statuses=tuple(PortfolioChangeLifecycleStatusResponse.from_status(status) for status in view.statuses),
+            draft_design_change_ids=view.draft_design_change_ids,
+            design_required_change_ids=view.design_required_change_ids,
+            claimed=view.claimed,
+            queued_for_orchestration=view.queued_for_orchestration,
+            interventions=view.interventions,
+            dependency_waits=view.dependency_waits,
+            guidance=view.guidance,
+        )
+
+
+class DeliveryHealthDiagnosticResponse(_TargetHTTPModel):
+    """Expose one bounded Delivery diagnostic to the Cockpit operator."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool
+
+
+class DeliveryHealthResponse(_TargetHTTPModel):
+    """Expose current Delivery availability and quarantined-state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnosticResponse, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: DeliveryHealthView) -> DeliveryHealthResponse:
+        """Adapt shared Delivery health without deriving new Cockpit state."""
+        return cls(
+            status=view.status,
+            diagnostics=tuple(
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
+            ),
+        )
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
     """Return Change-grouped current Work Items and independent totals."""
 
     groups: tuple[ChangeGroupView, ...]
     totals: WorkItemPortfolioTotals
-    operating: PortfolioOperatingView
+    operating: PortfolioOperatingResponse
+    health: DeliveryHealthResponse
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):
@@ -165,6 +264,39 @@ class AcceptanceReconciliationResponse(_TargetHTTPModel):
     outcomes: tuple[AcceptanceReconciliationOutcomeResponse, ...]
 
 
+class WorkItemPublicationReconciliationResponse(_TargetHTTPModel):
+    """Expose one checkpoint attempt and its durable remaining queue state."""
+
+    change_id: str = Field(min_length=1)
+    attempted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    reconciled: bool
+    error_code: str | None = Field(default=None, min_length=1)
+    error_detail: str | None = Field(default=None, min_length=1, max_length=240)
+    pending_checkpoint_attempt_count: int = Field(default=0, ge=0)
+    pending_checkpoint_last_attempted_at: datetime | None = None
+    pending_checkpoint_error_code: str | None = Field(default=None, min_length=1)
+    pending_checkpoint_error_detail: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @classmethod
+    def from_result(
+        cls,
+        result: DeliveryCheckpointReconciliationResult,
+    ) -> WorkItemPublicationReconciliationResponse:
+        """Adapt one Delivery checkpoint result without deriving new authority."""
+        pending = result.state.pending_checkpoint
+        return cls(
+            change_id=result.change_id,
+            attempted_head=result.attempted_head,
+            reconciled=result.reconciled,
+            error_code=result.error_code,
+            error_detail=result.error_detail,
+            pending_checkpoint_attempt_count=pending.attempt_count if pending is not None else 0,
+            pending_checkpoint_last_attempted_at=(pending.last_attempted_at if pending is not None else None),
+            pending_checkpoint_error_code=pending.last_error_code if pending is not None else None,
+            pending_checkpoint_error_detail=pending.last_error_detail if pending is not None else None,
+        )
+
+
 class DesignWorkDetailResponse(_TargetHTTPModel):
     """Verified authored Design sources for one pre-admission package."""
 
@@ -209,6 +341,15 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class AdoptExternalHeadAfterAcceptanceAttentionBody(_TargetHTTPModel):
+    """Exact acceptance attention and pull-request heads for external-head adoption."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class ChangeDispositionReasonBody(_TargetHTTPModel):
     """User reason for deferring or abandoning one Change."""
 
@@ -249,6 +390,12 @@ class TargetSyncConflictBody(_TargetHTTPModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class CleanupAbandonedTargetSyncBody(_TargetHTTPModel):
+    """Explicit confirmation to discard a preserved target merge before cleanup."""
+
+    confirmed_discard: Literal[True]
+
+
 class SupersedePublicationBody(_TargetHTTPModel):
     """Stable operation identity used to reconcile a publication successor retry."""
 
@@ -268,6 +415,7 @@ class TargetSyncResponse(_TargetHTTPModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> TargetSyncResponse:
@@ -282,6 +430,7 @@ class TargetSyncResponse(_TargetHTTPModel):
             change_head_before=receipt.change_head_before,
             merged_head=receipt.merged_head,
             merge_commit=receipt.merge_commit,
+            review_required=receipt.review_required,
         )
 
 
@@ -298,6 +447,24 @@ class TargetSyncAbortResponse(_TargetHTTPModel):
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncAbortReceipt) -> TargetSyncAbortResponse:
         """Convert one application abort receipt into the HTTP transport shape."""
+        return cls(**receipt.model_dump())
+
+
+class ExternalHeadAdoptionResponse(_TargetHTTPModel):
+    """Typed receipt returned after adopting one exact external Change head."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"]
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ExternalHeadAdoptionResponse:
+        """Convert one Delivery adoption receipt into the HTTP transport shape."""
         return cls(**receipt.model_dump())
 
 
@@ -397,17 +564,22 @@ __all__ = [
     "AcceptanceReconciliationRequest",
     "AcceptanceReconciliationResponse",
     "ActivityCounts",
+    "AdoptExternalHeadAfterAcceptanceAttentionBody",
     "AnswerRequestBody",
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
     "ChangeWorktreeCleanupResponse",
     "ChangeWorktreeRecoveryResponse",
+    "CleanupAbandonedTargetSyncBody",
     "CleanupCompletedChangeBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
+    "ExternalHeadAdoptionResponse",
     "NeedsCounts",
+    "PortfolioChangeLifecycleStatusResponse",
+    "PortfolioOperatingResponse",
     "PublicationCheckView",
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
@@ -418,4 +590,5 @@ __all__ = [
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",
     "WorkItemPortfolioTotals",
+    "WorkItemPublicationReconciliationResponse",
 ]

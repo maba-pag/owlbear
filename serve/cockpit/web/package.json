@@ -14,16 +14,18 @@
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
     "test": "cross-env NODE_OPTIONS=--max-old-space-size=2048 vitest run --silent=true",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:e2e:compat": "node scripts/run-e2e-compat.mjs",
+    "test:e2e:compat:all": "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs",
     "test:e2e:work": "cross-env WORK_PORTFOLIO_E2E=1 playwright test --project=work-portfolio",
     "test:e2e:memory-purge": "cross-env PURGE_E2E=1 playwright test --project=memory-purge-assembled",
     "test:e2e:memory-lifecycle": "cross-env LIFECYCLE_E2E=1 playwright test --project=memory-lifecycle-assembled",
     "test:e2e:all": "node scripts/run-e2e-all.mjs"
   },
   "dependencies": {
-    "@porsche-design-system/components-js": "^4.5.0",
-    "@porsche-design-system/components-react": "^4.5.0",
+    "@porsche-design-system/components-js": "^4.6.0",
+    "@porsche-design-system/components-react": "^4.6.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
@@ -44,7 +46,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "cross-env": "^10.1.0",
     "eslint": "^10.7.0",
@@ -56,7 +58,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
     "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   },
   "allowScripts": {
     "fsevents@2.3.2": true,

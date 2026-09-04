@@ -44,7 +44,6 @@ from owlbear_delivery import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
-    DeliveryIntegrationCompletion,
     DeliveryMergedPullRequestLatch,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -78,7 +77,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
-from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
@@ -270,6 +269,7 @@ def _activate(
     claim_id: str,
     *,
     task_id: str | None = None,
+    attempt_id: str | None = None,
 ):
     stage = runtime.show_binding(outcome_id).stage
     role = {
@@ -280,7 +280,7 @@ def _activate(
         ActivateDeliveryClaim(
             outcome_id=outcome_id,
             claim=DeliveryActiveClaim(
-                attempt_id=f"attempt-{claim_id}",
+                attempt_id=attempt_id or f"attempt-{claim_id}",
                 claim_id=claim_id,
                 owner_id=f"owner-{claim_id}",
                 process_id=f"process-{claim_id}",
@@ -499,7 +499,7 @@ def _pull_request_observation(  # noqa: PLR0913
     candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **values)
     observation_id = hashlib.sha256(
         json.dumps(
-            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            candidate._identity_payload(),  # noqa: SLF001
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
@@ -597,6 +597,51 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.finalization_invalidation() == invalidation
     assert runtime.change_stage() == DeliveryChangeStage.BUILDING
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
+
+
+def test_review_repair_invalidates_current_finalization_and_replays(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, "3" * 40))
+
+    invalidation = runtime.prepare_review_repair(
+        finalization.finalization_id,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+    )
+
+    assert invalidation.reason == "review-repair"
+    assert invalidation.expected_head == invalidation.observed_head == "3" * 40
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    assert runtime.finalization_invalidation() == invalidation
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+    assert runtime.prepare_review_repair(finalization.finalization_id, datetime(2026, 8, 11, 17, tzinfo=UTC)) == (
+        invalidation
+    )
+
+
+def test_review_repair_rejects_finalizing_the_unchanged_head(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.prepare_review_repair(finalization.finalization_id, datetime(2026, 8, 11, 16, tzinfo=UTC))
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="new Change commit"):
+        runtime.finalize_change(
+            _finalization_request("3" * 40),
+            datetime(2026, 8, 11, 17, tzinfo=UTC),
+        )
 
 
 def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
@@ -764,51 +809,6 @@ def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
     assert invalidation.finalization_id == finalization.finalization_id
     assert invalidation.reason == "target-sync-conflict"
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
-
-
-def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 9
-    payload.pop("change_disposition")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert migrated.change_disposition() is None
-
-
-def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 10
-    payload.pop("change_disposition_resolution")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["change_disposition_resolution"] is None
-
-
-def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 11
-    payload.pop("change_disposition_publication")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["change_disposition_publication"] is None
 
 
 def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
@@ -1157,23 +1157,6 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
         DeliveryFrontier.model_validate(attention_payload)
 
 
-def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 12
-    payload.pop("change_deferral")
-    payload.pop("change_abandonment")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert migrated.change_deferral() is None
-    assert migrated.change_abandonment() is None
-
-
 def test_pull_request_draft_regression_persists_publication_attention(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -1374,7 +1357,7 @@ def test_completion_transaction_recovers_after_receipt_publication(tmp_path: Pat
 
     assert recovered.completion_receipt() == receipt
     assert recovered.change_stage() == DeliveryChangeStage.COMPLETED
-    assert not tuple((tmp_path / ".runtime-transactions").glob("*.yaml"))
+    assert not tuple((tmp_path / "transactions").glob("*.yaml"))
 
 
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
@@ -1399,184 +1382,6 @@ def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: 
     assert promoted.candidate is None
     assert promoted.stage == DeliveryStage.IMPLEMENTATION
     assert runtime.claimable_task_ids("OUT-001") == ("TASK-001",)
-
-
-def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 1
-    for binding in payload["bindings"]:
-        binding["assembly_required"] = False
-    payload["integration_result_id"] = None
-    payload["integration_completion"] = None
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert all("assembly_required" not in binding for binding in canonical["bindings"])
-    assert "integration_result_id" not in canonical
-    assert "integration_completion" not in canonical
-    assert json.loads(path.read_bytes()) == canonical
-
-
-def test_frontier_migration_rejects_non_null_legacy_integration_completion(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    payload = json.loads(runtime.frontier_bytes())
-    completion = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="1" * 40,
-        completion_path=".owlbear/completed/delivery-runtime.json",
-    )
-    payload["schema_version"] = 15
-    payload["integration_result_id"] = completion.completion_id
-    payload["integration_completion"] = completion.model_dump(mode="json")
-
-    with pytest.raises(ValueError, match="requires retirement"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(tmp_path, _contract())
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["published_head"] is None
-    assert canonical["pending_checkpoint"] is None
-    assert json.loads(path.read_bytes()) == canonical
-
-
-def test_runtime_rejects_legacy_embedded_finalization_authority(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    exact_head = runtime.bindings()[0].results[0].completed_commit
-    runtime.finalize_change(
-        _finalization_request(exact_head),
-        datetime(2026, 8, 11, 14, tzinfo=UTC),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 8
-    payload["finalization"]["schema_version"] = 1
-
-    with pytest.raises(ValueError, match="explicit re-finalization"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-@pytest.mark.parametrize("schema_version", [3, 4, 5, 6, 7])
-def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint(
-    tmp_path: Path,
-    schema_version: int,
-) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    exact_head = "3" * 40
-    runtime.finalize_change(
-        _finalization_request(exact_head),
-        datetime(2026, 8, 11, 14, tzinfo=UTC),
-    )
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = schema_version
-    if schema_version < 7:
-        payload.pop("merged_pull_request_latch")
-    payload.pop("change_completion")
-    expected_checkpoint = payload["pending_checkpoint"]
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-    migrated = DeliveryRuntime(
-        tmp_path,
-        _contract(),
-        migration_reviewed_head="f" * 40,
-    )
-    canonical = json.loads(migrated.frontier_bytes())
-
-    assert canonical["schema_version"] == 17
-    assert canonical["pending_checkpoint"] == expected_checkpoint
-    assert canonical["pending_checkpoint"]["head"] == exact_head
-    assert canonical["pending_checkpoint"]["triggers"][-1] == {
-        "kind": DeliveryCheckpointTriggerKind.FINALIZATION,
-        "outcome_id": None,
-    }
-
-
-def test_runtime_rejects_schema_three_result_history_without_exact_commit_evidence(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.PLANNING, DeliveryStage.PLANNING),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 3
-    result = payload["bindings"][0]["results"][0]
-    result.pop("observations")
-    result.pop("review")
-
-    with pytest.raises(ValidationError, match="observations"):
-        parse_delivery_frontier(json.dumps(payload).encode())
-
-
-def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.PLANNING),
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-
-    migrated, _canonical_bytes = parse_delivery_frontier(
-        json.dumps(payload).encode(),
-        migration_reviewed_head="f" * 40,
-        require_checkpoint_backfill=True,
-    )
-
-    assert migrated.pending_checkpoint is not None
-    assert migrated.pending_checkpoint.head == "f" * 40
-    assert tuple((trigger.kind, trigger.outcome_id) for trigger in migrated.pending_checkpoint.triggers) == (
-        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
-    )
-
-
-@pytest.mark.parametrize(
-    ("stage", "assembly_required_value"),
-    [("planning", "true"), ("assembly", "false")],
-)
-def test_runtime_rejects_irreducible_assembly_authority(
-    tmp_path: Path,
-    stage: str,
-    assembly_required_value: str,
-) -> None:
-    runtime = _runtime(tmp_path)
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 1
-    payload["bindings"][0]["stage"] = stage
-    payload["bindings"][0]["assembly_required"] = assembly_required_value == "true"
-    original = json.dumps(payload).encode()
-    path.write_bytes(original)
-
-    with pytest.raises(DeliveryRuntimeReferenceError, match="missing or invalid"):
-        DeliveryRuntime(tmp_path, _contract())
-
-    assert path.read_bytes() == original
 
 
 def test_plan_publication_rejects_unresolved_or_cyclic_graph_without_mutation(tmp_path: Path) -> None:
@@ -1628,7 +1433,7 @@ def _workspace(tmp_path: Path):
     _git(repository, "commit", "-m", "baseline")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
-    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    coordinator = PortfolioCoordinator(state_root)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     coordination = manager.ensure("delivery-runtime")
     return state_root, coordinator, manager, coordination
@@ -1782,6 +1587,47 @@ def test_empty_checkpoint_invalidation_preserves_valid_anchor() -> None:
     )
 
     assert invalidate_checkpoint_publication(pending, set()) is pending
+
+
+def test_checkpoint_failure_metadata_survives_reload_and_reanchors_by_head(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    initial = DeliveryPendingCheckpoint(
+        head="1" * 40,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=initial)
+
+    state = runtime.checkpoint_publication_state()
+    assert state.pending_checkpoint is not None
+    failed = runtime.record_checkpoint_failure(
+        state.pending_checkpoint,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        "ERR_PROVIDER_UNAVAILABLE",
+        "The provider is unavailable.",
+    )
+
+    pending = failed.pending_checkpoint
+    assert pending is not None
+    assert pending.attempt_count == 1
+    assert pending.last_attempted_at == datetime(2026, 8, 11, 16, tzinfo=UTC)
+    assert pending.last_error_code == "ERR_PROVIDER_UNAVAILABLE"
+    assert pending.last_error_detail == "The provider is unavailable."
+    assert DeliveryRuntime(tmp_path, _contract()).checkpoint_publication_state() == failed
+
+    same_head = pending.model_copy(
+        update={
+            "triggers": (*pending.triggers, DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION))
+        }
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=same_head)
+    assert runtime.checkpoint_publication_state().pending_checkpoint == same_head
+
+    reanchored = DeliveryPendingCheckpoint(
+        head="2" * 40,
+        triggers=same_head.triggers,
+    )
+    _persist_frontier(tmp_path, runtime, pending_checkpoint=reanchored)
+    assert runtime.checkpoint_publication_state().pending_checkpoint == reanchored
 
 
 def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path: Path) -> None:
@@ -1940,7 +1786,7 @@ def _active_second_task(tmp_path: Path):
             kind="build",
         ),
     )
-    _activate(runtime, "OUT-001", "claim-002", task_id="TASK-002")
+    _activate(runtime, "OUT-001", "claim-002", task_id="TASK-002", attempt_id="attempt-002")
     (coordination.worktree_path / "product.txt").write_text("unreviewed task two\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", "unreviewed task two")
@@ -2037,7 +1883,32 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
         assert result.results == (first_result,)
         assert result.block is not None
         assert result.block.resume_commit == attempt_commit
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
+        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
+        assert (
+            _git(coordination.worktree_path, "rev-parse", "refs/owlbear/attempts/delivery-runtime/attempt-002")
+            == attempt_commit
+        )
+
+
+def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    dirty_file = coordination.worktree_path / "dirty-retry.txt"
+    dirty_file.write_text("preserve this work\n", encoding="utf-8")
+    before = dirty_file.read_bytes()
+
+    with pytest.raises(RuntimeError, match="clean change worktree"):
+        runtime.transition(
+            RetryDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                abandoned_commit=attempt_commit,
+                attempt_id="attempt-002",
+            )
+        )
+
+    assert dirty_file.read_bytes() == before
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
+    assert coordinator.show("delivery-runtime").writer is not None
 
 
 @pytest.mark.parametrize(
@@ -2170,6 +2041,35 @@ def test_implementation_block_requires_bounded_user_request(tmp_path: Path) -> N
 
     assert runtime.frontier_bytes() == before
     assert coordinator.show("delivery-runtime").writer is not None
+
+
+def test_implementation_block_rejects_resume_commit_not_at_branch_head(tmp_path: Path) -> None:
+    runtime, coordinator, _coordination, initial, _attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(RuntimeError, match="outside the recoverable restart states"):
+        runtime.transition(
+            BlockDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                block_id="block-stale-resume",
+                reason="External evidence is unavailable.",
+                unblock_condition="The evidence is supplied.",
+                expected_evidence=("External result",),
+                locators=("TASK-002",),
+                request=DeliveryRequest(
+                    request_id="request-stale-resume",
+                    kind=DeliveryRequestKind.ACTION,
+                    outcome_id="OUT-001",
+                    summary="Supply the external result.",
+                ),
+                resume_commit=initial,
+            )
+        )
+
+    assert runtime.frontier_bytes() == before
+    assert coordinator.show("delivery-runtime").writer is not None
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
 
 
 def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_path: Path) -> None:

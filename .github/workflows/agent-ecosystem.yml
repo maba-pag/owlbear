@@ -4,33 +4,36 @@ name: Agent ecosystem validation
 "on":
   pull_request:
     branches: [dev]
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
     paths:
       - .github/workflows/agent-ecosystem.yml
-      - .github/workflows/dependency-verification.yml
       - .owlbear/hooks/**
       - .owlbear/agents/**
+      - .owlbear/instructions/**
       - .owlbear/prompts/**
       - .owlbear/scripts/validate_agents.py
       - .owlbear/scripts/validate_prompts.py
       - .owlbear/scripts/validate_skills.py
       - .owlbear/skills/**
       - .github/scripts/check_uv_version.py
-      - serve/tools/src/owlbear_tools/dependency_ci.py
       - .pre-commit-config.yaml
+      - .vscode/mcp.json
+      - seed/.vscode/mcp.json
+      - serve/*-mcp/**
       - share/agents/**
+      - share/instructions/**
       - share/prompts/**
       - share/skills/**
       - tests/test_agent_ecosystem_validation.py
       - tests/test_write_guard_hooks.py
-      - tests/test_dependency_verification_workflow.py
       - .python-version
       - conftest.py
       - pyproject.toml
       - serve/knowledge/**
-      - serve/knowledge-mcp/**
-      - share/agents/knowledge-ingestor.agent.md
-      - share/prompts/kb-ingest.prompt.md
-      - share/skills/h-knowledge-ops/SKILL.md
       - tests/test_knowledge_ops_contract.py
       - uv.lock
 
@@ -42,6 +45,9 @@ permissions: {}
 
 jobs:
   validate-agent-ecosystem:
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -57,4 +63,8 @@ jobs:
       - run: uv run --frozen python .owlbear/scripts/validate_agents.py
       - run: uv run --frozen python .owlbear/scripts/validate_skills.py
       - run: uv run --frozen python .owlbear/scripts/validate_prompts.py
-      - run: uv run --frozen pytest -q tests/test_agent_ecosystem_validation.py tests/test_write_guard_hooks.py tests/test_knowledge_ops_contract.py tests/test_dependency_verification_workflow.py
+      - run: >-
+          uv run --frozen pytest -q
+          tests/test_agent_ecosystem_validation.py
+          tests/test_write_guard_hooks.py
+          tests/test_knowledge_ops_contract.py

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { PButton, PHeading, PIcon, PInputSearch, PFlyout, PTag } from '@porsche-design-system/components-react'
+import { PButton, PHeading, PIcon, PInputSearch, PFlyout, PModal, PTag } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import { WorkItemApiError, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'
+import { WorkItemApiError, cleanupAbandonedWorkItemChange, completedChangeRecordId, discardAbandonedTargetSyncAndCleanup, type AbandonedChangeRecord, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'
 import { useCopyToClipboard } from './CopyCommand'
+import { SectionCard, StatusChip } from './DeliveryPrimitives'
 import { useCompletedChange, useCompletedHistory } from '../hooks/useWorkItems'
 import WorkspaceViewHeader, { WorkspaceViewCount } from './WorkspaceViewHeader'
 
@@ -23,7 +24,7 @@ function parseSelection(pathname: string): CompletedHistorySelection | null {
 }
 
 function historyDetailPath(record: CompletedChangeRecord): string {
-  return `/delivery/history/${encodeURIComponent(record.change_id)}/${encodeURIComponent(record.completion_id)}`
+  return `/delivery/history/${encodeURIComponent(record.change_id)}/${encodeURIComponent(completedChangeRecordId(record))}`
 }
 
 function fieldValue(event: FieldValueEvent): string {
@@ -42,6 +43,10 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 
 function isReceipt(record: CompletedChangeRecord): record is ReceiptCompletedChangeRecord {
   return record.record_kind === 'completion-receipt'
+}
+
+function isAbandoned(record: CompletedChangeRecord): record is AbandonedChangeRecord {
+  return record.record_kind === 'abandoned-change'
 }
 
 function formatCompletedAt(value: string): string {
@@ -100,15 +105,14 @@ function CompletedRecord({
   onSelect: (trigger: HTMLElement) => void
 }) {
   return (
-    <article
-      className={[
-        'relative grid gap-x-static-lg gap-y-static-sm border-b border-contrast-low py-static-md',
-        stale ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
-        'md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start',
-      ].join(' ')}
-      aria-label={stale ? `${record.title}, previous search result` : undefined}
-      data-stale={stale ? 'true' : undefined}
-      data-testid="completed-change-record"
+    <SectionCard
+      as="article"
+      interactive={!stale}
+      muted={stale}
+      ariaLabel={stale ? `${record.title}, previous search result` : undefined}
+      dataStale={stale}
+      dataTestId="completed-change-record"
+      className="relative grid gap-x-static-lg gap-y-static-sm p-static-sm md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start"
     >
       <div className="min-w-0">
         <PHeading tag="h3" size="small">
@@ -132,24 +136,49 @@ function CompletedRecord({
             <CopyValue label="accepted merge commit" value={record.accepted_merge_commit} truncate />
             <time dateTime={record.completed_at}>{formatCompletedAt(record.completed_at)}</time>
           </div>
+        ) : isAbandoned(record) ? (
+          <div className="mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs text-xs text-contrast-medium">
+            <StatusChip label="Abandoned" tone="neutral" />
+            <time dateTime={record.abandoned_at}>{formatCompletedAt(record.abandoned_at)}</time>
+          </div>
         ) : null}
       </div>
-    </article>
+    </SectionCard>
   )
 }
 
-function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; onClose: () => void }) {
+function CompletedDetail({
+  record,
+  onClose,
+  onCleanup,
+}: {
+  record: CompletedChangeRecord
+  onClose: () => void
+  onCleanup: () => Promise<Error | null>
+}) {
   const outcomePromises = record.outcome_promises ?? []
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [cleanupError, setCleanupError] = useState<Error | null>(null)
+  const [cleanupComplete, setCleanupComplete] = useState(false)
+  const abandoned = isAbandoned(record)
+  const cleanup = async () => {
+    const error = await onCleanup()
+    setCleanupError(error)
+    if (!error) {
+      setCleanupComplete(true)
+      setConfirmOpen(false)
+    }
+  }
   return (
     <article
-      aria-label="Completion detail"
+      aria-label={abandoned ? 'Abandoned change detail' : 'Completion detail'}
       className="min-w-0"
       data-testid="completed-change-detail"
     >
       <div className="flex items-start justify-between gap-static-sm">
         <div>
-          <h2 className="m-0 text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Completed change</h2>
-          <p className="mt-static-xs text-sm text-contrast-medium">What this Change delivered and the evidence retained for its completion.</p>
+          <h2 className="m-0 text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">{abandoned ? 'Abandoned change' : 'Completed change'}</h2>
+          <p className="mt-static-xs text-sm text-contrast-medium">{abandoned ? 'Why this Change ended before completion and what terminal evidence remains.' : 'What this Change delivered and the evidence retained for its completion.'}</p>
         </div>
         <PButton type="button" variant="secondary" icon="close" hideLabel compact onClick={onClose}>Close</PButton>
       </div>
@@ -169,7 +198,7 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
         </ul>
       </section>
       <PTag compact className="mt-static-md">
-        {record.record_kind === 'completion-receipt' ? 'Completion receipt' : 'Legacy package'}
+        {record.record_kind === 'completion-receipt' ? 'Completion receipt' : record.record_kind === 'abandoned-change' ? 'Abandonment record' : 'Legacy package'}
       </PTag>
       {isReceipt(record) ? (
         <section className="mt-static-lg grid gap-static-xs">
@@ -197,6 +226,15 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
             </div>
           </dl>
         </section>
+      ) : abandoned ? (
+        <section className="mt-static-lg grid gap-static-xs">
+          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Abandonment</h4>
+          <dl className="grid gap-static-sm text-sm">
+            <div><dt className="font-semibold">Prior stage</dt><dd className="text-contrast-medium">{record.prior_stage}</dd></div>
+            <div><dt className="font-semibold">Reason</dt><dd className="break-words text-contrast-medium">{record.reason}</dd></div>
+            <div><dt className="font-semibold">Abandoned</dt><dd className="text-contrast-medium"><time dateTime={record.abandoned_at}>{formatCompletedAt(record.abandoned_at)}</time></dd></div>
+          </dl>
+        </section>
       ) : (
         <section className="mt-static-lg grid gap-static-xs">
           <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Historical delivery</h4>
@@ -210,12 +248,17 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
             <dt className="font-semibold">Change</dt>
             <dd className="break-words text-contrast-medium">{record.change_id}</dd>
           </div>
-          <div>
-            <dt className="font-semibold">Completion</dt>
-            <dd><CopyValue label="completion ID" value={record.completion_id} /></dd>
-          </div>
-          {isReceipt(record) ? (
+          {isAbandoned(record) ? (
+            <div>
+              <dt className="font-semibold">Abandonment ID</dt>
+              <dd><CopyValue label="abandonment ID" value={record.abandonment_id} /></dd>
+            </div>
+          ) : isReceipt(record) ? (
             <>
+              <div>
+                <dt className="font-semibold">Completion</dt>
+                <dd><CopyValue label="completion ID" value={record.completion_id} /></dd>
+              </div>
               <div>
                 <dt className="font-semibold">Finalized Change head</dt>
                 <dd><CopyValue label="finalized Change head" value={record.finalized_change_head} /></dd>
@@ -227,6 +270,10 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
             </>
           ) : (
             <>
+              <div>
+                <dt className="font-semibold">Completion</dt>
+                <dd><CopyValue label="completion ID" value={record.completion_id} /></dd>
+              </div>
               <div>
                 <dt className="font-semibold">Package path</dt>
                 <dd className="break-all font-mono text-xs text-contrast-medium">{record.completion_path}</dd>
@@ -251,6 +298,31 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
           )}
         </dl>
       </details>
+      {abandoned && record.cleanup_available ? (
+        <>
+          {cleanupComplete ? <p className="mt-static-lg border-l-4 border-success bg-surface p-static-sm text-sm" role="status">
+            {record.target_sync_conflict
+              ? 'Target merge discarded and abandoned Change worktree cleaned up.'
+              : 'Abandoned Change worktree cleaned up.'}
+          </p> : null}
+          <PButton type="button" variant="secondary" className="mt-static-lg" onClick={() => { setCleanupError(null); setCleanupComplete(false); setConfirmOpen(true) }}>
+            {record.target_sync_conflict ? 'Discard conflict and clean worktree' : 'Clean abandoned worktree'}
+          </PButton>
+          {confirmOpen ? (
+            <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm abandoned worktree cleanup' }}>
+              <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+                <PHeading tag="h2" size="lg">{record.target_sync_conflict ? 'Discard conflict and clean worktree' : 'Clean abandoned worktree'}</PHeading>
+                <p className="text-sm">{record.target_sync_conflict ? 'Delivery will discard the preserved target merge before removing the abandoned worktree.' : 'Delivery will remove the abandoned worktree while retaining the branch and abandonment record.'}</p>
+                {cleanupError ? <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">{cleanupError.message}</p> : null}
+                <div className="flex flex-wrap justify-end gap-static-xs">
+                  <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+                  <PButton type="button" onClick={() => void cleanup()}>Confirm cleanup</PButton>
+                </div>
+              </div>
+            </PModal>
+          ) : null}
+        </>
+      ) : null}
     </article>
   )
 }
@@ -265,7 +337,7 @@ export default function CompletedHistoryWorkspace() {
   const isQueryLoading = history.isLoading && !history.isLoadingMore
   const showingStaleResults = (isQueryLoading || (history.error !== null && !canRetryLoadMore)) && history.page.records.length > 0
   const selected = parseSelection(location.pathname)
-  const detail = useCompletedChange(selected)
+  const detail = useCompletedChange(selected ? { changeId: selected.changeId, recordId: selected.completionId } : null)
   const lastTrigger = useRef<HTMLElement | null>(null)
   const historyWorkspace = useRef<HTMLElement | null>(null)
   const restoreFocusAfterClose = useRef(false)
@@ -294,7 +366,7 @@ export default function CompletedHistoryWorkspace() {
     }
     if (isQueryLoading || history.error || detail.isLoading) return
     const present = history.page.records.some((record) => record.change_id === selected.changeId
-      && record.completion_id === selected.completionId)
+      && completedChangeRecordId(record) === selected.completionId)
     if (present) return
     if (searchQuery) {
       restoreFocusAfterClose.current = true
@@ -349,16 +421,16 @@ export default function CompletedHistoryWorkspace() {
     >
       <WorkspaceViewHeader
         headingId="completed-history-heading"
-        title="Completed changes"
+        title="Change history"
         metaTestId="completed-history-count"
-        meta={<WorkspaceViewCount separator value={history.page.total_count} unit={history.page.total_count === 1 ? 'completed change' : 'completed changes'} />}
+        meta={<WorkspaceViewCount separator value={history.page.total_count} unit={history.page.total_count === 1 ? 'change' : 'changes'} />}
         tools={(
           <PInputSearch
             compact
             hideLabel
             className="w-[min(22rem,100%)]"
             name="completed-history-search"
-            label="Search completed work"
+            label="Search Change history"
             value={query}
             clear
             indicator
@@ -370,7 +442,7 @@ export default function CompletedHistoryWorkspace() {
 
       {history.error ? (
         <div className="mt-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
-          <span className="min-w-0 flex-1">{canRetryLoadMore ? 'Could not load more completed history.' : 'Completed history is unavailable.'} {history.error.message}</span>
+          <span className="min-w-0 flex-1">{canRetryLoadMore ? 'Could not load more Change history.' : 'Change history is unavailable.'} {history.error.message}</span>
           <PButton
             type="button"
             variant="secondary"
@@ -381,7 +453,7 @@ export default function CompletedHistoryWorkspace() {
           </PButton>
         </div>
       ) : null}
-      {history.isLoading && history.page.records.length === 0 ? <p className="mt-static-lg" role="status">Loading completed history...</p> : null}
+      {history.isLoading && history.page.records.length === 0 ? <p className="mt-static-lg" role="status">Loading Change history...</p> : null}
       {showingStaleResults ? (
         <p
           id="completed-history-stale-status"
@@ -389,17 +461,17 @@ export default function CompletedHistoryWorkspace() {
           role="status"
           data-testid="completed-history-stale-status"
         >
-          {history.error ? 'Previous results are shown while this search is retried.' : 'Updating completed history results. Previous results are shown until the search finishes.'}
+          {history.error ? 'Previous results are shown while this search is retried.' : 'Updating Change history results. Previous results are shown until the search finishes.'}
         </p>
       ) : null}
       {!history.isLoading && !history.error && history.page.records.length === 0 ? (
         <section className="mt-static-lg grid min-h-40 place-items-center border border-dashed border-contrast-low bg-surface px-static-lg py-static-xl text-center" data-testid="completed-history-empty-state">
           <div className="grid max-w-[44rem] gap-static-xs">
             <PHeading tag="h3" size="small">
-              {searchQuery ? `No completed changes match "${searchQuery}"` : 'No completed changes yet'}
+              {searchQuery ? `No changes match "${searchQuery}"` : 'No changes in history yet'}
             </PHeading>
             <p className="text-sm leading-relaxed text-contrast-medium">
-              {searchQuery ? 'Try a different search or clear the current search.' : 'Accepted Delivery changes will appear here with their merge evidence.'}
+              {searchQuery ? 'Try a different search or clear the current search.' : 'Completed and abandoned Changes will appear here with their retained evidence.'}
             </p>
             {searchQuery ? (
               <PButton type="button" variant="secondary" className="mx-auto" onClick={() => setQuery('')}>
@@ -417,10 +489,10 @@ export default function CompletedHistoryWorkspace() {
           aria-describedby={showingStaleResults ? 'completed-history-stale-status' : undefined}
           data-testid="completed-history-results"
         >
-          <div className="min-w-0">
+          <div className="grid min-w-0 gap-static-sm">
             {history.page.records.map((record) => (
               <CompletedRecord
-                key={record.completion_id}
+                key={completedChangeRecordId(record)}
                 record={record}
                 stale={showingStaleResults}
                 onSelect={(trigger) => {
@@ -464,7 +536,20 @@ export default function CompletedHistoryWorkspace() {
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? <>
-            {detail.data ? <CompletedDetail record={detail.data} onClose={closeSelected} /> : null}
+            {detail.data ? <CompletedDetail record={detail.data} onClose={closeSelected} onCleanup={async () => {
+              if (detail.data?.record_kind !== 'abandoned-change') return null
+              try {
+                if (detail.data.target_sync_conflict) {
+                  await discardAbandonedTargetSyncAndCleanup(detail.data.change_id)
+                } else {
+                  await cleanupAbandonedWorkItemChange(detail.data.change_id)
+                }
+                history.retry()
+                return null
+              } catch (caught: unknown) {
+                return caught instanceof Error ? caught : new Error('Abandoned worktree cleanup failed')
+              }
+            }} /> : null}
             {detail.isLoading ? <p role="status">Loading completion detail...</p> : null}
             {detail.error ? (
               <div className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">

@@ -14,43 +14,34 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
-from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
-    ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
     PublicationBaselineRecoveryReceipt,
-    PublicationBaselineUnavailableError,
 )
-from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
+from owlbear_delivery.completed_history import CompletedHistoryError
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMovePreview,
     DeliveryPlanCandidate,
+    DeliveryRequest,
     DeliveryResultCandidate,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
+    OutcomeAuthorityBinding,
 )
-from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryOperatorContext,
     PortfolioApplication,
-    PortfolioApplicationError,
 )
-from owlbear_delivery.publication_provider import PublicationProviderError
-from owlbear_delivery.runtime_transaction import (
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-from owlbear_delivery.target_admission import TargetAdmissionError
+from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
+    AdministrativeMovePreviewResponse,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
     ChangeExternalHeadAdoptionResponse,
@@ -66,14 +57,21 @@ from owlbear_delivery_mcp.target_models import (
     ClaimContextRequest,
     CleanupAbandonedChangeParams,
     CleanupAbandonedChangeRequest,
+    CleanupAbandonedTargetSyncParams,
+    CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
+    ClearBlockParams,
+    ClearBlockRequest,
+    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
     DeferChangeParams,
     DeferChangeRequest,
+    DeliveryHealthResponse,
+    DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
@@ -87,6 +85,10 @@ from owlbear_delivery_mcp.target_models import (
     FinalizeDeliveryChangeRequest,
     MarkChangeReadyParams,
     MarkChangeReadyRequest,
+    OperatorContextParams,
+    OperatorContextRequest,
+    PreviewAdministrativeMoveParams,
+    PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -99,6 +101,9 @@ from owlbear_delivery_mcp.target_models import (
     RepairClaimContextRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
+    ResolvedDeliveryRequestResponse,
+    ResolveRequestParams,
+    ResolveRequestRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -117,10 +122,13 @@ from owlbear_delivery_mcp.target_models import (
     TransitionDeliveryRequest,
     WorkItemParams,
     WorkItemRequest,
+    WorkItemViewParams,
+    WorkItemViewRequest,
 )
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
 _WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False)
+_OPERATOR_WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 _CLEANUP = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=True)
 _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 
@@ -133,8 +141,14 @@ DELIVERY_OPERATION_NAMES = (
     "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
+    "show_operator_context",
+    "resolve_request",
+    "clear_block",
+    "preview_administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -143,6 +157,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_delivery_result",
     "finalize_change",
     "mark_change_ready",
+    "prepare_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -158,6 +173,7 @@ DELIVERY_OPERATION_NAMES = (
     "resume_change",
     "abandon_change",
     "cleanup_abandoned_change_worktree",
+    "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
@@ -175,8 +191,12 @@ _DELIVERY_READS = frozenset(
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_work_item_view",
+        "show_operator_context",
+        "preview_administrative_move",
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
@@ -187,13 +207,21 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"resolve_request", "clear_block"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
     if name == "acquire_frontier_work"
     else _CLEANUP
-    if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+    if name
+    in {
+        "cleanup_abandoned_change_worktree",
+        "cleanup_abandoned_change_worktree_after_target_sync_discard",
+        "cleanup_completed_change_worktree",
+    }
+    else _OPERATOR_WRITE
+    if name in _DELIVERY_NON_IDEMPOTENT_WRITES
     else _WRITE
     for name in DELIVERY_OPERATION_NAMES
 }
@@ -290,6 +318,12 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
 
+    async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
+        """Return bounded diagnostics for quarantined or unavailable Delivery state."""
+        params = self._validate(EmptyParams, request)
+        health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
+        return DeliveryHealthResponse.from_view(health)
+
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""
         params = self._validate(EmptyParams, request)
@@ -304,6 +338,82 @@ class TargetMCPAdapter:
         """Show one exact bounded work item."""
         params = self._validate(WorkItemParams, request)
         return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
+
+    async def show_work_item_view(self, request: WorkItemViewRequest) -> dict[str, object]:
+        """Show one exact detailed Work Item view."""
+        params = self._validate(WorkItemViewParams, request)
+        return self._call(
+            params,
+            lambda: self._application.show_work_item_view(params.change_id, params.item_key),
+        )
+
+    async def show_operator_context(self, request: OperatorContextRequest) -> DeliveryOperatorContextResponse:
+        """Show bounded operator state for one exact outcome or Change."""
+        params = self._validate(OperatorContextParams, request)
+        context = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.show_operator_context(params.change_id, params.outcome_id),
+            DeliveryOperatorContext,
+        )
+        return DeliveryOperatorContextResponse.from_context(context)
+
+    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
+        """Persist one user-owned answer for a retained Delivery request."""
+        params = self._validate(ResolveRequestParams, request)
+        resolved = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.resolve_request(
+                params.change_id,
+                params.request_id,
+                params.resolution,
+            ),
+            DeliveryRequest,
+        )
+        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
+
+    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
+        """Clear one requestless block with explicit operator evidence."""
+        params = self._validate(ClearBlockParams, request)
+        binding = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.clear_block(
+                params.change_id,
+                params.outcome_id,
+                params.block_id,
+                params.operator_note,
+                params.locators,
+            ),
+            OutcomeAuthorityBinding,
+        )
+        if binding.block is None:
+            message = "unsupported cleared block output: missing block"
+            raise TypeError(message)
+        return ClearedDeliveryBlockResponse(
+            change_id=params.change_id,
+            outcome_id=binding.outcome_id,
+            block=binding.block,
+        )
+
+    async def preview_administrative_move(
+        self,
+        request: PreviewAdministrativeMoveRequest,
+    ) -> AdministrativeMovePreviewResponse:
+        """Preview one backward movement without changing Delivery state."""
+        params = self._validate(PreviewAdministrativeMoveParams, request)
+        preview = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.preview_administrative_move(
+                params.change_id,
+                params.outcome_id,
+                params.target,
+            ),
+            AdministrativeDeliveryMovePreview,
+        )
+        return AdministrativeMovePreviewResponse.from_preview(preview)
 
     async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
         """Acquire currently available frontier work."""
@@ -361,6 +471,15 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.mark_change_ready(params.request.change_id, params.request),
+        )
+
+    async def prepare_review_repair(self, request: ChangeRequest) -> dict[str, object]:
+        """Return one open Change pull request to draft before external review repair."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.prepare_review_repair(params.change_id),
         )
 
     async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:
@@ -563,6 +682,23 @@ class TargetMCPAdapter:
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
+    async def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        request: CleanupAbandonedTargetSyncRequest,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Discard one abandoned target merge and remove its exact worktree."""
+        params = self._validate(CleanupAbandonedTargetSyncParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+                params.change_id,
+                confirmed_discard=params.confirmed_discard,
+            ),
+            DeliveryChangeWorktreeCleanup,
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
     async def cleanup_completed_change_worktree(
         self,
         request: CleanupCompletedChangeRequest,
@@ -697,28 +833,14 @@ class TargetMCPAdapter:
     def _call_raw(self, params: BaseModel, operation: Callable[[], object]) -> object:
         try:
             return operation()
-        except CompletedHistoryError as exc:
-            authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or self._authority(params)
-            self._raise(
-                exc.diagnostic.code.value,
-                exc.diagnostic.detail,
-                authority,
-                retry_safe=isinstance(exc, CompletedHistoryStaleError),
-            )
-        except PublicationProviderError as exc:
-            self._raise(
-                exc.code.value,
-                str(exc) or exc.code.value,
-                self._authority(params),
-                retry_safe=exc.retry_safe,
-            )
-        except _NAMED_DELIVERY_ERRORS as exc:
-            self._raise(
-                exc.code,
-                str(exc) or exc.code,
-                self._authority(params),
-                retry_safe=getattr(exc, "retry_safe", isinstance(exc, _RETRY_SAFE_ERRORS)),
-            )
+        except Exception as exc:
+            failure = classify_delivery_failure(exc)
+            if failure is None:
+                raise
+            authority = self._authority(params)
+            if isinstance(exc, CompletedHistoryError):
+                authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or authority
+            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe)
 
     @staticmethod
     def _serialize(value: object) -> StructuredOutput:
@@ -766,29 +888,6 @@ class TargetMCPAdapter:
             retry_safe=retry_safe,
         )
         raise ToolError(diagnostic.model_dump_json())
-
-
-_NAMED_DELIVERY_ERRORS = (
-    CompletionReceiptConflictError,
-    ChangeTargetSyncConflictError,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
-    PublicationBaselineUnavailableError,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
-    DesignPackageConflictError,
-    PortfolioApplicationError,
-    TargetAdmissionError,
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-_RETRY_SAFE_ERRORS = (
-    CoordinationConflictError,
-    DeliveryRuntimeConflictError,
-    DesignPackageConflictError,
-    TransactionConflictError,
-)
 
 
 def assemble_target_server(application: PortfolioApplication) -> MCPServer:

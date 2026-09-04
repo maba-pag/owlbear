@@ -25,7 +25,7 @@ def test_python_source_routes_to_owning_package_tests() -> None:
         coverage=False,
     )
 
-    assert commands == [(["uv", "run", "pytest", "serve/tools/tests"], _ROOT)]
+    assert commands == [(["uv", "run", "--locked", "pytest", "serve/tools/tests"], _ROOT)]
 
 
 def test_shared_web_content_source_routes_to_owning_package_tests() -> None:
@@ -104,7 +104,7 @@ def test_all_runs_python_and_frontend_suites_with_coverage() -> None:
     )
 
     assert commands == [
-        (["uv", "run", "pytest", "tests", "serve", "--cov"], _ROOT),
+        (["uv", "run", "--locked", "pytest", "tests", "serve", "--cov"], _ROOT),
         (["npm", "test", "--", "--coverage"], _WEB),
     ]
 
@@ -130,7 +130,7 @@ def test_no_paths_runs_all_suites() -> None:
         run_test()
 
     assert [item.args for item in call.call_args_list] == [
-        (["uv", "run", "pytest", "tests", "serve"],),
+        (["uv", "run", "--locked", "pytest", "tests", "serve"],),
         (["npm", "test"],),
     ]
     assert [item.kwargs for item in call.call_args_list] == [{"cwd": _ROOT}, {"cwd": _WEB}]

@@ -58,14 +58,15 @@ integrity.
 
 | Generation | Current role | Main modules |
 | --- | --- | --- |
-| Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, the `DeliveryAuthorityRegistry` half of `target_admission.py`, `portfolio_application.py` |
+| Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, `delivery_admission.py`, `portfolio_application.py` |
 | Retained target-v1 execution | Job/attempt/review/receipt runtime and semantic authority used by cutover/finalizer and retained public evidence contracts | `target_runtime.py`, `target_authority.py`, the `TargetAuthorityRegistry` half of `target_admission.py` |
 | One-time cutover and snapshot retention | Bootstrap source retirement, snapshot verification, receipt publication, and mutation gate | `target_cutover.py`, `snapshot.py`, `setup/finalize.py` |
 | Transport | Process configuration/lifespan and explicit MCP adaptation | `delivery-mcp/server.py`, `delivery-mcp/target_server.py`, `delivery-mcp/target_models.py` |
 
-The active and retained generations are not cleanly isolated. `target_admission.py` contains both
-registries, the package root exports both generations, and the active work-item read path converts
-schema-v2 contracts and frontiers back into target-v1 authority/evidence models.
+The active and retained generations are isolated at the admission-module boundary. Current
+source-bound admission lives in `delivery_admission.py`; `target_admission.py` contains only the
+retained Target-era registry and models. The package root still exports both generations while the
+Target-era public surface remains supported.
 
 ## Reconciliation of the initial assessment
 
@@ -202,8 +203,8 @@ repair-candidate and reviewed-repair admission flow used by
 `PortfolioApplication.admit_reviewed_integration_repair()`.
 There were no production callers of the old method or its result types. The old method and its result
 types are now removed. This closure also removes the legacy runtime completion-capture and Integration
-attention/completion writers; persisted frontier readers and reviewed-repair transformations remain for
-compatibility.
+attention/completion writers; current frontier readers and reviewed-repair transformations remain as
+live current behavior.
 
 The retirement was performed by exact symbol closure, not by an `Integration*` name sweep. Removed
 symbols are:
@@ -252,10 +253,10 @@ does not promise backward compatibility, but the surface change must still be ex
   `test_publishes_and_replays_exact_change_branch_without_mutating_target_or_user_checkout`.
 2. Closed: neither the historical
   `.owlbear/target/target-runtime/integration-findings/*.json` path nor the current host-local
-  `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. The current
-  runtime is gitignored, `delivery_migration.py` does not migrate either namespace, and no reader
-  remains after producer removal. They are inert historical bytes, so no retirement inventory or
-  cleanup authority is added; the retirement tool continues to handle only known authoritative paths.
+  `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. They are
+  inert historical bytes and no longer participate in runtime discovery or authority. The retained
+  `.owlbear/legacy/completed` catalog is read-only information for completed-history search, not
+  executable or runtime state.
 
 The first prerequisite is now covered by the independent-application contention regression. No local
 Integration producer remains; a future GitHub-backed acceptance slice must establish the external

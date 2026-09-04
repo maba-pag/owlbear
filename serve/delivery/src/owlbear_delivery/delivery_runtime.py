@@ -13,10 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
     CompletionReceipt,
+    CompletionReceiptBundle,
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import (
+    ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncReceipt,
@@ -64,6 +66,16 @@ class DeliveryChangeDispositionKind(StrEnum):
     ACCEPTANCE_ATTENTION = "acceptance-attention"
 
 
+class DeliveryAcceptanceAttentionReason(StrEnum):
+    """Typed provider condition that caused acceptance attention."""
+
+    HEAD_MOVED = "head-moved"
+    CLOSED_UNMERGED = "closed-unmerged"
+    IDENTITY_MISMATCH = "identity-mismatch"
+    MERGE_EVIDENCE_MISSING = "merge-evidence-missing"
+    LATCH_REGRESSION = "latch-regression"
+
+
 class DeliveryOutputKind(StrEnum):
     """Minimal phase-output categories consumed by mechanical transitions."""
 
@@ -91,6 +103,7 @@ class DeliveryWorkerRole(StrEnum):
 class DeliveryCheckpointTriggerKind(StrEnum):
     """Delivery-owned reasons that require Change checkpoint publication."""
 
+    ADMITTED_DESIGN = "admitted-design"
     FIRST_PROMOTED_TASK = "first-promoted-task"
     VERIFIED_OUTCOME = "verified-outcome"
     FINALIZATION = "finalization"
@@ -511,7 +524,7 @@ class DeliveryFinalizationInvalidation(_DeliveryModel):
     finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reason: Literal["head-drift", "target-sync-conflict"] = "head-drift"
+    reason: Literal["head-drift", "target-sync-conflict", "review-repair"] = "head-drift"
     invalidated_at: datetime
 
 
@@ -528,17 +541,17 @@ class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
         """Create one finalization invalidation using the canonical digest."""
         values = invalidation.model_dump()
         candidate = cls.model_construct(invalidation_id="0" * 64, **values)
-        return cls(invalidation_id=_receipt_digest(candidate, "invalidation_id"), **values)
+        return cls(invalidation_id=_finalization_invalidation_digest(candidate), **values)
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
-        if self.expected_head == self.observed_head:
+        if self.expected_head == self.observed_head and self.reason != "review-repair":
             message = "Delivery finalization invalidation requires head drift"
             raise ValueError(message)
         if self.invalidated_at.tzinfo is None:
             message = "Delivery finalization invalidation timestamp must include a timezone"
             raise ValueError(message)
-        if self.invalidation_id != _receipt_digest(self, "invalidation_id"):
+        if self.invalidation_id != _finalization_invalidation_digest(self):
             message = "Delivery finalization invalidation identity is invalid"
             raise ValueError(message)
         return self
@@ -593,9 +606,10 @@ class DeliveryChangeDisposition(_DeliveryModel):
     entered_from: DeliveryChangeStage
     recorded_at: datetime
     diagnostics: tuple[str, ...] = Field(min_length=1)
+    acceptance_reason: DeliveryAcceptanceAttentionReason | None = None
 
     @classmethod
-    def create(
+    def create(  # noqa: PLR0913 - acceptance reason binds one additional typed authority field.
         cls,
         *,
         kind: DeliveryChangeDispositionKind,
@@ -603,6 +617,7 @@ class DeliveryChangeDisposition(_DeliveryModel):
         entered_from: DeliveryChangeStage,
         recorded_at: datetime,
         diagnostics: tuple[str, ...],
+        acceptance_reason: DeliveryAcceptanceAttentionReason | None = None,
     ) -> DeliveryChangeDisposition:
         """Create one deterministic attention record from typed evidence."""
         values = {
@@ -611,6 +626,7 @@ class DeliveryChangeDisposition(_DeliveryModel):
             "entered_from": entered_from,
             "recorded_at": recorded_at,
             "diagnostics": diagnostics,
+            "acceptance_reason": acceptance_reason,
         }
         candidate = cls.model_construct(disposition_id="0" * 64, schema_version=1, **values)
         return cls(disposition_id=_receipt_digest(candidate, "disposition_id"), **values)
@@ -626,10 +642,14 @@ class DeliveryChangeDisposition(_DeliveryModel):
         ):
             message = "acceptance attention must be entered from awaiting-merge state"
             raise ValueError(message)
+        if self.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION and self.acceptance_reason is not None:
+            message = "acceptance attention reason requires acceptance attention"
+            raise ValueError(message)
         if self.recorded_at.tzinfo is None:
             message = "Change disposition timestamp must include a timezone"
             raise ValueError(message)
-        if self.disposition_id != _receipt_digest(self, "disposition_id"):
+        expected_id = _receipt_digest(self, "disposition_id")
+        if self.disposition_id != expected_id:
             message = "Change disposition identity is invalid"
             raise ValueError(message)
         return self
@@ -695,6 +715,10 @@ class DeliveryPendingCheckpoint(_DeliveryModel):
 
     head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     triggers: tuple[DeliveryCheckpointTrigger, ...] = Field(min_length=1)
+    attempt_count: int = Field(default=0, ge=0)
+    last_attempted_at: datetime | None = None
+    last_error_code: str | None = Field(default=None, min_length=1, max_length=120)
+    last_error_detail: str | None = Field(default=None, min_length=1, max_length=240)
 
     @model_validator(mode="after")
     def _validate_triggers(self) -> DeliveryPendingCheckpoint:
@@ -707,6 +731,9 @@ class DeliveryPendingCheckpoint(_DeliveryModel):
         )
         if len(identities) != len(set(identities)):
             message = "pending checkpoint trigger kinds must be unique per scope"
+            raise ValueError(message)
+        if self.last_attempted_at is not None and self.last_attempted_at.tzinfo is None:
+            message = "pending checkpoint attempt timestamp must include a timezone"
             raise ValueError(message)
         return self
 
@@ -870,16 +897,6 @@ def integration_attention_disposition(
     if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
         return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
     return DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
-
-
-class DeliveryIntegrationCompletion(_DeliveryModel):
-    """Committed identity of one atomic Integration publication."""
-
-    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    completion_path: str = Field(min_length=1)
 
 
 class DeliveryIntegrationAttention(_DeliveryModel):
@@ -1305,6 +1322,12 @@ class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
     retry_safe = False
 
 
+class DeliveryChangeDispositionBusyError(DeliveryRuntimeConflictError):
+    """A Change attention resolution is temporarily blocked by another mutation."""
+
+    code = "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY"
+
+
 class DeliveryAcceptanceWaitingError(DeliveryRuntimeConflictError):
     """The bound pull request is still open and has not reached acceptance."""
 
@@ -1317,22 +1340,13 @@ class DeliveryRuntimeReferenceError(ValueError):
     code = "ERR_DELIVERY_RUNTIME_REFERENCE"
 
 
-class DeliveryRuntimeMigrationError(ValueError):
-    """A legacy frontier requires explicit migration before startup."""
-
-
 _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
 _FRONTIER_SCHEMA_VERSION = 17
-_FINALIZATION_SCHEMA_VERSION = 2
-_LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
-_LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
-_CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1340,7 +1354,10 @@ _RETURN_TARGETS = {
 _NORMAL_CHANGE_MUTATIONS = frozenset(
     {
         "record_checkpoint_branch_publication",
+        "record_design_package_snapshot",
+        "queue_admitted_design_checkpoint",
         "acknowledge_checkpoint_publication",
+        "record_checkpoint_failure",
         "record_publication_identity",
         "record_publication_successor",
         "record_target_sync",
@@ -1350,10 +1367,12 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_external_head_promotion",
         "capture_target_sync_conflict",
         "mark_awaiting_merge",
+        "clear_ready_for_head_change",
         "reconcile_pull_request_draft_state",
         "latch_merged_pull_request",
         "complete_change",
         "finalize_change",
+        "prepare_review_repair",
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
@@ -1411,12 +1430,10 @@ class DeliveryRuntime:
         contract: DeliveryContract,
         *,
         workspace_manager: ChangeWorkspaceManager | None = None,
-        migration_reviewed_head: str | None = None,
     ) -> None:
         self._target_root = runtime_root.resolve()
         self._contract = contract
         self._workspace_manager = workspace_manager
-        self._migration_reviewed_head = migration_reviewed_head
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
         self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
@@ -1541,6 +1558,7 @@ class DeliveryRuntime:
             and existing.change_id == disposition.change_id
             and existing.entered_from == disposition.entered_from
             and existing.diagnostics == disposition.diagnostics
+            and existing.acceptance_reason == disposition.acceptance_reason
         ):
             _conflict("Delivery Change already has different attention authority")
         if publication_identity is None:
@@ -1658,6 +1676,8 @@ class DeliveryRuntime:
         self,
         observation: PublicationPullRequestObservationReceipt,
         diagnostics: tuple[str, ...],
+        *,
+        reason: DeliveryAcceptanceAttentionReason = DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
     ) -> DeliveryChangeDisposition:
         """Capture one mismatched provider acceptance observation."""
         return self.capture_change_disposition(
@@ -1667,6 +1687,7 @@ class DeliveryRuntime:
                 entered_from=DeliveryChangeStage.AWAITING_MERGE,
                 recorded_at=observation.observed_at,
                 diagnostics=(*diagnostics, f"acceptance-observation:{observation.observation_id}"),
+                acceptance_reason=reason,
             ),
             clear_ready=True,
             publication_identity=DeliveryChangePublicationIdentity(
@@ -1791,6 +1812,55 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
 
+    def record_design_package_snapshot(
+        self,
+        expected: DeliveryCheckpointPublicationState,
+        receipt: ChangeDesignPackageSnapshotReceipt,
+    ) -> DeliveryCheckpointPublicationState:
+        """Re-anchor the first checkpoint to its admitted package snapshot commit."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_design_package_snapshot")
+        current = frontier.pending_checkpoint
+        if (
+            expected.change_id != self._contract.change_id
+            or expected.pending_checkpoint is None
+            or current != expected.pending_checkpoint
+            or frontier.published_head != expected.published_head
+            or receipt.change_id != self._contract.change_id
+            or receipt.previous_head != expected.pending_checkpoint.head
+        ):
+            _conflict("Design package snapshot no longer matches the checkpoint queue")
+        if current.head == receipt.snapshot_head:
+            return self.checkpoint_publication_state()
+        updated = frontier.model_copy(
+            update={"pending_checkpoint": _checkpoint_with_head(current, receipt.snapshot_head)}
+        )
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def queue_admitted_design_checkpoint(self, reviewed_head: str) -> DeliveryCheckpointPublicationState:
+        """Queue the first remote checkpoint for an admitted Design package."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "queue_admitted_design_checkpoint")
+        pending = frontier.pending_checkpoint
+        trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN)
+        if pending is not None:
+            if pending.head != reviewed_head:
+                _conflict("admitted Design checkpoint no longer matches the reviewed boundary")
+            if trigger in pending.triggers:
+                return self.checkpoint_publication_state()
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": pending.model_copy(update={"triggers": (*pending.triggers, trigger)})}
+            )
+        elif frontier.published_head is not None:
+            return self.checkpoint_publication_state()
+        else:
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": DeliveryPendingCheckpoint(head=reviewed_head, triggers=(trigger,))}
+            )
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
     def acknowledge_checkpoint_publication(
         self,
         expected: DeliveryPendingCheckpoint,
@@ -1809,12 +1879,47 @@ class DeliveryRuntime:
                 trigger
                 for trigger in current.triggers
                 if not (
-                    trigger in expected.triggers and trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK
+                    trigger in expected.triggers
+                    and trigger.kind
+                    in {
+                        DeliveryCheckpointTriggerKind.ADMITTED_DESIGN,
+                        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                    }
                 )
             )
         pending = current.model_copy(update={"triggers": retained}) if retained else None
         updated = frontier.model_copy(update={"pending_checkpoint": pending})
         self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def record_checkpoint_failure(
+        self,
+        expected: DeliveryPendingCheckpoint,
+        attempted_at: datetime,
+        error_code: str,
+        error_detail: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Persist one failed checkpoint attempt without changing its obligation."""
+        if attempted_at.tzinfo is None:
+            message = "pending checkpoint failure timestamp must include a timezone"
+            raise ValueError(message)
+        if not error_code or not error_detail:
+            message = "pending checkpoint failure requires an error code and detail"
+            raise ValueError(message)
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_checkpoint_failure", allow_attention=True)
+        current = frontier.pending_checkpoint
+        if current is None or current != expected:
+            _conflict("checkpoint failure no longer matches the durable queue")
+        updated_pending = current.model_copy(
+            update={
+                "attempt_count": current.attempt_count + 1,
+                "last_attempted_at": attempted_at,
+                "last_error_code": error_code,
+                "last_error_detail": error_detail,
+            }
+        )
+        self._replace(previous, frontier.model_copy(update={"pending_checkpoint": updated_pending}))
         return self.checkpoint_publication_state()
 
     def finalization(self) -> DeliveryFinalizationReceipt | None:
@@ -1931,6 +2036,29 @@ class DeliveryRuntime:
         )
         return receipt
 
+    def clear_ready_for_head_change(
+        self,
+        finalization_id: str,
+        exact_head: str,
+    ) -> PullRequestReadyReceipt | None:
+        """Clear local ready authority after its provider pull request returns to draft."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "clear_ready_for_head_change")
+        finalization = frontier.finalization
+        ready = frontier.ready
+        if ready is None:
+            return None
+        if (
+            finalization is None
+            or finalization.finalization_id != finalization_id
+            or finalization.exact_head != exact_head
+            or ready.finalization_id != finalization_id
+            or ready.head_sha != exact_head
+        ):
+            _conflict("ready authority does not match the head-change boundary")
+        self._replace(previous, frontier.model_copy(update={"ready": None}))
+        return ready
+
     def reconcile_pull_request_draft_state(
         self,
         *,
@@ -1981,6 +2109,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence does not match awaiting-merge authority",),
+                reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
             )
             _conflict("merged pull-request evidence does not match awaiting-merge authority")
         existing = frontier.merged_pull_request_latch
@@ -1993,6 +2122,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence regressed from the immutable merged latch",),
+                reason=DeliveryAcceptanceAttentionReason.LATCH_REGRESSION,
             )
             _conflict("provider acceptance evidence regressed from the immutable merged latch")
         if is_acceptance_waiting_observation(observation):
@@ -2002,12 +2132,14 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance observation is not merged and closed",),
+                reason=DeliveryAcceptanceAttentionReason.CLOSED_UNMERGED,
             )
             _conflict("acceptance observation does not report a merged pull request")
         if snapshot.merged_at is None or snapshot.merge_commit_sha is None:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance observation is missing merge evidence",),
+                reason=DeliveryAcceptanceAttentionReason.MERGE_EVIDENCE_MISSING,
             )
             _conflict("merged pull-request evidence is incomplete")
         candidate = DeliveryMergedPullRequestLatch(
@@ -2046,6 +2178,7 @@ class DeliveryRuntime:
             self.capture_acceptance_attention(
                 observation,
                 ("provider acceptance evidence conflicts with the immutable merged latch",),
+                reason=DeliveryAcceptanceAttentionReason.LATCH_REGRESSION,
             )
             _conflict("merged pull-request evidence conflicts with the immutable latch")
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
@@ -2120,6 +2253,10 @@ class DeliveryRuntime:
         ).commit()
         return receipt
 
+    def completion_bundle(self) -> CompletionReceiptBundle | None:
+        """Return the immutable completion evidence for this Change, if present."""
+        return CompletionReceiptStore(self._target_root).read_bundle(self._contract.change_id)
+
     def finalize_change(
         self,
         request: FinalizeDeliveryChange,
@@ -2142,6 +2279,13 @@ class DeliveryRuntime:
             _conflict("Delivery Change is already finalized with different authority")
         if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
             _conflict("Delivery finalization requires every Outcome completed")
+        invalidation = frontier.finalization_invalidation
+        if (
+            invalidation is not None
+            and invalidation.reason == "review-repair"
+            and request.exact_head == invalidation.expected_head
+        ):
+            _conflict("review repair requires a new Change commit before finalization")
         if any(binding.active_claim is not None for binding in frontier.bindings):
             _conflict("Delivery finalization cannot overlap an active Outcome claim")
         if frontier.integration_repair_claim is not None:
@@ -2206,7 +2350,7 @@ class DeliveryRuntime:
     ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
         """Retain exact finalization or invalidate it after observed Change-head drift."""
         frontier, previous = self._read()
-        _require_change_mutable(frontier, "reconcile_finalization_head")
+        _require_change_mutable(frontier, "reconcile_finalization_head", allow_attention=True)
         finalization = frontier.finalization
         if finalization is None:
             invalidation = frontier.finalization_invalidation
@@ -2235,6 +2379,51 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return invalidation
 
+    def prepare_review_repair(
+        self,
+        expected_finalization_id: str,
+        invalidated_at: datetime,
+    ) -> DeliveryFinalizationInvalidationReceipt:
+        """Invalidate current finalization before repairing external review feedback."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "prepare_review_repair", allow_attention=True)
+        finalization = frontier.finalization
+        existing = frontier.finalization_invalidation
+        if finalization is None:
+            if (
+                existing is not None
+                and existing.reason == "review-repair"
+                and existing.finalization_id == expected_finalization_id
+            ):
+                return existing
+            _conflict("review repair requires current finalization authority")
+        if finalization.finalization_id != expected_finalization_id:
+            _conflict("review repair finalization identity is stale")
+        if frontier.merged_pull_request_latch is not None:
+            _conflict("merged Change cannot be reopened for review repair")
+        if frontier.change_disposition is not None:
+            _conflict("review repair requires current Change attention resolution")
+        invalidation = DeliveryFinalizationInvalidationReceipt.create(
+            DeliveryFinalizationInvalidation(
+                change_id=self._contract.change_id,
+                finalization_id=finalization.finalization_id,
+                expected_head=finalization.exact_head,
+                observed_head=finalization.exact_head,
+                reason="review-repair",
+                invalidated_at=invalidated_at,
+            )
+        )
+        updated = frontier.model_copy(
+            update={
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "ready": None,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return invalidation
+
     def record_target_sync(
         self,
         receipt: ChangeTargetSyncReceipt,
@@ -2244,6 +2433,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_target_sync")
         _require_no_active_change_claim(frontier, "target synchronization")
+        _require_no_review_repair(frontier, "target synchronization")
         if receipt.change_id != self._contract.change_id:
             _conflict("target synchronization receipt does not match the admitted Change")
         existing = frontier.target_sync_receipt
@@ -2264,6 +2454,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_external_head_adoption")
         _require_no_active_change_claim(frontier, "external Change head adoption")
+        _require_no_review_repair(frontier, "external Change head adoption")
         if adopted_at.tzinfo is None:
             message = "external Change head adoption timestamp must include a timezone"
             raise ValueError(message)
@@ -2287,6 +2478,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_external_head_promotion")
         _require_no_active_change_claim(frontier, "external Change head promotion")
+        _require_no_review_repair(frontier, "external Change head promotion")
         if promoted_at.tzinfo is None:
             message = "external Change head promotion timestamp must include a timezone"
             raise ValueError(message)
@@ -2409,9 +2601,10 @@ class DeliveryRuntime:
                 "finalization": finalization,
                 "finalization_invalidation": invalidation,
                 "ready": ready,
-                "pending_checkpoint": DeliveryPendingCheckpoint(
-                    head=receipt.merged_head,
-                    triggers=triggers,
+                "pending_checkpoint": _checkpoint_with_head(
+                    pending,
+                    receipt.merged_head,
+                    triggers,
                 ),
             }
         )
@@ -2456,9 +2649,10 @@ class DeliveryRuntime:
                 "finalization": finalization,
                 "finalization_invalidation": invalidation,
                 "ready": ready,
-                "pending_checkpoint": DeliveryPendingCheckpoint(
-                    head=receipt.adopted_head,
-                    triggers=triggers,
+                "pending_checkpoint": _checkpoint_with_head(
+                    pending,
+                    receipt.adopted_head,
+                    triggers,
                 ),
             }
         )
@@ -3085,9 +3279,12 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
-            self._require_workspace().release_writer_at_head(
+            claim = binding.active_claim
+            if claim is None:
+                _conflict("Implementation block requires an active claim")
+            self._require_workspace().restart(
                 self._contract.change_id,
-                request.claim_id,
+                claim.attempt_id,
                 request.resume_commit,
             )
         elif request.resume_commit is not None:
@@ -3119,11 +3316,7 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            frontier, canonical = parse_delivery_frontier(
-                content,
-                migration_reviewed_head=self._migration_reviewed_head,
-                require_checkpoint_backfill=True,
-            )
+            frontier, canonical = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
             if canonical != content:
                 self._replace_content(content, canonical)
@@ -3219,6 +3412,13 @@ def _require_no_active_change_claim(frontier: DeliveryFrontier, operation: str) 
         _conflict(f"{operation} cannot overlap an active mutation claim")
 
 
+def _require_no_review_repair(frontier: DeliveryFrontier, operation: str) -> None:
+    """Reject head mutations while external review repair owns the Change boundary."""
+    invalidation = frontier.finalization_invalidation
+    if invalidation is not None and invalidation.reason == "review-repair":
+        _conflict(f"{operation} cannot overlap an active review repair")
+
+
 def is_acceptance_waiting_observation(
     observation: PublicationPullRequestObservationReceipt,
 ) -> bool:
@@ -3229,100 +3429,15 @@ def is_acceptance_waiting_observation(
 
 def parse_delivery_frontier(
     content: bytes,
-    *,
-    migration_reviewed_head: str | None = None,
-    require_checkpoint_backfill: bool = False,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse canonical frontier bytes and reduce safe pre-Assembly-removal state."""
+    """Parse one canonical current-schema frontier."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
-    schema_version = _normalize_frontier_schema(payload)
-    _reject_legacy_finalization(payload)
-    frontier = DeliveryFrontier.model_validate_json(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")),
-    )
-    if schema_version in _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS:
-        frontier = _backfill_checkpoint_state(
-            frontier,
-            migration_reviewed_head,
-            required=require_checkpoint_backfill,
-        )
-    return frontier, _model_content(frontier)
-
-
-def _normalize_frontier_schema(payload: dict[str, object]) -> int:
-    schema_version = payload.get("schema_version")
-    if schema_version == 1:
-        _normalize_schema_one_bindings(payload)
-    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
-        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+    if payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
-    _normalize_legacy_integration_completion(payload)
-    return schema_version
-
-
-def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
-    bindings = payload.get("bindings")
-    if not isinstance(bindings, list):
-        raise TypeError
-    for binding in bindings:
-        if not isinstance(binding, dict) or binding.get("stage") == "assembly":
-            raise ValueError
-        assembly_required = binding.pop("assembly_required", False)
-        if assembly_required is not False:
-            raise ValueError
-    payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-
-
-def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None:
-    result_id = payload.pop("integration_result_id", None)
-    completion = payload.pop("integration_completion", None)
-    if result_id is not None or completion is not None:
-        raise DeliveryRuntimeMigrationError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
-
-
-def _reject_legacy_finalization(payload: dict[str, object]) -> None:
-    finalization = payload.get("finalization")
-    if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
-        raise DeliveryRuntimeMigrationError(_LEGACY_FINALIZATION_MESSAGE)
-
-
-def _backfill_checkpoint_state(
-    frontier: DeliveryFrontier,
-    reviewed_head: str | None,
-    *,
-    required: bool,
-) -> DeliveryFrontier:
-    result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
-    if not result_bindings:
-        return frontier
-    if reviewed_head is None:
-        if required:
-            raise ValueError
-        return frontier
-    triggers = [
-        DeliveryCheckpointTrigger(
-            kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-        )
-    ]
-    triggers.extend(
-        DeliveryCheckpointTrigger(
-            kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
-            outcome_id=binding.outcome_id,
-        )
-        for binding in frontier.bindings
-        if binding.stage == DeliveryStage.COMPLETED
-    )
-    return frontier.model_copy(
-        update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=reviewed_head,
-                triggers=tuple(triggers),
-            )
-        }
-    )
+    frontier = DeliveryFrontier.model_validate_json(content)
+    return frontier, _model_content(frontier)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -3379,9 +3494,10 @@ def _queue_promoted_result_checkpoint(
     combined = (*(() if pending is None else pending.triggers), *triggers)
     return replacement.model_copy(
         update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=candidate.result.completed_commit,
-                triggers=tuple(dict.fromkeys(combined)),
+            "pending_checkpoint": _checkpoint_with_head(
+                pending,
+                candidate.result.completed_commit,
+                tuple(dict.fromkeys(combined)),
             )
         }
     )
@@ -3392,12 +3508,7 @@ def _queue_finalization_checkpoint(frontier: DeliveryFrontier, exact_head: str) 
     trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION)
     combined = (*(() if pending is None else pending.triggers), trigger)
     return frontier.model_copy(
-        update={
-            "pending_checkpoint": DeliveryPendingCheckpoint(
-                head=exact_head,
-                triggers=tuple(dict.fromkeys(combined)),
-            )
-        }
+        update={"pending_checkpoint": _checkpoint_with_head(pending, exact_head, tuple(dict.fromkeys(combined)))}
     )
 
 
@@ -3411,7 +3522,7 @@ def _invalidate_finalization_checkpoint(
     )
     if not retained:
         return None
-    return pending.model_copy(update={"head": None, "triggers": retained})
+    return _checkpoint_with_head(pending, None, retained)
 
 
 def _has_checkpoint_trigger(
@@ -3437,7 +3548,19 @@ def invalidate_checkpoint_publication(
     )
     if not retained:
         return None
-    return pending.model_copy(update={"head": None, "triggers": retained})
+    return _checkpoint_with_head(pending, None, retained)
+
+
+def _checkpoint_with_head(
+    previous: DeliveryPendingCheckpoint | None,
+    head: str | None,
+    triggers: tuple[DeliveryCheckpointTrigger, ...] | None = None,
+) -> DeliveryPendingCheckpoint:
+    """Create or re-anchor one checkpoint, retaining retry metadata only for the same head."""
+    next_triggers = triggers if triggers is not None else (() if previous is None else previous.triggers)
+    if previous is not None and previous.head == head:
+        return previous.model_copy(update={"triggers": next_triggers})
+    return DeliveryPendingCheckpoint(head=head, triggers=next_triggers)
 
 
 def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:
@@ -3508,6 +3631,12 @@ def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _finalization_invalidation_digest(receipt: DeliveryFinalizationInvalidationReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"invalidation_id"})
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(content).hexdigest()
+
+
 def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryChangePublicationIdentity | None:
     if ready is None:
         return None
@@ -3566,12 +3695,14 @@ __all__ = [
     "AdministrativeDeliveryMoveResult",
     "AdvanceDelivery",
     "BlockDelivery",
+    "DeliveryAcceptanceAttentionReason",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
     "DeliveryChangeAbandonment",
     "DeliveryChangeCompletion",
     "DeliveryChangeDeferral",
     "DeliveryChangeDisposition",
+    "DeliveryChangeDispositionBusyError",
     "DeliveryChangeDispositionConflictError",
     "DeliveryChangeDispositionKind",
     "DeliveryChangeDispositionResolution",
@@ -3588,7 +3719,6 @@ __all__ = [
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
-    "DeliveryIntegrationCompletion",
     "DeliveryMergedPullRequestLatch",
     "DeliveryObservation",
     "DeliveryObservationReceipt",
@@ -3606,7 +3736,6 @@ __all__ = [
     "DeliveryReviewReceipt",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
-    "DeliveryRuntimeMigrationError",
     "DeliveryRuntimeReferenceError",
     "DeliveryStage",
     "DeliveryTaskDefinition",

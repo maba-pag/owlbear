@@ -2,5 +2,6 @@
   "schema_version": 2,
   "remote": "origin",
   "target_branch": "dev",
-  "github_repository": "maba-pag/owlbear"
+  "github_repository": "maba-pag/owlbear",
+  "delivery_state_branch": "owlbear/delivery-state"
 }

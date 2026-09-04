@@ -8,8 +8,6 @@ import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError, ValidationError
 
-from owlbear_memory_mcp.models import MemoryEntry as McpMemoryEntry
-
 # Mined from #1845: factually-wrong confirmation, disputed transitions, and OCC ordering.
 
 # ---------------------------------------------------------------------------
@@ -103,11 +101,11 @@ class TestConfirmationCycle:
     """Confirmation cycle: record_factually_wrong() transitions and field contract."""
 
     # ------------------------------------------------------------------
-    # AC1 — contested_by_task field existence in both packages
+    # AC1 — contested_by_task field existence
     # ------------------------------------------------------------------
 
-    def test_owlbear_memory_entry_has_contested_by_task_default_none(self) -> None:
-        """AC1: MemoryEntry in owlbear_memory has contested_by_task with default None."""
+    def test_memory_entry_has_contested_by_task_default_none(self) -> None:
+        """AC1: MemoryEntry has contested_by_task with default None."""
         entry = MemoryEntry(
             id=_ID_APPROVED,
             title="Test",
@@ -122,50 +120,12 @@ class TestConfirmationCycle:
         )
         assert entry.contested_by_task is None
 
-    def test_owlbear_memory_mcp_entry_has_contested_by_task_default_none(self) -> None:
-        """AC1: MemoryEntry in owlbear_memory_mcp has contested_by_task with default None."""
-        entry = McpMemoryEntry(
-            id=_ID_APPROVED,
-            title="Test",
-            content="Content",
-            categories=["domain-knowledge"],
-            confidence=0.9,
-            state="approved",
-            scope_agents=["a"],
-            source_agent="agent",
-            created_at=_TS,
-            updated_at=_TS,
-        )
-        assert entry.contested_by_task is None
-
     def test_contested_by_task_survives_storage_roundtrip_owlbear_memory(self, tmp_path: Path) -> None:
         """AC1: contested_by_task is frontmatter-serialized and survives write/read roundtrip."""
         entry = _make_entry(_ID_APPROVED, MemoryState.APPROVED, contested_by_task=_TASK_A)
         path = _write_entry(tmp_path, entry)
         reloaded = storage.read_entry(path)
         assert reloaded is not None
-        assert reloaded.contested_by_task == _TASK_A
-
-    def test_contested_by_task_survives_storage_roundtrip_owlbear_memory_mcp(self, tmp_path: Path) -> None:
-        """AC1: contested_by_task is frontmatter-serialized in owlbear_memory_mcp engine roundtrip."""
-        from owlbear_memory_mcp.engine import MemoryEngine as McpEngine  # noqa: PLC0415
-
-        entry = McpMemoryEntry(
-            id=_ID_APPROVED,
-            title="Test",
-            content="Content",
-            categories=["domain-knowledge"],
-            confidence=0.9,
-            state="approved",
-            scope_agents=["a"],
-            source_agent="agent",
-            created_at=_TS,
-            updated_at=_TS,
-            contested_by_task=_TASK_A,
-        )
-        engine = McpEngine(memory_dir=tmp_path)
-        engine.write(entry)
-        reloaded = engine.get_entry(_ID_APPROVED)
         assert reloaded.contested_by_task == _TASK_A
 
     # ------------------------------------------------------------------

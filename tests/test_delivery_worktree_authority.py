@@ -76,7 +76,6 @@ _REMOVE_WORKTREE_CALLERS = frozenset(
     {
         ("ChangeWorkspaceManager", "cleanup"),
         ("ChangeWorkspaceManager", "recover"),
-        ("<module>", "_remove_worktrees"),
     }
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
@@ -87,7 +86,7 @@ _FORBIDDEN_PROVIDER_TERMS = re.compile(
 )
 _FORBIDDEN_FIELD_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:merge_method|mergeMethod)(?![A-Za-z0-9])")
 _FORBIDDEN_CAPABILITY_PATTERNS = (
-    re.compile(r"/merge(?:\b|/)", re.IGNORECASE),
+    re.compile(r"(?:['\"`]|/api/)[^\s'\"`]*?/merge(?:\b|/)", re.IGNORECASE),
     re.compile(r"(?:auto.?merge|enablePullRequestAutoMerge)", re.IGNORECASE),
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
 )
@@ -108,6 +107,7 @@ _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
 _ALLOWED_PROVIDER_REST_CALLS = {
     "read_repository": ("GET", "_repository_endpoint(repository)"),
     "read_pull_request": ("GET", 'f"{_repository_endpoint(repository)}/pulls/{number}"'),
+    "_read_open_pull_request": ("GET", 'f"{_repository_endpoint(repository)}/pulls/{number}"'),
     "find_pull_request": ("GET", 'f"{_repository_endpoint(request.repository)}/pulls?{query}"'),
     "create_draft_pull_request": ("POST", 'f"{_repository_endpoint(request.repository)}/pulls"'),
     "update_pull_request": ("PATCH", 'f"{_repository_endpoint(request.repository)}/pulls/{request.number}"'),
@@ -116,9 +116,17 @@ _ALLOWED_PROVIDER_GRAPHQL_CALLS = frozenset(
     {
         ("_graphql", "set_pull_request_draft_state", "mutation"),
         ("_graphql_query", "_observe_check_page", "_OBSERVE_CHECKS_QUERY"),
+        ("_graphql_query", "_read_merged_evidence", "_READ_MERGED_PULL_REQUEST_QUERY"),
     }
 )
-_ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "_OBSERVE_CHECKS_QUERY"})
+_ALLOWED_PROVIDER_DOCUMENTS = frozenset(
+    {
+        "_READY_MUTATION",
+        "_DRAFT_MUTATION",
+        "_OBSERVE_CHECKS_QUERY",
+        "_READ_MERGED_PULL_REQUEST_QUERY",
+    }
+)
 _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
 _SHELL_APIS = frozenset({"popen", "system"})
 _GIT_HELPER_NAME_PATTERN = re.compile(r"(?:^|_)git(?:_|$)", re.IGNORECASE)

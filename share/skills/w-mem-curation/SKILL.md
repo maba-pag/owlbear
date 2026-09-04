@@ -40,6 +40,16 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 
 ## Step 0 — Setup
 
+Before curation, if the Memory tools are deferred, run one focused `tool_search` with:
+
+`OwlBear Memory list_memories read_memory curate_memory delete_memory delete_agent_memories rename_agent_memories commit_memory_batch`
+
+Require callable bindings for `list_memories` and `commit_memory_batch` before any candidate read or
+mutation. If either required binding is unavailable or the focused search returns a tool error,
+report the exact missing operation and return without changing MCP memory or the workspace. The
+remaining bindings are required before using their corresponding operations; do not substitute a
+different memory store or direct Git command.
+
 **Mode detection:**
 
 - **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
@@ -62,7 +72,7 @@ ordinary content or scope uncertainty remain reportable.
 
 ## Step 2 — Classify Signal
 
-For each MCP pending entry or file-inbox note, classify by meaning:
+For each MCP pending entry, classify by meaning:
 
 | Rating | Meaning | Default action |
 | --- | --- | --- |

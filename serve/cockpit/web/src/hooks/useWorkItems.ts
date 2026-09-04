@@ -4,6 +4,7 @@ import {
   abortWorkItemTargetSync,
   abandonWorkItemChange,
   cleanupAbandonedWorkItemChange,
+  discardAbandonedTargetSyncAndCleanup,
   cleanupCompletedWorkItemChange,
   clearWorkItemBlock,
   deferWorkItemChange,
@@ -27,6 +28,7 @@ import {
   workItemDetailUrl,
   type CompletedChangePage,
   type CompletedChangeRecord,
+  completedChangeRecordId,
   type DeliveryRequestResolution,
   type DesignWorkDetailResponse,
   type WorkItemDetailResponse,
@@ -36,6 +38,7 @@ import {
   type WorkItemStage,
   WorkItemApiError,
   designWorkDetailUrl,
+  adoptExternalHeadAfterAcceptanceAttention,
 } from '../api/workItems'
 import { usePollingFetch } from './usePollingFetch'
 
@@ -61,6 +64,7 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
   operating: {
     unfinished_change_count: 0,
     completed_change_count: 0,
+    statuses: [],
     draft_design_change_ids: [],
     design_required_change_ids: [],
     claimed: [],
@@ -68,6 +72,10 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
     interventions: [],
     dependency_waits: [],
     guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
+  },
+  health: {
+    status: 'healthy',
+    diagnostics: [],
   },
 }
 
@@ -295,7 +303,7 @@ export function useCompletedHistory(query: string) {
         && setResource({ data, error: null, isLoading: false }))
       .catch((caught: unknown) => {
         if (!active || generation !== requestGeneration.current) return
-        const error = caught instanceof Error ? caught : new Error('Completed history is unavailable')
+        const error = caught instanceof Error ? caught : new Error('Change history is unavailable')
         setResource({
           data: resource.data,
           error,
@@ -339,7 +347,7 @@ export function useCompletedHistory(query: string) {
       setIsLoadingMore(false)
       setResource({
         data: current,
-        error: caught instanceof Error ? caught : new Error('Completed history is unavailable'),
+        error: caught instanceof Error ? caught : new Error('Change history is unavailable'),
         isLoading: false,
       })
       setFailedCursor(cursor)
@@ -363,7 +371,7 @@ export function useCompletedHistory(query: string) {
   }
 }
 
-export function useCompletedChange(identity: { changeId: string; completionId: string } | null) {
+export function useCompletedChange(identity: { changeId: string; recordId: string } | null) {
   const [resource, setResource] = useState<AsyncResource<CompletedChangeRecord>>({
     data: null,
     error: null,
@@ -380,10 +388,10 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
       }
     }
     setResource({ data: null, error: null, isLoading: true })
-    void showCompletedChange(identity.changeId, identity.completionId)
+    void showCompletedChange(identity.changeId, identity.recordId)
       .then((data) => {
         if (!active) return
-        if (data.change_id !== identity.changeId || data.completion_id !== identity.completionId) {
+        if (data.change_id !== identity.changeId || completedChangeRecordId(data) !== identity.recordId) {
           throw new Error('Completed change detail did not match the requested identity')
         }
         setResource({ data, error: null, isLoading: false })
@@ -399,7 +407,7 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
     return () => {
       active = false
     }
-  }, [identity?.changeId, identity?.completionId, retryNonce])
+  }, [identity?.changeId, identity?.recordId, retryNonce])
 
   return {
     ...resource,
@@ -418,6 +426,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
   const [publicationChecksStale, setPublicationChecksStale] = useState(false)
   const [isObservingPublicationChecks, setIsObservingPublicationChecks] = useState(false)
   const targetSyncOperation = useRef<{ changeId: string; operationId: string } | null>(null)
+  const acceptanceHeadAdoptionOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const supersedePublicationOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const identityKey = `${identity.changeId}:${identity.itemKey}`
   const publicationIdentityRef = useRef(identityKey)
@@ -524,19 +533,20 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     }
   }
 
-  const mutate = async (
+  async function mutate<T>(
     action: string,
-    operation: () => Promise<unknown>,
-    result: string,
-  ): Promise<Error | null> => {
+    operation: () => Promise<T>,
+    result: string | ((value: T) => string | null),
+  ): Promise<Error | null> {
     setPendingAction(action)
     setActionError(null)
     setActionResult(null)
     try {
-      await operation()
-      setActionResult(result)
+      const value = await operation()
       polling.refetch()
       onChanged()
+      const message = typeof result === 'function' ? result(value) : result
+      if (message !== null) setActionResult(message)
       return null
     } catch (caught: unknown) {
       const error = caught instanceof Error ? caught : new Error('Delivery control failed')
@@ -613,7 +623,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     reconcilePublication: () => mutate(
       'publication-reconcile',
       () => reconcileWorkItemPublication(identity.changeId),
-      'Publication checkpoint reconciled.',
+      (reconciliation) => {
+        if (reconciliation.reconciled) return 'Publication checkpoint reconciled.'
+        if (reconciliation.error_detail) return `${reconciliation.error_code ?? 'Checkpoint pending'}: ${reconciliation.error_detail}`
+        return null
+      },
     ),
     markPublicationReady: () => mutate(
       'publication-ready',
@@ -630,6 +644,37 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       () => observeWorkItemAcceptance(identity.changeId),
       'GitHub acceptance observed.',
     ),
+    adoptExternalHeadAfterAcceptanceAttention: (
+      expectedDispositionId: string,
+      expectedHead: string,
+      adoptedHead: string,
+    ) => mutate(
+      'acceptance-head-adopt',
+      () => {
+        const existing = acceptanceHeadAdoptionOperation.current
+        const operationId = existing?.changeId === identity.changeId
+          ? existing.operationId
+          : `cockpit-acceptance-head-adopt-${crypto.randomUUID()}`
+        acceptanceHeadAdoptionOperation.current = { changeId: identity.changeId, operationId }
+        return adoptExternalHeadAfterAcceptanceAttention(
+          identity.changeId,
+          expectedDispositionId,
+          expectedHead,
+          adoptedHead,
+          operationId,
+        )
+      },
+      'Changed pull-request head adopted; re-finalization is required.',
+    ).then((error) => {
+      const operationId = acceptanceHeadAdoptionOperation.current?.operationId
+      if (
+        operationId
+        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
+      ) {
+        acceptanceHeadAdoptionOperation.current = null
+      }
+      return error
+    }),
     resolveAttention: (expectedDispositionId: string) => mutate(
       'attention-resolve',
       () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
@@ -709,6 +754,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'change-cleanup-abandoned',
       () => cleanupAbandonedWorkItemChange(identity.changeId),
       'Abandoned Change worktree cleaned up.',
+    ),
+    discardAbandonedTargetSync: () => mutate(
+      'change-cleanup-abandoned-target-sync',
+      () => discardAbandonedTargetSyncAndCleanup(identity.changeId),
+      'Target merge discarded and abandoned Change worktree cleaned up.',
     ),
     cleanupCompletedChange: (completionId: string) => mutate(
       'change-cleanup-completed',

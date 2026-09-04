@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "execution_capacity": 3,
+  "claim_timeout_seconds": 3600
+}

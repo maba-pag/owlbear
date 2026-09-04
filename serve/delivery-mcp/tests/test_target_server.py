@@ -14,12 +14,13 @@ from typing import Any
 
 import pytest
 from mcp import Client
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
     ChangeCoordination,
+    DeliveryAdmissionReceipt,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -31,6 +32,7 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
+from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -58,8 +60,14 @@ DELIVERY_TOOLS = {
     "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
+    "show_operator_context",
+    "resolve_request",
+    "clear_block",
+    "preview_administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -68,6 +76,7 @@ DELIVERY_TOOLS = {
     "publish_delivery_result",
     "finalize_change",
     "mark_change_ready",
+    "prepare_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -83,6 +92,7 @@ DELIVERY_TOOLS = {
     "resume_change",
     "abandon_change",
     "cleanup_abandoned_change_worktree",
+    "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
@@ -99,8 +109,12 @@ READ_TOOLS = {
     "derive_delivery_contract",
     "validate_delivery_contract",
     "list_work_items",
+    "delivery_health",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
+    "show_operator_context",
+    "preview_administrative_move",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
@@ -115,7 +129,6 @@ EXCLUDED_TOOLS = {
     "show_change",
     "validate_change",
     "admit_change",
-    "resolve_request",
     "create_request",
     "unblock_delivery",
     "list_semantic_updates",
@@ -270,7 +283,29 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    coordination_root = runtime_root / "claims/changes"
+    receipt_payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": contract_fingerprint(contract),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(
+                [binding.model_dump(mode="json") for binding in contract.source_bindings],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": target_head,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    receipt_payload["receipt_id"] = hashlib.sha256(
+        json.dumps(receipt_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    change_root.joinpath("admission.json").write_text(
+        DeliveryAdmissionReceipt.model_validate(receipt_payload).model_dump_json(),
+        encoding="utf-8",
+    )
+    coordination_root = runtime_root / "coordination/changes"
     coordination_root.mkdir(parents=True)
     coordination_root.joinpath("change-a.json").write_text(
         ChangeCoordination(
@@ -294,9 +329,16 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
     for name, tool in tools.items():
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
-        assert tool.annotations.idempotent_hint is (name != "acquire_frontier_work")
+        assert tool.annotations.idempotent_hint is (
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+        )
         assert tool.annotations.destructive_hint is (
-            name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+            name
+            in {
+                "cleanup_abandoned_change_worktree",
+                "cleanup_abandoned_change_worktree_after_target_sync_discard",
+                "cleanup_completed_change_worktree",
+            }
         )
         request_schema = tool.input_schema["properties"]["request"]
         assert "$ref" in request_schema
@@ -317,6 +359,33 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_work_item_view_tool_delegates_exact_publication_key() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "show_work_item_view",
+            {"request": {"change_id": "change-a", "item_key": "publication"}},
+        )
+
+    assert result.structured_content == {"operation": "show_work_item_view"}
+    assert application.calls == ["show_work_item_view"]
+
+
+@pytest.mark.asyncio
+async def test_registered_review_repair_tool_invokes_strict_adapter_once() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool("prepare_review_repair", {"request": {"change_id": "change-a"}})
+
+    assert result.structured_content == {"operation": "prepare_review_repair"}
+    assert application.calls == ["prepare_review_repair"]
 
 
 def _published_result_payload() -> dict[str, object]:
@@ -416,6 +485,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     resolution_schema = tools["resolve_change_disposition"].input_schema
     resolution_request = resolution_schema["$defs"]["ResolveChangeDispositionParams"]
     assert set(resolution_request["properties"]) == {"change_id", "expected_disposition_id"}
+    assert set(tools["prepare_review_repair"].input_schema["$defs"]["ChangeParams"]["properties"]) == {"change_id"}
     supersession_schema = tools["supersede_publication"].input_schema
     supersession_request = supersession_schema["$defs"]["SupersedePublicationParams"]
     assert set(supersession_request["properties"]) == {
@@ -499,6 +569,35 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stale_writer_capacity_fails_with_extra_forbidden_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    config_path = repository / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    _write_config(config_path, _config())
+    host_path = repository / ".owlbear/delivery/runtime/host.json"
+    host_path.parent.mkdir(parents=True)
+    host_path.write_text('{"schema_version": 1, "writer_capacity": 1}', encoding="utf-8")
+    monkeypatch.chdir(repository)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
+
+    diagnostic = exc_info.value
+    assert diagnostic.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert diagnostic.field == "writer_capacity"
+    assert diagnostic.retry_safe is False
+    assert "host.json" in diagnostic.detail
+    assert isinstance(diagnostic.__cause__, Exception)
+    assert isinstance(diagnostic.__cause__.__cause__, ValidationError)
+    assert diagnostic.__cause__.__cause__.errors()[0]["type"] == "extra_forbidden"
+    assert not (repository / ".owlbear/delivery/target").exists()
+
+
+@pytest.mark.asyncio
 async def test_external_head_adoption_tool_has_exact_contract() -> None:
     application = _PublicationApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
@@ -516,6 +615,7 @@ async def test_external_head_adoption_tool_has_exact_contract() -> None:
         "branch",
         "expected_head",
         "adopted_head",
+        "provenance",
     } <= set(tools["adopt_external_head"].output_schema["required"])
 
 
@@ -719,7 +819,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (repository / ".owlbear/delivery/runtime/capacity.json").is_file()
+        assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()  # noqa: SLF001

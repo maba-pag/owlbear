@@ -27,20 +27,40 @@ they must also be on the same drive.
 
 Walk the teammate through these steps:
 
+### 1. Clone the project repository
+
 ```shell
-# 1. Clone the project repository to a convenient parent directory
 git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
+```
 
-# 2. Clone owlbear as a sibling
+**Expected result:** the project is checked out at `~/Dev/my-project`.
+
+### 2. Clone OwlBear as a sibling
+
+```shell
 git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
+```
 
-# 3. Bootstrap owlbear into the project workspace
+**Expected result:** the OwlBear checkout is at `~/Dev/owlbear`, beside the project repository.
+
+### 3. Bootstrap OwlBear into the project workspace
+
+```shell
 cd ~/Dev/my-project
 uv run --project ../owlbear python ../owlbear/setup/init.py
+```
 
-# 4. Open the project in VS Code
+**Expected result:** setup creates or merges the project's VS Code configuration, registers the
+seeded MCP servers, and copies the project-local runtime files.
+
+### 4. Open the project in VS Code
+
+```shell
 code .
 ```
+
+**Expected result:** VS Code opens `~/Dev/my-project` with the shared OwlBear customization roots
+available.
 
 > **Windows:** use `C:\Dev\...` paths and backslashes:
 > `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.
@@ -48,10 +68,6 @@ code .
 
 Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
 different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
-
-If an existing project reports that retired Delivery state needs migration, preserve the reported
-files and follow the [Delivery state migration procedure](../serve/tools/README.md) before
-restarting setup or Cockpit.
 
 After VS Code opens, have the teammate follow the canonical
 [installation verification](setup-guide.md#verify-the-installation). It checks both the shared
@@ -99,7 +115,7 @@ No platform-specific configuration is required:
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | Delivery package authority | `.owlbear/delivery/packages/` in project | No — tracked per-project |
 | Delivery runtime and worktrees | `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` in project | No — ignored and host-local |
-| Immutable legacy inventory | `.owlbear/legacy/` in project, when present | No — read-only history |
+| Historical completion packages | `.owlbear/legacy/completed/` in project, when present | No — read-only search source |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 
@@ -158,7 +174,6 @@ organization agent registry as a complement to the local installation.
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
-| Delivery MCP or Cockpit reports that a legacy root requires migration | Preserve the reported state unchanged and complete the dedicated Delivery migration before restarting |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |

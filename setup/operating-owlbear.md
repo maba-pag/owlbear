@@ -13,6 +13,7 @@ the [sharing guide](sharing-guide.md).
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
 | Remove OwlBear from a project | [Uninstalling](#uninstalling) |
 | Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
+| Recover Delivery after a new clone or hardware loss | [Portability and recovery](#portability-and-recovery) |
 | Launch the human control surface | [Cockpit details](#cockpit-details) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
 
@@ -26,7 +27,9 @@ Running `init.py` writes the following files into your project directory:
 | --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
+| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
+| `.owlbear/delivery/runtime/host.json` | Shows the tracked baseline for the shared execution budget and the 60-minute claim timeout | Seeded with `execution_capacity: 3`; existing values are preserved on rerun |
+| `.owlbear/delivery/runtime/host.local.json` | Optional per-host overrides for any `host.json` setting | Not seeded; ignored by Git and preserved when present |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -40,7 +43,7 @@ Running `init.py` writes the following files into your project directory:
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and removes retired root rules on rerun |
+| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and merges current managed rules on rerun |
 | `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
@@ -58,9 +61,12 @@ project. Setup skips this file on later runs so those project-specific instructi
 The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testing; replace it with
 exact hostnames before using Browser against production or sensitive sites.
 
-For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
-Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
-audit stores. Existing legacy state is preserved unchanged.
+For a fresh workspace, `init.py` writes tracked Delivery configuration and the visible default
+`host.json` with one shared execution budget for Planner and Builder claims (`execution_capacity: 3`).
+Builds retain exact per-Change writer custody; there is no separate global `writer_capacity` limit.
+Create `host.local.json` only for machine-specific execution or timeout overrides; it is ignored and
+is not synced to other hosts. Setup does not create mutable Delivery runtime state, worktrees, verification
+profiles, or retired task, decision, board, accept, or audit stores.
 
 Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
 checks and procedures may differ by Change; Delivery retains their typed observations and an
@@ -192,13 +198,13 @@ worktree and their promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
-- Build reads one typed task and custody context, commits only its maintained surfaces, publishes
+- Build reads one typed task and exact per-Change custody context, commits only its maintained surfaces, publishes
   one independently reviewed exact-commit result, and returns the same transition set.
 - Reviewers return only `pass` or `finding` with source-grounded evidence. They never publish,
   repair, choose transitions, or mutate lifecycle state.
 
-Expected outcome: outcomes move through Planning and Build under separate execution and writer
-capacity without Orchestrator scheduling judgment or conversation-derived authority.
+Expected outcome: outcomes move through Planning and Build under one shared execution budget, with
+exact per-Change writer custody, without Orchestrator scheduling judgment or conversation-derived authority.
 
 ### Correction And Recovery
 
@@ -215,7 +221,7 @@ Worker transitions keep correction finite and typed:
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
 Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and retained legacy Integration attention
+unblock, confirmed-dead claim recovery, backward movement, and retained Integration attention
 remain user-owned Cockpit controls rather than agent MCP operations.
 
 ### Publication, Acceptance, And Completed History
@@ -233,10 +239,11 @@ requires the exact repository, PR, base, finalized head, merged state, merge tim
 reported merge commit. Completed history preserves the finalized Change head and accepted merge
 commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
 
-Persisted legacy Integration attention remains visible through compatibility surfaces only. Use
-Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact legacy
-attention. New Integration repair claims, candidates, reviews, and admissions are retired. Treat a
-merge conflict without a current legacy claim as an authority gap; if persisted legacy claim context
+Persisted Integration attention remains visible through the current attention surfaces. Use
+Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact attention.
+New Integration repair claims, candidates, reviews, and admissions are not created by the current
+workflow. Treat a
+merge conflict without a current repair claim as an authority gap; if persisted repair-claim context
 supplies exact attempt and claim identities, use the exact recovery operation and preserve its
 evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
 provide bounded list, search, and exact lookup of receipt-backed history.
@@ -250,7 +257,8 @@ provide bounded list, search, and exact lookup of receipt-backed history.
 - Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
   configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
-  authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
+  authority. Files under `.owlbear/legacy/completed/` are read-only historical completion evidence
+  available through the completed-history search.
 
 ```text
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
@@ -261,12 +269,32 @@ Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> read
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
 
+## Portability and recovery
+
+Admission is the first remote recovery guarantee. Before admission, authored Design drafts are
+local working material and are not committed for every revision. At admission, Delivery places the
+verified four-file package on the managed Change branch, then opens the first draft pull request.
+The normal remote branch is the package backup; local `refs/owlbear/packages/*` refs are not.
+
+Delivery also publishes sparse semantic snapshots to `owlbear/delivery-state`. These snapshots
+retain the admitted contract, frontier progress, publication and finalization identities, and
+completion evidence. They exclude active claims, writer custody, locks, capacity ledgers, process
+identifiers, absolute paths, and transient model output. A new clone recreates ignored runtime state,
+the package cache, and open Change worktrees from those remote identities; incomplete claims are
+requeued rather than treated as live.
+
+For a new machine, clone the project normally, run setup so `.owlbear/delivery/config.json` names
+the configured `delivery_state_branch`, and launch Delivery or Cockpit from the project root. Do
+not copy `.git`, hidden OwlBear refs, ignored runtime files, or an old managed worktree. If startup
+reports a package, Change-branch, target, or state-snapshot divergence, preserve both sides and
+resolve the typed attention before acquiring work.
+
 ---
 
 ## Cockpit details
 
 Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
-completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root
+completed history, Memory, Ideas, and read-only historical completion search. Launch it from the project root
 so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.

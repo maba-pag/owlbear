@@ -91,7 +91,7 @@ def _commands_for_paths(
         run_web = any(_is_web_path(path) for path in paths) and not python_only
 
     if run_python:
-        command = ["uv", "run", "pytest", *python_targets]
+        command = ["uv", "run", "--locked", "pytest", *python_targets]
         if coverage:
             command.append("--cov")
         commands.append((command, _REPOSITORY_ROOT))

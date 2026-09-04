@@ -23,7 +23,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 _MANIFEST_NAME = "manifest.json"
 _PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", _MANIFEST_NAME)
@@ -145,15 +145,17 @@ class DesignPackageStore:
         repository: Path,
         *,
         failure: Callable[[str], None] | None = None,
+        transaction_root: Path | None = None,
     ) -> None:
         self._active_root = active_root.resolve()
         self._repository = repository.resolve()
         self._failure = failure
+        self._transaction_root = (transaction_root or active_root).resolve()
 
     def create(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult:
         """Create or replay one exact active Design package."""
         _validate_change_id(change_id)
-        RuntimeTransaction.recover_all(self._active_root)
+        self._recover_transactions()
         manifest = DesignPackageManifest.from_content(change_id, intent_bytes, design_bytes)
         manifest_bytes = manifest.canonical_bytes()
         package_id = _digest(manifest_bytes)
@@ -177,7 +179,7 @@ class DesignPackageStore:
             TransactionParticipant(self._active_root, relative_root / name, content[name]) for name in _PACKAGE_NAMES
         )
         transaction = RuntimeTransaction(
-            self._active_root,
+            self._transaction_root,
             f"design-package-{change_id}-{package_id}",
             participants,
         )
@@ -194,19 +196,23 @@ class DesignPackageStore:
     def read_verified(self, change_id: str) -> VerifiedDesignPackage:
         """Return exact package bytes after validating their manifest binding."""
         _validate_change_id(change_id)
-        RuntimeTransaction.recover_all(self._active_root)
+        self._recover_transactions()
         with locked_roots((self._active_root,)):
             manifest, content = self._verify_package(change_id)
             return self._verified_package(change_id, manifest, content)
 
     def list_verified(self) -> tuple[VerifiedDesignPackage, ...]:
         """Return all active Design packages in stable identity order."""
-        RuntimeTransaction.recover_all(self._active_root)
+        self._recover_transactions()
         with locked_roots((self._active_root,)):
             if not self._active_root.exists():
                 return ()
             change_ids = tuple(
-                sorted(path.name for path in self._active_root.iterdir() if not path.name.startswith("."))
+                sorted(
+                    path.name
+                    for path in self._active_root.iterdir()
+                    if not path.name.startswith(".") and path.name != "transactions"
+                )
             )
             packages = []
             for change_id in change_ids:
@@ -214,6 +220,54 @@ class DesignPackageStore:
                 manifest, content = self._verify_package(change_id)
                 packages.append(self._verified_package(change_id, manifest, content))
             return tuple(packages)
+
+    def restore(self, change_id: str, package_files: Mapping[str, bytes]) -> VerifiedDesignPackage:
+        """Restore one exact verified package from portable Delivery state."""
+        _validate_change_id(change_id)
+        if set(package_files) != set(_PACKAGE_NAMES):
+            message = f"Design package files are incomplete: {change_id}"
+            raise DesignPackageConflictError(message)
+        content = dict(package_files)
+        try:
+            manifest = DesignPackageManifest.model_validate_json(content[_MANIFEST_NAME])
+        except (ValidationError, ValueError) as exc:
+            message = f"Design package manifest is invalid: {change_id}"
+            raise DesignPackageConflictError(message) from exc
+        expected = DesignPackageManifest.from_content(
+            change_id,
+            content["intent.md"],
+            content["design.md"],
+            content["authority.json"],
+        )
+        if manifest != expected or content[_MANIFEST_NAME] != manifest.canonical_bytes():
+            message = f"Design package bytes do not match its manifest: {change_id}"
+            raise DesignPackageConflictError(message)
+        self._recover_transactions()
+        with locked_roots((self._active_root,)):
+            existing = self._existing_content(change_id)
+            if existing is not None:
+                if existing != content:
+                    message = f"Design package differs: {change_id}"
+                    raise DesignPackageConflictError(message)
+                return self._verified_package(change_id, manifest, existing)
+        relative_root = Path(change_id)
+        transaction = RuntimeTransaction(
+            self._transaction_root,
+            f"design-package-restore-{change_id}-{_digest(manifest.canonical_bytes())}",
+            tuple(
+                TransactionParticipant(self._active_root, relative_root / name, content[name])
+                for name in _PACKAGE_NAMES
+            ),
+        )
+        try:
+            transaction.commit(failure=self._failure)
+        except Exception as exc:
+            transaction.abort()
+            if isinstance(exc, TransactionConflictError):
+                message = f"Design package differs: {change_id}"
+                raise DesignPackageConflictError(message) from exc
+            raise
+        return self._verified_package(change_id, manifest, content)
 
     def revise(
         self,
@@ -242,7 +296,7 @@ class DesignPackageStore:
         }
         relative_root = Path(change_id)
         transaction = RuntimeTransaction(
-            self._active_root,
+            self._transaction_root,
             f"design-revision-{change_id}-{expected_package_id}-{_digest(manifest.canonical_bytes())}",
             tuple(
                 ReplacementTransactionParticipant(
@@ -317,7 +371,7 @@ class DesignPackageStore:
             ),
         )
         transaction = RuntimeTransaction(
-            self._active_root,
+            self._transaction_root,
             f"design-contract-{change_id}-{expected_package_id}-{_digest(contract_bytes)}",
             participants,
         )
@@ -343,7 +397,7 @@ class DesignPackageStore:
     def checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint verified package bytes without touching product Git state."""
         _validate_change_id(change_id)
-        RuntimeTransaction.recover_all(self._active_root)
+        self._recover_transactions()
         with locked_roots((self._active_root,)):
             manifest, content = self._verify_package(change_id)
             package_id = _digest(manifest.canonical_bytes())
@@ -369,6 +423,13 @@ class DesignPackageStore:
                 commit=commit,
                 replayed=False,
             )
+
+    def _recover_transactions(self) -> None:
+        """Recover shared Delivery transactions and pre-rename package transactions."""
+        roots = (self._transaction_root, self._active_root)
+        RuntimeTransaction.recover_all(self._transaction_root, roots=roots)
+        if self._transaction_root != self._active_root:
+            RuntimeTransaction.recover_all(self._active_root)
 
     def _existing_content(self, change_id: str) -> dict[str, bytes] | None:
         package_root = self._active_root / change_id

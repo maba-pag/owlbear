@@ -32,6 +32,13 @@ The development instructions in `.github/copilot-instructions.md` are not the sa
 consumer template at `seed/.github/copilot-instructions.md`. The former describes this repository;
 the latter is a placeholder that `init.py` adapts for a project using OwlBear.
 
+Dependency verification checks the declared Python compatibility floor and current `.python-version`
+on pull requests. Manual dispatch additionally exercises the intervening Python 3.13 line. Cockpit
+verification follows the Node support floor and the current `serve/cockpit/web/.nvmrc` pin; its
+pull-request browser gate is Chromium-only, while manual dispatch retains the full browser matrix.
+Dependency workflow contract tests own workflow-shape validation; the agent-ecosystem workflow
+focuses on agent, hook, and knowledge surfaces.
+
 ## Changing the sync boundary
 
 Treat [`sync-manifest.json`](sync-manifest.json) as the source of truth for the source allowlists

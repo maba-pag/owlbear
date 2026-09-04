@@ -3,15 +3,20 @@ import { PorscheDesignSystemProvider, PToast } from '@porsche-design-system/comp
 import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type {
+  AbandonedChangeRecord,
   ChangeGroupView,
   CompletedChangeRecord,
+  DeliveryHealthResponse,
   DesignWorkDetailResponse,
+  PortfolioChangeLifecycleStatus,
   PortfolioOperatingView,
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
+  WorkItemPublicationReconciliationResponse,
   PublicationChecksObservationResponse,
 } from '../api/workItems'
+import { completedChangeRecordId } from '../api/workItems'
 import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import WorkPortfolioPage from '../pages/WorkPortfolioPage'
 
@@ -62,7 +67,22 @@ function group(overrides: Partial<ChangeGroupView> = {}): ChangeGroupView {
   }
 }
 
-function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResponse {
+function changeStatus(changeId: string, overrides: Partial<PortfolioChangeLifecycleStatus> = {}): PortfolioChangeLifecycleStatus {
+  return {
+    change_id: changeId,
+    admission: 'admitted',
+    stage: 'building',
+    actionable_runtime: true,
+    diagnostic_code: null,
+    diagnostic_detail: null,
+    ...overrides,
+  }
+}
+
+function portfolio(
+  groups: ChangeGroupView[] = [group()],
+  health: DeliveryHealthResponse = { status: 'healthy', diagnostics: [] },
+): WorkItemPortfolioResponse {
   const items = groups.flatMap((item) => item.items)
   const reference = (item: WorkItemCardView) => ({
     change_id: item.change_id,
@@ -98,6 +118,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
     operating: {
       unfinished_change_count: groups.length,
       completed_change_count: 0,
+      statuses: groups.map((item) => changeStatus(item.change_id)),
       draft_design_change_ids: [],
       design_required_change_ids: [],
       claimed,
@@ -105,6 +126,21 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
       interventions,
       dependency_waits: dependencyWaits,
       guidance,
+    },
+    health,
+  }
+}
+
+function withUnadmittedDesign(data: WorkItemPortfolioResponse, changeId = 'design-draft'): WorkItemPortfolioResponse {
+  return {
+    ...data,
+    operating: {
+      ...data.operating,
+      statuses: [
+        ...data.operating.statuses,
+        changeStatus(changeId, { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+      ],
+      draft_design_change_ids: [changeId],
     },
   }
 }
@@ -235,6 +271,25 @@ const receiptCompleted: CompletedChangeRecord = {
   completed_at: '2026-08-11T13:00:00Z',
 }
 
+function abandonedRecord(overrides: Partial<AbandonedChangeRecord> = {}): AbandonedChangeRecord {
+  return {
+    schema_version: 1,
+    record_kind: 'abandoned-change',
+    change_id: 'change-alpha',
+    abandonment_id: '9'.repeat(64),
+    title: 'Abandoned portfolio change',
+    semantic_summary: 'Stopped before completion with its terminal evidence retained.',
+    outcome_titles: ['Preserve the abandoned Change record'],
+    outcome_promises: ['Keep the abandoned Change recoverable for cleanup.'],
+    prior_stage: 'building',
+    reason: 'User stopped the Change',
+    abandoned_at: '2026-08-11T14:00:00Z',
+    cleanup_available: true,
+    target_sync_conflict: false,
+    ...overrides,
+  }
+}
+
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
 let currentDesignWork: DesignWorkDetailResponse
@@ -271,6 +326,7 @@ let completedHistorySearchRecords: CompletedChangeRecord[]
 let completedHistorySearchNextCursor: string | null
 let completedHistorySearchPageRecords: CompletedChangeRecord[]
 let completedHistorySearchRelease: (() => void) | null
+let publicationReconciliationResult: WorkItemPublicationReconciliationResponse
 let requests: Array<{ url: string; method: string; body: unknown }>
 
 function response(payload: unknown, status = 200): Response {
@@ -341,9 +397,9 @@ function installFetch() {
       })
     }
     if (method === 'GET' && url.startsWith('/api/work-items/completed/')) {
-      const selected = completedDetailMismatch ?? (completedDetailRecord && url.includes(completedDetailRecord.completion_id)
+      const selected = completedDetailMismatch ?? (completedDetailRecord && url.includes(completedChangeRecordId(completedDetailRecord))
         ? completedDetailRecord
-        : completedRecords.find((record) => url.includes(record.completion_id)))
+        : completedRecords.find((record) => url.includes(completedChangeRecordId(record))))
       if (completedDetailNotFound) return response({ detail: 'Completion detail was removed' }, 404)
       if (completedDetailFailuresRemaining > 0) {
         completedDetailFailuresRemaining -= 1
@@ -379,7 +435,6 @@ function installFetch() {
         }],
       })
     }
-
     if (method === 'POST' && mutationFailurePath && url.endsWith(mutationFailurePath)) {
       return response({
         detail: {
@@ -449,12 +504,14 @@ function installFetch() {
       || url.endsWith('/resume')
       || url.endsWith('/abandon')
       || url.endsWith('/worktree/cleanup/abandoned')
+      || url.endsWith('/worktree/cleanup/abandoned/target-sync-discard')
       || url.endsWith('/worktree/cleanup/completed')
       || url.endsWith('/worktree/recover')
     )) {
       if (pendingMutationPath && url.endsWith(pendingMutationPath)) {
         await new Promise<void>((resolve) => { pendingMutationRelease = resolve })
       }
+      if (url.endsWith('/publication/reconcile')) return response(publicationReconciliationResult)
       if (url.endsWith('/acceptance/observe') && acceptanceObservationFailure) {
         return response({
           detail: {
@@ -492,6 +549,7 @@ function installFetch() {
           change_head_before: '2'.repeat(40),
           merged_head: '3'.repeat(40),
           merge_commit: true,
+          review_required: false,
         })
       }
       if (url.endsWith('/target/conflict/abort')) {
@@ -516,6 +574,16 @@ function installFetch() {
           change_head_before: '5'.repeat(40),
           merged_head: '6'.repeat(40),
           merge_commit: true,
+          review_required: true,
+        })
+      }
+      if (url.endsWith('/worktree/cleanup/abandoned/target-sync-discard')) {
+        return response({
+          cleanup_id: 'd'.repeat(64),
+          change_id: 'change-alpha',
+          branch: 'owlbear/change/change-alpha',
+          worktree_path: '.owlbear/delivery/worktrees/change-alpha',
+          branch_head: '5'.repeat(40),
         })
       }
       return response({})
@@ -580,6 +648,17 @@ beforeEach(() => {
   acceptanceObservationFailure = false
   acceptanceReconciliationProviderUnavailable = false
   publicationChecksFailure = false
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: true,
+    error_code: null,
+    error_detail: null,
+    pending_checkpoint_attempt_count: 0,
+    pending_checkpoint_last_attempted_at: null,
+    pending_checkpoint_error_code: null,
+    pending_checkpoint_error_detail: null,
+  }
   publicationChecksResponse = {
     schema_version: 1,
     observation_id: 'a'.repeat(64),
@@ -647,8 +726,14 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   const operating: PortfolioOperatingView = {
     unfinished_change_count: 3,
     completed_change_count: 8,
-    draft_design_change_ids: ['draft-change'],
-    design_required_change_ids: ['design-reentry'],
+    statuses: [
+      changeStatus('draft-change', { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+      changeStatus('delivery-change'),
+      changeStatus('design-reentry', { stage: 'design' }),
+      changeStatus('unavailable-change', { actionable_runtime: false, diagnostic_code: 'runtime_unavailable', diagnostic_detail: 'Runtime composition is unavailable.' }),
+    ],
+    draft_design_change_ids: ['legacy-draft', 'legacy-draft-2'],
+    design_required_change_ids: ['legacy-reentry', 'legacy-reentry-2', 'legacy-reentry-3'],
     claimed: [outcome],
     queued_for_orchestration: [publication],
     interventions: [outcome],
@@ -675,14 +760,109 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   expect(onNeedsFilter).toHaveBeenCalledWith('')
 })
 
+it('classifies Design and Delivery entries from explicit lifecycle statuses', async () => {
+  const planningGroup = group({
+    change_id: 'planning-change',
+    title: 'Admitted planning',
+    items: [card({
+      change_id: 'planning-change',
+      title: 'Planning without a task plan',
+      progress: { kind: 'plan', label: 'Task plan not published', done: null, total: null },
+    })],
+  })
+  const reentryGroup = group({
+    change_id: 'design-reentry',
+    title: 'Admitted Design re-entry',
+    items: [card({
+      change_id: 'design-reentry',
+      title: 'Returned to Design',
+      stage: 'design',
+      progress: { kind: 'design-return', label: 'Returned to Design', done: null, total: null },
+    })],
+  })
+  const basePortfolio = portfolio([planningGroup, reentryGroup])
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [
+        changeStatus('design-draft', { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+        changeStatus('planning-change'),
+        changeStatus('design-reentry', { stage: 'design' }),
+        changeStatus('unavailable-change', { actionable_runtime: false, diagnostic_code: 'runtime_unavailable', diagnostic_detail: 'Persisted admission is valid, but runtime composition is unavailable.' }),
+      ],
+      draft_design_change_ids: ['planning-change', 'design-reentry', 'unavailable-change'],
+      design_required_change_ids: [],
+    },
+  }
+
+  renderPage()
+
+  const designWork = await screen.findByTestId('design-work-section')
+  expect(designWork).toHaveTextContent('Design Draft')
+  expect(designWork).not.toHaveTextContent('Admitted planning')
+  expect(designWork).not.toHaveTextContent('Admitted Design re-entry')
+  expect(designWork).not.toHaveTextContent('unavailable-change')
+
+  const table = screen.getByTestId('work-portfolio-table')
+  expect(table).toHaveTextContent('Admitted planning')
+  expect(table).toHaveTextContent('Task plan not published')
+  expect(table).toHaveTextContent('Admitted Design re-entry')
+
+  const unavailable = screen.getByTestId('delivery-issues-section')
+  expect(unavailable).toHaveTextContent('unavailable-change')
+  expect(unavailable).toHaveTextContent('Runtime unavailable')
+  expect(unavailable).toHaveTextContent('Persisted admission is valid, but runtime composition is unavailable.')
+  expect(unavailable).not.toHaveTextContent('Not admitted to Delivery')
+
+  const summary = await screen.findByLabelText('Delivery portfolio status')
+  expect(summary).toHaveTextContent('4Changes')
+  expect(summary).toHaveTextContent('2Design')
+  expect(summary).toHaveTextContent('2Delivery')
+})
+
+it('shows bounded Delivery health diagnostics for quarantined state', async () => {
+  const basePortfolio = portfolio([], {
+    status: 'attention',
+    diagnostics: [{
+      source: 'local-runtime',
+      code: 'contract-identity-invalid',
+      detail: 'Persisted Change contract identity is invalid',
+      change_id: 'quarantined-change',
+      path: '.owlbear/delivery/runtime/changes/quarantined-change',
+      retry_safe: false,
+    }],
+  })
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [changeStatus('quarantined-change', {
+        actionable_runtime: false,
+        diagnostic_code: 'runtime_unavailable',
+        diagnostic_detail: 'Persisted Change contract identity is invalid',
+      })],
+    },
+  }
+
+  renderPage()
+
+  const health = await screen.findByTestId('delivery-issues-section')
+  expect(health).toHaveTextContent('Delivery issues')
+  expect(health).toHaveTextContent('Quarantined state is hidden from dispatch.')
+  expect(health).toHaveTextContent('quarantined-change')
+  expect(health).toHaveTextContent('local-runtime / contract-identity-invalid')
+  expect(health).toHaveTextContent('Persisted Change contract identity is invalid')
+  expect(screen.queryByTestId('work-portfolio-table')).not.toBeInTheDocument()
+})
+
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Portfolio redesign')
   expect(table).toHaveTextContent('Work')
-  expect(table).toHaveTextContent('Progress')
-  expect(table).toHaveTextContent('Status')
+  expect(table).toHaveTextContent('State')
   expect(table).toHaveTextContent('Working')
   expect(table).toHaveTextContent('Builder')
   expect(table).toHaveTextContent('Decision required')
@@ -691,10 +871,10 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(within(table).getAllByText('OUT-001', { selector: 'code' }).length).toBeGreaterThan(0)
   expect(within(table).getAllByText('Portfolio redesign')).toHaveLength(1)
   expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1Running')
-  const guidance = screen.getByLabelText('Session suggestions')
+  const guidance = screen.getByLabelText('Delivery guidance')
   expect(guidance).toHaveTextContent('Review 1 item that needs you')
-  expect(guidance).toHaveTextContent('/orchestrate is already working')
-  expect(within(guidance).getByText('/orchestrate', { selector: 'code' })).toBeInTheDocument()
+  expect(guidance).toHaveTextContent('An orchestration session is already working')
+  expect(within(guidance).getByTestId('portfolio-commands')).toHaveTextContent('/orchestrate')
   expect(within(guidance).getByRole('button', { name: 'Copy command /orchestrate' })).toBeInTheDocument()
   expect(guidance).not.toHaveTextContent('Start /orchestrate')
   expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -707,7 +887,7 @@ it('copies empty-portfolio session commands with the shared compact control', as
   currentPortfolio = portfolio([])
   renderPage()
 
-  const guidance = await screen.findByLabelText('Session suggestions')
+  const guidance = await screen.findByLabelText('Delivery guidance')
   const ideateCommand = within(guidance).getByRole('button', { name: 'Copy command /ideate' })
   fireEvent.click(ideateCommand)
 
@@ -715,11 +895,11 @@ it('copies empty-portfolio session commands with the shared compact control', as
 })
 
 it('shows unadmitted Design work on the board and opens its verified sources', async () => {
+  const basePortfolio = withUnadmittedDesign(portfolio())
   currentPortfolio = {
-    ...portfolio(),
+    ...basePortfolio,
     operating: {
-      ...portfolio().operating,
-      draft_design_change_ids: ['design-draft'],
+      ...basePortfolio.operating,
       guidance: [{ kind: 'resume-design', change_ids: ['design-draft'], work_count: 1 }],
     },
   }
@@ -728,10 +908,10 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   const designWork = await screen.findByTestId('design-work-section')
   expect(designWork).toHaveTextContent('Design Draft')
   expect(designWork).toHaveTextContent('Not admitted to Delivery')
-  expect(designWork).toHaveTextContent('/design design-draft')
-  expect(within(designWork).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
-  expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
-  expect(within(designWork).getAllByRole('definition')).toHaveLength(3)
+  expect(designWork).not.toHaveTextContent('/design design-draft')
+  expect(within(designWork).queryByRole('button', { name: 'Copy command /design design-draft' })).not.toBeInTheDocument()
+  expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'State'])
+  expect(within(designWork).getAllByRole('definition')).toHaveLength(2)
   const status = screen.getByLabelText('Delivery portfolio status')
   expect(status).toHaveTextContent('2Changes')
   expect(status).toHaveTextContent('1Design')
@@ -746,18 +926,17 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   fireEvent.click(screen.getByText('Design', { selector: 'summary' }))
   expect(detailView).toHaveTextContent('Keep authority explicit.')
   expect(requests.some(({ url }) => url === '/api/design-work/design-draft')).toBe(true)
-  const guidance = screen.getByLabelText('Session suggestions')
-  expect(guidance).toHaveTextContent('Continue Design with')
-  expect(within(guidance).getByText('/design design-draft', { selector: 'code' })).toBeInTheDocument()
-  expect(within(guidance).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
+  const guidance = screen.getByLabelText('Delivery guidance')
+  expect(guidance).toHaveTextContent('Continue Design for: design-draft')
+  expect(within(guidance).queryByTestId('portfolio-commands')).not.toBeInTheDocument()
 })
 
 it('uses Design-specific unavailable detail copy and retry action', async () => {
+  const basePortfolio = withUnadmittedDesign(portfolio())
   currentPortfolio = {
-    ...portfolio(),
+    ...basePortfolio,
     operating: {
-      ...portfolio().operating,
-      draft_design_change_ids: ['design-draft'],
+      ...basePortfolio.operating,
     },
   }
   designFailure = true
@@ -776,13 +955,7 @@ it('uses Design-specific unavailable detail copy and retry action', async () => 
 it('refreshes open Design detail after an authored package revision', async () => {
   vi.useFakeTimers()
   try {
-    currentPortfolio = {
-      ...portfolio(),
-      operating: {
-        ...portfolio().operating,
-        draft_design_change_ids: ['design-draft'],
-      },
-    }
+    currentPortfolio = withUnadmittedDesign(portfolio())
     renderPage('/delivery/design-draft/design')
 
     await act(async () => {
@@ -808,35 +981,45 @@ it('refreshes open Design detail after an authored package revision', async () =
 })
 
 it('shows stale Design detail state and retries the refresh in place', async () => {
-  renderPage('/delivery/design-draft/design')
-  const detailView = await screen.findByTestId('design-work-detail')
-  designFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/design-draft/design')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const detailView = screen.getByTestId('design-work-detail')
+    designFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful Design detail; live updates paused.')
-  expect(alert).toHaveTextContent('Design source temporarily unavailable')
-  expect(detailView).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful Design detail; live updates paused.')
+    expect(alert).toHaveTextContent('Design source temporarily unavailable')
+    expect(detailView).toBeInTheDocument()
 
-  designFailure = false
-  fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
-  await waitFor(() => expect(screen.queryByText('Showing the last successful Design detail; live updates paused.')).not.toBeInTheDocument())
-  expect(screen.getByTestId('design-work-detail')).toBeInTheDocument()
+    designFailure = false
+    fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.queryByText('Showing the last successful Design detail; live updates paused.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('design-work-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('closes removed Design detail after a portfolio refresh', async () => {
   const initialPortfolio = portfolio()
-  currentPortfolio = {
-    ...initialPortfolio,
-    operating: {
-      ...initialPortfolio.operating,
-      draft_design_change_ids: ['design-draft'],
-    },
-  }
+  currentPortfolio = withUnadmittedDesign(initialPortfolio)
   renderPage('/delivery/design-draft/design')
   await screen.findByTestId('design-work-detail')
 
   currentPortfolio = portfolio()
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
   await screen.findByTestId('completed-history-workspace')
   fireEvent.click(screen.getByRole('button', { name: 'Current delivery', exact: true }))
 
@@ -864,7 +1047,7 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   const basePortfolio = portfolio([group(), secondGroup])
   currentPortfolio = {
     ...basePortfolio,
-    operating: { ...basePortfolio.operating, draft_design_change_ids: ['design-draft'] },
+    operating: withUnadmittedDesign(basePortfolio).operating,
   }
   const { container } = renderPage()
   await screen.findByTestId('work-portfolio-table')
@@ -955,7 +1138,7 @@ it('opens routed semantic detail with acceptance and bounded task evidence', asy
   fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(screen.getByLabelText('Session suggestions')).toBeInTheDocument()
+  expect(screen.getByLabelText('Delivery guidance')).toBeInTheDocument()
   expect(screen.getByTestId('work-portfolio-table')).toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Current delivery' })).not.toBeInTheDocument()
   expect(inspector).toHaveTextContent('Portfolio redesign / OUT-001')
@@ -1374,6 +1557,7 @@ it('reconciles a pending publication checkpoint from the Change publication view
     next_actor: 'agent',
     next_step: 'Reconcile the final checkpoint',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    publication_phase: 'checkpoint-pending',
     progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
     action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
   })
@@ -1404,16 +1588,16 @@ it('reconciles a pending publication checkpoint from the Change publication view
 
   const inspector = await screen.findByTestId('work-item-detail')
   const publicationRow = screen.getByLabelText('Change publication for Portfolio redesign')
-  expect(within(publicationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
-  expect(within(publicationRow).getAllByRole('definition')).toHaveLength(3)
+  expect(within(publicationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'State'])
+  expect(within(publicationRow).getAllByRole('definition')).toHaveLength(2)
   expect(inspector).toHaveTextContent('Checkpoint pending')
   expect(inspector).toHaveTextContent('Finalized head')
   expect(inspector).toHaveTextContent('1'.repeat(40))
-  expect(inspector).toHaveTextContent('Checkpoint triggers: finalization')
+  expect(inspector).toHaveTextContent('Pending head:')
+  expect(inspector).toHaveTextContent('Triggered by: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
   expect(publicationRow).toHaveTextContent('Checkpoint pending')
-  expect(within(publicationRow).getByText('Ready')).toHaveAttribute('data-status-tone', 'ready')
-  expect(within(publicationRow).getByText('Ready')).not.toHaveTextContent('Checkpoint pending')
+  expect(within(publicationRow).getByText('Checkpoint pending', { selector: '[data-status-tone]' })).toHaveAttribute('data-status-tone', 'active')
   fireEvent.click(within(inspector).getByText('Publish checkpoint'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/publication/reconcile',
@@ -1421,6 +1605,133 @@ it('reconciles a pending publication checkpoint from the Change publication view
     body: null,
   }))
   expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
+})
+
+it('shows persisted checkpoint retry diagnostics and structured reconciliation errors', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    next_actor: 'agent',
+    next_step: 'Reconcile the final checkpoint',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
+    action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'checkpoint-pending',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: ['verified-outcome'],
+      pending_checkpoint_attempt_count: 2,
+      pending_checkpoint_last_attempted_at: '2026-08-11T17:00:00+00:00',
+      pending_checkpoint_error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+      pending_checkpoint_error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 1, items: [publicationCard] })])
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: false,
+    error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+    error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+    pending_checkpoint_attempt_count: 2,
+    pending_checkpoint_last_attempted_at: '2026-08-11T17:00:00+00:00',
+    pending_checkpoint_error_code: 'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING',
+    pending_checkpoint_error_detail: 'Checkpoint publication is waiting for a reviewed Change head.',
+  }
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const diagnostics = within(inspector).getByTestId('checkpoint-diagnostics')
+  expect(diagnostics).toHaveTextContent('2 attempts recorded')
+  expect(diagnostics).toHaveTextContent('Triggered by: verified-outcome')
+  expect(diagnostics).toHaveTextContent('Last attempt: 2026-08-11T17:00:00+00:00')
+  expect(diagnostics).toHaveTextContent('ERR_DELIVERY_CHECKPOINT_HEAD_MISSING')
+  fireEvent.click(within(inspector).getByText('Publish checkpoint'))
+
+  await waitFor(() => expect(screen.getByText(
+    'ERR_DELIVERY_CHECKPOINT_HEAD_MISSING: Checkpoint publication is waiting for a reviewed Change head.',
+  )).toBeInTheDocument())
+})
+
+it('does not claim publication success when reconciliation remains incomplete', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Reconcile the final checkpoint',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
+    action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'checkpoint-pending',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: null,
+      pending_checkpoint_head: '1'.repeat(40),
+      pending_checkpoint_triggers: ['finalization'],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  publicationReconciliationResult = {
+    change_id: 'change-alpha',
+    attempted_head: null,
+    reconciled: false,
+    error_code: null,
+    error_detail: null,
+    pending_checkpoint_attempt_count: 0,
+    pending_checkpoint_last_attempted_at: null,
+    pending_checkpoint_error_code: null,
+    pending_checkpoint_error_detail: null,
+  }
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Publish checkpoint'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/reconcile',
+    method: 'POST',
+    body: null,
+  }))
+  await waitFor(() => expect(screen.queryByText('Publication checkpoint reconciled.')).not.toBeInTheDocument())
 })
 
 it('syncs the Change with the target and shows the latest sync receipt', async () => {
@@ -1467,6 +1778,7 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
         change_head_before: '2'.repeat(40),
         merged_head: '3'.repeat(40),
         merge_commit: true,
+        review_required: false,
       },
     },
   })
@@ -1475,9 +1787,10 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent(`Target head${'1'.repeat(40)}`)
-  expect(inspector).toHaveTextContent(`Merged Change head${'3'.repeat(40)}`)
+  expect(inspector).toHaveTextContent(`Target-sync merge result${'3'.repeat(40)}`)
   expect(inspector).toHaveTextContent('Last target sync: main (merge commit)')
-  fireEvent.click(within(inspector).getByText('Sync with target'))
+  fireEvent.click(within(inspector).getByText('Merge latest target into Change'))
+  fireEvent.click(screen.getByText('Confirm target update'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/target/sync',
     method: 'POST',
@@ -1545,6 +1858,9 @@ it('shows publication history and keeps ordinary attention remedies available', 
   expect(inspector).toHaveTextContent(`Generation 2: owlbear/example #42 / ${'1'.repeat(40)}`)
   expect(within(inspector).getAllByText('Resolve publication attention')).not.toHaveLength(0)
   expect(within(inspector).getByTestId('publication-supersede')).toBeInTheDocument()
+  const evidence = within(inspector).getByText('Publication evidence', { selector: 'summary' }).closest('details')
+  expect(evidence).not.toHaveAttribute('open')
+  expect(within(inspector).getByTestId('publication-supersede')).toBeVisible()
 
   fireEvent.click(within(inspector).getByTestId('publication-supersede'))
   await waitFor(() => expect(requests).toContainEqual({
@@ -1629,7 +1945,12 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
     next_step: 'Choose an explicit target-sync conflict exit',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Finalization invalidated', done: null, total: null },
-    action: { kind: 'resolve-attention', label: 'Resolve attention', command: null, attention_id: dispositionId },
+    action: {
+      kind: 'resolve-attention',
+      label: 'Resolve attention',
+      command: '/resolve-target-conflict change-alpha',
+      attention_id: dispositionId,
+    },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -1677,10 +1998,12 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Target sync conflict')
   expect(inspector).toHaveTextContent('src/app.py')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
   expect(within(inspector).queryByText('Resolve attention')).toBeNull()
   expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
 
   fireEvent.click(screen.getByTestId('target-sync-conflict-abort'))
+  fireEvent.click(screen.getByText('Confirm abort'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/target/conflict/abort',
     method: 'POST',
@@ -1746,7 +2069,8 @@ it('offers the finalization command from the Change publication row and detail v
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
-  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(2)
+  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(1)
+  expect(within(screen.getByTestId('portfolio-commands')).queryByLabelText('Copy command /finalize-change change-alpha')).not.toBeInTheDocument()
 })
 
 it('keeps invalidated finalization heads distinct and offers re-finalization', async () => {
@@ -1792,8 +2116,9 @@ it('keeps invalidated finalization heads distinct and offers re-finalization', a
   expect(within(inspector).getByRole('region', { name: 'Finalization invalidated' })).toBeInTheDocument()
   expect(inspector).toHaveTextContent(`Expected head${'1'.repeat(40)}`)
   expect(inspector).toHaveTextContent(`Observed head${'2'.repeat(40)}`)
-  expect(inspector).toHaveTextContent('Re-finalize the current Change head')
+  expect(inspector).toHaveTextContent('Next: Re-finalize the current Change head')
   expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
+  expect(inspector.querySelector('[data-section-tone]')).toHaveAttribute('data-section-tone', 'warning')
 })
 
 it('shows GitHub merge as user-owned work with observation as the only Cockpit control', async () => {
@@ -1809,7 +2134,7 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
     next_step: 'Merge pull request in GitHub',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
-    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
+    action: { kind: 'observe-acceptance', label: 'Check merge status', command: null },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -1841,7 +2166,7 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   expect(inspector).toHaveTextContent('owlbear/example')
   expect(inspector).toHaveTextContent('42')
   expect(within(inspector).queryByText(/merge now/i)).not.toBeInTheDocument()
-  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  fireEvent.click(within(inspector).getByText('Check merge status'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/acceptance/observe',
     method: 'POST',
@@ -1849,10 +2174,51 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   }))
 
   acceptanceObservationFailure = true
-  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  fireEvent.click(within(inspector).getByText('Check merge status'))
   const waiting = await within(inspector).findByRole('status')
   expect(waiting).toHaveTextContent('ERR_DELIVERY_ACCEPTANCE_WAITING')
   expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
+})
+
+it('keeps conflict guidance and merge-status control for a ready conflicted pull request', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before continuing',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'observe-acceptance',
+      label: 'Check merge status',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('awaiting-merge'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Check merge status'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/acceptance/observe',
+    method: 'POST',
+    body: null,
+  }))
 })
 
 it('surfaces acceptance-reconciliation provider failure with an immediate retry', async () => {
@@ -1868,7 +2234,7 @@ it('surfaces acceptance-reconciliation provider failure with an immediate retry'
     next_step: 'Merge pull request in GitHub',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
-    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
+    action: { kind: 'observe-acceptance', label: 'Check merge status', command: null },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', items: [publicationCard] })])
   acceptanceReconciliationProviderUnavailable = true
@@ -2145,46 +2511,18 @@ it('does not show Change disposition controls for an abandoned Change', async ()
   expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
 })
 
-it('confirms and cleans an eligible abandoned Change worktree', async () => {
-  const publicationCard = card({
-    item_key: 'publication',
-    work_item_id: 'change-alpha',
-    scope: 'change-publication',
-    title: 'Change publication',
-    stage: null,
-    needs: 'none',
-    needs_headline: null,
-    next_actor: 'none',
-    next_step: 'Change abandoned',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-  })
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      phase: 'abandoned',
-      finalization_id: null,
-      finalized_head: null,
-      published_head: null,
-      pending_checkpoint_head: null,
-      pending_checkpoint_triggers: [],
-      invalidated_expected_head: null,
-      invalidated_observed_head: null,
-      repository: null,
-      pull_request_number: null,
-      pull_request_head: null,
-      accepted_merge_commit: null,
-      merged_at: null,
-      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+it('confirms and cleans an eligible abandoned Change from Change history', async () => {
+  const abandoned = abandonedRecord()
+  completedRecords = [abandoned]
+  renderPage()
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
-  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
     method: 'POST',
@@ -2193,37 +2531,19 @@ it('confirms and cleans an eligible abandoned Change worktree', async () => {
   expect(await screen.findByText('Abandoned Change worktree cleaned up.')).toBeInTheDocument()
 })
 
-it('keeps abandoned worktree cleanup confirmation open when cleanup fails', async () => {
-  const publicationCard = publicationCardForChecks({
-    next_step: 'Change abandoned',
-    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
-  })
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      phase: 'abandoned',
-      finalization_id: null,
-      finalized_head: null,
-      published_head: null,
-      pending_checkpoint_head: null,
-      pending_checkpoint_triggers: [],
-      invalidated_expected_head: null,
-      invalidated_observed_head: null,
-      repository: null,
-      pull_request_number: null,
-      pull_request_head: null,
-      accepted_merge_commit: null,
-      merged_at: null,
-      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+it('keeps abandoned history cleanup confirmation open when cleanup fails', async () => {
+  const abandoned = abandonedRecord()
+  completedRecords = [abandoned]
   mutationFailurePath = '/worktree/cleanup/abandoned'
-  renderPage('/delivery/change-alpha/publication')
+  renderPage()
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
-  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
     method: 'POST',
@@ -2232,6 +2552,29 @@ it('keeps abandoned worktree cleanup confirmation open when cleanup fails', asyn
   const dialog = screen.getByRole('alertdialog')
   expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
   expect(within(dialog).getByText('Clean abandoned worktree')).toBeInTheDocument()
+})
+
+it('confirms discard and cleanup for an abandoned target-sync conflict from Change history', async () => {
+  const abandoned = abandonedRecord({
+    target_sync_conflict: true,
+    cleanup_available: true,
+  })
+  completedRecords = [abandoned]
+  renderPage()
+
+  fireEvent.click(screen.getByText('Change history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: `Inspect ${abandoned.title}` }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  fireEvent.click(within(detailView).getByText('Discard conflict and clean worktree'))
+  fireEvent.click(await screen.findByText('Confirm cleanup'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/abandoned/target-sync-discard',
+    method: 'POST',
+    body: { confirmed_discard: true },
+  }))
+  expect(await screen.findByText('Target merge discarded and abandoned Change worktree cleaned up.')).toBeInTheDocument()
 })
 
 it('cleans an eligible completed Change worktree with its exact completion identity', async () => {
@@ -2403,24 +2746,81 @@ it('presents a draft pull request as publication work', async () => {
     title: 'Change publication',
     stage: null,
     next_actor: 'agent',
-    next_step: 'Mark the pull request ready',
+    next_step: 'Mark the pull request ready through Delivery',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'publication', label: 'Pull request is draft', done: null, total: null },
-    action: { kind: 'mark-ready', label: 'Mark ready', command: null },
+    publication_phase: 'pull-request-draft',
+    progress: { kind: 'publication', label: 'Delivery ready state not recorded', done: null, total: null },
+    action: { kind: 'mark-ready', label: 'Make PR ready for review', command: null },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
-  expect(table).toHaveTextContent('Pull request is draft')
-  expect(table).toHaveTextContent('Mark ready')
-  const readyLink = within(table).getByText('Mark ready').closest('p-link-pure') as HTMLElement & { href: string }
+  expect(table).toHaveTextContent('Delivery ready state not recorded')
+  expect(table).toHaveTextContent('Make PR ready for review')
+  const publicationRow = screen.getByLabelText('Change publication for Portfolio redesign')
+  expect(publicationRow.querySelector('[data-status-tone]')).toHaveTextContent('Delivery ready state not recorded')
+  const readyLink = within(table).getByText('Make PR ready for review').closest('p-link-pure') as HTMLElement & { href: string }
   expect(readyLink.href).toBe('/delivery/change-alpha/publication')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 
-it('observes checks from a draft even when repository and pull request fields are null', async () => {
+it('warns before making a conflicted pull request ready and offers the resolution prompt', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Pull request has merge conflicts',
+    next_actor: 'you',
+    next_step: 'Resolve pull-request conflicts before making it ready',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    publication_phase: 'pull-request-draft',
+    progress: { kind: 'publication', label: 'Pull request conflicts detected', done: null, total: null },
+    action: {
+      kind: 'mark-ready',
+      label: 'Make PR ready for review',
+      command: '/resolve-target-conflict change-alpha',
+    },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('pull-request-draft'),
+      mergeable: false,
+      merge_state_status: 'dirty',
+      mergeability_observed_at: '2026-09-04T10:00:00Z',
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /resolve-target-conflict change-alpha')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+
+  const dialog = await screen.findByRole('alertdialog')
+  expect(dialog).toHaveTextContent('GitHub reports conflicts with the integration target.')
+  expect(dialog).toHaveTextContent('Making the pull request ready will not resolve them')
+  expect(dialog).toHaveTextContent('/resolve-target-conflict change-alpha')
+  expect(requests.some(({ url, method }) => url.endsWith('/publication/ready') && method === 'POST')).toBe(false)
+
+  fireEvent.click(within(dialog).getByText('Keep PR in draft'))
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+  fireEvent.click(within(inspector).getByText('Make PR ready for review'))
+  fireEvent.click(await screen.findByText('Make PR ready anyway'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/ready',
+    method: 'POST',
+    body: null,
+  }))
+})
+
+it('keeps check observation discoverable but unavailable for a draft', async () => {
   const publicationCard = publicationCardForChecks()
   currentDetail = detail({
     card: publicationCard,
@@ -2430,28 +2830,16 @@ it('observes checks from a draft even when repository and pull request fields ar
   renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  const portfolioReadsBefore = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(within(inspector).getByTestId('publication-checks-observe')).toBeInTheDocument()
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
+  expect(observe).toBeInTheDocument()
+  expect(observe.disabled).toBe(true)
+  expect(within(inspector).getByTestId('publication-checks-draft-guidance')).toHaveTextContent(
+    'You can observe check results here once this pull request is ready for review.',
+  )
+  expect(within(inspector).queryByTestId('publication-checks-status')).not.toBeInTheDocument()
 
-  await waitFor(() => expect(requests).toContainEqual({
-    url: '/api/changes/change-alpha/publication/checks/observe',
-    method: 'POST',
-    body: null,
-  }))
-  expect(await within(inspector).findByText('Unit tests')).toBeInTheDocument()
-  expect(within(inspector).getByText('Blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Required pending', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Not blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Observed commit').nextElementSibling).toHaveTextContent('1'.repeat(40))
-  expect(within(inspector).getByText('Evidence recorded').nextElementSibling).toHaveTextContent('2026-08-11T16:00:00Z')
-  expect(Array.from(within(inspector).getAllByTestId('publication-check')).map((item) => item.textContent)).toEqual([
-    expect.stringContaining('Unit tests'),
-    expect.stringContaining('Integration tests'),
-    expect.stringContaining('Optional lint'),
-  ])
-  const portfolioReadsAfter = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(portfolioReadsAfter).toBe(portfolioReadsBefore)
+  fireEvent.click(observe)
+  expect(requests.filter(({ url, method }) => url === '/api/changes/change-alpha/publication/checks/observe' && method === 'POST')).toHaveLength(0)
 })
 
 it('does not offer publication-check observation outside draft and awaiting-merge phases', async () => {
@@ -2470,56 +2858,83 @@ it('does not offer publication-check observation outside draft and awaiting-merg
 })
 
 it('clears publication-check results when the polled published head changes', async () => {
-  const publicationCard = publicationCardForChecks()
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge'),
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+  vi.useFakeTimers()
+  try {
+    const publicationCard = publicationCardForChecks()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge'),
+    })
+    currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+    renderPage('/delivery/change-alpha/publication')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-  await within(inspector).findByText('Unit tests')
+    const inspector = screen.getByTestId('work-item-detail')
+    fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
 
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge', '2'.repeat(40)),
-  })
-  await waitFor(
-    () => expect(within(inspector).getByTestId('publication-checks-status')).toHaveTextContent('Previous check results were cleared'),
-    { timeout: 6_000 },
-  )
-  expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge', '2'.repeat(40)),
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(within(inspector).getByTestId('publication-checks-status')).toHaveTextContent('Previous check results were cleared')
+    expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('keeps observed publication checks visible across a phase change with the same head', async () => {
-  const publicationCard = publicationCardForChecks()
-  currentDetail = detail({
-    card: publicationCard,
-    publication: publicationForChecks('awaiting-merge'),
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
-  renderPage('/delivery/change-alpha/publication')
+  vi.useFakeTimers()
+  try {
+    const publicationCard = publicationCardForChecks()
+    currentDetail = detail({
+      card: publicationCard,
+      publication: publicationForChecks('awaiting-merge'),
+    })
+    currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+    renderPage('/delivery/change-alpha/publication')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
-  const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-  await within(inspector).findByText('Unit tests')
+    const inspector = screen.getByTestId('work-item-detail')
+    fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
 
-  currentDetail = detail({
-    card: publicationCard,
-    publication: {
-      ...publicationForChecks('awaiting-merge'),
-      phase: 'checkpoint-pending',
-      pending_checkpoint_head: '1'.repeat(40),
-      pending_checkpoint_triggers: ['finalization'],
-    },
-  })
-  await waitFor(() => {
+    currentDetail = detail({
+      card: publicationCard,
+      publication: {
+        ...publicationForChecks('awaiting-merge'),
+        phase: 'checkpoint-pending',
+        pending_checkpoint_head: '1'.repeat(40),
+        pending_checkpoint_triggers: ['finalization'],
+      },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
     expect(within(inspector).getByText('Checkpoint pending')).toBeInTheDocument()
     expect(within(inspector).queryByTestId('publication-checks-observe')).not.toBeInTheDocument()
-  }, { timeout: 6_000 })
-  expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
+    expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('disables publication-check observation while another publication action is pending', async () => {
@@ -2533,7 +2948,8 @@ it('disables publication-check observation while another publication action is p
   const inspector = (renderPage('/delivery/change-alpha/publication'), await screen.findByTestId('work-item-detail'))
 
   try {
-    fireEvent.click(within(inspector).getByText('Sync with target'))
+    fireEvent.click(within(inspector).getByText('Merge latest target into Change'))
+    fireEvent.click(screen.getByText('Confirm target update'))
     const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
     await waitFor(() => expect(observe.disabled).toBe(true))
   } finally {
@@ -2556,7 +2972,7 @@ it('disables publication actions while publication-check observation is pending'
 
   try {
     fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
-    const sync = within(inspector).getByText('Sync with target') as HTMLElement & { disabled: boolean }
+    const sync = within(inspector).getByText('Merge latest target into Change') as HTMLElement & { disabled: boolean }
     await waitFor(() => expect(sync.disabled).toBe(true))
     expect(requests.filter(({ url, method }) => method === 'POST' && url.endsWith('/target/sync'))).toHaveLength(0)
   } finally {
@@ -2619,32 +3035,60 @@ it('shows typed provider failure for publication-check observation', async () =>
 })
 
 it('keeps cached routed detail visible when a background refresh fails', async () => {
-  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
-  const detailView = await screen.findByTestId('work-item-detail')
-  portfolioFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const detailView = screen.getByTestId('work-item-detail')
+    portfolioFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful refresh — live updates paused.')
-  expect(alert).toHaveTextContent('Temporary polling failure')
-  expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
-  expect(detailView).toBeInTheDocument()
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful refresh — live updates paused.')
+    expect(alert).toHaveTextContent('Temporary polling failure')
+    expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
+    expect(detailView).toBeInTheDocument()
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('shows stale Work Item detail state and retries the refresh in place', async () => {
-  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
-  await screen.findByTestId('work-item-detail')
-  detailFailure = true
+  vi.useFakeTimers()
+  try {
+    renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    detailFailure = true
 
-  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
-  expect(alert).toHaveTextContent('Showing the last successful Work Item detail; live updates paused.')
-  expect(alert).toHaveTextContent('Delivery runtime is absent: change-alpha')
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Showing the last successful Work Item detail; live updates paused.')
+    expect(alert).toHaveTextContent('Delivery runtime is absent: change-alpha')
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
 
-  detailFailure = false
-  fireEvent.click(within(alert).getByText('Retry Work Item', { exact: true }))
-  await waitFor(() => expect(screen.queryByText('Showing the last successful Work Item detail; live updates paused.')).not.toBeInTheDocument())
-  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+    detailFailure = false
+    fireEvent.click(within(alert).getByText('Retry Work Item', { exact: true }))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.queryByText('Showing the last successful Work Item detail; live updates paused.')).not.toBeInTheDocument()
+    expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+  }
 }, 6_000)
 
 it('keeps backend detail collapsed when a selected Work Item is unavailable', async () => {
@@ -2746,6 +3190,7 @@ it('shows finalized and accepted merge heads as distinct identities', async () =
   expect(detailView).toHaveTextContent(`Finalized head${'1'.repeat(40)}`)
   expect(detailView).toHaveTextContent(`Accepted merge commit${'2'.repeat(40)}`)
   expect(detailView).not.toHaveTextContent(/ancestor|descendant|merge method/i)
+  expect(detailView.querySelector('[data-section-tone]')).toHaveAttribute('data-section-tone', 'success')
 })
 
 it('moves a completed selected Change into completed history instead of leaving a dead route', async () => {
@@ -2787,7 +3232,7 @@ it('moves a completed selected Change into completed history instead of leaving 
   const inspector = await screen.findByTestId('work-item-detail')
   fireEvent.click(within(inspector).getByText('Complete accepted Change'))
 
-  expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
+  expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Change history')
   await waitFor(() => expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/history'))
   expect(await screen.findByText('Portfolio redesign')).toBeInTheDocument()
 })
@@ -2796,7 +3241,7 @@ it('closes live detail before entering completed history', async () => {
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
   await screen.findByTestId('work-item-detail')
 
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
 
   await screen.findByTestId('completed-history-workspace')
   expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument()
@@ -2804,12 +3249,12 @@ it('closes live detail before entering completed history', async () => {
     const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
     expect(openFlyout).toBeUndefined()
   })
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Completed history', exact: true })).toHaveFocus())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Change history', exact: true })).toHaveFocus())
 })
 
 it('presents legacy completion package provenance explicitly', async () => {
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
 
@@ -2831,7 +3276,7 @@ it('refreshes current delivery immediately after returning from completed histor
   renderPage()
   await screen.findByRole('heading', { name: 'Initial delivery', exact: true })
 
-  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Change history', exact: true }))
   await screen.findByTestId('completed-history-workspace')
   currentPortfolio = portfolio([group({ title: 'Refreshed delivery' })])
   const requestsBeforeReturn = requests.filter(({ method, url }) => method === 'GET' && url === '/api/work-items').length
@@ -2846,17 +3291,17 @@ it('refreshes current delivery immediately after returning from completed histor
 it('explains when completed history is empty', async () => {
   completedRecords = []
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
 
   const emptyState = await screen.findByTestId('completed-history-empty-state')
-  expect(emptyState).toHaveTextContent('No completed changes yet')
-  expect(emptyState).toHaveTextContent('Accepted Delivery changes will appear here with their merge evidence.')
+  expect(emptyState).toHaveTextContent('No changes in history yet')
+  expect(emptyState).toHaveTextContent('Completed and abandoned Changes will appear here with their retained evidence.')
 })
 
 it('distinguishes no matching completed history and clears the search', async () => {
   completedRecords = [completed]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-change-record')
 
   const search = container.querySelector('p-input-search')
@@ -2864,7 +3309,7 @@ it('distinguishes no matching completed history and clears the search', async ()
   inputValue(search as Element, 'unmatched history')
 
   const emptyState = await screen.findByTestId('completed-history-empty-state')
-  expect(emptyState).toHaveTextContent('No completed changes match "unmatched history"')
+  expect(emptyState).toHaveTextContent('No changes match "unmatched history"')
   expect(emptyState).toHaveTextContent('Try a different search or clear the current search.')
   fireEvent.click(within(emptyState).getByText('Clear search', { exact: true }))
 
@@ -2875,7 +3320,7 @@ it('marks previous completed history results while a search is pending', async (
   completedRecords = [completed, receiptCompleted]
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -2903,7 +3348,7 @@ it('retains previous completed history when a search fails', async () => {
   completedHistorySearchFailuresRemaining = 1
   completedHistorySearchRecords = [receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   const search = container.querySelector('p-input-search')
@@ -2911,7 +3356,7 @@ it('retains previous completed history when a search fails', async () => {
   inputValue(search as Element, 'Beta')
 
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Completed history is unavailable.')
+  expect(alert).toHaveTextContent('Change history is unavailable.')
   expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
   expect(screen.getByTestId('completed-history-stale-status')).toHaveTextContent('Previous results are shown while this search is retried.')
   const loadMore = screen.getByText('Load more', { exact: true }).closest('p-button') as HTMLElement & { disabled?: boolean }
@@ -2928,7 +3373,7 @@ it('disables load more while a completed history search is pending', async () =>
   completedHistoryNextCursor = 'page-2'
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -2951,7 +3396,7 @@ it('appends paginated results for a completed history search', async () => {
   completedHistorySearchNextCursor = 'search-page-2'
   completedHistorySearchPageRecords = [receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1))
 
   const search = container.querySelector('p-input-search')
@@ -2971,7 +3416,7 @@ it('closes completed history detail when a settled search removes the selected r
   completedRecords = [completed, receiptCompleted]
   completedHistorySearchPending = true
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   try {
@@ -3002,7 +3447,7 @@ it('closes completed history detail when a settled search removes the selected r
 it('debounces completed history search requests while typing', async () => {
   completedRecords = [completed, receiptCompleted]
   const { container } = renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
 
   const search = container.querySelector('p-input-search')
@@ -3018,7 +3463,7 @@ it('retries failed completed history detail in place', async () => {
   completedRecords = [completed]
   completedDetailFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
 
@@ -3034,7 +3479,7 @@ it('retries failed completed history detail in place', async () => {
 it('closes a listed completion when its detail is confirmed missing', async () => {
   completedRecords = [completed]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
   completedDetailNotFound = true
@@ -3052,7 +3497,7 @@ it('closes a missing completion despite a failed history page load', async () =>
   completedHistoryNextCursor = 'page-2'
   completedHistoryPageFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
 
@@ -3079,7 +3524,7 @@ it('returns focus to history after appending the final page', async () => {
   completedHistoryNextCursor = 'page-2'
   completedHistoryPageRecords = [nextRecord]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-history-load-more')
 
   fireEvent.click(screen.getByTestId('completed-history-load-more'))
@@ -3105,7 +3550,7 @@ it('keeps a deep-linked completion open while the initial history list fails', a
   const detailView = await screen.findByTestId('completed-change-detail')
   expect(detailView).toHaveTextContent('Historical delivery')
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Completed history is unavailable.')
+  expect(alert).toHaveTextContent('Change history is unavailable.')
 
   fireEvent.click(within(alert).getByText('Retry history', { exact: true }))
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
@@ -3142,13 +3587,13 @@ it('retries a failed completed history page without resetting loaded records', a
   completedHistoryPageRecords = [nextRecord]
   completedHistoryPageFailuresRemaining = 1
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   await screen.findByTestId('completed-change-record')
   expect(screen.getByTestId('completed-history-count')).toHaveTextContent('2')
 
   fireEvent.click(screen.getByText('Load more', { exact: true }))
   const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Could not load more completed history.')
+  expect(alert).toHaveTextContent('Could not load more Change history.')
   expect(within(alert).getByText('Retry loading more', { exact: true })).toBeInTheDocument()
   expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1)
 
@@ -3161,7 +3606,7 @@ it('retries a failed completed history page without resetting loaded records', a
 it('presents receipt completion identities without graph claims', async () => {
   completedRecords = [receiptCompleted]
   renderPage()
-  fireEvent.click(screen.getByText('Completed history'))
+  fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
   const pullRequest = within(record).getByRole('link', { name: 'PR #42' })
   expect(pullRequest).toHaveAttribute('href', 'https://github.com/owlbear/example/pull/42')

@@ -6,6 +6,8 @@
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
 import { test, expect, type Page } from '@playwright/test'
+import { EMPTY_WORK_ITEM_PORTFOLIO } from './support/api-fixtures'
+import { trackPageErrors, waitForWorkspaceWithoutPageErrors } from './support/page-errors'
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
 
@@ -46,7 +48,9 @@ const TASKS = {
 // Routes registered first have LOWER priority (Playwright LIFO) — catch-all
 // registered first ensures specific handlers always win.
 
-async function stubApis(page: Page): Promise<void> {
+async function stubApis(page: Page) {
+  const pageErrors = trackPageErrors(page)
+
   // Catch-all fallback for remaining /api/* routes (decisions, scan, sessions, etc.)
   // Must be registered FIRST so specific routes (registered after) take precedence.
   await page.route('/api/**', (route) => route.fulfill({ status: 200, json: {} }))
@@ -67,6 +71,9 @@ async function stubApis(page: Page): Promise<void> {
   // Core data routes — registered last so they take priority over catch-all
   await page.route('/api/tasks', (route) => route.fulfill({ json: TASKS }))
   await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+  await page.route('/api/work-items', (route) => route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }))
+
+  return pageErrors
 }
 
 // ─── AC1: PDS CSS custom properties resolve to non-empty values on :root ───────
@@ -79,9 +86,9 @@ async function stubApis(page: Page): Promise<void> {
 
 test.describe('TestFromAC_PDSCSSCustomProperties', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Happy path: --p-color-canvas resolves to a non-empty value on :root
@@ -143,9 +150,9 @@ test.describe('TestFromAC_PDSCSSCustomProperties', () => {
 
 test.describe('TestFromAC_CSPFontSrc', () => {
   test.beforeEach(async ({ page }) => {
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
   })
 
   // Helper: read the CSP meta tag content attribute
@@ -219,9 +226,9 @@ test.describe('TestFromAC_PDSConsoleClean', () => {
         porschemessages.push(`[${msg.type()}] ${msg.text()}`)
       }
     })
-    await stubApis(page)
+    const pageErrors = await stubApis(page)
     await page.goto('/')
-    await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
+    await waitForWorkspaceWithoutPageErrors(page, pageErrors)
     expect(
       porschemessages,
       'No console errors or warnings containing "porsche" must appear during shell load',

@@ -23,9 +23,16 @@ Before edits, enter only `launch.worktree_path` and require:
 - its current branch equals `launch.branch`;
 - `HEAD` equals `launch.source_head` and descends from `launch.last_reviewed_commit`;
 - writer custody still matches the active claim;
-- the task-owned paths are clean and no unrelated staged state is adopted;
+- the worktree state has been triaged under the rules below; the final candidate must leave the entire
+  managed worktree clean;
 - any predecessor results, resolved requests, return context, and recovery attention come only from
   this fresh Build context.
+
+The branch, `HEAD`, ancestry, writer custody, and worktree-cleanliness observations must come from the
+Builder's own direct tool calls in the assigned worktree. A delegated execution report or caller prose
+summary is not admissible identity or custody evidence; if a required observation is delegated or
+unavailable, return `dispatch_failure` instead of inferring the result. Delegated execution remains
+available for ordinary read-only proof after custody is established.
 
 Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
 cannot establish fresh Build context or custody returns this non-transition result to Orchestrator
@@ -40,6 +47,48 @@ claim_id: <launch claim ID>
 failed_operation: show_build_context
 reason: <recorded prerequisite failure>
 ```
+
+### Triage An Unclean Worktree
+
+The normal Builder launch is clean. If a Builder dispatch fails or ends without a valid transition,
+Orchestrator calls exact `recover_claim`; Delivery preserves and cleans a dirty worktree
+automatically. Do not ask the user to classify stale files or perform Git recovery. A recovery
+attention is a machine-owned preservation or custody failure, not an invitation to invent a manual
+cleanup route.
+
+Inspect the assigned worktree before editing with `git status --short`, `git diff`,
+`git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
+hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions, and the exact
+launch identity.
+
+- **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
+  it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
+  fact that another session ended.
+- **Preserve for handoff:** When changes are useful but incomplete for this invocation, preserve them
+  with a task-scoped WIP commit using explicit owned paths, then return `retry` with that exact clean
+  commit as `abandoned_commit`. The WIP commit is recoverable predecessor evidence; it is not a
+  successful task result and does not release the claim by itself.
+- **Reset:** When changes are clearly disposable artifacts from this exact task and every tracked or
+  untracked path is within the task boundary, the Builder may discard them. Prefer a reversible
+  `git stash push -u -m <claim-id> -- <explicit paths>` before removal. For disposable untracked
+  artifacts, preview removal with `git clean -nd -- <explicit paths>`, then remove only the reviewed
+  paths with `git clean -f -- <explicit paths>`. Never use broad `git clean -fd`, reset another branch,
+  or remove paths outside the task boundary.
+- **Escalate:** If any path is foreign or ambiguous, staged state exists outside the task boundary,
+  branch/HEAD/custody is not exact, recovery attention is present, or the current HEAD contains an
+  unreviewed commit whose provenance is unclear, do not reset or adopt it. Return the claim-bound
+  `dispatch_failure` above for exact recovery.
+
+Before returning `retry`, `return`, or `block`, the Builder must leave the managed worktree clean and
+make any required commit identity equal the current exact HEAD. A dirty worktree cannot produce one of
+those transitions: resolve it through reuse, a WIP handoff, or an explicit scoped reset first. Use
+`dispatch_failure` only when that triage cannot be completed safely, not as a substitute for ordinary
+task failure handling.
+
+This authority covers working-tree artifacts. A committed predecessor head is immutable evidence: the
+Builder may inspect and reuse a compatible exact-task commit, but does not silently erase committed
+history. A Git commit also does not release the Delivery claim or writer custody; the normal published
+result and transition still close the work.
 
 ## Step 1 - Fix The Task Boundary
 
@@ -66,6 +115,13 @@ Make the minimum complete change inside the admitted boundary. Run enough pre-co
 the implementation, then load `r-workspace-governance` and create one scoped commit from explicit
 owned paths. Require a clean owned state and exact candidate commit. Never rebase, squash,
 cherry-pick, amend a reviewed commit, or create a per-task worktree.
+
+When the task changes an input that determines a tracked generated output, regenerate that output
+before the scoped commit and include it in the same `commit-owned` path set. Do this conditionally
+from the task's `required_outputs` and `maintained_surfaces`; do not regenerate unrelated outputs for
+every task. For Python workspace resolution changes, run `uv lock` before the commit and `uv lock
+--check` against the exact candidate afterward. Use locked or otherwise non-mutating proof commands
+after generation so post-commit checks cannot silently rewrite the candidate.
 
 Rerun every Task-required observation against that exact candidate commit; pre-commit proof does
 not bind a commit and cannot support publication. For each passing observation, construct
@@ -146,6 +202,11 @@ abandoned_commit: <exact clean current head>
 ```
 
 Use `retry` for an implementation failure that cannot be repaired in this invocation.
+
+`retry` abandons the current attempt and resets the managed worktree to the reviewed boundary through
+Delivery. It is valid only after the Builder has supplied a clean exact `abandoned_commit`; it does not
+preserve uncommitted work. Preserve useful incomplete work with the WIP handoff in Step 0 before
+returning `retry`.
 
 ```yaml
 action: return

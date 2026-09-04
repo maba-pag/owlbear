@@ -13,6 +13,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import (
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
@@ -35,28 +37,45 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMovePreview,
     DeliveryAcceptanceWaitingError,
+    DeliveryBlock,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPlanCandidate,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestResolution,
     DeliveryResultCandidate,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntimeReferenceError,
+    DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     FinalizeDeliveryChange,
+    OutcomeAuthorityBinding,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
-from owlbear_delivery.portfolio_application import DeliveryChangePublicationSupersessionReceipt
+from owlbear_delivery.portfolio_application import (
+    DeliveryChangePublicationSupersessionReceipt,
+    DeliveryOperatorContext,
+)
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+)
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -224,8 +243,23 @@ class _RecordingApplication:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
         self.failures = failures or {}
 
+    def delivery_health(self) -> DeliveryHealthView:
+        self.calls.append(("delivery_health", (), {}))
+        return DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION,
+            diagnostics=(
+                DeliveryHealthDiagnostic(
+                    source="test",
+                    code="runtime-unavailable",
+                    detail="The fixture Change requires reconciliation.",
+                    change_id=CHANGE,
+                    retry_safe=True,
+                ),
+            ),
+        )
+
     def __getattr__(self, name: str) -> Any:  # noqa: C901
-        def operation(*args: object, **kwargs: object) -> object:
+        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
             if failure is not None:
@@ -249,7 +283,11 @@ class _RecordingApplication:
                         cleanup_eligible=True,
                     ),
                 )
-            elif name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
+            elif name in {
+                "cleanup_abandoned_change_worktree",
+                "cleanup_abandoned_change_worktree_after_target_sync_discard",
+                "cleanup_completed_change_worktree",
+            }:
                 result = DeliveryChangeWorktreeCleanup(
                     cleanup_id=DIGEST,
                     change_id=CHANGE,
@@ -271,6 +309,57 @@ class _RecordingApplication:
                     change_id=CHANGE,
                     expected_change_head=COMMIT,
                     publication_base_head="a" * 40,
+                )
+            elif name == "show_operator_context":
+                result = DeliveryOperatorContext(
+                    change_id=CHANGE,
+                    outcome_id="OUT-001",
+                    stage=DeliveryStage.PLANNING,
+                    block=DeliveryBlock(
+                        block_id="block",
+                        reason="Need user action",
+                        unblock_condition="Action is complete",
+                        expected_evidence=("completion evidence",),
+                        locators=("request",),
+                        request_id="request",
+                    ),
+                    requests=(
+                        DeliveryRequest(
+                            request_id="request",
+                            kind=DeliveryRequestKind.ACTION,
+                            outcome_id="OUT-001",
+                            summary="Complete the action",
+                        ),
+                    ),
+                )
+            elif name == "resolve_request":
+                result = DeliveryRequest(
+                    request_id="request",
+                    kind=DeliveryRequestKind.ACTION,
+                    outcome_id="OUT-001",
+                    summary="Complete the action",
+                    resolution=DeliveryRequestResolution(response_text="Completed."),
+                )
+            elif name == "clear_block":
+                result = OutcomeAuthorityBinding(
+                    outcome_id="OUT-001",
+                    plan_scope_id="SCOPE-001",
+                    block=DeliveryBlock(
+                        block_id="block",
+                        reason="Need operator evidence",
+                        unblock_condition="Evidence is recorded",
+                        expected_evidence=("operator evidence",),
+                        locators=("operator-note",),
+                        resolution_note="Verified.",
+                        resolution_locators=("operator-note",),
+                    ),
+                )
+            elif name == "preview_administrative_move":
+                result = AdministrativeDeliveryMovePreview(
+                    outcome_id="OUT-001",
+                    target=DeliveryStage.PLANNING,
+                    snapshot_version=DIGEST,
+                    invalidated_outcome_ids=("OUT-001",),
                 )
             elif name == "publish_delivery_plan":
                 request = args[1]
@@ -416,8 +505,28 @@ def _requests() -> dict[str, dict[str, object]]:
         "validate_delivery_contract": change,
         "admit_delivery_change": {"request": {"change_id": CHANGE, "active_claim_ids": []}},
         "list_work_items": {},
+        "delivery_health": {},
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
+        "show_work_item_view": {**change, "item_key": "publication"},
+        "show_operator_context": {**change, "outcome_id": "OUT-001"},
+        "resolve_request": {
+            **change,
+            "request_id": "request",
+            "resolution": {"response_text": "Completed."},
+        },
+        "clear_block": {
+            **change,
+            "outcome_id": "OUT-001",
+            "block_id": "block",
+            "operator_note": "Verified.",
+            "locators": ["operator-note"],
+        },
+        "preview_administrative_move": {
+            **change,
+            "outcome_id": "OUT-001",
+            "target": "planning",
+        },
         "acquire_frontier_work": {},
         "show_plan_context": claim,
         "show_build_context": claim,
@@ -439,6 +548,7 @@ def _requests() -> dict[str, dict[str, object]]:
                 "exact_head": COMMIT,
             }
         },
+        "prepare_review_repair": change,
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
         "sync_change_with_target": {
@@ -481,6 +591,10 @@ def _requests() -> dict[str, dict[str, object]]:
         "resume_change": change,
         "abandon_change": {**change, "reason": "Stop this Change"},
         "cleanup_abandoned_change_worktree": change,
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": {
+            **change,
+            "confirmed_discard": True,
+        },
         "cleanup_completed_change_worktree": {**change, "completion_id": DIGEST},
         "recover_change_worktree": {
             **change,
@@ -537,6 +651,7 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
         assert result.provider_supersession.successor_number == 8
     elif operation_name == "adopt_external_head":
         assert result.adopted_head == "e" * 40
+        assert result.provenance == "fast-forward"
     elif operation_name == "promote_external_head":
         assert result.promoted_head == "e" * 40
     elif operation_name in {"sync_change_with_target", "resolve_target_sync_conflict"}:
@@ -548,7 +663,9 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
-async def test_each_delivery_operation_validates_delegates_once_and_serializes(operation_name: str) -> None:  # noqa: C901
+async def test_each_delivery_operation_validates_delegates_once_and_serializes(  # noqa: C901, PLR0912, PLR0915
+    operation_name: str,
+) -> None:
     application = _RecordingApplication()
     adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
 
@@ -556,6 +673,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
 
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
+        "show_operator_context": (CHANGE, "OUT-001"),
+        "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
+        "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
+        "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
         "reconcile_finalization_head": (CHANGE,),
         "observe_acceptance": (CHANGE,),
         "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
@@ -565,8 +686,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         "abort_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "resolve_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "cleanup_abandoned_change_worktree": (CHANGE,),
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
+        "prepare_review_repair": (CHANGE,),
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
@@ -588,6 +711,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     }
     receipt_results = {
         "cleanup_abandoned_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
+        "cleanup_abandoned_change_worktree_after_target_sync_discard": {
+            "cleanup_id": DIGEST,
+            "worktree_path": str(WORKTREE_PATH),
+        },
         "cleanup_completed_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
         "recover_change_worktree": {
             "change_id": CHANGE,
@@ -620,6 +747,29 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
         assert result.output.output_id == result.candidate_id
+    elif operation_name == "show_operator_context":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.block.block_id == "block"
+        assert result.requests[0].request_id == "request"
+    elif operation_name == "resolve_request":
+        assert result.change_id == CHANGE
+        assert result.request.request_id == "request"
+        assert result.request.resolution.response_text == "Completed."
+    elif operation_name == "clear_block":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.block.resolution_note == "Verified."
+        assert "tasks" not in result.model_dump(mode="json")
+        assert "results" not in result.model_dump(mode="json")
+    elif operation_name == "preview_administrative_move":
+        assert result.outcome_id == "OUT-001"
+        assert result.target == DeliveryStage.PLANNING
+        assert result.snapshot_version == DIGEST
+    elif operation_name == "delivery_health":
+        assert result.status is DeliveryHealthStatus.ATTENTION
+        assert result.diagnostics[0].change_id == CHANGE
+        assert result.diagnostics[0].retry_safe is True
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
@@ -664,8 +814,12 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_work_item_view",
+        "show_operator_context",
+        "preview_administrative_move",
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
@@ -676,7 +830,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_completed_change",
     }
     prohibited = {
-        "resolve_request",
         "create_request",
         "unblock_delivery",
         "list_semantic_updates",
@@ -697,10 +850,17 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
     assert tuple(DELIVERY_OPERATION_ANNOTATIONS) == DELIVERY_OPERATION_NAMES
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
         assert tool_annotations.destructive_hint is (
-            name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+            name
+            in {
+                "cleanup_abandoned_change_worktree",
+                "cleanup_abandoned_change_worktree_after_target_sync_discard",
+                "cleanup_completed_change_worktree",
+            }
         )
         assert tool_annotations.read_only_hint is (name in reads)
-        assert tool_annotations.idempotent_hint is (name != "acquire_frontier_work")
+        assert tool_annotations.idempotent_hint is (
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+        )
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 
 
@@ -743,6 +903,18 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
     )
     cases = (
         (
+            "admit_delivery_change",
+            DeliveryAdmissionConflictError("active claims block Delivery authority revision"),
+            "ERR_DELIVERY_ADMISSION_CONFLICT",
+            False,
+        ),
+        (
+            "admit_delivery_change",
+            DeliveryAdmissionValidationError("authored Specification does not compile"),
+            "ERR_DELIVERY_ADMISSION_VALIDATION",
+            False,
+        ),
+        (
             "transition_delivery",
             DeliveryRuntimeReferenceError("outcome is absent"),
             "ERR_DELIVERY_RUNTIME_REFERENCE",
@@ -753,7 +925,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "revise_design_session",
             DesignPackageConflictError("package identity is stale"),
             "ERR_DESIGN_PACKAGE_CONFLICT",
-            True,
+            False,
         ),
         (
             "reconcile_change_checkpoint",
@@ -763,7 +935,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
                 "provider rate limit reached",
                 retry_safe=True,
             ),
-            "rate_limited",
+            "ERR_DELIVERY_PROVIDER_RATE_LIMITED",
             True,
         ),
         (
@@ -783,6 +955,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             DeliveryChangeDispositionConflictError("attention identity is stale"),
             "ERR_DELIVERY_RUNTIME_CONFLICT",
             False,
+        ),
+        (
+            "resolve_change_disposition",
+            DeliveryChangeDispositionBusyError("attention resolution is already in progress"),
+            "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+            True,
         ),
         (
             "cleanup_abandoned_change_worktree",
@@ -806,6 +984,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             PublicationBaselineUnavailableError(CHANGE, "publication baseline is unavailable"),
             "ERR_PUBLICATION_BASELINE_UNAVAILABLE",
             False,
+        ),
+        (
+            "observe_acceptance",
+            DeliveryStatePublicationError("state publication failed", retry_safe=True),
+            "ERR_DELIVERY_STATE_PUBLICATION",
+            True,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:

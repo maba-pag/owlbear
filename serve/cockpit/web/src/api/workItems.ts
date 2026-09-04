@@ -5,6 +5,7 @@ export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working'
 export type WorkItemActionKind =
   | 'none'
+  | 'resume-design'
   | 'answer-request'
   | 'clear-block'
   | 'recover-claim'
@@ -13,6 +14,7 @@ export type WorkItemActionKind =
   | 'mark-ready'
   | 'observe-acceptance'
   | 'resolve-attention'
+  | 'adopt-external-head'
   | 'resume-change'
   | 'start-orchestration'
 export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
@@ -20,6 +22,7 @@ export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publicat
 export type DeliveryWorkerRole = 'planner' | 'builder'
 export type WorkItemPublicationPhase =
   | 'finalization-invalidated'
+  | 'review-repair'
   | 'ready-for-finalization'
   | 'checkpoint-pending'
   | 'pull-request-draft'
@@ -40,6 +43,8 @@ export interface WorkItemAction {
   label: string | null
   command: string | null
   attention_id?: string | null
+  expected_head?: string | null
+  adopted_head?: string | null
 }
 
 export interface WorkItemProgress {
@@ -56,6 +61,7 @@ export interface WorkItemCardView {
   scope: WorkItemScope
   title: string
   stage: WorkItemStage | null
+  publication_phase?: WorkItemPublicationPhase | null
   needs: WorkItemNeed
   needs_headline: string | null
   next_actor: WorkItemNextActor
@@ -94,6 +100,27 @@ export interface WorkItemPortfolioTotals {
   activity: ActivityCounts
 }
 
+export type PortfolioChangeAdmission = 'admitted' | 'unadmitted'
+export type PortfolioChangeStage =
+  | 'design'
+  | 'building'
+  | 'finalized'
+  | 'awaiting-merge'
+  | 'publication-attention'
+  | 'acceptance-attention'
+  | 'deferred'
+  | 'abandoned'
+  | 'completed'
+
+export interface PortfolioChangeLifecycleStatus {
+  change_id: string
+  admission: PortfolioChangeAdmission
+  stage: PortfolioChangeStage | null
+  actionable_runtime: boolean
+  diagnostic_code: string | null
+  diagnostic_detail: string | null
+}
+
 export type PortfolioWorkScope = 'outcome' | 'publication'
 export type PortfolioGuidanceKind =
   | 'resume-design'
@@ -118,6 +145,7 @@ export interface PortfolioGuidance {
 export interface PortfolioOperatingView {
   unfinished_change_count: number
   completed_change_count: number
+  statuses: PortfolioChangeLifecycleStatus[]
   draft_design_change_ids: string[]
   design_required_change_ids: string[]
   claimed: PortfolioWorkReference[]
@@ -127,10 +155,27 @@ export interface PortfolioOperatingView {
   guidance: PortfolioGuidance[]
 }
 
+export type DeliveryHealthStatus = 'healthy' | 'attention'
+
+export interface DeliveryHealthDiagnostic {
+  source: string
+  code: string
+  detail: string
+  change_id: string | null
+  path: string | null
+  retry_safe: boolean
+}
+
+export interface DeliveryHealthResponse {
+  status: DeliveryHealthStatus
+  diagnostics: DeliveryHealthDiagnostic[]
+}
+
 export interface WorkItemPortfolioResponse {
   groups: ChangeGroupView[]
   totals: WorkItemPortfolioTotals
   operating: PortfolioOperatingView
+  health: DeliveryHealthResponse
 }
 
 export type AcceptanceReconciliationStatus =
@@ -243,18 +288,39 @@ export interface PublicationChecksObservationResponse {
   truncated_count: number
 }
 
+export interface WorkItemPublicationReconciliationResponse {
+  change_id: string
+  attempted_head: string | null
+  reconciled: boolean
+  error_code: string | null
+  error_detail: string | null
+  pending_checkpoint_attempt_count: number
+  pending_checkpoint_last_attempted_at: string | null
+  pending_checkpoint_error_code: string | null
+  pending_checkpoint_error_detail: string | null
+}
+
 export interface WorkItemPublicationView {
   phase: WorkItemPublicationPhase
   finalization_id: string | null
   finalized_head: string | null
+  ready_for_finalization?: boolean | null
+  readiness_diagnostics?: string[]
   published_head: string | null
   pending_checkpoint_head: string | null
   pending_checkpoint_triggers: string[]
+  pending_checkpoint_attempt_count?: number
+  pending_checkpoint_last_attempted_at?: string | null
+  pending_checkpoint_error_code?: string | null
+  pending_checkpoint_error_detail?: string | null
   invalidated_expected_head: string | null
   invalidated_observed_head: string | null
   repository: string | null
   pull_request_number: number | null
   pull_request_head: string | null
+  mergeable?: boolean | null
+  merge_state_status?: string | null
+  mergeability_observed_at?: string | null
   accepted_merge_commit: string | null
   merged_at: string | null
   publication_generations: WorkItemPublicationGeneration[]
@@ -265,6 +331,7 @@ export interface WorkItemPublicationView {
     entered_from: string
     recorded_at: string
     diagnostics: string[]
+    acceptance_reason?: 'head-moved' | 'closed-unmerged' | 'identity-mismatch' | 'merge-evidence-missing' | 'latch-regression' | null
   } | null
   target_sync?: WorkItemTargetSyncView | null
   target_sync_conflict?: WorkItemTargetSyncConflictView | null
@@ -281,6 +348,7 @@ export interface WorkItemTargetSyncView {
   change_head_before: string
   merged_head: string
   merge_commit: boolean
+  review_required: boolean
 }
 
 export interface WorkItemTargetSyncConflictView {
@@ -330,6 +398,7 @@ export interface TargetSyncResponse {
   change_head_before: string
   merged_head: string
   merge_commit: boolean
+  review_required: boolean
 }
 
 export interface TargetSyncAbortResponse {
@@ -339,6 +408,17 @@ export interface TargetSyncAbortResponse {
   change_id: string
   target_head: string
   restored_head: string
+}
+
+export interface ExternalHeadAdoptionResponse {
+  schema_version: 2
+  receipt_id: string
+  operation_id: string
+  change_id: string
+  branch: string
+  expected_head: string
+  adopted_head: string
+  provenance: 'fast-forward' | 'observed'
 }
 
 export interface PublicationSupersessionResponse {
@@ -454,7 +534,23 @@ export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase 
   completed_at: string
 }
 
-export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord
+export interface AbandonedChangeRecord {
+  schema_version: 1
+  record_kind: 'abandoned-change'
+  change_id: string
+  abandonment_id: string
+  title: string
+  semantic_summary: string
+  outcome_titles: string[]
+  outcome_promises?: string[] | null
+  prior_stage: 'design' | 'building' | 'finalized' | 'awaiting-merge' | 'publication-attention' | 'acceptance-attention' | 'deferred'
+  reason: string
+  abandoned_at: string
+  cleanup_available: boolean
+  target_sync_conflict: boolean
+}
+
+export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[]
@@ -526,8 +622,12 @@ export function searchCompletedChanges(query: string, cursor?: string, signal?: 
   )
 }
 
-export function showCompletedChange(changeId: string, completionId: string): Promise<CompletedChangeRecord> {
-  const query = new URLSearchParams({ completion_id: completionId })
+export function completedChangeRecordId(record: CompletedChangeRecord): string {
+  return record.record_kind === 'abandoned-change' ? record.abandonment_id : record.completion_id
+}
+
+export function showCompletedChange(changeId: string, recordId: string): Promise<CompletedChangeRecord> {
+  const query = new URLSearchParams({ completion_id: recordId })
   return workItemRequest(
     `/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`,
     { fallbackCode: 'ERR_COMPLETED_HISTORY_DETAIL' },
@@ -621,7 +721,7 @@ export function previewWorkItemBackward(
   )
 }
 
-export function reconcileWorkItemPublication(changeId: string): Promise<unknown> {
+export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/reconcile`,
     'ERR_WORK_ITEM_PUBLICATION_RECONCILE',
@@ -646,6 +746,25 @@ export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/acceptance/observe`,
     'ERR_WORK_ITEM_ACCEPTANCE_OBSERVE',
+  )
+}
+
+export function adoptExternalHeadAfterAcceptanceAttention(
+  changeId: string,
+  expectedDispositionId: string,
+  expectedHead: string,
+  adoptedHead: string,
+  operationId: string,
+): Promise<ExternalHeadAdoptionResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/acceptance/external-head/adopt`,
+    'ERR_WORK_ITEM_ACCEPTANCE_HEAD_ADOPTION',
+    {
+      expected_disposition_id: expectedDispositionId,
+      expected_head: expectedHead,
+      adopted_head: adoptedHead,
+      operation_id: operationId,
+    },
   )
 }
 
@@ -741,6 +860,14 @@ export function cleanupAbandonedWorkItemChange(changeId: string): Promise<Change
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned`,
     'ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP',
+  )
+}
+
+export function discardAbandonedTargetSyncAndCleanup(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned/target-sync-discard`,
+    'ERR_WORK_ITEM_TARGET_SYNC_DISCARD_CLEANUP',
+    { confirmed_discard: true },
   )
 }
 

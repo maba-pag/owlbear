@@ -17,16 +17,26 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionCode,
     PublicationBaselineRecoveryReceipt,
 )
+from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMovePreview,
+    DeliveryBlock,
     DeliveryChangePublicationHistory,
     DeliveryChangeStage,
+    DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationAttentionDisposition,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
+    DeliveryRequest,
+    DeliveryRequestResolution,
     DeliveryResultCandidate,
+    DeliveryReturnContext,
+    DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
+    DeliveryWorkerRole,
     FinalizeDeliveryChange,
     PublishDeliveryPlan,
     PublishDeliveryResult,
@@ -37,10 +47,14 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryOperatorContext,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
 )
-from owlbear_delivery.target_admission import DeliveryAdmissionRequest
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+)
 
 
 class _TargetProtocolModel(BaseModel):
@@ -78,6 +92,34 @@ class TargetDiagnostic(_TargetProtocolModel):
     retry_safe: bool
 
 
+class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
+    """Bounded MCP diagnostic for Delivery state excluded from authority."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool
+
+
+class DeliveryHealthResponse(_TargetProtocolModel):
+    """Current Delivery health and quarantined-state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnosticResponse, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: DeliveryHealthView) -> DeliveryHealthResponse:
+        """Project the shared Delivery health view into the MCP contract."""
+        return cls(
+            status=view.status,
+            diagnostics=tuple(
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
+            ),
+        )
+
+
 class EmptyParams(_TargetProtocolModel):
     """Validate an operation that accepts no parameters."""
 
@@ -108,6 +150,12 @@ class AbandonChangeParams(ChangeParams):
 
 class CleanupAbandonedChangeParams(ChangeParams):
     """Validate cleanup of one terminal abandoned Change worktree."""
+
+
+class CleanupAbandonedTargetSyncParams(ChangeParams):
+    """Validate explicit discard of an abandoned target-sync conflict before cleanup."""
+
+    confirmed_discard: Literal[True]
 
 
 class CleanupCompletedChangeParams(ChangeParams):
@@ -149,6 +197,41 @@ class WorkItemParams(ChangeParams):
     """Validate one exact work item within a Delivery change."""
 
     work_item_id: str = Field(min_length=1)
+
+
+class WorkItemViewParams(ChangeParams):
+    """Validate one exact detailed Work Item view."""
+
+    item_key: str = Field(min_length=1)
+
+
+class OperatorContextParams(ChangeParams):
+    """Validate one exact outcome or Change operator context."""
+
+    outcome_id: str = Field(min_length=1)
+
+
+class ResolveRequestParams(ChangeParams):
+    """Validate one user-owned answer for a retained Delivery request."""
+
+    request_id: str = Field(min_length=1)
+    resolution: DeliveryRequestResolution
+
+
+class ClearBlockParams(ChangeParams):
+    """Validate operator evidence for one requestless same-stage block."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    block_id: str = Field(min_length=1)
+    operator_note: str = Field(min_length=1)
+    locators: tuple[str, ...] = Field(min_length=1)
+
+
+class PreviewAdministrativeMoveParams(ChangeParams):
+    """Validate one read-only administrative movement preview."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    target: DeliveryStage
 
 
 class ClaimContextParams(ChangeParams):
@@ -354,6 +437,125 @@ class DeliveryResultPublication(_TargetProtocolModel):
         return cls(**candidate.model_dump(), output=candidate.output)
 
 
+class DeliveryOperatorClaimResponse(_TargetProtocolModel):
+    """Bounded active-claim identity for operator diagnostics."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    started_at: str = Field(min_length=1)
+    worker_role: DeliveryWorkerRole
+    task_id: str | None = None
+
+
+class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
+    """Bounded recovery evidence for operator diagnostics."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    custody_retained: bool
+    retry_condition: str = Field(min_length=1)
+
+
+class DeliveryOperatorIntegrationAttentionResponse(_TargetProtocolModel):
+    """Bounded Integration attention for operator diagnostics."""
+
+    code: DeliveryIntegrationAttentionCode
+    disposition: DeliveryIntegrationAttentionDisposition
+    diagnostics: tuple[str, ...] = Field(min_length=1)
+    retry_condition: str = Field(min_length=1)
+
+
+class DeliveryOperatorContextResponse(_TargetProtocolModel):
+    """MCP projection of one bounded operator context."""
+
+    change_id: ChangeId
+    outcome_id: str = Field(min_length=1)
+    stage: DeliveryStage
+    block: DeliveryBlock | None = None
+    requests: tuple[DeliveryRequest, ...] = ()
+    active_claim: DeliveryOperatorClaimResponse | None = None
+    return_context: DeliveryReturnContext | None = None
+    recovery_attention: DeliveryOperatorRecoveryAttentionResponse | None = None
+    integration_attention: DeliveryOperatorIntegrationAttentionResponse | None = None
+
+    @classmethod
+    def from_context(cls, context: DeliveryOperatorContext) -> DeliveryOperatorContextResponse:
+        """Project application diagnostics without exposing frontier bindings."""
+        active_claim = context.active_claim
+        recovery_attention = context.recovery_attention
+        integration_attention = context.integration_attention
+        return cls(
+            change_id=context.change_id,
+            outcome_id=context.outcome_id,
+            stage=context.stage,
+            block=context.block,
+            requests=context.requests,
+            active_claim=(
+                DeliveryOperatorClaimResponse(
+                    attempt_id=active_claim.attempt_id,
+                    claim_id=active_claim.claim_id,
+                    started_at=active_claim.started_at,
+                    worker_role=active_claim.worker_role,
+                    task_id=active_claim.task_id,
+                )
+                if active_claim is not None
+                else None
+            ),
+            return_context=context.return_context,
+            recovery_attention=(
+                DeliveryOperatorRecoveryAttentionResponse(
+                    attempt_id=recovery_attention.attempt_id,
+                    claim_id=recovery_attention.claim_id,
+                    reason=recovery_attention.reason,
+                    custody_retained=recovery_attention.custody_retained,
+                    retry_condition=recovery_attention.retry_condition,
+                )
+                if recovery_attention is not None
+                else None
+            ),
+            integration_attention=(
+                DeliveryOperatorIntegrationAttentionResponse(
+                    code=integration_attention.code,
+                    disposition=integration_attention.disposition,
+                    diagnostics=integration_attention.diagnostics,
+                    retry_condition=integration_attention.retry_condition,
+                )
+                if integration_attention is not None
+                else None
+            ),
+        )
+
+
+class ResolvedDeliveryRequestResponse(_TargetProtocolModel):
+    """Bounded response for one persisted request resolution."""
+
+    change_id: ChangeId
+    request: DeliveryRequest
+
+
+class ClearedDeliveryBlockResponse(_TargetProtocolModel):
+    """Bounded response for one cleared requestless block."""
+
+    change_id: ChangeId
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    block: DeliveryBlock
+
+
+class AdministrativeMovePreviewResponse(_TargetProtocolModel):
+    """Read-only invalidation preview bound to one frontier version."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    target: DeliveryStage
+    snapshot_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    invalidated_outcome_ids: tuple[str, ...] = Field(min_length=1)
+
+    @classmethod
+    def from_preview(cls, preview: AdministrativeDeliveryMovePreview) -> AdministrativeMovePreviewResponse:
+        """Project one domain preview into the MCP contract."""
+        return cls(**preview.model_dump())
+
+
 class DeliveryPublicationSupersessionResponse(_TargetProtocolModel):
     """MCP response for one application-bound publication successor."""
 
@@ -397,6 +599,7 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> ChangeTargetSyncResponse:
@@ -411,24 +614,34 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
             change_head_before=receipt.change_head_before,
             merged_head=receipt.merged_head,
             merge_commit=receipt.merge_commit,
+            review_required=receipt.review_required,
         )
 
 
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
-    """MCP response for one exact external Change-head adoption receipt."""
+    """MCP response for one exact external Change-head adoption or observation receipt."""
 
-    schema_version: int = 1
+    schema_version: int = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(min_length=1)
     change_id: ChangeId
     branch: str = Field(min_length=1)
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"]
 
     @classmethod
     def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ChangeExternalHeadAdoptionResponse:
         """Project one domain adoption receipt into the transport contract."""
-        return cls(**receipt.model_dump())
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            expected_head=receipt.expected_head,
+            adopted_head=receipt.adopted_head,
+            provenance=receipt.provenance,
+        )
 
 
 class ChangeExternalHeadPromotionResponse(_TargetProtocolModel):
@@ -502,6 +715,22 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, AdmitDeliveryChangeParams)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type OperatorContextRequest = Annotated[
+    OperatorContextParams,
+    BeforeValidator(partial(_parse_json_model, OperatorContextParams)),
+]
+type ResolveRequestRequest = Annotated[
+    ResolveRequestParams,
+    BeforeValidator(partial(_parse_json_model, ResolveRequestParams)),
+]
+type ClearBlockRequest = Annotated[
+    ClearBlockParams,
+    BeforeValidator(partial(_parse_json_model, ClearBlockParams)),
+]
+type PreviewAdministrativeMoveRequest = Annotated[
+    PreviewAdministrativeMoveParams,
+    BeforeValidator(partial(_parse_json_model, PreviewAdministrativeMoveParams)),
+]
 type DeferChangeRequest = Annotated[
     DeferChangeParams,
     BeforeValidator(partial(_parse_json_model, DeferChangeParams)),
@@ -513,6 +742,10 @@ type AbandonChangeRequest = Annotated[
 type CleanupAbandonedChangeRequest = Annotated[
     CleanupAbandonedChangeParams,
     BeforeValidator(partial(_parse_json_model, CleanupAbandonedChangeParams)),
+]
+type CleanupAbandonedTargetSyncRequest = Annotated[
+    CleanupAbandonedTargetSyncParams,
+    BeforeValidator(partial(_parse_json_model, CleanupAbandonedTargetSyncParams)),
 ]
 type CleanupCompletedChangeRequest = Annotated[
     CleanupCompletedChangeParams,
@@ -600,11 +833,16 @@ type TransitionDeliveryRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
 ]
 type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
+type WorkItemViewRequest = Annotated[
+    WorkItemViewParams,
+    BeforeValidator(partial(_parse_json_model, WorkItemViewParams)),
+]
 
 
 __all__ = [
     "AbandonChangeParams",
     "AbandonChangeRequest",
+    "AdministrativeMovePreviewResponse",
     "AdmitDeliveryChangeParams",
     "AdmitDeliveryChangeRequest",
     "ChangeExternalHeadAdoptionResponse",
@@ -619,14 +857,25 @@ __all__ = [
     "ClaimContextRequest",
     "CleanupAbandonedChangeParams",
     "CleanupAbandonedChangeRequest",
+    "CleanupAbandonedTargetSyncParams",
+    "CleanupAbandonedTargetSyncRequest",
     "CleanupCompletedChangeParams",
     "CleanupCompletedChangeRequest",
+    "ClearBlockParams",
+    "ClearBlockRequest",
+    "ClearedDeliveryBlockResponse",
     "CompletedPageParams",
     "CompletedPageRequest",
     "CreateDesignSessionParams",
     "CreateDesignSessionRequest",
     "DeferChangeParams",
     "DeferChangeRequest",
+    "DeliveryHealthDiagnosticResponse",
+    "DeliveryHealthResponse",
+    "DeliveryOperatorClaimResponse",
+    "DeliveryOperatorContextResponse",
+    "DeliveryOperatorIntegrationAttentionResponse",
+    "DeliveryOperatorRecoveryAttentionResponse",
     "DeliveryPlanPublication",
     "DeliveryPublicationSupersessionResponse",
     "DeliveryResultPublication",
@@ -642,16 +891,25 @@ __all__ = [
     "FinalizeDeliveryChangeRequest",
     "MarkChangeReadyParams",
     "MarkChangeReadyRequest",
+    "OperatorContextParams",
+    "OperatorContextRequest",
+    "PreviewAdministrativeMoveParams",
+    "PreviewAdministrativeMoveRequest",
     "PublishDeliveryPlanParams",
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
     "PublishDeliveryResultRequest",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
+    "RecoverPublicationBaselineParams",
+    "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
     "ResolveChangeDispositionParams",
     "ResolveChangeDispositionRequest",
+    "ResolveRequestParams",
+    "ResolveRequestRequest",
+    "ResolvedDeliveryRequestResponse",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",
@@ -670,4 +928,6 @@ __all__ = [
     "TransitionDeliveryRequest",
     "WorkItemParams",
     "WorkItemRequest",
+    "WorkItemViewParams",
+    "WorkItemViewRequest",
 ]

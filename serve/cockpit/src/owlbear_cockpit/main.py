@@ -40,6 +40,7 @@ from owlbear_cockpit.routes.target_work import (
 )
 from owlbear_cockpit.routes.target_work import router as target_work_router
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery import DeliveryCheckpointSupervisor
 from owlbear_delivery.storage_io import atomic_write
 
 _DEFAULT_PORT = 8420
@@ -319,6 +320,9 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     memory_engine = MemoryEngine(workspace_root / _MEMORY_DIR)
     app.state.workspace_root = workspace_root
     app.state.target_context = target_context
+    checkpoint_supervisor = DeliveryCheckpointSupervisor(target_context)
+    checkpoint_supervisor.start()
+    app.state.checkpoint_supervisor = checkpoint_supervisor
     app.state.memory_engine = memory_engine
     app.state.port = port
 
@@ -367,6 +371,7 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     try:
         uvicorn.run(app, host=_HOST, port=port)
     finally:
+        checkpoint_supervisor.stop()
         record.unlink(missing_ok=True)
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 import types
 from pathlib import Path
@@ -15,6 +16,7 @@ _AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _PROMPTS_ROOT = _REPO_ROOT / "share/prompts"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
+_LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
@@ -54,6 +56,7 @@ _RETIRED_SKILLS = {
     "w-node-acceptance",
     "w-whole-change-audit",
     "w-integration-repair",
+    "w-change-publication",
 }
 _GENERIC_TASK_TOOLS = {
     "owlbear-delivery/create_task",
@@ -83,6 +86,7 @@ _TARGET_ROLE_TOOLS = {
     "orchestrator": {
         "list_work_items",
         "acquire_frontier_work",
+        "delivery_health",
         "transition_delivery",
         "recover_claim",
         "recover_integration_repair_claim",
@@ -138,7 +142,7 @@ _PROMPT_VALIDATOR = _load_module(_PROMPT_VALIDATOR_PATH, "prompt_validator")
 def _agent_text(
     name: str,
     *,
-    tools: str = "[search]",
+    tools: str = "[vscode/toolSearch, search]",
     agents: str = "[]",
     agent_rows: str = "",
     disable_model_invocation: str = "true",
@@ -198,21 +202,32 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
     assert pull_request["branches"] == ["dev"]
     assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
     assert {
+        ".owlbear/instructions/**",
+        "serve/*-mcp/**",
+        "seed/.vscode/mcp.json",
+        ".vscode/mcp.json",
+        "share/instructions/**",
+    } <= set(pull_request["paths"])
+    assert not {
         ".github/workflows/dependency-verification.yml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "serve/knowledge-mcp/**",
+        "share/agents/knowledge-ingestor.agent.md",
+        "share/prompts/kb-ingest.prompt.md",
+        "share/skills/h-knowledge-ops/SKILL.md",
         "tests/test_dependency_verification_workflow.py",
-    } <= set(pull_request["paths"])
+    } & set(pull_request["paths"])
     assert job["timeout-minutes"] == 5
-    assert "if" not in job
+    assert job["if"] == ("github.event_name != 'pull_request' || github.event.pull_request.draft == false")
     assert all(
         path in pytest_run
         for path in (
             "tests/test_agent_ecosystem_validation.py",
             "tests/test_write_guard_hooks.py",
             "tests/test_knowledge_ops_contract.py",
-            "tests/test_dependency_verification_workflow.py",
         )
     )
+    assert "tests/test_dependency_verification_workflow.py" not in pytest_run
 
 
 class _TargetApplicationDouble:
@@ -224,9 +239,73 @@ class _TargetApplicationDouble:
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/acquire]"))
+    path = _write_agent(
+        tmp_path,
+        "reader",
+        _agent_text("reader", tools="[vscode/toolSearch, owlbear-browser/acquire]"),
+    )
 
     assert _AGENT_VALIDATOR.validate_agent(path) == []
+
+
+def test_agent_validator_requires_tool_search(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[search]"))
+
+    errors = _AGENT_VALIDATOR.validate_agent(path)
+
+    assert any("missing required tool(s): ['vscode/toolSearch']" in error for error in errors)
+
+
+def test_agent_validator_rejects_unavailable_mcp_tool_suffix(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/missing]"))
+
+    errors = _AGENT_VALIDATOR._check_live_mcp_grants(  # noqa: SLF001
+        [path],
+        frozenset({"owlbear-browser"}),
+        {"owlbear-browser": frozenset({"acquire"})},
+    )
+
+    assert any("unavailable owlbear-browser tool 'missing'" in error for error in errors)
+
+
+def test_agent_validator_rejects_local_mcp_wildcard(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/*]"))
+
+    errors = _AGENT_VALIDATOR._check_live_mcp_grants(  # noqa: SLF001
+        [path],
+        frozenset({"owlbear-browser"}),
+        {"owlbear-browser": frozenset({"acquire"})},
+    )
+
+    assert any("requires an exact tool grant" in error for error in errors)
+
+
+def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = tmp_path / "mcp.json"
+    config.write_text('{"servers": {"owlbear-browser": {}, "ddgs": {}}}', encoding="utf-8")
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_CANONICAL_MCP_CONFIG", config)
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG_PATHS", (config, config))
+
+    _configured, errors = _AGENT_VALIDATOR._validate_mcp_configuration()  # noqa: SLF001
+
+    assert any("MCP servers are missing" in error for error in errors)
+    assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
+
+
+def test_agent_validator_checks_explicit_tool_search_queries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    system_instructions = tmp_path / "owlbear-system.instructions.md"
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_SYSTEM_INSTRUCTIONS", system_instructions)
+    monkeypatch.setattr(
+        _AGENT_VALIDATOR,
+        "_tool_search_queries",
+        lambda: ((system_instructions, "OwlBear Delivery acquire_frontier_work"),),
+    )
+
+    errors = _AGENT_VALIDATOR._check_tool_search_queries(  # noqa: SLF001
+        {"owlbear-delivery": frozenset({"acquire_frontier_work", "transition_delivery"})}
+    )
+
+    assert any("exhaustive Delivery bootstrap query is missing tools" in error for error in errors)
 
 
 def test_agent_validator_rejects_malformed_frontmatter_and_missing_sections(tmp_path: Path) -> None:
@@ -461,6 +540,48 @@ def test_retired_delivery_operations_are_absent_from_agent_prose() -> None:
     assert "repair-authority attention" not in orchestrator
 
 
+def test_retired_skills_are_absent_from_active_customization_prose() -> None:
+    """Retired skill names must not survive in active customization sources."""
+    roots = (
+        _REPO_ROOT / "share/agents",
+        _REPO_ROOT / "share/instructions",
+        _REPO_ROOT / "share/prompts",
+        _REPO_ROOT / "share/skills",
+        _REPO_ROOT / ".owlbear/agents",
+        _REPO_ROOT / ".owlbear/instructions",
+        _REPO_ROOT / ".owlbear/prompts",
+        _REPO_ROOT / ".owlbear/skills",
+    )
+    active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]
+    active_files.append(_REPO_ROOT / ".github/copilot-instructions.md")
+
+    for path in active_files:
+        content = path.read_text(encoding="utf-8")
+        for skill in _RETIRED_SKILLS:
+            assert re.search(rf"(?<![a-z0-9-]){re.escape(skill)}(?![a-z0-9-])", content) is None, (
+                f"{path.relative_to(_REPO_ROOT)} mentions retired skill {skill}"
+            )
+
+
+def test_project_doc_instruction_declares_local_standard_route() -> None:
+    """The local doc wiring declares its scope and standards route; runtime loading is separate."""
+    path = _LOCAL_INSTRUCTIONS_ROOT / "doc-types.instructions.md"
+    content = path.read_text(encoding="utf-8")
+    _, raw_frontmatter, _ = content.split("---", maxsplit=2)
+    metadata = yaml.safe_load(raw_frontmatter)
+    assert isinstance(metadata, dict)
+
+    apply_to = metadata["applyTo"]
+    assert isinstance(apply_to, str)
+    assert {
+        ".github/README-automation.md",
+        ".owlbear/README.md",
+        "store/README.md",
+        "tests/README.md",
+    } <= set(apply_to.split(","))
+    assert "Before applying these project-specific document-type rules, read `r-doc-standards`" in content
+
+
 def test_memory_curator_identity_deferral_reporting_split() -> None:
     """Periodic curation keeps identity-only uncertainty pending without reporting it."""
     workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
@@ -477,6 +598,17 @@ def test_memory_curator_identity_deferral_reporting_split() -> None:
     )
     assert "Conflicts and ordinary content or scope uncertainty remain reportable." in content
     assert "another reviewed non-pending entry or a readable local definition" in content
+
+
+def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
+    """The curator's logical workflow resolves when no project-local override exists."""
+    agent = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
+    skill = _SKILLS_ROOT / "w-mem-curation/SKILL.md"
+
+    assert "fall back to `share/skills` when no local override exists" in agent
+    assert skill.is_file()
+    assert "owlbear-memory/list_memories" in agent
+    assert "owlbear-memory/commit_memory_batch" in agent
 
 
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:

@@ -15,10 +15,10 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
-`recover_claim`, and `recover_integration_repair_claim`. Run one focused `tool_search` for each
+`recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
 missing operation. If any binding remains unavailable or its focused search returns a tool error,
 report the exact missing operation and end the session without acquisition. Transition and recovery
 are required dispatch safety authority, not optional operations to discover after a claim has been
@@ -26,10 +26,15 @@ acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
-typed `integration_attention`, and acquisition failures. Active claims remain occupied; an
-interrupted claim is recovered only through its exact recovery operation after a failed dispatch.
-Report Integration and recovery attention unchanged. Do not filter
-for capacity, infer readiness, create identities, or reserve writer custody.
+typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
+`health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
+diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
+diagnostics; quarantined Changes have no actionable launch authority. Active claims remain occupied until the
+exact recovery operation completes. `recover_claim` automatically preserves dirty Builder bytes in
+an isolated quarantine ref, cleans the managed worktree, releases stale custody, and permits the
+next acquisition; it returns attention only when preservation or exact custody verification fails.
+Report the typed result unchanged. Do not filter for capacity, infer readiness, create identities,
+or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
@@ -49,6 +54,11 @@ report it without interpreting Git, liveness, or custody. An acquisition failure
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
 attention and is not recoverable by Orchestrator. Do not report a recovery operation as unavailable
 unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
+
+When exact recovery returns `recovered`, discard the failed launch and continue with the next
+acquisition cycle; do not inspect or classify the quarantined files. When it returns `attention`,
+report the returned reason and retry condition as machine-owned evidence. Do not ask the user to
+choose which dirty files to keep, discard, adopt, or commit.
 
 ## Step 3 - Forward One Worker Transition
 
@@ -97,11 +107,13 @@ identity; do not call `transition_delivery` or `recover_claim` for it.
 
 The curator's successful Channel A result must use the `w-mem-curation` form
 `DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
-present. If the dispatch binding is unavailable or the agent tool returns an error, record a
-fail-closed housekeeping failure, report it separately, and stop after the current batch; do not
-use Delivery recovery. If the dispatch returns no result or a result without the curator's Channel A
-verdict, record a malformed housekeeping result, do not retry it, and continue acquisition. A
-scheduled attempt consumes its cadence slot regardless of its result.
+present. If the dispatch binding is unavailable, the `runSubagent` invocation itself returns a
+tool-layer error, or capability dispatch fails before a child result exists, record a fail-closed
+housekeeping failure, report it separately, and stop after the current batch; do not use Delivery
+recovery. If the invocation completes but returns no result, a result without the curator's Channel A
+verdict, or a child report of its own internal failure, record a malformed housekeeping result, do
+not retry it, and continue acquisition. A scheduled attempt consumes its cadence slot regardless of
+its result.
 
 ## Step 6 - Refresh
 

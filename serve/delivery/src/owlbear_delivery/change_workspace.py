@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,7 +29,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
     from contextlib import AbstractContextManager
 
 _OCC_RETRY_LIMIT = 8
@@ -38,6 +39,10 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MERGE_COMMIT_MIN_PARENTS = 2
 _PORCELAIN_WORKTREE_STATUS_INDEX = 1
+_PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH = 4
+_DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.json")
+_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_PARENT_COUNT = 2
 
 
 @dataclass(frozen=True)
@@ -76,7 +81,7 @@ class ChangeWriter(WriterIdentity):
 class _ChangeWorktreeCleanupRecord(_WorkspaceModel):
     """Identity-bound record for one exact Change worktree cleanup."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     change_id: ChangeId
     branch: str = Field(min_length=1)
@@ -190,7 +195,7 @@ class RecoverPublicationBaseline(_WorkspaceModel):
 
 
 class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
-    """Content-addressed evidence for one explicit legacy baseline recovery."""
+    """Content-addressed evidence for one explicit recovery of an unknown baseline."""
 
     schema_version: Literal[1] = 1
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -229,7 +234,7 @@ class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -239,6 +244,7 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
     @classmethod
     def create(  # noqa: PLR0913
@@ -252,9 +258,11 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
         change_head_before: str,
         merged_head: str,
         merge_commit: bool,
+        review_required: bool = False,
     ) -> Self:
         """Create a content-addressed receipt from one completed target merge."""
         values = {
+            "schema_version": 2,
             "operation_id": operation_id,
             "change_id": change_id,
             "integration_target": integration_target,
@@ -263,6 +271,7 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
             "change_head_before": change_head_before,
             "merged_head": merged_head,
             "merge_commit": merge_commit,
+            "review_required": review_required,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
         return cls(receipt_id=_target_sync_digest(candidate), **values)
@@ -361,18 +370,19 @@ class ChangeTargetSyncAbortReceipt(_WorkspaceModel):
 
 
 class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
-    """Content-addressed evidence that one remote Change descendant was adopted."""
+    """Content-addressed evidence that one remote Change descendant was adopted or observed."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
     branch: str = Field(min_length=1)
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    provenance: Literal["fast-forward", "observed"]
 
     @classmethod
-    def create(
+    def create(  # noqa: PLR0913 - adoption receipt binds each exact provenance input.
         cls,
         *,
         operation_id: str,
@@ -380,14 +390,17 @@ class ChangeExternalHeadAdoptionReceipt(_WorkspaceModel):
         branch: str,
         expected_head: str,
         adopted_head: str,
+        provenance: Literal["fast-forward", "observed"] = "fast-forward",
     ) -> Self:
         """Create deterministic evidence for one adopted remote Change head."""
         values = {
+            "schema_version": 2,
             "operation_id": operation_id,
             "change_id": change_id,
             "branch": branch,
             "expected_head": expected_head,
             "adopted_head": adopted_head,
+            "provenance": provenance,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
         return cls(receipt_id=_external_head_adoption_digest(candidate), **values)
@@ -446,6 +459,165 @@ class ChangeExternalHeadPromotionReceipt(_WorkspaceModel):
         return self
 
 
+class ChangeDesignPackageSnapshotIntent(_WorkspaceModel):
+    """Durable intent for one admitted Design package snapshot."""
+
+    schema_version: Literal[1] = 1
+    intent_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - snapshot identity requires each workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        package_id: str,
+        branch: str,
+        worktree_path: Path,
+        expected_head: str,
+    ) -> Self:
+        """Create deterministic intent for one managed package snapshot."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "package_id": package_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "expected_head": expected_head,
+        }
+        candidate = cls.model_construct(intent_id="0" * 64, **values)
+        return cls(intent_id=_design_package_snapshot_intent_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.intent_id != _design_package_snapshot_intent_digest(self):
+            message = "Design package snapshot intent identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class ChangeDesignPackageSnapshotReceipt(_WorkspaceModel):
+    """Exact reviewed Change-branch commit containing one admitted Design package."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    previous_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - snapshot identity requires each workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        package_id: str,
+        branch: str,
+        worktree_path: Path,
+        previous_head: str,
+        snapshot_head: str,
+    ) -> Self:
+        """Create deterministic receipt for one managed package snapshot commit."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "package_id": package_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "previous_head": previous_head,
+            "snapshot_head": snapshot_head,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_design_package_snapshot_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.receipt_id != _design_package_snapshot_digest(self):
+            message = "Design package snapshot receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DirtyWorktreeQuarantineReceipt(_WorkspaceModel):
+    """Content-addressed evidence that one dirty Builder worktree was preserved."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str = Field(min_length=1)
+    quarantine_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    paths: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _normalize_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("paths")
+    @classmethod
+    def _validate_paths(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if value != tuple(sorted(set(value))) or any(
+            not path or Path(path).is_absolute() or ".." in Path(path).parts for path in value
+        ):
+            message = "dirty worktree quarantine paths must be unique, sorted, and relative"
+            raise ValueError(message)
+        return value
+
+    @classmethod
+    def create(  # noqa: PLR0913 - quarantine identity requires each exact workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        branch: str,
+        worktree_path: Path,
+        base_head: str,
+        quarantine_ref: str,
+        quarantine_commit: str,
+        paths: tuple[str, ...],
+    ) -> Self:
+        """Create deterministic evidence for one preserved dirty worktree."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "attempt_id": attempt_id,
+            "claim_id": claim_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "base_head": base_head,
+            "quarantine_ref": quarantine_ref,
+            "quarantine_commit": quarantine_commit,
+            "paths": paths,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        return cls(receipt_id=_quarantine_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.receipt_id != _quarantine_digest(self):
+            message = "dirty worktree quarantine receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -490,6 +662,8 @@ class ChangeCoordination(_WorkspaceModel):
     publication_base_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     publication_baseline_recovery: PublicationBaselineRecoveryReceipt | None = None
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    design_package_snapshot_intent: ChangeDesignPackageSnapshotIntent | None = None
+    design_package_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
@@ -502,15 +676,19 @@ class ChangeCoordination(_WorkspaceModel):
     external_head_promotion_receipts: tuple[ChangeExternalHeadPromotionReceipt, ...] = ()
     worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
+    dirty_worktree_quarantine: DirtyWorktreeQuarantineReceipt | None = None
 
     @model_validator(mode="before")
     @classmethod
     def _discard_retired_publication_reservation(cls, value: object) -> object:
-        if not isinstance(value, dict) or "publication_operation_id" not in value:
+        if not isinstance(value, dict) or (
+            "publication_operation_id" not in value and "blocked_implementation_recovery" not in value
+        ):
             return value
         migrated: dict[object, object] = dict(value)
         migrated.pop("publication_operation_id", None)
         migrated.pop("publication_expires_at", None)
+        migrated.pop("blocked_implementation_recovery", None)
         return migrated
 
     @field_validator("external_head_adoption_receipts", mode="before")
@@ -568,7 +746,43 @@ class ChangeCoordination(_WorkspaceModel):
         if self.target_sync_abort_receipt is not None and self.target_sync_conflict is not None:
             message = "target synchronization abort receipt and conflict cannot coexist"
             raise ValueError(message)
+        self._validate_design_package_snapshot()
+        self._validate_dirty_worktree_quarantine()
         return self
+
+    def _validate_design_package_snapshot(self) -> None:
+        if (
+            self.design_package_snapshot_intent is not None
+            and self.design_package_snapshot_intent.change_id != self.change_id
+        ):
+            message = "Design package snapshot intent does not match its Change"
+            raise ValueError(message)
+        if self.design_package_snapshot is not None and self.design_package_snapshot.change_id != self.change_id:
+            message = "Design package snapshot receipt does not match its Change"
+            raise ValueError(message)
+
+    def _validate_dirty_worktree_quarantine(self) -> None:
+        receipt = self.dirty_worktree_quarantine
+        if receipt is None:
+            return
+        if receipt.change_id != self.change_id:
+            message = "dirty worktree quarantine receipt does not match its Change"
+            raise ValueError(message)
+        if receipt.branch != self.branch:
+            message = "dirty worktree quarantine receipt does not match its branch"
+            raise ValueError(message)
+        if receipt.worktree_path != self.worktree_path:
+            message = "dirty worktree quarantine receipt does not match its worktree"
+            raise ValueError(message)
+        expected_ref = f"refs/owlbear/quarantine/{receipt.change_id}/{receipt.attempt_id}"
+        if receipt.quarantine_ref != expected_ref:
+            message = "dirty worktree quarantine receipt ref does not match its attempt"
+            raise ValueError(message)
+        if self.writer is not None and (
+            self.writer.attempt_id != receipt.attempt_id or self.writer.claim_id != receipt.claim_id
+        ):
+            message = "dirty worktree quarantine receipt does not match active writer custody"
+            raise ValueError(message)
 
     def _validate_publication_baseline_recovery(self) -> None:
         receipt = self.publication_baseline_recovery
@@ -606,6 +820,8 @@ class WorkspaceRecoverySnapshot(_WorkspaceModel):
     worktree_branch: str | None = None
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    quarantine_ref: str | None = None
+    quarantine_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     clean: bool
     reviewed_ancestor: bool
     preserved_reviewed_ancestor: bool
@@ -699,7 +915,7 @@ class ChangeTargetSyncConflictError(RuntimeError):
 
 
 class CapacityLedger(_WorkspaceModel):
-    """Global writer capacity without serializing independent changes."""
+    """Current writer-capacity payload."""
 
     schema_version: Literal[1] = 1
     capacity: int = Field(gt=0)
@@ -727,38 +943,23 @@ class IntegrationContext(_WorkspaceModel):
 
 
 class CoordinationConflictError(RuntimeError):
-    """A per-change writer or global capacity slot is unavailable."""
+    """A per-change writer slot is unavailable."""
 
     code = "ERR_TARGET_COORDINATION_CONFLICT"
 
 
-class CapacityConfigurationConflictError(CoordinationConflictError):
-    """Configured writer capacity is below the active holder count."""
-
-    def __init__(self, active_holders: int, configured_capacity: int) -> None:
-        self.active_holders = active_holders
-        self.configured_capacity = configured_capacity
-        super().__init__(f"active writers exceed configured writer capacity: {active_holders} > {configured_capacity}")
-
-
-class CapacityLedgerConflictError(CoordinationConflictError):
-    """The host capacity ledger changed during startup reconfiguration."""
-
-    def __init__(self) -> None:
-        super().__init__("host capacity ledger changed concurrently")
-
-
 class PortfolioCoordinator:
-    """Atomically coordinate independent per-change writers and global capacity."""
+    """Atomically coordinate independent per-change writers."""
 
-    def __init__(self, state_root: Path, capacity: int) -> None:
+    def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
-        self._coordination_root = state_root / "claims" / "changes"
-        self._ledger_path = state_root / "capacity.json"
-        self._capacity = capacity
+        self._coordination_root = state_root / "coordination" / "changes"
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
-        self._initialize_ledger()
+
+    def recover_pending_transactions(self) -> None:
+        """Complete pending coordinator transactions before reading ownership state."""
+        RuntimeTransaction.recover_all(self._state_root)
 
     def acquisition_lock(self) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""
@@ -779,11 +980,6 @@ class PortfolioCoordinator:
                 yield lock
             finally:
                 lock.close()
-
-    def writer_capacity_available(self) -> bool:
-        """Return whether another Build writer can be reserved."""
-        ledger = CapacityLedger.model_validate_json(self._ledger_path.read_bytes())
-        return len(ledger.change_ids) < ledger.capacity
 
     def register(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """Create one replayable per-change coordination record."""
@@ -829,7 +1025,7 @@ class PortfolioCoordinator:
         return tuple(sorted(records, key=lambda item: item.change_id))
 
     def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
-        """Atomically bind one writer and one global capacity slot."""
+        """Atomically bind one writer to a Change."""
         coordination = self.show(change_id)
         publication_expiry = coordination.publication_expiry
         if publication_expiry is not None and publication_expiry > datetime.now(UTC):
@@ -841,8 +1037,6 @@ class PortfolioCoordinator:
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
-        ledger_bytes = self._ledger_path.read_bytes()
-        ledger = CapacityLedger.model_validate_json(ledger_bytes)
         publication_expiry = coordination.publication_expiry
         publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
         if (
@@ -850,51 +1044,41 @@ class PortfolioCoordinator:
             or publication_active
             or coordination.worktree_cleanup_intent is not None
             or coordination.worktree_cleanup is not None
-            or change_id in ledger.change_ids
         ):
             _coordination_conflict("change already has an active writer")
-        if len(ledger.change_ids) >= ledger.capacity:
-            _coordination_conflict("global writer capacity is exhausted")
         claimed = coordination.model_copy(
             update={
                 "writer": writer,
                 "publication_lease": None,
+                "dirty_worktree_quarantine": None,
             }
         )
-        occupied = ledger.model_copy(update={"change_ids": tuple(sorted((*ledger.change_ids, change_id)))})
-        participants = (
-            _replacement(self._state_root, coordination_path, coordination_bytes, claimed),
-            _replacement(self._state_root, self._ledger_path, ledger_bytes, occupied),
-        )
         try:
-            self._commit(f"acquire-{change_id}-{writer.claim_id}", participants)
+            self._commit(
+                f"acquire-{change_id}-{writer.claim_id}",
+                (_replacement(self._state_root, coordination_path, coordination_bytes, claimed),),
+            )
         except TransactionConflictError as exc:
             msg = "writer coordination changed concurrently"
             raise CoordinationConflictError(msg) from exc
         return claimed
 
     def release(self, change_id: str, claim_id: str) -> ChangeCoordination:
-        """Release one exact writer and its capacity slot."""
+        """Release one exact writer."""
         for _attempt in range(_OCC_RETRY_LIMIT):
             coordination_path = self._coordination_path(change_id)
             coordination_bytes = coordination_path.read_bytes()
             coordination = ChangeCoordination.model_validate_json(coordination_bytes)
-            ledger_bytes = self._ledger_path.read_bytes()
-            ledger = CapacityLedger.model_validate_json(ledger_bytes)
-            if coordination.writer is None and change_id not in ledger.change_ids:
+            if coordination.writer is None:
                 return coordination
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
                 _coordination_conflict("writer claim does not own the change workspace")
             released = coordination.model_copy(update={"writer": None})
-            available = ledger.model_copy(
-                update={"change_ids": tuple(item for item in ledger.change_ids if item != change_id)}
-            )
-            participants = (
-                _replacement(self._state_root, coordination_path, coordination_bytes, released),
-                _replacement(self._state_root, self._ledger_path, ledger_bytes, available),
-            )
             try:
-                self._commit(f"release-{change_id}-{claim_id}", participants)
+                self._commit(
+                    f"release-{change_id}-{claim_id}",
+                    (_replacement(self._state_root, coordination_path, coordination_bytes, released),),
+                )
             except TransactionConflictError:
                 continue
             return released
@@ -906,7 +1090,7 @@ class PortfolioCoordinator:
         *,
         lock: PublicationLock | None = None,
     ) -> ChangeCoordination:
-        """OCC-replace one registered per-change record without touching capacity."""
+        """OCC-replace one registered per-change record without changing ownership."""
         existing = self.show(coordination.change_id)
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
@@ -943,6 +1127,15 @@ class PortfolioCoordinator:
             and existing.publication_base_head is not None
         ):
             _coordination_conflict("publication baseline recovery authority cannot be added")
+        if existing.dirty_worktree_quarantine is not None and (
+            existing.dirty_worktree_quarantine != coordination.dirty_worktree_quarantine
+        ):
+            _coordination_conflict("dirty worktree quarantine authority cannot be replaced")
+        if existing.dirty_worktree_quarantine is None and coordination.dirty_worktree_quarantine is not None:
+            receipt = coordination.dirty_worktree_quarantine
+            writer = coordination.writer
+            if writer is None or writer.attempt_id != receipt.attempt_id or writer.claim_id != receipt.claim_id:
+                _coordination_conflict("dirty worktree quarantine authority requires matching writer custody")
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
             self._commit(f"update-{coordination.change_id}", (participant,))
@@ -1059,37 +1252,6 @@ class PortfolioCoordinator:
     @staticmethod
     def _publication_timestamp(value: str) -> datetime:
         return _publication_timestamp(value)
-
-    def _initialize_ledger(self) -> None:
-        initial = CapacityLedger(capacity=self._capacity)
-        if self._ledger_path.exists():
-            existing_bytes = self._ledger_path.read_bytes()
-            existing = CapacityLedger.model_validate_json(existing_bytes)
-            if existing.capacity != self._capacity:
-                if len(existing.change_ids) > self._capacity:
-                    raise CapacityConfigurationConflictError(len(existing.change_ids), self._capacity)
-                updated = existing.model_copy(update={"capacity": self._capacity})
-                try:
-                    self._commit(
-                        "reconfigure-capacity",
-                        (_replacement(self._state_root, self._ledger_path, existing_bytes, updated),),
-                    )
-                except TransactionConflictError as exc:
-                    raise CapacityLedgerConflictError from exc
-            return
-        try:
-            self._commit(
-                "initialize-capacity",
-                (
-                    TransactionParticipant(
-                        self._state_root,
-                        self._ledger_path.relative_to(self._state_root),
-                        _model_content(initial),
-                    ),
-                ),
-            )
-        except TransactionConflictError as exc:
-            raise CapacityLedgerConflictError from exc
 
     def _coordination_path(self, change_id: str) -> Path:
         if not change_id or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in change_id):
@@ -1301,6 +1463,222 @@ class ChangeWorkspaceManager:
             return None
         return self._coordinator.prepare_reviewed_boundary(coordination, exact_head, lock)
 
+    def snapshot_design_package(
+        self,
+        change_id: str,
+        package_id: str,
+        package_files: Mapping[str, bytes],
+        operation_id: str,
+    ) -> ChangeDesignPackageSnapshotReceipt:
+        """Commit one verified admitted Design package on its managed Change branch."""
+        if set(package_files) != set(_DESIGN_PACKAGE_NAMES):
+            _workspace_failure("Design package snapshot must contain the canonical package files")
+        if not _DIGEST_PATTERN.fullmatch(package_id):
+            _workspace_failure("Design package snapshot identity is invalid")
+        with self._coordinator.publication_lock(change_id) as lock:
+            coordination = self._coordinator.show(change_id)
+            existing = coordination.design_package_snapshot
+            if existing is not None:
+                self._validate_design_package_snapshot_replay(existing, package_id)
+                return existing
+            intent = coordination.design_package_snapshot_intent
+            branch_head = self._resolve(coordination.branch)
+            if intent is None:
+                if branch_head != coordination.last_reviewed_commit:
+                    _workspace_failure("Design package snapshot requires the reviewed Change branch head")
+                intent = ChangeDesignPackageSnapshotIntent.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    package_id=package_id,
+                    branch=coordination.branch,
+                    worktree_path=coordination.worktree_path,
+                    expected_head=branch_head,
+                )
+                coordination = self._coordinator.update(
+                    coordination.model_copy(update={"design_package_snapshot_intent": intent}),
+                    lock=lock,
+                )
+            elif intent.operation_id != operation_id or intent.package_id != package_id:
+                _coordination_conflict("Design package snapshot intent differs from the request")
+            snapshot_head = self._commit_design_package_snapshot(coordination, intent, package_files, branch_head)
+            receipt = ChangeDesignPackageSnapshotReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                package_id=package_id,
+                branch=coordination.branch,
+                worktree_path=coordination.worktree_path,
+                previous_head=intent.expected_head,
+                snapshot_head=snapshot_head,
+            )
+            current = self._coordinator.show(change_id)
+            updated = current.model_copy(
+                update={
+                    "design_package_snapshot_intent": None,
+                    "design_package_snapshot": receipt,
+                    "last_reviewed_commit": snapshot_head,
+                }
+            )
+            self._coordinator.update(updated, lock=lock)
+            return receipt
+
+    def _validate_design_package_snapshot_replay(
+        self,
+        receipt: ChangeDesignPackageSnapshotReceipt,
+        package_id: str,
+    ) -> None:
+        if receipt.package_id != package_id:
+            _coordination_conflict("Design package snapshot differs from the request")
+        self._require_worktree(
+            receipt.change_id,
+            receipt.worktree_path,
+            receipt.branch,
+            receipt.snapshot_head,
+        )
+        self._require_clean_worktree(receipt.worktree_path)
+
+    def _commit_design_package_snapshot(
+        self,
+        coordination: ChangeCoordination,
+        intent: ChangeDesignPackageSnapshotIntent,
+        package_files: Mapping[str, bytes],
+        branch_head: str | None,
+    ) -> str:
+        worktree = coordination.worktree_path
+        relative_paths = tuple(
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
+        )
+        existing = {
+            name: self._read_optional_worktree_file(worktree / relative_path)
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        }
+        if branch_head == intent.expected_head and self._package_files_match_commit(
+            intent.expected_head,
+            relative_paths,
+            existing,
+            package_files,
+        ):
+            return intent.expected_head
+        if branch_head != intent.expected_head:
+            return self._replay_design_package_snapshot(coordination, intent, package_files, branch_head)
+        self._require_worktree(coordination.change_id, worktree, coordination.branch, intent.expected_head)
+        self._require_clean_worktree(worktree)
+        committed = False
+        try:
+            self._write_design_package_files(worktree, relative_paths, package_files)
+            self._git("add", "-f", "--", *relative_paths, cwd=worktree)
+            message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+            result = self._run_git(
+                "commit",
+                "--only",
+                "-m",
+                message,
+                "--",
+                *relative_paths,
+                cwd=worktree,
+                check=False,
+            )
+            if result.returncode != 0:
+                _workspace_failure("Design package snapshot could not be committed")
+            committed = True
+        except Exception:
+            if not committed:
+                self._restore_worktree_files(worktree, relative_paths, existing)
+            raise
+        else:
+            snapshot_head = self._resolve("HEAD", cwd=worktree)
+            if snapshot_head is None:
+                _workspace_failure("Design package snapshot commit has no resolvable head")
+            self._require_clean_worktree(worktree)
+            changed = self._git(
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                snapshot_head,
+                cwd=worktree,
+            ).splitlines()
+            if set(changed) != set(relative_paths):
+                _workspace_failure("Design package snapshot committed an unexpected path")
+            return snapshot_head
+
+    def _replay_design_package_snapshot(
+        self,
+        coordination: ChangeCoordination,
+        intent: ChangeDesignPackageSnapshotIntent,
+        package_files: Mapping[str, bytes],
+        branch_head: str,
+    ) -> str:
+        """Recover a package snapshot after its commit succeeded before receipt storage."""
+        if not self._is_direct_child(intent.expected_head, branch_head):
+            _workspace_failure("Design package snapshot branch changed before its commit")
+        self._require_clean_worktree(coordination.worktree_path)
+        relative_paths = tuple(
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
+        )
+        existing = {
+            name: self._read_optional_worktree_file(coordination.worktree_path / relative_path)
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        }
+        if not self._package_files_match_commit(branch_head, relative_paths, existing, package_files):
+            _workspace_failure("Design package snapshot commit does not match its package")
+        message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+        if self._git("log", "-1", "--format=%s", branch_head, cwd=coordination.worktree_path) != message:
+            _workspace_failure("Design package snapshot branch commit is not replayable")
+        return branch_head
+
+    def _package_files_match_commit(
+        self,
+        commit: str,
+        relative_paths: tuple[str, ...],
+        existing: Mapping[str, bytes | None],
+        package_files: Mapping[str, bytes],
+    ) -> bool:
+        tracked = self._git("ls-tree", "-r", "--name-only", commit, "--", *relative_paths).splitlines()
+        return set(tracked) == set(relative_paths) and all(
+            self._git_blob_bytes(commit, relative_path) == package_files[name] and existing[name] == package_files[name]
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        )
+
+    def _git_blob_bytes(self, commit: str, relative_path: str) -> bytes:
+        result = self._run_git("show", f"{commit}:{relative_path}", check=False)
+        return result.stdout if result.returncode == 0 else b""
+
+    def _is_direct_child(self, parent: str, commit: str) -> bool:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        return len(parents) == _COMMIT_PARENT_COUNT and parents[1] == parent
+
+    @staticmethod
+    def _read_optional_worktree_file(path: Path) -> bytes | None:
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            _workspace_failure("Design package snapshot path is unsafe")
+        return path.read_bytes() if path.exists() else None
+
+    @staticmethod
+    def _write_design_package_files(
+        worktree: Path,
+        relative_paths: tuple[str, ...],
+        package_files: Mapping[str, bytes],
+    ) -> None:
+        for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True):
+            path = worktree / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(package_files[name])
+
+    def _restore_worktree_files(
+        self,
+        worktree: Path,
+        relative_paths: tuple[str, ...],
+        existing: Mapping[str, bytes | None],
+    ) -> None:
+        self._git("reset", "HEAD", "--", *relative_paths, cwd=worktree, check=False)
+        for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True):
+            path = worktree / relative_path
+            previous = existing[name]
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(previous)
+
     @classmethod
     def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None:
         """Restore one absent managed worktree from its retained branch."""
@@ -1364,6 +1742,18 @@ class ChangeWorkspaceManager:
                 include_content_attention=True,
             )
             for change_id in change_ids
+        )
+
+    def inspect_retained(self, change_id: str, coordination: ChangeCoordination) -> RetainedChangeWorktree:
+        """Inspect one retained Change worktree without enumerating other coordination records."""
+        if coordination.change_id != change_id:
+            _coordination_conflict("Change workspace inspection identity does not match coordination")
+        return self._retained_worktree(
+            change_id,
+            coordination,
+            self._registered_worktrees().get(change_id),
+            self._change_branch_heads().get(change_id),
+            include_content_attention=True,
         )
 
     def cleanup(self, change_id: str) -> ChangeWorktreeCleanup:
@@ -1522,7 +1912,7 @@ class ChangeWorkspaceManager:
         publication_base_head: str,
         operation_id: str,
     ) -> PublicationBaselineRecoveryReceipt:
-        """Persist one explicitly confirmed baseline for legacy publication authority."""
+        """Persist one explicitly confirmed baseline for publication authority."""
         if _COMMIT_PATTERN.fullmatch(expected_change_head) is None:
             message = "expected Change head is not an exact commit identity"
             raise ValueError(message)
@@ -1646,7 +2036,11 @@ class ChangeWorkspaceManager:
         if branch_head != coordination.last_reviewed_commit:
             _coordination_conflict("target synchronization requires the reviewed Change head")
 
-    def sync_with_target(self, request: SyncChangeWithTarget) -> ChangeTargetSyncReceipt:
+    def sync_with_target(
+        self,
+        request: SyncChangeWithTarget,
+        before_head_change: Callable[[], None] | None = None,
+    ) -> ChangeTargetSyncReceipt:
         """Fetch one exact target head and merge it only in the managed Change worktree."""
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
@@ -1684,6 +2078,11 @@ class ChangeWorkspaceManager:
                 coordination.branch,
                 branch_head,
             )
+            if (
+                not self._is_ancestor(target_head, branch_head, cwd=coordination.worktree_path)
+                and before_head_change is not None
+            ):
+                before_head_change()
             merge = self._run_git(
                 "merge",
                 "--no-edit",
@@ -1698,6 +2097,11 @@ class ChangeWorkspaceManager:
                     self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
                 _workspace_failure("target synchronization merge failed")
             merged_head = self._resolve(coordination.branch)
+            inherited_review_requirement = (
+                coordination.target_sync_receipt.review_required
+                if coordination.target_sync_receipt is not None
+                else False
+            )
             receipt = ChangeTargetSyncReceipt.create(
                 operation_id=request.operation_id,
                 change_id=request.change_id,
@@ -1707,6 +2111,7 @@ class ChangeWorkspaceManager:
                 change_head_before=branch_head,
                 merged_head=merged_head,
                 merge_commit=self._is_merge_commit(merged_head, coordination.worktree_path),
+                review_required=inherited_review_requirement,
             )
             self._coordinator.update(
                 coordination.model_copy(
@@ -1722,7 +2127,11 @@ class ChangeWorkspaceManager:
             )
             return receipt
 
-    def adopt_external_head(self, request: AdoptExternalHead) -> ChangeExternalHeadAdoptionReceipt:
+    def adopt_external_head(
+        self,
+        request: AdoptExternalHead,
+        before_head_change: Callable[[], None] | None = None,
+    ) -> ChangeExternalHeadAdoptionReceipt:
         """Adopt one exact descendant from the remote Change branch without advancing review authority."""
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
@@ -1733,6 +2142,10 @@ class ChangeWorkspaceManager:
 
             branch_head = self._resolve(coordination.branch)
             if branch_head == request.adopted_head:
+                provenance: Literal["fast-forward", "observed"] = "fast-forward"
+                if coordination.external_head_adoption_intent is None:
+                    self._fetch_external_head(coordination.branch, request.adopted_head)
+                    provenance = "observed"
                 self._require_ancestor(request.expected_head, branch_head)
                 self._require_worktree(
                     request.change_id,
@@ -1740,37 +2153,58 @@ class ChangeWorkspaceManager:
                     coordination.branch,
                     branch_head,
                 )
-                self._require_clean_worktree(coordination.worktree_path)
-                return self._complete_external_head_adoption(request, coordination, lock)
+                self._require_clean_worktree(
+                    coordination.worktree_path,
+                    operation="external Change-head adoption",
+                )
+                return self._complete_external_head_adoption(
+                    request,
+                    coordination,
+                    lock,
+                    provenance=provenance,
+                )
             if branch_head != request.expected_head:
-                _coordination_conflict("Change branch head differs from the adoption request")
-            return self._fast_forward_external_head(request, coordination, lock)
+                _coordination_conflict(
+                    "external Change head adoption requires the managed Change branch to equal either "
+                    f"the reviewed head {request.expected_head} or requested adopted head "
+                    f"{request.adopted_head}; observed branch head is {branch_head}"
+                )
+            return self._fast_forward_external_head(request, coordination, lock, before_head_change)
 
     def _prepare_external_head_adoption(
         self,
         request: AdoptExternalHead,
         coordination: ChangeCoordination,
     ) -> ChangeCoordination:
-        self._require_external_head_adoption_start(coordination)
+        self._require_external_head_adoption_start(coordination, request)
         intent = coordination.external_head_adoption_intent
         expected_intent = ChangeExternalHeadAdoptionIntent.create(request, coordination.branch)
         if intent is not None:
             if intent != expected_intent:
                 _coordination_conflict("external Change head adoption intent differs from the request")
             return coordination
-        branch_head = self._resolve(coordination.branch)
-        if branch_head != request.expected_head:
-            _coordination_conflict("Change branch head differs from the adoption request")
+        current = coordination.external_head_adoption_receipt
+        if (
+            current is not None
+            and current.operation_id != request.operation_id
+            and current.expected_head == request.expected_head
+            and current.adopted_head == request.adopted_head
+        ):
+            _coordination_conflict("external Change head adoption was already recorded for the requested head")
         if request.expected_head != coordination.last_reviewed_commit:
             _coordination_conflict("external Change head adoption requires the reviewed branch head")
         self._require_ancestor(coordination.last_reviewed_commit, request.expected_head)
+        branch_head = self._resolve(coordination.branch)
         self._require_worktree(
             request.change_id,
             coordination.worktree_path,
             coordination.branch,
-            request.expected_head,
+            branch_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
         return coordination
 
     def _fast_forward_external_head(
@@ -1778,6 +2212,7 @@ class ChangeWorkspaceManager:
         request: AdoptExternalHead,
         coordination: ChangeCoordination,
         lock: PublicationLock,
+        before_head_change: Callable[[], None] | None,
     ) -> ChangeExternalHeadAdoptionReceipt:
         remote_ref = self._fetch_external_head(coordination.branch, request.adopted_head)
         if not self._is_ancestor(request.expected_head, request.adopted_head, cwd=self._repository):
@@ -1789,6 +2224,8 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(update={"external_head_adoption_intent": intent}),
                 lock=lock,
             )
+        if before_head_change is not None:
+            before_head_change()
         merge = self._run_git(
             "merge",
             "--ff-only",
@@ -1808,8 +2245,17 @@ class ChangeWorkspaceManager:
             coordination.branch,
             adopted_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
-        return self._complete_external_head_adoption(request, coordination, lock, adopted_head)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
+        return self._complete_external_head_adoption(
+            request,
+            coordination,
+            lock,
+            adopted_head,
+            provenance="fast-forward",
+        )
 
     def _complete_external_head_adoption(
         self,
@@ -1817,6 +2263,7 @@ class ChangeWorkspaceManager:
         coordination: ChangeCoordination,
         lock: PublicationLock,
         adopted_head: str | None = None,
+        provenance: Literal["fast-forward", "observed"] = "fast-forward",
     ) -> ChangeExternalHeadAdoptionReceipt:
         receipt = ChangeExternalHeadAdoptionReceipt.create(
             operation_id=request.operation_id,
@@ -1824,6 +2271,7 @@ class ChangeWorkspaceManager:
             branch=coordination.branch,
             expected_head=request.expected_head,
             adopted_head=adopted_head or request.adopted_head,
+            provenance=provenance,
         )
         history = coordination.external_head_adoption_receipts
         if receipt.operation_id not in {item.operation_id for item in history}:
@@ -1861,7 +2309,10 @@ class ChangeWorkspaceManager:
             coordination.branch,
             receipt.adopted_head,
         )
-        self._require_clean_worktree(coordination.worktree_path)
+        self._require_clean_worktree(
+            coordination.worktree_path,
+            operation="external Change-head adoption",
+        )
         return receipt
 
     @staticmethod
@@ -1875,7 +2326,11 @@ class ChangeWorkspaceManager:
             receipts = (*receipts, current)
         return next((receipt for receipt in receipts if receipt.operation_id == operation_id), None)
 
-    def _require_external_head_adoption_start(self, coordination: ChangeCoordination) -> None:
+    def _require_external_head_adoption_start(
+        self,
+        coordination: ChangeCoordination,
+        request: AdoptExternalHead,
+    ) -> None:
         if coordination.writer is not None:
             _coordination_conflict("external Change head adoption cannot overlap an active writer")
         if coordination.publication_lease is not None:
@@ -1886,8 +2341,12 @@ class ChangeWorkspaceManager:
             _coordination_conflict("external Change head adoption cannot overlap a target synchronization conflict")
         if coordination.external_head_adoption_intent is None:
             branch_head = self._resolve(coordination.branch)
-            if branch_head != coordination.last_reviewed_commit:
-                _coordination_conflict("external Change head adoption requires the reviewed branch head")
+            if branch_head not in {request.expected_head, request.adopted_head}:
+                _coordination_conflict(
+                    "external Change head adoption requires the managed Change branch to equal either "
+                    f"the reviewed head {request.expected_head} or requested adopted head "
+                    f"{request.adopted_head}; observed branch head is {branch_head}"
+                )
 
     def _fetch_external_head(self, branch: str, expected_head: str) -> str:
         source_ref = f"refs/heads/{branch}"
@@ -2098,6 +2557,7 @@ class ChangeWorkspaceManager:
                 change_head_before=change_head_before,
                 merged_head=merged_head,
                 merge_commit=True,
+                review_required=True,
             )
             self._coordinator.update(
                 coordination.model_copy(
@@ -2212,9 +2672,9 @@ class ChangeWorkspaceManager:
             return ()
         return tuple(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
 
-    def _require_clean_worktree(self, worktree: Path) -> None:
+    def _require_clean_worktree(self, worktree: Path, *, operation: str = "target synchronization") -> None:
         if self._git("-C", str(worktree), "status", "--porcelain=v1").strip():
-            _workspace_failure("target synchronization worktree is not clean")
+            _workspace_failure(f"{operation} worktree is not clean")
 
     def _require_no_unstaged_changes(self, worktree: Path) -> None:
         status = self._git("-C", str(worktree), "status", "--porcelain=v1")
@@ -2401,6 +2861,8 @@ class ChangeWorkspaceManager:
             _coordination_conflict("Delivery finalization cannot overlap external Change-head adoption")
         if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
             _coordination_conflict("Delivery finalization cannot overlap Change worktree cleanup")
+        if coordination.dirty_worktree_quarantine is not None:
+            _coordination_conflict("Delivery finalization cannot use a quarantined Change worktree")
         branch_head = self._resolve(coordination.branch)
         if branch_head != exact_head:
             _workspace_failure("Delivery finalization head differs from the current Change branch")
@@ -2443,6 +2905,7 @@ class ChangeWorkspaceManager:
                 "--show-current",
             )
             clean = not self._git("-C", str(coordination.worktree_path), "status", "--porcelain")
+        quarantine = coordination.dirty_worktree_quarantine
         return WorkspaceRecoverySnapshot(
             change_id=change_id,
             worktree_path=coordination.worktree_path,
@@ -2452,6 +2915,8 @@ class ChangeWorkspaceManager:
             worktree_branch=worktree_branch,
             last_reviewed_commit=coordination.last_reviewed_commit,
             preserved_commit=preserved,
+            quarantine_ref=quarantine.quarantine_ref if quarantine is not None else None,
+            quarantine_commit=quarantine.quarantine_commit if quarantine is not None else None,
             clean=clean,
             reviewed_ancestor=self._is_ancestor(
                 coordination.last_reviewed_commit,
@@ -2468,6 +2933,334 @@ class ChangeWorkspaceManager:
             ),
             writer=coordination.writer,
         )
+
+    def quarantine_dirty_worktree(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        operation_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        """Preserve a dirty Builder worktree as an isolated commit before cleanup."""
+        coordination = self._coordinator.show(change_id)
+        writer = coordination.writer
+        if writer is None or writer.attempt_id != attempt_id or writer.claim_id != claim_id:
+            _coordination_conflict("dirty worktree quarantine requires matching writer custody")
+        worktree = coordination.worktree_path
+        branch_head = self._resolve(coordination.branch)
+        self._require_worktree(change_id, worktree, coordination.branch, branch_head)
+        quarantine_ref = f"refs/owlbear/quarantine/{change_id}/{attempt_id}"
+        self._git("check-ref-format", quarantine_ref)
+        receipt = self._prepare_dirty_worktree_quarantine(
+            coordination=coordination,
+            worktree=worktree,
+            branch_head=branch_head,
+            quarantine_ref=quarantine_ref,
+            operation_id=operation_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+        )
+        if self._resolve(coordination.branch) != branch_head:
+            _workspace_failure("change branch moved while dirty worktree was being quarantined")
+        self._git("reset", "--hard", branch_head, cwd=worktree)
+        self._git("clean", "-fd", cwd=worktree)
+        if self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=worktree):
+            _workspace_failure("dirty worktree quarantine did not clean the managed worktree")
+        return receipt
+
+    def _prepare_dirty_worktree_quarantine(  # noqa: PLR0913, PLR0917
+        self,
+        coordination: ChangeCoordination,
+        worktree: Path,
+        branch_head: str,
+        quarantine_ref: str,
+        operation_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        current = self._coordinator.show(coordination.change_id)
+        existing_receipt = current.dirty_worktree_quarantine
+        if existing_receipt is not None:
+            if (
+                existing_receipt.operation_id != operation_id
+                or existing_receipt.attempt_id != attempt_id
+                or existing_receipt.claim_id != claim_id
+                or existing_receipt.quarantine_ref != quarantine_ref
+            ):
+                _coordination_conflict("dirty worktree quarantine already has different authority")
+            if not self._quarantine_base_matches_current(coordination, branch_head, existing_receipt):
+                _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+            existing_commit = self._resolve(existing_receipt.quarantine_ref)
+            if existing_commit != existing_receipt.quarantine_commit:
+                _workspace_failure("dirty worktree quarantine ref does not match its receipt")
+            self._verify_quarantine_commit(
+                existing_receipt.quarantine_commit,
+                existing_receipt.base_head,
+                existing_receipt.paths,
+                existing_receipt.operation_id,
+            )
+            self._verify_worktree_matches_quarantine(worktree, existing_receipt)
+            return existing_receipt
+
+        paths = self._worktree_change_paths(worktree)
+        receipt_base_head = branch_head
+        existing = self._resolve(quarantine_ref, missing_ok=True)
+        if existing is None:
+            if not paths:
+                _coordination_conflict("dirty worktree quarantine requires changed content")
+            quarantine_commit = self._quarantine_commit(worktree, branch_head, paths, operation_id)
+            self._git("update-ref", quarantine_ref, quarantine_commit, "0" * 40)
+        else:
+            quarantine_commit = existing
+            quarantine_base = self._quarantine_commit_parent(quarantine_commit)
+            paths = self._quarantine_commit_paths(quarantine_commit, quarantine_base)
+            self._verify_quarantine_commit(quarantine_commit, quarantine_base, paths, operation_id)
+            replay_receipt = DirtyWorktreeQuarantineReceipt.create(
+                operation_id=operation_id,
+                change_id=coordination.change_id,
+                attempt_id=attempt_id,
+                claim_id=claim_id,
+                branch=coordination.branch,
+                worktree_path=worktree,
+                base_head=quarantine_base,
+                quarantine_ref=quarantine_ref,
+                quarantine_commit=quarantine_commit,
+                paths=paths,
+            )
+            if not self._quarantine_base_matches_current(coordination, branch_head, replay_receipt):
+                _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+            self._verify_worktree_matches_quarantine(worktree, replay_receipt)
+            receipt_base_head = quarantine_base
+        receipt = DirtyWorktreeQuarantineReceipt.create(
+            operation_id=operation_id,
+            change_id=coordination.change_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+            branch=coordination.branch,
+            worktree_path=worktree,
+            base_head=receipt_base_head,
+            quarantine_ref=quarantine_ref,
+            quarantine_commit=quarantine_commit,
+            paths=paths,
+        )
+        self._coordinator.update(current.model_copy(update={"dirty_worktree_quarantine": receipt}))
+        return receipt
+
+    def verify_dirty_worktree_quarantine(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+        operation_id: str,
+    ) -> DirtyWorktreeQuarantineReceipt:
+        """Verify preserved dirty-worktree evidence after workspace cleanup and writer release."""
+        coordination = self._coordinator.show(change_id)
+        receipt = coordination.dirty_worktree_quarantine
+        if receipt is None:
+            _coordination_conflict("dirty worktree quarantine receipt is missing")
+        if receipt.operation_id != operation_id or receipt.attempt_id != attempt_id or receipt.claim_id != claim_id:
+            _coordination_conflict("dirty worktree quarantine receipt does not match the recovery claim")
+        branch_head = self._resolve(coordination.branch)
+        if self._resolve(receipt.quarantine_ref) != receipt.quarantine_commit:
+            _workspace_failure("dirty worktree quarantine ref does not match its receipt")
+        if not self._quarantine_base_matches_current(coordination, branch_head, receipt):
+            _workspace_failure("dirty worktree quarantine base moved outside the recoverable restart state")
+        self._verify_quarantine_commit(
+            receipt.quarantine_commit,
+            receipt.base_head,
+            receipt.paths,
+            receipt.operation_id,
+        )
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, branch_head)
+        if self._git("status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=coordination.worktree_path):
+            _workspace_failure("dirty worktree quarantine evidence requires a clean managed worktree")
+        return receipt
+
+    def _quarantine_base_matches_current(
+        self,
+        coordination: ChangeCoordination,
+        branch_head: str,
+        receipt: DirtyWorktreeQuarantineReceipt,
+    ) -> bool:
+        if receipt.base_head == branch_head:
+            return True
+        if branch_head != coordination.last_reviewed_commit:
+            return False
+        attempt_ref = f"refs/owlbear/attempts/{coordination.change_id}/{receipt.attempt_id}"
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        return preserved == receipt.base_head and self._is_ancestor(
+            coordination.last_reviewed_commit,
+            receipt.base_head,
+            cwd=self._repository,
+        )
+
+    def _worktree_change_paths(self, worktree: Path) -> tuple[str, ...]:
+        status = self._run_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            cwd=worktree,
+        ).stdout
+        if status and not status.endswith(b"\0"):
+            _workspace_failure("Git returned an unterminated dirty worktree status")
+        paths: set[str] = set()
+        records = status.split(b"\0")
+        index = 0
+        while index < len(records):
+            record = records[index]
+            index += 1
+            if not record:
+                continue
+            if len(record) < _PORCELAIN_WORKTREE_STATUS_PREFIX_LENGTH:
+                _workspace_failure("Git returned an invalid dirty worktree status record")
+            status_code = record[:2].decode("ascii")
+            paths.add(os.fsdecode(record[3:]))
+            if "R" in status_code or "C" in status_code:
+                if index >= len(records) or not records[index]:
+                    _workspace_failure("Git returned an incomplete rename status record")
+                paths.add(os.fsdecode(records[index]))
+                index += 1
+        return tuple(sorted(paths))
+
+    def _verify_worktree_matches_quarantine(
+        self,
+        worktree: Path,
+        receipt: DirtyWorktreeQuarantineReceipt,
+    ) -> None:
+        current_paths = self._worktree_change_paths(worktree)
+        if not set(current_paths).issubset(receipt.paths):
+            _workspace_failure("dirty worktree changed after quarantine preservation")
+        if not current_paths:
+            return
+        self._verify_worktree_paths_match_commit(
+            worktree,
+            receipt.base_head,
+            current_paths,
+            receipt.quarantine_commit,
+        )
+
+    def _verify_worktree_paths_match_commit(
+        self,
+        worktree: Path,
+        base_head: str,
+        paths: tuple[str, ...],
+        commit: str,
+    ) -> None:
+        tree = self._worktree_tree(worktree, base_head, paths)
+        result = self._run_git(
+            "--literal-pathspecs",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--quiet",
+            commit,
+            tree,
+            "--",
+            *paths,
+            check=False,
+        )
+        if result.returncode != 0:
+            _workspace_failure("dirty worktree content changed after quarantine preservation")
+
+    def _worktree_tree(self, worktree: Path, base_head: str, paths: tuple[str, ...]) -> str:
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-quarantine-index-")
+        os.close(index_fd)
+        Path(index_path).unlink()
+        environment = {**os.environ, "GIT_INDEX_FILE": index_path}
+        try:
+            self._run_git("read-tree", base_head, cwd=worktree, environment=environment)
+            self._run_git(
+                "--literal-pathspecs",
+                "add",
+                "--all",
+                "--",
+                *paths,
+                cwd=worktree,
+                environment=environment,
+            )
+            return self._run_git("write-tree", cwd=worktree, environment=environment).stdout.decode().strip()
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+
+    def _quarantine_commit(
+        self,
+        worktree: Path,
+        base_head: str,
+        paths: tuple[str, ...],
+        operation_id: str,
+    ) -> str:
+        index_fd, index_path = tempfile.mkstemp(prefix="owlbear-quarantine-index-")
+        os.close(index_fd)
+        Path(index_path).unlink()
+        environment = {**os.environ, "GIT_INDEX_FILE": index_path}
+        try:
+            tree = self._worktree_tree(worktree, base_head, paths)
+            commit = (
+                self._run_git(
+                    "commit-tree",
+                    tree,
+                    "-p",
+                    base_head,
+                    "-m",
+                    _quarantine_commit_message(operation_id),
+                    cwd=worktree,
+                    environment={
+                        **environment,
+                        "GIT_AUTHOR_NAME": "OwlBear",
+                        "GIT_AUTHOR_EMAIL": "owlbear@localhost",
+                        "GIT_COMMITTER_NAME": "OwlBear",
+                        "GIT_COMMITTER_EMAIL": "owlbear@localhost",
+                    },
+                )
+                .stdout.decode()
+                .strip()
+            )
+            self._verify_quarantine_commit(commit, base_head, paths, operation_id)
+            return commit
+        finally:
+            Path(index_path).unlink(missing_ok=True)
+
+    def _verify_quarantine_commit(
+        self,
+        commit: str,
+        base_head: str,
+        paths: tuple[str, ...],
+        operation_id: str,
+    ) -> None:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        if parents != [commit, base_head]:
+            _workspace_failure("quarantine commit does not have the exact reviewed worktree parent")
+        message = self._git("show", "-s", "--format=%B", commit).rstrip()
+        if message != _quarantine_commit_message(operation_id):
+            _workspace_failure("quarantine commit does not belong to the recovery operation")
+        changed = self._quarantine_commit_paths(commit, base_head)
+        if changed != paths:
+            _workspace_failure("quarantine commit does not contain the complete dirty worktree")
+
+    def _quarantine_commit_paths(self, commit: str, base_head: str) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                os.fsdecode(path)
+                for path in self._run_git(
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--name-only",
+                    "-z",
+                    base_head,
+                    commit,
+                ).stdout.split(b"\0")
+                if path
+            )
+        )
+
+    def _quarantine_commit_parent(self, commit: str) -> str:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        if len(parents) != _COMMIT_PARENT_COUNT:
+            _workspace_failure("quarantine commit does not have exactly one parent")
+        return parents[1]
 
     def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
         """Validate one writer-owned clean branch-head commit without mutation."""
@@ -2540,6 +3333,8 @@ class ChangeWorkspaceManager:
         receipt = coordination.external_head_adoption_receipt
         if receipt is None or receipt.adopted_head == coordination.last_reviewed_commit:
             return
+        if self._external_head_promotion_covers_adoption(coordination, receipt):
+            return
         if branch_head == coordination.last_reviewed_commit or self._is_ancestor(
             receipt.adopted_head,
             branch_head,
@@ -2548,6 +3343,25 @@ class ChangeWorkspaceManager:
             _coordination_conflict(
                 "cannot restart across an unpromoted external Change head; promote the adopted head first"
             )
+
+    def _external_head_promotion_covers_adoption(
+        self,
+        coordination: ChangeCoordination,
+        adoption: ChangeExternalHeadAdoptionReceipt,
+    ) -> bool:
+        promotion = coordination.external_head_promotion_receipt
+        return (
+            promotion is not None
+            and promotion.change_id == coordination.change_id
+            and promotion.branch == coordination.branch
+            and promotion.adoption_receipt_id == adoption.receipt_id
+            and promotion.promoted_head == adoption.adopted_head
+            and self._is_ancestor(
+                promotion.promoted_head,
+                coordination.last_reviewed_commit,
+                cwd=self._repository,
+            )
+        )
 
     def _validate_released_restart(
         self,
@@ -2579,10 +3393,6 @@ class ChangeWorkspaceManager:
             _coordination_conflict("restart attempt does not own the change writer")
         if branch_head not in {rejected_head, coordination.last_reviewed_commit}:
             _workspace_failure("change branch is outside the recoverable restart states")
-        if preserved is None:
-            if branch_head != rejected_head:
-                _workspace_failure("rejected head is not the current change branch")
-            self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
         if branch_head != rejected_head:
             return
         if coordination.worktree_path.exists():
@@ -2594,6 +3404,9 @@ class ChangeWorkspaceManager:
             )
             if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
                 _workspace_failure("restart requires a clean committed change worktree")
+        if preserved is None:
+            self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
+        if coordination.worktree_path.exists():
             self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=coordination.worktree_path)
             return
         self._git(
@@ -2953,8 +3766,15 @@ class ChangeWorkspaceManager:
         cwd: Path | None = None,
         check: bool = True,
         input_bytes: bytes | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> str:
-        result = self._run_git(*arguments, cwd=cwd, check=check, input_bytes=input_bytes)
+        result = self._run_git(
+            *arguments,
+            cwd=cwd,
+            check=check,
+            input_bytes=input_bytes,
+            environment=environment,
+        )
         return result.stdout.decode().strip()
 
     def _run_git(
@@ -2963,12 +3783,14 @@ class ChangeWorkspaceManager:
         cwd: Path | None = None,
         check: bool = True,
         input_bytes: bytes | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
             (resolve_git_executable(), "-C", str(cwd or self._repository), *arguments),
             check=check,
             capture_output=True,
             input=input_bytes,
+            env=dict(environment) if environment is not None else None,
         )
 
 
@@ -3025,6 +3847,28 @@ def _external_head_promotion_digest(receipt: ChangeExternalHeadPromotionReceipt)
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _design_package_snapshot_intent_digest(intent: ChangeDesignPackageSnapshotIntent) -> str:
+    payload = intent.model_dump(mode="json", exclude={"intent_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _design_package_snapshot_digest(receipt: ChangeDesignPackageSnapshotReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _quarantine_digest(receipt: DirtyWorktreeQuarantineReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _quarantine_commit_message(operation_id: str) -> str:
+    return f"chore: quarantine dirty Builder worktree ({operation_id})"
 
 
 def _coordination_conflict(detail: str) -> Never:

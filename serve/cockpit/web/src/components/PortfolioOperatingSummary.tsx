@@ -6,7 +6,6 @@ import type {
   WorkItemPortfolioTotals,
 } from '../api/workItems'
 import CopyCommand from './CopyCommand'
-import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
@@ -25,15 +24,15 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case 'intervene':
       return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return <>Continue Design with:{guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}</>
+      return <>Continue Design for: {guidance.change_ids.join(', ')}.</>
     case 'start-orchestration':
-      return <>Process {countLabel(guidance.work_count, 'queued work item')} with:<Command>/orchestrate</Command></>
+      return <>Process {countLabel(guidance.work_count, 'queued work item')}.</>
     case 'work-underway':
-      return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
+      return <>An orchestration session is already working; no new session is needed.</>
     case 'wait':
       return <>No session action needed.</>
     case 'create-change':
-      return <>Start with:<Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command></>
+      return <>Start a new Change.</>
   }
 }
 
@@ -42,6 +41,11 @@ interface PortfolioHeaderSummaryProps {
   totals: WorkItemPortfolioTotals
   needsFilter: WorkItemNeed | ''
   onNeedsFilter: (value: WorkItemNeed | '') => void
+}
+
+interface PortfolioOperatingSummaryProps {
+  operating: PortfolioOperatingView
+  commands?: string[]
 }
 
 interface AttentionMetricProps {
@@ -111,9 +115,9 @@ function ActivityMetric({ count, icon, label }: { count: number; icon: 'play' | 
 }
 
 export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter }: PortfolioHeaderSummaryProps) {
-  const designCount = operating.draft_design_change_ids.length + operating.design_required_change_ids.length
-  const deliveryCount = Math.max(0, operating.unfinished_change_count - operating.design_required_change_ids.length)
-  const currentChangeCount = operating.unfinished_change_count + operating.draft_design_change_ids.length
+  const designCount = operating.statuses.filter((status) => status.stage === 'design').length
+  const deliveryCount = operating.statuses.filter((status) => status.admission === 'admitted' && status.stage !== 'design').length
+  const currentChangeCount = operating.statuses.length
   const runningCount = totals.activity.working
 
   return (
@@ -155,14 +159,26 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
   )
 }
 
-export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView }) {
-  if (operating.guidance.length === 0) return null
+export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps) {
+  if (operating.guidance.length === 0 && commands.length === 0) return null
   return (
-    <aside className="grid min-w-0 gap-static-xs px-static-sm text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-static-md" aria-label="Session suggestions">
-      <strong className="text-primary">Session suggestions</strong>
-      <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0">
-        {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
-      </ul>
+    <aside className="grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-x-static-md" aria-label="Delivery guidance">
+      {operating.guidance.length > 0 ? (
+        <>
+          <strong className="text-primary">Next session</strong>
+          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0" data-testid="portfolio-next-session">
+            {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
+          </ul>
+        </>
+      ) : null}
+      {commands.length > 0 ? (
+        <>
+          <strong className="text-primary">Available commands</strong>
+          <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-lg gap-y-static-xs p-0" data-testid="portfolio-commands">
+            {commands.map((command) => <li className="min-w-0" key={command}><Command>{command}</Command></li>)}
+          </ul>
+        </>
+      ) : null}
     </aside>
   )
 }

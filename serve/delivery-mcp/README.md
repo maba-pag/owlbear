@@ -20,6 +20,11 @@ uv run python -m owlbear_delivery_mcp
 
 Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json` — not invoked directly.
 
+Delivery stores per-Change custody records under
+`.owlbear/delivery/runtime/coordination/changes/` and recoverable transaction manifests under
+`.owlbear/delivery/runtime/transactions/`. The sibling `runtime/claims/` namespace contains
+acquisition, publication, and verification locks.
+
 ### Tools
 
 The server exposes these operation groups:
@@ -27,15 +32,26 @@ The server exposes these operation groups:
 | Area | Tools |
 | --- | --- |
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
-| Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
-| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
+| Portfolio | `list_work_items`, `delivery_health`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
+| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
-| Legacy compatibility | `show_integration_attention`, `recover_integration_repair_claim` |
+| Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
-attention operation. The compatibility tools only make persisted legacy state visible or recoverable;
-current work uses sequential Change outcomes and user-owned pull-request acceptance.
+creation operation. These operations expose and recover current typed Integration attention; current
+work uses sequential Change outcomes and user-owned pull-request acceptance.
+
+Delivery startup isolates malformed or identity-mismatched per-Change state as bounded attention so
+valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch
+but remain visible through the Cockpit health section and the read-only `delivery_health` tool. The
+orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
+health hint; healthy acquisitions remain quiet. Global workspace, Git, configuration, and
+unsupported persisted-state failures still fail closed at startup. Current readers accept only the
+current persisted schema, and health never repairs persisted state. `list_work_items` continues to
+return only work-item projections, and `show_work_item` uses the MCP Work Item ID (the Change ID
+for a publication projection), not Cockpit's `publication` item key. `show_work_item_view` accepts
+a detailed view key such as `publication` when a workflow needs richer publication and conflict evidence.
 
 ## Configuration
 
@@ -48,16 +64,47 @@ directory, so no Delivery environment variable is required.
  "schema_version": 2,
  "remote": "origin",
  "target_branch": "main",
- "github_repository": "your-org/your-project"
+ "github_repository": "your-org/your-project",
+ "delivery_state_branch": "owlbear/delivery-state"
 }
 ```
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
-`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
-claim and one Build writer at a time. Agent frontmatter owns model selection; Delivery owns the fixed
-Planner, Builder, and reviewer routing. Startup validates the configured remote, the exact
+`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery uses one shared
+`execution_capacity` budget for active Planner and Builder outcome claims, defaulting to `3`. Each
+Change retains exact Build writer custody; `writer_capacity` is never an active admission limit. The
+optional host-local settings file is described in the [core Delivery configuration reference](../delivery/README.md#configuration).
+Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer
+routing.
+Startup validates the configured remote, the exact
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
 remote URL. It does not require or inspect a local target branch.
+
+The tracked `.owlbear/delivery/config.json` is required for canonical startup and contains schema
+version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_state_branch`; setup
+defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
+`owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
+remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` baseline with schema
+version `1`, `execution_capacity: 3`, and `claim_timeout_seconds: 3600` (60
+minutes), preserving an existing file on rerun. The optional ignored
+`.owlbear/delivery/runtime/host.local.json` may contain `execution_capacity` and/or
+`claim_timeout_seconds` for one host;
+local values override the baseline and are not synchronized through Git. The loader supplies the
+same defaults when either file or a field is absent, and all supplied numeric values must be positive
+integers. A historical `.owlbear/delivery/runtime/capacity-ledger.json` is not current runtime
+state or configuration and must not be edited manually. The Delivery server reads no environment
+variables.
+
+When upgrading an existing workspace, remove the obsolete `writer_capacity` field from
+`.owlbear/delivery/runtime/host.json` and any `.owlbear/delivery/runtime/host.local.json` override
+before restarting Delivery. Setup preserves an existing `host.json` on rerun, and startup rejects
+the stale field rather than rewriting it. Do not edit historical `capacity-ledger.json` data.
+
+At admission, Delivery commits the verified four-file Design package to the managed Change branch
+before opening its first draft pull request. Sparse checkpoints on `delivery_state_branch` retain
+frontier, publication, finalization, and completion authority without active claims, locks, process
+identifiers, or local paths. A fresh clone restores the last published checkpoint and requeues
+incomplete work; local `refs/owlbear/packages/*` refs are not a remote backup.
 
 `sync_change_with_target` is an allowed Change-worktree operation. It fetches the configured
 remote-tracking target and merges the exact target head into the managed Change worktree, preserving
@@ -70,26 +117,48 @@ Delivery does not resolve or execute a target-bound verification profile. This e
 that GitHub can merge the Change or that the merged result passes.
 
 `adopt_external_head` fetches one exact remote Change descendant into a fixed remote-tracking ref and
-fast-forwards only the managed Change worktree. Adoption proves provenance but does not grant review
-authority: it preserves the prior reviewed boundary, and Builder acquisition remains blocked until
-`promote_external_head(change_id, expected_head, operation_id)` records explicit review admission for
-the exact adopted head. Finalization may perform its own exact-head promotion for a completed adopted
-Change after independent review. Durable adoption and promotion receipts make both operations
-replayable after a process interruption.
+normally fast-forwards only the managed Change worktree. When an intentional out-of-band push has
+already advanced the clean managed worktree to that exact remote head, the operation observes the
+head and returns `provenance: "observed"` instead of moving it. Adoption proves provenance but does
+not grant review authority: it preserves the prior reviewed boundary, and Builder acquisition remains
+blocked until `promote_external_head(change_id, expected_head, operation_id)` records explicit review
+admission for the exact adopted head. Finalization may perform its own exact-head promotion for a
+completed adopted Change after independent review. Durable adoption and promotion receipts make both
+operations replayable after a process interruption and distinguish movement from observation.
 
-Legacy coordination records without publication-baseline provenance fail closed during publication
-summary generation. After confirming the exact Change head, baseline commit, and a clean idle managed
-worktree, `recover_publication_baseline` records one replayable recovery receipt. It does not resolve
-existing publication attention; use `resolve_change_disposition` separately after reviewing the repair.
+### External-head responses
+
+The `adopt_external_head` response uses transport schema `2` and always includes `provenance`:
+`fast-forward` means Delivery moved the managed worktree, while `observed` means the clean managed
+worktree was already at the exact remote head and Delivery verified that remote tip before recording
+it. Consumers must handle both values and must not infer review authority from adoption; the prior
+reviewed boundary remains in force until explicit promotion or fresh finalization.
+
+Persisted domain receipts use their current schemas and content-addressed identities. Older receipt
+schemas are unsupported input and are not converted by the current Delivery process.
+
+Coordination records without publication-baseline provenance fail closed during publication summary
+generation. After confirming the exact Change head, baseline commit, and a clean idle managed worktree,
+`recover_publication_baseline` records one replayable recovery receipt. It does not resolve existing
+publication attention; use `resolve_change_disposition` separately after reviewing the attention.
+
+`prepare_review_repair` verifies an open, unmerged Change pull request at its exact finalized head,
+returns it to draft when necessary, invalidates the old finalization and ready authority, and
+publishes the repair-ready state. It is the Delivery boundary for external review repair; review
+threads and reviewer decisions remain outside the product and are handled by the
+`/address-pr-feedback` workflow through the `gh` CLI.
+
+Target synchronization and external Change-head movement are blocked while review repair is active.
+Complete the repair with a new commit or abandon the Change. Review repair never restores stale
+finalization or ready authority, so fresh finalization and readiness are required after a repair.
 
 Delivery has no environment configuration. The server must be launched with the consuming workspace
-as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or
-`.owlbear/worktrees` roots remain, so live state cannot be silently orphaned before migration.
+as its current directory. Startup accepts only the canonical current Delivery roots.
 
 ## Dependencies
 
 | Package | Purpose |
 | --- | --- |
 | `mcp` | MCPServer framework |
-| `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, legacy compatibility, and completed history |
+| `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, Integration attention, and completed history |
 | `owlbear-delivery-github` | Fixed GitHub API adapter for draft pull-request publication |

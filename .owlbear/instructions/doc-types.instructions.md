@@ -7,8 +7,8 @@ applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/READM
 
 Project-local rule IDs for documentation shape, placement mapping, and audience targets.
 
-These files also use `r-doc-standards` for cross-reference integrity, audience fitness, and the
-eight audit dimensions.
+Before applying these project-specific document-type rules, read `r-doc-standards` for
+cross-reference integrity, audience fitness, and the eight audit dimensions.
 
 ## Rule IDs
 

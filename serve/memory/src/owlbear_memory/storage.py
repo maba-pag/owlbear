@@ -21,6 +21,14 @@ _MAX_FILE_SIZE_BYTES = 8192
 _YAML = YAML(typ="safe")
 
 
+def _pydantic_error_detail(error: PydanticValidationError) -> str:
+    fields: list[str] = []
+    for item in error.errors(include_url=False, include_context=False, include_input=False):
+        location = ".".join(str(part) for part in item.get("loc", ())) or "entry"
+        fields.append(f"{location} ({item.get('type', 'invalid')})")
+    return "schema validation failed: " + ", ".join(fields)
+
+
 def _assert_within_memory_dir(path: Path, memory_dir: Path) -> None:
     resolved_path = path.resolve()
     resolved_memory_dir = memory_dir.resolve()
@@ -37,27 +45,85 @@ def _reject_symlink(path: Path) -> None:
 
 def read_entry(path: Path) -> MemoryEntry | None:
     """Read one memory entry file; return None for malformed or unsafe files."""
-    if path.is_symlink() or not path.is_file():
+    try:
+        if path.is_symlink() or not path.is_file():
+            return None
+        return read_entry_strict(path)
+    except (OSError, ValueError):
         return None
+
+
+def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
+    data = _YAML.load(frontmatter_raw)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        msg = "YAML frontmatter must be an object"
+        raise TypeError(msg)
+    return data
+
+
+def _read_entry_file(path: Path) -> MemoryEntry:
+    return _read_entry_bytes(path.read_bytes())
+
+
+def _read_entry_bytes(raw: bytes) -> MemoryEntry:
+    if len(raw) > _MAX_FILE_SIZE_BYTES:
+        msg = f"file exceeds {_MAX_FILE_SIZE_BYTES} bytes"
+        raise ValueError(msg)
+
+    text = raw.decode("utf-8-sig")
+    parts = text.split("---", 2)
+    if len(parts) < _FRONTMATTER_PARTS:
+        msg = "YAML frontmatter is missing"
+        raise ValueError(msg)
+
+    _, frontmatter_raw, body = parts
+    data = _parse_frontmatter(frontmatter_raw)
+    data["content"] = body.strip()
+    return MemoryEntry(**data)
+
+
+def read_entry_strict(path: Path) -> MemoryEntry:
+    """Read one memory entry file or raise a safe validation diagnostic."""
+    if path.is_symlink():
+        msg = "symlink paths are not allowed"
+        raise ValueError(msg)
+    if not path.is_file():
+        msg = "memory entry file is missing"
+        raise ValueError(msg)
 
     try:
-        if path.stat().st_size > _MAX_FILE_SIZE_BYTES:
-            return None
+        return _read_entry_file(path)
+    except OSError as exc:
+        msg = f"file read failed ({type(exc).__name__})"
+        raise ValueError(msg) from exc
+    except UnicodeDecodeError as exc:
+        msg = "file is not valid UTF-8"
+        raise ValueError(msg) from exc
+    except YAMLError as exc:
+        msg = "YAML frontmatter is invalid"
+        raise ValueError(msg) from exc
+    except TypeError as exc:
+        raise ValueError(str(exc)) from exc
+    except PydanticValidationError as exc:
+        raise ValueError(_pydantic_error_detail(exc)) from exc
 
-        raw = path.read_text(encoding="utf-8-sig")
-        parts = raw.split("---", 2)
-        if len(parts) >= _FRONTMATTER_PARTS:
-            _, frontmatter_raw, body = parts
-            data = _YAML.load(frontmatter_raw)
-            if data is None:
-                data = {}
-            if isinstance(data, dict):
-                data["content"] = body.strip()
-                return MemoryEntry(**data)
-    except (OSError, UnicodeDecodeError, YAMLError, PydanticValidationError):
-        return None
-    else:
-        return None
+
+def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
+    """Parse one memory entry snapshot using the canonical storage rules."""
+    try:
+        return _read_entry_bytes(raw)
+    except UnicodeDecodeError as exc:
+        msg = "file is not valid UTF-8"
+        raise ValueError(msg) from exc
+    except YAMLError as exc:
+        msg = "YAML frontmatter is invalid"
+        raise ValueError(msg) from exc
+    except TypeError as exc:
+        raise ValueError(str(exc)) from exc
+    except PydanticValidationError as exc:
+        raise ValueError(_pydantic_error_detail(exc)) from exc
 
 
 def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: Path) -> None:

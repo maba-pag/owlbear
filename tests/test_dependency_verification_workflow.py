@@ -22,6 +22,7 @@ SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
 UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
+RUFF_TOOLCHAIN_SCRIPT = ROOT / ".github/scripts/check_ruff_toolchain.py"
 
 
 def _workflow(path: Path) -> dict[str, object]:
@@ -63,6 +64,20 @@ def _fake_node(tmp_path: Path, version: str) -> Path:
     return executable
 
 
+def _fake_ruff(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "ruff"
+    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
+def _fake_docker(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "docker"
+    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
 def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         [sys.executable, str(UV_VERSION_SCRIPT), "--uv-executable", str(executable)],
@@ -78,10 +93,11 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     pull_request = workflow["on"]["pull_request"]
 
     assert pull_request["branches"] == ["dev"]
-    assert pull_request["types"] == ["opened", "reopened", "synchronize"]
+    assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
         ".github/scripts/check_node_runtime.py",
+        ".github/scripts/check_ruff_toolchain.py",
         ".github/scripts/check_uv_version.py",
         ".github/scripts/check_uv_workspace_lock.py",
         ".github/workflows/**",
@@ -98,10 +114,30 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "serve/cockpit/web/package.json",
         "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "serve/tools/src/owlbear_tools/megalinter.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
-    assert "if" not in _job(workflow, "classify")
+    assert _job(workflow, "classify")["if"] == (
+        "github.event_name != 'pull_request' || github.event.pull_request.draft == false"
+    )
+    assert "workflow_dispatch" in workflow["on"]
+
+
+def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> None:
+    expected_types = ["opened", "reopened", "synchronize", "ready_for_review"]
+    for path in (AGENT_WORKFLOW_PATH, VERIFY_PATH, COCKPIT_VERIFY_PATH):
+        workflow = _workflow(path)
+        pull_request = workflow["on"]["pull_request"]
+        assert pull_request["types"] == expected_types
+        jobs = workflow["jobs"]
+        assert isinstance(jobs, dict)
+        for job_name, job in jobs.items():
+            assert isinstance(job, dict)
+            condition = job.get("if")
+            assert isinstance(condition, str), f"{path.name}:{job_name} needs a draft guard"
+            assert "github.event_name != 'pull_request'" in condition
+            assert "github.event.pull_request.draft == false" in condition
 
 
 def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> None:
@@ -130,13 +166,19 @@ def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> No
 def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> None:
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
+    resolve = _job(workflow, "resolve_runtimes")
     proof_python = _job(workflow, "proof-python")
     proof_node = _job(workflow, "proof-node")
 
+    assert resolve["outputs"] == {"python_matrix": "${{ steps.runtime.outputs.python_matrix }}"}
+    assert "python_upper=\"$(tr -d '\\r\\n' < .python-version)\"" in text
+    assert 'python_matrix=["3.12.14","3.13","%s"]' in text
+    assert 'python_matrix=["3.12.14","%s"]' in text
     assert proof_python["strategy"] == {
         "fail-fast": False,
-        "matrix": {"python": ["3.12.14", "3.13.15", "3.14.7"]},
+        "matrix": {"python": "${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}"},
     }
+    assert proof_python["needs"] == ["classify", "resolve_runtimes"]
     assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
     assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
     assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
@@ -144,7 +186,10 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text
-    assert proof_python["if"] == "needs.classify.outputs.python == 'true'"
+    assert proof_python["if"] == (
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "needs.classify.outputs.python == 'true'"
+    )
     assert "runtime" not in workflow["jobs"]
     assert "proof-pds" not in workflow["jobs"]
     assert "proof-root-node" not in workflow["jobs"]
@@ -154,6 +199,53 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
+
+
+def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert "ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}" in text
+    parity_steps = [step for step in compatibility["steps"] if step.get("name") == "Verify Ruff toolchain parity"]
+    assert parity_steps == [
+        {
+            "name": "Verify Ruff toolchain parity",
+            "if": "needs.classify.outputs.ruff_toolchain == 'true'",
+            "run": "uv run python .github/scripts/check_ruff_toolchain.py",
+        }
+    ]
+
+
+def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    classify = _job(workflow, "classify")
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert classify["outputs"]["proof_tooling"] == "${{ steps.proof_tooling.outputs.proof_tooling }}"
+    assert 'MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"' in text
+    assert '--base-ref "$MERGE_BASE"' in text
+    assert '--head-ref "$HEAD_SHA"' in text
+    assert compatibility["if"] == (
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "(needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true')"
+    )
+    proof_step_name = "Exercise dependency proof tooling"
+    steps = compatibility["steps"]
+    proof_steps = [step for step in steps if step.get("name") == proof_step_name]
+    assert proof_steps == [
+        {
+            "name": "Exercise dependency proof tooling",
+            "if": "needs.classify.outputs.proof_tooling == 'true'",
+            "run": (
+                "uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py"
+            ),
+        }
+    ]
+    assert ".github/workflows/*|" in text
+    assert "serve/tools/src/owlbear_tools/megalinter.py|" in text
+    assert "tests/test_dependency_verification_workflow.py)" in text
 
 
 def test_uv_runtime_check_precedes_uv_commands() -> None:
@@ -194,6 +286,32 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "below" in result.stderr
+
+
+def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path) -> None:
+    result = _run_script(
+        RUFF_TOOLCHAIN_SCRIPT,
+        "--ruff-executable",
+        str(_fake_ruff(tmp_path, "0.16.2")),
+        "--docker-executable",
+        str(_fake_docker(tmp_path, "0.16.2")),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "aligned at 0.16.2" in result.stdout
+
+
+def test_ruff_toolchain_proof_rejects_bundled_version_drift(tmp_path: Path) -> None:
+    result = _run_script(
+        RUFF_TOOLCHAIN_SCRIPT,
+        "--ruff-executable",
+        str(_fake_ruff(tmp_path, "0.16.2")),
+        "--docker-executable",
+        str(_fake_docker(tmp_path, "0.16.1")),
+    )
+
+    assert result.returncode != 0
+    assert "MegaLinter bundled Ruff=0.16.1" in result.stderr
 
 
 def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
@@ -248,15 +366,23 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     workflow = _workflow(VERIFY_PATH)
     gate = _job(workflow, "gate")
 
-    assert gate["if"] == "always()"
+    assert gate["if"] == (
+        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
+    )
     assert gate["needs"] == [
         "classify",
+        "resolve_runtimes",
         "proof-python",
         "proof-node",
         "compatibility",
     ]
     assert "extraction" not in gate["needs"]
     assert "prepare-fixes" not in gate["needs"]
+
+    gate_env = gate["steps"][0]["env"]
+    assert gate_env["COMPATIBILITY_EXPECTED"] == (
+        "${{ needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true' }}"
+    )
 
 
 def test_dependency_workflow_actions_are_pinned() -> None:
@@ -308,12 +434,110 @@ def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
     assert "frontend_runtime" not in frontend.github_outputs()
 
 
-def test_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
+def test_unrelated_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
     scope = classify_dependency_change([".pre-commit-config.yaml"], "")
 
     assert scope.precommit
     assert scope.compatibility
     assert not scope.python
+    assert not scope.ruff_toolchain
+
+
+@pytest.mark.parametrize(
+    ("path", "before", "after", "ruff_toolchain"),
+    [
+        (
+            "pyproject.toml",
+            '[project]\ndependencies = ["ruff==0.16.2"]\n',
+            '[project]\ndependencies = ["ruff==0.16.3"]\n',
+            True,
+        ),
+        (
+            "pyproject.toml",
+            '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.3"]\n',
+            '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.4"]\n',
+            False,
+        ),
+        (
+            "uv.lock",
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n',
+            '[[package]]\nname = "ruff"\nversion = "0.16.3"\n',
+            True,
+        ),
+        (
+            "uv.lock",
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n\n[[package]]\nname = "pytest"\nversion = "9.0.3"\n',
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n\n[[package]]\nname = "pytest"\nversion = "9.0.4"\n',
+            False,
+        ),
+        (
+            ".pre-commit-config.yaml",
+            "- repo: https://github.com/astral-sh/ruff-pre-commit\n  rev: v0.16.2\n  hooks: []\n",
+            "- repo: https://github.com/astral-sh/ruff-pre-commit\n  rev: v0.16.3\n  hooks: []\n",
+            True,
+        ),
+        (
+            ".pre-commit-config.yaml",
+            (
+                "- repo: https://github.com/astral-sh/ruff-pre-commit\n"
+                "  rev: v0.16.2\n"
+                "  hooks: []\n"
+                "- repo: https://github.com/rhysd/actionlint\n"
+                "  rev: v1.7.12\n"
+            ),
+            (
+                "- repo: https://github.com/astral-sh/ruff-pre-commit\n"
+                "  rev: v0.16.2\n"
+                "  hooks: []\n"
+                "- repo: https://github.com/rhysd/actionlint\n"
+                "  rev: v1.7.13\n"
+            ),
+            False,
+        ),
+        (
+            ".mega-linter.yml",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.1.0\nENABLE_LINTERS: []\n",
+            True,
+        ),
+        (
+            ".mega-linter.yml",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: []\n",
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\nENABLE_LINTERS: [PYTHON_RUFF]\n",
+            False,
+        ),
+        (
+            ".github/workflows/megalinter.yml",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@oldsha  # v10.0.0\n",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@newsha  # v10.0.0\n",
+            True,
+        ),
+        (
+            ".github/workflows/megalinter.yml",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 15\n",
+            "      uses: oxsecurity/megalinter/flavors/cupcake@sha  # v10.0.0\n      timeout-minutes: 20\n",
+            False,
+        ),
+    ],
+)
+def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
+    path: str,
+    before: str,
+    after: str,
+    *,
+    ruff_toolchain: bool,
+) -> None:
+    scope = classify_dependency_change(
+        [path],
+        "",
+        before_files={path: before},
+        after_files={path: after},
+    )
+
+    assert scope.ruff_toolchain is ruff_toolchain
+    assert scope.compatibility is (
+        ruff_toolchain or path in {".pre-commit-config.yaml", ".mega-linter.yml", ".github/workflows/megalinter.yml"}
+    )
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:
@@ -450,9 +674,12 @@ def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: 
 
 def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     workflow = _workflow(COCKPIT_VERIFY_PATH)
+    resolve = _job(workflow, "resolve_runtimes")
     proof = _job(workflow, "proof")
     browser = _job(workflow, "browser_compatibility")
+    gate = _job(workflow, "gate")
     text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
+    package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
 
     assert workflow["on"]["pull_request"]["paths"] == [
         "serve/cockpit/web/**",
@@ -462,14 +689,59 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     ]
     assert proof["strategy"] == {
         "fail-fast": False,
-        "matrix": {"node": ["24.16.0", "24.19.0"]},
+        "matrix": {"node": "${{ fromJSON(needs.resolve_runtimes.outputs.node_matrix) }}"},
     }
+    assert resolve["outputs"] == {"node_matrix": "${{ steps.runtime.outputs.node_matrix }}"}
+    assert proof["needs"] == "resolve_runtimes"
+    assert "node_upper=\"$(tr -d '\\r\\n' < serve/cockpit/web/.nvmrc)\"" in text
     assert "npm ci --engine-strict" in text
     assert "npm run build" in text
     assert browser["needs"] == "proof"
-    assert browser["if"] == "needs.proof.result == 'success'"
-    assert "npx playwright install chromium firefox webkit" in text
+    assert browser["if"] == (
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "needs.proof.result == 'success'"
+    )
+    assert gate["name"] == "Verify Cockpit"
+    assert gate["needs"] == ["resolve_runtimes", "proof", "browser_compatibility"]
+    assert gate["if"] == (
+        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
+    )
+    assert "workflow_dispatch:" in text
+    assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
+    assert browser["env"] == {
+        "E2E_COMPAT_BROWSERS": (
+            "${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}"
+        )
+    }
+    assert "npx playwright install --with-deps $E2E_COMPAT_BROWSERS" in text
     assert "npm run test:e2e:compat" in text
+    assert package["scripts"]["test:e2e:compat:all"] == (
+        "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs"
+    )
+
+
+def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
+    config = (ROOT / "serve/cockpit/web/playwright.compat.config.ts").read_text(encoding="utf-8")
+    workflow = _workflow(COCKPIT_VERIFY_PATH)
+    browser = _job(workflow, "browser_compatibility")
+
+    assert "trace: 'retain-on-failure'" in config
+    assert "outputFolder: 'playwright-report'" in config
+
+    upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser compatibility diagnostics"]
+    assert upload_steps == [
+        {
+            "name": "Upload browser compatibility diagnostics",
+            "if": "always()",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "with": {
+                "name": "cockpit-browser-compatibility-diagnostics",
+                "path": "serve/cockpit/web/test-results\nserve/cockpit/web/playwright-report\n",
+                "if-no-files-found": "ignore",
+                "retention-days": 15,
+            },
+        }
+    ]
 
 
 def test_cockpit_workflow_actions_are_pinned() -> None:
@@ -534,10 +806,30 @@ def test_ruff_declarations_and_renovate_updates_stay_coupled() -> None:
         r"repo: https://github\.com/astral-sh/ruff-pre-commit\s+rev: v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
         precommit,
     )
-    rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff toolchain")
+    rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff and MegaLinter toolchain")
+    generic_group_index = next(
+        index
+        for index, candidate in enumerate(renovate["packageRules"])
+        if candidate.get("description") == "Group routine version updates by ecosystem on Friday"
+    )
+    integrity_group_index = next(
+        index
+        for index, candidate in enumerate(renovate["packageRules"])
+        if candidate.get("description") == "Group integrity updates by ecosystem on Friday"
+    )
+    toolchain_index = renovate["packageRules"].index(rule)
 
     assert dependency_match is not None
     assert hook_match is not None
     assert dependency_match.group("version") == hook_match.group("version")
-    assert rule["matchManagers"] == ["pep621", "pre-commit"]
-    assert rule["matchPackageNames"] == ["ruff", "astral-sh/ruff-pre-commit"]
+    assert generic_group_index < toolchain_index
+    assert integrity_group_index < toolchain_index
+    assert rule["matchManagers"] == ["pep621", "pre-commit", "custom.regex", "github-actions"]
+    assert rule["matchDatasources"] == ["pypi", "github-tags", "docker"]
+    assert rule["matchPackageNames"] == [
+        "ruff",
+        "astral-sh/ruff-pre-commit",
+        "ghcr.io/oxsecurity/megalinter",
+        "ghcr.io/oxsecurity/megalinter-cupcake",
+        "oxsecurity/megalinter",
+    ]

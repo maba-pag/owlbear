@@ -73,6 +73,26 @@
 ### Outbound links
 - [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)
 
+## static-website-knowledge-ingestion-t03-recovery-plan.md
+- # `Static Website Knowledge Ingestion T03 Recovery Plan`
+- ## `1. Context and Question`
+- ## `2. Sources Studied`
+- ## `3. Analysis`
+- ### `3.1 Authority boundary`
+- ### `3.2 Reconciled challenger findings`
+- ### `3.3 Acceptance mapping that must be proved`
+- ### `3.4 Alternatives`
+- ## `4. Implementation Plan`
+- ### `4.1 Operator and state gate`
+- ### `4.2 Orchestrator acquisition`
+- ### `4.3 Reconstruct the candidate`
+- ### `4.4 Shape and commit`
+- ### `4.5 Exact-candidate proof`
+- ### `4.6 Review, publication, and transition`
+- ### `4.7 Follow-up boundaries`
+- ## `5. Verification Checklist`
+- ## `6. Recommendation, Confidence, and Limits`
+
 ## .github/README-automation.md
 - # `GitHub Automation`
 - ## `What lives here`
@@ -298,7 +318,9 @@
 ## serve/delivery/README.md
 - # `owlbear-delivery`
 - ## `Launch / Usage`
+- ## `Admission And Portfolio Freshness`
 - ## `Configuration`
+- ### `Portability And Recovery`
 - ## `Dependencies`
 
 ### Outbound links
@@ -309,6 +331,7 @@
 ## serve/delivery-github/README.md
 - # `owlbear-delivery-github — GitHub Publication Adapter`
 - ## `Launch / Usage`
+- ### `Pull-request read contract`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -321,11 +344,13 @@
 - ## `Launch / Usage`
 - ### `Tools`
 - ## `Configuration`
+- ### `External-head responses`
 - ## `Dependencies`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+- [core Delivery configuration reference](../serve/delivery/README.md#configuration)
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -415,6 +440,8 @@
 - ### ``MemoryState` (StrEnum)`
 - ## `Storage Primitives`
 - ### ``read_entry(path: Path) -> MemoryEntry | None``
+- ### ``read_entry_strict(path: Path) -> MemoryEntry``
+- ### ``read_entry_bytes_strict(raw: bytes) -> MemoryEntry``
 - ### ``write_entry(path: Path, entry: MemoryEntry | dict, *, memory_dir: Path) -> None``
 - ### ``delete_entry(path: Path, *, memory_dir: Path) -> None``
 - ## `Error Types`
@@ -453,12 +480,12 @@
 ## serve/tools/README.md
 - # `owlbear-tools — Workspace Utilities`
 - ## `Launch / Usage`
+- ## `Configuration`
 - ### `Dependency environment`
 - ### `Dependency profile`
-- ### `Public API`
-- ### `Excluded directories`
-- ## `Configuration`
 - ## `Dependencies`
+- ## `Public API`
+- ## `Excluded directories`
 
 ### Outbound links
 - [serve/README.md](../serve/README.md)
@@ -477,6 +504,7 @@
 - ### `Correction And Recovery`
 - ### `Publication, Acceptance, And Completed History`
 - ### `Current Manual Boundaries`
+- ## `Portability and recovery`
 - ## `Cockpit details`
 - ## `Project-Specific Customization`
 - ### `Adding local agents`
@@ -492,6 +520,7 @@
 - [Refreshing Consumer Configs](../setup/operating-owlbear.md#refreshing-consumer-configs)
 - [Uninstalling](../setup/operating-owlbear.md#uninstalling)
 - [Delivery Workflow](../setup/operating-owlbear.md#delivery-workflow)
+- [Portability and recovery](../setup/operating-owlbear.md#portability-and-recovery)
 - [Cockpit details](../setup/operating-owlbear.md#cockpit-details)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [`seed/`](../seed)
@@ -544,6 +573,10 @@
 - # `Sharing OwlBear with Teammates`
 - ## `Sharing Model`
 - ## `Set Up for a Teammate`
+- ### `1. Clone the project repository`
+- ### `2. Clone OwlBear as a sibling`
+- ### `3. Bootstrap OwlBear into the project workspace`
+- ### `4. Open the project in VS Code`
 - ## `Platform Notes`
 - ### `macOS and Linux`
 - ### `Windows`
@@ -556,7 +589,6 @@
 - ## `Troubleshooting`
 
 ### Outbound links
-- [Delivery state migration procedure](../serve/tools/README.md)
 - [installation verification](../setup/setup-guide.md#verify-the-installation)
 - [Project-Specific Customization](../setup/operating-owlbear.md#project-specific-customization)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
@@ -670,6 +702,8 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 ## share/instructions/python.instructions.md
 
 ## share/instructions/research-docs.instructions.md
+
+## share/prompts/address-pr-feedback.prompt.md
 
 ## share/prompts/arch-audit.prompt.md
 - # `Architecture Module Quality Audit`
@@ -1067,6 +1101,18 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
+## share/skills/w-address-pr-feedback/SKILL.md
+- # `Address Pull-Request Feedback`
+- ## `Step 0 - Route The Requested Mode`
+- ## `Step 1 - Bind The Change And Pull Request`
+- ## `Step 2 - Critically Triage Every Thread`
+- ## `Step 3 - Prepare The Provider And Delivery State`
+- ## `Step 4 - Repair One Thread At A Time`
+- ## `Step 5 - Hand Off To Finalization`
+- ## `Step 6 - Publish Then Reply And Resolve Threads`
+- ## `Output Template`
+- ## `Known Pitfalls`
+
 ## share/skills/w-change-finalization/SKILL.md
 - # `Change Finalization`
 - ## `Step 0 - Resolve Current Authority`
@@ -1081,7 +1127,8 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ## share/skills/w-delivery-attention-resolution/SKILL.md
 - # `Delivery Attention Resolution`
-- ## `Step 0 - Bind The Exact Current Attention`
+- ## `Lifecycle Status`
+- ## `Step 0 - Bind The Exact Current Attention Or Blocked Outcome`
 - ## `Step 1 - Diagnose Current State Read-Only`
 - ## `Step 2 - Present One Decision`
 - ## `Step 3 - Apply Only Existing Authority`
@@ -1170,6 +1217,7 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 ## share/skills/w-packet-building/SKILL.md
 - # `Packet Building`
 - ## `Step 0 - Validate Launch, Context, And Custody`
+- ### `Triage An Unclean Worktree`
 - ## `Step 1 - Fix The Task Boundary`
 - ## `Step 2 - Implement And Commit`
 - ## `Step 3 - Obtain Advisory Exact-Commit Review`
@@ -1190,24 +1238,14 @@ describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/deliv
 
 ## share/skills/w-test-curation/SKILL.md
 - # `Test Curation`
-- ## `Goal`
-- ## `Discovery`
-- ### `Inventory command`
-- ### `Finding transient tests`
-- ### `Filtering`
-- ## `Triage`
-- ### `Zero-value patterns (delete without mining)`
-- ### `Negative assertions`
-- ### `Potential-value patterns (read before deciding)`
-- ### `Mixed-file verdicts`
-- ## `Mining`
-- ### `Python`
-- ### `Frontend (Vitest/Jest)`
-- ### `E2E (Playwright)`
-- ## `Verify & Delete`
-- ## `Full Suite Gate`
-- ## `Commit`
-- ## `Output`
+- ## `Scope And Ownership`
+- ## `Step 1 - Bind The Scope`
+- ## `Step 2 - Discover Current Tests`
+- ## `Step 3 - Apply Durable Test Admission`
+- ## `Step 4 - Change The Smallest Set`
+- ## `Step 5 - Verify The Result`
+- ## `Step 6 - Report And Commit`
+- ## `Output Template`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
 

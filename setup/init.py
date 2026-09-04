@@ -59,6 +59,7 @@ _SKIP_IF_EXISTS_REL = frozenset(
         ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
+        ".owlbear/delivery/runtime/host.json",
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
@@ -76,38 +77,10 @@ _REFRESHABLE_CONFIG_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
-_RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
-    {
-        "# Brief drafts (transient template directory)",
-        "# Host-local Delivery startup configuration",
-        "/.owlbear/delivery/config.json",
-        ".owlbear/briefs/draft-new/",
-        "# Scratch / ad-hoc workspace",
-        ".owlbear/scratch/*",
-        "!.owlbear/scratch/.gitkeep",
-        "!.owlbear/scratch/.instructions.md",
-        "# Knowledge and memory databases",
-        ".owlbear/knowledge/*.db",
-        ".owlbear/knowledge/vectors/",
-        ".owlbear/memory/*.db",
-        "# Host-local Delivery worktrees and mutable capacity ledger",
-        "/.owlbear/delivery/runtime/",
-        "/.owlbear/delivery/worktrees/",
-        "/.owlbear/worktrees/",
-        "/.owlbear/delivery/migration.json",
-        "/.owlbear/delivery/integration-retirement.json",
-        "/.owlbear/scratch/delivery-integration-retirement/",
-        "/.owlbear/target/target-runtime/capacity.json",
-        "/.owlbear/target/target-runtime/integration-verification/",
-        "# Lock files (transient runtime artifacts)",
-        "**/.storage.lock",
-        ".owlbear/target/**/.storage.lock",
-        ".owlbear/kanban/activity.jsonl",
-    }
-)
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
+_DELIVERY_STATE_BRANCH = "owlbear/delivery-state"
 _INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
 _INSTALL_MANIFEST_SCHEMA_VERSION = 1
 _DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
@@ -317,15 +290,14 @@ def _merge_claims(old: dict, new: dict) -> dict:
     return merged
 
 
-def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | None = None) -> None:
+def _write_gitignore(src: Path, dest: Path) -> None:
     """Write .gitignore, appending owlbear-managed section to existing file.
 
     If the destination file does not exist, copies the full seed .gitignore.
     If it exists but has no owlbear marker, appends the owlbear-managed section.
-    If the marker is already present, removes retired rules and adds missing current rules.
+    If the marker is already present, adds missing current rules.
     """
     seed_content = src.read_text(encoding="utf-8")
-    retired = _RETIRED_OWLBEAR_GITIGNORE_LINES if retired_lines is None else retired_lines
 
     if not dest.exists():
         dest.write_text(seed_content, encoding="utf-8")
@@ -334,16 +306,12 @@ def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | N
     existing = dest.read_text(encoding="utf-8")
     if _OWLBEAR_GITIGNORE_MARKER in existing:
         prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
-        retained = [line for line in managed.splitlines() if line.strip() not in retired]
+        retained = managed.splitlines()
         while retained and not retained[0].strip():
             retained.pop(0)
         seed_managed = seed_content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines()
         retained_values = {line.strip() for line in retained}
-        additions = [
-            line
-            for line in seed_managed
-            if line.strip() and line.strip() not in retained_values and line.strip() not in retired
-        ]
+        additions = [line for line in seed_managed if line.strip() and line.strip() not in retained_values]
         merged = "\n".join((*retained, *additions)).rstrip()
         updated = prefix + marker + ("\n" + merged + "\n" if merged else "\n")
         if updated != existing:
@@ -1031,42 +999,48 @@ def _write_delivery_config(
     *,
     interactive: bool,
 ) -> None:
-    """Create or migrate the tracked project Delivery policy."""
+    """Create the tracked project Delivery policy."""
     path = target_dir / _DELIVERY_CONFIG_PATH
     if path.exists():
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            msg = f"Delivery configuration cannot be migrated: {path}"
+            msg = f"Delivery configuration cannot be read: {path}"
             raise RuntimeError(msg) from exc
-        if isinstance(existing, dict) and existing.get("schema_version") == _DELIVERY_CONFIG_SCHEMA_VERSION:
-            return
         if (
             not isinstance(existing, dict)
-            or set(existing) != {"schema_version", "integration_target"}
-            or existing.get("schema_version") != 1
-            or not isinstance(existing.get("integration_target"), str)
-            or not existing["integration_target"]
+            or existing.get("schema_version") != _DELIVERY_CONFIG_SCHEMA_VERSION
+            or set(existing)
+            != {
+                "schema_version",
+                "remote",
+                "target_branch",
+                "github_repository",
+                "delivery_state_branch",
+            }
         ):
-            msg = f"Delivery configuration schema cannot be migrated: {path}"
+            msg = f"Delivery configuration is not current: {path}"
             raise RuntimeError(msg)
-        target_branch = existing["integration_target"]
+        return
+    content = None
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = {
-        "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
-        "remote": remote,
-        "target_branch": _select_target_branch(
-            target_dir,
-            target_branch,
-            interactive=interactive,
-        ),
-        "github_repository": _select_github_repository(
-            target_dir,
-            remote,
-            github_repository,
-            interactive=interactive,
-        ),
-    }
+    if content is None:
+        content = {
+            "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
+            "remote": remote,
+            "target_branch": _select_target_branch(
+                target_dir,
+                target_branch,
+                interactive=interactive,
+            ),
+            "github_repository": _select_github_repository(
+                target_dir,
+                remote,
+                github_repository,
+                interactive=interactive,
+            ),
+            "delivery_state_branch": _DELIVERY_STATE_BRANCH,
+        }
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
@@ -1590,7 +1564,6 @@ def init(  # noqa: C901, PLR0913
     A successful run records its copied and merged surfaces in
     ``.owlbear/install-manifest.json`` for conservative uninstall.
     Also receipt-activates an empty target authority store for fresh workspaces.
-    Existing legacy stores remain untouched.
 
     Args:
         target_dir: Destination project directory.
@@ -1652,7 +1625,7 @@ def init(  # noqa: C901, PLR0913
         if rel_posix == ".owlbear/.gitignore":
             before = dest.read_text(encoding="utf-8") if dest.exists() else ""
             created = not dest.exists()
-            _write_gitignore(src, dest, retired_lines=frozenset())
+            _write_gitignore(src, dest)
             _record_seed_install(
                 manifest,
                 rel_posix,

@@ -595,13 +595,6 @@ def test_editorconfig_python_indentation_delegation_is_shared() -> None:
     assert "indent_size = 4" in editorconfig
 
 
-def test_editorconfig_does_not_keep_redundant_exceptions() -> None:
-    editorconfig = (_ROOT / ".editorconfig").read_text(encoding="utf-8")
-    assert "[.mega-linter.yml]" not in editorconfig
-    assert "[package-lock.json]" in editorconfig
-    assert "[serve/cockpit/web/package-lock.json]" not in editorconfig
-
-
 def test_ruff_formatter_conflict_ignore_remains_explicit() -> None:
     pyproject = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     tool = pyproject.get("tool")

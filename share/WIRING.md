@@ -48,11 +48,11 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task claims, recovers exact failed claims including retained legacy repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
+| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
 | builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
 | finalizer | GPT-5.6 Sol | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-5.6 Luna | `w-test-curation` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
+| test-curator | GPT-5.6 Luna | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
 | memory-curator | GPT-5.6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
@@ -67,7 +67,9 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
-| `resolve-delivery-attention` | Current agent directed by prompt | Loads `w-delivery-attention-resolution`; binds one exact Integration attention before interactive diagnosis |
+| `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
+| `resolve-target-conflict` | Current agent directed by prompt | Loads `w-target-conflict-resolution`; resolves exact target merges in the managed Change worktree and hands off to finalization |
+| `resolve-delivery-attention` | Temporary recovery/exception prompt | Loads `w-delivery-attention-resolution`; binds one exact Change or Integration attention before interactive diagnosis; retire only after Cockpit and Delivery provide tested guided routes for all prompt-only recovery capabilities |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
@@ -75,7 +77,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
 | `memory-audit` | Current agent directed by prompt | Loads memory structure and MCP memory before review; pending inspection uses preflight metadata and hands curation to `memory-curator` |
-| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation` and `w-test-curation`; uses its prompt-defined read-only audit procedure |
+| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation`; uses its prompt-defined read-only audit procedure |
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
 project-local skills in addition to the shared surface.
@@ -92,9 +94,11 @@ The named caller owns each on-demand condition and timing.
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
+| frontend conventions | package-provided `pds-knowledge-{framework}` | The project declares a PDS wrapper and its generated companion link resolves |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
 | Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
-| `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Integration attention needs interactive diagnosis or a user-selected remedy |
+| `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Delivery attention or blocked outcome needs interactive diagnosis or a user-selected remedy |
+| `resolve-target-conflict` prompt | `w-target-conflict-resolution` | One exact target merge needs managed-worktree resolution and Delivery-owned merge validation |
 
 ## Required Skill Consumers
 
@@ -109,11 +113,11 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, finalizer |
 | `h-module-design` | designer-challenger, planner-challenger |
 | `h-frontend-design` | conceptual-design-reviewer |
-| `r-workspace-governance` | builder |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
 | `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
+| `r-workspace-governance` | builder, test-curator |
 | `w-mem-curation` | memory-curator |
 | `h-knowledge-ops` | knowledge-ingestor, knowledge-enricher |
 | `w-knowledge-enrichment` | knowledge-enricher |

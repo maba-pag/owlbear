@@ -2,30 +2,43 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from owlbear_delivery.acceptance import CompletionReceiptStore
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
-    CapacityConfigurationConflictError,
-    CapacityLedgerConflictError,
+    ChangeCoordination,
     ChangeWorkspaceManager,
     CoordinationConflictError,
     PortfolioCoordinator,
 )
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
+from owlbear_delivery.delivery_admission import DeliveryAuthorityRegistry
+from owlbear_delivery.delivery_contract_discovery import (
+    DeliveryDiscoveryErrorCode,
+    DeliveryDiscoveryRootError,
+    discover_persisted_changes,
+)
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceAttentionReason,
+    DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryRuntime,
-    DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
-    parse_delivery_frontier,
+)
+from owlbear_delivery.delivery_state import (
+    DeliveryStatePublicationError,
+    DeliveryStatePublisher,
+    DeliveryStateSnapshot,
 )
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
@@ -36,11 +49,12 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
 )
-from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
-from owlbear_delivery.target_contract import DeliveryContract
+from owlbear_delivery.portfolio_operating import DeliveryHealthDiagnostic
+from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 
 if TYPE_CHECKING:
     from owlbear_delivery.publication_provider import PublicationProvider
+    from owlbear_delivery.target_contract import DeliveryContract
 
 
 class _LoaderModel(BaseModel):
@@ -54,14 +68,23 @@ class DeliveryStartupConfig(_LoaderModel):
     remote: str = Field(min_length=1)
     target_branch: str = Field(min_length=1)
     github_repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    delivery_state_branch: str = "owlbear/delivery-state"
 
 
 class DeliveryHostConfig(_LoaderModel):
-    """Host-local limits for concurrent Delivery work."""
+    """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
-    writer_capacity: int = Field(default=1, gt=0)
-    execution_capacity: int = Field(default=1, gt=0)
+    execution_capacity: int = Field(default=3, gt=0)
+    claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
+
+
+class _DeliveryHostConfigOverrides(_LoaderModel):
+    """Optional host-local overrides layered over tracked Delivery defaults."""
+
+    schema_version: Literal[1] = 1
+    execution_capacity: int | None = Field(default=None, gt=0)
+    claim_timeout_seconds: int | None = Field(default=None, gt=0)
 
 
 @dataclass(frozen=True)
@@ -83,6 +106,16 @@ class DeliveryApplicationLoadError(RuntimeError):
         super().__init__(detail)
 
 
+_REMOTE_REF_MISSING = 2
+_RECOVERABLE_ADMISSION_ERRORS = frozenset(
+    {
+        DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
+        DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
+    }
+)
+_logger = logging.getLogger(__name__)
+
+
 def _load_error(field: str, detail: str) -> DeliveryApplicationLoadError:
     return DeliveryApplicationLoadError(field, detail)
 
@@ -99,27 +132,6 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "workspace_root"
         detail = "Delivery state parents must not be symlinks"
         raise _load_error(field, detail)
-    migration_journal = delivery_root / "migration.json"
-    if migration_journal.exists():
-        field = "runtime_root"
-        detail = "interrupted Delivery migration must be recovered before startup"
-        raise _load_error(field, detail)
-    retirement_journal = delivery_root / "integration-retirement.json"
-    if retirement_journal.exists():
-        field = "runtime_root"
-        detail = "interrupted Integration retirement must be recovered before startup"
-        raise _load_error(field, detail)
-    for field, legacy_root in (
-        ("runtime_root", repository_root / ".owlbear/target"),
-        ("worktree_root", repository_root / ".owlbear/worktrees"),
-    ):
-        try:
-            has_legacy_state = legacy_root.exists() and any(legacy_root.iterdir())
-        except OSError as exc:
-            error = _load_error(field, "legacy Delivery path cannot be inspected")
-            raise error from exc
-        if has_legacy_state:
-            raise _load_error(field, "legacy Delivery state must be migrated before startup")
     paths = _DeliveryPaths(
         package_root=delivery_root / "packages",
         runtime_root=delivery_root / "runtime",
@@ -145,6 +157,7 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
     checks = (
         (("rev-parse", "--git-dir"), "repository_root"),
         (("check-ref-format", f"refs/heads/{config.target_branch}"), "target_branch"),
+        (("check-ref-format", f"refs/heads/{config.delivery_state_branch}"), "delivery_state_branch"),
         (("remote", "get-url", config.remote), "remote"),
         (
             ("rev-parse", "--verify", f"refs/remotes/{config.remote}/{config.target_branch}^{{commit}}"),
@@ -162,11 +175,12 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
                 "repository_root": "configured Git repository is invalid",
                 "remote": "configured Git remote is invalid",
                 "target_branch": "configured target branch or remote-tracking target is invalid",
+                "delivery_state_branch": "configured Delivery-state branch name is invalid",
             }[field]
             error = _load_error(field, detail)
             raise error
     remote_url = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
-        (git_executable, "-C", str(paths.repository_root), "remote", "get-url", config.remote),
+        (git_executable, "-C", str(paths.repository_root), "config", "--get", f"remote.{config.remote}.url"),
         check=False,
         capture_output=True,
         text=True,
@@ -202,68 +216,76 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
         field = "workspace_root"
         detail = "Delivery must start from the primary Git worktree"
         raise _load_error(field, detail)
-    legacy_root = primary_worktree / ".owlbear/worktrees"
-    for registered in registered_worktrees:
-        if registered == legacy_root or legacy_root in registered.parents:
-            field_name = "worktree_root"
-            detail = "legacy Git worktree registrations must be migrated before startup"
-            raise _load_error(field_name, detail)
 
 
-def _read_contract(change_root: Path) -> DeliveryContract:
+def _load_contracts(runtime_root: Path) -> tuple[dict[str, DeliveryContract], tuple[DeliveryHealthDiagnostic, ...]]:
     try:
-        contract = DeliveryContract.model_validate_json((change_root / "contract.json").read_bytes())
-    except (OSError, ValidationError) as exc:
-        error = _load_error("runtime_root", "Delivery state is invalid")
+        observations = discover_persisted_changes(runtime_root)
+    except DeliveryDiscoveryRootError as exc:
+        error = _load_error("runtime_root", exc.detail)
         raise error from exc
-    if contract.change_id != change_root.name:
-        error = _load_error("runtime_root", "Delivery state identity is invalid")
-        raise error
-    return contract
+    contracts: dict[str, DeliveryContract] = {}
+    diagnostics: list[DeliveryHealthDiagnostic] = []
+    for observation in observations:
+        if observation.error is not None:
+            detail = observation.diagnostic_detail or "Persisted Delivery state is unavailable."
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code=observation.error.code.value,
+                    detail=detail,
+                    change_id=observation.change_id,
+                    path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                )
+            )
+        if (
+            observation.contract is not None
+            and observation.contract.change_id == observation.change_id
+            and (observation.error is None or observation.error.code in _RECOVERABLE_ADMISSION_ERRORS)
+        ):
+            contracts[observation.change_id] = observation.contract
+    return contracts, tuple(diagnostics)
 
 
-def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
-    changes_root = runtime_root / "changes"
-    if not changes_root.exists():
-        return {}
-    if changes_root.is_symlink() or not changes_root.is_dir():
-        error = _load_error("runtime_root", "Delivery state root is invalid")
-        raise error
-    try:
-        change_roots = tuple(sorted(changes_root.iterdir()))
-    except OSError as exc:
-        error = _load_error("runtime_root", "Delivery state is invalid")
-        raise error from exc
-    return {
-        contract.change_id: contract
-        for change_root in change_roots
-        if change_root.is_dir() and not change_root.is_symlink()
-        for contract in (_read_contract(change_root),)
-    }
-
-
-def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
-    path = paths.runtime_root / "host.json"
+def _load_host_config_model[T: BaseModel](path: Path, model: type[T], default: T) -> T:
     try:
         if not path.exists():
             if path.is_symlink():
-                error = _load_error("host_config", "host-local Delivery capacity configuration is unsafe")
+                error = _load_error("host_config", "host-local Delivery runtime configuration is unsafe")
                 raise error
-            return DeliveryHostConfig(schema_version=1)
+            return default
         if path.is_symlink() or not path.is_file():
-            error = _load_error("host_config", "host-local Delivery capacity configuration must be a regular file")
+            error = _load_error("host_config", "host-local Delivery runtime configuration must be a regular file")
             raise error
-        return DeliveryHostConfig.model_validate_json(path.read_bytes())
+        return model.model_validate_json(path.read_bytes())
     except DeliveryApplicationLoadError:
         raise
     except ValidationError as exc:
         location = exc.errors(include_url=False, include_context=False)[0].get("loc")
         field = location[0] if isinstance(location, tuple | list) and location else "host_config"
-        error = _load_error(str(field), f"host-local Delivery capacity configuration is invalid: {path}")
+        error = _load_error(str(field), f"host-local Delivery runtime configuration is invalid: {path}")
         raise error from exc
     except (OSError, ValueError) as exc:
-        error = _load_error("host_config", f"host-local Delivery capacity configuration cannot be read: {path}")
+        error = _load_error("host_config", f"host-local Delivery runtime configuration cannot be read: {path}")
         raise error from exc
+
+
+def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
+    baseline = _load_host_config_model(
+        paths.runtime_root / "host.json",
+        DeliveryHostConfig,
+        DeliveryHostConfig(schema_version=1),
+    )
+    overrides = _load_host_config_model(
+        paths.runtime_root / "host.local.json",
+        _DeliveryHostConfigOverrides,
+        _DeliveryHostConfigOverrides(),
+    )
+    values = baseline.model_dump()
+    local_values = overrides.model_dump(exclude_none=True)
+    local_values.pop("schema_version", None)
+    values.update(local_values)
+    return DeliveryHostConfig.model_validate(values)
 
 
 def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
@@ -281,49 +303,48 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
     )
 
 
-def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryContract]) -> None:
-    try:
-        for contract in contracts.values():
-            frontier_path = runtime_root / "changes" / contract.change_id / "frontier.json"
-            frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
-            _require_runtime_bindings(contract, frontier)
-    except DeliveryRuntimeMigrationError as exc:
-        error = _load_error("runtime_root", str(exc))
-        raise error from exc
-    except (OSError, ValidationError, TypeError, ValueError) as exc:
-        error = _load_error("runtime_root", "Delivery runtime state is invalid")
-        raise error from exc
-
-
-def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFrontier) -> None:
-    expected = tuple((scope.outcome_id, scope.scope_id) for scope in contract.plan_scopes)
-    actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
-    if actual != expected:
-        raise ValueError
-
-
-def _compose_application(
+def _bootstrap_remote_state(
     config: DeliveryStartupConfig,
-    host_config: DeliveryHostConfig,
     paths: _DeliveryPaths,
-    contracts: dict[str, DeliveryContract],
-    publication_provider: PublicationProvider | None,
-) -> PortfolioApplication:
-    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+) -> tuple[DeliveryHealthDiagnostic, ...]:
+    """Restore missing local Delivery state from remote semantic snapshots."""
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
     try:
-        coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
-    except CapacityConfigurationConflictError as exc:
-        error = _load_error(
-            "writer_capacity",
-            f"host-local Delivery capacity configuration in host.json cannot be lower than active writers: {exc}",
+        state_publisher = DeliveryStatePublisher(
+            paths.repository_root,
+            remote=config.remote,
+            state_branch=config.delivery_state_branch,
         )
-        raise error from exc
-    except CapacityLedgerConflictError as exc:
-        error = _load_error(
-            "runtime_root",
-            f"Delivery capacity ledger changed concurrently; retry startup: {exc}",
+        inventory = state_publisher.read_snapshot_inventory()
+    except DeliveryStatePublicationError as exc:
+        return (
+            DeliveryHealthDiagnostic(
+                source="remote-state",
+                code="remote-state-unavailable",
+                detail=_bounded_health_detail(
+                    str(exc),
+                    "Remote Delivery-state snapshots are unavailable; local state was retained.",
+                ),
+                retry_safe=exc.retry_safe,
+            ),
         )
-        raise error from exc
+    diagnostics = [
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code=item.code,
+            detail=item.detail,
+            change_id=item.change_id,
+            path=item.path,
+        )
+        for item in inventory.diagnostics
+    ]
+    if not inventory.snapshots:
+        return tuple(diagnostics)
+    coordinator = PortfolioCoordinator(paths.runtime_root)
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
         paths.worktree_root,
@@ -331,7 +352,527 @@ def _compose_application(
         config.target_branch,
         config.remote,
     )
-    runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
+    local_change_ids = _local_runtime_change_ids(paths.runtime_root)
+    for snapshot in inventory.snapshots:
+        try:
+            if snapshot.change_id in local_change_ids:
+                _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
+            else:
+                _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
+        except _DeferredRemoteStateReconciliationError:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-change-head-ahead",
+                    detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
+                    change_id=snapshot.change_id,
+                )
+            )
+            continue
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-state-reconciliation-required",
+                    detail=_bounded_health_detail(
+                        str(exc),
+                        "Remote Delivery state could not be reconciled and was quarantined.",
+                    ),
+                    change_id=snapshot.change_id,
+                )
+            )
+    return tuple(diagnostics)
+
+
+def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each independent state owner.
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    package_store: DesignPackageStore,
+    coordinator: PortfolioCoordinator,
+    workspace_manager: ChangeWorkspaceManager,
+) -> None:
+    """Restore one exact remote snapshot into host-local Delivery state."""
+    revision, has_remote_change_branch = _fetch_snapshot_change_head(snapshot, config, paths.repository_root)
+    package_files = {
+        name: _read_git_blob(
+            paths.repository_root,
+            revision,
+            f".owlbear/delivery/packages/{snapshot.change_id}/{name}",
+        )
+        for name in ("authority.json", "design.md", "intent.md", "manifest.json")
+    }
+    package_store.restore(snapshot.change_id, package_files)
+    if has_remote_change_branch:
+        _restore_local_change_branch(snapshot, paths.repository_root)
+    worktree_path = paths.worktree_root / snapshot.change_id
+    if has_remote_change_branch and not snapshot.frontier.change_completion and not worktree_path.exists():
+        ChangeWorkspaceManager.restore_worktree(
+            paths.repository_root,
+            worktree_path,
+            snapshot.branch,
+        )
+    try:
+        coordinator.show(snapshot.change_id)
+    except CoordinationConflictError:
+        coordinator.register(
+            ChangeCoordination(
+                change_id=snapshot.change_id,
+                branch=snapshot.branch,
+                worktree_path=worktree_path,
+                integration_target=snapshot.integration_target,
+                target_head=snapshot.target_head,
+                publication_base_head=snapshot.publication_base_head,
+                last_reviewed_commit=snapshot.last_reviewed_commit,
+            )
+        )
+    _restore_runtime_snapshot(snapshot, paths.runtime_root)
+    workspace_manager.show(snapshot.change_id)
+
+
+def _validate_local_snapshot(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    package_store: DesignPackageStore,
+    coordinator: PortfolioCoordinator,
+) -> None:
+    """Reject local Delivery state outside exact or explicitly recoverable authority."""
+    try:
+        package = package_store.read_verified(snapshot.change_id)
+    except (OSError, RuntimeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery package cannot be reconciled with its remote snapshot", exc)
+    if package.package_id != snapshot.package_id:
+        _bootstrap_failure("local Delivery package differs from its remote snapshot")
+    try:
+        coordination = coordinator.show(snapshot.change_id)
+    except (OSError, RuntimeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery coordination cannot be reconciled with its remote snapshot", exc)
+    if (
+        coordination.branch != snapshot.branch
+        or coordination.integration_target != snapshot.integration_target
+        or coordination.target_head != snapshot.target_head
+        or coordination.publication_base_head != snapshot.publication_base_head
+        or coordination.last_reviewed_commit != snapshot.last_reviewed_commit
+    ):
+        _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
+    relative_root = paths.runtime_root / "changes" / snapshot.change_id
+    expected = {
+        "contract.json": _canonical_model(snapshot.contract),
+        "frontier.json": _canonical_model(snapshot.frontier),
+        "admission.json": _canonical_model(snapshot.admission),
+    }
+    frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    local_attention_successor = _is_unpublished_acceptance_attention_successor(snapshot.frontier, frontier)
+    _fetch_snapshot_change_head(
+        snapshot,
+        config,
+        paths.repository_root,
+        allow_local_branch=True,
+        allow_local_descendant=local_attention_successor,
+    )
+    if frontier_bytes != expected["frontier.json"] and not local_attention_successor:
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
+    _validate_local_snapshot_artifacts(relative_root, expected)
+    try:
+        completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+    except RuntimeError as exc:
+        _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
+    if completion != snapshot.completion:
+        _bootstrap_failure("local completion evidence differs from its remote snapshot")
+
+
+def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
+    """Read and validate the local frontier needed for startup reconciliation."""
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
+    try:
+        content = path.read_bytes()
+        return content, DeliveryFrontier.model_validate_json(content)
+    except (OSError, ValueError) as exc:
+        _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
+
+
+def _validate_local_snapshot_artifacts(
+    relative_root: Path,
+    expected: dict[str, bytes],
+) -> None:
+    """Validate the non-frontier local artifacts against the remote snapshot."""
+    for name in ("contract.json", "admission.json"):
+        _validate_local_snapshot_artifact(relative_root / name, name, expected[name])
+
+
+def _validate_local_snapshot_artifact(
+    path: Path,
+    name: str,
+    expected: bytes,
+) -> None:
+    """Require one local runtime artifact to match its remote snapshot bytes."""
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
+    actual = path.read_bytes()
+    if actual == expected:
+        return
+    _bootstrap_failure(f"local Delivery runtime artifact differs from its remote snapshot: {name}")
+
+
+def _fetch_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+    *,
+    allow_local_branch: bool = False,
+    allow_local_descendant: bool = False,
+) -> tuple[str, bool]:
+    """Fetch the remote Change branch or use the configured target for finalized authority."""
+    remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
+    if remote_branch is not None:
+        return _fetch_remote_snapshot_change_head(snapshot, config, repository, remote_branch)
+    local_head = _local_snapshot_change_head(
+        snapshot,
+        repository,
+        allow_local_branch=allow_local_branch,
+        allow_local_descendant=allow_local_descendant,
+    )
+    if local_head is not None:
+        return local_head, False
+    if snapshot.frontier.change_completion is not None:
+        return _fetch_completed_snapshot_change_head(snapshot, config, repository)
+    if snapshot.frontier.finalization is not None:
+        return _fetch_finalized_snapshot_change_head(snapshot, config, repository)
+    message = "remote Change branch is missing for an active Delivery snapshot"
+    return _bootstrap_failure(message)
+
+
+def _fetch_remote_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+    remote_branch: str,
+) -> tuple[str, bool]:
+    """Validate and fetch one remote Change branch at its snapshot head."""
+    if remote_branch != snapshot.change_head:
+        if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
+            raise _DeferredRemoteStateReconciliationError
+        _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
+    result = _run_loader_git(
+        repository,
+        "fetch",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--refmap=",
+        config.remote,
+        f"refs/heads/{snapshot.branch}",
+        check=False,
+    )
+    if result.returncode != 0:
+        _bootstrap_failure("remote Change branch could not be fetched")
+    return snapshot.change_head, True
+
+
+def _local_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    *,
+    allow_local_branch: bool,
+    allow_local_descendant: bool,
+) -> str | None:
+    """Return the snapshot head when a retained local branch is safe to use."""
+    if not allow_local_branch or snapshot.frontier.change_completion is not None:
+        return None
+    local_branch = _loader_git_output(
+        repository,
+        "rev-parse",
+        "--verify",
+        f"refs/heads/{snapshot.branch}^{{commit}}",
+    )
+    if local_branch == snapshot.change_head:
+        return snapshot.change_head
+    if (
+        allow_local_descendant
+        and local_branch is not None
+        and _loader_git_is_ancestor(repository, snapshot.change_head, local_branch)
+    ):
+        return snapshot.change_head
+    return None
+
+
+def _is_unpublished_acceptance_attention_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local acceptance attention captured after the last state snapshot."""
+    disposition = local_frontier.change_disposition
+    if (
+        snapshot_frontier.change_disposition is not None
+        or disposition is None
+        or disposition.kind != DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+        or local_frontier.change_disposition_resolution is not None
+        or local_frontier.ready is not None
+    ):
+        return False
+    common_attention_fields = {
+        "change_disposition": None,
+        "change_disposition_publication": None,
+        "change_disposition_resolution": None,
+        "ready": None,
+    }
+    if (
+        snapshot_frontier.finalization == local_frontier.finalization
+        and snapshot_frontier.finalization_invalidation == local_frontier.finalization_invalidation
+        and snapshot_frontier.model_copy(update=common_attention_fields)
+        == local_frontier.model_copy(update=common_attention_fields)
+    ):
+        return True
+    if disposition.acceptance_reason != DeliveryAcceptanceAttentionReason.HEAD_MOVED:
+        return False
+    snapshot_finalization = snapshot_frontier.finalization
+    local_invalidation = local_frontier.finalization_invalidation
+    if (
+        snapshot_finalization is None
+        or snapshot_frontier.finalization_invalidation is not None
+        or local_frontier.finalization is not None
+        or local_invalidation is None
+        or local_invalidation.change_id != snapshot_finalization.change_id
+        or local_invalidation.finalization_id != snapshot_finalization.finalization_id
+        or local_invalidation.expected_head != snapshot_finalization.exact_head
+        or local_invalidation.observed_head == snapshot_finalization.exact_head
+        or local_invalidation.reason != "head-drift"
+    ):
+        return False
+    transition_fields = {
+        **common_attention_fields,
+        "finalization": None,
+        "finalization_invalidation": None,
+    }
+    return snapshot_frontier.model_copy(update=transition_fields) == local_frontier.model_copy(update=transition_fields)
+
+
+def _fetch_completed_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+) -> tuple[str, bool]:
+    """Validate a completed snapshot against the configured target branch."""
+    if snapshot.frontier.change_completion is None:
+        _bootstrap_failure("remote Change branch is missing for an active Delivery snapshot")
+    target_ref = f"refs/remotes/{config.remote}/{config.target_branch}"
+    target_head = _loader_git_output(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+    if target_head is None:
+        _bootstrap_failure("configured target head is unavailable for a completed snapshot")
+    latch = snapshot.frontier.merged_pull_request_latch
+    if latch is None:
+        _bootstrap_failure("completed Delivery snapshot has no accepted merge identity")
+    if (
+        _run_loader_git(
+            repository,
+            "merge-base",
+            "--is-ancestor",
+            latch.accepted_merge_commit,
+            target_ref,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        _bootstrap_failure("accepted merge commit is not present on the configured target")
+    return latch.accepted_merge_commit, False
+
+
+def _fetch_finalized_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+) -> tuple[str, bool]:
+    """Validate finalized authority against the configured target after branch deletion."""
+    finalization = snapshot.frontier.finalization
+    if finalization is None:
+        _bootstrap_failure("finalized Delivery snapshot has no finalization authority")
+    if finalization.exact_head != snapshot.change_head:
+        _bootstrap_failure("finalized Delivery snapshot head does not match its finalization authority")
+    target_ref = f"refs/remotes/{config.remote}/{config.target_branch}"
+    target_head = _loader_git_output(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+    if target_head is None:
+        _bootstrap_failure("configured target head is unavailable for a finalized snapshot")
+    if not _loader_git_is_ancestor(repository, finalization.exact_head, target_ref):
+        _bootstrap_failure("finalized Change head is not present on the configured target")
+    return finalization.exact_head, False
+
+
+class _DeferredRemoteStateReconciliationError(Exception):
+    """One Change is safely deferred while its remote branch advances past its snapshot."""
+
+
+def _can_defer_remote_state_reconciliation(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+    remote_branch: str,
+) -> bool:
+    """Return whether one clean reviewed descendant can be quarantined at startup."""
+    if snapshot.frontier.change_completion is not None:
+        return False
+    if not _loader_git_is_ancestor(repository, snapshot.last_reviewed_commit, remote_branch):
+        return False
+    return _loader_git_is_ancestor(repository, snapshot.change_head, remote_branch)
+
+
+def _loader_git_is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
+    """Check commit ancestry without changing repository state."""
+    return (
+        _run_loader_git(
+            repository,
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def _restore_local_change_branch(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+) -> None:
+    """Create or validate the local Change branch at the remote snapshot head."""
+    branch_ref = f"refs/heads/{snapshot.branch}"
+    local_head = _loader_git_output(repository, "rev-parse", "--verify", f"{branch_ref}^{{commit}}")
+    if local_head is None:
+        result = _run_loader_git(repository, "branch", snapshot.branch, snapshot.change_head, check=False)
+        if result.returncode != 0:
+            _bootstrap_failure("local Change branch could not be recreated")
+    elif local_head != snapshot.change_head:
+        _bootstrap_failure("local Change branch differs from Delivery-state snapshot")
+
+
+def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Path) -> None:
+    """Atomically recreate one Change's startup and terminal evidence files."""
+    relative_root = Path("changes") / snapshot.change_id
+    participants = (
+        TransactionParticipant(runtime_root, relative_root / "contract.json", _canonical_model(snapshot.contract)),
+        TransactionParticipant(runtime_root, relative_root / "frontier.json", _canonical_model(snapshot.frontier)),
+        TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
+    )
+    completion_store = CompletionReceiptStore(runtime_root)
+    existing_completion = completion_store.read_bundle(snapshot.change_id)
+    if existing_completion != snapshot.completion:
+        if existing_completion is not None:
+            _bootstrap_failure("local completion evidence differs from its remote snapshot")
+        if snapshot.completion is not None:
+            participants += (
+                completion_store.participant(snapshot.completion.receipt),
+                completion_store.display_participant(snapshot.completion.display),
+            )
+    transaction = RuntimeTransaction(
+        runtime_root,
+        f"delivery-state-bootstrap-{snapshot.change_id}-{snapshot.snapshot_id}",
+        participants,
+    )
+    try:
+        transaction.commit()
+    except (OSError, RuntimeError, ValueError) as exc:
+        transaction.abort()
+        _bootstrap_failure("local Delivery state could not be restored", exc)
+
+
+def _local_runtime_change_ids(runtime_root: Path) -> set[str]:
+    changes_root = runtime_root / "changes"
+    if not changes_root.is_dir():
+        return set()
+    return {path.name for path in changes_root.iterdir() if path.is_dir() and not path.is_symlink()}
+
+
+def _remote_branch_head(repository: Path, remote: str, branch: str) -> str | None:
+    result = _run_loader_git(
+        repository,
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        remote,
+        f"refs/heads/{branch}",
+        check=False,
+    )
+    if result.returncode == _REMOTE_REF_MISSING:
+        return None
+    if result.returncode != 0:
+        _bootstrap_failure("remote Change branch could not be observed")
+    lines = result.stdout.decode(errors="replace").strip().splitlines()
+    if len(lines) != 1:
+        _bootstrap_failure("remote Change branch response is invalid")
+    return lines[0].split("\t", 1)[0]
+
+
+def _read_git_blob(repository: Path, revision: str, path: str) -> bytes:
+    result = _run_loader_git(repository, "show", f"{revision}:{path}", check=False)
+    if result.returncode != 0:
+        _bootstrap_failure("remote Delivery package file is missing")
+    return result.stdout
+
+
+def _loader_git_output(repository: Path, *arguments: str) -> str | None:
+    result = _run_loader_git(repository, *arguments, check=False)
+    return result.stdout.decode().strip() if result.returncode == 0 else None
+
+
+def _run_loader_git(
+    repository: Path,
+    *arguments: str,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (resolve_git_executable(), "-C", str(repository), *arguments),
+        check=check,
+        capture_output=True,
+    )
+
+
+def _canonical_model(model: BaseModel) -> bytes:
+    return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _bootstrap_failure(detail: str, cause: Exception | None = None) -> Never:
+    error = _load_error("runtime_root", detail)
+    if cause is None:
+        raise error
+    raise error from cause
+
+
+def _bounded_health_detail(detail: str, fallback: str) -> str:
+    compact = " ".join(detail.split())
+    return (compact or fallback)[:240]
+
+
+def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independent authority owners.
+    config: DeliveryStartupConfig,
+    host_config: DeliveryHostConfig,
+    paths: _DeliveryPaths,
+    contracts: dict[str, DeliveryContract],
+    publication_provider: PublicationProvider | None,
+    health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = (),
+) -> PortfolioApplication:
+    package_store = DesignPackageStore(
+        paths.package_root,
+        paths.repository_root,
+        transaction_root=paths.runtime_root,
+    )
+    coordinator = PortfolioCoordinator(paths.runtime_root)
+    workspace_manager = ChangeWorkspaceManager(
+        paths.repository_root,
+        paths.worktree_root,
+        coordinator,
+        config.target_branch,
+        config.remote,
+    )
+    delivery_state_publisher = DeliveryStatePublisher(
+        paths.repository_root,
+        remote=config.remote,
+        state_branch=config.delivery_state_branch,
+    )
+    runtimes, runtime_diagnostics = _composed_runtimes(
+        paths.runtime_root,
+        contracts,
+        workspace_manager,
+    )
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
         package_store=package_store,
@@ -348,6 +889,7 @@ def _compose_application(
             f"refs/remotes/{config.remote}/{config.target_branch}",
             paths.runtime_root,
         ),
+        delivery_state_publisher=delivery_state_publisher,
         change_branch_publisher=ChangeBranchPublisher(
             paths.repository_root,
             coordinator,
@@ -365,10 +907,12 @@ def _compose_application(
             if publication_provider is not None
             else None
         ),
+        health_diagnostics=(*health_diagnostics, *runtime_diagnostics),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
         execution_capacity=host_config.execution_capacity,
+        claim_timeout_seconds=host_config.claim_timeout_seconds,
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)
@@ -378,20 +922,30 @@ def _composed_runtimes(
     runtime_root: Path,
     contracts: dict[str, DeliveryContract],
     workspace_manager: ChangeWorkspaceManager,
-) -> dict[str, DeliveryRuntime]:
+) -> tuple[dict[str, DeliveryRuntime], tuple[DeliveryHealthDiagnostic, ...]]:
     runtimes = {}
+    diagnostics: list[DeliveryHealthDiagnostic] = []
     for change_id, contract in contracts.items():
         try:
-            reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
-        except CoordinationConflictError:
-            continue
-        runtimes[change_id] = DeliveryRuntime(
-            runtime_root,
-            contract,
-            workspace_manager=workspace_manager,
-            migration_reviewed_head=reviewed_head,
-        )
-    return runtimes
+            runtimes[change_id] = DeliveryRuntime(
+                runtime_root,
+                contract,
+                workspace_manager=workspace_manager,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code="runtime-unavailable",
+                    detail=_bounded_health_detail(
+                        str(exc),
+                        "Delivery runtime is unavailable and was quarantined.",
+                    ),
+                    change_id=change_id,
+                    path=f".owlbear/delivery/runtime/changes/{change_id}",
+                )
+            )
+    return runtimes, tuple(diagnostics)
 
 
 def load_delivery_application(
@@ -404,6 +958,25 @@ def load_delivery_application(
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
-    contracts = _load_contracts(paths.runtime_root)
-    _validate_runtime_state(paths.runtime_root, contracts)
-    return _compose_application(config, host_config, paths, contracts, publication_provider)
+    remote_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
+    if "delivery_state_branch" in config.model_fields_set:
+        remote_diagnostics = _bootstrap_remote_state(config, paths)
+    contracts, local_diagnostics = _load_contracts(paths.runtime_root)
+    health_diagnostics = (*remote_diagnostics, *local_diagnostics)
+    if health_diagnostics:
+        change_count = len(
+            {diagnostic.change_id for diagnostic in health_diagnostics if diagnostic.change_id is not None}
+        )
+        _logger.warning(
+            "Delivery started with %d health attention item(s) across %d Change(s); call delivery_health for details.",
+            len(health_diagnostics),
+            change_count,
+        )
+    return _compose_application(
+        config,
+        host_config,
+        paths,
+        contracts,
+        publication_provider,
+        health_diagnostics,
+    )

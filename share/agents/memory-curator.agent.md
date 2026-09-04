@@ -17,7 +17,8 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 
 <required_reading>
 
-- `w-mem-curation` — primary workflow
+- `w-mem-curation` — primary workflow; resolve the logical skill name through the configured
+  project-local root first and fall back to `share/skills` when no local override exists
 
 </required_reading>
 

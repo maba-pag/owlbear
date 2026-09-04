@@ -28,6 +28,7 @@ describe('PdsRuntimeTrapBehavior', () => {
   beforeEach(() => {
     // Clear module cache so each test gets a fresh main.tsx execution
     vi.resetModules()
+    document.body.innerHTML = '<div id="root"></div>'
     // Reset prior namespace state without breaking delayed PDS polyfill callbacks.
     ;(document as Record<string, unknown>).porscheDesignSystem = {}
     // Ensure customElements.whenDefined resolves immediately (no real PDS loading)
@@ -37,8 +38,10 @@ describe('PdsRuntimeTrapBehavior', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     ;(document as Record<string, unknown>).porscheDesignSystem = {}
     vi.restoreAllMocks()
+    document.body.replaceChildren()
   })
 
   it('document.porscheDesignSystem.cdn property descriptor has a getter (accessor trap)', async () => {
@@ -110,5 +113,25 @@ describe('PdsRuntimeTrapBehavior', () => {
 
     // Assert
     expect(trapPresentAtLoadTime).toBe(true)
+  })
+
+  it('renders a visible fallback when required PDS elements never register', async () => {
+    vi.useFakeTimers()
+    vi.mocked(customElements.whenDefined).mockImplementation(
+      () => new Promise<CustomElementConstructor>(() => {}),
+    )
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await import('../main')
+    await Promise.resolve()
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(10_000)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const fallback = document.querySelector<HTMLElement>('#root [role="alert"]')
+    expect(fallback).not.toBeNull()
+    expect(fallback).toHaveTextContent('OwlBear Cockpit could not load')
+    expect(fallback).toHaveTextContent('Reload page')
   })
 })

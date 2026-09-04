@@ -5,11 +5,10 @@ import type {
   WorkItemCardView,
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
-import CopyCommand from './CopyCommand'
+import { StatusChip, WorkRow } from './DeliveryPrimitives'
 import {
   PROGRESS_STAGE_LABELS,
   workItemStatus,
-  workItemStatusClassName,
 } from './workItemPresentation'
 
 interface WorkPortfolioTableProps {
@@ -56,10 +55,7 @@ function ItemLink({
 
 function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
   const navigate = useNavigate()
-  if (item.action.kind === 'none' || !item.action.label) return null
-  if (item.action.command) {
-    return <CopyCommand command={item.action.command} />
-  }
+  if (item.action.kind === 'none' || !item.action.label || item.action.command) return null
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
   return (
@@ -83,11 +79,14 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
 function ProgressState({ item }: { item: WorkItemCardView }) {
   const stage = item.stage === null ? null : PROGRESS_STAGE_LABELS[item.stage]
   const quantified = item.progress.done !== null && item.progress.total !== null && item.progress.total > 0
+  const complete = quantified && item.progress.done === item.progress.total
+  const state = workItemStatus(item)
+  if (complete || (!stage && item.progress.label === state.label)) return null
   const percentage = quantified
     ? Math.min(100, Math.round((item.progress.done as number / (item.progress.total as number)) * 100))
     : null
   return (
-    <span>
+    <span className="mt-static-xs block">
       {stage ? <strong className="block font-medium text-primary">{stage}</strong> : null}
       {percentage !== null ? (
         <span
@@ -110,10 +109,10 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
   const state = workItemStatus(item)
   return (
     <span>
-      <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(state.tone)}`} data-status-tone={state.tone}>{state.label}</span>
+      <StatusChip label={state.label} tone={state.tone} />
       {state.detail ? <span className="mt-1 block text-xs text-contrast-medium">{state.detail}</span> : null}
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
+      {item.action.kind !== 'none' && !item.action.command ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
     </span>
   )
 }
@@ -122,18 +121,16 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
     <div className="hidden overflow-x-auto md:block" data-testid="work-table-scroll">
-      <table className="w-full min-w-[48rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
+      <table className="w-full min-w-[42rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
         <caption className="sr-only">Current Outcomes for {group.title}</caption>
         <colgroup>
-          <col className="w-[44%]" />
-          <col className="w-[24%]" />
-          <col className="w-[32%]" />
+          <col className="w-[60%]" />
+          <col className="w-[40%]" />
         </colgroup>
-        <thead>
+        <thead className="sr-only">
           <tr className="text-2xs font-semibold uppercase text-contrast-high">
             <th className="px-static-sm py-static-xs" scope="col">Work</th>
-            <th className="px-static-sm py-static-xs" scope="col">Progress</th>
-            <th className="px-static-sm py-static-xs" scope="col">Status</th>
+            <th className="px-static-sm py-static-xs" scope="col">State</th>
           </tr>
         </thead>
         <tbody>
@@ -148,8 +145,8 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
                 <td className={`rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm ${attentionBorder(item)}`}>
                   <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
                   <span className="block text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
+                  <ProgressState item={item} />
                 </td>
-                <td className="border-y border-contrast-low px-static-sm py-static-sm"><ProgressState item={item} /></td>
                 <td className="rounded-r-lg border-y border-r border-contrast-low px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
               </tr>
             )
@@ -167,19 +164,12 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
       {outcomes.map((item) => {
         const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
         return (
-          <article
-            key={workItemIdentity(item)}
-            className={['relative grid gap-static-sm rounded-lg border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
-            data-work-item={workItemIdentity(item)}
-            aria-label={`${item.title} work item`}
-          >
+          <WorkRow key={workItemIdentity(item)} selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`${item.title} work item`} className="grid gap-static-sm p-static-sm">
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
             <span className="text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
-            <div className="grid grid-cols-2 gap-static-sm text-xs">
-              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-high">Progress</span><ProgressState item={item} /></div>
-              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-high">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
-            </div>
-          </article>
+            <ProgressState item={item} />
+            <CurrentState item={item} onSelect={onSelect} />
+          </WorkRow>
         )
       })}
     </div>
@@ -193,16 +183,8 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
   return (
-    <section
-      className={[
-        'relative mt-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md md:px-0 md:py-0',
-        attentionBorder(item),
-        isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
-      ].join(' ')}
-      aria-label={`Change publication for ${group.title}`}
-      data-work-item={workItemIdentity(item)}
-    >
-      <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:items-start md:gap-0">
+    <WorkRow selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`Change publication for ${group.title}`} className="mt-static-sm px-static-sm py-static-md md:px-0 md:py-0">
+      <dl className="grid gap-static-sm md:grid-cols-[minmax(0,60fr)_minmax(0,40fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
           <dt className="sr-only">Work</dt>
           <dd>
@@ -217,18 +199,15 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
               Publication
             </Link>
             <span className="text-xs text-contrast-medium">Change: {group.title}</span>
+            <ProgressState item={item} />
           </dd>
         </div>
         <div className="md:px-static-sm md:py-static-sm">
-          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
-          <dd><ProgressState item={item} /></dd>
-        </div>
-        <div className="md:px-static-sm md:py-static-sm">
-          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
+          <dt className="sr-only">State</dt>
           <dd><CurrentState item={item} onSelect={onSelect} /></dd>
         </div>
       </dl>
-    </section>
+    </WorkRow>
   )
 }
 
@@ -238,7 +217,10 @@ export default function WorkPortfolioTable({ groups, selected, emptyMessage, onS
     <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-lg">
       {groups.map((group) => (
         <section key={group.change_id} className="min-w-0" aria-labelledby={`work-group-${group.change_id}`}>
-          <h2 id={`work-group-${group.change_id}`} className="mb-static-xs border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">{group.title}</h2>
+          <div className="mb-static-xs flex min-w-0 flex-wrap items-baseline justify-between gap-x-static-md gap-y-static-xs border-b border-contrast-low px-static-sm pb-static-xs">
+            <h2 id={`work-group-${group.change_id}`} className="m-0 min-w-0 text-md font-semibold text-primary">{group.title}</h2>
+            <span className="text-xs text-contrast-medium"><strong className="font-semibold text-primary">{group.outcome_completed} of {group.outcome_total}</strong> outcomes <span aria-hidden="true">·</span> {group.lifecycle.replace(/-/g, ' ')}</span>
+          </div>
           <DesktopTable group={group} selected={selected} onSelect={onSelect} />
           <CompactRows group={group} selected={selected} onSelect={onSelect} />
           <PublicationGate group={group} selected={selected} onSelect={onSelect} />

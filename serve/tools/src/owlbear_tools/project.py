@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from owlbear_tools.commands import command_footer
-from owlbear_tools.delivery_config import _delivery_config_status, _legacy_delivery_blockers
+from owlbear_tools.delivery_config import _delivery_config_status
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
@@ -69,7 +69,6 @@ def doctor() -> None:
     failures.extend(config_failures)
     if config_success is not None:
         print(f"PASS  {config_success}")  # noqa: T201
-    failures.extend(_legacy_delivery_blockers(root))
     relative = Path(".vscode/mcp.json")
     if (root / relative).is_file():
         print(f"PASS  {relative}")  # noqa: T201

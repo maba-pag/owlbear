@@ -55,6 +55,18 @@ def compute_content_hash(content: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
+def _embedding_failure(*, query: bool) -> KnowledgeOperationError:
+    """Return a safe generic failure for non-BGE embedding providers."""
+    return KnowledgeOperationError(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.QUERY if query else KnowledgeFailureStage.INDEXING,
+            code="query_embedding_failed" if query else "embedding_failed",
+            retryable=True,
+            message="Query embedding failed" if query else "Document embedding failed",
+        )
+    )
+
+
 class ContentStore(ContentStoreProtocol):
     """SQLite-backed Content storage with deterministic ingest dedup."""
 
@@ -578,12 +590,7 @@ class ContentStore(ContentStoreProtocol):
         except KnowledgeOperationError:
             raise
         except Exception as exc:
-            raise _operation_error(
-                KnowledgeFailureStage.INDEXING,
-                "embedding_failed",
-                retryable=True,
-                message="Document embedding failed",
-            ) from exc
+            raise _embedding_failure(query=False) from exc
 
     def _embed_query(self, query_text: str) -> object:
         try:
@@ -599,19 +606,8 @@ class ContentStore(ContentStoreProtocol):
         except KnowledgeOperationError:
             raise
         except Exception as exc:
-            raise _operation_error(
-                KnowledgeFailureStage.QUERY,
-                "query_embedding_failed",
-                retryable=True,
-                message="Query embedding failed",
-            ) from exc
-
-        raise _operation_error(
-            KnowledgeFailureStage.QUERY,
-            "query_embedding_failed",
-            retryable=True,
-            message="Query embedding failed",
-        )
+            raise _embedding_failure(query=True) from exc
+        raise _embedding_failure(query=True)
 
     def _get_chunks_by_ids(self, chunk_ids: tuple[str, ...]) -> dict[str, ContentChunk]:
         if not chunk_ids:

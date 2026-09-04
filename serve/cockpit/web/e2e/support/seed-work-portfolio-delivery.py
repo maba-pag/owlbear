@@ -20,6 +20,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
+from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.delivery_application_loader import DeliveryHostConfig, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
@@ -223,6 +224,41 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
     )
 
 
+def _write_admission(
+    change_root: Path,
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    checkpoint_commit: str,
+) -> None:
+    contract_payload = (
+        json.dumps(
+            contract.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        + b"\n"
+    )
+    source_bindings_payload = json.dumps(
+        [binding.model_dump(mode="json") for binding in contract.source_bindings],
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    receipt_payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": hashlib.sha256(contract_payload).hexdigest(),
+        "source_bindings_digest": hashlib.sha256(source_bindings_payload).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": checkpoint_commit,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    receipt_payload["receipt_id"] = hashlib.sha256(
+        json.dumps(receipt_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    (change_root / "admission.json").write_bytes(_canonical(DeliveryAdmissionReceipt.model_validate(receipt_payload)))
+
+
 def _write_current_delivery(runtime_root: Path, head: str) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
@@ -240,6 +276,7 @@ def _write_current_delivery(runtime_root: Path, head: str) -> None:
     change_root.mkdir(parents=True, exist_ok=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _write_admission(change_root, contract, frontier, head)
 
 
 def _write_publication_delivery(runtime_root: Path, head: str) -> None:
@@ -264,6 +301,7 @@ def _write_publication_delivery(runtime_root: Path, head: str) -> None:
     change_root.mkdir(parents=True, exist_ok=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    _write_admission(change_root, contract, frontier, head)
 
 
 def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]:
@@ -384,7 +422,7 @@ def _write_config(workspace: Path) -> None:
 
 
 def _write_host_config(workspace: Path) -> None:
-    config = DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=2)
+    config = DeliveryHostConfig(schema_version=1, execution_capacity=2)
     path = workspace / ".owlbear/delivery/runtime/host.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(), encoding="utf-8")
@@ -405,7 +443,7 @@ def seed_delivery(workspace: Path) -> None:
     _write_current_delivery(runtime_root, head)
     _write_publication_delivery(runtime_root, head)
     _write_host_config(workspace)
-    coordinator = PortfolioCoordinator(runtime_root, capacity=2)
+    coordinator = PortfolioCoordinator(runtime_root)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
     workspace_manager.ensure("work-e2e")
     workspace_manager.ensure("publication-e2e")

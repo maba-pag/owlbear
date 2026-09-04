@@ -53,6 +53,17 @@ class MegaLinterImage:
         """Return the image tag."""
         return self.reference.rsplit(":", 1)[1]
 
+    @property
+    def flavor(self) -> str:
+        """Return the MegaLinter flavor encoded in the image repository."""
+        if self.repository == _BASE_IMAGE_REPOSITORY:
+            return "all"
+        prefix = f"{_BASE_IMAGE_REPOSITORY}-"
+        if not self.repository.startswith(prefix):
+            msg = f"{self.repository} is not a recognized MegaLinter image repository"
+            raise ValueError(msg)
+        return self.repository.removeprefix(prefix)
+
 
 @dataclass(frozen=True)
 class DockerRuntimeApp:

@@ -146,10 +146,13 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         ".owlbear/adapters",
         ".owlbear/target-cutover-request.json",
         ".owlbear/target-cutover.json",
-        ".owlbear/delivery/runtime",
+        ".owlbear/delivery/runtime/capacity-ledger.json",
+        ".owlbear/delivery/runtime/changes",
+        ".owlbear/delivery/runtime/coordination",
         ".owlbear/delivery/worktrees",
     ):
         assert not (target_dir / retired_path).exists()
+    assert (target_dir / ".owlbear/delivery/runtime/host.json").is_file()
     assert not (target_dir / ".owlbear/changes").exists()
     assert not (target_dir / ".owlbear/kanban").exists()
     assert not (target_dir / "openspec").exists()
@@ -200,7 +203,15 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     gitignore = (target_dir / ".gitignore").read_text(encoding="utf-8")
     assert "/.owlbear/delivery/config.json" not in gitignore
     assert "/.owlbear/delivery/runtime/" not in gitignore
-    assert "delivery/runtime/" in (target_dir / ".owlbear/.gitignore").read_text(encoding="utf-8")
+    nested_gitignore = (target_dir / ".owlbear/.gitignore").read_text(encoding="utf-8")
+    assert "delivery/runtime/*" in nested_gitignore
+    assert "!delivery/runtime/host.json" in nested_gitignore
+    host_config = json.loads((target_dir / ".owlbear/delivery/runtime/host.json").read_text(encoding="utf-8"))
+    assert host_config == {
+        "schema_version": 1,
+        "execution_capacity": 3,
+        "claim_timeout_seconds": 3600,
+    }
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
@@ -212,7 +223,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     package_install.assert_not_called()
 
 
-def test_init_rerun_preserves_user_settings_and_target_records(
+def test_init_rerun_preserves_user_settings_and_current_runtime_config(
     tmp_path: Path,
     init_module: types.ModuleType,
     run_init_without_test_surface: Callable[..., None],
@@ -230,33 +241,16 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     delivery_config = json.loads(delivery_config_path.read_text(encoding="utf-8"))
     delivery_config["target_branch"] = "release"
     delivery_config_path.write_text(json.dumps(delivery_config), encoding="utf-8")
-    gitignore_path = target_dir / ".gitignore"
-    gitignore_path.write_text(
-        gitignore_path.read_text(encoding="utf-8")
-        + "\n# Host-local Delivery worktrees and mutable capacity ledger\n"
-        + "/.owlbear/worktrees/\n"
-        + "/.owlbear/target/target-runtime/capacity.json\n"
-        + "/.owlbear/target/target-runtime/integration-verification/\n"
-        + ".owlbear/target/**/.storage.lock\n"
-        + ".owlbear/target-cutover.pending\n"
-        + "# Brief drafts (transient template directory)\n"
-        + ".owlbear/briefs/draft-new/\n",
-        encoding="utf-8",
-    )
+    host_local_config_path = target_dir / ".owlbear/delivery/runtime/host.local.json"
+    host_local_config_path.write_text('{"claim_timeout_seconds": 5}\n', encoding="utf-8")
     nested_gitignore_path = target_dir / ".owlbear/.gitignore"
     nested_gitignore_path.write_text(
-        nested_gitignore_path.read_text(encoding="utf-8") + "\ncustom-consumer-rule/\n",
+        nested_gitignore_path.read_text(encoding="utf-8").replace(
+            "delivery/runtime/*\n!delivery/runtime/host.json", "delivery/runtime/"
+        )
+        + "\ncustom-consumer-rule/\n",
         encoding="utf-8",
     )
-
-    records = {
-        ".owlbear/target/changes/example/authority.json": b'{"authority":"preserved"}\n',
-        ".owlbear/target/changes/example/target-runtime/state.json": b'{"runtime":"preserved"}\n',
-    }
-    for relative_path, content in records.items():
-        path = target_dir / relative_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
 
     run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
     first_rerun = {path.relative_to(target_dir): path.read_bytes() for path in target_dir.rglob("*") if path.is_file()}
@@ -267,21 +261,10 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
     assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["target_branch"] == "release"
-    assert all((target_dir / path).read_bytes() == content for path, content in records.items())
-    gitignore = gitignore_path.read_text(encoding="utf-8")
-    for retired in (
-        "/.owlbear/delivery/runtime/",
-        "/.owlbear/delivery/worktrees/",
-        "/.owlbear/worktrees/",
-        "/.owlbear/target/target-runtime/capacity.json",
-        "/.owlbear/target/target-runtime/integration-verification/",
-        ".owlbear/target/**/.storage.lock",
-        ".owlbear/briefs/draft-new/",
-    ):
-        assert retired not in gitignore
-    assert ".owlbear/target-cutover.pending" in gitignore
+    assert json.loads(host_local_config_path.read_text(encoding="utf-8"))["claim_timeout_seconds"] == 5
     nested_gitignore = nested_gitignore_path.read_text(encoding="utf-8")
-    assert "delivery/runtime/" in nested_gitignore
+    assert "delivery/runtime/*" in nested_gitignore
+    assert "!delivery/runtime/host.json" in nested_gitignore
     assert "custom-consumer-rule/" in nested_gitignore
     assert second_rerun == first_rerun
 
@@ -306,34 +289,6 @@ def test_init_rerun_preserves_legacy_managed_coverage_rule(
     run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
     assert ".coverage.*" in gitignore_path.read_text(encoding="utf-8").splitlines()
-
-
-def test_init_migrates_exact_schema_one_delivery_policy(
-    tmp_path: Path,
-    init_module: types.ModuleType,
-    run_init_without_test_surface: Callable[..., None],
-) -> None:
-    target_dir = tmp_path / "project"
-    config_path = target_dir / ".owlbear/delivery/config.json"
-    config_path.parent.mkdir(parents=True)
-    config_path.write_text('{"schema_version":1,"integration_target":"release"}\n', encoding="utf-8")
-
-    run_init_without_test_surface(
-        init_module.init,
-        target_dir,
-        _REPO_ROOT,
-        interactive=False,
-        remote="upstream",
-        github_repository="example/project",
-    )
-
-    config = DeliveryStartupConfig.model_validate_json(config_path.read_bytes())
-    assert config.model_dump() == {
-        "schema_version": 2,
-        "remote": "upstream",
-        "target_branch": "release",
-        "github_repository": "example/project",
-    }
 
 
 def test_init_requires_exact_github_identity_when_remote_cannot_supply_it(

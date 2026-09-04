@@ -1,4 +1,4 @@
-import type { DeliveryWorkerRole, WorkItemCardView, WorkItemStage } from '../api/workItems'
+import type { DeliveryWorkerRole, WorkItemCardView, WorkItemPublicationPhase, WorkItemStage } from '../api/workItems'
 
 export const PROGRESS_STAGE_LABELS: Record<WorkItemStage, string> = {
   design: 'Design',
@@ -20,7 +20,57 @@ export interface WorkItemStatusPresentation {
   detail: string | null
 }
 
+function distinctDetail(label: string, detail: string | null): string | null {
+  return detail && detail !== label ? detail : null
+}
+
+const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
+  'finalization-invalidated': 'Finalization invalidated',
+  'review-repair': 'Review feedback needed',
+  'ready-for-finalization': 'Ready for finalization',
+  'checkpoint-pending': 'Checkpoint pending',
+  'pull-request-draft': 'Delivery ready state not recorded',
+  'awaiting-merge': 'Awaiting merge',
+  'acceptance-observed': 'Acceptance observed',
+  deferred: 'Change deferred',
+  abandoned: 'Change abandoned',
+}
+
+function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation | null {
+  if (item.scope !== 'change-publication' || !item.publication_phase) return null
+  if (item.action.kind === 'resolve-attention' || item.action.kind === 'adopt-external-head') {
+    return {
+      label: 'Publication attention',
+      tone: 'attention',
+      detail: distinctDetail('Publication attention', item.needs_headline ?? item.next_step),
+    }
+  }
+  if (item.publication_phase === 'pull-request-draft' && item.needs === 'you') {
+    return {
+      label: 'Publication needs reconciliation',
+      tone: 'attention',
+      detail: distinctDetail('Publication needs reconciliation', item.needs_headline ?? item.next_step),
+    }
+  }
+  const tone: WorkItemStatusTone = item.publication_phase === 'acceptance-observed'
+    ? 'complete'
+    : item.publication_phase === 'finalization-invalidated' || item.publication_phase === 'review-repair' || item.publication_phase === 'awaiting-merge'
+      ? 'attention'
+      : item.publication_phase === 'checkpoint-pending'
+        ? 'active'
+        : item.publication_phase === 'ready-for-finalization' || item.publication_phase === 'pull-request-draft'
+          ? 'ready'
+          : 'neutral'
+  return {
+    label: PUBLICATION_PHASE_LABELS[item.publication_phase],
+    tone,
+    detail: distinctDetail(PUBLICATION_PHASE_LABELS[item.publication_phase], item.needs_headline),
+  }
+}
+
 export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation {
+  const publication = publicationStatus(item)
+  if (publication) return publication
   if (item.needs === 'you') {
     return { label: 'Needs you', tone: 'attention', detail: item.needs_headline }
   }

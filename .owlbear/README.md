@@ -6,9 +6,12 @@ not the portable source tree copied into a consumer project.
 
 ## What lives here
 
+> **TODO:** cleanup — remove Delivery runtime path bridges after no active Changes remain on the board [#runtime-path-shims]
+> **TODO:** cleanup — perform the deliberate destructive runtime reset once no active Changes remain on the board [#destructive-runtime-reset]
+
 | Area | Role |
 | --- | --- |
-| `delivery/` | Change configuration and Delivery authority; runtime capacity, worktrees, and locks are host-local or ignored |
+| `delivery/` | Change configuration and Delivery authority; admitted package snapshots and sparse state checkpoints are remote-backed, while runtime capacity, worktrees, and locks are host-local or ignored |
 | `hooks/` | Project-local write, session, and lint hooks used by the development checkout |
 | `instructions/`, `prompts/`, and `skills/` | Project-local operational customizations loaded alongside the portable shared ecosystem |
 | `scripts/` | Development validators and operational helper scripts |
@@ -24,6 +27,14 @@ not the portable source tree copied into a consumer project.
 Tracked files and ignored runtime files intentionally coexist here. Use the owning Delivery,
 Knowledge, or Memory workflow for lifecycle mutations instead of broad file operations over this
 directory.
+
+Delivery has three persistence tiers. Unadmitted `intent.md` and `design.md` files under
+`delivery/packages/` are local drafts. Admission copies the verified four-file package into the
+managed Change branch and its pull request. Sparse resumable snapshots live on the configured
+`owlbear/delivery-state` remote branch under `.owlbear/delivery/state/<change-id>/snapshot.json`;
+they are remote Delivery authority, not a working-copy cache. Ignored runtime claims, locks,
+capacity, and worktrees are recreated on a new host, and incomplete work is claimable again.
+Local `refs/owlbear/packages/*` refs are checkpoints only and must not be treated as portable backup.
 
 ## What belongs elsewhere
 

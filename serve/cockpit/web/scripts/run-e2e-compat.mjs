@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import { checkBrowser } from './check-playwright-browser.mjs'
 
-const browsers = ['chromium', 'firefox', 'webkit']
+const configuredBrowsers = process.env['E2E_COMPAT_BROWSERS'] || 'chromium'
+const browsers = configuredBrowsers.split(/[,\s]+/).filter(Boolean)
 const projects = browsers.map((browser) => `compatibility-${browser}`)
 const compatibilitySpecs = [
   'e2e/smoke.spec.ts',

@@ -25,6 +25,8 @@ from owlbear_delivery.completed_history import (
     ReceiptCompletedChangeRecord,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeAbandonment,
+    DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -438,3 +440,53 @@ def test_catalog_fails_closed_for_malformed_receipt_display_metadata(tmp_path: P
         CompletedHistoryCatalog(repository, "main", "main", runtime_root).list()
 
     assert malformed.value.diagnostic.code == CompletedHistoryDiagnosticCode.MALFORMED
+
+
+def test_catalog_ignores_stray_runtime_entries_but_rejects_recognized_corruption(tmp_path: Path) -> None:
+    repository, _commits = _repository(tmp_path / "repository")
+    runtime_root = tmp_path / "runtime"
+    changes_root = runtime_root / "changes"
+    changes_root.mkdir(parents=True)
+    (changes_root / "README.txt").write_text("unrelated runtime note\n", encoding="utf-8")
+    (changes_root / "not_a_change").mkdir()
+    (changes_root / "not_a_change" / "frontier.json").write_text("not a Change\n", encoding="utf-8")
+    (changes_root / "stray-link").symlink_to(changes_root / "README.txt")
+
+    abandoned_id = "abandoned-change"
+    abandoned_root = changes_root / abandoned_id
+    abandoned_root.mkdir()
+    contract = _contract(abandoned_id, "Abandoned delivery", b"intent", b"design")
+    abandonment = DeliveryChangeAbandonment.create(
+        change_id=abandoned_id,
+        prior_stage=DeliveryChangeStage.BUILDING,
+        abandoned_at=datetime(2026, 8, 11, 14, tzinfo=UTC),
+        reason="User stopped the Change.",
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.IMPLEMENTATION,
+            ),
+        ),
+        change_abandonment=abandonment,
+    )
+    (abandoned_root / "contract.json").write_bytes(_canonical(contract))
+    (abandoned_root / "frontier.json").write_bytes(_canonical(frontier))
+
+    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+    page = catalog.list()
+
+    assert tuple(record.change_id for record in page.records) == (abandoned_id, "change-a", "change-b")
+    assert page.records[0].record_kind == "abandoned-change"
+
+    corrupt_root = changes_root / "recognized-corruption"
+    corrupt_root.mkdir()
+    (corrupt_root / "frontier.json").write_text("not-json\n", encoding="utf-8")
+
+    with pytest.raises(CompletedHistoryError) as malformed:
+        catalog.list()
+
+    assert malformed.value.diagnostic.code == CompletedHistoryDiagnosticCode.MALFORMED
+    assert malformed.value.diagnostic.change_id == "recognized-corruption"

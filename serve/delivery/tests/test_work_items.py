@@ -40,7 +40,11 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.draft_pull_request import (
+    PublicationPullRequestObservationReceipt,
+    PullRequestReadyReceipt,
+)
+from owlbear_delivery.publication_provider import PublicationPullRequest
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -202,6 +206,7 @@ def _snapshot(
     *,
     operator_moves: tuple[DeliveryOperatorMove, ...] = (),
     frontier_updates: dict[str, object] | None = None,
+    publication_observation: PublicationPullRequestObservationReceipt | None = None,
 ) -> DeliveryPortfolioSnapshot:
     frontier = DeliveryFrontier(
         bindings=bindings,
@@ -213,7 +218,60 @@ def _snapshot(
     return DeliveryPortfolioSnapshot.capture(
         _contract(),
         content,
+        publication_observation=publication_observation,
     )
+
+
+def _publication_observation(
+    *,
+    mergeable: bool | None,
+    merge_state_status: str | None,
+    head_sha: str = "3" * 40,
+) -> PublicationPullRequestObservationReceipt:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_branch="owlbear/change/portfolio-change",
+        head_sha=head_sha,
+        base_branch="main",
+        title="Portfolio Change",
+        body="Generated summary",
+        draft=True,
+        state="open",
+        merged=False,
+        mergeable=mergeable,
+        merge_state_status=merge_state_status,
+    )
+    observed_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+    payload = {
+        "schema_version": 1,
+        "change_id": "portfolio-change",
+        "observed_at": observed_at,
+        "snapshot": snapshot,
+        "provider_evidence_digest": hashlib.sha256(
+            json.dumps(
+                {
+                    **snapshot.model_dump(mode="json"),
+                    "mergeable": mergeable,
+                    "merge_state_status": merge_state_status,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        "mergeable": mergeable,
+        "merge_state_status": merge_state_status,
+    }
+    candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **payload)
+    observation_id = hashlib.sha256(
+        json.dumps(
+            candidate._identity_payload(),  # noqa: SLF001
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
 
 
 def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
@@ -299,8 +357,9 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
         WorkItemStage.DESIGN,
         WorkItemNeed.YOU,
         WorkItemActivityState.IDLE,
-        WorkItemActionKind.NONE,
+        WorkItemActionKind.RESUME_DESIGN,
     )
+    assert card.action.command == "/design portfolio-change"
     assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
     assert detail.projection.attention == WorkItemAttention.USER
@@ -316,7 +375,7 @@ def test_work_item_activity_contract_has_no_legacy_repair_state() -> None:
     }
 
 
-def test_design_return_suppresses_preserved_request_action_until_readmission() -> None:
+def test_design_return_exposes_resume_command_and_suppresses_preserved_request_action() -> None:
     request = DeliveryRequest(
         request_id="REQ-001",
         kind=DeliveryRequestKind.DECISION,
@@ -336,7 +395,8 @@ def test_design_return_suppresses_preserved_request_action_until_readmission() -
     card = projector.group_view().items[0]
 
     assert card.needs_headline == "Re-admission required"
-    assert card.action.kind == WorkItemActionKind.NONE
+    assert card.action.kind == WorkItemActionKind.RESUME_DESIGN
+    assert card.action.command == "/design portfolio-change"
 
 
 def test_detail_exposes_operator_directed_course_changes() -> None:
@@ -498,6 +558,7 @@ def test_target_sync_receipt_projects_without_receipt_only_fields() -> None:
         "change_head_before": receipt.change_head_before,
         "merged_head": receipt.merged_head,
         "merge_commit": receipt.merge_commit,
+        "review_required": receipt.review_required,
     }
 
 
@@ -553,6 +614,38 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     assert detail.publication is not None
     assert detail.publication.invalidated_expected_head == finalization.exact_head
     assert detail.publication.invalidated_observed_head == "4" * 40
+
+
+def test_review_repair_projects_feedback_prompt_without_premature_finalization() -> None:
+    finalization = _finalization()
+    invalidation = DeliveryFinalizationInvalidationReceipt.create(
+        DeliveryFinalizationInvalidation(
+            change_id="portfolio-change",
+            finalization_id=finalization.finalization_id,
+            expected_head=finalization.exact_head,
+            observed_head=finalization.exact_head,
+            reason="review-repair",
+            invalidated_at=datetime(2026, 8, 11, 15, tzinfo=UTC),
+        )
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"finalization_invalidation": invalidation},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert projector.publication_phase() == WorkItemPublicationPhase.REVIEW_REPAIR
+    assert projector.group_view().lifecycle == "finalization"
+    assert card.needs == WorkItemNeed.YOU
+    assert card.next_step == "Address pull-request feedback before re-finalization"
+    assert card.action.kind == WorkItemActionKind.NONE
+    assert card.action.command == "/address-pr-feedback portfolio-change"
+    assert detail.publication is not None
+    assert detail.publication.phase == WorkItemPublicationPhase.REVIEW_REPAIR
 
 
 def test_change_attention_projects_user_resolution_before_outcomes_complete() -> None:
@@ -644,6 +737,102 @@ def test_publication_history_projects_ordered_transport_free_generations() -> No
     ]
 
 
+def test_publication_head_mismatch_keeps_identity_and_withholds_ready_action() -> None:
+    finalization = _finalization()
+    publication = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_sha="4" * 40,
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "change_publication_history": DeliveryChangePublicationHistory.create(publication),
+            },
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert card.publication_phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT
+    assert (card.needs, card.next_actor, card.action.kind, card.progress.label) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        WorkItemActionKind.NONE,
+        "Publication head needs reconciliation",
+    )
+    assert detail.publication is not None
+    assert (
+        detail.publication.repository,
+        detail.publication.pull_request_number,
+        detail.publication.pull_request_head,
+    ) == (publication.repository, publication.number, publication.head_sha)
+
+
+def test_conflicting_draft_publication_offers_resolution_prompt_and_keeps_ready_action() -> None:
+    finalization = _finalization()
+    publication = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_sha=finalization.exact_head,
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "change_publication_history": DeliveryChangePublicationHistory.create(publication),
+            },
+            publication_observation=_publication_observation(mergeable=False, merge_state_status="dirty"),
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert (card.needs, card.next_actor, card.next_step, card.action.kind, card.action.label, card.action.command) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        "Resolve pull-request conflicts before making it ready",
+        WorkItemActionKind.MARK_READY,
+        "Make PR ready for review",
+        "/resolve-target-conflict portfolio-change",
+    )
+    assert detail.publication is not None
+    assert (detail.publication.mergeable, detail.publication.merge_state_status) == (False, "dirty")
+
+
+def test_target_sync_attention_offers_resolution_prompt() -> None:
+    disposition = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+        change_id="portfolio-change",
+        entered_from=DeliveryChangeStage.FINALIZED,
+        recorded_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
+        diagnostics=("target-sync-operation:sync-123", "conflict-path:src/app.py"),
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"change_disposition": disposition},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert card.action.kind == WorkItemActionKind.RESOLVE_ATTENTION
+    assert card.action.command == "/resolve-target-conflict portfolio-change"
+    assert card.action.attention_id == disposition.disposition_id
+
+
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
     finalization = _finalization()
     bindings = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
@@ -660,8 +849,44 @@ def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
 
     assert checkpoint.group_view().lifecycle == "publication"
     assert checkpoint.group_view().items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
-    assert draft.group_view().items[-1].progress.label == "Pull request is draft"
+    assert draft.group_view().items[-1].progress.label == "Delivery ready state not recorded"
     assert draft.group_view().items[-1].action.kind == WorkItemActionKind.MARK_READY
+
+
+def test_unanchored_checkpoint_projects_reconciliation_action_and_retry_metadata() -> None:
+    pending = DeliveryPendingCheckpoint(
+        head=None,
+        triggers=(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+        ),
+        attempt_count=2,
+        last_attempted_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+        last_error_code="ERR_DELIVERY_CHECKPOINT_HEAD_MISSING",
+        last_error_detail="Checkpoint publication is waiting for a reviewed Change head.",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.PLANNING)),
+            frontier_updates={"pending_checkpoint": pending},
+        )
+    )
+
+    group = projector.group_view()
+    publication = projector.show_view("publication").publication
+
+    assert group.items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
+    assert projector.publication_phase() == WorkItemPublicationPhase.CHECKPOINT_PENDING
+    assert publication is not None
+    assert publication.pending_checkpoint_head is None
+    assert publication.pending_checkpoint_attempt_count == 2
+    assert publication.pending_checkpoint_last_attempted_at == "2026-08-11T17:00:00+00:00"
+    assert publication.pending_checkpoint_error_code == "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
+    assert publication.pending_checkpoint_error_detail == (
+        "Checkpoint publication is waiting for a reviewed Change head."
+    )
 
 
 def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
@@ -733,9 +958,45 @@ def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None
         WorkItemNextActor.YOU,
         WorkItemActionKind.OBSERVE_ACCEPTANCE,
     )
-    assert card.action.label == "Check GitHub acceptance"
+    assert card.action.label == "Check merge status"
     assert detail.publication is not None
     assert detail.publication.pull_request_number == 42
+
+
+def test_conflicting_ready_pull_request_keeps_status_check_and_resolution_prompt() -> None:
+    finalization = _finalization()
+    ready = _ready(finalization)
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "ready": ready,
+                "change_publication_history": DeliveryChangePublicationHistory.create(
+                    DeliveryChangePublicationIdentity(
+                        change_id="portfolio-change",
+                        repository="example/project",
+                        number=42,
+                        node_id="PR_portfolio_42",
+                        head_sha=finalization.exact_head,
+                    )
+                ),
+            },
+            publication_observation=_publication_observation(mergeable=False, merge_state_status="dirty"),
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert (card.needs, card.next_actor, card.next_step, card.action.kind, card.action.label, card.action.command) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        "Resolve pull-request conflicts before continuing",
+        WorkItemActionKind.OBSERVE_ACCEPTANCE,
+        "Check merge status",
+        "/resolve-target-conflict portfolio-change",
+    )
 
 
 def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:

@@ -64,3 +64,14 @@ it('renders Not Found for an unmatched path', () => {
   expect(screen.getByTestId('not-found-view')).toBeInTheDocument()
   expect(screen.getByText('Go to Delivery portfolio')).toBeInTheDocument()
 })
+
+it('does not render a generic command footer', () => {
+  render(
+    <MemoryRouter initialEntries={['/delivery']}>
+      <CockpitShell />
+    </MemoryRouter>,
+  )
+
+  expect(screen.queryByTestId('command-reference')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Copy command /finalize-change <change-id>' })).not.toBeInTheDocument()
+})

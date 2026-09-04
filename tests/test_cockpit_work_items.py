@@ -7,22 +7,28 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
 from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryCheckpointPublicationState,
+    DeliveryCheckpointReconciliationResult,
+    DeliveryRuntime,
+    PortfolioApplication,
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
 )
-from owlbear_delivery.acceptance import CompletionPullRequestIdentity
+from owlbear_delivery.acceptance import CompletionPullRequestIdentity, CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
@@ -38,15 +44,23 @@ from owlbear_delivery.completed_history import (
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
+    DeliveryChangeStage,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthStatus,
+    DeliveryHealthView,
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
     PortfolioGuidance,
     PortfolioGuidanceKind,
     PortfolioOperatingView,
     PortfolioWorkReference,
     PortfolioWorkScope,
 )
+from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
@@ -66,6 +80,16 @@ from owlbear_delivery.work_items import (
     WorkItemTargetSyncView,
 )
 from owlbear_delivery_github import GitHubCliPublicationProvider
+
+
+class _LockOnlyPortfolioApplication(PortfolioApplication):
+    def __init__(self, target_root: Path) -> None:
+        self._target_root = target_root.resolve()
+        self._clock = lambda: "2026-08-11T16:00:00Z"
+
+    def _runtime(self, _change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
+        del for_mutation
+        return cast(DeliveryRuntime, object())
 
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
@@ -88,9 +112,14 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
 
 
 class _DeliveryApplicationFake:
-    def __init__(self, failures: dict[str, Exception] | None = None) -> None:
+    def __init__(
+        self,
+        failures: dict[str, Exception] | None = None,
+        health: DeliveryHealthView | None = None,
+    ) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self.failures = failures or {}
+        self.health = health or DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
@@ -101,6 +130,7 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(
             groups=self._work_item_groups(),
             operating=self._portfolio_operating_view(),
+            health=self.health,
         )
 
     @staticmethod
@@ -160,6 +190,34 @@ class _DeliveryApplicationFake:
         return PortfolioOperatingView(
             unfinished_change_count=2,
             completed_change_count=0,
+            statuses=(
+                PortfolioChangeLifecycleStatus(
+                    change_id="draft-change",
+                    admission=PortfolioChangeAdmission.UNADMITTED,
+                    stage=DeliveryChangeStage.DESIGN,
+                    actionable_runtime=False,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="admitted-planning",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.BUILDING,
+                    actionable_runtime=True,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="design-reentry",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.DESIGN,
+                    actionable_runtime=True,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="unavailable-change",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.BUILDING,
+                    actionable_runtime=False,
+                    diagnostic_code="runtime_unavailable",
+                    diagnostic_detail="Delivery runtime is unavailable.",
+                ),
+            ),
             interventions=(
                 PortfolioWorkReference(
                     change_id="change-a",
@@ -258,7 +316,11 @@ class _DeliveryApplicationFake:
 
     def reconcile_change_checkpoint(self, *args: object) -> dict[str, object]:
         self.calls.append(("publication-reconcile", args))
-        return {"change_id": args[0], "reconciled": True}
+        return DeliveryCheckpointReconciliationResult(
+            change_id=str(args[0]),
+            state=DeliveryCheckpointPublicationState(change_id=str(args[0])),
+            reconciled=True,
+        )
 
     def mark_current_change_ready(self, *args: object) -> dict[str, object]:
         self.calls.append(("publication-ready", args))
@@ -423,6 +485,14 @@ class _DeliveryApplicationFake:
             raise failure
         return self._cleanup_receipt()
 
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        *args: object,
+        confirmed_discard: bool,
+    ) -> SimpleNamespace:
+        self.calls.append(("cleanup-abandoned-target-sync", (*args, confirmed_discard)))
+        return self._cleanup_receipt()
+
     def cleanup_completed_change_worktree(self, *args: object) -> SimpleNamespace:
         self.calls.append(("cleanup-completed", args))
         return self._cleanup_receipt()
@@ -502,8 +572,11 @@ class _DeliveryApplicationFake:
         return records[1] if args[1] == "1" * 64 else records[0]
 
 
-def _client(failures: dict[str, Exception] | None = None) -> tuple[TestClient, _DeliveryApplicationFake]:
-    application = _DeliveryApplicationFake(failures)
+def _client(
+    failures: dict[str, Exception] | None = None,
+    health: DeliveryHealthView | None = None,
+) -> tuple[TestClient, _DeliveryApplicationFake]:
+    application = _DeliveryApplicationFake(failures, health)
     return TestClient(assemble_target_app(application)), application  # type: ignore[arg-type]
 
 
@@ -564,7 +637,7 @@ def test_startup_discovers_workspace_delivery_configuration(
     assert isinstance(call.kwargs["publication_provider"], GitHubCliPublicationProvider)
 
 
-def test_startup_reports_delivery_migration_blocker(tmp_path: Path) -> None:
+def test_startup_surfaces_delivery_load_failure(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
     config = DeliveryStartupConfig(
         schema_version=2,
@@ -575,13 +648,13 @@ def test_startup_reports_delivery_migration_blocker(tmp_path: Path) -> None:
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
-    load_error = DeliveryApplicationLoadError("runtime_root", "legacy runtime state requires migration")
+    load_error = DeliveryApplicationLoadError("runtime_root", "legacy runtime state is unsupported")
 
     with (
         patch("owlbear_cockpit.target_context.load_delivery_application", side_effect=load_error),
         pytest.raises(
             RuntimeError,
-            match="Cockpit Delivery startup failed for runtime_root: legacy runtime state requires migration",
+            match="Cockpit Delivery startup failed for runtime_root: legacy runtime state is unsupported",
         ),
     ):
         load_target_context(workspace_root)
@@ -603,6 +676,40 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert portfolio.json()["operating"] == {
         "unfinished_change_count": 2,
         "completed_change_count": 0,
+        "statuses": [
+            {
+                "change_id": "draft-change",
+                "admission": "unadmitted",
+                "stage": "design",
+                "actionable_runtime": False,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "admitted-planning",
+                "admission": "admitted",
+                "stage": "building",
+                "actionable_runtime": True,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "design-reentry",
+                "admission": "admitted",
+                "stage": "design",
+                "actionable_runtime": True,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "unavailable-change",
+                "admission": "admitted",
+                "stage": "building",
+                "actionable_runtime": False,
+                "diagnostic_code": "runtime_unavailable",
+                "diagnostic_detail": "Delivery runtime is unavailable.",
+            },
+        ],
         "draft_design_change_ids": [],
         "design_required_change_ids": [],
         "claimed": [],
@@ -627,6 +734,40 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     ]
 
 
+def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
+    client, _application = _client(
+        health=DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION,
+            diagnostics=(
+                DeliveryHealthDiagnostic(
+                    source="local-runtime",
+                    code="contract-identity-invalid",
+                    detail="Persisted Change contract identity is invalid",
+                    change_id="quarantined-change",
+                    path=".owlbear/delivery/runtime/changes/quarantined-change",
+                ),
+            ),
+        ),
+    )
+
+    response = client.get("/api/work-items")
+
+    assert response.status_code == 200
+    assert response.json()["health"] == {
+        "status": "attention",
+        "diagnostics": [
+            {
+                "source": "local-runtime",
+                "code": "contract-identity-invalid",
+                "detail": "Persisted Change contract identity is invalid",
+                "change_id": "quarantined-change",
+                "path": ".owlbear/delivery/runtime/changes/quarantined-change",
+                "retry_safe": False,
+            },
+        ],
+    }
+
+
 def test_detail_target_sync_uses_target_branch_wire_contract() -> None:
     client, _application = _client()
 
@@ -642,6 +783,7 @@ def test_detail_target_sync_uses_target_branch_wire_contract() -> None:
         "change_head_before": "2" * 40,
         "merged_head": "3" * 40,
         "merge_commit": True,
+        "review_required": False,
     }
 
 
@@ -776,6 +918,7 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         "change_head_before": "d" * 40,
         "merged_head": "f" * 40,
         "merge_commit": True,
+        "review_required": False,
     }
     assert responses[8].json() == {
         "cleanup_id": "c" * 64,
@@ -1085,6 +1228,33 @@ def test_target_sync_conflict_exit_routes_delegate_exactly_once() -> None:
     ]
 
 
+def test_abandoned_target_sync_discard_cleanup_route_requires_confirmation() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
+        json={"confirmed_discard": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "cleanup_id": "c" * 64,
+        "change_id": "change-a",
+        "branch": "owlbear/change/change-a",
+        "worktree_path": ".owlbear/delivery/worktrees/change-a",
+        "branch_head": "d" * 40,
+    }
+    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+
+    rejected = client.post(
+        "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
+        json={"confirmed_discard": False},
+    )
+
+    assert rejected.status_code == 422
+    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+
+
 def test_publication_supersession_route_delegates_current_identity_exactly_once() -> None:
     client, application = _client()
 
@@ -1125,6 +1295,49 @@ def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
         "retry_safe": False,
     }
     assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+
+
+def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
+    client, application = _client(
+        {"resolve_change_disposition": DeliveryChangeDispositionBusyError("attention is already in progress")}
+    )
+
+    response = client.post(
+        "/api/changes/change-a/attention/resolve",
+        json={"expected_disposition_id": "a" * 64},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+        "detail": "attention is already in progress",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
+    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+
+
+def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_path: Path) -> None:
+    application = _LockOnlyPortfolioApplication(tmp_path)
+    lock_root = tmp_path / "publications/checkpoints/locks/change-a"
+
+    with (
+        patch("owlbear_delivery.portfolio_application._ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS", 0.0),
+        locked_roots((lock_root,)),
+        TestClient(assemble_target_app(application)) as client,
+    ):
+        response = client.post(
+            "/api/changes/change-a/attention/resolve",
+            json={"expected_disposition_id": "a" * 64},
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
+        "detail": "Change attention resolution is already in progress; retry after the active mutation finishes",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
 
 
 def test_malformed_body_fails_before_application_mutation() -> None:
@@ -1241,6 +1454,48 @@ def test_worktree_attention_recovery_route_returns_typed_delivery_error() -> Non
     assert application.calls == [("recover-worktree", ("change-a", "c" * 40, True))]
 
 
+def test_live_cockpit_app_surfaces_known_delivery_failure() -> None:
+    from owlbear_cockpit.main import app  # noqa: PLC0415
+
+    application = _DeliveryApplicationFake(
+        {"observe_acceptance": CompletionReceiptConflictError("completion receipt is inconsistent")}
+    )
+    app.dependency_overrides[get_target_context] = lambda: application
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post("/api/changes/change-a/acceptance/observe")
+    finally:
+        app.dependency_overrides.pop(get_target_context, None)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_COMPLETION_RECEIPT_CONFLICT",
+        "detail": "completion receipt is inconsistent",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
+def test_live_cockpit_app_keeps_unknown_failure_on_generic_backstop() -> None:
+    from owlbear_cockpit.main import app  # noqa: PLC0415
+
+    application = _DeliveryApplicationFake({"observe_acceptance": RuntimeError("unexpected failure")})
+    app.dependency_overrides[get_target_context] = lambda: application
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post("/api/changes/change-a/acceptance/observe")
+    finally:
+        app.dependency_overrides.pop(get_target_context, None)
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "code": "COCKPIT_INTERNAL_ERROR",
+        "message": "An unexpected error occurred.",
+    }
+    assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
 def test_target_routes_are_mounted_on_live_app() -> None:
     from owlbear_cockpit.main import app  # noqa: PLC0415
 
@@ -1267,11 +1522,13 @@ def test_completed_history_routes_publish_versioned_discriminated_schema() -> No
     assert record_schema["oneOf"] == [
         {"$ref": "#/components/schemas/LegacyCompletedChangeRecord"},
         {"$ref": "#/components/schemas/ReceiptCompletedChangeRecord"},
+        {"$ref": "#/components/schemas/AbandonedChangeRecord"},
     ]
     assert record_schema["discriminator"] == {
         "propertyName": "record_kind",
         "mapping": {
             "legacy-package": "#/components/schemas/LegacyCompletedChangeRecord",
             "completion-receipt": "#/components/schemas/ReceiptCompletedChangeRecord",
+            "abandoned-change": "#/components/schemas/AbandonedChangeRecord",
         },
     }

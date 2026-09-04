@@ -19,7 +19,7 @@ from owlbear_memory import (
 )
 from pydantic import ValidationError
 
-from owlbear_memory_mcp.git import commit_batch
+from owlbear_memory_mcp.git import commit_batch, format_git_failure
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
@@ -247,10 +247,19 @@ async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, A
         commit_sha = commit_batch(memory_dir, session_type=session_type)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
-    except (OSError, subprocess.CalledProcessError) as exc:
-        _LOGGER.exception("Memory batch commit failed", exc_info=exc)
-        msg = "memory batch commit failed"
-        raise ToolError(msg) from None
+    except subprocess.CalledProcessError as exc:
+        detail = format_git_failure(exc)
+        _LOGGER.exception("Memory batch commit failed: %s", detail)
+        msg = (
+            f"memory batch commit failed: {detail}. "
+            "Memory paths may remain staged after this failure; inspect Git staging before retrying."
+        )
+        raise ToolError(msg) from exc
+    except OSError as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        _LOGGER.exception("Memory batch commit failed: %s", detail)
+        msg = f"memory batch commit failed: {detail}"
+        raise ToolError(msg) from exc
 
     if not commit_sha:
         return {
