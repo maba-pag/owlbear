@@ -1235,6 +1235,7 @@ class PortfolioApplication:
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
+            self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
             self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
             return receipt
 
@@ -1513,6 +1514,7 @@ class PortfolioApplication:
             self._fail("target synchronization resolution differs from runtime evidence")
         resolution = runtime.change_disposition_resolution()
         if resolution is not None:
+            self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
             self._publish_delivery_state(
                 request.change_id,
                 runtime,
@@ -1540,6 +1542,7 @@ class PortfolioApplication:
         resolution = runtime.change_disposition_resolution()
         if resolution is None:
             self._fail("target synchronization resolution did not record attention resolution")
+        self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
         self._publish_delivery_state(
             request.change_id,
             runtime,
@@ -3010,17 +3013,7 @@ class PortfolioApplication:
         self._validate_package_authority(runtime, package)
         summary = _checkpoint_summary(runtime, package, pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
-        branch_request = PublishChangeBranch(
-            change_id=change_id,
-            expected_remote_head=initial.published_head,
-            expected_published_head=head,
-            operation_id=_checkpoint_operation_id(
-                "branch",
-                change_id,
-                head,
-            ),
-        )
-        branch_receipt = self._change_branch_publisher.publish(branch_request)
+        branch_receipt = self._publish_checkpoint_branch(change_id, initial, head)
         if initial.published_head != head:
             state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
         else:
@@ -3090,6 +3083,41 @@ class PortfolioApplication:
             state=state,
             reconciled=state.pending_checkpoint is None,
         )
+
+    def _publish_checkpoint_branch(
+        self,
+        change_id: str,
+        checkpoint: DeliveryCheckpointPublicationState,
+        head: str,
+    ) -> ChangeBranchPublicationReceipt:
+        """Publish one exact checkpoint head through the managed Change branch."""
+        publisher = self._change_branch_publisher
+        if publisher is None:
+            self._fail("Change branch publication is not configured")
+        pending = checkpoint.pending_checkpoint
+        if pending is None or pending.head != head:
+            self._fail("Change branch publication does not match the pending checkpoint")
+        return publisher.publish(
+            PublishChangeBranch(
+                change_id=change_id,
+                expected_remote_head=checkpoint.published_head,
+                expected_published_head=head,
+                operation_id=_checkpoint_operation_id("branch", change_id, head),
+            )
+        )
+
+    def _publish_target_sync_branch(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        merged_head: str,
+    ) -> None:
+        """Publish a target-sync head before its portable Delivery snapshot."""
+        if self._change_branch_publisher is None:
+            return
+        checkpoint = runtime.checkpoint_publication_state()
+        branch_receipt = self._publish_checkpoint_branch(change_id, checkpoint, merged_head)
+        runtime.record_checkpoint_branch_publication(checkpoint, branch_receipt.published_head)
 
     def _prepare_checkpoint_head(
         self,
