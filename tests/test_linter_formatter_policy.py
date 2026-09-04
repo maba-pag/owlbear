@@ -11,7 +11,7 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
 _JSONC_LINE_COMMENT = re.compile(r"(?m)^\s*//.*$")
-_SEED_ONLY_CLI2_IGNORES = frozenset({".owlbear/hooks", "*.excalidraw"})
+_SEED_ONLY_CLI2_IGNORES = frozenset({".owlbear/hooks"})
 _SEED_PROFILE_OMISSIONS = frozenset({".owlbear/target"})
 _P01_SHARED_EXCLUDED_PATHS = (
     "package.egg-info/PKG-INFO",

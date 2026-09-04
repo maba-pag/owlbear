@@ -199,6 +199,22 @@
       "automerge": false
     },
     {
+      "description": "Review Archify release asset and digest updates",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "github-release-attachments"
+      ],
+      "matchPackageNames": [
+        "tt-a1i/archify"
+      ],
+      "addLabels": [
+        "diagrams"
+      ],
+      "automerge": false
+    },
+    {
       "description": "Open major version updates on Sunday",
       "matchUpdateTypes": [
         "major"
@@ -259,6 +275,19 @@
       "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
       "depNameTemplate": "ghcr.io/oxsecurity/megalinter{{#if flavor}}-{{{flavor}}}{{/if}}",
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Archify release asset and SHA-256 pin",
+      "managerFilePatterns": [
+        "/^\\.owlbear/scripts/diagrams/archify\\.lock\\.json$/"
+      ],
+      "matchStrings": [
+        "version\\D*(?<currentValue>v[\\d.]+)[\\s\\S]*?sha256\\D*(?<currentDigest>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "tt-a1i/archify",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
     }
   ]
 }
