@@ -1,0 +1,75 @@
+---
+name: Source verification
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - .github/workflows/source-verification.yml
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - uv.lock
+      - serve/*/pyproject.toml
+      - serve/*/src/**
+      - serve/*/tests/**
+      - tests/**
+      - setup/**
+      - seed/**
+  workflow_dispatch:
+
+concurrency:
+  group: source-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Prove Python source behavior
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install pinned Python
+        run: uv python install
+
+      - name: Install locked Python workspace
+        run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Install Chromium for browser-marked tests
+        run: uv run playwright install --with-deps chromium
+
+      - name: Compile Python sources
+        run: uv run python -m compileall -q serve setup tests .owlbear/hooks seed
+
+      - name: Check Python sources
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run Python behavior tests
+        run: uv run pytest tests serve -m "not e2e"

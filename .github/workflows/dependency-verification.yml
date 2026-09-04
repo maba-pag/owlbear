@@ -378,6 +378,10 @@ jobs:
         if: needs.classify.outputs.precommit == 'true'
         run: uv run lint --no-fix
 
+      # Deferred removal option (comment-only; keep the step below active for now):
+      # - name: Exercise updated MegaLinter image
+      #   if: needs.classify.outputs.megalinter == 'true'
+      #   run: uv run megalint --no-fix
       - name: Exercise updated MegaLinter image
         if: needs.classify.outputs.megalinter == 'true'
         run: uv run megalint --no-fix

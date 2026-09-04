@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
@@ -49,6 +51,16 @@ def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[st
     )
 
 
+@pytest.fixture
+def ruff_toolchain_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("check_ruff_toolchain_test", RUFF_TOOLCHAIN_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _fake_uv(tmp_path: Path, version: str) -> Path:
     executable = tmp_path / "uv"
     executable.write_text(f"#!/bin/sh\nprintf 'uv {version}\\n'\n", encoding="utf-8")
@@ -65,13 +77,6 @@ def _fake_node(tmp_path: Path, version: str) -> Path:
 
 def _fake_ruff(tmp_path: Path, version: str) -> Path:
     executable = tmp_path / "ruff"
-    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
-    return executable
-
-
-def _fake_docker(tmp_path: Path, version: str) -> Path:
-    executable = tmp_path / "docker"
     executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
     return executable
@@ -241,6 +246,25 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
     ]
 
 
+def test_dependency_workflow_keeps_megalinter_execution_active() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    megalinter_steps = [
+        step for step in compatibility["steps"] if step.get("name") == "Exercise updated MegaLinter image"
+    ]
+    assert megalinter_steps == [
+        {
+            "name": "Exercise updated MegaLinter image",
+            "if": "needs.classify.outputs.megalinter == 'true'",
+            "run": "uv run megalint --no-fix",
+        }
+    ]
+    assert "# Deferred removal option (comment-only; keep the step below active for now):" in text
+    assert "# - name: Exercise updated MegaLinter image" in text
+
+
 def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
     workflow = _workflow(VERIFY_PATH)
     classify = _job(workflow, "classify")
@@ -312,30 +336,59 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
     assert "below" in result.stderr
 
 
-def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path) -> None:
-    result = _run_script(
-        RUFF_TOOLCHAIN_SCRIPT,
-        "--ruff-executable",
-        str(_fake_ruff(tmp_path, "0.16.2")),
-        "--docker-executable",
-        str(_fake_docker(tmp_path, "0.16.2")),
+def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path, ruff_toolchain_module: ModuleType) -> None:
+    def load_versions(url: str) -> object:
+        assert (
+            url
+            == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.0.0/.automation/generated/linter-versions.json"
+        )
+        return {"ruff": "0.16.2"}
+
+    ruff_toolchain_module.check_ruff_toolchain(
+        ROOT,
+        ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+        megalinter_versions_loader=load_versions,
     )
 
-    assert result.returncode == 0, result.stderr
-    assert "aligned at 0.16.2" in result.stdout
+
+def test_ruff_toolchain_proof_rejects_declared_version_drift(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    with pytest.raises(ValueError, match=r"MegaLinter declared Ruff=0\.16\.1"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=lambda _: {"ruff": "0.16.1"},
+        )
 
 
-def test_ruff_toolchain_proof_rejects_bundled_version_drift(tmp_path: Path) -> None:
-    result = _run_script(
-        RUFF_TOOLCHAIN_SCRIPT,
-        "--ruff-executable",
-        str(_fake_ruff(tmp_path, "0.16.2")),
-        "--docker-executable",
-        str(_fake_docker(tmp_path, "0.16.1")),
-    )
+def test_ruff_toolchain_proof_rejects_malformed_declared_metadata(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    with pytest.raises(ValueError, match="invalid ruff entry"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=lambda _: {"ruff": "0.16"},
+        )
 
-    assert result.returncode != 0
-    assert "MegaLinter bundled Ruff=0.16.1" in result.stderr
+
+def test_ruff_toolchain_proof_rejects_unavailable_declared_metadata(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    def unavailable(_: str) -> object:
+        message = "network unavailable"
+        raise OSError(message)
+
+    with pytest.raises(RuntimeError, match="Unable to fetch MegaLinter linter versions"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=unavailable,
+        )
 
 
 def test_shared_node_runtime_uses_one_node_proof() -> None:
