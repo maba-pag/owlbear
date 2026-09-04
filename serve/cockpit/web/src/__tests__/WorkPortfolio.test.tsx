@@ -2773,7 +2773,7 @@ it('warns before making a conflicted pull request ready and offers the resolutio
   }))
 })
 
-it('observes checks from a draft even when repository and pull request fields are null', async () => {
+it('keeps check observation discoverable but unavailable for a draft', async () => {
   const publicationCard = publicationCardForChecks()
   currentDetail = detail({
     card: publicationCard,
@@ -2783,28 +2783,16 @@ it('observes checks from a draft even when repository and pull request fields ar
   renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  const portfolioReadsBefore = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(within(inspector).getByTestId('publication-checks-observe')).toBeInTheDocument()
-  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
+  expect(observe).toBeInTheDocument()
+  expect(observe.disabled).toBe(true)
+  expect(within(inspector).getByTestId('publication-checks-draft-guidance')).toHaveTextContent(
+    'You can observe check results here once this pull request is ready for review.',
+  )
+  expect(within(inspector).queryByTestId('publication-checks-status')).not.toBeInTheDocument()
 
-  await waitFor(() => expect(requests).toContainEqual({
-    url: '/api/changes/change-alpha/publication/checks/observe',
-    method: 'POST',
-    body: null,
-  }))
-  expect(await within(inspector).findByText('Unit tests')).toBeInTheDocument()
-  expect(within(inspector).getByText('Blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Required pending', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Not blocking', { exact: true })).toBeInTheDocument()
-  expect(within(inspector).getByText('Observed commit').nextElementSibling).toHaveTextContent('1'.repeat(40))
-  expect(within(inspector).getByText('Evidence recorded').nextElementSibling).toHaveTextContent('2026-08-11T16:00:00Z')
-  expect(Array.from(within(inspector).getAllByTestId('publication-check')).map((item) => item.textContent)).toEqual([
-    expect.stringContaining('Unit tests'),
-    expect.stringContaining('Integration tests'),
-    expect.stringContaining('Optional lint'),
-  ])
-  const portfolioReadsAfter = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
-  expect(portfolioReadsAfter).toBe(portfolioReadsBefore)
+  fireEvent.click(observe)
+  expect(requests.filter(({ url, method }) => url === '/api/changes/change-alpha/publication/checks/observe' && method === 'POST')).toHaveLength(0)
 })
 
 it('does not offer publication-check observation outside draft and awaiting-merge phases', async () => {

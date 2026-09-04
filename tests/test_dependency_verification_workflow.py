@@ -92,7 +92,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     pull_request = workflow["on"]["pull_request"]
 
     assert pull_request["branches"] == ["dev"]
-    assert pull_request["types"] == ["opened", "reopened", "synchronize"]
+    assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
         ".github/scripts/check_node_runtime.py",
@@ -117,8 +117,26 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
-    assert "if" not in _job(workflow, "classify")
+    assert _job(workflow, "classify")["if"] == (
+        "github.event_name != 'pull_request' || github.event.pull_request.draft == false"
+    )
     assert "workflow_dispatch" in workflow["on"]
+
+
+def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> None:
+    expected_types = ["opened", "reopened", "synchronize", "ready_for_review"]
+    for path in (AGENT_WORKFLOW_PATH, VERIFY_PATH, COCKPIT_VERIFY_PATH):
+        workflow = _workflow(path)
+        pull_request = workflow["on"]["pull_request"]
+        assert pull_request["types"] == expected_types
+        jobs = workflow["jobs"]
+        assert isinstance(jobs, dict)
+        for job_name, job in jobs.items():
+            assert isinstance(job, dict)
+            condition = job.get("if")
+            assert isinstance(condition, str), f"{path.name}:{job_name} needs a draft guard"
+            assert "github.event_name != 'pull_request'" in condition
+            assert "github.event.pull_request.draft == false" in condition
 
 
 def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> None:
@@ -167,7 +185,10 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text
-    assert proof_python["if"] == "needs.classify.outputs.python == 'true'"
+    assert proof_python["if"] == (
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "needs.classify.outputs.python == 'true'"
+    )
     assert "runtime" not in workflow["jobs"]
     assert "proof-pds" not in workflow["jobs"]
     assert "proof-root-node" not in workflow["jobs"]
@@ -206,7 +227,8 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
     assert '--base-ref "$MERGE_BASE"' in text
     assert '--head-ref "$HEAD_SHA"' in text
     assert compatibility["if"] == (
-        "needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true'"
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "(needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true')"
     )
     proof_step_name = "Exercise dependency proof tooling"
     steps = compatibility["steps"]
@@ -343,7 +365,9 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     workflow = _workflow(VERIFY_PATH)
     gate = _job(workflow, "gate")
 
-    assert gate["if"] == "always()"
+    assert gate["if"] == (
+        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
+    )
     assert gate["needs"] == [
         "classify",
         "resolve_runtimes",
@@ -658,10 +682,15 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     assert "npm ci --engine-strict" in text
     assert "npm run build" in text
     assert browser["needs"] == "proof"
-    assert browser["if"] == "needs.proof.result == 'success'"
+    assert browser["if"] == (
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "needs.proof.result == 'success'"
+    )
     assert gate["name"] == "Verify Cockpit"
     assert gate["needs"] == ["resolve_runtimes", "proof", "browser_compatibility"]
-    assert gate["if"] == "always()"
+    assert gate["if"] == (
+        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
+    )
     assert "workflow_dispatch:" in text
     assert "ref: ${{ github.event.pull_request.head.sha || github.sha }}" in text
     assert browser["env"] == {

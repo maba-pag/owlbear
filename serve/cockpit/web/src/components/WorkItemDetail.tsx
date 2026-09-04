@@ -837,10 +837,11 @@ function PublicationCheckItem({ check }: { check: PublicationChecksObservationRe
 
 function PublicationChecksSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
-  const observable = publication
+  const observable = Boolean(publication
     && (publication.phase === 'pull-request-draft' || publication.phase === 'awaiting-merge')
     && publication.published_head !== null
-    && publication.publication_generations.length > 0
+    && publication.publication_generations.length > 0)
+  const draftPublication = observable && publication?.phase === 'pull-request-draft'
   const observation = props.publicationChecks
   const retainsEvidence = observation !== null || props.publicationChecksStale
   if (!observable && !retainsEvidence) return null
@@ -853,7 +854,9 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
       ? 'Previous check results were cleared because the published head changed. Observe again for the current head.'
       : observation
         ? `Checks observed for ${observation.exact_commit}.`
-        : 'No publication-check observation recorded for this head.'
+        : draftPublication
+          ? null
+          : 'No checks observed for this head yet.'
   return (
     <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
       <div className="flex flex-wrap items-start justify-between gap-static-sm">
@@ -864,14 +867,20 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
             compact
             variant="secondary"
             data-testid="publication-checks-observe"
-            disabled={props.isObservingPublicationChecks || props.pendingAction !== null}
-            onClick={() => void props.onObservePublicationChecks()}
+            aria-describedby={draftPublication ? 'publication-checks-draft-guidance' : undefined}
+            disabled={draftPublication || props.isObservingPublicationChecks || props.pendingAction !== null}
+            onClick={draftPublication ? undefined : () => void props.onObservePublicationChecks()}
           >
-            {props.isObservingPublicationChecks ? 'Checking CI...' : 'Refresh PR CI'}
+            {props.isObservingPublicationChecks ? 'Checking CI...' : 'Observe current checks'}
           </PButton>
         ) : null}
       </div>
-      <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p>
+      {draftPublication ? (
+        <p id="publication-checks-draft-guidance" className="mt-static-sm text-sm" role="status" data-testid="publication-checks-draft-guidance">
+          You can observe check results here once this pull request is ready for review.
+        </p>
+      ) : null}
+      {status ? <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p> : null}
       {props.publicationChecksError ? (
         <p className="mt-static-sm flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">
           <PIcon name="error" size="sm" aria-hidden="true" />
