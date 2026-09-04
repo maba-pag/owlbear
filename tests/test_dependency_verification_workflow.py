@@ -715,7 +715,7 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
             "${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}"
         )
     }
-    assert "npx playwright install --with-deps $E2E_COMPAT_BROWSERS" in text
+    assert 'npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"' in text
     assert "npm run test:e2e:compat" in text
     assert package["scripts"]["test:e2e:compat:all"] == (
         "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs"
