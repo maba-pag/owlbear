@@ -188,11 +188,27 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
             "timeout-minutes": 10,
             "run": (
                 "python3 .owlbear/scripts/diagrams/sync.py --check\n"
-                "python3 .owlbear/scripts/diagrams/render.py \\\n"
-                "  --input share/diagrams/mcp-topology.architecture.json \\\n"
-                '  --output "$RUNNER_TEMP/mcp-topology.svg" \\\n'
-                "  --offline\n"
-                'cmp --silent "$RUNNER_TEMP/mcp-topology.svg" share/diagrams/mcp-topology.svg\n'
+                "diagram_index=0\n"
+                "python3 -c '\n"
+                "import json\n"
+                "from pathlib import Path\n"
+                "\n"
+                'manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))\n'
+                'for diagram in manifest["diagrams"]:\n'
+                '    print("\\t".join((diagram["source"], diagram["artifact"])))\n'
+                "' | while IFS=$'\\t' read -r source artifact; do\n"
+                '  test -n "$source"\n'
+                '  test -n "$artifact"\n'
+                '  test -f "$source"\n'
+                '  test -f "$artifact"\n'
+                '  output="$RUNNER_TEMP/archify-diagram-${diagram_index}.svg"\n'
+                "  python3 .owlbear/scripts/diagrams/render.py \\\n"
+                '    --input "$source" \\\n'
+                '    --output "$output" \\\n'
+                "    --offline\n"
+                '  cmp --silent "$output" "$artifact"\n'
+                "  diagram_index=$((diagram_index + 1))\n"
+                "done\n"
             ),
         }
     ]

@@ -253,11 +253,27 @@ jobs:
         timeout-minutes: 10
         run: |
           python3 .owlbear/scripts/diagrams/sync.py --check
-          python3 .owlbear/scripts/diagrams/render.py \
-            --input share/diagrams/mcp-topology.architecture.json \
-            --output "$RUNNER_TEMP/mcp-topology.svg" \
-            --offline
-          cmp --silent "$RUNNER_TEMP/mcp-topology.svg" share/diagrams/mcp-topology.svg
+          diagram_index=0
+          python3 -c '
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))
+          for diagram in manifest["diagrams"]:
+              print("\t".join((diagram["source"], diagram["artifact"])))
+          ' | while IFS=$'\t' read -r source artifact; do
+            test -n "$source"
+            test -n "$artifact"
+            test -f "$source"
+            test -f "$artifact"
+            output="$RUNNER_TEMP/archify-diagram-${diagram_index}.svg"
+            python3 .owlbear/scripts/diagrams/render.py \
+              --input "$source" \
+              --output "$output" \
+              --offline
+            cmp --silent "$output" "$artifact"
+            diagram_index=$((diagram_index + 1))
+          done
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'

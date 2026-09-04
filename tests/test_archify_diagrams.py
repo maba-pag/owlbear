@@ -157,6 +157,18 @@ def test_standalone_svg_rejects_css_without_static_rules(render_module: ModuleTy
         render_module._standalone_svg(html, "light")  # noqa: SLF001
 
 
+def test_standalone_svg_rejects_unmapped_svg_class(render_module: ModuleType) -> None:
+    html = """<!DOCTYPE html>
+<html><head><style>
+  .c-grid { stroke: #eee; }
+</style></head><body>
+<svg viewBox="0 0 320 240" role="img"><path class="c-grid future-class" /></svg>
+</body></html>"""
+
+    with pytest.raises(render_module.RenderError, match="lack retained CSS selectors"):
+        render_module._standalone_svg(html, "light")  # noqa: SLF001
+
+
 def test_render_diagram_validates_then_atomically_writes_svg(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

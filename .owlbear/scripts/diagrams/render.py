@@ -24,6 +24,8 @@ SVG_SELECTOR_RE = re.compile(
     r"(^|,)\s*(svg|:root|\[data-theme|\[data-preset|\.semantic-sigil|\.s-|\.c-|\.t-|\.a-|\.m-)"
 )
 COMMENT_RE = re.compile(r"/\*[\s\S]*?\*/")
+CLASS_ATTRIBUTE_RE = re.compile(r'\bclass="([^"]*)"')
+CLASS_SELECTOR_RE = re.compile(r"(?<![A-Za-z0-9_-])\.([A-Za-z_][A-Za-z0-9_-]*)")
 VIEWBOX_RE = re.compile(r'\bviewBox="0\s+0\s+(?P<width>[0-9]+(?:\.[0-9]+)?)\s+(?P<height>[0-9]+(?:\.[0-9]+)?)"')
 
 
@@ -132,6 +134,15 @@ def _extract_svg_css(css: str) -> str:
     return "\n".join(rules)
 
 
+def _validate_svg_css_coverage(svg: str, css: str) -> None:
+    """Reject SVG classes that have no retained stylesheet selector."""
+    emitted_classes = {class_name for attribute in CLASS_ATTRIBUTE_RE.findall(svg) for class_name in attribute.split()}
+    retained_selectors = set(CLASS_SELECTOR_RE.findall(css))
+    missing = sorted(emitted_classes - retained_selectors)
+    if missing:
+        _fail(f"Archify SVG classes lack retained CSS selectors: {', '.join(missing)}.")
+
+
 def _replace_attribute(opening: str, name: str, value: str) -> str:
     """Set one double-quoted root attribute."""
     pattern = re.compile(rf'\s{re.escape(name)}="[^"]*"')
@@ -155,6 +166,7 @@ def _standalone_svg(html: str, theme: str) -> str:
         "'Hiragino Sans GB', 'Microsoft YaHei', monospace; }"
     )
     css = f"{font_stack}\n{filtered_css}"
+    _validate_svg_css_coverage(svg, css)
 
     svg_opening_end = svg.find(">")
     opening = svg[:svg_opening_end]
