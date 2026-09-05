@@ -531,12 +531,27 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
         assert declared == expected
 
 
-def test_retired_delivery_operations_are_absent_from_agent_prose() -> None:
-    """Retired MCP mutations must not survive in agent instructions or examples."""
-    for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
-        content = agent_path.read_text(encoding="utf-8")
+def test_retired_delivery_operations_are_absent_from_active_customization_prose() -> None:
+    """Retired MCP mutations must not survive in active customization sources."""
+    roots = (
+        _REPO_ROOT / "share/agents",
+        _REPO_ROOT / "share/instructions",
+        _REPO_ROOT / "share/prompts",
+        _REPO_ROOT / "share/skills",
+        _REPO_ROOT / ".owlbear/agents",
+        _REPO_ROOT / ".owlbear/instructions",
+        _REPO_ROOT / ".owlbear/prompts",
+        _REPO_ROOT / ".owlbear/skills",
+    )
+    active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]
+    active_files.append(_REPO_ROOT / ".github/copilot-instructions.md")
+
+    for path in active_files:
+        content = path.read_text(encoding="utf-8")
         for operation in _RETIRED_DELIVERY_TOOLS:
-            assert operation not in content, f"{agent_path.name} mentions retired Delivery operation {operation}"
+            assert operation not in content, (
+                f"{path.relative_to(_REPO_ROOT)} mentions retired Delivery operation {operation}"
+            )
 
     orchestrator = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
     assert "repair result" not in orchestrator

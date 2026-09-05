@@ -34,6 +34,11 @@ or block clearing; an unblocked outcome may continue to the administrative-move 
 standalone `change_id`, bind an abandoned Change with a retained target-sync conflict through
 `show_work_item_view(change_id, "publication")` and retain its exact conflict identities. Reject
 missing, extra, or malformed identities.
+For a standalone `change_id`, bind either an abandoned Change with a retained target-sync conflict
+through `show_work_item_view(change_id, "publication")`, or a quarantined target-sync publication
+repair through `delivery_health()` and the exact persisted target-sync receipt/publication evidence.
+For repair, retain `expected_remote_head`, `expected_merged_head`, and
+`target_sync_operation_id`. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
 `OwlBear Delivery list_work_items delivery_health repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
@@ -65,11 +70,14 @@ operator context and call `administrative_move(change_id, move_id, outcome_id, t
 expected_version=snapshot_version)`. A stale preview, finalized Change, active claim, or changed
 frontier is a hard stop; never invent a new version or bypass Delivery.
 
-For a standalone `change_id`, use only the retained target-sync conflict evidence bound in Step 0.
-Present one explicit confirmation, then call
+For a standalone `change_id`, use the route bound in Step 0. For an abandoned Change with a retained
+conflict, present one explicit confirmation, then call
 `cleanup_abandoned_change_worktree_after_target_sync_discard(change_id, expected_target_head,
-expected_operation_id, confirmed_discard=true)`. Re-read the returned cleanup state and report any
-remaining attention; never use this route for a non-abandoned Change or without a retained conflict.
+expected_operation_id, confirmed_discard=true)`. For a quarantined target-sync publication, present
+one explicit confirmation, then call
+`repair_target_sync_publication(change_id, expected_remote_head, expected_merged_head,
+target_sync_operation_id, operation_id, confirmed_repair=true)`. Re-read the returned state and
+report any remaining attention; never use either route without the exact retained evidence.
 
 ## Step 1 - Diagnose Current State Read-Only
 
