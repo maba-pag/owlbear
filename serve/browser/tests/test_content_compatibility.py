@@ -1,15 +1,15 @@
 import pytest
-from owlbear_web_content import clean as shared_clean
-from owlbear_web_content import extract as shared_extract
-from owlbear_web_content import extract_content as shared_extract_content
-from owlbear_web_content import html_to_markdown as shared_html_to_markdown
-from owlbear_web_content import strip_noise as shared_strip_noise
 
 from owlbear_browser.cleaner import clean as browser_clean
 from owlbear_browser.cleaner import html_to_markdown as browser_html_to_markdown
 from owlbear_browser.cleaner import strip_noise as browser_strip_noise
 from owlbear_browser.extractor import extract as browser_extract
 from owlbear_browser.extractor import extract_content as browser_extract_content
+from owlbear_web_content import clean as shared_clean
+from owlbear_web_content import extract as shared_extract
+from owlbear_web_content import extract_content as shared_extract_content
+from owlbear_web_content import html_to_markdown as shared_html_to_markdown
+from owlbear_web_content import strip_noise as shared_strip_noise
 
 REPRESENTATIVE_HTML = """
 <html>
