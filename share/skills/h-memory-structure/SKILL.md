@@ -36,7 +36,7 @@ Enumerations and ranges used by the schema:
 - `state` values: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted`
 - `confidence` range: inclusive `[0.7, 1.0]`
 
-This schema is validated by `MemoryEntry` in the `memory-mcp` package.
+This schema is validated by `MemoryEntry` in the `owlbear-memory` package; `memory-mcp` owns MCP-boundary validation and projections.
 
 ## Tier-Content Fit
 
@@ -65,8 +65,6 @@ MCP memory is canonical.
 
 The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
 reflection.
-
-See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 
 ## State Model
 

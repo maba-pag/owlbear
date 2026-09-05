@@ -87,23 +87,6 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "Keep Ruff and its pre-commit hook version coupled",
-      "matchManagers": [
-        "pep621",
-        "pre-commit"
-      ],
-      "matchPackageNames": [
-        "ruff",
-        "astral-sh/ruff-pre-commit"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch"
-      ],
-      "groupName": "Ruff toolchain"
-    },
-    {
       "description": "Keep Node runtime declarations aligned",
       "matchDatasources": [
         "node-version"
@@ -152,16 +135,21 @@
       "automerge": false
     },
     {
-      "description": "Keep MegaLinter image and action versions coupled",
+      "description": "Keep Ruff and MegaLinter toolchain versions coupled",
       "matchManagers": [
+        "pep621",
+        "pre-commit",
         "custom.regex",
         "github-actions"
       ],
       "matchDatasources": [
-        "docker",
-        "github-tags"
+        "pypi",
+        "github-tags",
+        "docker"
       ],
       "matchPackageNames": [
+        "ruff",
+        "astral-sh/ruff-pre-commit",
         "ghcr.io/oxsecurity/megalinter",
         "ghcr.io/oxsecurity/megalinter-cupcake",
         "oxsecurity/megalinter"
@@ -174,7 +162,7 @@
         "pinDigest",
         "digest"
       ],
-      "groupName": "MegaLinter version alignment"
+      "groupName": "Ruff and MegaLinter toolchain"
     },
     {
       "description": "Disable unsupported MegaLinter Docker pin and digest updates",
@@ -207,6 +195,22 @@
       "addLabels": [
         "cockpit",
         "pds"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Review Archify release asset and digest updates",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "github-release-attachments"
+      ],
+      "matchPackageNames": [
+        "tt-a1i/archify"
+      ],
+      "addLabels": [
+        "diagrams"
       ],
       "automerge": false
     },
@@ -271,6 +275,19 @@
       "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
       "depNameTemplate": "ghcr.io/oxsecurity/megalinter{{#if flavor}}-{{{flavor}}}{{/if}}",
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Archify release asset and SHA-256 pin",
+      "managerFilePatterns": [
+        "/^\\.owlbear/scripts/diagrams/archify\\.lock\\.json$/"
+      ],
+      "matchStrings": [
+        "version\\D*(?<currentValue>v[\\d.]+)[\\s\\S]*?sha256\\D*(?<currentDigest>[a-f0-9]{64})"
+      ],
+      "depNameTemplate": "tt-a1i/archify",
+      "datasourceTemplate": "github-release-attachments",
+      "versioningTemplate": "semver"
     }
   ]
 }

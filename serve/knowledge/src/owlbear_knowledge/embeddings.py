@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import gc
+import os
+import ssl
 import threading
 import time
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
+
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
 
 
 class SparseVector(BaseModel):
@@ -32,6 +41,61 @@ class EmbeddingProvider(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding vector per input text."""
         ...
+
+
+def _configure_huggingface_tls() -> None:
+    """Bridge a Node-style extra CA into Hugging Face's Python HTTP client."""
+    if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
+        return
+    extra_ca = os.environ.get("NODE_EXTRA_CA_CERTS")
+    if not extra_ca:
+        return
+    ca_path = Path(extra_ca).expanduser()
+    if not ca_path.is_file() or not os.access(ca_path, os.R_OK):
+        return
+
+    import httpx  # noqa: PLC0415
+    from huggingface_hub import set_client_factory  # noqa: PLC0415
+    from huggingface_hub.utils._http import hf_request_event_hook  # noqa: PLC0415
+
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=str(ca_path))
+
+    def client_factory() -> httpx.Client:
+        return httpx.Client(
+            event_hooks={"request": [hf_request_event_hook]},
+            follow_redirects=True,
+            timeout=None,  # noqa: S113 - preserve Hugging Face's default client contract.
+            verify=context,
+        )
+
+    set_client_factory(client_factory)
+
+
+def _model_load_failure(error: Exception) -> KnowledgeOperationError:
+    """Convert model setup failures to stable, safe diagnostics."""
+    details = str(error).lower()
+    configured_ca = os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR")
+    if configured_ca and not Path(configured_ca).exists():
+        code = "embedding_tls_configuration"
+        message = "BGE-M3 TLS configuration is unavailable"
+    elif "certificate" in details or "certificate_verify_failed" in details or "ssl" in details or "tls" in details:
+        code = "embedding_tls_failed"
+        message = "BGE-M3 download TLS verification failed"
+    elif "localentrynotfound" in details or "local entry" in details or "no local model" in details:
+        code = "embedding_model_unavailable"
+        message = "BGE-M3 model is unavailable locally"
+    else:
+        code = "embedding_download_failed"
+        message = "BGE-M3 model download failed"
+    return KnowledgeOperationError(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.INDEXING,
+            code=code,
+            retryable=True,
+            message=message,
+        )
+    )
 
 
 class BgeM3EmbeddingProvider:
@@ -67,17 +131,26 @@ class BgeM3EmbeddingProvider:
                 try:
                     from FlagEmbedding import BGEM3FlagModel  # noqa: PLC0415
                 except ImportError:
-                    msg = (
-                        "FlagEmbedding is required for BgeM3EmbeddingProvider. "
-                        "Install it with: uv pip install FlagEmbedding"
+                    raise KnowledgeOperationError(
+                        KnowledgeFailure(
+                            stage=KnowledgeFailureStage.INDEXING,
+                            code="embedding_dependency_missing",
+                            retryable=False,
+                            message="FlagEmbedding dependency is unavailable",
+                        )
+                    ) from None
+                _configure_huggingface_tls()
+                try:
+                    self._model = BGEM3FlagModel(
+                        self.model_name,
+                        use_fp16=True,
+                        devices=["cpu"],
+                        batch_size=self.batch_size,
                     )
-                    raise ImportError(msg) from None
-                self._model = BGEM3FlagModel(
-                    self.model_name,
-                    use_fp16=True,
-                    devices=["cpu"],
-                    batch_size=self.batch_size,
-                )
+                except KnowledgeOperationError:
+                    raise
+                except Exception as exc:
+                    raise _model_load_failure(exc) from exc
         return self._model
 
     def _reset_timer(self) -> None:

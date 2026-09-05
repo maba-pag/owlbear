@@ -31,6 +31,10 @@ without behavior change).
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
+- When a task changes an input that determines a tracked generated output, commit the generated
+  output with those inputs in the same scoped commit. Keep the output in the task's explicit
+  `maintained_surfaces` and `required_outputs`; do not create a later lock-only or index-only task
+  when an earlier task cannot be proved without the generated file.
 - During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
   within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
   complete diff, validate it against the task, and explicitly adopt it before committing. Do not
@@ -48,6 +52,10 @@ without behavior change).
 - A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
   affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.
+
+An admitted Delivery package snapshot is a Delivery-owned commit on the exact managed Change
+branch. Local `refs/owlbear/packages/*` checkpoints are not remote backup and must not replace that
+branch publication.
 
 ### VS Code Auto-Staging Trap
 

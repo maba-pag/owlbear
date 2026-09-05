@@ -13,16 +13,33 @@ Delivery authority permits. Local Integration execution and completion-proposal 
 retired; completion is recorded only from a fresh provider observation bound to finalized Delivery
 authority.
 
-## Step 0 - Bind The Exact Current Attention
+## Lifecycle Status
 
-Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by one
-64-character lowercase hexadecimal identity. A Change publication or acceptance attention uses its
-`disposition_id`; a retained Integration repair attention uses its `attention_id`. Reject missing,
-extra, or malformed identities.
+This is a temporary recovery/exception workflow, not a normal Delivery step. Retire its user-facing
+prompt only after Cockpit and Delivery provide guided, tested routes for every capability currently
+reachable only here: external Change-head adoption and promotion, publication-baseline recovery,
+and retained Integration-repair claim recovery. The replacement must preserve exact identity
+binding, user decisions, provider actions, and explicit authority-gap reporting. Ordinary Change
+attention buttons do not satisfy this retirement condition.
+
+## Step 0 - Bind The Exact Current Attention Or Blocked Outcome
+
+Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by either one
+64-character lowercase hexadecimal identity or one `OUT-nnn` outcome identity, or as a standalone
+`change_id` for abandoned target-sync cleanup or quarantined target-sync publication repair. For a
+64-character identity, a Change publication or acceptance attention uses its `disposition_id`; a
+retained Integration repair attention uses its `attention_id`. For an `OUT-nnn` identity, bind the
+exact outcome through `show_operator_context(change_id, outcome_id)`. A current block is required
+for request resolution or block clearing; an unblocked outcome may continue to the administrative
+move preview. For a standalone `change_id`, bind either an abandoned Change with a retained
+target-sync conflict through `show_work_item_view(change_id, "publication")`, or a quarantined
+target-sync publication repair through `delivery_health()` and the exact persisted target-sync
+receipt/publication evidence. For repair, retain `expected_remote_head`, `expected_merged_head`,
+and `target_sync_operation_id`. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
-For a Change attention, call `list_work_items` and require the Change publication card's
+`OwlBear Delivery list_work_items delivery_health repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
 `show_integration_attention(change_id)` and require its change and attention identities to equal
@@ -33,6 +50,31 @@ current state and stop without mutation. Never substitute a newer attention sile
 
 Treat the returned code, heads, target, diagnostics, and retry condition as retained evidence, not
 as permission to edit a worktree or target.
+
+For an `OUT-nnn` identity, call `show_operator_context(change_id, outcome_id)` and require the
+returned context to retain the supplied outcome identity. If the context contains a current block
+and that block contains a pending request, present exactly one user decision and, after the answer, call
+`resolve_request(change_id, request_id, resolution)` with the selected option or response text. If
+the context contains a requestless block, present the evidence requirement and, after explicit user
+confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note, locators)`. Re-read
+the exact operator context before either mutation; neither operation restores later-stage authority
+or selects a Delivery transition.
+
+For an operator-directed backward movement, call `preview_administrative_move(change_id, outcome_id,
+target)` and retain its `snapshot_version` and `invalidated_outcome_ids`. Present the invalidation
+closure and obtain one explicit user decision. If the user approves that exact preview, re-read the
+operator context and call `administrative_move(change_id, move_id, outcome_id, target, reason,
+expected_version=snapshot_version)`. A stale preview, finalized Change, active claim, or changed
+frontier is a hard stop; never invent a new version or bypass Delivery.
+
+For a standalone `change_id`, use the route bound in Step 0. For an abandoned Change with a retained
+conflict, present one explicit confirmation, then call
+`cleanup_abandoned_change_worktree_after_target_sync_discard(change_id, expected_target_head,
+expected_operation_id, confirmed_discard=true)`. For a quarantined target-sync publication, present
+one explicit confirmation, then call
+`repair_target_sync_publication(change_id, expected_remote_head, expected_merged_head,
+target_sync_operation_id, operation_id, confirmed_repair=true)`. Re-read the returned state and
+report any remaining attention; never use either route without the exact retained evidence.
 
 ## Step 1 - Diagnose Current State Read-Only
 
@@ -95,6 +137,18 @@ Use only an existing operation whose contract owns the selected result:
   and re-read finalization and checkpoint authority before retrying `mark_change_ready(change_id)`.
   If the exact head changed, reconcile finalization first and hand the Change back to its owning
   finalization/review workflow; do not supersede the publication solely because a check failed.
+- Target-sync publication repair: when Delivery reports a committed target merge whose remote Change
+  branch or Delivery-state publication is inconsistent, bind the exact `expected_remote_head`,
+  `expected_merged_head`, `target_sync_operation_id`, and a fresh `operation_id`. Present one explicit
+  confirmation, then call `repair_target_sync_publication(..., confirmed_repair=true)`. Re-read the
+  returned receipt and finalization context; repair publishes only the already-recorded managed Change
+  head and requires fresh finalization review.
+- Abandoned target-sync discard: after an exact Change is abandoned and its retained worktree reports
+  a preserved target-sync conflict, re-read the conflict's `target_head` and `operation_id`. Present
+  one explicit confirmation, then call
+  `cleanup_abandoned_change_worktree_after_target_sync_discard(change_id,
+  expected_target_head, expected_operation_id, confirmed_discard=true)`. A changed conflict identity,
+  missing worktree, or non-abandoned Change remains blocked; never discard the merge with raw Git.
 - Change attention: use the exact disposition identity and call
   `resolve_change_disposition(change_id, expected_disposition_id)`. This clears the current Change
   attention and retained provider identity; it does not restore ready authority. For a closed,
@@ -111,10 +165,12 @@ Use only an existing operation whose contract owns the selected result:
   irreversible and must not be inferred from an attention diagnosis.
 - External Change head adoption: after the user explicitly selects adoption and the exact expected
   reviewed head and remote adopted head have been re-read, call
-  `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. This fast-forwards
-  only the managed Change worktree and preserves the prior reviewed boundary; adoption proves
-  provenance but does not grant review authority. Before Builder acquisition, re-read the exact
-  adopted receipt and call
+  `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. When the managed
+  branch is at the reviewed head, Delivery fast-forwards it; when an intentional out-of-band push
+  has already put the clean managed branch at the exact adopted head, Delivery verifies the remote
+  tip and records observed provenance. Both paths preserve the prior reviewed boundary; adoption
+  proves provenance but does not grant review authority. Before Builder acquisition, re-read the
+  exact adopted receipt and call
   `promote_external_head(change_id, expected_head=adopted_head, operation_id)` to admit review
   authority for that exact head. For a completed adopted Change, hand off to the finalization
   workflow, which performs the finalization-bound promotion after exact review. Do not use target
@@ -156,16 +212,25 @@ Use only an existing operation whose contract owns the selected result:
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
-  legacy repair claim for recovery; do not create a new claim, candidate, review, or admission;
+  Integration repair claim for recovery; do not create a new claim, candidate, review, or admission;
 - target-sync merge conflict: when the Change attention diagnostics identify a preserved target
-  synchronization conflict, retain the managed worktree, `MERGE_HEAD`, and conflict paths and
-  report `authority-gap` unless the current context supplies an exact Delivery-owned operation for
-  conflict resolution, validation, and review. Do not resolve the generic Change disposition,
+  synchronization conflict, hand off to `/resolve-target-conflict <change-id>`. That workflow
+  retains the managed worktree, `MERGE_HEAD`, and conflict paths while the agent resolves content
+  and Delivery validates and commits the merge. Do not resolve the generic Change disposition,
   retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
+- dirty Builder claim recovery: call the exact `recover_claim` operation with the supplied change,
+  outcome, attempt, and claim identities. Delivery preserves uncommitted tracked, staged, deleted,
+  renamed, and untracked non-ignored bytes in an isolated quarantine ref, verifies the evidence,
+  resets and cleans the managed worktree without removing ignored environments, releases stale
+  custody, and allows successor acquisition. Do not inspect, classify, adopt, discard, or commit
+  dirty files on the user's behalf. If recovery returns `recovered`, report the quarantine evidence
+  and continue the owning workflow. If it returns `attention`, report the machine-owned preservation
+  or custody failure and its retry condition; do not turn it into a Git decision for the user.
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
-  its attempt and claim identities.
+  its attempt and claim identities. A recovery result of `attention` is not recovery; report the
+  retained claim, custody, and machine-owned retry condition without performing Git cleanup.
 - retained Integration repair attention: preserve the existing
   `show_integration_attention(change_id)` and `recover_integration_repair_claim(change_id,
   attempt_id, claim_id)` route. Do not use Change disposition resolution for an Integration repair
@@ -206,3 +271,5 @@ owned route.
   clears attention only; reconciliation and ready-marking are separate authority steps.
 - **Choosing for the user:** preservation, adoption, and discard have materially different outcomes.
 - **Resolving the wrong attention:** bind and revalidate the exact attention ID before every mutation.
+- **Operator mutation without context:** read `show_operator_context` first and require the exact
+  request or block identity before resolving it.

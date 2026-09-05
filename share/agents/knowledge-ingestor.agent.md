@@ -28,6 +28,7 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 <critical_rules>
 
 - **Follow the `h-knowledge-ops` skill** for MCP tool behaviors, scope conventions, and the curation lifecycle.
+- Report Knowledge outcomes from their structured fields: inspect `stage` and `code`, preserve `retryable` and the redacted `message`, and retain successful refresh counts beside per-source failures. Never parse operational text or claim acquisition, extraction, persistence, indexing, or query work succeeded when a typed failure names that stage.
 - **Use canonical memory identity `knowledge-ingestor`.** Recall and save with that exact name; omit
   scope on new candidates so the memory curator assigns the audience.
 - Use `read/readFile` for local text paths, `web` for known public pages, browser acquisition for rendered or authenticated pages, `markitdown/*` for supported document conversion, `vscode/askQuestions` for user validation, and `owlbear-knowledge/*` tools for knowledge-base reads/writes.
@@ -42,7 +43,7 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 
 ### Channel A
 
-Report the completed operation inline. For registration, report `id`, `name`, `state`, `kind`, and `scope`; for ingestion or refresh, report the source result, fetch status, chunk count, and validation outcome; for intentional deletion, report `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`.
+Report the completed operation inline. For registration, report `id`, `name`, `state`, `kind`, and `scope`; for ingestion, report the source result, fetch status, chunk count, and validation outcome. For `knowledge_search`, report either the successful values or `stage`, `code`, `retryable`, and redacted `message`. For refresh, report `source_id`, successful document and chunk counts, and typed per-source failures. Preserve partial successes and error-free no-op success; do not collapse a typed failure into a successful acquisition, extraction, persistence, indexing, or query report. For intentional deletion, report `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`.
 
 ### Channel B
 

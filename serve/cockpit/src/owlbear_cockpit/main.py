@@ -40,6 +40,7 @@ from owlbear_cockpit.routes.target_work import (
 )
 from owlbear_cockpit.routes.target_work import router as target_work_router
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery import DeliveryCheckpointSupervisor
 from owlbear_delivery.storage_io import atomic_write
 
 _DEFAULT_PORT = 8420
@@ -51,6 +52,7 @@ _MEMORY_DIR = Path(".owlbear/memory")
 _NO_OPEN_ENV = "COCKPIT_NO_OPEN"
 _PORT_ENV = "COCKPIT_PORT"
 _REGISTRY_ENV = "OWLBEAR_COCKPIT_REGISTRY"
+_REVALIDATE_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 app = FastAPI(title="OwlBear Cockpit")
 app.add_exception_handler(HTTPException, handle_target_http_error)
@@ -318,6 +320,9 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     memory_engine = MemoryEngine(workspace_root / _MEMORY_DIR)
     app.state.workspace_root = workspace_root
     app.state.target_context = target_context
+    checkpoint_supervisor = DeliveryCheckpointSupervisor(target_context)
+    checkpoint_supervisor.start()
+    app.state.checkpoint_supervisor = checkpoint_supervisor
     app.state.memory_engine = memory_engine
     app.state.port = port
 
@@ -336,11 +341,15 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
         return FileResponse(
             dist_dir / "theme-bootstrap.js",
             media_type="application/javascript",
+            headers=_REVALIDATE_HEADERS,
         )
 
     @app.get("/{path:path}")
     def _spa_catchall(path: str) -> HTMLResponse:  # noqa: ARG001
-        return HTMLResponse((dist_dir / "index.html").read_text(encoding="utf-8"))
+        return HTMLResponse(
+            (dist_dir / "index.html").read_text(encoding="utf-8"),
+            headers=_REVALIDATE_HEADERS,
+        )
 
     # --- browser auto-open ---
     if not no_open and not os.environ.get(_NO_OPEN_ENV):
@@ -362,6 +371,7 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     try:
         uvicorn.run(app, host=_HOST, port=port)
     finally:
+        checkpoint_supervisor.stop()
         record.unlink(missing_ok=True)
 
 

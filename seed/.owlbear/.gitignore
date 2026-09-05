@@ -4,21 +4,18 @@
 scratch/*
 !scratch/.gitkeep
 !scratch/.instructions.md
+skills/pds-knowledge-*
 
 # Knowledge and memory databases
 knowledge/*.db
 knowledge/vectors/
 memory/*.db
 
-# Host-local Delivery runtime and linked worktrees
-delivery/runtime/
+# Delivery runtime state; keep the visible host defaults trackable
+delivery/runtime/*
+!delivery/runtime/host.json
 delivery/worktrees/
 worktrees/
-delivery/migration.json
-delivery/integration-retirement.json
-scratch/delivery-integration-retirement/
-target/target-runtime/capacity.json
-target/target-runtime/integration-verification/
 
 # Lock files (transient runtime artifacts)
 .storage.lock

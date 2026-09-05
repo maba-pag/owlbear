@@ -9,17 +9,17 @@ name: Dependency verification
       - opened
       - reopened
       - synchronize
+      - ready_for_review
     paths:
       - .github/renovate.json
-      - .github/scripts/check_node_runtime.py
-      - .github/scripts/check_uv_version.py
       - .github/scripts/check_uv_workspace_lock.py
+      - .github/scripts/check_ruff_toolchain.py
       - .github/workflows/**
       - .mega-linter.yml
       - .pre-commit-config.yaml
       - .python-version
-      - .owlbear/scripts/export-diagrams/package.json
-      - .owlbear/scripts/export-diagrams/package-lock.json
+      - .owlbear/scripts/diagrams/**
+      - share/diagrams/**
       - package.json
       - package-lock.json
       - pyproject.toml
@@ -28,11 +28,14 @@ name: Dependency verification
       - serve/cockpit/web/package.json
       - serve/cockpit/web/package-lock.json
       - serve/tools/src/owlbear_tools/dependency_ci.py
+      - serve/tools/src/owlbear_tools/megalinter.py
+      - tests/test_archify_diagrams.py
       - tests/test_dependency_verification_workflow.py
       - uv.lock
+  workflow_dispatch:
 
 concurrency:
-  group: dependency-verification-${{ github.event.pull_request.number }}
+  group: dependency-verification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -40,8 +43,39 @@ permissions:
   contents: read
 
 jobs:
+  resolve_runtimes:
+    name: Resolve Python runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python_matrix: ${{ steps.runtime.outputs.python_matrix }}
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve pinned Python runtimes
+        id: runtime
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python_upper="$(tr -d '\r\n' < .python-version)"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            printf 'python_matrix=["3.12.14","3.13","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
+          else
+            printf 'python_matrix=["3.12.14","%s"]\n' "$python_upper" >> "$GITHUB_OUTPUT"
+          fi
+
   classify:
     name: Classify dependency surfaces
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -53,15 +87,18 @@ jobs:
       pds: ${{ steps.scope.outputs.pds }}
       precommit: ${{ steps.scope.outputs.precommit }}
       python: ${{ steps.scope.outputs.python }}
+      proof_tooling: ${{ steps.proof_tooling.outputs.proof_tooling }}
+      workspace_lock_tooling: ${{ steps.proof_tooling.outputs.workspace_lock_tooling }}
+      ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}
       renovate: ${{ steps.scope.outputs.renovate }}
       root_node: ${{ steps.scope.outputs.root_node }}
       shared_node_runtime: ${{ steps.scope.outputs.shared_node_runtime }}
       workflows: ${{ steps.scope.outputs.workflows }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -70,14 +107,60 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
-          git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
-          python3 serve/tools/src/owlbear_tools/dependency_ci.py \
-            --paths-file "$RUNNER_TEMP/dependency-paths" \
-            --diff-file "$RUNNER_TEMP/dependency.diff" \
-            --github-output "$GITHUB_OUTPUT" \
-            --summary "$GITHUB_STEP_SUMMARY"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            : > "$RUNNER_TEMP/dependency-paths"
+            for output in \
+              python node shared_node_runtime root_node diagrams pds precommit \
+              ruff_toolchain workflows megalinter renovate applicable compatibility \
+              workspace_lock_tooling
+            do
+              echo "$output=true" >> "$GITHUB_OUTPUT"
+            done
+          else
+            MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+            git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
+            git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
+            python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+              --paths-file "$RUNNER_TEMP/dependency-paths" \
+              --diff-file "$RUNNER_TEMP/dependency.diff" \
+              --base-ref "$MERGE_BASE" \
+              --head-ref "$HEAD_SHA" \
+              --repository-root "$GITHUB_WORKSPACE" \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Protect dependency proof tooling
+        id: proof_tooling
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "proof_tooling=true" >> "$GITHUB_OUTPUT"
+            echo "workspace_lock_tooling=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          proof_tooling=false
+          workspace_lock_tooling=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              .github/scripts/check_uv_workspace_lock.py)
+                workspace_lock_tooling=true
+                ;;
+              .github/workflows/*|\
+              .github/scripts/check_ruff_toolchain.py|\
+              serve/tools/src/owlbear_tools/dependency_ci.py|\
+              serve/tools/src/owlbear_tools/megalinter.py|\
+              tests/test_dependency_verification_workflow.py)
+                proof_tooling=true
+                ;;
+            esac
+          done < "$RUNNER_TEMP/dependency-paths"
+          echo "proof_tooling=$proof_tooling" >> "$GITHUB_OUTPUT"
+          echo "workspace_lock_tooling=$workspace_lock_tooling" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js for runtime declaration
         if: steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true'
@@ -95,24 +178,26 @@ jobs:
 
   proof-python:
     name: Prove Python ${{ matrix.python }} compatibility
-    needs: classify
-    if: needs.classify.outputs.python == 'true'
+    needs:
+      - classify
+      - resolve_runtimes
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      needs.classify.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python:
-          - "3.12.14"
-          - "3.13.15"
-          - "3.14.7"
+        python: ${{ fromJSON(needs.resolve_runtimes.outputs.python_matrix) }}
     env:
       UV_PROJECT_ENVIRONMENT: .venv-${{ matrix.python }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup uv
@@ -130,27 +215,33 @@ jobs:
         run: uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups
 
       - name: Prove workspace lock regeneration
+        if: matrix.python == '3.12.14'
         run: uv run --python "${{ matrix.python }}" python .github/scripts/check_uv_workspace_lock.py
 
       - name: Compile Python sources
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" python -m compileall -q serve setup tests .owlbear/hooks seed
 
       - name: Check Python sources
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" ruff check .
           uv run --python "${{ matrix.python }}" ruff format --check .
 
       - name: Run Python behavior tests
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" pytest tests serve \
-            -m "not api and not e2e and not browser and not cockpit"
+            -m "not api and not e2e and not browser and not cockpit and not model"
 
   proof-node:
     name: Prove Node dependency surfaces
     needs:
       - classify
     if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
       needs.classify.result == 'success' &&
       (needs.classify.outputs.pds == 'true' ||
       needs.classify.outputs.root_node == 'true' ||
@@ -159,10 +250,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -173,27 +264,58 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             serve/cockpit/web/package-lock.json
-            .owlbear/scripts/export-diagrams/package-lock.json
 
       - name: Install locked root dependencies
         if: needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         run: npm ci
 
-      - name: Install locked diagram exporter dependencies
+      - name: Verify pinned Archify release and static render
         if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
-        working-directory: .owlbear/scripts/export-diagrams
-        run: npm ci
-
-      - name: Render one maintained diagram
-        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
-        working-directory: .owlbear/scripts/export-diagrams
         timeout-minutes: 10
+        shell: bash
         run: |
-          npx playwright install chromium
-          npm run export:file -- \
-            ../../../share/diagrams/mcp-topology.excalidraw \
-            "$RUNNER_TEMP/mcp-topology.png"
-          test -s "$RUNNER_TEMP/mcp-topology.png"
+          python3 .owlbear/scripts/diagrams/sync.py
+          python3 -c '
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("share/diagrams/manifest.json").read_text(encoding="utf-8"))
+          manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}
+          architecture_sources = {
+              path.as_posix() for path in Path("share/diagrams").rglob("*.architecture.json")
+          }
+          if manifest_sources != architecture_sources:
+              missing = sorted(architecture_sources - manifest_sources)
+              unlisted = sorted(manifest_sources - architecture_sources)
+              raise SystemExit(
+                  f"Archify manifest source coverage mismatch: missing={missing}; unlisted={unlisted}"
+              )
+          for diagram in manifest["diagrams"]:
+              print("\t".join((diagram["source"], diagram["artifact"])))
+          ' > "$RUNNER_TEMP/archify-diagrams.tsv"
+          test -s "$RUNNER_TEMP/archify-diagrams.tsv"
+          diagram_index=0
+          while IFS=$'\t' read -r source artifact; do
+            test -n "$source"
+            test -n "$artifact"
+            test -f "$source"
+            test -f "$artifact"
+            output="$RUNNER_TEMP/archify-diagram-${diagram_index}.svg"
+            python3 .owlbear/scripts/diagrams/render.py \
+              --input "$source" \
+              --output "$output" \
+              --offline
+            if cmp --silent "$output" "$artifact"; then
+              :
+            else
+              echo "Archify artifact is stale: $artifact"
+              echo "Regenerate with:"
+              echo "  python3 .owlbear/scripts/diagrams/render.py"
+              echo "    --input \"$source\" --output \"$artifact\" --offline"
+              exit 1
+            fi
+            diagram_index=$((diagram_index + 1))
+          done < "$RUNNER_TEMP/archify-diagrams.tsv"
 
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.pds == 'true'
@@ -212,14 +334,19 @@ jobs:
   compatibility:
     name: Prove dependency tooling compatibility
     needs: classify
-    if: needs.classify.outputs.compatibility == 'true'
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      (needs.classify.outputs.compatibility == 'true' ||
+      needs.classify.outputs.proof_tooling == 'true' ||
+      needs.classify.outputs.workspace_lock_tooling == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup uv
@@ -232,6 +359,18 @@ jobs:
 
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Exercise dependency proof tooling
+        if: needs.classify.outputs.proof_tooling == 'true'
+        run: uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py
+
+      - name: Exercise workspace lock proof
+        if: needs.classify.outputs.workspace_lock_tooling == 'true'
+        run: uv run python .github/scripts/check_uv_workspace_lock.py
+
+      - name: Verify Ruff toolchain parity
+        if: needs.classify.outputs.ruff_toolchain == 'true'
+        run: uv run python .github/scripts/check_ruff_toolchain.py
 
       - name: Setup Node.js for frontend lint hooks
         if: needs.classify.outputs.precommit == 'true'
@@ -253,6 +392,10 @@ jobs:
         if: needs.classify.outputs.precommit == 'true'
         run: uv run lint --no-fix
 
+      # Deferred removal option (comment-only; keep the step below active for now):
+      # - name: Exercise updated MegaLinter image
+      #   if: needs.classify.outputs.megalinter == 'true'
+      #   run: uv run megalint --no-fix
       - name: Exercise updated MegaLinter image
         if: needs.classify.outputs.megalinter == 'true'
         run: uv run megalint --no-fix
@@ -265,10 +408,14 @@ jobs:
     name: Verify dependency update
     needs:
       - classify
+      - resolve_runtimes
       - proof-python
       - proof-node
       - compatibility
-    if: always()
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -276,7 +423,10 @@ jobs:
         env:
           CLASSIFY: ${{ needs.classify.result }}
           COMPATIBILITY: ${{ needs.compatibility.result }}
-          COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
+          COMPATIBILITY_EXPECTED: >-
+            ${{ needs.classify.outputs.compatibility == 'true' ||
+            needs.classify.outputs.proof_tooling == 'true' ||
+            needs.classify.outputs.workspace_lock_tooling == 'true' }}
           NODE: ${{ needs.proof-node.result }}
           NODE_EXPECTED: >-
             ${{ needs.classify.outputs.pds == 'true' ||

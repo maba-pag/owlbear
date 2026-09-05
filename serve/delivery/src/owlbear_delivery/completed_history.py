@@ -20,7 +20,9 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
+from owlbear_delivery.change_workspace import ChangeCoordination
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryStage,
     DeliveryTaskDefinition,
@@ -208,8 +210,31 @@ class ReceiptCompletedChangeRecord(_CompletedChangeRecordBase):
     completed_at: datetime
 
 
+class AbandonedChangeRecord(_CompletedHistoryModel):
+    """Terminal abandonment facts retained separately from accepted history."""
+
+    schema_version: Literal[1] = 1
+    record_kind: Literal["abandoned-change"] = "abandoned-change"
+    change_id: ChangeId
+    abandonment_id: Digest
+    title: str = Field(min_length=1)
+    semantic_summary: str = Field(min_length=1)
+    outcome_titles: tuple[str, ...] = Field(min_length=1)
+    outcome_promises: tuple[str, ...] | None = None
+    prior_stage: DeliveryChangeStage
+    reason: str = Field(min_length=1)
+    abandoned_at: datetime
+    cleanup_available: bool
+    target_sync_conflict: bool = False
+    target_sync_conflict_target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    target_sync_conflict_operation_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+
+
 type CompletedChangeRecord = Annotated[
-    LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord,
+    LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord,
     Field(discriminator="record_kind"),
 ]
 
@@ -278,7 +303,8 @@ class CompletedHistoryCatalog:
         self._repository = repository.resolve()
         self._target_branch = target_branch
         self._legacy_source_ref = legacy_source_ref
-        self._completion_store = CompletionReceiptStore(runtime_root)
+        self._runtime_root = runtime_root.resolve()
+        self._completion_store = CompletionReceiptStore(self._runtime_root)
 
     def list(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one stable identity-ordered page from completed history."""
@@ -296,7 +322,7 @@ class CompletedHistoryCatalog:
     def show(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord:
         """Show one verified completion by change and optional exact completion identity."""
         for record in self._rebuild().records:
-            if record.change_id == change_id and completion_id in {None, record.completion_id}:
+            if record.change_id == change_id and completion_id in {None, _record_identity(record)}:
                 return record
         return self._missing("completed change is absent", change_id, completion_id)
 
@@ -311,15 +337,24 @@ class CompletedHistoryCatalog:
             self._malformed("completion receipt history is malformed", cause=exc)
         receipt_records = tuple(self._receipt_record(bundle) for bundle in bundles)
         receipt_change_ids = {record.change_id for record in receipt_records}
+        abandoned_records = tuple(
+            self._abandoned_record(observation)
+            for observation in self._abandoned_observations()
+            if observation[0] not in receipt_change_ids
+        )
         records = (
             *receipt_records,
+            *abandoned_records,
             *(record for record in legacy_records if record.change_id not in receipt_change_ids),
         )
-        receipt_set_digest = _receipt_set_digest(bundles)
+        ordered_records = tuple(
+            sorted(records, key=lambda item: (item.change_id, item.record_kind, _record_identity(item)))
+        )
+        receipt_set_digest = _history_record_set_digest(ordered_records)
         return _CatalogSnapshot(
             legacy_source_commit=target_commit,
             receipt_set_digest=receipt_set_digest,
-            records=tuple(sorted(records, key=lambda item: (item.change_id, item.record_kind, item.completion_id))),
+            records=ordered_records,
         )
 
     def _legacy_record(self, target_commit: str, path: str) -> LegacyCompletedChangeRecord:
@@ -367,6 +402,87 @@ class CompletedHistoryCatalog:
             completed_at=receipt.completed_at,
         )
 
+    def _abandoned_observations(self) -> tuple[tuple[str, DeliveryFrontier], ...]:
+        """Read terminal abandoned frontiers from local Delivery runtime state."""
+        runtime_root = self._runtime_root
+        changes_root = runtime_root / "changes"
+        if not changes_root.exists():
+            return ()
+        if changes_root.is_symlink() or not changes_root.is_dir():
+            self._malformed("Delivery abandoned-history root is invalid")
+        observations = []
+        for change_root in sorted(changes_root.iterdir(), key=lambda path: path.name):
+            if change_root.is_symlink() or not change_root.is_dir() or not _SAFE_CHANGE_ID.fullmatch(change_root.name):
+                continue
+            path = change_root / "frontier.json"
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                frontier = parse_delivery_frontier(path.read_bytes())[0]
+            except (OSError, TypeError, ValueError, ValidationError) as exc:
+                self._malformed("Delivery abandoned-history frontier is invalid", change_root.name, cause=exc)
+            if frontier.change_abandonment is not None:
+                observations.append((change_root.name, frontier))
+        return tuple(observations)
+
+    def _abandoned_record(
+        self,
+        observation: tuple[str, DeliveryFrontier],
+    ) -> AbandonedChangeRecord:
+        change_id, frontier = observation
+        abandonment = frontier.change_abandonment
+        if abandonment is None:
+            self._malformed("abandoned-history frontier has no abandonment receipt", change_id)
+        contract = self._local_contract(change_id)
+        (
+            cleanup_available,
+            target_sync_conflict,
+            target_sync_conflict_target_head,
+            target_sync_conflict_operation_id,
+        ) = self._cleanup_state(change_id)
+        return AbandonedChangeRecord(
+            change_id=change_id,
+            abandonment_id=abandonment.abandonment_id,
+            title=contract.title,
+            semantic_summary=f"Abandoned before completion: {abandonment.reason}",
+            outcome_titles=tuple(outcome.title for outcome in contract.outcomes),
+            outcome_promises=tuple(outcome.promise for outcome in contract.outcomes),
+            prior_stage=abandonment.prior_stage,
+            reason=abandonment.reason,
+            abandoned_at=abandonment.abandoned_at,
+            cleanup_available=cleanup_available,
+            target_sync_conflict=target_sync_conflict,
+            target_sync_conflict_target_head=target_sync_conflict_target_head,
+            target_sync_conflict_operation_id=target_sync_conflict_operation_id,
+        )
+
+    def _local_contract(self, change_id: str) -> DeliveryContract:
+        path = self._runtime_root / "changes" / change_id / "contract.json"
+        try:
+            contract = DeliveryContract.model_validate_json(path.read_bytes())
+        except (OSError, TypeError, ValueError, ValidationError) as exc:
+            self._malformed("abandoned-history contract is invalid", change_id, cause=exc)
+        if contract.change_id != change_id:
+            self._malformed("abandoned-history contract identity is invalid", change_id)
+        return contract
+
+    def _cleanup_state(self, change_id: str) -> tuple[bool, bool, str | None, str | None]:
+        """Return whether cleanup is available and whether a target conflict must be discarded first."""
+        path = self._runtime_root / "coordination" / "changes" / f"{change_id}.json"
+        if not path.is_file() or path.is_symlink():
+            return False, False, None, None
+        try:
+            coordination = ChangeCoordination.model_validate_json(path.read_bytes())
+        except (OSError, TypeError, ValueError, ValidationError) as exc:
+            self._malformed("abandoned-history coordination is invalid", change_id, cause=exc)
+        conflict = coordination.target_sync_conflict
+        return (
+            coordination.worktree_cleanup is None,
+            conflict is not None,
+            conflict.target_head if conflict is not None else None,
+            conflict.operation_id if conflict is not None else None,
+        )
+
     @staticmethod
     def _search_text(record: CompletedChangeRecord) -> str:
         fields = [record.change_id, record.title, record.semantic_summary]
@@ -378,6 +494,8 @@ class CompletedHistoryCatalog:
                     str(record.pull_request_identity.number),
                 )
             )
+        elif isinstance(record, AbandonedChangeRecord):
+            fields.extend((record.prior_stage.value, record.reason))
         return "\n".join(fields).casefold()
 
     def _snapshot(self, commit: str, path: str) -> CompletionPackageSnapshot:
@@ -748,6 +866,17 @@ def _receipt_set_digest(bundles: tuple[CompletionReceiptBundle, ...]) -> str:
         (bundle.receipt.change_id, bundle.receipt.completion_id, bundle.display.display_id) for bundle in bundles
     )
     return hashlib.sha256(json.dumps(identities, separators=(",", ":")).encode()).hexdigest()
+
+
+def _record_identity(record: CompletedChangeRecord) -> str:
+    """Return the stable archive identity for one completion or abandonment record."""
+    return record.abandonment_id if isinstance(record, AbandonedChangeRecord) else record.completion_id
+
+
+def _history_record_set_digest(records: tuple[CompletedChangeRecord, ...]) -> str:
+    """Digest all archive records so cursors expire when any record changes."""
+    payload = [record.model_dump(mode="json") for record in records]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _canonical_results(results: tuple[BaseModel, ...]) -> bytes:

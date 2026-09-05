@@ -17,17 +17,22 @@ from owlbear_cockpit.target_models import (
     AcceptanceReconciliationRequest,
     AcceptanceReconciliationResponse,
     ActivityCounts,
+    AdoptExternalHeadAfterAcceptanceAttentionBody,
     AnswerRequestBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
     ChangeWorktreeCleanupResponse,
     ChangeWorktreeRecoveryResponse,
+    CleanupAbandonedTargetSyncBody,
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
+    DeliveryHealthResponse,
     DesignWorkDetailResponse,
+    ExternalHeadAdoptionResponse,
     NeedsCounts,
+    PortfolioOperatingResponse,
     PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
@@ -40,28 +45,22 @@ from owlbear_cockpit.target_models import (
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
-)
-from owlbear_delivery.change_workspace import (
-    ChangeTargetSyncConflictError,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
+    WorkItemPublicationReconciliationResponse,
 )
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
     CompletedChangeRecord,
-    CompletedHistoryError,
-    CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     DeliveryRequestResolution,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
     DeliveryStage,
 )
-from owlbear_delivery.design_package import DesignPackageConflictError
-from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
-from owlbear_delivery.publication_provider import PublicationProviderError
+from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
+from owlbear_delivery.portfolio_application import (
+    PortfolioApplication,  # noqa: TC001 - FastAPI evaluates this annotation.
+)
+from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemActivityState,
@@ -85,10 +84,12 @@ class TargetCockpitService:
     ) -> WorkItemPortfolioResponse:
         """Return Change-grouped current Work Items from exact snapshots."""
         view = self._invoke(self._application.portfolio_read_view)
+        health = getattr(view, "health", DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY))
         return WorkItemPortfolioResponse(
             groups=view.groups,
             totals=_portfolio_totals(view.groups),
-            operating=view.operating,
+            operating=PortfolioOperatingResponse.from_view(view.operating),
+            health=DeliveryHealthResponse.from_view(health),
         )
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
@@ -171,9 +172,10 @@ class TargetCockpitService:
             )
         )
 
-    def reconcile_checkpoint(self, change_id: str) -> object:
+    def reconcile_checkpoint(self, change_id: str) -> WorkItemPublicationReconciliationResponse:
         """Reconcile the current engine-derived Change checkpoint."""
-        return self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
+        result = self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
+        return WorkItemPublicationReconciliationResponse.from_result(result)
 
     def mark_ready(self, change_id: str) -> object:
         """Mark the current exact finalized pull request ready."""
@@ -182,6 +184,23 @@ class TargetCockpitService:
     def observe_acceptance(self, change_id: str) -> object:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def adopt_external_head_after_acceptance_attention(
+        self,
+        change_id: str,
+        body: AdoptExternalHeadAfterAcceptanceAttentionBody,
+    ) -> ExternalHeadAdoptionResponse:
+        """Adopt one exact open pull-request head from matching acceptance attention."""
+        receipt = self._invoke(
+            lambda: self._application.adopt_external_head_after_acceptance_attention(
+                change_id,
+                body.expected_disposition_id,
+                body.expected_head,
+                body.adopted_head,
+                body.operation_id,
+            )
+        )
+        return ExternalHeadAdoptionResponse.from_receipt(receipt)
 
     def observe_publication_checks(self, change_id: str) -> PublicationChecksObservationResponse:
         """Observe provider checks at the current exact published Change head."""
@@ -262,6 +281,22 @@ class TargetCockpitService:
         receipt = self._invoke(lambda: self._application.cleanup_abandoned_change_worktree(change_id))
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        change_id: str,
+        body: CleanupAbandonedTargetSyncBody,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Discard one abandoned target merge and clean its exact Change worktree."""
+        receipt = self._invoke(
+            lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+                change_id,
+                confirmed_discard=body.confirmed_discard,
+                expected_target_head=body.expected_target_head,
+                expected_operation_id=body.expected_operation_id,
+            )
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
     def cleanup_completed_change_worktree(
         self,
         change_id: str,
@@ -301,39 +336,19 @@ class TargetCockpitService:
         return self._invoke(lambda: self._application.show_completed_change(change_id, completion_id))
 
     @staticmethod
-    def _invoke(operation: Callable[[], object]):  # noqa: ANN205
+    def _invoke(operation: Callable[[], object]) -> object:
         try:
             return operation()
-        except CompletedHistoryError as exc:
+        except Exception as exc:
+            failure = classify_delivery_failure(exc)
+            if failure is None:
+                raise
             _http_error(
-                404 if isinstance(exc, CompletedHistoryMissingError) else 409,
-                exc.diagnostic.code,
-                exc.diagnostic.detail,
-                retry_safe=False,
+                _http_status(failure.category),
+                failure.code,
+                failure.detail,
+                retry_safe=failure.retry_safe,
             )
-        except (
-            ChangeTargetSyncConflictError,
-            ChangeWorktreeAttentionError,
-            DeliveryRuntimeConflictError,
-            CoordinationConflictError,
-        ) as exc:
-            _http_error(
-                409,
-                getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),
-                str(exc),
-                retry_safe=getattr(exc, "retry_safe", True),
-            )
-        except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
-            _http_error(409, exc.code, str(exc), retry_safe=False)
-        except PublicationProviderError as exc:
-            _http_error(
-                502,
-                f"ERR_DELIVERY_PROVIDER_{exc.code.value.upper()}",
-                str(exc),
-                retry_safe=exc.retry_safe,
-            )
-        except DesignPackageConflictError as exc:
-            _http_error(409, exc.code, str(exc), retry_safe=False)
 
 
 def _get_target_service(
@@ -462,7 +477,7 @@ def _register_outcome_controls(router: APIRouter) -> None:
         return service.preview_backward_move(change_id, outcome_id, body)
 
 
-def _register_publication_controls(router: APIRouter) -> None:
+def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
     @router.post(
         "/work-items/acceptance/reconcile",
         response_model=AcceptanceReconciliationResponse,
@@ -473,8 +488,14 @@ def _register_publication_controls(router: APIRouter) -> None:
     ) -> AcceptanceReconciliationResponse:
         return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
 
-    @router.post("/changes/{change_id}/publication/reconcile")
-    def reconcile_checkpoint(change_id: str, service: _TargetService) -> object:
+    @router.post(
+        "/changes/{change_id}/publication/reconcile",
+        response_model=WorkItemPublicationReconciliationResponse,
+    )
+    def reconcile_checkpoint(
+        change_id: str,
+        service: _TargetService,
+    ) -> WorkItemPublicationReconciliationResponse:
         return service.reconcile_checkpoint(change_id)
 
     @router.post("/changes/{change_id}/publication/ready")
@@ -484,6 +505,17 @@ def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/acceptance/observe")
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
+
+    @router.post(
+        "/changes/{change_id}/acceptance/external-head/adopt",
+        response_model=ExternalHeadAdoptionResponse,
+    )
+    def adopt_external_head_after_acceptance_attention(
+        change_id: str,
+        body: AdoptExternalHeadAfterAcceptanceAttentionBody,
+        service: _TargetService,
+    ) -> ExternalHeadAdoptionResponse:
+        return service.adopt_external_head_after_acceptance_attention(change_id, body)
 
     @router.post(
         "/changes/{change_id}/publication/checks/observe",
@@ -580,6 +612,17 @@ def _register_target_controls(router: APIRouter) -> None:
         return service.cleanup_abandoned_change_worktree(change_id)
 
     @router.post(
+        "/changes/{change_id}/worktree/cleanup/abandoned/target-sync-discard",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        change_id: str,
+        body: CleanupAbandonedTargetSyncBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_abandoned_change_worktree_after_target_sync_discard(change_id, body)
+
+    @router.post(
         "/changes/{change_id}/worktree/cleanup/completed",
         response_model=ChangeWorktreeCleanupResponse,
     )
@@ -622,6 +665,14 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
             working=activity.count(WorkItemActivityState.WORKING),
         ),
     )
+
+
+def _http_status(category: DeliveryFailureCategory) -> int:
+    if category is DeliveryFailureCategory.NOT_FOUND:
+        return 404
+    if category is DeliveryFailureCategory.PROVIDER:
+        return 502
+    return 409
 
 
 def _http_error(status_code: int, code: object, detail: str, *, retry_safe: bool) -> None:

@@ -46,6 +46,15 @@ never authorizes a lifecycle call by itself.
 - Fail only for a concrete defect in the proposed route. Style preference, alternate implementation
   taste, and unsupported doubt are not findings.
 
+### Test Evidence Boundary
+
+A passing test or test suite is baseline evidence for only the assertions, inputs, execution path,
+and environment it actually exercises. It does not by itself prove user intent, complete
+functionality, integration, security, usability, or operational correctness. A test may be adequate
+for a deliberately narrow claim about that exact contract; otherwise require source/control-point
+evidence and the cheapest public, assembled, runtime, or manual evidence that matches the claim.
+Do not demand broad or E2E proof merely because a test is insufficient.
+
 ### Minimum Change Review
 
 For committed-packet review, compare the complete diff with the admitted packet envelope, required

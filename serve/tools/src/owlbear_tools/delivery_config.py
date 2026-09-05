@@ -15,9 +15,8 @@ from owlbear_tools.commands import command_footer
 _DELIVERY_CONFIG = Path(".owlbear/delivery/config.json")
 _CHANGE_GLOB = ".owlbear/delivery/runtime/changes/*"
 _FRONTIER_GLOB = ".owlbear/delivery/runtime/changes/*/frontier.json"
-_COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
+_COORDINATION_GLOB = ".owlbear/delivery/runtime/coordination/changes/*.json"
 _PACKAGE_GLOB = ".owlbear/delivery/packages/*"
-_LEGACY_DELIVERY_ROOTS = (Path(".owlbear/target"), Path(".owlbear/worktrees"))
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
 
 
@@ -43,11 +42,7 @@ def _remote_target_exists(root: Path, remote: str, branch: str) -> bool:
 
 
 def _has_terminal_completion(frontier: dict[str, object]) -> bool:
-    if frontier.get("change_abandonment") is not None or frontier.get("change_completion") is not None:
-        return True
-    completion = frontier.get("integration_completion")
-    result_id = frontier.get("integration_result_id")
-    return isinstance(completion, dict) and isinstance(result_id, str) and completion.get("completion_id") == result_id
+    return frontier.get("change_abandonment") is not None or frontier.get("change_completion") is not None
 
 
 def _remote_github_repository(root: Path, remote: str) -> str | None:
@@ -90,26 +85,12 @@ def _delivery_config_status(root: Path) -> tuple[list[str], str | None]:
     return [], f"Delivery target is {remote}/{target} in {github_repository}"
 
 
-def _legacy_delivery_blockers(root: Path) -> list[str]:
-    blockers: list[str] = []
-    if (root / ".owlbear").is_symlink() or (root / ".owlbear/delivery").is_symlink():
-        blockers.append("Delivery state parents must not be symlinks")
-    for relative in _LEGACY_DELIVERY_ROOTS:
-        legacy_root = root / relative
-        try:
-            has_legacy_state = legacy_root.exists() and any(legacy_root.iterdir())
-        except OSError:
-            has_legacy_state = True
-        if has_legacy_state:
-            blockers.append(f"unmigrated Delivery state: {relative}")
-    return blockers
-
-
 def _delivery_blockers(root: Path) -> list[str]:
-    blockers = _legacy_delivery_blockers(root)
-    for path in sorted(root.glob(_CHANGE_GLOB)):
-        if not (path / "frontier.json").is_file():
-            blockers.append(f"incomplete Delivery change: {path.name}")
+    blockers = [
+        f"incomplete Delivery change: {path.name}"
+        for path in sorted(root.glob(_CHANGE_GLOB))
+        if not (path / "frontier.json").is_file()
+    ]
     for path in sorted(root.glob(_FRONTIER_GLOB)):
         try:
             frontier = _load_json(path)
@@ -123,6 +104,13 @@ def _delivery_blockers(root: Path) -> list[str]:
             blockers.append(f"active Delivery claim: {path.parent.name}")
         elif not _has_terminal_completion(frontier):
             blockers.append(f"unfinished Delivery change: {path.parent.name}")
+    blockers.extend(_coordination_blockers(root))
+    blockers.extend(f"unfinished Delivery package: {path.name}" for path in sorted(root.glob(_PACKAGE_GLOB)))
+    return blockers
+
+
+def _coordination_blockers(root: Path) -> list[str]:
+    blockers: list[str] = []
     for path in sorted(root.glob(_COORDINATION_GLOB)):
         try:
             _load_json(path)
@@ -130,8 +118,6 @@ def _delivery_blockers(root: Path) -> list[str]:
             blockers.append(f"unreadable Delivery coordination: {path.relative_to(root)}")
             continue
         blockers.append(f"unfinished Delivery coordination: {path.stem}")
-    for path in sorted(root.glob(_PACKAGE_GLOB)):
-        blockers.append(f"unfinished Delivery package: {path.name}")
     return blockers
 
 

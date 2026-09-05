@@ -14,33 +14,59 @@ name: Cockpit verification
       - opened
       - reopened
       - synchronize
+      - ready_for_review
+  workflow_dispatch:
 
 concurrency:
-  group: cockpit-verification-${{ github.event.pull_request.number }}
+  group: cockpit-verification-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  resolve_runtimes:
+    name: Resolve Cockpit runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      node_matrix: ${{ steps.runtime.outputs.node_matrix }}
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Resolve pinned Node runtimes
+        id: runtime
+        run: |
+          node_upper="$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
+          printf 'node_matrix=["24.16.0","%s"]\n' "$node_upper" >> "$GITHUB_OUTPUT"
+
   proof:
     name: Prove Cockpit on Node ${{ matrix.node }}
+    needs: resolve_runtimes
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        node:
-          - "24.16.0"
-          - "24.19.0"
+        node: ${{ fromJSON(needs.resolve_runtimes.outputs.node_matrix) }}
     defaults:
       run:
         working-directory: serve/cockpit/web
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -63,6 +89,9 @@ jobs:
       - name: Run Cockpit behavior tests
         run: npm test
 
+      - name: Type-check Cockpit browser tests
+        run: npm run typecheck:e2e
+
       - name: Check Cockpit sources
         run: |
           npx eslint src e2e --max-warnings 0
@@ -75,32 +104,90 @@ jobs:
   browser_compatibility:
     name: Prove browser compatibility
     needs: proof
-    if: needs.proof.result == 'success'
+    if: >-
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false) &&
+      needs.proof.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: serve/cockpit/web
+    env:
+      E2E_COMPAT_BROWSERS: ${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}
     steps:
-      - name: Checkout pull request head
+      - name: Checkout requested revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version-file: .nvmrc
+          node-version-file: serve/cockpit/web/.nvmrc
           cache: npm
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
       - name: Install locked Cockpit dependencies
         run: npm ci --engine-strict
 
-      - name: Install Playwright browser engines
+      - name: Install Playwright browser engines and Linux dependencies
         timeout-minutes: 10
-        run: npx playwright install chromium firefox webkit
+        run: npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"
 
-      - name: Run cross-engine compatibility smoke tests
+      - name: Run compatibility smoke tests
         run: npm run test:e2e:compat
+
+      - name: Upload browser compatibility diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: cockpit-browser-compatibility-diagnostics
+          path: |
+            serve/cockpit/web/test-results
+            serve/cockpit/web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 15
+
+  gate:
+    name: Verify Cockpit
+    needs:
+      - resolve_runtimes
+      - proof
+      - browser_compatibility
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate Cockpit verification
+        env:
+          RESOLVE: ${{ needs.resolve_runtimes.result }}
+          PROOF: ${{ needs.proof.result }}
+          BROWSER: ${{ needs.browser_compatibility.result }}
+        run: |
+          failed=false
+          [ "$RESOLVE" = success ] || failed=true
+          [ "$PROOF" = success ] || failed=true
+          [ "$BROWSER" = success ] || failed=true
+
+          {
+            echo "## Cockpit verification gate"
+            echo
+            echo "| Proof | Result |"
+            echo "|---|---|"
+            echo "| Runtime resolution | $RESOLVE |"
+            echo "| Node behavior matrix | $PROOF |"
+            echo "| Browser compatibility | $BROWSER |"
+            echo
+            if [ "$failed" = true ]; then
+              echo "At least one Cockpit proof failed."
+            else
+              echo "All Cockpit proofs passed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$failed" = false ]

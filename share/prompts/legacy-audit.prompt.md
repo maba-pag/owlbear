@@ -24,7 +24,6 @@ useful.
 Before scanning, read:
 
 - `../skills/h-codebase-orientation/SKILL.md` for project and test-boundary discovery.
-- `../skills/w-test-curation/SKILL.md` for task-test discovery and immutable provenance filtering.
 
 Inspect the relevant package manifests and test configuration before selecting commands. State the
 selected scope, language/toolchain boundaries, and exclusions before collecting findings.
@@ -81,12 +80,7 @@ Inspect the scoped surface and collect an internal finding queue for all categor
     - Verify mocked targets, attributes, methods, and signatures against the current public interface.
        A mock target that still exists is not stale by itself; report only removed, renamed, or
        behaviorally incompatible contracts, and protect uncertain cases.
-4. Stale task-scoped tests
-    - Apply the Discovery and Filtering rules from `w-test-curation` across configured Python,
-       Vitest/Jest, and Playwright test roots, including explicit module-header provenance.
-    - Check only immutable legacy provenance for archived or completed status. Report candidates here,
-       but route assertion triage, mining, and deletion to `/test-curation`.
-5. Legacy naming residue
+4. Legacy naming residue
     - Inspect function, class, module, and compatibility-branch definitions in live source for
        `legacy`, `compat`, `bridge`, and `shim`.
     - Treat domain nouns, archive/snapshot implementations, migration readers with a live target,
@@ -98,8 +92,8 @@ Inspect the scoped surface and collect an internal finding queue for all categor
        and adapters when they meet the same evidence rule. A keyword match alone is never a finding.
 
 The audit discovers candidates; it does not decide architectural removal. Use `/test-curation` for
-task-test triage, `/arch-audit` for module or boundary deletion questions, and `/ideate` or `/design`
-to turn an accepted cleanup proposal into a governed Delivery Change.
+current test-suite quality work, `/arch-audit` for module or boundary deletion questions, and
+`/ideate` or `/design` to turn an accepted cleanup proposal into a governed Delivery Change.
 
 ## Step 3 - Produce ranked cleanup report
 
@@ -108,8 +102,7 @@ Build findings grouped by type using this exact section order:
 1. stale-task-todos
 2. dead-references
 3. mock-staleness
-4. stale-task-tests
-5. legacy-naming
+4. legacy-naming
 
 For every accepted entry, record:
 
@@ -140,7 +133,7 @@ finding must receive the complete evidence record above before it enters the fin
 
 ## Step 4 - Guardrails and closeout
 
-Before final output, confirm that the selected scope and exclusions were honored; all five categories
+Before final output, confirm that the selected scope and exclusions were honored; all four categories
 appear in the required order with severity, evidence, confidence, and detection method; and cleanup
 actions remain suggestions for user decision. If the queue is empty, report the empty result and the
 evidence limits instead of asking the user to continue.

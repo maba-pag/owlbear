@@ -48,6 +48,7 @@ playwright-report/
 .vscode/*
 !.vscode/mcp.json
 !.vscode/settings.json
+.github/skills/pds-knowledge-*
 
 # OS artifacts
 .DS_Store
@@ -86,3 +87,6 @@ store/audit/
 
 # --- OwlBear managed paths ---
 # OwlBear-specific rules live in .owlbear/.gitignore.
+
+# Atomic generated diagram candidates
+/share/diagrams/.*.svg.*

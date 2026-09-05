@@ -160,7 +160,9 @@ def _minimum_change_warnings(candidate_paths: list[str], root: Path) -> list[str
         warnings.append(f"test-heavy edit adds {test_added} test lines versus {product_added} product lines")
 
     if warnings:
-        warnings.append("recheck the change envelope and Rent Test; continue when the expansion is justified")
+        warnings.append(
+            "recheck the change envelope and Durable Test Admission; continue when the expansion is justified"
+        )
     return warnings
 
 

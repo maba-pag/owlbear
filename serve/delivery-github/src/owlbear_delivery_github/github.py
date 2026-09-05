@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import NoReturn, cast
 from urllib.parse import quote, urlencode
@@ -39,6 +39,21 @@ _DRAFT_MUTATION = """mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
     pullRequest { id isDraft }
   }
 }"""
+_READ_MERGED_PULL_REQUEST_QUERY = """query ReadMergedPullRequest(
+    $owner: String!, $name: String!, $number: Int!
+) {
+    repository(owner: $owner, name: $name) {
+        nameWithOwner
+        pullRequest(number: $number) {
+            number
+            headRefOid
+            baseRefName
+            merged
+            mergedAt
+            mergeCommit { oid }
+        }
+    }
+}"""
 _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
     $owner: String!, $name: String!, $number: Int!, $cursor: String
 ) {
@@ -49,21 +64,23 @@ _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
             headRefOid
             commits(last: 1) {
                 nodes {
-                    oid
-                    statusCheckRollup {
-                        state
-                        contexts(first: 100, after: $cursor) {
-                            totalCount
-                            pageInfo { hasNextPage endCursor }
-                            nodes {
-                                __typename
-                                ... on CheckRun {
-                                    id name status conclusion startedAt completedAt detailsUrl
-                                    isRequired(pullRequestNumber: $number)
-                                }
-                                ... on StatusContext {
-                                    id context state createdAt updatedAt targetUrl
-                                    isRequired(pullRequestNumber: $number)
+                    commit {
+                        oid
+                        statusCheckRollup {
+                            state
+                            contexts(first: 100, after: $cursor) {
+                                totalCount
+                                pageInfo { hasNextPage endCursor }
+                                nodes {
+                                    __typename
+                                    ... on CheckRun {
+                                        id name status conclusion startedAt completedAt detailsUrl
+                                        isRequired(pullRequestNumber: $number)
+                                    }
+                                    ... on StatusContext {
+                                        id context state createdAt updatedAt targetUrl
+                                        isRequired(pullRequestNumber: $number)
+                                    }
                                 }
                             }
                         }
@@ -100,7 +117,7 @@ class _RepositoryResponse(_GitHubModel):
 
 class _PullRef(_GitHubModel):
     ref: str
-    sha: str
+    sha: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class _PullUser(_GitHubModel):
@@ -117,9 +134,67 @@ class _PullResponse(_GitHubModel):
     draft: bool
     state: str
     merged: bool
-    merge_commit_sha: str | None
+    mergeable: bool | None = None
+    mergeable_state: str | None = Field(default=None, min_length=1)
+    merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None
     merged_by: _PullUser | None
+
+
+class _MergedGitHubModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class _MergedCommitResponse(_MergedGitHubModel):
+    oid: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _MergedPullRequestResponse(_MergedGitHubModel):
+    number: int = Field(gt=0)
+    head_ref_oid: str = Field(pattern=r"^[0-9a-f]{40}$", alias="headRefOid")
+    base_ref_name: str = Field(min_length=1, alias="baseRefName")
+    merged: bool
+    merged_at: str = Field(min_length=1, alias="mergedAt")
+    merge_commit: _MergedCommitResponse | None = Field(alias="mergeCommit")
+
+
+class _MergedRepositoryResponse(_MergedGitHubModel):
+    name_with_owner: str = Field(min_length=3, alias="nameWithOwner")
+    pull_request: _MergedPullRequestResponse | None = Field(alias="pullRequest")
+
+
+class _MergedQueryData(_MergedGitHubModel):
+    repository: _MergedRepositoryResponse | None
+
+
+class _MergedQueryResponse(_MergedGitHubModel):
+    data: _MergedQueryData
+
+
+@dataclass(frozen=True)
+class _PullRequestRead:
+    repository: str
+    number: int
+    node_id: str
+    head_branch: str
+    head_sha: str
+    base_branch: str
+    title: str
+    body: str
+    draft: bool
+    state: str
+    merged: bool
+    mergeable: bool | None
+    merge_state_status: str | None
+    merge_commit_sha: str | None
+    merged_at: datetime | None
+    merged_by_login: str | None
+
+
+@dataclass(frozen=True)
+class _MergedEvidence:
+    merge_commit_sha: str
+    merged_at: datetime
 
 
 class _PullListItem(_GitHubModel):
@@ -152,8 +227,12 @@ class _CheckCommitResponse(_GitHubModel):
     status_check_rollup: _StatusRollupResponse | None = Field(alias="statusCheckRollup")
 
 
+class _CheckPullRequestCommitResponse(_GitHubModel):
+    commit: _CheckCommitResponse | None
+
+
 class _CheckCommitConnection(_GitHubModel):
-    nodes: list[_CheckCommitResponse | None]
+    nodes: list[_CheckPullRequestCommitResponse | None]
 
 
 class _CheckPullRequestResponse(_GitHubModel):
@@ -247,7 +326,18 @@ class GitHubCliPublicationProvider:
         pull_request = self._pull_request(repository, payload, operation, retry_safe=True)
         if pull_request.number != number:
             self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
-        return pull_request
+        if not pull_request.merged:
+            return self._public_pull_request(pull_request, operation, retry_safe=True)
+        evidence = self._read_merged_evidence(repository, number, pull_request, operation)
+        return self._public_pull_request(
+            replace(
+                pull_request,
+                merge_commit_sha=evidence.merge_commit_sha,
+                merged_at=evidence.merged_at,
+            ),
+            operation,
+            retry_safe=True,
+        )
 
     def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None:
         """Find the unique pull request for one exact head/base identity."""
@@ -278,7 +368,12 @@ class GitHubCliPublicationProvider:
                 "multiple pull requests match the publication identity",
                 retry_safe=False,
             )
-        return self.read_pull_request(request.repository, matches[0].number) if matches else None
+        if not matches:
+            return None
+        pull_request = self.read_pull_request(request.repository, matches[0].number)
+        if pull_request.head_branch != request.head_branch or pull_request.base_branch != request.base_branch:
+            self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
+        return pull_request
 
     def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest:
         """Create one draft pull request using a fixed REST payload."""
@@ -306,7 +401,7 @@ class GitHubCliPublicationProvider:
             or pull_request.merged
         ):
             self._invalid_response(operation, "created pull request differs from the requested identity")
-        return pull_request
+        return self._public_pull_request(pull_request, operation)
 
     def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest:
         """Update fixed generated metadata after exact-head read fences."""
@@ -327,12 +422,12 @@ class GitHubCliPublicationProvider:
         )
         updated = self._pull_request(request.repository, payload, "update_pull_request")
         self._require_matching_head(updated, request.expected_head_sha, "update_pull_request")
-        if updated.title != request.title or updated.body != request.body:
+        if updated.title != request.title or updated.body != request.body or updated.state != "open" or updated.merged:
             self._invalid_response(
                 "update_pull_request",
                 "GitHub did not apply the requested pull request metadata",
             )
-        return updated
+        return self._public_pull_request(updated, "update_pull_request")
 
     def set_pull_request_draft_state(
         self,
@@ -344,7 +439,7 @@ class GitHubCliPublicationProvider:
         if current.node_id != request.node_id:
             self._conflict(operation, "pull request node identity differs from the update fence")
         if current.draft == request.draft:
-            return current
+            return self._public_pull_request(current, operation)
         mutation = _DRAFT_MUTATION if request.draft else _READY_MUTATION
         operation_name = "ConvertPullRequestToDraft" if request.draft else "MarkPullRequestReadyForReview"
         payload = self._graphql(
@@ -358,11 +453,10 @@ class GitHubCliPublicationProvider:
         state = self._draft_state(payload, operation_name, operation)
         if state.id != request.node_id or state.is_draft != request.draft:
             self._invalid_response(operation, "GitHub returned an inconsistent draft-state mutation result")
-        updated = self.read_pull_request(request.repository, request.number)
-        self._require_matching_head(updated, request.expected_head_sha, operation)
+        updated = self._require_open_head(request.repository, request.number, request.expected_head_sha, operation)
         if updated.draft != request.draft:
             self._invalid_response(operation, "GitHub did not apply the requested draft state")
-        return updated
+        return self._public_pull_request(updated, operation)
 
     def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
         """Read a complete bounded check rollup for one exact pull-request head."""
@@ -502,7 +596,11 @@ class GitHubCliPublicationProvider:
             self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
         if pull_request.head_ref_oid != request.expected_head_sha:
             self._conflict(operation, "pull request head differs from the check observation fence")
-        commits = tuple(commit for commit in pull_request.commits.nodes if commit is not None)
+        commits = tuple(
+            pull_request_commit.commit
+            for pull_request_commit in pull_request.commits.nodes
+            if pull_request_commit is not None and pull_request_commit.commit is not None
+        )
         if len(commits) != 1 or commits[0].oid != request.expected_head_sha:
             self._invalid_response(
                 operation,
@@ -537,7 +635,7 @@ class GitHubCliPublicationProvider:
                         required=response.required,
                         started_at=started_at,
                         completed_at=completed_at,
-                        duration_seconds=self._duration(started_at, completed_at, operation),
+                        duration_seconds=self._duration(started_at, completed_at),
                         details_url=response.details_url,
                     )
                 )
@@ -561,7 +659,7 @@ class GitHubCliPublicationProvider:
                         required=response.required,
                         started_at=created_at,
                         completed_at=completed_at,
-                        duration_seconds=self._duration(created_at, completed_at, operation),
+                        duration_seconds=self._duration(created_at, completed_at),
                         details_url=response.target_url,
                     )
                 )
@@ -569,29 +667,38 @@ class GitHubCliPublicationProvider:
                 self._invalid_response(operation, "GitHub returned an unknown check context type", retry_safe=True)
         return tuple(checks)
 
-    def _timestamp(self, value: str | None, operation: str) -> datetime | None:
+    def _timestamp(
+        self,
+        value: str | None,
+        operation: str,
+        *,
+        retry_safe: bool = True,
+    ) -> datetime | None:
         if value is None:
             return None
         try:
             parsed = datetime.fromisoformat(value)
         except ValueError as exc:
-            self._invalid_response(operation, "GitHub returned an invalid timestamp", retry_safe=True, cause=exc)
+            self._invalid_response(operation, "GitHub returned an invalid timestamp", retry_safe=retry_safe, cause=exc)
         if parsed.tzinfo is None:
-            self._invalid_response(operation, "GitHub returned a timezone-naive timestamp", retry_safe=True)
+            self._invalid_response(operation, "GitHub returned a timezone-naive timestamp", retry_safe=retry_safe)
         return parsed
 
     def _duration(
         self,
         started_at: datetime | None,
         completed_at: datetime | None,
-        operation: str,
     ) -> float | None:
         if started_at is None or completed_at is None:
             return None
         duration = (completed_at - started_at).total_seconds()
         if duration < 0:
-            self._invalid_response(operation, "GitHub returned an invalid check duration", retry_safe=True)
+            return None
         return duration
+
+    def _read_open_pull_request(self, repository: str, number: int, operation: str) -> _PullRequestRead:
+        payload = self._rest(operation, "GET", f"{_repository_endpoint(repository)}/pulls/{number}")
+        return self._pull_request(repository, payload, operation)
 
     def _require_open_head(
         self,
@@ -599,16 +706,97 @@ class GitHubCliPublicationProvider:
         number: int,
         expected_head_sha: str,
         operation: str,
-    ) -> PublicationPullRequest:
-        pull_request = self.read_pull_request(repository, number)
+    ) -> _PullRequestRead:
+        pull_request = self._read_open_pull_request(repository, number, operation)
         self._require_matching_head(pull_request, expected_head_sha, operation)
         if pull_request.state != "open" or pull_request.merged:
             self._conflict(operation, "pull request is not open for publication updates")
         return pull_request
 
+    def _read_merged_evidence(
+        self,
+        repository: str,
+        number: int,
+        pull_request: _PullRequestRead,
+        operation: str,
+    ) -> _MergedEvidence:
+        owner, name = repository.split("/", maxsplit=1)
+        payload = self._graphql_query(
+            operation,
+            {
+                "query": _READ_MERGED_PULL_REQUEST_QUERY,
+                "operationName": "ReadMergedPullRequest",
+                "variables": {"owner": owner, "name": name, "number": number},
+            },
+        )
+        response = self._validate(_MergedQueryResponse, payload, operation, retry_safe=True)
+        merged_pull_request = self._validate_merged_pull_request(
+            response,
+            repository,
+            number,
+            pull_request,
+            operation,
+        )
+        if merged_pull_request.merge_commit is None:
+            self._invalid_response(operation, "GitHub omitted the pull request merge commit", retry_safe=True)
+        merged_at = self._timestamp(merged_pull_request.merged_at, operation, retry_safe=True)
+        if merged_at is None:
+            self._invalid_response(operation, "GitHub omitted the pull request merge timestamp", retry_safe=True)
+        if (
+            pull_request.merge_commit_sha is not None
+            and pull_request.merge_commit_sha != merged_pull_request.merge_commit.oid
+        ):
+            self._invalid_response(operation, "GitHub returned conflicting pull request merge commits", retry_safe=True)
+        if pull_request.merged_at is not None and pull_request.merged_at != merged_at:
+            self._invalid_response(
+                operation,
+                "GitHub returned conflicting pull request merge timestamps",
+                retry_safe=True,
+            )
+        return _MergedEvidence(
+            merge_commit_sha=merged_pull_request.merge_commit.oid,
+            merged_at=merged_at,
+        )
+
+    def _validate_merged_pull_request(
+        self,
+        response: _MergedQueryResponse,
+        repository: str,
+        number: int,
+        pull_request: _PullRequestRead,
+        operation: str,
+    ) -> _MergedPullRequestResponse:
+        merged_repository = response.data.repository
+        if merged_repository is None:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.NOT_FOUND,
+                operation,
+                "publication repository was not found",
+                retry_safe=False,
+            )
+        if merged_repository.name_with_owner.casefold() != repository.casefold():
+            self._invalid_response(operation, "GitHub returned another repository identity", retry_safe=True)
+        merged_pull_request = merged_repository.pull_request
+        if merged_pull_request is None:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.NOT_FOUND,
+                operation,
+                "publication pull request was not found",
+                retry_safe=False,
+            )
+        if merged_pull_request.number != number or merged_pull_request.number != pull_request.number:
+            self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
+        if merged_pull_request.head_ref_oid != pull_request.head_sha:
+            self._invalid_response(operation, "GitHub returned another pull request head", retry_safe=True)
+        if merged_pull_request.base_ref_name != pull_request.base_branch:
+            self._invalid_response(operation, "GitHub returned another pull request base", retry_safe=True)
+        if not merged_pull_request.merged:
+            self._invalid_response(operation, "GitHub returned an unmerged pull request", retry_safe=True)
+        return merged_pull_request
+
     def _require_matching_head(
         self,
-        pull_request: PublicationPullRequest,
+        pull_request: _PullRequestRead,
         expected_head_sha: str,
         operation: str,
     ) -> None:
@@ -728,24 +916,52 @@ class GitHubCliPublicationProvider:
         operation: str,
         *,
         retry_safe: bool = False,
-    ) -> PublicationPullRequest:
+    ) -> _PullRequestRead:
         response = self._validate(_PullResponse, payload, operation, retry_safe=retry_safe)
+        return _PullRequestRead(
+            repository=repository,
+            number=response.number,
+            node_id=response.node_id,
+            head_branch=response.head.ref,
+            head_sha=response.head.sha,
+            base_branch=response.base.ref,
+            title=response.title,
+            body=response.body or "",
+            draft=response.draft,
+            state=response.state,
+            merged=response.merged,
+            mergeable=response.mergeable,
+            merge_state_status=response.mergeable_state,
+            merge_commit_sha=response.merge_commit_sha,
+            merged_at=self._timestamp(response.merged_at, operation, retry_safe=retry_safe),
+            merged_by_login=response.merged_by.login if response.merged_by is not None else None,
+        )
+
+    def _public_pull_request(
+        self,
+        pull_request: _PullRequestRead,
+        operation: str,
+        *,
+        retry_safe: bool = False,
+    ) -> PublicationPullRequest:
         try:
             return PublicationPullRequest(
-                repository=repository,
-                number=response.number,
-                node_id=response.node_id,
-                head_branch=response.head.ref,
-                head_sha=response.head.sha,
-                base_branch=response.base.ref,
-                title=response.title,
-                body=response.body or "",
-                draft=response.draft,
-                state=response.state,
-                merged=response.merged,
-                merge_commit_sha=response.merge_commit_sha,
-                merged_at=self._timestamp(response.merged_at, operation),
-                merged_by_login=response.merged_by.login if response.merged_by is not None else None,
+                repository=pull_request.repository,
+                number=pull_request.number,
+                node_id=pull_request.node_id,
+                head_branch=pull_request.head_branch,
+                head_sha=pull_request.head_sha,
+                base_branch=pull_request.base_branch,
+                title=pull_request.title,
+                body=pull_request.body,
+                draft=pull_request.draft,
+                state=pull_request.state,
+                merged=pull_request.merged,
+                mergeable=pull_request.mergeable,
+                merge_state_status=pull_request.merge_state_status,
+                merge_commit_sha=pull_request.merge_commit_sha,
+                merged_at=pull_request.merged_at,
+                merged_by_login=pull_request.merged_by_login,
             )
         except ValidationError as exc:
             self._invalid_response(

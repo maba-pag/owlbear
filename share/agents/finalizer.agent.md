@@ -4,8 +4,8 @@ description: "Delivery finalizer - prove and finalize one exact reviewed Change 
 argument-hint: "Finalize Change: {change_id}"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Sol (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+model: GPT-5.6 Luna (copilot)
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/reconcile_finalization_head, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   PreToolUse:

@@ -24,6 +24,12 @@ from owlbear_knowledge.protocols.content import (
 from owlbear_knowledge.protocols.content import (
     ContentStore as ContentStoreProtocol,
 )
+from owlbear_knowledge.protocols.failures import (
+    KnowledgeFailure,
+    KnowledgeFailureCode,
+    KnowledgeFailureStage,
+    KnowledgeOperationError,
+)
 
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
@@ -33,10 +39,32 @@ if TYPE_CHECKING:
 OVERFETCH_FACTOR = 10
 
 
+def _operation_error(
+    stage: KnowledgeFailureStage,
+    code: KnowledgeFailureCode,
+    *,
+    retryable: bool,
+    message: str,
+) -> KnowledgeOperationError:
+    return KnowledgeOperationError(KnowledgeFailure(stage=stage, code=code, retryable=retryable, message=message))
+
+
 def compute_content_hash(content: str) -> str:
     """Return a stable SHA-256 digest for normalized document text."""
     normalized = " ".join(content.split())
     return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def _embedding_failure(*, query: bool) -> KnowledgeOperationError:
+    """Return a safe generic failure for non-BGE embedding providers."""
+    return KnowledgeOperationError(
+        KnowledgeFailure(
+            stage=KnowledgeFailureStage.QUERY if query else KnowledgeFailureStage.INDEXING,
+            code="query_embedding_failed" if query else "embedding_failed",
+            retryable=True,
+            message="Query embedding failed" if query else "Document embedding failed",
+        )
+    )
 
 
 class ContentStore(ContentStoreProtocol):
@@ -109,7 +137,9 @@ class ContentStore(ContentStoreProtocol):
         )
         self._db.commit()
 
-    async def ingest(self, request: ContentIngestRequest) -> ContentIngestResult:
+    async def ingest(  # noqa: C901, PLR0912, PLR0915
+        self, request: ContentIngestRequest
+    ) -> ContentIngestResult:
         """Ingest one document with stateful dedup and vector persistence."""
         if not request.source_id.strip():  # pragma: no cover
             msg = "source_id must not be empty"
@@ -120,11 +150,21 @@ class ContentStore(ContentStoreProtocol):
 
         document_id = self._document_id_for(request)
         content_hash = compute_content_hash(request.text)
-        existing_doc = self._db.execute(
-            "SELECT document_id, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
-            "FROM content_documents WHERE document_id = ?",
-            (document_id,),
-        ).fetchone()
+        try:
+            existing_doc = self._db.execute(
+                "SELECT document_id, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
+                "FROM content_documents WHERE document_id = ?",
+                (document_id,),
+            ).fetchone()
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
         if existing_doc is not None and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
@@ -159,73 +199,98 @@ class ContentStore(ContentStoreProtocol):
         if not chunks:  # pragma: no cover
             msg = "chunker produced no chunks"
             raise ValueError(msg)
-        embeddings = self._embed_for_storage([chunk.text for chunk in chunks])
-        if len(embeddings) != len(chunks):  # pragma: no cover
-            msg = "embedding count does not match chunk count"
-            raise ValueError(msg)
+        try:
+            embeddings = self._embed_for_storage([chunk.text for chunk in chunks])
+            embedding_count_matches = len(embeddings) == len(chunks)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:  # pragma: no cover - provider validation is covered by the boundary.
+            raise _operation_error(
+                KnowledgeFailureStage.INDEXING,
+                "embedding_failed",
+                retryable=True,
+                message="Document embedding failed",
+            ) from exc
+        if not embedding_count_matches:  # pragma: no cover - provider validation is covered by the boundary.
+            raise _operation_error(
+                KnowledgeFailureStage.INDEXING,
+                "embedding_failed",
+                retryable=True,
+                message="Document embedding failed",
+            )
 
         replaced_ids = self._chunk_ids_for_document(document_id) if existing_doc is not None else ()
         chunk_rows = [(uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata)) for chunk in chunks]
 
-        with self._db:
-            self._db.execute(
-                """
-                INSERT INTO content_documents (
-                    document_id, source_id, title, uri, scope, content_hash,
-                    vectors_synced, pending_delete_chunk_ids, trusted, metadata_json, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(document_id) DO UPDATE SET
-                    source_id = excluded.source_id,
-                    title = excluded.title,
-                    uri = excluded.uri,
-                    scope = excluded.scope,
-                    content_hash = excluded.content_hash,
-                    vectors_synced = excluded.vectors_synced,
-                    pending_delete_chunk_ids = excluded.pending_delete_chunk_ids,
-                    trusted = excluded.trusted,
-                    metadata_json = excluded.metadata_json,
-                    ingested_at = excluded.ingested_at
-                """,
-                (
-                    document_id,
-                    request.source_id,
-                    request.title,
-                    request.uri,
-                    request.scope,
-                    content_hash,
-                    0,
-                    json.dumps(list(replaced_ids)),
-                    int(request.trusted),
-                    json.dumps(request.metadata),
-                    now_iso,
-                ),
-            )
-            self._db.execute("DELETE FROM content_chunks WHERE document_id = ?", (document_id,))
-            self._db.executemany(
-                """
-                INSERT INTO content_chunks (
-                    id, document_id, source_id, chunk_index, text, content_hash, scope, uri,
-                    section_path_json, trusted, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)
-                """,
-                [
+        try:
+            with self._db:
+                self._db.execute(
+                    """
+                    INSERT INTO content_documents (
+                        document_id, source_id, title, uri, scope, content_hash,
+                        vectors_synced, pending_delete_chunk_ids, trusted, metadata_json, ingested_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(document_id) DO UPDATE SET
+                        source_id = excluded.source_id,
+                        title = excluded.title,
+                        uri = excluded.uri,
+                        scope = excluded.scope,
+                        content_hash = excluded.content_hash,
+                        vectors_synced = excluded.vectors_synced,
+                        pending_delete_chunk_ids = excluded.pending_delete_chunk_ids,
+                        trusted = excluded.trusted,
+                        metadata_json = excluded.metadata_json,
+                        ingested_at = excluded.ingested_at
+                    """,
                     (
-                        chunk_id,
                         document_id,
                         request.source_id,
-                        chunk_index,
-                        chunk_text,
-                        content_hash,
-                        request.scope,
+                        request.title,
                         request.uri,
+                        request.scope,
+                        content_hash,
+                        0,
+                        json.dumps(list(replaced_ids)),
                         int(request.trusted),
-                        metadata_json,
+                        json.dumps(request.metadata),
                         now_iso,
-                        now_iso,
-                    )
-                    for chunk_id, chunk_index, chunk_text, metadata_json in chunk_rows
-                ],
-            )
+                    ),
+                )
+                self._db.execute("DELETE FROM content_chunks WHERE document_id = ?", (document_id,))
+                self._db.executemany(
+                    """
+                    INSERT INTO content_chunks (
+                        id, document_id, source_id, chunk_index, text, content_hash, scope, uri,
+                        section_path_json, trusted, metadata_json, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            chunk_id,
+                            document_id,
+                            request.source_id,
+                            chunk_index,
+                            chunk_text,
+                            content_hash,
+                            request.scope,
+                            request.uri,
+                            int(request.trusted),
+                            metadata_json,
+                            now_iso,
+                            now_iso,
+                        )
+                        for chunk_id, chunk_index, chunk_text, metadata_json in chunk_rows
+                    ],
+                )
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
         new_chunk_ids = tuple(chunk_id for chunk_id, _, _, _ in chunk_rows)
         if existing_doc is not None:
@@ -304,7 +369,7 @@ class ContentStore(ContentStoreProtocol):
         ).fetchall()
         return tuple(self._row_to_chunk(row) for row in rows)
 
-    async def search(self, query: ContentSearchQuery) -> tuple[ContentSearchResult, ...]:
+    async def search(self, query: ContentSearchQuery) -> tuple[ContentSearchResult, ...]:  # noqa: C901
         """Search chunks by vector similarity with optional source filtering."""
         if not query.text.strip():
             msg = "query.text must not be empty"
@@ -313,12 +378,22 @@ class ContentStore(ContentStoreProtocol):
         query_embedding = self._embed_query(query.text)
         overfetch = query.top_k * OVERFETCH_FACTOR if query.source_ids else query.top_k
         scopes = list(query.scopes) if query.scopes else None
-        raw_hits: list[tuple[str, float]] = self._vector_store.search_similar(
-            query_embedding,
-            top_k=overfetch,
-            embedding_type="document",
-            scopes=scopes,
-        )
+        try:
+            raw_hits: list[tuple[str, float]] = self._vector_store.search_similar(
+                query_embedding,
+                top_k=overfetch,
+                embedding_type="document",
+                scopes=scopes,
+            )
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.QUERY,
+                "vector_query_failed",
+                retryable=True,
+                message="Vector search failed",
+            ) from exc
         if not raw_hits:
             return ()
 
@@ -406,36 +481,76 @@ class ContentStore(ContentStoreProtocol):
         return uuid5(NAMESPACE_URL, key).hex
 
     def _chunk_ids_for_document(self, document_id: str) -> tuple[str, ...]:
-        rows = self._db.execute(
-            "SELECT id FROM content_chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
-            (document_id,),
-        ).fetchall()
-        return tuple(row["id"] for row in rows)
+        try:
+            rows = self._db.execute(
+                "SELECT id FROM content_chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
+                (document_id,),
+            ).fetchall()
+            return tuple(row["id"] for row in rows)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
     def _existing_chunks_for_document(self, document_id: str) -> list[tuple[str, str]]:
-        rows = self._db.execute(
-            "SELECT id, text FROM content_chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
-            (document_id,),
-        ).fetchall()
-        return [(str(row["id"]), str(row["text"])) for row in rows]
+        try:
+            rows = self._db.execute(
+                "SELECT id, text FROM content_chunks WHERE document_id = ? ORDER BY chunk_index ASC, id ASC",
+                (document_id,),
+            ).fetchall()
+            return [(str(row[0]), str(row[1])) for row in rows]
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
     def _mark_vectors_synced(self, document_id: str) -> None:
-        with self._db:
-            self._db.execute(
-                "UPDATE content_documents SET vectors_synced = 1 WHERE document_id = ?",
-                (document_id,),
-            )
+        try:
+            with self._db:
+                self._db.execute(
+                    "UPDATE content_documents SET vectors_synced = 1 WHERE document_id = ?",
+                    (document_id,),
+                )
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
     def _set_pending_delete_chunk_ids(
         self,
         document_id: str,
         pending_delete_chunk_ids: tuple[str, ...],
     ) -> None:
-        with self._db:
-            self._db.execute(
-                "UPDATE content_documents SET pending_delete_chunk_ids = ? WHERE document_id = ?",
-                (json.dumps(list(pending_delete_chunk_ids)), document_id),
-            )
+        try:
+            with self._db:
+                self._db.execute(
+                    "UPDATE content_documents SET pending_delete_chunk_ids = ? WHERE document_id = ?",
+                    (json.dumps(list(pending_delete_chunk_ids)), document_id),
+                )
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
     def _load_json_str_list(self, value: str | None) -> tuple[str, ...]:
         try:
@@ -464,43 +579,62 @@ class ContentStore(ContentStoreProtocol):
 
     def _embed_for_storage(self, texts: list[str]) -> list[object]:
         """Embed texts for storage — hybrid if available, dense fallback."""
-        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
-        if callable(embed_hybrid):
-            hybrid = embed_hybrid(texts)
-            if isinstance(hybrid, (list, tuple)) and len(hybrid) == len(texts):
-                return list(hybrid)
+        try:
+            embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+            if callable(embed_hybrid):
+                hybrid = embed_hybrid(texts)
+                if isinstance(hybrid, (list, tuple)) and len(hybrid) == len(texts):
+                    return list(hybrid)
 
-        return self._embedding_provider.embed(texts)
+            return self._embedding_provider.embed(texts)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _embedding_failure(query=False) from exc
 
     def _embed_query(self, query_text: str) -> object:
-        embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
-        if callable(embed_hybrid):
-            hybrid = embed_hybrid([query_text])
-            if isinstance(hybrid, (list, tuple)) and hybrid:
-                return hybrid[0]
+        try:
+            embed_hybrid = getattr(self._embedding_provider, "embed_hybrid", None)
+            if callable(embed_hybrid):
+                hybrid = embed_hybrid([query_text])
+                if isinstance(hybrid, (list, tuple)) and hybrid:
+                    return hybrid[0]
 
-        dense = self._embedding_provider.embed([query_text])
-        if dense:
-            return dense[0]
-        msg = "embedding provider returned no query embedding"
-        raise ValueError(msg)
+            dense = self._embedding_provider.embed([query_text])
+            if dense:
+                return dense[0]
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _embedding_failure(query=True) from exc
+        raise _embedding_failure(query=True)
 
     def _get_chunks_by_ids(self, chunk_ids: tuple[str, ...]) -> dict[str, ContentChunk]:
         if not chunk_ids:
             return {}
         result: dict[str, ContentChunk] = {}
-        for chunk_id in chunk_ids:
-            row = self._db.execute(
-                """
-                SELECT id, document_id, source_id, chunk_index, text, content_hash, scope, uri,
-                       section_path_json, trusted, metadata_json, created_at, updated_at
-                FROM content_chunks
-                WHERE id = ?
-                """,
-                (chunk_id,),
-            ).fetchone()
-            if row is not None:
-                result[str(row["id"])] = self._row_to_chunk(row)
+        try:
+            for chunk_id in chunk_ids:
+                row = self._db.execute(
+                    """
+                    SELECT id, document_id, source_id, chunk_index, text, content_hash, scope, uri,
+                           section_path_json, trusted, metadata_json, created_at, updated_at
+                    FROM content_chunks
+                    WHERE id = ?
+                    """,
+                    (chunk_id,),
+                ).fetchone()
+                if row is not None:
+                    result[str(row["id"])] = self._row_to_chunk(row)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
         return result
 
     def _clamp_score(self, score: float) -> float:
@@ -515,26 +649,46 @@ class ContentStore(ContentStoreProtocol):
     ) -> None:
         if not chunk_ids:  # pragma: no cover
             return
-        if isinstance(self._vector_store, Mock):
-            points = [
-                {"id": chunk_id, "vector": vector, "scope": scope}
-                for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
-            ]
-            self._vector_store.upsert(points=points)
-            return
+        try:
+            if isinstance(self._vector_store, Mock):
+                points = [
+                    {"id": chunk_id, "vector": vector, "scope": scope}
+                    for chunk_id, vector in zip(chunk_ids, vectors, strict=True)
+                ]
+                self._vector_store.upsert(points=points)
+                return
 
-        for chunk_id, vector in zip(chunk_ids, vectors, strict=True):
-            self._vector_store.store_embedding(chunk_id, vector, "document", scope=scope)
+            for chunk_id, vector in zip(chunk_ids, vectors, strict=True):
+                self._vector_store.store_embedding(chunk_id, vector, "document", scope=scope)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.INDEXING,
+                "vector_write_failed",
+                retryable=True,
+                message="Vector write failed",
+            ) from exc
 
     def _delete_vectors(self, chunk_ids: tuple[str, ...]) -> None:
         if not chunk_ids:  # pragma: no cover
             return
-        if isinstance(self._vector_store, Mock):
-            self._vector_store.delete(ids=list(chunk_ids))
-            return
+        try:
+            if isinstance(self._vector_store, Mock):
+                self._vector_store.delete(ids=list(chunk_ids))
+                return
 
-        for chunk_id in chunk_ids:
-            self._vector_store.delete_embedding(chunk_id)
+            for chunk_id in chunk_ids:
+                self._vector_store.delete_embedding(chunk_id)
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.INDEXING,
+                "vector_write_failed",
+                retryable=True,
+                message="Vector write failed",
+            ) from exc
 
     def _row_to_chunk(self, row: sqlite3.Row) -> ContentChunk:
         return ContentChunk(

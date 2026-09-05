@@ -35,6 +35,13 @@ Each `DeliveryTaskDefinition` supplies `task_id`, `outcome_id`, `plan_scope_id`,
 inside the outcome, references stay within supplied authority, and proof names observable maintained
 or public boundaries.
 
+Keep tracked generated outputs with the task that changes the inputs that determine them when the
+output is required for a runnable environment or repository validity. For a Python workspace,
+adding or removing a `serve/*` member or changing dependency-resolution inputs owns the resulting
+`uv.lock` in that same task's `maintained_surfaces` and `required_outputs`; metadata-only project
+changes do not require a lockfile diff. Make freshness an exact-candidate acceptance observation
+such as `uv lock --check`, rather than requiring every project-file edit to change the lock bytes.
+
 Do not alter outcome, commitment, plan-scope, architecture, or Design meaning. A local task-chain
 defect is Planner-owned. A missing or contradictory Design premise is not.
 

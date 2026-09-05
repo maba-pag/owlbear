@@ -94,18 +94,26 @@ uv run test-e2e
 Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
 workspaces use the prebuilt bundle and do not run this developer-only procedure.
 
-Run the explicit cross-engine compatibility smoke gate when validating browser support:
+Run the Chromium compatibility smoke gate used by pull requests:
 
 ```shell
 cd /path/to/owlbear/serve/cockpit/web
-npx playwright install chromium firefox webkit
+npx playwright install chromium
 npm run test:e2e:compat
 ```
 
 The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
-smoke scenarios against the Playwright-pinned current Chromium, Firefox, and WebKit engines. It
-does not execute the exact minimum browser versions in the output-target table. The maintained
-fast and assembled suites remain Chromium-only.
+smoke scenarios against the Playwright-pinned Chromium engine. To run the full cross-engine matrix
+locally, install all three engines and use the explicit full-suite command:
+
+```shell
+npx playwright install chromium firefox webkit
+npm run test:e2e:compat:all
+```
+
+The full matrix does not execute the exact minimum browser versions in the output-target table.
+On Ubuntu CI, manual workflow dispatch runs the full matrix with `--with-deps`; pull-request CI
+uses the Chromium-only gate. The maintained fast and assembled suites remain Chromium-only.
 
 ## Delivery Evidence
 
@@ -113,17 +121,44 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 
 | Surface | Authority |
 | --- | --- |
-| Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
+| Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, task progress, and explicit per-Change admission/runtime status from `PortfolioApplication` |
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
 | User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
+The `/api/work-items` response consumes Delivery's explicit status axes. A package is shown as
+unadmitted Design only when persisted admission is absent. An admitted Change with no tasks is a
+valid Planning state and reports `Task plan not published`; an admitted but non-actionable Change
+retains its admission state and reports the generic `runtime_unavailable` diagnostic.
+
+The current frontend polls `/api/work-items` every three seconds. Each poll observes a reconciled
+Delivery read, so an already-running Cockpit can see newly admitted Changes without a process
+restart. Polling does not reload the full application, use SSE, or replace persisted Delivery
+authority.
+
+The assembled FastAPI inventory preserves 21 POST routes for user-owned controls:
+
+| Control family | Preserved operations | Routes |
+| --- | --- | ---: |
+| Requests and outcomes | Answer a request; clear a requestless block; recover a claim; preview a backward move; apply a backward move | 5 |
+| Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; observe publication checks; resolve attention; supersede a publication; defer; resume | 9 |
+| Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees; recover a worktree | 7 |
+
+These controls remain Cockpit user authority and continue to use the Delivery domain methods and
+locks. Cockpit does not schedule work, choose worker transitions, interpret reviewer evidence, or
+silently turn these controls into agent actions.
+
+Cause-specific missing-coordination classification is deferred to a separate follow-up Change.
+Delivery MCP user-control parity is also deferred: this remediation adds no Delivery MCP operation,
+and any later parity work must define explicit user confirmation and reuse the core Delivery
+methods.
+
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
 answer-bearing and administrative controls reserved for users. It does not schedule work, choose
 worker transitions, interpret reviewer evidence, repair source, merge pull requests, or update the
-configured target branch on its own. Persisted legacy Integration attention remains visible only
-through compatibility surfaces.
+configured target branch on its own. Persisted Integration attention remains visible through the
+current attention surfaces.
 
 ## Configuration
 

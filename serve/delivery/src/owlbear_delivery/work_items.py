@@ -8,6 +8,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceAttentionReason,
     DeliveryBlock,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -21,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
     parse_delivery_frontier,
 )
+from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -78,6 +80,7 @@ class WorkItemActionKind(StrEnum):
     """Typed operator action available from one Work Item."""
 
     NONE = "none"
+    RESUME_DESIGN = "resume-design"
     ANSWER_REQUEST = "answer-request"
     CLEAR_BLOCK = "clear-block"
     RECOVER_CLAIM = "recover-claim"
@@ -86,6 +89,7 @@ class WorkItemActionKind(StrEnum):
     MARK_READY = "mark-ready"
     OBSERVE_ACCEPTANCE = "observe-acceptance"
     RESOLVE_ATTENTION = "resolve-attention"
+    ADOPT_EXTERNAL_HEAD = "adopt-external-head"
     RESUME_CHANGE = "resume-change"
     START_ORCHESTRATION = "start-orchestration"
 
@@ -115,6 +119,7 @@ class WorkItemPublicationPhase(StrEnum):
     """Durable Change publication phase derived from exact frontier receipts."""
 
     FINALIZATION_INVALIDATED = "finalization-invalidated"
+    REVIEW_REPAIR = "review-repair"
     READY_FOR_FINALIZATION = "ready-for-finalization"
     CHECKPOINT_PENDING = "checkpoint-pending"
     PULL_REQUEST_DRAFT = "pull-request-draft"
@@ -160,18 +165,21 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
     contract: DeliveryContract
     frontier: DeliveryFrontier
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    publication_observation: PublicationPullRequestObservationReceipt | None = None
 
     @classmethod
     def capture(
         cls,
         contract: DeliveryContract,
         frontier_bytes: bytes,
+        publication_observation: PublicationPullRequestObservationReceipt | None = None,
     ) -> DeliveryPortfolioSnapshot:
         """Validate one frontier read and bind its exact content digest."""
         return cls(
             contract=contract,
             frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
+            publication_observation=publication_observation,
         )
 
     @model_validator(mode="after")
@@ -180,6 +188,12 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
         binding_ids = tuple(binding.outcome_id for binding in self.frontier.bindings)
         if binding_ids != contract_ids:
             message = "Delivery snapshot bindings must match contract outcome order"
+            raise ValueError(message)
+        if (
+            self.publication_observation is not None
+            and self.publication_observation.change_id != self.contract.change_id
+        ):
+            message = "Delivery publication observation must match the contract Change"
             raise ValueError(message)
         return self
 
@@ -200,6 +214,8 @@ class WorkItemAction(_ProjectionModel):
     label: str | None = None
     command: str | None = None
     attention_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
 class WorkItemProgress(_ProjectionModel):
@@ -220,6 +236,7 @@ class WorkItemCardView(_ProjectionModel):
     scope: WorkItemScope
     title: str = Field(min_length=1)
     stage: WorkItemStage | None
+    publication_phase: WorkItemPublicationPhase | None = None
     needs: WorkItemNeed
     needs_headline: str | None = None
     next_actor: WorkItemNextActor
@@ -308,6 +325,7 @@ class WorkItemTargetSyncView(_ProjectionModel):
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
     merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     merge_commit: bool
+    review_required: bool = False
 
 
 class WorkItemTargetSyncConflictView(_ProjectionModel):
@@ -335,14 +353,23 @@ class WorkItemPublicationView(_ProjectionModel):
     phase: WorkItemPublicationPhase
     finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    ready_for_finalization: bool | None = None
+    readiness_diagnostics: tuple[str, ...] = ()
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint_triggers: tuple[str, ...] = ()
+    pending_checkpoint_attempt_count: int = Field(default=0, ge=0)
+    pending_checkpoint_last_attempted_at: str | None = None
+    pending_checkpoint_error_code: str | None = None
+    pending_checkpoint_error_detail: str | None = None
     invalidated_expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     invalidated_observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     repository: str | None = None
     pull_request_number: int | None = Field(default=None, gt=0)
     pull_request_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    mergeable: bool | None = None
+    merge_state_status: str | None = Field(default=None, min_length=1)
+    mergeability_observed_at: str | None = None
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
     publication_generations: tuple[WorkItemPublicationGenerationView, ...] = ()
@@ -466,6 +493,7 @@ class WorkItemProjector:
         frontier = self._snapshot.frontier
         if (
             all(binding.stage == DeliveryStage.COMPLETED for binding in frontier.bindings)
+            or frontier.pending_checkpoint is not None
             or frontier.change_disposition is not None
             or frontier.change_deferral is not None
             or frontier.change_abandonment is not None
@@ -489,7 +517,7 @@ class WorkItemProjector:
             next_actor, next_step = self._outcome_next(binding, needs, headline)
             activity = self._outcome_activity(binding, needs)
             progress = self._outcome_progress(binding)
-            action = self._outcome_action(binding)
+            action = self._outcome_action(binding, self._snapshot.contract.change_id)
         return WorkItemCardView(
             item_key=f"outcome:{outcome.outcome_id}",
             work_item_id=outcome.outcome_id,
@@ -559,9 +587,13 @@ class WorkItemProjector:
         return WorkItemActivity(state=WorkItemActivityState.READY)
 
     @staticmethod
-    def _outcome_action(binding: OutcomeAuthorityBinding) -> WorkItemAction:
+    def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
         if binding.stage == DeliveryStage.DESIGN:
-            return WorkItemAction()
+            return WorkItemAction(
+                kind=WorkItemActionKind.RESUME_DESIGN,
+                label="Resume Design",
+                command=f"/design {change_id}",
+            )
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
@@ -596,6 +628,7 @@ class WorkItemProjector:
                 scope=WorkItemScope.CHANGE_PUBLICATION,
                 title="Change publication",
                 stage=None,
+                publication_phase=self._publication_phase(),
                 needs=WorkItemNeed.NONE,
                 next_actor=WorkItemNextActor.NONE,
                 next_step="Change abandoned",
@@ -611,6 +644,7 @@ class WorkItemProjector:
                 scope=WorkItemScope.CHANGE_PUBLICATION,
                 title="Change publication",
                 stage=None,
+                publication_phase=self._publication_phase(),
                 needs=WorkItemNeed.YOU,
                 needs_headline="Change is deferred",
                 next_actor=WorkItemNextActor.YOU,
@@ -624,32 +658,17 @@ class WorkItemProjector:
             )
         disposition = self._snapshot.frontier.change_disposition
         if disposition is not None:
-            label = (
-                "Resolve publication attention"
-                if disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
-                else "Resolve acceptance attention"
-            )
-            return WorkItemCardView(
-                item_key="publication",
-                work_item_id=self._snapshot.contract.change_id,
-                change_id=self._snapshot.contract.change_id,
-                scope=WorkItemScope.CHANGE_PUBLICATION,
-                title="Change publication",
-                stage=None,
-                needs=WorkItemNeed.YOU,
-                needs_headline="Change attention requires resolution",
-                next_actor=WorkItemNextActor.YOU,
-                next_step=label,
-                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
-                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=label),
-                action=WorkItemAction(
-                    kind=WorkItemActionKind.RESOLVE_ATTENTION,
-                    label=label,
-                    attention_id=disposition.disposition_id,
-                ),
-            )
+            return self._attention_card(disposition)
         phase = self._publication_phase()
-        if phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
+        if phase == WorkItemPublicationPhase.REVIEW_REPAIR:
+            needs, headline, next_actor = WorkItemNeed.YOU, "Review feedback needs attention", WorkItemNextActor.YOU
+            next_step, progress = "Address pull-request feedback before re-finalization", "Review repair in progress"
+            action = WorkItemAction(
+                kind=WorkItemActionKind.NONE,
+                label="Address pull-request feedback",
+                command=f"/address-pr-feedback {self._snapshot.contract.change_id}",
+            )
+        elif phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
             needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
             next_step, progress = "Re-finalize the current Change head", "Head drift observed"
             action = WorkItemAction(
@@ -674,13 +693,9 @@ class WorkItemProjector:
             next_step, progress = "Reconcile the final checkpoint", "Checkpoint pending"
             action = WorkItemAction(kind=WorkItemActionKind.RECONCILE_CHECKPOINT, label="Publish checkpoint")
         elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
-            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
-            next_step, progress = "Mark the pull request ready", "Pull request is draft"
-            action = WorkItemAction(kind=WorkItemActionKind.MARK_READY, label="Mark ready")
+            return self._draft_publication_card(phase)
         elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
-            needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
-            next_step, progress = headline, "Awaiting merge in GitHub"
-            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check GitHub acceptance")
+            needs, headline, next_actor, next_step, progress, action = self._awaiting_merge_state()
         else:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Record accepted completion", "Merge observed"
@@ -695,6 +710,7 @@ class WorkItemProjector:
             scope=WorkItemScope.CHANGE_PUBLICATION,
             title="Change publication",
             stage=None,
+            publication_phase=phase,
             needs=needs,
             needs_headline=headline,
             next_actor=next_actor,
@@ -702,6 +718,202 @@ class WorkItemProjector:
             activity=activity,
             progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
             action=action,
+        )
+
+    def _awaiting_merge_state(
+        self,
+    ) -> tuple[WorkItemNeed, str | None, WorkItemNextActor, str, str, WorkItemAction]:
+        mergeability = self._current_publication_observation()
+        if mergeability is not None and mergeability.mergeable is False:
+            return (
+                WorkItemNeed.YOU,
+                "Pull request has merge conflicts",
+                WorkItemNextActor.YOU,
+                "Resolve pull-request conflicts before continuing",
+                "Pull request conflicts detected",
+                WorkItemAction(
+                    kind=WorkItemActionKind.OBSERVE_ACCEPTANCE,
+                    label="Check merge status",
+                    command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+                ),
+            )
+        return (
+            WorkItemNeed.YOU,
+            "Merge pull request in GitHub",
+            WorkItemNextActor.YOU,
+            "Merge pull request in GitHub",
+            "Awaiting merge in GitHub",
+            WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check merge status"),
+        )
+
+    def _draft_publication_card(self, phase: WorkItemPublicationPhase) -> WorkItemCardView:
+        mergeability = self._current_publication_observation()
+        if self._publication_head_requires_reconciliation():
+            needs, headline, next_actor = (
+                WorkItemNeed.YOU,
+                "Pull request head differs from finalized Change",
+                WorkItemNextActor.YOU,
+            )
+            next_step, progress = (
+                "Review the current pull-request head before continuing",
+                "Publication head needs reconciliation",
+            )
+            action = WorkItemAction()
+        elif mergeability is not None and mergeability.mergeable is False:
+            needs, headline, next_actor = (
+                WorkItemNeed.YOU,
+                "Pull request has merge conflicts",
+                WorkItemNextActor.YOU,
+            )
+            next_step, progress = (
+                "Resolve pull-request conflicts before making it ready",
+                "Pull request conflicts detected",
+            )
+            action = WorkItemAction(
+                kind=WorkItemActionKind.MARK_READY,
+                label="Make PR ready for review",
+                command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+            )
+        else:
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress = (
+                "Mark the pull request ready through Delivery",
+                "Delivery ready state not recorded",
+            )
+            action = WorkItemAction(
+                kind=WorkItemActionKind.MARK_READY,
+                label="Make PR ready for review",
+            )
+        activity = WorkItemActivity(
+            state=WorkItemActivityState.IDLE if next_actor == WorkItemNextActor.YOU else WorkItemActivityState.READY
+        )
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=phase,
+            needs=needs,
+            needs_headline=headline,
+            next_actor=next_actor,
+            next_step=next_step,
+            activity=activity,
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
+            action=action,
+        )
+
+    def _attention_card(self, disposition: DeliveryChangeDisposition) -> WorkItemCardView:
+        if disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION:
+            head_move = self._head_move_attention_card(disposition)
+            if head_move is not None:
+                return head_move
+            return self._prompt_attention_card(disposition, "Acceptance attention")
+        if any(diagnostic.startswith("required-publication-check-failure") for diagnostic in disposition.diagnostics):
+            return self._prompt_attention_card(
+                disposition,
+                "Publication attention",
+                headline="Required publication checks need reconciliation",
+                next_step="Re-observe checks before resolving publication attention",
+            )
+        if "publication-baseline-unavailable" in disposition.diagnostics:
+            return self._prompt_attention_card(
+                disposition,
+                "Publication attention",
+                headline="Publication baseline recovery is required",
+                next_step="Use the attention workflow to recover the publication baseline",
+            )
+        if any(diagnostic.startswith("target-sync-operation:") for diagnostic in disposition.diagnostics):
+            return self._prompt_attention_card(
+                disposition,
+                "Target sync conflict",
+                headline="Target merge conflict needs resolution",
+                next_step="Resolve the target merge conflict before continuing",
+                command=f"/resolve-target-conflict {self._snapshot.contract.change_id}",
+            )
+        label = "Resolve publication attention"
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=self._publication_phase(),
+            needs=WorkItemNeed.YOU,
+            needs_headline="Change attention requires resolution",
+            next_actor=WorkItemNextActor.YOU,
+            next_step=label,
+            activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=label),
+            action=WorkItemAction(
+                kind=WorkItemActionKind.RESOLVE_ATTENTION,
+                label=label,
+                attention_id=disposition.disposition_id,
+            ),
+        )
+
+    def _head_move_attention_card(self, disposition: DeliveryChangeDisposition) -> WorkItemCardView | None:
+        if disposition.acceptance_reason != DeliveryAcceptanceAttentionReason.HEAD_MOVED:
+            return None
+        invalidation = self._snapshot.frontier.finalization_invalidation
+        publication = self._snapshot.frontier.change_disposition_publication
+        if invalidation is None or publication is None:
+            return None
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=self._publication_phase(),
+            needs=WorkItemNeed.YOU,
+            needs_headline="Pull request head changed",
+            next_actor=WorkItemNextActor.YOU,
+            next_step="Adopt the changed pull-request head before re-finalization",
+            activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Acceptance attention"),
+            action=WorkItemAction(
+                kind=WorkItemActionKind.ADOPT_EXTERNAL_HEAD,
+                label="Adopt changed PR head",
+                attention_id=disposition.disposition_id,
+                expected_head=invalidation.expected_head,
+                adopted_head=publication.head_sha,
+            ),
+        )
+
+    def _prompt_attention_card(
+        self,
+        disposition: DeliveryChangeDisposition,
+        label: str,
+        *,
+        headline: str = "Change attention requires resolution",
+        next_step: str = "Use the exact attention recovery route",
+        command: str | None = None,
+    ) -> WorkItemCardView:
+        return WorkItemCardView(
+            item_key="publication",
+            work_item_id=self._snapshot.contract.change_id,
+            change_id=self._snapshot.contract.change_id,
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
+            stage=None,
+            publication_phase=self._publication_phase(),
+            needs=WorkItemNeed.YOU,
+            needs_headline=headline,
+            next_actor=WorkItemNextActor.YOU,
+            next_step=next_step,
+            activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=label),
+            action=WorkItemAction(
+                kind=WorkItemActionKind.RESOLVE_ATTENTION,
+                label=f"Resolve {label.casefold()}",
+                command=command
+                or f"/resolve-delivery-attention {self._snapshot.contract.change_id} {disposition.disposition_id}",
+                attention_id=disposition.disposition_id,
+            ),
         )
 
     def _finalization_action_available(self) -> bool:
@@ -712,6 +924,35 @@ class WorkItemProjector:
             and all(binding.active_claim is None for binding in frontier.bindings)
             and frontier.integration_repair_claim is None
         )
+
+    def _publication_head_requires_reconciliation(self) -> bool:
+        """Return whether the current publication head cannot satisfy finalization authority."""
+        frontier = self._snapshot.frontier
+        history = frontier.change_publication_history
+        finalization = frontier.finalization
+        return history is not None and finalization is not None and history.current.head_sha != finalization.exact_head
+
+    def _current_publication_observation(self) -> PublicationPullRequestObservationReceipt | None:
+        observation = self._snapshot.publication_observation
+        frontier = self._snapshot.frontier
+        history = frontier.change_publication_history
+        published_head = frontier.published_head
+        if observation is None or history is None or published_head is None:
+            return None
+        publication = history.current
+        snapshot = observation.snapshot
+        if (
+            observation.change_id != self._snapshot.contract.change_id
+            or publication.head_sha != published_head
+            or snapshot.repository != publication.repository
+            or snapshot.number != publication.number
+            or snapshot.node_id != publication.node_id
+            or snapshot.head_sha != published_head
+            or snapshot.state != "open"
+            or snapshot.merged
+        ):
+            return None
+        return observation
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
         frontier = self._snapshot.frontier
@@ -731,6 +972,7 @@ class WorkItemProjector:
                 phase = self._publication_phase()
                 if phase in {
                     WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
+                    WorkItemPublicationPhase.REVIEW_REPAIR,
                     WorkItemPublicationPhase.READY_FOR_FINALIZATION,
                 }:
                     lifecycle = WorkItemChangeLifecycle.FINALIZATION
@@ -745,14 +987,27 @@ class WorkItemProjector:
                     lifecycle = WorkItemChangeLifecycle.ACCEPTANCE
         return lifecycle
 
-    def _publication_phase(self) -> WorkItemPublicationPhase:
+    def _publication_phase(self) -> WorkItemPublicationPhase:  # noqa: C901
         frontier = self._snapshot.frontier
         if frontier.change_abandonment is not None:
             phase = WorkItemPublicationPhase.ABANDONED
         elif frontier.change_deferral is not None:
             phase = WorkItemPublicationPhase.DEFERRED
+        elif (
+            frontier.finalization_invalidation is not None
+            and frontier.finalization_invalidation.reason == "review-repair"
+        ):
+            phase = WorkItemPublicationPhase.REVIEW_REPAIR
         elif frontier.finalization_invalidation is not None:
             phase = WorkItemPublicationPhase.FINALIZATION_INVALIDATED
+        elif (
+            frontier.target_sync_receipt is not None
+            and frontier.target_sync_receipt.review_required
+            and frontier.finalization is None
+        ):
+            phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
+        elif frontier.pending_checkpoint is not None:
+            phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
         elif frontier.finalization is None:
             phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
         elif frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
@@ -773,8 +1028,14 @@ class WorkItemProjector:
         ready = frontier.ready
         attention_publication = frontier.change_disposition_publication
         merged = frontier.merged_pull_request_latch
-        publication_identity = ready or merged or attention_publication
         publication_history = frontier.change_publication_history
+        publication_identity = (
+            ready
+            or merged
+            or attention_publication
+            or (publication_history.current if publication_history is not None else None)
+        )
+        publication_observation = self._current_publication_observation()
         target_sync = frontier.target_sync_receipt
         return WorkItemPublicationView(
             phase=self._publication_phase(),
@@ -783,11 +1044,24 @@ class WorkItemProjector:
             published_head=frontier.published_head,
             pending_checkpoint_head=pending.head if pending is not None else None,
             pending_checkpoint_triggers=tuple(trigger.kind.value for trigger in pending.triggers) if pending else (),
+            pending_checkpoint_attempt_count=pending.attempt_count if pending is not None else 0,
+            pending_checkpoint_last_attempted_at=(
+                pending.last_attempted_at.isoformat() if pending is not None and pending.last_attempted_at else None
+            ),
+            pending_checkpoint_error_code=pending.last_error_code if pending is not None else None,
+            pending_checkpoint_error_detail=pending.last_error_detail if pending is not None else None,
             invalidated_expected_head=invalidation.expected_head if invalidation is not None else None,
             invalidated_observed_head=invalidation.observed_head if invalidation is not None else None,
             repository=publication_identity.repository if publication_identity is not None else None,
             pull_request_number=publication_identity.number if publication_identity is not None else None,
             pull_request_head=publication_identity.head_sha if publication_identity is not None else None,
+            mergeable=publication_observation.mergeable if publication_observation is not None else None,
+            merge_state_status=(
+                publication_observation.merge_state_status if publication_observation is not None else None
+            ),
+            mergeability_observed_at=(
+                publication_observation.observed_at.isoformat() if publication_observation is not None else None
+            ),
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
             publication_generations=(
@@ -814,6 +1088,7 @@ class WorkItemProjector:
                     change_head_before=target_sync.change_head_before,
                     merged_head=target_sync.merged_head,
                     merge_commit=target_sync.merge_commit,
+                    review_required=target_sync.review_required,
                 )
                 if target_sync is not None
                 else None

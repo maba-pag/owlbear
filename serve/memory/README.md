@@ -122,6 +122,17 @@ Reads one memory entry file. Returns `None` for any of:
 
 Never raises on malformed input (lenient read contract).
 
+### `read_entry_strict(path: Path) -> MemoryEntry`
+
+Reads one entry using the same parser and validation rules as `read_entry`, but raises a safe
+`ValueError` diagnostic for invalid files. Batch operations use this form when they must fail
+closed instead of silently skipping malformed memory.
+
+### `read_entry_bytes_strict(raw: bytes) -> MemoryEntry`
+
+Parses an in-memory entry snapshot with the same size, YAML, and schema validation rules. Batch
+operations use this form for staged Git snapshots.
+
 ### `write_entry(path: Path, entry: MemoryEntry | dict, *, memory_dir: Path) -> None`
 
 Writes one memory entry file atomically:

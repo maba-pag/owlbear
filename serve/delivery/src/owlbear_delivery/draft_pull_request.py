@@ -323,18 +323,51 @@ class _PublicationPullRequestObservationPayload(_DraftPullRequestModel):
 class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservationPayload):
     """Durable provider evidence for the current bound pull-request head and state."""
 
+    mergeable: bool | None = None
+    merge_state_status: str | None = Field(default=None, min_length=1)
     observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    def _provider_evidence(self) -> dict[str, object]:
+        evidence = self.snapshot.model_dump(mode="json")
+        if "mergeable" in self.model_fields_set:
+            evidence["mergeable"] = self.mergeable
+        if "merge_state_status" in self.model_fields_set:
+            evidence["merge_state_status"] = self.merge_state_status
+        return evidence
+
+    def _identity_payload(self) -> dict[str, object]:
+        payload = self.model_dump(mode="json", exclude={"observation_id"})
+        if "mergeable" not in self.model_fields_set:
+            payload.pop("mergeable", None)
+        if "merge_state_status" not in self.model_fields_set:
+            payload.pop("merge_state_status", None)
+        return payload
+
+    def _legacy_provider_evidence(self) -> dict[str, object]:
+        return self.snapshot.model_dump(mode="json")
+
+    def _legacy_identity_payload(self) -> dict[str, object]:
+        payload = self.model_dump(mode="json", exclude={"observation_id"})
+        payload.pop("mergeable", None)
+        payload.pop("merge_state_status", None)
+        return payload
 
     @model_validator(mode="after")
     def _validate_receipt(self) -> PublicationPullRequestObservationReceipt:
         if self.observed_at.tzinfo is None:
             msg = "pull-request observation timestamp must include a timezone"
             raise ValueError(msg)
-        if self.provider_evidence_digest != _digest(self.snapshot.model_dump(mode="json")):
+        if self.provider_evidence_digest != _digest(self._provider_evidence()) and not (
+            self.mergeable is None
+            and self.merge_state_status is None
+            and self.provider_evidence_digest == _digest(self._legacy_provider_evidence())
+        ):
             msg = "pull-request observation receipt does not match its provider snapshot"
             raise ValueError(msg)
-        payload = self.model_dump(mode="json", exclude={"observation_id"})
-        if self.observation_id != _digest(payload):
+        valid_identity_ids = {_digest(self._identity_payload())}
+        if self.mergeable is None and self.merge_state_status is None:
+            valid_identity_ids.add(_digest(self._legacy_identity_payload()))
+        if self.observation_id not in valid_identity_ids:
             msg = "pull-request observation receipt identity is invalid"
             raise ValueError(msg)
         return self
@@ -557,16 +590,23 @@ class DraftPullRequestPublisher:
                 or snapshot.base_branch != publication.base_branch
             ):
                 self._conflict(request, "provider pull request does not match the bound publication identity")
-            evidence_digest = _digest(snapshot.model_dump(mode="json"))
-            payload = _PublicationPullRequestObservationPayload(
-                change_id=request.change_id,
-                observed_at=self._clock(),
-                snapshot=snapshot,
-                provider_evidence_digest=evidence_digest,
-            )
+            evidence = snapshot.model_dump(mode="json")
+            evidence["mergeable"] = snapshot.mergeable
+            evidence["merge_state_status"] = snapshot.merge_state_status
+            evidence_digest = _digest(evidence)
+            values = {
+                "schema_version": 1,
+                "change_id": request.change_id,
+                "observed_at": self._clock(),
+                "snapshot": snapshot,
+                "provider_evidence_digest": evidence_digest,
+                "mergeable": snapshot.mergeable,
+                "merge_state_status": snapshot.merge_state_status,
+            }
+            candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **values)
             receipt = PublicationPullRequestObservationReceipt(
-                observation_id=_digest(payload.model_dump(mode="json")),
-                **payload.model_dump(),
+                observation_id=_digest(candidate._identity_payload()),  # noqa: SLF001
+                **values,
             )
             return self._publish_or_read(
                 self._pull_request_observation_path(request, evidence_digest),

@@ -105,6 +105,7 @@ Apply these only when the target is the OwlBear repository or matching configura
 | Command | Scope |
 | --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, invariants, and affected frontend tests |
 | `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
@@ -134,6 +135,9 @@ aggregates are listed by `uv run help quality`.
 | `slow` | Long-running |
 | `integration` | Requires the `kanban-md` binary |
 | `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
+| `model` | Requires installed embedding/vector prerequisites and a real model runtime; excluded by default |
+
+Explicit routine `-m` expressions must include `not model` because they replace the default `addopts` marker selection.
 
 - **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
 - **Direct runner debugging.** Raw `uv run pytest` and package-owned npm scripts remain valid when

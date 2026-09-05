@@ -5,8 +5,8 @@ requires-python = ">=3.12.14"
 description = "OwlBear browser package — authenticated web content extraction via Edge CDP"
 dependencies = [
     "lxml>=6.1.1",
+    "owlbear-web-content",
     "playwright>=1.60.0",
-    "trafilatura>=2.0.0",
 ]
 
 [build-system]
@@ -15,3 +15,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/owlbear_browser"]
+
+[tool.uv.sources]
+owlbear-web-content = { workspace = true }

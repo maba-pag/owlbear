@@ -3,55 +3,55 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Never, cast
+from functools import partial
+from typing import Annotated, Never, cast, get_args, get_origin, get_type_hints
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, BeforeValidator, ConfigDict, TypeAdapter, ValidationError, create_model
 
-from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
-    ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
     PublicationBaselineRecoveryReceipt,
-    PublicationBaselineUnavailableError,
 )
-from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
+from owlbear_delivery.completed_history import CompletedHistoryError
+from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMove,
+    AdministrativeDeliveryMovePreview,
+    AdministrativeDeliveryMoveResult,
     DeliveryPlanCandidate,
+    DeliveryRequest,
     DeliveryResultCandidate,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
+    OutcomeAuthorityBinding,
 )
-from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.diagnostics import classify_delivery_failure
+from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryOperatorContext,
+    DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
-    PortfolioApplicationError,
 )
-from owlbear_delivery.publication_provider import PublicationProviderError
-from owlbear_delivery.runtime_transaction import (
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-from owlbear_delivery.target_admission import TargetAdmissionError
+from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
     AbandonChangeParams,
     AbandonChangeRequest,
-    AdmitDeliveryChangeParams,
+    AdministrativeMoveParams,
+    AdministrativeMovePreviewResponse,
+    AdministrativeMoveRequest,
+    AdministrativeMoveResponse,
     AdmitDeliveryChangeRequest,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
@@ -66,14 +66,21 @@ from owlbear_delivery_mcp.target_models import (
     ClaimContextRequest,
     CleanupAbandonedChangeParams,
     CleanupAbandonedChangeRequest,
+    CleanupAbandonedTargetSyncParams,
+    CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
+    ClearBlockParams,
+    ClearBlockRequest,
+    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
     DeferChangeParams,
     DeferChangeRequest,
+    DeliveryHealthResponse,
+    DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
@@ -85,8 +92,11 @@ from owlbear_delivery_mcp.target_models import (
     ExternalHeadPromotionRequest,
     FinalizeDeliveryChangeParams,
     FinalizeDeliveryChangeRequest,
-    MarkChangeReadyParams,
     MarkChangeReadyRequest,
+    OperatorContextParams,
+    OperatorContextRequest,
+    PreviewAdministrativeMoveParams,
+    PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -97,8 +107,13 @@ from owlbear_delivery_mcp.target_models import (
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RepairTargetSyncPublicationParams,
+    RepairTargetSyncPublicationRequest,
     ResolveChangeDispositionParams,
     ResolveChangeDispositionRequest,
+    ResolvedDeliveryRequestResponse,
+    ResolveRequestParams,
+    ResolveRequestRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -112,15 +127,19 @@ from owlbear_delivery_mcp.target_models import (
     TargetSyncConflictParams,
     TargetSyncConflictRequest,
     TargetSyncParams,
+    TargetSyncPublicationRepairResponse,
     TargetSyncRequest,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
     WorkItemParams,
     WorkItemRequest,
+    WorkItemViewParams,
+    WorkItemViewRequest,
 )
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
 _WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False)
+_OPERATOR_WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 _CLEANUP = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=True)
 _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 
@@ -130,11 +149,18 @@ DELIVERY_OPERATION_NAMES = (
     "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
-    "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "delivery_health",
+    "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
+    "show_work_item_view",
+    "show_operator_context",
+    "resolve_request",
+    "clear_block",
+    "preview_administrative_move",
+    "administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -143,6 +169,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_delivery_result",
     "finalize_change",
     "mark_change_ready",
+    "prepare_review_repair",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "sync_change_with_target",
@@ -158,6 +185,7 @@ DELIVERY_OPERATION_NAMES = (
     "resume_change",
     "abandon_change",
     "cleanup_abandoned_change_worktree",
+    "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
     "recover_publication_baseline",
@@ -173,10 +201,13 @@ _DELIVERY_READS = frozenset(
     {
         "read_design_session",
         "derive_delivery_contract",
-        "validate_delivery_contract",
         "list_work_items",
+        "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
+        "show_work_item_view",
+        "show_operator_context",
+        "preview_administrative_move",
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
@@ -187,13 +218,21 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"resolve_request", "clear_block", "administrative_move"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
     if name == "acquire_frontier_work"
     else _CLEANUP
-    if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+    if name
+    in {
+        "cleanup_abandoned_change_worktree",
+        "cleanup_abandoned_change_worktree_after_target_sync_discard",
+        "cleanup_completed_change_worktree",
+    }
+    else _OPERATOR_WRITE
+    if name in _DELIVERY_NON_IDEMPOTENT_WRITES
     else _WRITE
     for name in DELIVERY_OPERATION_NAMES
 }
@@ -275,20 +314,42 @@ class TargetMCPAdapter:
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.derive_delivery_contract(params.change_id))
 
-    async def validate_delivery_contract(self, request: ChangeRequest) -> dict[str, object]:
-        """Validate one derived Delivery contract."""
-        params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.validate_delivery_contract(params.change_id))
-
     async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
         """Admit one source-bound Delivery change."""
-        params = self._validate(AdmitDeliveryChangeParams, request)
-        return self._call(params, lambda: self._application.admit_delivery_change(params.request))
+        params = self._validate(DeliveryAdmissionRequest, request)
+        return self._call(params, lambda: self._application.admit_delivery_change(params))
 
     async def list_work_items(self, request: EmptyRequest) -> list[object]:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
+        """Return bounded diagnostics for quarantined or unavailable Delivery state."""
+        params = self._validate(EmptyParams, request)
+        health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
+        return DeliveryHealthResponse.from_view(health)
+
+    async def repair_target_sync_publication(
+        self,
+        request: RepairTargetSyncPublicationRequest,
+    ) -> TargetSyncPublicationRepairResponse:
+        """Repair one exact quarantined target-sync publication after confirmation."""
+        params = self._validate(RepairTargetSyncPublicationParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_target_sync_publication(
+                params.change_id,
+                params.expected_remote_head,
+                params.expected_merged_head,
+                params.target_sync_operation_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryTargetSyncRepairReceipt,
+        )
+        return TargetSyncPublicationRepairResponse.from_receipt(receipt)
 
     async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
         """List retained Change worktrees and their cleanup eligibility."""
@@ -304,6 +365,102 @@ class TargetMCPAdapter:
         """Show one exact bounded work item."""
         params = self._validate(WorkItemParams, request)
         return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
+
+    async def show_work_item_view(self, request: WorkItemViewRequest) -> dict[str, object]:
+        """Show one exact detailed Work Item view."""
+        params = self._validate(WorkItemViewParams, request)
+        return self._call(
+            params,
+            lambda: self._application.show_work_item_view(params.change_id, params.item_key),
+        )
+
+    async def show_operator_context(self, request: OperatorContextRequest) -> DeliveryOperatorContextResponse:
+        """Show bounded operator state for one exact outcome or Change."""
+        params = self._validate(OperatorContextParams, request)
+        context = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.show_operator_context(params.change_id, params.outcome_id),
+            DeliveryOperatorContext,
+        )
+        return DeliveryOperatorContextResponse.from_context(context)
+
+    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
+        """Persist one user-owned answer for a retained Delivery request."""
+        params = self._validate(ResolveRequestParams, request)
+        resolved = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.resolve_request(
+                params.change_id,
+                params.request_id,
+                params.resolution,
+            ),
+            DeliveryRequest,
+        )
+        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
+
+    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
+        """Clear one requestless block with explicit operator evidence."""
+        params = self._validate(ClearBlockParams, request)
+        binding = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.clear_block(
+                params.change_id,
+                params.outcome_id,
+                params.block_id,
+                params.operator_note,
+                params.locators,
+            ),
+            OutcomeAuthorityBinding,
+        )
+        if binding.block is None:
+            message = "unsupported cleared block output: missing block"
+            raise TypeError(message)
+        return ClearedDeliveryBlockResponse(
+            change_id=params.change_id,
+            outcome_id=binding.outcome_id,
+            block=binding.block,
+        )
+
+    async def preview_administrative_move(
+        self,
+        request: PreviewAdministrativeMoveRequest,
+    ) -> AdministrativeMovePreviewResponse:
+        """Preview one backward movement without changing Delivery state."""
+        params = self._validate(PreviewAdministrativeMoveParams, request)
+        preview = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.preview_administrative_move(
+                params.change_id,
+                params.outcome_id,
+                params.target,
+            ),
+            AdministrativeDeliveryMovePreview,
+        )
+        return AdministrativeMovePreviewResponse.from_preview(preview)
+
+    async def administrative_move(self, request: AdministrativeMoveRequest) -> AdministrativeMoveResponse:
+        """Apply one exact operator-directed backward movement."""
+        params = self._validate(AdministrativeMoveParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.administrative_move(
+                params.change_id,
+                AdministrativeDeliveryMove(
+                    move_id=params.move_id,
+                    outcome_id=params.outcome_id,
+                    target=params.target,
+                    reason=params.reason,
+                    expected_version=params.expected_version,
+                ),
+            ),
+            AdministrativeDeliveryMoveResult,
+        )
+        return AdministrativeMoveResponse.from_result(result)
 
     async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
         """Acquire currently available frontier work."""
@@ -330,7 +487,7 @@ class TargetMCPAdapter:
         params = self._validate(PublishDeliveryPlanParams, request)
         candidate = self._call_model(
             params,
-            lambda: self._application.publish_delivery_plan(params.change_id, params.request),
+            lambda: self._application.publish_delivery_plan(params.change_id, params.plan),
             DeliveryPlanCandidate,
         )
         return DeliveryPlanPublication.from_candidate(candidate)
@@ -340,7 +497,7 @@ class TargetMCPAdapter:
         params = self._validate(PublishDeliveryResultParams, request)
         candidate = self._call_model(
             params,
-            lambda: self._application.publish_delivery_result(params.change_id, params.request),
+            lambda: self._application.publish_delivery_result(params.change_id, params.result),
             DeliveryResultCandidate,
         )
         return DeliveryResultPublication.from_candidate(candidate)
@@ -351,16 +508,25 @@ class TargetMCPAdapter:
         return await asyncio.to_thread(
             self._call,
             params,
-            lambda: self._application.finalize_change(params.change_id, params.request),
+            lambda: self._application.finalize_change(params.change_id, params.finalization),
         )
 
     async def mark_change_ready(self, request: MarkChangeReadyRequest) -> dict[str, object]:
         """Mark one exact finalized and fully published Change pull request ready."""
-        params = self._validate(MarkChangeReadyParams, request)
+        params = self._validate(MarkChangePullRequestReady, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            lambda: self._application.mark_change_ready(params.request.change_id, params.request),
+            lambda: self._application.mark_change_ready(params.change_id, params),
+        )
+
+    async def prepare_review_repair(self, request: ChangeRequest) -> dict[str, object]:
+        """Return one open Change pull request to draft before external review repair."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.prepare_review_repair(params.change_id),
         )
 
     async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:
@@ -563,6 +729,25 @@ class TargetMCPAdapter:
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
+    async def cleanup_abandoned_change_worktree_after_target_sync_discard(
+        self,
+        request: CleanupAbandonedTargetSyncRequest,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Discard one abandoned target merge and remove its exact worktree."""
+        params = self._validate(CleanupAbandonedTargetSyncParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.cleanup_abandoned_change_worktree_after_target_sync_discard(
+                params.change_id,
+                confirmed_discard=params.confirmed_discard,
+                expected_target_head=params.expected_target_head,
+                expected_operation_id=params.expected_operation_id,
+            ),
+            DeliveryChangeWorktreeCleanup,
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
     async def cleanup_completed_change_worktree(
         self,
         request: CleanupCompletedChangeRequest,
@@ -621,7 +806,7 @@ class TargetMCPAdapter:
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
-        return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.request))
+        return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
     async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]:
         """Recover one exact failed Delivery claim."""
@@ -670,7 +855,10 @@ class TargetMCPAdapter:
         if isinstance(payload, model):
             return payload
         try:
-            return model.model_validate_json(json.dumps(payload))
+            try:
+                return model.model_validate(payload)
+            except ValidationError:
+                return model.model_validate_json(json.dumps(payload, default=_json_default))
         except (TypeError, ValueError, ValidationError) as exc:
             TargetMCPAdapter._raise(
                 "ERR_TARGET_PARAM_VALIDATION",
@@ -697,28 +885,14 @@ class TargetMCPAdapter:
     def _call_raw(self, params: BaseModel, operation: Callable[[], object]) -> object:
         try:
             return operation()
-        except CompletedHistoryError as exc:
-            authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or self._authority(params)
-            self._raise(
-                exc.diagnostic.code.value,
-                exc.diagnostic.detail,
-                authority,
-                retry_safe=isinstance(exc, CompletedHistoryStaleError),
-            )
-        except PublicationProviderError as exc:
-            self._raise(
-                exc.code.value,
-                str(exc) or exc.code.value,
-                self._authority(params),
-                retry_safe=exc.retry_safe,
-            )
-        except _NAMED_DELIVERY_ERRORS as exc:
-            self._raise(
-                exc.code,
-                str(exc) or exc.code,
-                self._authority(params),
-                retry_safe=getattr(exc, "retry_safe", isinstance(exc, _RETRY_SAFE_ERRORS)),
-            )
+        except Exception as exc:
+            failure = classify_delivery_failure(exc)
+            if failure is None:
+                raise
+            authority = self._authority(params)
+            if isinstance(exc, CompletedHistoryError):
+                authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or authority
+            self._raise(failure.code, failure.detail, authority, retry_safe=failure.retry_safe)
 
     @staticmethod
     def _serialize(value: object) -> StructuredOutput:
@@ -768,29 +942,6 @@ class TargetMCPAdapter:
         raise ToolError(diagnostic.model_dump_json())
 
 
-_NAMED_DELIVERY_ERRORS = (
-    CompletionReceiptConflictError,
-    ChangeTargetSyncConflictError,
-    ChangeWorktreeAttentionError,
-    CoordinationConflictError,
-    PublicationBaselineUnavailableError,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
-    DesignPackageConflictError,
-    PortfolioApplicationError,
-    TargetAdmissionError,
-    TransactionConflictError,
-    TransactionManifestError,
-    TransactionPathError,
-)
-_RETRY_SAFE_ERRORS = (
-    CoordinationConflictError,
-    DeliveryRuntimeConflictError,
-    DesignPackageConflictError,
-    TransactionConflictError,
-)
-
-
 def assemble_target_server(application: PortfolioApplication) -> MCPServer:
     """Assemble the exact Delivery registry around one explicit application."""
 
@@ -806,7 +957,98 @@ def assemble_target_server(application: PortfolioApplication) -> MCPServer:
 def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None:
     """Register the exact Delivery operation contract."""
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
-        server.tool(name=name, annotations=tool_annotations)(cast("Callable[..., object]", getattr(adapter, name)))
+        server.tool(name=name, annotations=tool_annotations)(_flatten_tool(adapter, name))
+        _install_strict_argument_model(server, name)
+
+
+def _install_strict_argument_model(server: MCPServer, name: str) -> None:
+    """Replace MCP's permissive argument model with an extra-forbid variant."""
+    tool_manager = getattr(server, "_tool_manager", None)
+    tool = tool_manager.get_tool(name) if tool_manager is not None else None
+    if tool is None:
+        message = f"Delivery MCP operation {name} was not registered"
+        raise RuntimeError(message)
+    argument_model = create_model(
+        f"Strict{name.title().replace('_', '')}Arguments",
+        __base__=tool.fn_metadata.arg_model,
+        __config__=ConfigDict(extra="forbid"),
+    )
+    tool.fn_metadata.arg_model = argument_model
+    tool.parameters = argument_model.model_json_schema(by_alias=True)
+
+
+def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:
+    """Expose one adapter model as strict top-level MCP keyword arguments."""
+    method = getattr(adapter, name)
+    hints = get_type_hints(method, include_extras=True)
+    request_annotation = hints["request"]
+    while not isinstance(request_annotation, type):
+        alias_value = getattr(request_annotation, "__value__", None)
+        if alias_value is not None and alias_value is not request_annotation:
+            request_annotation = alias_value
+            continue
+        if get_origin(request_annotation) is None:
+            break
+        arguments = get_args(request_annotation)
+        if not arguments:
+            break
+        request_annotation = arguments[0]
+    if not isinstance(request_annotation, type) or not issubclass(request_annotation, BaseModel):
+        message = f"Delivery MCP operation {name} has no Pydantic request model"
+        raise TypeError(message)
+
+    parameters: list[inspect.Parameter] = []
+    annotations: dict[str, object] = {}
+    for field_name, field in request_annotation.model_fields.items():
+        default = inspect.Parameter.empty
+        if not field.is_required():
+            default = field.default
+            if field.default_factory is not None:
+                default = field.default_factory()
+        annotation = field.rebuild_annotation()
+        annotation = Annotated[
+            annotation,
+            BeforeValidator(partial(_parse_flat_field, annotation)),
+        ]
+        annotations[field_name] = annotation
+        parameters.append(
+            inspect.Parameter(
+                field_name,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=default,
+                annotation=annotation,
+            )
+        )
+
+    async def flat_tool(**payload: object) -> object:
+        params = request_annotation.model_validate(payload)
+        return await method(params)
+
+    flat_tool.__name__ = name
+    flat_tool.__qualname__ = name
+    flat_tool.__doc__ = method.__doc__
+    annotations["return"] = hints.get("return", inspect.Signature.empty)
+    flat_tool.__annotations__ = annotations
+    flat_tool.__signature__ = inspect.Signature(
+        parameters=parameters,
+        return_annotation=annotations["return"],
+    )
+    return flat_tool
+
+
+def _parse_flat_field(annotation: object, value: object) -> object:
+    """Parse JSON-shaped MCP values before strict nested model validation."""
+    if isinstance(value, BaseModel):
+        return value
+    return TypeAdapter(annotation).validate_json(json.dumps(value))
+
+
+def _json_default(value: object) -> object:
+    """Serialize nested Pydantic values when normalizing MCP arguments."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    message = f"Object of type {type(value).__name__} is not JSON serializable"
+    raise TypeError(message)
 
 
 __all__ = [

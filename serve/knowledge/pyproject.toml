@@ -10,12 +10,19 @@ dependencies = [
 [project.optional-dependencies]
 qdrant = ["qdrant-client>=1.18.0"]
 embedding = ["FlagEmbedding>=1.4.0"]
-intake = ["httpx>=0.28.1"]
+intake = [
+    "httpx>=0.28.1",
+    "owlbear-web-content",
+]
 full = [
     "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",
     "httpx>=0.28.1",
+    "owlbear-web-content",
 ]
+
+[tool.uv.sources]
+owlbear-web-content = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -1,8 +1,18 @@
 ---
-description: "Diagnose and resolve one exact Delivery Integration attention interactively"
+description: "Temporary recovery/exception: diagnose and resolve one exact Delivery attention"
 ---
 
-Attention: ${input:attention:Change ID followed by the exact 64-character Integration attention ID}
+> **Status:** Temporary recovery/exception surface. This is not part of the normal Delivery path.
+>
+> **Retirement condition:** Remove this prompt only after Cockpit and Delivery provide guided,
+> tested routes for every recovery operation currently reachable only through this workflow:
+> external Change-head adoption and promotion, publication-baseline recovery, and retained
+> Integration-repair claim recovery. The replacement must also preserve exact identity binding,
+> user decisions, provider actions, and explicit authority-gap reporting. Keep this prompt while any
+> one of those capabilities still depends on it; ordinary Change attention controls are not enough
+> to satisfy this condition.
+
+Attention: ${input:attention:Change ID followed by either a 64-character attention ID or an OUT-nnn outcome ID; use a standalone Change ID for abandoned target-sync cleanup or quarantined target-sync publication repair}
 
 Read and follow `../skills/w-delivery-attention-resolution/SKILL.md`. Bind the supplied change and
 attention identities before inspecting current evidence. Present every material user choice with

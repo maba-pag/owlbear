@@ -34,6 +34,33 @@ React, Cockpit, Porsche Design System, Vite, Vitest, or Playwright without repos
 
 For deeper visual and interaction guidance, see `h-frontend-design`.
 
+## Optional PDS Knowledge Companion
+
+When a consuming project declares a Porsche Design System package, use its matching package-provided
+knowledge skill as an optional companion:
+
+- Discover the PDS wrapper package, framework, installed version, and active Copilot skill roots from
+  the project manifest, lockfile, and workspace settings. Do not assume React, a `web/` directory,
+  Cockpit, or `.owlbear/skills`.
+- Use the installed wrapper's `pds-skill` binary with explicit `--package`, `--location`, and
+  `--skill pds-knowledge-{framework}` arguments to link the companion into a configured local skill
+  root. Keep the link generated and ignored; do not copy or commit the package-owned skill into
+  `share/skills` or another source-controlled skill tree.
+- Recreate the link after dependency installation using the consuming project's package-manager
+  lifecycle, or document the package-manager-specific command when lifecycle hooks are not owned by
+  the project. A missing or dangling link means the optional companion is unavailable; continue with
+  this handbook and project-local policy instead of inferring a PDS contract.
+- Once loaded, read the companion before PDS-specific frontend work. Verify installed metadata and
+  typings first, then read the relevant exact-version references for components, stylesheets, tokens,
+  themes, and testing. Use exact-version source or official storefront material only when the
+  installed references are insufficient.
+- Keep the PDS package, companion skill, lockfile, generated assets, and project integration aligned
+  when the project vendors or generates runtime assets. Use the project's build/version checks;
+  a symlink alone proves only that the installed tree is being read.
+- The companion does not replace project discovery and may not cover setup, migration, changelog,
+  patterns/templates, AG Grid, or other PDS topics. For uncovered material, consult matching
+  exact-version official documentation.
+
 ## Accessibility and Input
 
 Use semantic platform elements first and add ARIA only when native semantics cannot express the

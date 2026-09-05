@@ -6,6 +6,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery.delivery_runtime import DeliveryChangeStage
+
 
 class PortfolioWorkScope(StrEnum):
     """Scopes that can participate in current Delivery operation."""
@@ -23,6 +25,13 @@ class PortfolioGuidanceKind(StrEnum):
     INTERVENE = "intervene"
     WAIT = "wait"
     CREATE_CHANGE = "create-change"
+
+
+class PortfolioChangeAdmission(StrEnum):
+    """Persisted admission state for one current Change."""
+
+    ADMITTED = "admitted"
+    UNADMITTED = "unadmitted"
 
 
 class _OperatingModel(BaseModel):
@@ -56,11 +65,56 @@ class PortfolioGuidanceFacts(_OperatingModel):
     dependency_waits: tuple[PortfolioWorkReference, ...] = ()
 
 
+class PortfolioChangeLifecycleStatus(_OperatingModel):
+    """Explicit lifecycle facts for one current Change."""
+
+    change_id: str = Field(min_length=1)
+    admission: PortfolioChangeAdmission
+    stage: DeliveryChangeStage | None = None
+    actionable_runtime: bool
+    diagnostic_code: str | None = Field(default=None, min_length=1)
+    diagnostic_detail: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @property
+    def admitted(self) -> bool:
+        """Return whether persisted admission evidence exists."""
+        return self.admission is PortfolioChangeAdmission.ADMITTED
+
+
+class DeliveryHealthStatus(StrEnum):
+    """Overall availability of the current Delivery application."""
+
+    HEALTHY = "healthy"
+    ATTENTION = "attention"
+
+
+class DeliveryHealthDiagnostic(_OperatingModel):
+    """Bounded diagnostic for state excluded from Delivery authority."""
+
+    source: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1, max_length=240)
+    change_id: str | None = Field(default=None, min_length=1)
+    path: str | None = Field(default=None, min_length=1)
+    retry_safe: bool = False
+
+
+class DeliveryHealthView(_OperatingModel):
+    """Current Delivery availability and bounded state diagnostics."""
+
+    status: DeliveryHealthStatus
+    diagnostics: tuple[DeliveryHealthDiagnostic, ...] = Field(default=(), max_length=64)
+
+
 class PortfolioOperatingView(_OperatingModel):
-    """Independent operating facts and derived guidance for the whole portfolio."""
+    """Current operating facts and derived guidance for the whole portfolio.
+
+    The status projection excludes normally completed Changes; completion totals retain them.
+    """
 
     unfinished_change_count: int = Field(ge=0)
     completed_change_count: int = Field(ge=0)
+    statuses: tuple[PortfolioChangeLifecycleStatus, ...] = ()
     draft_design_change_ids: tuple[str, ...] = ()
     design_required_change_ids: tuple[str, ...] = ()
     claimed: tuple[PortfolioWorkReference, ...] = ()
