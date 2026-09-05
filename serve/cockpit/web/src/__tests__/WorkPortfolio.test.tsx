@@ -2513,6 +2513,68 @@ it('does not show Change disposition controls for an abandoned Change', async ()
   expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
 })
 
+it('confirms discard and cleanup for an abandoned target-sync conflict from Change detail', async () => {
+  const targetHead = 'e'.repeat(40)
+  const operationId = 'cockpit-target-sync-detail-test'
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'none',
+    next_step: 'Change abandoned',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      target_sync_conflict: {
+        conflict_id: 'f'.repeat(64),
+        operation_id: operationId,
+        target_head: targetHead,
+        change_head_before: 'd'.repeat(40),
+        conflict_paths: ['src/app.py'],
+      },
+      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Discard merge and clean worktree'))
+  fireEvent.click(await screen.findByText('Confirm discard and cleanup'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/abandoned/target-sync-discard',
+    method: 'POST',
+    body: {
+      confirmed_discard: true,
+      expected_target_head: targetHead,
+      expected_operation_id: operationId,
+    },
+  }))
+  expect(await screen.findByText('Target merge discarded and abandoned Change worktree cleaned up.')).toBeInTheDocument()
+})
+
 it('confirms and cleans an eligible abandoned Change from Change history', async () => {
   const abandoned = abandonedRecord()
   completedRecords = [abandoned]

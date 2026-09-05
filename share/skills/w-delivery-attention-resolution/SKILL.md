@@ -25,10 +25,14 @@ attention buttons do not satisfy this retirement condition.
 ## Step 0 - Bind The Exact Current Attention Or Blocked Outcome
 
 Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by either one
-64-character lowercase hexadecimal identity or one `OUT-nnn` outcome identity. For a 64-character
-identity, a Change publication or acceptance attention uses its `disposition_id`; a retained
-Integration repair attention uses its `attention_id`. For an `OUT-nnn` identity, bind the exact
-outcome through `show_operator_context(change_id, outcome_id)` and require a current block. Reject
+64-character lowercase hexadecimal identity or one `OUT-nnn` outcome identity, or as a standalone
+`change_id` for abandoned target-sync cleanup. For a 64-character identity, a Change publication
+or acceptance attention uses its `disposition_id`; a retained Integration repair attention uses
+its `attention_id`. For an `OUT-nnn` identity, bind the exact outcome through
+`show_operator_context(change_id, outcome_id)`. A current block is required for request resolution
+or block clearing; an unblocked outcome may continue to the administrative-move preview. For a
+standalone `change_id`, bind an abandoned Change with a retained target-sync conflict through
+`show_work_item_view(change_id, "publication")` and retain its exact conflict identities. Reject
 missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
@@ -46,8 +50,8 @@ Treat the returned code, heads, target, diagnostics, and retry condition as reta
 as permission to edit a worktree or target.
 
 For an `OUT-nnn` identity, call `show_operator_context(change_id, outcome_id)` and require the
-returned context to retain the supplied outcome identity and a current block. If the context
-contains a pending request, present exactly one user decision and, after the answer, call
+returned context to retain the supplied outcome identity. If the context contains a current block
+and that block contains a pending request, present exactly one user decision and, after the answer, call
 `resolve_request(change_id, request_id, resolution)` with the selected option or response text. If
 the context contains a requestless block, present the evidence requirement and, after explicit user
 confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note, locators)`. Re-read
@@ -60,6 +64,12 @@ closure and obtain one explicit user decision. If the user approves that exact p
 operator context and call `administrative_move(change_id, move_id, outcome_id, target, reason,
 expected_version=snapshot_version)`. A stale preview, finalized Change, active claim, or changed
 frontier is a hard stop; never invent a new version or bypass Delivery.
+
+For a standalone `change_id`, use only the retained target-sync conflict evidence bound in Step 0.
+Present one explicit confirmation, then call
+`cleanup_abandoned_change_worktree_after_target_sync_discard(change_id, expected_target_head,
+expected_operation_id, confirmed_discard=true)`. Re-read the returned cleanup state and report any
+remaining attention; never use this route for a non-abandoned Change or without a retained conflict.
 
 ## Step 1 - Diagnose Current State Read-Only
 
