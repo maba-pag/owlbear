@@ -2709,6 +2709,30 @@ def test_mark_change_ready_does_not_gate_on_pending_or_nonblocking_checks(
     assert provider.set_pull_request_draft_state.call_count == 1
 
 
+def test_mark_change_ready_aborts_before_draft_mutation_when_check_observation_fails(
+    tmp_path: Path,
+) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+    )
+    provider.observe_checks.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.INVALID_RESPONSE,
+        "observe_checks",
+        "GitHub returned an invalid check duration",
+        retry_safe=True,
+    )
+
+    with pytest.raises(PublicationProviderError, match="invalid check duration"):
+        application.mark_current_change_ready("change-a")
+
+    assert runtime.finalization() is not None
+    assert runtime.finalization().exact_head == exact_head
+    assert runtime.ready_receipt() is None
+    assert state["pull_request"].draft is True
+    provider.set_pull_request_draft_state.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("status", "conclusion", "required", "expected"),
     [
