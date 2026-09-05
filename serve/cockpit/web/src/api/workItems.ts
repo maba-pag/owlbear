@@ -548,6 +548,8 @@ export interface AbandonedChangeRecord {
   abandoned_at: string
   cleanup_available: boolean
   target_sync_conflict: boolean
+  target_sync_conflict_target_head: string | null
+  target_sync_conflict_operation_id: string | null
 }
 
 export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord
@@ -863,11 +865,19 @@ export function cleanupAbandonedWorkItemChange(changeId: string): Promise<Change
   )
 }
 
-export function discardAbandonedTargetSyncAndCleanup(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
+export function discardAbandonedTargetSyncAndCleanup(
+  changeId: string,
+  expectedTargetHead: string,
+  expectedOperationId: string,
+): Promise<ChangeWorktreeCleanupResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned/target-sync-discard`,
     'ERR_WORK_ITEM_TARGET_SYNC_DISCARD_CLEANUP',
-    { confirmed_discard: true },
+    {
+      confirmed_discard: true,
+      expected_target_head: expectedTargetHead,
+      expected_operation_id: expectedOperationId,
+    },
   )
 }
 

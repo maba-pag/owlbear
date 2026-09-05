@@ -755,9 +755,9 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       () => cleanupAbandonedWorkItemChange(identity.changeId),
       'Abandoned Change worktree cleaned up.',
     ),
-    discardAbandonedTargetSync: () => mutate(
+    discardAbandonedTargetSync: (expectedTargetHead: string, expectedOperationId: string) => mutate(
       'change-cleanup-abandoned-target-sync',
-      () => discardAbandonedTargetSyncAndCleanup(identity.changeId),
+      () => discardAbandonedTargetSyncAndCleanup(identity.changeId, expectedTargetHead, expectedOperationId),
       'Target merge discarded and abandoned Change worktree cleaned up.',
     ),
     cleanupCompletedChange: (completionId: string) => mutate(

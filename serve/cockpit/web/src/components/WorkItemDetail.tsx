@@ -83,7 +83,7 @@ interface WorkItemDetailProps {
   onResumeChange: () => Promise<Error | null>
   onAbandonChange: (reason: string) => Promise<Error | null>
   onCleanupAbandonedChange: () => Promise<Error | null>
-  onDiscardAbandonedTargetSync: () => Promise<Error | null>
+  onDiscardAbandonedTargetSync: (targetHead: string, operationId: string) => Promise<Error | null>
   onCleanupCompletedChange: (completionId: string) => Promise<Error | null>
   onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>
 }
@@ -670,8 +670,10 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
 function AbandonedTargetSyncCleanupSection(props: WorkItemDetailProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [actionFailed, setActionFailed] = useState(false)
+  const conflict = props.detail.item.publication?.target_sync_conflict
+  if (!conflict) return null
   const run = async () => {
-    const error = await props.onDiscardAbandonedTargetSync()
+    const error = await props.onDiscardAbandonedTargetSync(conflict.target_head, conflict.operation_id)
     setActionFailed(error !== null)
     if (!error) setConfirmOpen(false)
   }

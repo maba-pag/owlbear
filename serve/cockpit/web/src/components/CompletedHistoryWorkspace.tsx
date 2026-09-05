@@ -540,7 +540,12 @@ export default function CompletedHistoryWorkspace() {
               if (detail.data?.record_kind !== 'abandoned-change') return null
               try {
                 if (detail.data.target_sync_conflict) {
-                  await discardAbandonedTargetSyncAndCleanup(detail.data.change_id)
+                  const targetHead = detail.data.target_sync_conflict_target_head
+                  const operationId = detail.data.target_sync_conflict_operation_id
+                  if (!targetHead || !operationId) {
+                    throw new Error('Target-sync conflict identity is unavailable for cleanup')
+                  }
+                  await discardAbandonedTargetSyncAndCleanup(detail.data.change_id, targetHead, operationId)
                 } else {
                   await cleanupAbandonedWorkItemChange(detail.data.change_id)
                 }

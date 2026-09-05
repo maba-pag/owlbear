@@ -16,6 +16,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceipt,
     CompletionReceiptStore,
 )
+from owlbear_delivery.change_workspace import ChangeCoordination, ChangeTargetSyncConflictState
 from owlbear_delivery.completed_history import (
     CompletedHistoryCatalog,
     CompletedHistoryDiagnosticCode,
@@ -490,3 +491,57 @@ def test_catalog_ignores_stray_runtime_entries_but_rejects_recognized_corruption
 
     assert malformed.value.diagnostic.code == CompletedHistoryDiagnosticCode.MALFORMED
     assert malformed.value.diagnostic.change_id == "recognized-corruption"
+
+
+def test_catalog_preserves_abandoned_target_sync_conflict_identity(tmp_path: Path) -> None:
+    repository, _commits = _repository(tmp_path / "repository")
+    runtime_root = tmp_path / "runtime"
+    change_id = "abandoned-change"
+    changes_root = runtime_root / "changes" / change_id
+    changes_root.mkdir(parents=True)
+    contract = _contract(change_id, "Abandoned delivery", b"intent", b"design")
+    abandonment = DeliveryChangeAbandonment.create(
+        change_id=change_id,
+        prior_stage=DeliveryChangeStage.BUILDING,
+        abandoned_at=datetime(2026, 8, 11, 14, tzinfo=UTC),
+        reason="User stopped the Change.",
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.IMPLEMENTATION,
+            ),
+        ),
+        change_abandonment=abandonment,
+    )
+    (changes_root / "contract.json").write_bytes(_canonical(contract))
+    (changes_root / "frontier.json").write_bytes(_canonical(frontier))
+
+    conflict = ChangeTargetSyncConflictState.create(
+        operation_id="sync-abandoned",
+        change_id=change_id,
+        target_head="c" * 40,
+        change_head_before="b" * 40,
+        conflict_paths=("product.txt",),
+    )
+    coordination_root = runtime_root / "coordination" / "changes"
+    coordination_root.mkdir(parents=True)
+    coordination = ChangeCoordination(
+        change_id=change_id,
+        branch=f"owlbear/change/{change_id}",
+        worktree_path=runtime_root / "worktrees" / change_id,
+        integration_target="main",
+        target_head="c" * 40,
+        last_reviewed_commit="b" * 40,
+        target_sync_conflict=conflict,
+    )
+    (coordination_root / f"{change_id}.json").write_bytes(coordination.model_dump_json().encode())
+
+    record = CompletedHistoryCatalog(repository, "main", "main", runtime_root).list().records[0]
+
+    assert record.record_kind == "abandoned-change"
+    assert record.target_sync_conflict is True
+    assert record.target_sync_conflict_target_head == "c" * 40
+    assert record.target_sync_conflict_operation_id == "sync-abandoned"

@@ -226,6 +226,11 @@ class AbandonedChangeRecord(_CompletedHistoryModel):
     abandoned_at: datetime
     cleanup_available: bool
     target_sync_conflict: bool = False
+    target_sync_conflict_target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    target_sync_conflict_operation_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
 
 
 type CompletedChangeRecord = Annotated[
@@ -429,7 +434,12 @@ class CompletedHistoryCatalog:
         if abandonment is None:
             self._malformed("abandoned-history frontier has no abandonment receipt", change_id)
         contract = self._local_contract(change_id)
-        cleanup_available, target_sync_conflict = self._cleanup_state(change_id)
+        (
+            cleanup_available,
+            target_sync_conflict,
+            target_sync_conflict_target_head,
+            target_sync_conflict_operation_id,
+        ) = self._cleanup_state(change_id)
         return AbandonedChangeRecord(
             change_id=change_id,
             abandonment_id=abandonment.abandonment_id,
@@ -442,6 +452,8 @@ class CompletedHistoryCatalog:
             abandoned_at=abandonment.abandoned_at,
             cleanup_available=cleanup_available,
             target_sync_conflict=target_sync_conflict,
+            target_sync_conflict_target_head=target_sync_conflict_target_head,
+            target_sync_conflict_operation_id=target_sync_conflict_operation_id,
         )
 
     def _local_contract(self, change_id: str) -> DeliveryContract:
@@ -454,16 +466,22 @@ class CompletedHistoryCatalog:
             self._malformed("abandoned-history contract identity is invalid", change_id)
         return contract
 
-    def _cleanup_state(self, change_id: str) -> tuple[bool, bool]:
+    def _cleanup_state(self, change_id: str) -> tuple[bool, bool, str | None, str | None]:
         """Return whether cleanup is available and whether a target conflict must be discarded first."""
         path = self._runtime_root / "coordination" / "changes" / f"{change_id}.json"
         if not path.is_file() or path.is_symlink():
-            return False, False
+            return False, False, None, None
         try:
             coordination = ChangeCoordination.model_validate_json(path.read_bytes())
         except (OSError, TypeError, ValueError, ValidationError) as exc:
             self._malformed("abandoned-history coordination is invalid", change_id, cause=exc)
-        return coordination.worktree_cleanup is None, coordination.target_sync_conflict is not None
+        conflict = coordination.target_sync_conflict
+        return (
+            coordination.worktree_cleanup is None,
+            conflict is not None,
+            conflict.target_head if conflict is not None else None,
+            conflict.operation_id if conflict is not None else None,
+        )
 
     @staticmethod
     def _search_text(record: CompletedChangeRecord) -> str:

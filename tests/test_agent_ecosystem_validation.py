@@ -120,6 +120,7 @@ _RETIRED_DELIVERY_TOOLS = {
     "admit_reviewed_integration_repair",
     "publish_integration_repair_authority_attention",
     "recover_blocked_implementation",
+    "validate_delivery_contract",
 }
 
 
@@ -528,13 +529,6 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
             if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
-
-    def test_finalizer_grants_finalization_reconciliation_required_by_workflow() -> None:
-        metadata = _frontmatter(_AGENTS_ROOT / "finalizer.agent.md")
-        declared = set(metadata["tools"])
-        assert "owlbear-delivery/show_finalization_context" in declared
-        assert "owlbear-delivery/reconcile_finalization_head" in declared
-        assert "owlbear-delivery/finalize_change" in declared
 
 
 def test_retired_delivery_operations_are_absent_from_agent_prose() -> None:

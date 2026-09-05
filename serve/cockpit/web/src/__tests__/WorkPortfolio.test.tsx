@@ -286,6 +286,8 @@ function abandonedRecord(overrides: Partial<AbandonedChangeRecord> = {}): Abando
     abandoned_at: '2026-08-11T14:00:00Z',
     cleanup_available: true,
     target_sync_conflict: false,
+    target_sync_conflict_target_head: null,
+    target_sync_conflict_operation_id: null,
     ...overrides,
   }
 }
@@ -2557,6 +2559,8 @@ it('keeps abandoned history cleanup confirmation open when cleanup fails', async
 it('confirms discard and cleanup for an abandoned target-sync conflict from Change history', async () => {
   const abandoned = abandonedRecord({
     target_sync_conflict: true,
+    target_sync_conflict_target_head: 'e'.repeat(40),
+    target_sync_conflict_operation_id: 'cockpit-target-sync-test',
     cleanup_available: true,
   })
   completedRecords = [abandoned]
@@ -2572,7 +2576,11 @@ it('confirms discard and cleanup for an abandoned target-sync conflict from Chan
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/worktree/cleanup/abandoned/target-sync-discard',
     method: 'POST',
-    body: { confirmed_discard: true },
+    body: {
+      confirmed_discard: true,
+      expected_target_head: 'e'.repeat(40),
+      expected_operation_id: 'cockpit-target-sync-test',
+    },
   }))
   expect(await screen.findByText('Target merge discarded and abandoned Change worktree cleaned up.')).toBeInTheDocument()
 })
