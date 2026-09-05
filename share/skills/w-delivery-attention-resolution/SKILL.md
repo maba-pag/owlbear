@@ -26,16 +26,16 @@ attention buttons do not satisfy this retirement condition.
 
 Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by either one
 64-character lowercase hexadecimal identity or one `OUT-nnn` outcome identity, or as a standalone
-`change_id` for abandoned target-sync cleanup or quarantined target-sync publication repair. For a 64-character identity, a Change publication
-or acceptance attention uses its `disposition_id`; a retained Integration repair attention uses
-its `attention_id`. For an `OUT-nnn` identity, bind the exact outcome through
-`show_operator_context(change_id, outcome_id)`. A current block is required for request resolution
-or block clearing; an unblocked outcome may continue to the administrative-move preview. For a
-For a standalone `change_id`, bind either an abandoned Change with a retained target-sync conflict
-through `show_work_item_view(change_id, "publication")`, or a quarantined target-sync publication
-repair through `delivery_health()` and the exact persisted target-sync receipt/publication evidence.
-For repair, retain `expected_remote_head`, `expected_merged_head`, and
-`target_sync_operation_id`. Reject missing, extra, or malformed identities.
+`change_id` for abandoned target-sync cleanup or quarantined target-sync publication repair. For a
+64-character identity, a Change publication or acceptance attention uses its `disposition_id`; a
+retained Integration repair attention uses its `attention_id`. For an `OUT-nnn` identity, bind the
+exact outcome through `show_operator_context(change_id, outcome_id)`. A current block is required
+for request resolution or block clearing; an unblocked outcome may continue to the administrative
+move preview. For a standalone `change_id`, bind either an abandoned Change with a retained
+target-sync conflict through `show_work_item_view(change_id, "publication")`, or a quarantined
+target-sync publication repair through `delivery_health()` and the exact persisted target-sync
+receipt/publication evidence. For repair, retain `expected_remote_head`, `expected_merged_head`,
+and `target_sync_operation_id`. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
 `OwlBear Delivery list_work_items delivery_health repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
