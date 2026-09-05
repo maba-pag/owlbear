@@ -691,6 +691,17 @@ class ChangeCoordination(_WorkspaceModel):
         migrated.pop("blocked_implementation_recovery", None)
         return migrated
 
+    @model_validator(mode="before")
+    @classmethod
+    def _discard_stale_target_sync_receipt(cls, value: object) -> object:
+        if not isinstance(value, dict) or value.get("target_sync_conflict") is None:
+            return value
+        if value.get("target_sync_receipt") is None:
+            return value
+        migrated: dict[object, object] = dict(value)
+        migrated["target_sync_receipt"] = None
+        return migrated
+
     @field_validator("external_head_adoption_receipts", mode="before")
     @classmethod
     def _normalize_external_head_adoption_receipts(cls, value: object) -> object:
@@ -1998,7 +2009,7 @@ class ChangeWorkspaceManager:
             conflict_paths=self._unmerged_paths(coordination.worktree_path),
         )
         self._coordinator.update(
-            coordination.model_copy(update={"target_sync_conflict": conflict}),
+            coordination.model_copy(update={"target_sync_receipt": None, "target_sync_conflict": conflict}),
             lock=lock,
         )
         raise ChangeTargetSyncConflictError(

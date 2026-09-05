@@ -13,6 +13,7 @@ response-unknown outcome rather than a retry-safe incident.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -95,8 +96,14 @@ def _reviewed_change(manager: ChangeWorkspaceManager, change_id: str) -> tuple[P
     return coordination.worktree_path, reviewed
 
 
-def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None = None) -> str:
-    target_repository = tmp_path / "target-repository"
+def _advance_remote_target(
+    tmp_path: Path,
+    remote: Path,
+    *,
+    product: str | None = None,
+    repository_name: str = "target-repository",
+) -> str:
+    target_repository = tmp_path / repository_name
     _git(tmp_path, "clone", str(remote), str(target_repository))
     _git(target_repository, "config", "user.name", "Target User")
     _git(target_repository, "config", "user.email", "target@example.com")
@@ -378,6 +385,51 @@ def test_sync_conflict_preserves_merge_state_and_user_checkout(
     assert coordinator.show("sync-conflict").last_reviewed_commit == reviewed
     assert coordinator.show("sync-conflict").target_sync_receipt is None
     before.assert_unchanged(repository)
+
+
+def test_target_sync_conflict_replaces_stale_receipt_and_normalizes_legacy_pair(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-conflict-after-receipt")
+    first_target = _advance_remote_target(tmp_path, remote)
+    first_receipt = manager.sync_with_target(
+        SyncChangeWithTarget(
+            change_id="sync-conflict-after-receipt",
+            expected_target=first_target,
+            operation_id="sync-conflict-after-receipt-1",
+        )
+    )
+
+    (worktree / "product.txt").write_text("source\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "advance Change source")
+    manager.record_reviewed("sync-conflict-after-receipt", _head(worktree))
+    second_target = _advance_remote_target(
+        tmp_path,
+        remote,
+        product="target\n",
+        repository_name="target-repository-2",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(
+                change_id="sync-conflict-after-receipt",
+                expected_target=second_target,
+                operation_id="sync-conflict-after-receipt-2",
+            )
+        )
+
+    coordination_path = tmp_path / "state/coordination/changes/sync-conflict-after-receipt.json"
+    stored = json.loads(coordination_path.read_text(encoding="utf-8"))
+    assert stored["target_sync_receipt"] is None
+    stored["target_sync_receipt"] = first_receipt.model_dump(mode="json")
+    coordination_path.write_text(json.dumps(stored, sort_keys=True) + "\n", encoding="utf-8")
+
+    loaded = coordinator.show("sync-conflict-after-receipt")
+    assert loaded.target_sync_receipt is None
+    assert loaded.target_sync_conflict is not None
+    assert loaded.target_sync_conflict.target_head == second_target
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
