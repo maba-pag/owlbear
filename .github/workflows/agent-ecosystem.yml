@@ -30,12 +30,8 @@ name: Agent ecosystem validation
       - share/skills/**
       - tests/test_agent_ecosystem_validation.py
       - tests/test_write_guard_hooks.py
-      - .python-version
-      - conftest.py
-      - pyproject.toml
       - serve/knowledge/**
       - tests/test_knowledge_ops_contract.py
-      - uv.lock
 
 concurrency:
   group: agent-ecosystem-${{ github.event.pull_request.number }}

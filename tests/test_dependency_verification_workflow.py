@@ -18,6 +18,7 @@ ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit-verification.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
+SOURCE_VERIFY_PATH = ROOT / ".github/workflows/source-verification.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
@@ -100,9 +101,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     assert pull_request["types"] == ["opened", "reopened", "synchronize", "ready_for_review"]
     assert set(pull_request["paths"]) == {
         ".github/renovate.json",
-        ".github/scripts/check_node_runtime.py",
         ".github/scripts/check_ruff_toolchain.py",
-        ".github/scripts/check_uv_version.py",
         ".github/scripts/check_uv_workspace_lock.py",
         ".github/workflows/**",
         ".mega-linter.yml",
@@ -131,7 +130,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
 
 def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> None:
     expected_types = ["opened", "reopened", "synchronize", "ready_for_review"]
-    for path in (AGENT_WORKFLOW_PATH, VERIFY_PATH, COCKPIT_VERIFY_PATH):
+    for path in (AGENT_WORKFLOW_PATH, VERIFY_PATH, COCKPIT_VERIFY_PATH, SOURCE_VERIFY_PATH):
         workflow = _workflow(path)
         pull_request = workflow["on"]["pull_request"]
         assert pull_request["types"] == expected_types
@@ -143,6 +142,21 @@ def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> No
             assert isinstance(condition, str), f"{path.name}:{job_name} needs a draft guard"
             assert "github.event_name != 'pull_request'" in condition
             assert "github.event.pull_request.draft == false" in condition
+
+
+def test_agent_workflow_delegates_python_workspace_paths() -> None:
+    workflow = _workflow(AGENT_WORKFLOW_PATH)
+    paths = set(workflow["on"]["pull_request"]["paths"])
+
+    assert (
+        not {
+            ".python-version",
+            "conftest.py",
+            "pyproject.toml",
+            "uv.lock",
+        }
+        & paths
+    )
 
 
 def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> None:
@@ -230,6 +244,18 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "Regenerate with:" in archify_run
 
 
+def test_dependency_workflow_avoids_duplicate_pr_python_proof() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    proof_python = _job(workflow, "proof-python")
+    python_steps = {step["name"]: step for step in proof_python["steps"]}
+
+    assert python_steps["Prove workspace lock regeneration"]["if"] == "matrix.python == '3.12.14'"
+    for step_name in ("Compile Python sources", "Check Python sources", "Run Python behavior tests"):
+        assert python_steps[step_name]["if"] == (
+            "github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'"
+        )
+
+
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
     workflow = _workflow(VERIFY_PATH)
     compatibility = _job(workflow, "compatibility")
@@ -272,12 +298,17 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
     text = VERIFY_PATH.read_text(encoding="utf-8")
 
     assert classify["outputs"]["proof_tooling"] == "${{ steps.proof_tooling.outputs.proof_tooling }}"
+    assert classify["outputs"]["workspace_lock_tooling"] == (
+        "${{ steps.proof_tooling.outputs.workspace_lock_tooling }}"
+    )
     assert 'MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"' in text
     assert '--base-ref "$MERGE_BASE"' in text
     assert '--head-ref "$HEAD_SHA"' in text
     assert compatibility["if"] == (
         "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
-        "(needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true')"
+        "(needs.classify.outputs.compatibility == 'true' || "
+        "needs.classify.outputs.proof_tooling == 'true' || "
+        "needs.classify.outputs.workspace_lock_tooling == 'true')"
     )
     proof_step_name = "Exercise dependency proof tooling"
     steps = compatibility["steps"]
@@ -291,6 +322,15 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
             ),
         }
     ]
+    workspace_lock_steps = [step for step in steps if step.get("name") == "Exercise workspace lock proof"]
+    assert workspace_lock_steps == [
+        {
+            "name": "Exercise workspace lock proof",
+            "if": "needs.classify.outputs.workspace_lock_tooling == 'true'",
+            "run": "uv run python .github/scripts/check_uv_workspace_lock.py",
+        }
+    ]
+    assert ".github/scripts/check_uv_workspace_lock.py)" in text
     assert ".github/workflows/*|" in text
     assert "serve/tools/src/owlbear_tools/megalinter.py|" in text
     assert "tests/test_dependency_verification_workflow.py)" in text
@@ -427,7 +467,9 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
 
     gate_env = gate["steps"][0]["env"]
     assert gate_env["COMPATIBILITY_EXPECTED"] == (
-        "${{ needs.classify.outputs.compatibility == 'true' || needs.classify.outputs.proof_tooling == 'true' }}"
+        "${{ needs.classify.outputs.compatibility == 'true' || "
+        "needs.classify.outputs.proof_tooling == 'true' || "
+        "needs.classify.outputs.workspace_lock_tooling == 'true' }}"
     )
 
 

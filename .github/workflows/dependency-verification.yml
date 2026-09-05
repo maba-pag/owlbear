@@ -12,8 +12,6 @@ name: Dependency verification
       - ready_for_review
     paths:
       - .github/renovate.json
-      - .github/scripts/check_node_runtime.py
-      - .github/scripts/check_uv_version.py
       - .github/scripts/check_uv_workspace_lock.py
       - .github/scripts/check_ruff_toolchain.py
       - .github/workflows/**
@@ -90,6 +88,7 @@ jobs:
       precommit: ${{ steps.scope.outputs.precommit }}
       python: ${{ steps.scope.outputs.python }}
       proof_tooling: ${{ steps.proof_tooling.outputs.proof_tooling }}
+      workspace_lock_tooling: ${{ steps.proof_tooling.outputs.workspace_lock_tooling }}
       ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}
       renovate: ${{ steps.scope.outputs.renovate }}
       root_node: ${{ steps.scope.outputs.root_node }}
@@ -114,7 +113,8 @@ jobs:
             : > "$RUNNER_TEMP/dependency-paths"
             for output in \
               python node shared_node_runtime root_node diagrams pds precommit \
-              ruff_toolchain workflows megalinter renovate applicable compatibility
+              ruff_toolchain workflows megalinter renovate applicable compatibility \
+              workspace_lock_tooling
             do
               echo "$output=true" >> "$GITHUB_OUTPUT"
             done
@@ -139,23 +139,28 @@ jobs:
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "proof_tooling=true" >> "$GITHUB_OUTPUT"
+            echo "workspace_lock_tooling=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           proof_tooling=false
+          workspace_lock_tooling=false
           while IFS= read -r -d '' path; do
             case "$path" in
+              .github/scripts/check_uv_workspace_lock.py)
+                workspace_lock_tooling=true
+                ;;
               .github/workflows/*|\
               .github/scripts/check_ruff_toolchain.py|\
               serve/tools/src/owlbear_tools/dependency_ci.py|\
               serve/tools/src/owlbear_tools/megalinter.py|\
               tests/test_dependency_verification_workflow.py)
                 proof_tooling=true
-                break
                 ;;
             esac
           done < "$RUNNER_TEMP/dependency-paths"
           echo "proof_tooling=$proof_tooling" >> "$GITHUB_OUTPUT"
+          echo "workspace_lock_tooling=$workspace_lock_tooling" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js for runtime declaration
         if: steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true'
@@ -210,18 +215,22 @@ jobs:
         run: uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups
 
       - name: Prove workspace lock regeneration
+        if: matrix.python == '3.12.14'
         run: uv run --python "${{ matrix.python }}" python .github/scripts/check_uv_workspace_lock.py
 
       - name: Compile Python sources
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" python -m compileall -q serve setup tests .owlbear/hooks seed
 
       - name: Check Python sources
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" ruff check .
           uv run --python "${{ matrix.python }}" ruff format --check .
 
       - name: Run Python behavior tests
+        if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" pytest tests serve \
             -m "not api and not e2e and not browser and not cockpit"
@@ -329,7 +338,8 @@ jobs:
       (github.event_name != 'pull_request' ||
       github.event.pull_request.draft == false) &&
       (needs.classify.outputs.compatibility == 'true' ||
-      needs.classify.outputs.proof_tooling == 'true')
+      needs.classify.outputs.proof_tooling == 'true' ||
+      needs.classify.outputs.workspace_lock_tooling == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -353,6 +363,10 @@ jobs:
       - name: Exercise dependency proof tooling
         if: needs.classify.outputs.proof_tooling == 'true'
         run: uv run pytest -q tests/test_dependency_verification_workflow.py serve/tools/tests/test_megalinter.py
+
+      - name: Exercise workspace lock proof
+        if: needs.classify.outputs.workspace_lock_tooling == 'true'
+        run: uv run python .github/scripts/check_uv_workspace_lock.py
 
       - name: Verify Ruff toolchain parity
         if: needs.classify.outputs.ruff_toolchain == 'true'
@@ -411,7 +425,8 @@ jobs:
           COMPATIBILITY: ${{ needs.compatibility.result }}
           COMPATIBILITY_EXPECTED: >-
             ${{ needs.classify.outputs.compatibility == 'true' ||
-            needs.classify.outputs.proof_tooling == 'true' }}
+            needs.classify.outputs.proof_tooling == 'true' ||
+            needs.classify.outputs.workspace_lock_tooling == 'true' }}
           NODE: ${{ needs.proof-node.result }}
           NODE_EXPECTED: >-
             ${{ needs.classify.outputs.pds == 'true' ||
