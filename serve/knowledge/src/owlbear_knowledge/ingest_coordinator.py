@@ -14,7 +14,7 @@ from owlbear_knowledge.protocols.content import (
     ContentStore,
 )
 from owlbear_knowledge.protocols.enrichment import EnrichmentPurgeResult
-from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeOperationError
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage, KnowledgeOperationError
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import (
     IngestDocument,
@@ -311,11 +311,7 @@ class IngestCoordinator:
             try:
                 fetch_result = await self._fetcher.fetch_source(source)
                 errors.extend(
-                    RefreshError(
-                        source_id=source.id,
-                        error=f"{fetch_error.uri}: {fetch_error.error}",
-                        timestamp=datetime.now(tz=UTC),
-                    )
+                    self._refresh_error(source.id, self._fetch_failure(fetch_error))
                     for fetch_error in fetch_result.errors
                 )
                 mapped_documents = tuple(
@@ -341,15 +337,8 @@ class IngestCoordinator:
                         )
                     )
                     ingest_results.append(ingest_result)
-                    errors.extend(
-                        RefreshError(
-                            source_id=source.id,
-                            error=failure.message,
-                            timestamp=datetime.now(tz=UTC),
-                            failure=failure,
-                        )
-                        for failure in ingest_result.errors
-                    )
+                    errors.extend(self._refresh_error(source.id, failure) for failure in ingest_result.errors)
+
                     successful_documents = (
                         ingest_result.documents_created
                         + ingest_result.documents_replaced
@@ -364,20 +353,46 @@ class IngestCoordinator:
                     SourceUpdate(last_refreshed_at=refreshed_at),
                 )
                 sources_refreshed += 1
-            except Exception as exc:  # noqa: BLE001 - batch must continue after per-source failures.
-                errors.append(
-                    RefreshError(
-                        source_id=source.id,
-                        error=str(exc),
-                        timestamp=datetime.now(tz=UTC),
-                    )
+            except KnowledgeOperationError as exc:
+                errors.append(self._refresh_error(source.id, exc.failure))
+            except Exception:  # noqa: BLE001 - batch must continue after per-source failures.
+                failure = KnowledgeFailure(
+                    stage=KnowledgeFailureStage.ACQUISITION,
+                    code="transport_failure",
+                    retryable=True,
+                    message="Source refresh failed",
                 )
+                errors.append(self._refresh_error(source.id, failure))
 
         return RefreshResult(
             sources_checked=len(filtered_sources),
             sources_refreshed=sources_refreshed,
             ingest_results=tuple(ingest_results),
             errors=tuple(errors),
+        )
+
+    @staticmethod
+    def _fetch_failure(fetch_error: object) -> KnowledgeFailure:
+        failure = getattr(fetch_error, "failure", None)
+        if isinstance(failure, KnowledgeFailure):
+            return failure
+        return KnowledgeFailure(
+            stage=KnowledgeFailureStage.ACQUISITION,
+            code="transport_failure",
+            retryable=True,
+            message="Source acquisition failed",
+        )
+
+    @staticmethod
+    def _refresh_error(
+        source_id: str,
+        failure: KnowledgeFailure,
+    ) -> RefreshError:
+        return RefreshError(
+            source_id=source_id,
+            error=failure.message,
+            timestamp=datetime.now(tz=UTC),
+            failure=failure,
         )
 
     def stats(self) -> IngestStats:

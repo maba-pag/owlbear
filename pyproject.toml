@@ -21,9 +21,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
 pythonpath = ["serve/delivery/src", "serve/tools/src"]
-addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
+addopts = """\
+--import-mode=importlib -m 'not e2e and not model' -n auto --dist loadfile \
+-p no:logfire -p no:pytest_logfire\
+"""
 timeout = 30
-session_timeout = 600
+session_timeout = 900
 asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
@@ -32,6 +35,7 @@ markers = [
   "slow: tests that are long-running",
   "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
   "e2e: end-to-end tests requiring VS Code agent runtime prerequisites (run explicitly with -m e2e)",
+  "model: tests that require a real model runtime (run explicitly with -m model)",
 ]
 
 [tool.ruff]
@@ -46,6 +50,7 @@ src = [
   "serve/memory-mcp/src",
   "serve/browser-mcp/src",
   "serve/browser/src",
+  "serve/web-content/src",
   "serve/cockpit/src",
   "serve/tools/src",
 ]

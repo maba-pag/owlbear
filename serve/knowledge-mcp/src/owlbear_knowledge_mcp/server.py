@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
@@ -18,6 +17,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
+from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
+from owlbear_knowledge.fetcher import HttpResponseFetcher, HttpxContentFetcher
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.protocols.common import (
     EntityType as ProtocolEntityType,
@@ -30,8 +32,8 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedEntity,
     ExtractedRelation,
 )
-from owlbear_knowledge.protocols.failures import KnowledgeOperationError
-from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshRequest
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeOperationError
+from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshError, RefreshRequest
 from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
@@ -73,7 +75,7 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
 logger = logging.getLogger(__name__)
 _WORKSPACE_MARKER = Path(".owlbear")
@@ -321,7 +323,62 @@ class AppContext:
     enrichment_store: EnrichmentStore | None = None
     source_store_v2: SqliteSourceStore | None = None
     ingest_coordinator: IngestCoordinator | None = None
-    vector_store: QdrantVectorStore | None = None
+    vector_store: object | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeRuntimeFactories:
+    """Factories for runtime dependencies below the Knowledge composition root."""
+
+    http_response_fetcher_factory: Callable[[], HttpResponseFetcher]
+    embedding_provider_factory: Callable[[], EmbeddingProvider]
+    vector_store_factory: Callable[[str], object]
+
+
+def build_app_context(
+    *,
+    workspace_root: Path,
+    conn: sqlite3.Connection,
+    factories: KnowledgeRuntimeFactories,
+) -> AppContext:
+    """Assemble the Knowledge service graph for production or deterministic tests."""
+    vector_store = factories.vector_store_factory(str(workspace_root / _DEFAULT_QDRANT_PATH))
+    source_store_v2 = SqliteSourceStore(conn)
+    graph_store_v2 = SqliteGraphStore(conn)
+    content_store = ContentStore(
+        db=conn,
+        vector_store=vector_store,
+        embedding_provider=factories.embedding_provider_factory(),
+        chunker=TextChunker(),
+    )
+    query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
+    enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
+    source_fetcher = CompositeSourceFetcher(
+        workspace_root=workspace_root,
+        content_fetcher_factory=select_content_fetcher,
+        http_response_fetcher_factory=factories.http_response_fetcher_factory,
+    )
+    ingest_coordinator = IngestCoordinator(
+        sources=source_store_v2,
+        content=content_store,
+        enrichment=enrichment_store,
+        graph=graph_store_v2,
+        fetcher=source_fetcher,
+    )
+    source_store_v2.ensure_tables()
+    graph_store_v2.ensure_tables()
+    content_store.ensure_tables()
+    enrichment_store.ensure_tables()
+    return AppContext(
+        conn=conn,
+        query_facade=query_facade,
+        graph_store_v2=graph_store_v2,
+        vector_store=vector_store,
+        content_store=content_store,
+        enrichment_store=enrichment_store,
+        source_store_v2=source_store_v2,
+        ingest_coordinator=ingest_coordinator,
+    )
 
 
 class RegisteredSourceResult(TypedDict):
@@ -334,6 +391,58 @@ class RegisteredSourceResult(TypedDict):
     scope: str
 
 
+class KnowledgeFailureResult(TypedDict):
+    """Redacted failure fields returned by Knowledge MCP tools."""
+
+    stage: str
+    code: str
+    retryable: bool
+    message: str
+
+
+class RefreshErrorResult(KnowledgeFailureResult):
+    """A redacted refresh failure with source context."""
+
+    source_id: str
+    timestamp: str
+
+
+class RefreshToolResult(TypedDict):
+    """Refresh counts and structured per-source failures."""
+
+    source_id: str
+    sources_refreshed: int
+    documents_created: int
+    documents_replaced: int
+    documents_unchanged: int
+    chunks_created: int
+    chunks_replaced: int
+    errors: list[RefreshErrorResult]
+
+
+def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureResult:
+    """Project a core failure without reclassifying or exposing exception text."""
+    return {
+        "stage": failure.stage.value,
+        "code": failure.code,
+        "retryable": failure.retryable,
+        "message": failure.message,
+    }
+
+
+def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
+    """Add refresh context to a typed core failure."""
+    failure = error.failure
+    if failure is None:
+        msg = "refresh result contained an untyped failure"
+        raise ToolError(msg)
+    return {
+        **_serialize_knowledge_failure(failure),
+        "source_id": error.source_id,
+        "timestamp": error.timestamp.isoformat(),
+    }
+
+
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -343,47 +452,16 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
         raise RuntimeError(message)
     db_path = workspace_root / _DEFAULT_KB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    qdrant_path = workspace_root / _DEFAULT_QDRANT_PATH
     conn = sqlite3.connect(db_path)
     try:
-        from owlbear_knowledge.chunker import TextChunker  # noqa: PLC0415
-        from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
-
-        vector_store = QdrantVectorStore(location=str(qdrant_path))
-        source_store_v2 = SqliteSourceStore(conn)
-        graph_store_v2 = SqliteGraphStore(conn)
-        content_store = ContentStore(
-            db=conn,
-            vector_store=vector_store,
-            embedding_provider=BgeM3EmbeddingProvider(),
-            chunker=TextChunker(),
-        )
-        query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
-        enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
-        source_fetcher = CompositeSourceFetcher(
+        ctx = build_app_context(
             workspace_root=workspace_root,
-            content_fetcher_factory=select_content_fetcher,
-        )
-        ingest_coordinator = IngestCoordinator(
-            sources=source_store_v2,
-            content=content_store,
-            enrichment=enrichment_store,
-            graph=graph_store_v2,
-            fetcher=source_fetcher,
-        )
-        source_store_v2.ensure_tables()
-        graph_store_v2.ensure_tables()
-        content_store.ensure_tables()
-        enrichment_store.ensure_tables()
-        ctx = AppContext(
             conn=conn,
-            query_facade=query_facade,
-            graph_store_v2=graph_store_v2,
-            vector_store=vector_store,
-            content_store=content_store,
-            enrichment_store=enrichment_store,
-            source_store_v2=source_store_v2,
-            ingest_coordinator=ingest_coordinator,
+            factories=KnowledgeRuntimeFactories(
+                http_response_fetcher_factory=HttpxContentFetcher,
+                embedding_provider_factory=BgeM3EmbeddingProvider,
+                vector_store_factory=lambda location: QdrantVectorStore(location=location),
+            ),
         )
         yield ctx
     finally:
@@ -404,6 +482,9 @@ retry_enrichment = mcp.tool(
 __all__ = [
     "_MAX_ENRICHMENT_BATCH_SIZE",
     "AppContext",
+    "KnowledgeFailureResult",
+    "RefreshErrorResult",
+    "RefreshToolResult",
     "app_lifespan",
     "claim_enrichment_batch",
     "delete_knowledge_source",
@@ -493,8 +574,8 @@ async def knowledge_search(
     query: str,
     limit: int = 5,
     scopes: list[str] | None = None,
-) -> list[SearchResult]:
-    """Search the knowledge base for relevant context."""
+) -> list[SearchResult] | KnowledgeFailureResult:
+    """Search the knowledge base or return a typed operational failure."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     query_facade = app_ctx.query_facade
 
@@ -511,7 +592,7 @@ async def knowledge_search(
         )
         result = await query_facade.search(request)
     except KnowledgeOperationError as exc:
-        return exc.failure.model_dump(mode="json")  # type: ignore[return-value]
+        return _serialize_knowledge_failure(exc.failure)
     except ValueError as exc:
         msg = "invalid search request"
         raise ToolError(msg) from exc
@@ -658,7 +739,7 @@ async def register_knowledge_source(  # noqa: PLR0913
         raise ToolError(str(exc)) from exc
 
     try:
-        source = await asyncio.to_thread(store.register_source, registration)
+        source = store.register_source(registration)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     return {
@@ -797,7 +878,10 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
-async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
+async def refresh_knowledge_source(
+    ctx: Context,
+    source_id: str,
+) -> RefreshToolResult | KnowledgeFailureResult:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
     Returns source_id, sources_refreshed, and serialized refresh errors.
@@ -811,32 +895,36 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
         raise ToolError(msg)
     source = store.get_source(source_id)
     if source is None:
-        msg = f"Source '{source_id}' not found"
+        msg = "source not found"
         raise ToolError(msg)
 
     if source.state != SourceState.ACTIVE:
-        return {
-            "source_id": source_id,
-            "sources_refreshed": 0,
-            "errors": [
-                {
-                    "source_id": source_id,
-                    "error": f"Source '{source_id}' is not active",
-                    "timestamp": datetime.now(tz=UTC).isoformat(),
-                }
-            ],
-        }
+        msg = "source is not active"
+        raise ToolError(msg)
 
     coordinator = app_ctx.ingest_coordinator
     if coordinator is None:
         msg = "ingest coordinator not available"
         raise ToolError(msg)
 
-    result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
+    try:
+        result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
+    except KnowledgeOperationError as exc:
+        return _serialize_knowledge_failure(exc.failure)
+    documents_created = sum(item.documents_created for item in result.ingest_results)
+    documents_replaced = sum(item.documents_replaced for item in result.ingest_results)
+    documents_unchanged = sum(item.documents_unchanged for item in result.ingest_results)
+    chunks_created = sum(item.chunks_created for item in result.ingest_results)
+    chunks_replaced = sum(item.chunks_replaced for item in result.ingest_results)
     return {
         "source_id": source_id,
         "sources_refreshed": result.sources_refreshed,
-        "errors": [error.model_dump(mode="json") for error in result.errors],
+        "documents_created": documents_created,
+        "documents_replaced": documents_replaced,
+        "documents_unchanged": documents_unchanged,
+        "chunks_created": chunks_created,
+        "chunks_replaced": chunks_replaced,
+        "errors": [_serialize_refresh_error(error) for error in result.errors],
     }
 
 

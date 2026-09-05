@@ -233,7 +233,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
           uv run --python "${{ matrix.python }}" pytest tests serve \
-            -m "not api and not e2e and not browser and not cockpit"
+            -m "not api and not e2e and not browser and not cockpit and not model"
 
   proof-node:
     name: Prove Node dependency surfaces

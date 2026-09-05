@@ -6,6 +6,7 @@ import re
 import stat
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -201,7 +202,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
     assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
     assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
-    assert '            -m "not api and not e2e and not browser and not cockpit"' in text
+    assert '            -m "not api and not e2e and not browser and not cockpit and not model"' in text
     assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text
@@ -509,6 +510,7 @@ def test_renovate_archify_match_spans_version_and_digest() -> None:
         ("pyproject.toml", "python"),
         ("uv.lock", "python"),
         ("serve/delivery/pyproject.toml", "python"),
+        ("serve/web-content/pyproject.toml", "python"),
         ("serve/cockpit/web/package.json", "node"),
         ("serve/cockpit/web/package-lock.json", "node"),
         ("serve/cockpit/web/.nvmrc", "node"),
@@ -670,6 +672,7 @@ def test_sync_manifest_preserves_workflow_support_paths() -> None:
         ".github/sync-manifest.json",
         ".github/workflows",
     }.issubset(manifest["scopes"]["infra"])
+    assert manifest["scopes"]["web-content"] == ["serve/web-content"]
     assert {
         ".github/copilot-instructions.md",
         ".github/skills",
@@ -678,6 +681,18 @@ def test_sync_manifest_preserves_workflow_support_paths() -> None:
     assert "python3 .github/scripts/sync_manifest.py paths" in workflow
     assert "python3 .github/scripts/sync_manifest.py excluded" in workflow
     assert "for excluded_path in $CONSUMER_EXCLUDED_PATHS" in workflow
+    assert "sync_web_content:" in workflow
+
+
+def test_shared_web_content_dependency_edges_are_declared() -> None:
+    browser = tomllib.loads((ROOT / "serve/browser/pyproject.toml").read_text(encoding="utf-8"))
+    knowledge = tomllib.loads((ROOT / "serve/knowledge/pyproject.toml").read_text(encoding="utf-8"))
+    root = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "owlbear-web-content" in browser["project"]["dependencies"]
+    assert "owlbear-web-content" in knowledge["project"]["optional-dependencies"]["intake"]
+    assert "owlbear-web-content" in knowledge["project"]["optional-dependencies"]["full"]
+    assert "serve/web-content/src" in root["tool"]["ruff"]["src"]
 
 
 def test_sync_delivery_scope_carries_the_github_adapter() -> None:

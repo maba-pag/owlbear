@@ -9,7 +9,7 @@ Behavioral coverage:
   AC4 — AUTHENTICATED_WEB: calls factory(fetch_method).fetch(base_url), returns one FetchedDocument
   AC5 — INLINE: returns FetchResult(documents=(), errors=())
   AC6 — Cancellation: cancel.is_set()=True between items stops iteration, partial results returned
-  AC7 — Item-level exceptions caught as FetchError(uri=..., error=str(exc)); never raises
+    AC7 — Item-level exceptions caught as redacted typed FetchError values; never raises
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import httpx
 import pytest
 
 from owlbear_knowledge.intake import IntakeResult
+from owlbear_knowledge.protocols.failures import KnowledgeFailureStage
 from owlbear_knowledge.protocols.fetcher import FetchError, FetchResult, SourceFetcher
 from owlbear_knowledge.protocols.sources import (
     AuthenticatedWebConfig,
@@ -279,7 +280,11 @@ class TestCompositeSourceFetcher:
             side_effect=exc,
         ):
             result = await composite.fetch_source(source)
-        assert result.errors[0].error == str(exc)
+        assert result.errors[0].failure is not None
+        assert result.errors[0].failure.stage is KnowledgeFailureStage.ACQUISITION
+        assert result.errors[0].failure.code == "http_status"
+        assert result.errors[0].error == result.errors[0].failure.message
+        assert str(exc) not in result.errors[0].error
 
     @pytest.mark.asyncio
     async def test_url_list_batch_continues_after_url_failure(self, composite: CompositeSourceFetcher) -> None:
@@ -619,7 +624,10 @@ class TestCompositeSourceFetcher:
             side_effect=exc,
         ):
             result = await composite.fetch_source(source)
-        assert result.errors[0].error == str(exc)
+        assert result.errors[0].failure is not None
+        assert result.errors[0].failure.code == "http_status"
+        assert result.errors[0].error == result.errors[0].failure.message
+        assert str(exc) not in result.errors[0].error
 
     # ------------------------------------------------------------------ #
     # AC3 retry gap — non-default base_path                                #
@@ -667,7 +675,10 @@ class TestCompositeSourceFetcher:
         assert len(result.errors) == 1
         expected_uri = str((tmp_path / "target.txt").resolve())
         assert result.errors[0].uri == expected_uri
-        assert result.errors[0].error == str(exc)
+        assert result.errors[0].failure is not None
+        assert result.errors[0].failure.code == "transport_failure"
+        assert result.errors[0].error == result.errors[0].failure.message
+        assert str(exc) not in result.errors[0].error
 
     @pytest.mark.asyncio
     async def test_file_glob_permission_error_fetch_error_uri_and_error_exact(
@@ -686,7 +697,10 @@ class TestCompositeSourceFetcher:
         assert len(result.errors) == 1
         expected_uri = str((tmp_path / "restricted.txt").resolve())
         assert result.errors[0].uri == expected_uri
-        assert result.errors[0].error == str(exc)
+        assert result.errors[0].failure is not None
+        assert result.errors[0].failure.code == "transport_failure"
+        assert result.errors[0].error == result.errors[0].failure.message
+        assert str(exc) not in result.errors[0].error
 
     @pytest.mark.asyncio
     async def test_auth_web_fetch_error_error_equals_str_of_exception(
@@ -696,4 +710,7 @@ class TestCompositeSourceFetcher:
         exc = RuntimeError("browser connection timed out")
         mock_factory.return_value.fetch = AsyncMock(side_effect=exc)
         result = await composite.fetch_source(_auth_source())
-        assert result.errors[0].error == str(exc)
+        assert result.errors[0].failure is not None
+        assert result.errors[0].failure.code == "transport_failure"
+        assert result.errors[0].error == result.errors[0].failure.message
+        assert str(exc) not in result.errors[0].error

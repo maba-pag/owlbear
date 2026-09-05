@@ -26,6 +26,7 @@ members = [
     "owlbear-memory",
     "owlbear-memory-mcp",
     "owlbear-tools",
+    "owlbear-web-content",
 ]
 
 [manifest.dependency-groups]
@@ -2015,15 +2016,15 @@ version = "0.1.0"
 source = { editable = "serve/browser" }
 dependencies = [
     { name = "lxml" },
+    { name = "owlbear-web-content" },
     { name = "playwright" },
-    { name = "trafilatura" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "lxml", specifier = ">=6.1.1" },
+    { name = "owlbear-web-content", editable = "serve/web-content" },
     { name = "playwright", specifier = ">=1.60.0" },
-    { name = "trafilatura", specifier = ">=2.0.0" },
 ]
 
 [[package]]
@@ -2132,10 +2133,12 @@ embedding = [
 full = [
     { name = "flagembedding" },
     { name = "httpx" },
+    { name = "owlbear-web-content" },
     { name = "qdrant-client" },
 ]
 intake = [
     { name = "httpx" },
+    { name = "owlbear-web-content" },
 ]
 qdrant = [
     { name = "qdrant-client" },
@@ -2147,6 +2150,8 @@ requires-dist = [
     { name = "flagembedding", marker = "extra == 'full'", specifier = ">=1.4.0" },
     { name = "httpx", marker = "extra == 'full'", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'intake'", specifier = ">=0.28.1" },
+    { name = "owlbear-web-content", marker = "extra == 'full'", editable = "serve/web-content" },
+    { name = "owlbear-web-content", marker = "extra == 'intake'", editable = "serve/web-content" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "qdrant-client", marker = "extra == 'full'", specifier = ">=1.18.0" },
     { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.18.0" },
@@ -2215,6 +2220,21 @@ requires-dist = [
     { name = "owlbear-delivery", editable = "serve/delivery" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tree-sitter-language-pack", specifier = ">=1.12.5,<2" },
+]
+
+[[package]]
+name = "owlbear-web-content"
+version = "0.1.0"
+source = { editable = "serve/web-content" }
+dependencies = [
+    { name = "lxml" },
+    { name = "trafilatura" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "lxml", specifier = ">=6.1.1" },
+    { name = "trafilatura", specifier = ">=2.0.0" },
 ]
 
 [[package]]

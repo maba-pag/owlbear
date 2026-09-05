@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -32,6 +33,25 @@ class TestQdrantPersistencePathWiring:
 
         qdrant_cls.assert_called_once_with(location=str(tmp_path / _DEFAULT_QDRANT_PATH))
         assert (tmp_path / ".owlbear/knowledge/local.db").is_file()
+
+    @pytest.mark.asyncio
+    async def test_lifespan_closes_the_assembled_sqlite_connection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """The lifespan closes its real connection after the context exits."""
+        (tmp_path / ".owlbear").mkdir()
+        monkeypatch.chdir(tmp_path)
+
+        connection: sqlite3.Connection | None = None
+        with patch("owlbear_knowledge_mcp.server.QdrantVectorStore", MagicMock()):
+            async with app_lifespan(MagicMock()) as context:
+                connection = context.conn
+
+        assert connection is not None
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
 
     @pytest.mark.asyncio
     async def test_legacy_storage_env_vars_do_not_override_workspace_paths(

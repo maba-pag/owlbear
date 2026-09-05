@@ -6,17 +6,18 @@ import ast
 from pathlib import Path
 
 ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
-    "owlbear_browser": frozenset(),
+    "owlbear_browser": frozenset({"owlbear_web_content"}),
     "owlbear_browser_mcp": frozenset({"owlbear_browser"}),
     "owlbear_cockpit": frozenset({"owlbear_delivery", "owlbear_delivery_github", "owlbear_memory"}),
     "owlbear_delivery": frozenset(),
     "owlbear_delivery_github": frozenset({"owlbear_delivery"}),
     "owlbear_delivery_mcp": frozenset({"owlbear_delivery", "owlbear_delivery_github"}),
-    "owlbear_knowledge": frozenset(),
+    "owlbear_knowledge": frozenset({"owlbear_web_content"}),
     "owlbear_knowledge_mcp": frozenset({"owlbear_knowledge"}),
     "owlbear_memory": frozenset(),
     "owlbear_memory_mcp": frozenset({"owlbear_memory"}),
     "owlbear_tools": frozenset({"owlbear_delivery"}),
+    "owlbear_web_content": frozenset(),
 }
 
 

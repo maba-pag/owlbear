@@ -1,4 +1,4 @@
-"""Typed, redacted failure carriers for Knowledge operation boundaries."""
+"""Typed, redacted failure carriers for the Knowledge boundaries."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from owlbear_knowledge.protocols.common import BoundaryModel
 
 
 class KnowledgeFailureStage(StrEnum):
-    """Pipeline boundary where a Knowledge operation failed."""
+    """Pipeline boundary where a knowledge operation failed."""
 
     ACQUISITION = "acquisition"
     EXTRACTION = "extraction"
@@ -42,7 +42,7 @@ KnowledgeFailureCode = Literal[
 
 
 class KnowledgeFailure(BoundaryModel):
-    """Redacted, structured description of one Knowledge operation failure."""
+    """Redacted, structured description of one knowledge operation failure."""
 
     stage: KnowledgeFailureStage
     code: KnowledgeFailureCode
@@ -51,7 +51,7 @@ class KnowledgeFailure(BoundaryModel):
 
 
 class KnowledgeOperationError(RuntimeError):
-    """Raise a lower-level failure with a safe Knowledge boundary carrier."""
+    """Raised when a lower knowledge operation fails with a typed carrier."""
 
     def __init__(self, failure: KnowledgeFailure) -> None:
         self.failure = failure

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from pydantic import Field
 
 from owlbear_knowledge.protocols.common import BoundaryModel, Metadata
+from owlbear_knowledge.protocols.failures import KnowledgeFailure
 
 if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
@@ -31,7 +32,8 @@ class FetchError(BoundaryModel):
     """One item-level fetch failure captured during source retrieval."""
 
     uri: str
-    error: str
+    error: str = ""
+    failure: KnowledgeFailure | None = None
 
 
 class FetchResult(BoundaryModel):
