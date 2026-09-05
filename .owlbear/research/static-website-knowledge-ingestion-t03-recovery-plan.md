@@ -32,6 +32,24 @@ succeeded on 2026-08-23:
 These are historical observations, not durable mutation authority. Every live identity and
 precondition must be re-read before acquisition.
 
+### Current restart incident (2026-09-04)
+
+After target synchronization conflict resolution, Delivery created the exact local merge
+`0ca310249feb5be47810ff97ac2848fb72163d68` from Change head
+`ffaecd2c4ca72eeee9fb114821d555f04dd00ed8` and target head
+`e57cb8790a99bac21aae0183698706828982e1a9`. The resolver then published a remote Delivery-state
+snapshot whose `change_head` was the merge head, while the remote Change branch remained at the
+pre-merge head. On the next MCP startup, `delivery_health` reported
+`remote-state-reconciliation-required` and quarantined this Change; `list_work_items` returned no
+items.
+
+This is a Delivery publication-ordering defect, not an MCP transport failure or malformed local
+merge. The state snapshot became restart-visible before the Change branch containing its head was
+remote-visible. The same risk exists on the non-conflicting target-sync path because it records the
+local target-sync head and publishes Delivery state before checkpoint reconciliation publishes the
+Change branch. The fix must make target synchronization restart-safe without weakening the fresh
+finalization and review gate.
+
 The remaining question is how to reuse the useful test implementation without treating the
 preserved commit as reviewed work. The selected route is normal Builder reacquisition followed by
 source-level reconstruction, exact-candidate proof, independent review, result publication, and an
@@ -41,8 +59,10 @@ Orchestrator-forwarded transition.
 
 | Source | Load-bearing fact | Evidence limit |
 | --- | --- | --- |
-| `serve/delivery/src/owlbear_delivery/portfolio_application.py` | `recover_claim` removes a clean failed claim only after workspace restart succeeds; `show_build_context` reconstructs fresh claim-bound authority. | Runtime state can change after inspection. |
-| `serve/delivery/src/owlbear_delivery/change_workspace.py` | Restart preserves a rejected head under an attempt ref, restores the reviewed boundary, and releases custody. Result publication validates the current writer-owned clean branch head. | It does not make a preserved attempt commit publishable under a future claim. |
+| `serve/delivery/src/owlbear_delivery/portfolio_application.py` | `recover_claim` removes a clean failed claim only after workspace restart succeeds; `show_build_context` reconstructs fresh claim-bound authority; target-sync resolution publishes Delivery state after local head movement while checkpoint reconciliation publishes the Change branch separately. | Runtime state can change after inspection. |
+| `serve/delivery/src/owlbear_delivery/change_workspace.py` | Restart preserves a rejected head under an attempt ref, restores the reviewed boundary, and releases custody. Target-sync resolution commits only in the managed worktree; it does not publish the Change branch. | It does not make a preserved attempt commit publishable under a future claim. |
+| `serve/delivery/src/owlbear_delivery/delivery_application_loader.py` | Startup requires an active remote Change branch to match the portable Delivery-state snapshot head; a mismatch is quarantined as `remote-state-reconciliation-required`. | Loader behavior is correct for an invalid remote snapshot ordering, but does not currently model an unpublished target-sync successor. |
+| `serve/delivery/src/owlbear_delivery/delivery_state.py` | Portable snapshots copy `coordination.last_reviewed_commit` into `change_head` and push independently of the Change branch publisher. | Snapshot portability depends on the referenced Change commit being available remotely. |
 | `serve/delivery/src/owlbear_delivery/delivery_runtime.py` | Result publication requires the active claim, exact task digest, exact completed commit, and writer-head validation. Implementation advance records the reviewed result and releases custody. | Mechanical validation does not replace required observations or independent review. |
 | `share/skills/w-packet-building/SKILL.md` | Builder requires fresh Build context, may not edit under recovery attention, must create a scoped commit, rerun proof at that commit, and must never cherry-pick. | Workflow authority applies only after Orchestrator supplies a valid launch package. |
 | `share/skills/r-workspace-governance/SKILL.md` | Interrupted task-owned bytes may be inspected and explicitly adopted, but only owned paths may be committed with `commit-owned`. | Byte provenance does not carry observation or review receipts. |
@@ -92,7 +112,36 @@ Two challenger recommendations were rejected:
 - Cherry-picking the preserved commit after reacquisition violates the packet-building workflow.
   Reconstruction must occur at the source level and produce a new scoped commit.
 
-### 3.3 Acceptance mapping that must be proved
+### 3.3 Target-sync restart consistency
+
+The confirmed head relationship is:
+
+```text
+remote Change branch:       ffaecd2c4ca72eeee9fb114821d555f04dd00ed8
+remote state snapshot:      0ca310249feb5be47810ff97ac2848fb72163d68
+managed local Change head:  0ca310249feb5be47810ff97ac2848fb72163d68
+```
+
+`resolve_target_sync_conflict` first commits the merge in the managed worktree, records the merged
+head as the reviewed boundary, and then calls `_publish_delivery_state`. The state publisher stores
+that reviewed boundary as the portable snapshot `change_head`. No Change-branch publication occurs
+in that operation. `reconcile_change_checkpoint` is intentionally deferred while target-sync review
+is required and finalization is absent, so the branch remains remote-stale during the exact window
+in which the state snapshot is already remote-visible.
+
+On restart, the loader correctly observes that the remote Change branch is behind the snapshot and
+quarantines the Change. This means the existing warning is an accurate detector, but the preceding
+operation created the invalid portable state. A restart-safe invariant is required:
+
+> An active remote Delivery-state snapshot must never advertise a Change head that is unavailable
+> from the corresponding remote Change branch, unless the snapshot explicitly carries a durable,
+> loader-supported unpublished-successor protocol.
+
+The remediation must cover both conflict resolution and clean target synchronization. It must retain
+the fresh finalization requirement: making the merge restart-safe must not mark the Change finalized,
+ready, or review-approved.
+
+### 3.4 Acceptance mapping that must be proved
 
 Before the new commit is reviewed, Builder must map each T03 acceptance observation to concrete
 assertions in `tests/test_mcp_knowledge_static_refresh.py`:
@@ -218,11 +267,36 @@ test defect, repair it under the same claim, create a successor commit, and reru
 5. Builder does not call `transition_delivery`. The owning Orchestrator forwards the unchanged
    transition, then re-reads OUT-004 and verifies T03 is the third reviewed result and T04 is next.
 
-### 4.7 Follow-up boundaries
+### 4.7 Delivery-state publication ordering fix
+
+This is a separate Delivery maintenance task discovered while validating the T03 target-conflict
+workflow. It should be planned and reviewed independently of T03, but it is required before the
+target-sync workflow can claim restart-safe behavior.
+
+1. Reproduce the incident with a real bare remote and Delivery-state branch: resolve a target-sync
+   conflict, restart the application before `/finalize-change`, call `delivery_health`, and verify the
+   Change is not quarantined and remains visible through `list_work_items`.
+2. Preserve the invariant in section 3.3. The preferred design is to make the remote Change branch
+   publication precede the remote Delivery-state snapshot publication, while keeping the branch in
+   its draft/unfinalized state. If policy forbids publishing an unfinalized target merge, introduce
+   an explicit durable unpublished-successor record and teach startup to resume that exact local
+   successor; do not publish a normal portable snapshot that points at an unavailable commit.
+3. Cover both `sync_change_with_target` and `resolve_target_sync_conflict`, including failure between
+   the two publication steps. A successful first step must leave a recoverable state; a failed second
+   step must not make a newer snapshot claim unavailable remote history.
+4. Add a restart regression test that asserts remote Change and state snapshot heads are compatible,
+   `delivery_health` is healthy for the Change, the managed worktree remains authoritative, and fresh
+   finalization is still required.
+5. Run the focused Delivery state, target-sync, and portfolio suites from the managed worktree,
+   followed by the normal MCP startup smoke check. Record the exact state and branch identities in
+   the fix result.
+
+### 4.8 Follow-up boundaries
 
 The following work does not belong in T03:
 
 - target synchronization and finalization preparation;
+- the Delivery-state publication-ordering fix in section 4.7;
 - stale recovery-attention invalidation;
 - first-class clean-candidate resume semantics;
 - attempt-ref retention or garbage collection policy;
@@ -245,12 +319,19 @@ The following work does not belong in T03:
 - [ ] Independent review passes the exact candidate.
 - [ ] Builder publishes the result; Orchestrator alone forwards the transition.
 - [ ] OUT-004 records T03 reviewed and exposes T04 as the next task.
+- [ ] Target-sync resolution cannot publish a portable state snapshot ahead of its remote Change
+   branch, including across an MCP restart before finalization.
+- [ ] Clean and conflicted target-sync paths have restart regression coverage.
 
 ## 6. Recommendation, Confidence, and Limits
 
 **Recommendation:** Reacquire OUT-004-T03 through normal Orchestration, reconstruct the useful
 one-file implementation from the preserved attempt diff without cherry-picking, close any
 acceptance-assertion gaps, and earn entirely fresh exact-commit proof and review before publication.
+
+Track the target-sync restart inconsistency as a separate Delivery fix. The current resolver receipt
+proves the merge itself, but not restart-safe publication; do not treat the startup quarantine as
+user error or suppress the diagnostic.
 
 **Confidence:** High for the recovery and authority sequence. Current source, persisted Delivery
 state, the preserved commit, the completed restart correction, and an independent architecture

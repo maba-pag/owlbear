@@ -14,9 +14,14 @@ export function trackPageErrors(page: Page): PageErrorTracker {
     resolveFirstError = resolve
   })
 
-  page.on('pageerror', (error) => {
-    messages.push(error.stack ?? error.message)
-    resolveFirstError(error)
+  const recordError = (message: string): void => {
+    messages.push(message)
+    resolveFirstError(new Error(message))
+  }
+
+  page.on('pageerror', (error) => recordError(error.stack ?? error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error') recordError(`Browser console error: ${message.text()}`)
   })
 
   return { messages, firstError }
