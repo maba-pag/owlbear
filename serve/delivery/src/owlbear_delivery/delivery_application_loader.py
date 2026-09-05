@@ -463,7 +463,9 @@ def _validate_local_snapshot(
         "admission.json": _canonical_model(snapshot.admission),
     }
     frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
-    local_attention_successor = _is_unpublished_acceptance_attention_successor(snapshot.frontier, frontier)
+    local_attention_successor = _is_unpublished_acceptance_attention_successor(
+        snapshot.frontier, frontier
+    ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
     _fetch_snapshot_change_head(
         snapshot,
         config,
@@ -488,7 +490,7 @@ def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     try:
         content = path.read_bytes()
-        return content, DeliveryFrontier.model_validate_json(content)
+        return content, DeliveryFrontier.model_validate_json(content, strict=False)
     except (OSError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
 
@@ -642,6 +644,58 @@ def _is_unpublished_acceptance_attention_successor(
         return False
     transition_fields = {
         **common_attention_fields,
+        "finalization": None,
+        "finalization_invalidation": None,
+    }
+    return snapshot_frontier.model_copy(update=transition_fields) == local_frontier.model_copy(update=transition_fields)
+
+
+def _is_unpublished_target_sync_attention_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local target-sync conflict captured after the last state snapshot."""
+    disposition = local_frontier.change_disposition
+    if (
+        snapshot_frontier.change_disposition is not None
+        or disposition is None
+        or disposition.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+        or not any(item.startswith("target-sync-operation:") for item in disposition.diagnostics)
+        or local_frontier.change_disposition_resolution is not None
+        or local_frontier.ready is not None
+        or local_frontier.target_sync_receipt is not None
+    ):
+        return False
+
+    attention_fields = {
+        "target_sync_receipt": None,
+        "change_disposition": None,
+        "change_disposition_publication": None,
+        "change_disposition_resolution": None,
+        "ready": None,
+    }
+    if snapshot_frontier.finalization is None:
+        return (
+            local_frontier.finalization is None
+            and local_frontier.finalization_invalidation is None
+            and snapshot_frontier.model_copy(update=attention_fields)
+            == local_frontier.model_copy(update=attention_fields)
+        )
+
+    invalidation = local_frontier.finalization_invalidation
+    if (
+        snapshot_frontier.finalization_invalidation is not None
+        or local_frontier.finalization is not None
+        or invalidation is None
+        or invalidation.change_id != snapshot_frontier.finalization.change_id
+        or invalidation.finalization_id != snapshot_frontier.finalization.finalization_id
+        or invalidation.expected_head != snapshot_frontier.finalization.exact_head
+        or invalidation.observed_head == snapshot_frontier.finalization.exact_head
+        or invalidation.reason != "target-sync-conflict"
+    ):
+        return False
+    transition_fields = {
+        **attention_fields,
         "finalization": None,
         "finalization_invalidation": None,
     }

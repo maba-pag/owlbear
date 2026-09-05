@@ -1037,6 +1037,23 @@ class DeliveryFrontier(_DeliveryModel):
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _discard_stale_target_sync_receipt(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        disposition = value.get("change_disposition")
+        diagnostics = disposition.get("diagnostics") if isinstance(disposition, dict) else None
+        if not isinstance(diagnostics, (tuple, list)) or not any(
+            isinstance(item, str) and item.startswith("target-sync-operation:") for item in diagnostics
+        ):
+            return value
+        if value.get("target_sync_receipt") is None:
+            return value
+        migrated: dict[object, object] = dict(value)
+        migrated["target_sync_receipt"] = None
+        return migrated
+
     @model_validator(mode="after")
     def _validate_identities(self) -> DeliveryFrontier:
         outcome_ids = tuple(binding.outcome_id for binding in self.bindings)
@@ -2705,6 +2722,7 @@ class DeliveryRuntime:
         )
         updated = frontier.model_copy(
             update={
+                "target_sync_receipt": None,
                 "change_disposition": disposition,
                 "change_disposition_publication": publication_identity,
                 "change_disposition_resolution": None,
@@ -3436,7 +3454,7 @@ def parse_delivery_frontier(
         raise TypeError
     if payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
-    frontier = DeliveryFrontier.model_validate_json(content)
+    frontier = DeliveryFrontier.model_validate_json(content, strict=False)
     return frontier, _model_content(frontier)
 
 

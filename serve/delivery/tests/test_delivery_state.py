@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery import (
     ChangeBranchPublisher,
+    ChangeTargetSyncReceipt,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
@@ -61,6 +62,7 @@ from owlbear_delivery.delivery_application_loader import (
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
     _is_unpublished_acceptance_attention_successor,
+    _is_unpublished_target_sync_attention_successor,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -322,6 +324,36 @@ def test_loader_accepts_unpublished_acceptance_attention_successor(tmp_path: Pat
             allow_local_branch=True,
             allow_local_descendant=True,
         ) == (snapshot.change_head, False)
+
+
+def test_loader_accepts_unpublished_target_sync_attention_successor() -> None:
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-previous",
+        change_id="state-target-sync-attention-fallback",
+        integration_target="main",
+        expected_target="4" * 40,
+        target_head="4" * 40,
+        change_head_before="1" * 40,
+        merged_head="5" * 40,
+        merge_commit=True,
+    )
+    snapshot_frontier = DeliveryFrontier(bindings=(), target_sync_receipt=receipt)
+    disposition = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+        change_id=receipt.change_id,
+        entered_from=DeliveryChangeStage.FINALIZED,
+        recorded_at=datetime(2026, 8, 23, 1, tzinfo=UTC),
+        diagnostics=("target-sync-operation:sync-current", "target synchronization merge conflict"),
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={"target_sync_receipt": None, "change_disposition": disposition}
+    )
+
+    assert _is_unpublished_target_sync_attention_successor(snapshot_frontier, local_frontier)
+    assert not _is_unpublished_target_sync_attention_successor(
+        snapshot_frontier,
+        local_frontier.model_copy(update={"target_sync_receipt": receipt}),
+    )
 
 
 def test_loader_accepts_unpublished_head_moved_acceptance_successor(tmp_path: Path) -> None:

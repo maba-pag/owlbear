@@ -1289,6 +1289,7 @@ class PortfolioApplication:
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
             self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
             self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
+            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
             return receipt
 
     def sync_change_with_current_target(
@@ -1572,6 +1573,7 @@ class PortfolioApplication:
                 runtime,
                 f"target-sync-resolution-{resolution.resolution_id}",
             )
+            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _record_target_sync_resolution(
@@ -1600,6 +1602,7 @@ class PortfolioApplication:
             runtime,
             f"target-sync-resolution-{resolution.resolution_id}",
         )
+        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _resolve_target_sync_workspace(
@@ -3191,6 +3194,13 @@ class PortfolioApplication:
         runtime.record_checkpoint_branch_publication(checkpoint, branch_receipt.published_head)
         return branch_receipt
 
+    @staticmethod
+    def _acknowledge_published_target_sync_checkpoint(runtime: DeliveryRuntime, published_head: str) -> None:
+        checkpoint = runtime.checkpoint_publication_state()
+        pending = checkpoint.pending_checkpoint
+        if pending is not None and pending.head == published_head and checkpoint.published_head == published_head:
+            runtime.acknowledge_checkpoint_publication(pending, published_head)
+
     def _prepare_checkpoint_head(
         self,
         change_id: str,
@@ -3321,7 +3331,7 @@ class PortfolioApplication:
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
             return result.model_copy(
-                update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes())}
+                update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)}
             )
 
     def publish_delivery_plan(

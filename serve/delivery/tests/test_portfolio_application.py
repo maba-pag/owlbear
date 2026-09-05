@@ -522,7 +522,7 @@ def _set_checkpoint(
     published_head: str | None = None,
 ) -> Path:
     path = state_root / f"changes/{runtime.contract.change_id}/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": published_head, "pending_checkpoint": pending}))
     )
@@ -636,7 +636,7 @@ def _portfolio(
         coordination = manager.ensure(change_id)
         runtime = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
         runtimes[change_id] = runtime
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
         (state_root / "changes" / change_id / "contract.json").write_bytes(_canonical(contract))
         (state_root / "changes" / change_id / "admission.json").write_bytes(
             _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
@@ -1992,6 +1992,7 @@ def test_target_sync_resolution_publishes_branch_before_state_snapshot(tmp_path:
     assert branch_request.expected_published_head == receipt.merged_head
     assert branch_request.expected_remote_head is None
     assert runtimes["change-a"].checkpoint_publication_state().published_head == receipt.merged_head
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is None
     assert runtimes["change-a"].target_sync_receipt() == receipt
 
 

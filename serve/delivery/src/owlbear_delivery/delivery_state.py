@@ -336,7 +336,7 @@ class DeliveryStatePublisher:
         for path in paths:
             if not path.endswith("/snapshot.json"):
                 continue
-            snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path)))
+            snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path), strict=False))
         return tuple(sorted(snapshots, key=lambda item: item.change_id))
 
     def read_snapshot_inventory(self) -> DeliveryStateSnapshotInventory:
@@ -362,7 +362,7 @@ class DeliveryStatePublisher:
                 continue
             try:
                 raw = self._git_blob(remote_head, path)
-                snapshot = DeliveryStateSnapshot.model_validate_json(raw)
+                snapshot = DeliveryStateSnapshot.model_validate_json(raw, strict=False)
             except (OSError, RuntimeError, subprocess.SubprocessError):
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
@@ -446,7 +446,7 @@ class DeliveryStatePublisher:
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
         raw = self._read_snapshot_bytes(commit, change_id)
-        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw)
+        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw, strict=False)
 
     def _read_snapshot_bytes(self, commit: str, change_id: str) -> bytes | None:
         path = _snapshot_path(change_id)
@@ -605,7 +605,7 @@ def _same_snapshot_authority(
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
     """Project a frontier after the exact checkpoint already published remotely."""
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     pending = frontier.pending_checkpoint
     if pending is not None and pending.head == frontier.published_head:
         return frontier.model_copy(update={"pending_checkpoint": None})

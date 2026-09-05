@@ -249,7 +249,7 @@ def _runtime(
 
 def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: object) -> None:
     path = tmp_path / "changes/delivery-runtime/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     path.write_bytes(_canonical(frontier.model_copy(update=updates)))
 
 
@@ -809,6 +809,39 @@ def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
     assert invalidation.finalization_id == finalization.finalization_id
     assert invalidation.reason == "target-sync-conflict"
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
+
+
+def test_target_sync_conflict_replaces_stale_receipt_and_normalizes_legacy_frontier(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-previous",
+        change_id="delivery-runtime",
+        integration_target="main",
+        expected_target="4" * 40,
+        target_head="4" * 40,
+        change_head_before="1" * 40,
+        merged_head="5" * 40,
+        merge_commit=True,
+    )
+    runtime.record_target_sync(receipt, datetime(2026, 8, 11, 15, tzinfo=UTC))
+
+    runtime.capture_target_sync_conflict(
+        "sync-current",
+        "6" * 40,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("target synchronization merge conflict",),
+    )
+
+    assert runtime.target_sync_receipt() is None
+    frontier_path = tmp_path / "changes/delivery-runtime/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"target_sync_receipt": receipt})))
+
+    reloaded = DeliveryRuntime(tmp_path, _contract())
+    assert reloaded.target_sync_receipt() is None
+    assert reloaded.change_disposition() is not None
 
 
 def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
