@@ -26,14 +26,11 @@ attention buttons do not satisfy this retirement condition.
 
 Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by either one
 64-character lowercase hexadecimal identity or one `OUT-nnn` outcome identity, or as a standalone
-`change_id` for abandoned target-sync cleanup. For a 64-character identity, a Change publication
+`change_id` for abandoned target-sync cleanup or quarantined target-sync publication repair. For a 64-character identity, a Change publication
 or acceptance attention uses its `disposition_id`; a retained Integration repair attention uses
 its `attention_id`. For an `OUT-nnn` identity, bind the exact outcome through
 `show_operator_context(change_id, outcome_id)`. A current block is required for request resolution
 or block clearing; an unblocked outcome may continue to the administrative-move preview. For a
-standalone `change_id`, bind an abandoned Change with a retained target-sync conflict through
-`show_work_item_view(change_id, "publication")` and retain its exact conflict identities. Reject
-missing, extra, or malformed identities.
 For a standalone `change_id`, bind either an abandoned Change with a retained target-sync conflict
 through `show_work_item_view(change_id, "publication")`, or a quarantined target-sync publication
 repair through `delivery_health()` and the exact persisted target-sync receipt/publication evidence.
