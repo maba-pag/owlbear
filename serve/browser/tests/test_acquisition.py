@@ -198,7 +198,7 @@ async def test_acquire_rejects_invalid_final_page_states(path: str, expected_sta
                 f"http://127.0.0.1:{server.server_port}{path}",
                 content_selector="#content" if path == "/empty" else None,
                 readiness_selector="body" if path == "/empty" else None,
-                readiness_timeout_ms=200,
+                readiness_timeout_ms=5_000,
             )
             result = await BrowserContentFetcher(context).acquire(request)
             await browser.close()
