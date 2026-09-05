@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from owlbear_tools import testing as testing_module
 from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
 from owlbear_tools.testing import test_e2e_main as run_test_e2e
 from owlbear_tools.testing import test_main as run_test
@@ -25,50 +26,52 @@ def test_python_source_routes_to_owning_package_tests() -> None:
         coverage=False,
     )
 
-    assert commands == [(["uv", "run", "--locked", "pytest", "serve/tools/tests"], _ROOT)]
+    command = commands[0][0]
+    assert command[:4] == ["uv", "run", "--locked", "pytest"]
+    assert any(path.startswith("serve/tools/tests/test_") for path in command)
+    assert "tests/test_package_boundary.py" in command
 
 
-def test_shared_web_content_source_routes_to_owning_package_tests() -> None:
+def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:
+    scope = testing_module._python_scope("serve/knowledge/src/owlbear_knowledge/query.py")  # noqa: SLF001
+
+    assert scope is not None
+    assert "tests/test_query_facade.py" in scope
+    assert "tests/test_query_facade_search.py" in scope
+    assert "tests/test_ingest_coordinator_delete.py" in scope
+    assert "tests/test_source_fetcher.py" in scope
+    assert "tests/test_package_boundary.py" in scope
+
+
+def test_memory_source_routes_confirmation_cycle() -> None:
+    scope = testing_module._python_scope("serve/memory/src/owlbear_memory/engine.py")  # noqa: SLF001
+
+    assert scope is not None
+    assert "tests/test_confirmation_cycle.py" in scope
+
+
+def test_setup_source_falls_back_to_full_python_suite() -> None:
+    scope = testing_module._python_scope("setup/init.py")  # noqa: SLF001
+
+    assert scope is None
+
+
+def test_hook_source_routes_guard_tests() -> None:
+    scope = testing_module._python_scope(".owlbear/hooks/deny-writes.py")  # noqa: SLF001
+
+    assert scope == ["tests/test_deny_code_writes.py", "tests/test_write_guard_hooks.py"]
+
+
+def test_deleted_test_path_falls_back_to_full_python_suite() -> None:
     commands = _commands_for_paths(
-        ["serve/web-content/src/owlbear_web_content/extractor.py"],
+        ["tests/test_deleted.py"],
         all_tests=False,
         python_only=False,
         web_only=False,
         coverage=False,
     )
 
-    assert commands == [(["uv", "run", "--locked", "pytest", "serve/web-content/tests"], _ROOT)]
-
-
-def test_shared_web_content_path_executes_owning_package_suite() -> None:
-    with (
-        patch.object(sys, "argv", ["test", "serve/web-content/src/owlbear_web_content/extractor.py"]),
-        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        run_test()
-
-    call.assert_called_once_with(["uv", "run", "--locked", "pytest", "serve/web-content/tests"], cwd=_ROOT)
-
-
-@pytest.mark.parametrize(
-    ("path", "expected_tests"),
-    [
-        ("serve/browser", "serve/browser/tests"),
-        ("serve/tools", "serve/tools/tests"),
-        ("serve/web-content", "serve/web-content/tests"),
-    ],
-)
-def test_python_package_directory_routes_to_owning_package_tests(path: str, expected_tests: str) -> None:
-    commands = _commands_for_paths(
-        [path],
-        all_tests=False,
-        python_only=False,
-        web_only=False,
-        coverage=False,
-    )
-
-    assert commands == [(["uv", "run", "--locked", "pytest", expected_tests], _ROOT)]
+    assert commands == [(["uv", "run", "--locked", "pytest", "tests", "serve"], _ROOT)]
 
 
 def test_frontend_source_routes_to_vitest() -> None:
@@ -135,6 +138,38 @@ def test_no_paths_runs_all_suites() -> None:
         (["npm", "test"],),
     ]
     assert [item.kwargs for item in call.call_args_list] == [{"cwd": _ROOT}, {"cwd": _WEB}]
+
+
+def test_changed_runs_git_scope_and_accepts_explicit_base() -> None:
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev", "--py"]),
+        patch(
+            "owlbear_tools.testing._changed_paths", return_value=["serve/tools/src/owlbear_tools/commands.py"]
+        ) as changed_paths,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+
+    changed_paths.assert_called_once_with("origin/dev")
+    command = call.call_args.args[0]
+    assert command[:4] == ["uv", "run", "--locked", "pytest"]
+    assert "tests/test_package_boundary.py" in command
+
+
+def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--py"]),
+        patch(
+            "owlbear_tools.testing._changed_paths",
+            side_effect=testing_module._ChangedScopeError("missing upstream"),  # noqa: SLF001
+        ),
+        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+
+    assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve"]
 
 
 def test_failures_are_aggregated_across_all_suites() -> None:

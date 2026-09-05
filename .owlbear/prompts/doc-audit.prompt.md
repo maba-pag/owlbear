@@ -110,8 +110,8 @@ Use doc-index `describes` metadata to verify diagram coverage.
   documentation establishes that a diagram is expected; do not report a gap solely because no
   diagram matches.
 
-This describes-based verification must explicitly reference the linked `.excalidraw`
-artifact and the source file(s) it describes.
+This manifest-based verification must explicitly reference the diagram manifest entry, its linked
+Archify source JSON, generated SVG artifact, and the source file(s) it describes.
 
 ## 8. Verification and Closeout
 

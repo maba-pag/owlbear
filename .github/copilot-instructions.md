@@ -72,19 +72,11 @@ Maps source paths to the test scope that covers them. Used by quality-runner `mo
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |
 | `serve/cockpit/web/` | `npm test` in `serve/cockpit/web/` | vitest |
-| `serve/cockpit/` (Python, not `web/`) | `tests/test_cockpit_*` | pytest |
-| `serve/delivery/` | `serve/delivery/tests/` `tests/test_engine_*` `tests/test_delivery_*` | pytest |
-| `serve/knowledge/` | `serve/knowledge/tests/` `tests/test_knowledge_*` `tests/test_enrichment_*` | pytest |
-| `serve/delivery-mcp/` | `serve/delivery-mcp/tests/` | pytest |
-| `serve/knowledge-mcp/` | `serve/knowledge-mcp/tests/` | pytest |
-| `serve/memory-mcp/` | `serve/memory-mcp/tests/` | pytest |
-| `serve/browser-mcp/` | `serve/browser-mcp/tests/` | pytest |
-| `serve/web-content/` | `serve/web-content/tests/` | pytest |
-| `serve/tools/` | `serve/tools/tests/` | pytest |
-| `share/` `.owlbear/` `setup/` | skip (docs/config only) | — |
-| (no prefix match) | `tests/ serve/ -m "not api and not model"` | pytest |
+| `serve/*/src/`, `serve/*/tests/`, `tests/` | `uv run test --changed` | manifest- and import-aware pytest scope plus invariant tests |
+| `share/` `.owlbear/` | skip (docs/config only, except executable hooks/scripts) | — |
+| (unsafe or unknown path) | full Python suite fallback | pytest |
 
-When a task changes files in multiple domains, run ALL matched test scopes. The last row is the fallback — use it when changed files don't match any specific prefix, or when `changed_paths` is not provided.
+`uv run test` remains the complete Python and Cockpit unit-test suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. Unknown or unsafe Git scope falls back to the full Python suite.
 
 For local development, prefer `uv run test` for the complete Python and frontend suites and
 `uv run test [PATH ...]` to apply this routing table to explicit paths. `uv run test-e2e` runs

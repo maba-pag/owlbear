@@ -18,9 +18,6 @@ def _checkout(tmp_path: Path, *, all_roots: bool = False) -> Path:
     if all_roots:
         (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
         (tmp_path / "package-lock.json").write_text("{}\n", encoding="utf-8")
-        diagrams = tmp_path / ".owlbear/scripts/export-diagrams"
-        diagrams.mkdir(parents=True)
-        (diagrams / "package-lock.json").write_text("{}\n", encoding="utf-8")
         (tmp_path / "serve/cockpit/web/public").mkdir(parents=True)
     return tmp_path
 
@@ -76,8 +73,8 @@ def test_dep_sync_all_includes_every_root_pds_and_browsers(
             dep_sync()
 
     npm_cwds = {cwd.relative_to(repository).as_posix() for command, cwd in calls if command == ["npm", "ci"]}
-    assert npm_cwds == {"serve/cockpit/web", ".", ".owlbear/scripts/export-diagrams"}
-    assert sum(command[:3] == ["npx", "--no-install", "playwright"] for command, _ in calls) == 2
+    assert npm_cwds == {"serve/cockpit/web", "."}
+    assert sum(command[:3] == ["npx", "--no-install", "playwright"] for command, _ in calls) == 1
     assert ["npm", "run", "sync:pds"] in [command for command, _ in calls]
 
 
@@ -102,13 +99,13 @@ def test_dep_sync_browsers_installs_only_browser_package_roots(
             dep_sync()
 
     npm_cwds = {cwd.relative_to(repository).as_posix() for command, cwd in calls if command == ["npm", "ci"]}
-    assert npm_cwds == {"serve/cockpit/web", ".owlbear/scripts/export-diagrams"}
+    assert npm_cwds == {"serve/cockpit/web"}
     browser_cwds = {
         cwd.relative_to(repository).as_posix()
         for command, cwd in calls
         if command[:3] == ["npx", "--no-install", "playwright"]
     }
-    assert browser_cwds == {"serve/cockpit/web", ".owlbear/scripts/export-diagrams"}
+    assert browser_cwds == {"serve/cockpit/web"}
 
 
 def test_dep_sync_attempts_later_roots_after_failure(

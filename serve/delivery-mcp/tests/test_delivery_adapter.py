@@ -37,7 +37,9 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
+    AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
+    AdministrativeDeliveryMoveResult,
     DeliveryAcceptanceWaitingError,
     DeliveryBlock,
     DeliveryChangeDispositionBusyError,
@@ -46,6 +48,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationIdentity,
     DeliveryObservation,
     DeliveryObservationReceipt,
+    DeliveryOperatorMove,
     DeliveryPlanCandidate,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -70,6 +73,7 @@ from owlbear_delivery.draft_pull_request import (
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
+    DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -210,6 +214,18 @@ def _target_sync_abort_receipt() -> ChangeTargetSyncAbortReceipt:
     )
 
 
+def _target_sync_repair_receipt() -> DeliveryTargetSyncRepairReceipt:
+    return DeliveryTargetSyncRepairReceipt.create(
+        operation_id="repair-sync-change-a",
+        change_id=CHANGE,
+        target_sync_operation_id="sync-change-a",
+        target_branch="main",
+        target_head="c" * 40,
+        expected_remote_head=COMMIT,
+        repaired_head="d" * 40,
+    )
+
+
 def _external_head_adoption_receipt() -> ChangeExternalHeadAdoptionReceipt:
     return ChangeExternalHeadAdoptionReceipt.create(
         operation_id="adopt-change-a",
@@ -310,6 +326,8 @@ class _RecordingApplication:
                     expected_change_head=COMMIT,
                     publication_base_head="a" * 40,
                 )
+            elif name == "repair_target_sync_publication":
+                result = _target_sync_repair_receipt()
             elif name == "show_operator_context":
                 result = DeliveryOperatorContext(
                     change_id=CHANGE,
@@ -361,6 +379,17 @@ class _RecordingApplication:
                     snapshot_version=DIGEST,
                     invalidated_outcome_ids=("OUT-001",),
                 )
+            elif name == "administrative_move":
+                result = AdministrativeDeliveryMoveResult(
+                    move=DeliveryOperatorMove(
+                        move_id="move-001",
+                        outcome_id="OUT-001",
+                        destination=DeliveryStage.PLANNING,
+                        reason="Verified.",
+                        invalidated_outcome_ids=("OUT-001",),
+                    ),
+                    invalidated_outcome_ids=("OUT-001",),
+                )
             elif name == "publish_delivery_plan":
                 request = args[1]
                 assert hasattr(request, "tasks")
@@ -386,6 +415,7 @@ class _RecordingApplication:
                 "promote_external_head",
                 "resolve_target_sync_conflict",
                 "abort_target_sync_conflict",
+                "repair_target_sync_publication",
             }:
                 result = {
                     "supersede_publication": _supersession_receipt,
@@ -394,6 +424,7 @@ class _RecordingApplication:
                     "promote_external_head": _external_head_promotion_receipt,
                     "resolve_target_sync_conflict": _target_sync_receipt,
                     "abort_target_sync_conflict": _target_sync_abort_receipt,
+                    "repair_target_sync_publication": _target_sync_repair_receipt,
                 }[name]()
             else:
                 result = _Result(operation=name)
@@ -502,8 +533,7 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "publish_design_checkpoint": change,
         "derive_delivery_contract": change,
-        "validate_delivery_contract": change,
-        "admit_delivery_change": {"request": {"change_id": CHANGE, "active_claim_ids": []}},
+        "admit_delivery_change": {"change_id": CHANGE, "active_claim_ids": []},
         "list_work_items": {},
         "delivery_health": {},
         "list_retained_change_worktrees": {},
@@ -527,26 +557,32 @@ def _requests() -> dict[str, dict[str, object]]:
             "outcome_id": "OUT-001",
             "target": "planning",
         },
+        "administrative_move": {
+            **change,
+            "move_id": "move-001",
+            "outcome_id": "OUT-001",
+            "target": "planning",
+            "reason": "Verified.",
+            "expected_version": DIGEST,
+        },
         "acquire_frontier_work": {},
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
         "publish_delivery_plan": {
             **change,
-            "request": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
+            "plan": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
         },
         "publish_delivery_result": {
             **change,
-            "request": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
+            "result": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
         },
-        "finalize_change": {**change, "request": _finalization()},
+        "finalize_change": {**change, "finalization": _finalization()},
         "mark_change_ready": {
-            "request": {
-                "change_id": CHANGE,
-                "operation_id": "ready-change-a",
-                "finalization_id": DIGEST,
-                "exact_head": COMMIT,
-            }
+            "change_id": CHANGE,
+            "operation_id": "ready-change-a",
+            "finalization_id": DIGEST,
+            "exact_head": COMMIT,
         },
         "prepare_review_repair": change,
         "reconcile_finalization_head": change,
@@ -594,6 +630,8 @@ def _requests() -> dict[str, dict[str, object]]:
         "cleanup_abandoned_change_worktree_after_target_sync_discard": {
             **change,
             "confirmed_discard": True,
+            "expected_target_head": "c" * 40,
+            "expected_operation_id": "sync-change-a",
         },
         "cleanup_completed_change_worktree": {**change, "completion_id": DIGEST},
         "recover_change_worktree": {
@@ -608,9 +646,17 @@ def _requests() -> dict[str, dict[str, object]]:
             "publication_base_head": "a" * 40,
             "operation_id": "recover-baseline",
         },
+        "repair_target_sync_publication": {
+            **change,
+            "confirmed_repair": True,
+            "expected_remote_head": COMMIT,
+            "expected_merged_head": "d" * 40,
+            "target_sync_operation_id": "sync-change-a",
+            "operation_id": "repair-sync-change-a",
+        },
         "transition_delivery": {
             **change,
-            "request": {
+            "transition": {
                 "action": "block",
                 "outcome_id": "OUT-001",
                 "claim_id": "claim",
@@ -644,6 +690,7 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
         "adopt_external_head": "adopt-change-a",
         "promote_external_head": "promote-change-a",
         "resolve_target_sync_conflict": "sync-change-a",
+        "repair_target_sync_publication": "repair-sync-change-a",
         "abort_target_sync_conflict": "sync-change-a",
     }[operation_name]
     assert result.operation_id == expected_operation_id
@@ -657,6 +704,10 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
     elif operation_name in {"sync_change_with_target", "resolve_target_sync_conflict"}:
         assert result.target_branch == "main"
         assert "integration_target" not in result.model_dump(mode="json")
+    elif operation_name == "repair_target_sync_publication":
+        assert result.target_branch == "main"
+        assert result.repaired_head == "d" * 40
+        assert result.review_required is True
     else:
         assert result.target_head == "c" * 40
 
@@ -677,6 +728,16 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
+        "administrative_move": (
+            CHANGE,
+            AdministrativeDeliveryMove(
+                move_id="move-001",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="Verified.",
+                expected_version=DIGEST,
+            ),
+        ),
         "reconcile_finalization_head": (CHANGE,),
         "observe_acceptance": (CHANGE,),
         "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
@@ -685,6 +746,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "promote_external_head": (CHANGE, "e" * 40, "promote-change-a"),
         "abort_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "resolve_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
+        "repair_target_sync_publication": (
+            CHANGE,
+            COMMIT,
+            "d" * 40,
+            "sync-change-a",
+            "repair-sync-change-a",
+        ),
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_abandoned_change_worktree_after_target_sync_discard": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
@@ -699,6 +767,16 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name == "recover_publication_baseline":
         assert application.calls[0][1] == (CHANGE, COMMIT, "a" * 40, "recover-baseline")
         assert application.calls[0][2] == {"confirmed_recovery": True}
+    if operation_name == "repair_target_sync_publication":
+        assert application.calls[0][1] == (CHANGE, COMMIT, "d" * 40, "sync-change-a", "repair-sync-change-a")
+        assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "cleanup_abandoned_change_worktree_after_target_sync_discard":
+        assert application.calls[0][1] == (CHANGE,)
+        assert application.calls[0][2] == {
+            "confirmed_discard": True,
+            "expected_target_head": "c" * 40,
+            "expected_operation_id": "sync-change-a",
+        }
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
     if operation_name == "mark_change_ready":
@@ -738,6 +816,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "promote_external_head",
         "abort_target_sync_conflict",
         "resolve_target_sync_conflict",
+        "repair_target_sync_publication",
     }:
         _assert_publication_result(operation_name, result)
     elif operation_name in receipt_results:
@@ -766,6 +845,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.outcome_id == "OUT-001"
         assert result.target == DeliveryStage.PLANNING
         assert result.snapshot_version == DIGEST
+    elif operation_name == "administrative_move":
+        assert result.move.move_id == "move-001"
+        assert result.move.destination == DeliveryStage.PLANNING
+        assert result.invalidated_outcome_ids == ("OUT-001",)
     elif operation_name == "delivery_health":
         assert result.status is DeliveryHealthStatus.ATTENTION
         assert result.diagnostics[0].change_id == CHANGE
@@ -812,7 +895,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
     reads = {
         "read_design_session",
         "derive_delivery_contract",
-        "validate_delivery_contract",
         "list_work_items",
         "delivery_health",
         "list_retained_change_worktrees",
@@ -859,7 +941,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         )
         assert tool_annotations.read_only_hint is (name in reads)
         assert tool_annotations.idempotent_hint is (
-            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move"}
         )
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 

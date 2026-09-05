@@ -105,6 +105,7 @@ Apply these only when the target is the OwlBear repository or matching configura
 | Command | Scope |
 | --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, invariants, and affected frontend tests |
 | `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |

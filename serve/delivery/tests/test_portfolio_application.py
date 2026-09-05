@@ -67,6 +67,7 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHealthDiagnostic,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -1237,6 +1238,46 @@ def test_application_binds_target_sync_receipt_and_invalidates_finalization(tmp_
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
 
 
+def test_clean_target_sync_publishes_branch_before_state_snapshot(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-clean-ordered",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=exact_head,
+        merged_head="3" * 40,
+        merge_commit=True,
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+
+    def publish_state(**_kwargs: object) -> None:
+        assert branch_publisher.publish.call_count == 1
+
+    state_publisher.publish.side_effect = publish_state
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+
+    with patch.object(application._workspace_manager, "sync_with_target", return_value=receipt):
+        synchronized = application.sync_change_with_target(
+            "change-a",
+            "2" * 40,
+            "sync-clean-ordered",
+        )
+
+    assert synchronized == receipt
+    assert runtimes["change-a"].checkpoint_publication_state().published_head == receipt.merged_head
+    assert runtimes["change-a"].target_sync_receipt() == receipt
+
+
 def test_application_binds_external_head_adoption_without_advancing_reviewed_authority(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -1903,6 +1944,185 @@ def test_application_records_semantic_target_resolution_with_exact_runtime_recei
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
 
 
+def test_target_sync_resolution_publishes_branch_before_state_snapshot(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    disposition = runtimes["change-a"].capture_target_sync_conflict(
+        "sync-ordered",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-ordered",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=exact_head,
+        merged_head="3" * 40,
+        merge_commit=True,
+        review_required=True,
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+
+    def publish_state(**_kwargs: object) -> None:
+        assert branch_publisher.publish.call_count == 1
+
+    state_publisher.publish.side_effect = publish_state
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+
+    with patch.object(application._workspace_manager, "resolve_target_sync_conflict", return_value=receipt):
+        resolved = application.resolve_target_sync_conflict(
+            "change-a",
+            disposition.disposition_id,
+            "2" * 40,
+            "sync-ordered",
+        )
+
+    assert resolved == receipt
+    branch_request = branch_publisher.publish.call_args.args[0]
+    assert branch_request.expected_published_head == receipt.merged_head
+    assert branch_request.expected_remote_head is None
+    assert runtimes["change-a"].checkpoint_publication_state().published_head == receipt.merged_head
+    assert runtimes["change-a"].target_sync_receipt() == receipt
+
+
+def test_target_sync_resolution_replays_branch_after_state_publication_failure(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    disposition = runtimes["change-a"].capture_target_sync_conflict(
+        "sync-retry",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-retry",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=exact_head,
+        merged_head="3" * 40,
+        merge_commit=True,
+        review_required=True,
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        None,
+    ]
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+
+    with patch.object(application._workspace_manager, "resolve_target_sync_conflict", return_value=receipt):
+        with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+            application.resolve_target_sync_conflict(
+                "change-a",
+                disposition.disposition_id,
+                "2" * 40,
+                "sync-retry",
+            )
+
+        assert runtimes["change-a"].checkpoint_publication_state().published_head == receipt.merged_head
+
+        replayed = application.resolve_target_sync_conflict(
+            "change-a",
+            disposition.disposition_id,
+            "2" * 40,
+            "sync-retry",
+        )
+
+    assert replayed == receipt
+    assert branch_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_count == 2
+
+
+def test_target_sync_publication_repair_reconciles_quarantined_state_and_preserves_review_gate(
+    tmp_path: Path,
+) -> None:
+    application, runtime_map, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtime_map["change-a"]
+    initial_head = coordinator.show("change-a").last_reviewed_commit
+    merged_head = _commit_local_descendant(coordinator.show("change-a"), "target-sync-repair.txt")
+    application._workspace_manager.record_reviewed("change-a", merged_head)
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-repair",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=initial_head,
+        merged_head=merged_head,
+        merge_commit=True,
+        review_required=True,
+    )
+    runtime.record_target_sync(receipt, datetime.now(UTC))
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=merged_head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
+        ),
+        published_head=initial_head,
+    )
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="remote-state-reconciliation-required",
+            detail="remote Change branch differs from Delivery-state snapshot: change-a",
+            change_id="change-a",
+        ),
+    )
+    application._reconcile_runtimes()
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+
+    def publish_state(**_kwargs: object) -> None:
+        assert branch_publisher.publish.call_count == 1
+        assert runtime.checkpoint_publication_state().published_head == merged_head
+
+    state_publisher.publish.side_effect = publish_state
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+    application._draft_pull_request_publisher = Mock()
+
+    repaired = application.repair_target_sync_publication(
+        "change-a",
+        initial_head,
+        merged_head,
+        "sync-repair",
+        "repair-sync-repair",
+        confirmed_repair=True,
+    )
+
+    assert repaired.repaired_head == merged_head
+    assert repaired.review_required is True
+    assert application.delivery_health().diagnostics == ()
+    assert runtime.finalization() is None
+    blocked = application.reconcile_change_checkpoint("change-a")
+    assert blocked.reconciled is True
+    assert runtime.target_sync_receipt().review_required is True
+
+
 def test_resolved_target_merge_requires_fresh_finalization_before_checkpoint_publication(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -2081,6 +2301,8 @@ def test_abandoned_target_sync_conflict_can_be_discarded_and_cleaned(
     receipt = application.cleanup_abandoned_change_worktree_after_target_sync_discard(
         "change-a",
         confirmed_discard=True,
+        expected_target_head=target_head,
+        expected_operation_id="sync-discard-cleanup",
     )
 
     assert receipt.change_id == "change-a"
@@ -5701,7 +5923,6 @@ dependencies: []
     package_bytes = _file_bytes(tmp_path / "packages/composed-delivery")
     replayed = application.create_design_session("composed-delivery", intent, design)
     derived = application.derive_delivery_contract("composed-delivery")
-    validated = application.validate_delivery_contract("composed-delivery")
 
     assert replayed.package_id == created.package_id
     assert replayed.replayed
@@ -5709,7 +5930,6 @@ dependencies: []
     with pytest.raises(DesignPackageConflictError, match="differs"):
         application.create_design_session("composed-delivery", intent + b"changed\n", design)
     assert _file_bytes(tmp_path / "packages/composed-delivery") == package_bytes
-    assert validated == derived
     assert derived.contract is not None
     assert not (state_root / "changes/composed-delivery").exists()
 

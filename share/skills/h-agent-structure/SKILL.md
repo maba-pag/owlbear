@@ -218,7 +218,7 @@ user-invocable: {true|false}
 
 - `name` — **required.** Must match the parent directory name exactly. Lowercase, hyphens for spaces. VS Code uses this for discovery and slash-command routing.
 - `description` — **required.** Starts with category label (`Workflow:`, `Rules:`, or `Handbook:`).
-- `user-invocable` — **required.** Default `false` for pipeline/internal skills. Set `true` only for skills users invoke directly via `/` menu (e.g., `h-excalidraw-diagram`).
+- `user-invocable` — **required.** Default `false` for pipeline/internal skills. Set `true` only for skills users invoke directly via `/` menu (e.g., `h-visual-output`).
 
 ### Three Categories
 

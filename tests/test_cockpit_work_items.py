@@ -489,8 +489,15 @@ class _DeliveryApplicationFake:
         self,
         *args: object,
         confirmed_discard: bool,
+        expected_target_head: str,
+        expected_operation_id: str,
     ) -> SimpleNamespace:
-        self.calls.append(("cleanup-abandoned-target-sync", (*args, confirmed_discard)))
+        self.calls.append(
+            (
+                "cleanup-abandoned-target-sync",
+                (*args, confirmed_discard, expected_target_head, expected_operation_id),
+            )
+        )
         return self._cleanup_receipt()
 
     def cleanup_completed_change_worktree(self, *args: object) -> SimpleNamespace:
@@ -1233,7 +1240,11 @@ def test_abandoned_target_sync_discard_cleanup_route_requires_confirmation() -> 
 
     response = client.post(
         "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
-        json={"confirmed_discard": True},
+        json={
+            "confirmed_discard": True,
+            "expected_target_head": "e" * 40,
+            "expected_operation_id": "cockpit-target-sync-test",
+        },
     )
 
     assert response.status_code == 200
@@ -1244,15 +1255,29 @@ def test_abandoned_target_sync_discard_cleanup_route_requires_confirmation() -> 
         "worktree_path": ".owlbear/delivery/worktrees/change-a",
         "branch_head": "d" * 40,
     }
-    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+    assert application.calls == [
+        (
+            "cleanup-abandoned-target-sync",
+            ("change-a", True, "e" * 40, "cockpit-target-sync-test"),
+        )
+    ]
 
     rejected = client.post(
         "/api/changes/change-a/worktree/cleanup/abandoned/target-sync-discard",
-        json={"confirmed_discard": False},
+        json={
+            "confirmed_discard": False,
+            "expected_target_head": "e" * 40,
+            "expected_operation_id": "cockpit-target-sync-test",
+        },
     )
 
     assert rejected.status_code == 422
-    assert application.calls == [("cleanup-abandoned-target-sync", ("change-a", True))]
+    assert application.calls == [
+        (
+            "cleanup-abandoned-target-sync",
+            ("change-a", True, "e" * 40, "cockpit-target-sync-test"),
+        )
+    ]
 
 
 def test_publication_supersession_route_delegates_current_identity_exactly_once() -> None:

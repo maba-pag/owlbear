@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Sol (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/validate_delivery_contract, owlbear-delivery/admit_delivery_change, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/admit_delivery_change, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
 agents: [conceptual-design-reviewer, designer-challenger, Explore]
 hooks:
   PreToolUse:

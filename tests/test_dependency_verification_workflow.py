@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import stat
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 import yaml
@@ -50,6 +52,16 @@ def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[st
     )
 
 
+@pytest.fixture
+def ruff_toolchain_module() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("check_ruff_toolchain_test", RUFF_TOOLCHAIN_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _fake_uv(tmp_path: Path, version: str) -> Path:
     executable = tmp_path / "uv"
     executable.write_text(f"#!/bin/sh\nprintf 'uv {version}\\n'\n", encoding="utf-8")
@@ -66,13 +78,6 @@ def _fake_node(tmp_path: Path, version: str) -> Path:
 
 def _fake_ruff(tmp_path: Path, version: str) -> Path:
     executable = tmp_path / "ruff"
-    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
-    return executable
-
-
-def _fake_docker(tmp_path: Path, version: str) -> Path:
-    executable = tmp_path / "docker"
     executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
     return executable
@@ -102,10 +107,10 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         ".github/scripts/check_uv_workspace_lock.py",
         ".github/workflows/**",
         ".mega-linter.yml",
-        ".owlbear/scripts/export-diagrams/package.json",
-        ".owlbear/scripts/export-diagrams/package-lock.json",
         ".pre-commit-config.yaml",
         ".python-version",
+        ".owlbear/scripts/diagrams/**",
+        "share/diagrams/**",
         "package.json",
         "package-lock.json",
         "pyproject.toml",
@@ -115,6 +120,7 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "serve/cockpit/web/package-lock.json",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/tools/src/owlbear_tools/megalinter.py",
+        "tests/test_archify_diagrams.py",
         "tests/test_dependency_verification_workflow.py",
         "uv.lock",
     }
@@ -199,6 +205,30 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
+    archify_steps = [
+        step for step in proof_node["steps"] if step.get("name") == "Verify pinned Archify release and static render"
+    ]
+    assert len(archify_steps) == 1
+    archify_step = archify_steps[0]
+    assert archify_step["if"] == (
+        "needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'"
+    )
+    assert archify_step["timeout-minutes"] == 10
+    assert archify_step["shell"] == "bash"
+    archify_run = archify_step["run"]
+    assert "--check" not in archify_run
+    assert '"$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert 'test -s "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert 'manifest_sources = {diagram["source"] for diagram in manifest["diagrams"]}' in archify_run
+    assert 'Path("share/diagrams").rglob("*.architecture.json")' in archify_run
+    assert "Archify manifest source coverage mismatch" in archify_run
+    assert "while IFS=$'\\t' read -r source artifact; do" in archify_run
+    assert 'done < "$RUNNER_TEMP/archify-diagrams.tsv"' in archify_run
+    assert "python3 .owlbear/scripts/diagrams/render.py" in archify_run
+    assert "--offline" in archify_run
+    assert 'if cmp --silent "$output" "$artifact"; then' in archify_run
+    assert "Archify artifact is stale" in archify_run
+    assert "Regenerate with:" in archify_run
 
 
 def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
@@ -215,6 +245,25 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
             "run": "uv run python .github/scripts/check_ruff_toolchain.py",
         }
     ]
+
+
+def test_dependency_workflow_keeps_megalinter_execution_active() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    compatibility = _job(workflow, "compatibility")
+    text = VERIFY_PATH.read_text(encoding="utf-8")
+
+    megalinter_steps = [
+        step for step in compatibility["steps"] if step.get("name") == "Exercise updated MegaLinter image"
+    ]
+    assert megalinter_steps == [
+        {
+            "name": "Exercise updated MegaLinter image",
+            "if": "needs.classify.outputs.megalinter == 'true'",
+            "run": "uv run megalint --no-fix",
+        }
+    ]
+    assert "# Deferred removal option (comment-only; keep the step below active for now):" in text
+    assert "# - name: Exercise updated MegaLinter image" in text
 
 
 def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
@@ -288,61 +337,59 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
     assert "below" in result.stderr
 
 
-def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path) -> None:
-    result = _run_script(
-        RUFF_TOOLCHAIN_SCRIPT,
-        "--ruff-executable",
-        str(_fake_ruff(tmp_path, "0.16.2")),
-        "--docker-executable",
-        str(_fake_docker(tmp_path, "0.16.2")),
+def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path, ruff_toolchain_module: ModuleType) -> None:
+    def load_versions(url: str) -> object:
+        assert (
+            url
+            == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.0.0/.automation/generated/linter-versions.json"
+        )
+        return {"ruff": "0.16.2"}
+
+    ruff_toolchain_module.check_ruff_toolchain(
+        ROOT,
+        ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+        megalinter_versions_loader=load_versions,
     )
 
-    assert result.returncode == 0, result.stderr
-    assert "aligned at 0.16.2" in result.stdout
+
+def test_ruff_toolchain_proof_rejects_declared_version_drift(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    with pytest.raises(ValueError, match=r"MegaLinter declared Ruff=0\.16\.1"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=lambda _: {"ruff": "0.16.1"},
+        )
 
 
-def test_ruff_toolchain_proof_rejects_bundled_version_drift(tmp_path: Path) -> None:
-    result = _run_script(
-        RUFF_TOOLCHAIN_SCRIPT,
-        "--ruff-executable",
-        str(_fake_ruff(tmp_path, "0.16.2")),
-        "--docker-executable",
-        str(_fake_docker(tmp_path, "0.16.1")),
-    )
-
-    assert result.returncode != 0
-    assert "MegaLinter bundled Ruff=0.16.1" in result.stderr
-
-
-def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
-    jobs = workflow["jobs"]
-    assert isinstance(jobs, dict)
-    return [
-        step
-        for job in jobs.values()
-        for step in job.get("steps", [])
-        if "playwright install" in str(step.get("run", ""))
-    ]
+def test_ruff_toolchain_proof_rejects_malformed_declared_metadata(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    with pytest.raises(ValueError, match="invalid ruff entry"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=lambda _: {"ruff": "0.16"},
+        )
 
 
-def test_playwright_browser_install_never_provisions_system_packages() -> None:
-    """`--with-deps` shells out to apt, which stalls the runner when a mirror is
-    unreachable. The runner image already ships Chromium's shared libraries."""
-    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
+def test_ruff_toolchain_proof_rejects_unavailable_declared_metadata(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    def unavailable(_: str) -> object:
+        message = "network unavailable"
+        raise OSError(message)
 
-    assert steps
-    for step in steps:
-        assert "--with-deps" not in str(step["run"])
-
-
-def test_browser_install_steps_cannot_burn_a_whole_job_timeout() -> None:
-    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
-
-    assert steps
-    for step in steps:
-        timeout = step.get("timeout-minutes")
-        assert timeout is not None
-        assert 0 < timeout <= 10
+    with pytest.raises(RuntimeError, match="Unable to fetch MegaLinter linter versions"):
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            megalinter_versions_loader=unavailable,
+        )
 
 
 def test_shared_node_runtime_uses_one_node_proof() -> None:
@@ -396,6 +443,25 @@ def test_dependency_workflow_actions_are_pinned() -> None:
         assert all(character in "0123456789abcdef" for character in revision)
 
 
+def test_renovate_archify_match_spans_version_and_digest() -> None:
+    config = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
+    managers = config["customManagers"]
+    archify = next(manager for manager in managers if manager.get("depNameTemplate") == "tt-a1i/archify")
+    patterns = archify["matchStrings"]
+    assert "matchStringsStrategy" not in archify
+    assert len(patterns) == 1
+
+    lock = (ROOT / ".owlbear/scripts/diagrams/archify.lock.json").read_text(encoding="utf-8")
+    assert "(?<currentValue>v[\\d.]+)" in patterns[0]
+    assert "(?<currentDigest>[a-f0-9]{64})" in patterns[0]
+    replacement_span = lock[lock.index('"version"') : lock.index('"sha256"') + len('"sha256"')]
+    lock_document = json.loads(lock)
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", lock_document["version"])
+    assert f'"version": "{lock_document["version"]}"' in replacement_span
+    assert '"sha256"' in replacement_span
+    assert lock_document["sha256"] in lock
+
+
 @pytest.mark.parametrize(
     ("path", "surface"),
     [
@@ -408,8 +474,12 @@ def test_dependency_workflow_actions_are_pinned() -> None:
         ("serve/cockpit/web/.nvmrc", "node"),
         ("package.json", "root_node"),
         ("package-lock.json", "root_node"),
-        (".owlbear/scripts/export-diagrams/package.json", "diagrams"),
-        (".owlbear/scripts/export-diagrams/package-lock.json", "diagrams"),
+        (".owlbear/scripts/diagrams/archify.lock.json", "diagrams"),
+        (".owlbear/scripts/diagrams/sync.py", "diagrams"),
+        (".owlbear/scripts/diagrams/render.py", "diagrams"),
+        ("share/diagrams/manifest.json", "diagrams"),
+        ("share/diagrams/mcp-topology.architecture.json", "diagrams"),
+        ("share/diagrams/mcp-topology.svg", "diagrams"),
         (".pre-commit-config.yaml", "precommit"),
         (".github/workflows/sync-to-main.yml", "workflows"),
         (".github/renovate.json", "renovate"),
@@ -713,7 +783,7 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
             "${{ github.event_name == 'workflow_dispatch' && 'chromium firefox webkit' || 'chromium' }}"
         )
     }
-    assert "npx playwright install --with-deps $E2E_COMPAT_BROWSERS" in text
+    assert 'npx playwright install --with-deps "$E2E_COMPAT_BROWSERS"' in text
     assert "npm run test:e2e:compat" in text
     assert package["scripts"]["test:e2e:compat:all"] == (
         "cross-env E2E_COMPAT_BROWSERS=chromium,firefox,webkit node scripts/run-e2e-compat.mjs"

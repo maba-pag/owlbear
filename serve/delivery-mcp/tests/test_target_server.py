@@ -57,10 +57,10 @@ DELIVERY_TOOLS = {
     "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
-    "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
@@ -68,6 +68,7 @@ DELIVERY_TOOLS = {
     "resolve_request",
     "clear_block",
     "preview_administrative_move",
+    "administrative_move",
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
@@ -107,7 +108,6 @@ DELIVERY_TOOLS = {
 READ_TOOLS = {
     "read_design_session",
     "derive_delivery_contract",
-    "validate_delivery_contract",
     "list_work_items",
     "delivery_health",
     "list_retained_change_worktrees",
@@ -330,7 +330,7 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
         assert tool.annotations.idempotent_hint is (
-            name not in {"acquire_frontier_work", "resolve_request", "clear_block"}
+            name not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move"}
         )
         assert tool.annotations.destructive_hint is (
             name
@@ -340,12 +340,8 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
                 "cleanup_completed_change_worktree",
             }
         )
-        request_schema = tool.input_schema["properties"]["request"]
-        assert "$ref" in request_schema
-        request_definition = tool.input_schema["$defs"][request_schema["$ref"].removeprefix("#/$defs/")]
-        if "$ref" in request_definition:
-            request_definition = tool.input_schema["$defs"][request_definition["$ref"].removeprefix("#/$defs/")]
-        assert request_definition["additionalProperties"] is False
+        assert "request" not in tool.input_schema.get("properties", {})
+        assert tool.input_schema["additionalProperties"] is False
 
 
 @pytest.mark.asyncio
@@ -354,11 +350,23 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     server = assemble_target_server(application)  # type: ignore[arg-type]
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        result = await client.call_tool("list_work_items", {"request": {}})
+        result = await client.call_tool("list_work_items", {})
 
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool("list_work_items", {"unexpected": True})
+
+    assert result.is_error
+    assert application.calls == []
 
 
 @pytest.mark.asyncio
@@ -369,7 +377,7 @@ async def test_work_item_view_tool_delegates_exact_publication_key() -> None:
     async with Client(server) as client:
         result = await client.call_tool(
             "show_work_item_view",
-            {"request": {"change_id": "change-a", "item_key": "publication"}},
+            {"change_id": "change-a", "item_key": "publication"},
         )
 
     assert result.structured_content == {"operation": "show_work_item_view"}
@@ -382,7 +390,7 @@ async def test_registered_review_repair_tool_invokes_strict_adapter_once() -> No
     server = assemble_target_server(application)  # type: ignore[arg-type]
 
     async with Client(server) as client:
-        result = await client.call_tool("prepare_review_repair", {"request": {"change_id": "change-a"}})
+        result = await client.call_tool("prepare_review_repair", {"change_id": "change-a"})
 
     assert result.structured_content == {"operation": "prepare_review_repair"}
     assert application.calls == ["prepare_review_repair"]
@@ -430,7 +438,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     server = assemble_target_server(application)  # type: ignore[arg-type]
     publication_request = {
         "change_id": "change-a",
-        "request": {
+        "result": {
             "outcome_id": "OUT-001",
             "claim_id": "claim-1",
             "result": _published_result_payload(),
@@ -439,56 +447,50 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
 
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        published = await client.call_tool("publish_delivery_result", {"request": publication_request})
+        published = await client.call_tool("publish_delivery_result", publication_request)
         assert published.structured_content is not None
         output = published.structured_content["output"]
         transitioned = await client.call_tool(
             "transition_delivery",
             {
-                "request": {
-                    "change_id": "change-a",
-                    "request": {
-                        "action": "advance",
-                        "outcome_id": "OUT-001",
-                        "claim_id": "claim-1",
-                        "output": output,
-                    },
+                "change_id": "change-a",
+                "transition": {
+                    "action": "advance",
+                    "outcome_id": "OUT-001",
+                    "claim_id": "claim-1",
+                    "output": output,
                 },
             },
         )
 
-    publication_schema = tools["publish_delivery_result"].input_schema["properties"]["request"]
+    publication_schema = tools["publish_delivery_result"].input_schema
     publication_definitions = tools["publish_delivery_result"].input_schema["$defs"]
     transition_definitions = tools["transition_delivery"].input_schema["$defs"]
-    publication_definition = publication_definitions[publication_schema["$ref"].removeprefix("#/$defs/")]
-    publication_definition = publication_definitions[publication_definition["$ref"].removeprefix("#/$defs/")]
-    publication_request_definition = publication_definitions[
-        publication_definition["properties"]["request"]["$ref"].removeprefix("#/$defs/")
-    ]
     result_definition = publication_definitions[
-        publication_request_definition["properties"]["result"]["$ref"].removeprefix("#/$defs/")
+        publication_schema["properties"]["result"]["$ref"].removeprefix("#/$defs/")
     ]
-    assert publication_definition["properties"]["change_id"]["type"] == "string"
-    assert {"observations", "review"} <= set(result_definition["required"])
+    task_result_definition = publication_definitions[
+        result_definition["properties"]["result"]["$ref"].removeprefix("#/$defs/")
+    ]
+    assert set(publication_schema["properties"]) == {"change_id", "result"}
+    assert publication_schema["properties"]["change_id"]["type"] == "string"
+    assert {"observations", "review"} <= set(task_result_definition["required"])
     finalization_schema = tools["finalize_change"].input_schema
+    assert set(finalization_schema["properties"]) == {"change_id", "finalization"}
     finalization_request = finalization_schema["$defs"]["FinalizeDeliveryChange"]
     assert {"operation_id", "exact_head", "observations", "review"} <= set(finalization_request["required"])
     ready_schema = tools["mark_change_ready"].input_schema
-    ready_request = ready_schema["$defs"]["MarkChangePullRequestReady"]
-    assert {"change_id", "operation_id", "finalization_id", "exact_head"} == set(ready_request["required"])
+    assert set(ready_schema["properties"]) == {"change_id", "operation_id", "finalization_id", "exact_head"}
+    assert {"change_id", "operation_id", "finalization_id", "exact_head"} == set(ready_schema["required"])
     reconciliation_schema = tools["reconcile_finalization_head"].input_schema
-    reconciliation_request = reconciliation_schema["$defs"]["ChangeParams"]
-    assert set(reconciliation_request["properties"]) == {"change_id"}
+    assert set(reconciliation_schema["properties"]) == {"change_id"}
     acceptance_schema = tools["observe_acceptance"].input_schema
-    acceptance_request = acceptance_schema["$defs"]["ChangeParams"]
-    assert set(acceptance_request["properties"]) == {"change_id"}
+    assert set(acceptance_schema["properties"]) == {"change_id"}
     resolution_schema = tools["resolve_change_disposition"].input_schema
-    resolution_request = resolution_schema["$defs"]["ResolveChangeDispositionParams"]
-    assert set(resolution_request["properties"]) == {"change_id", "expected_disposition_id"}
-    assert set(tools["prepare_review_repair"].input_schema["$defs"]["ChangeParams"]["properties"]) == {"change_id"}
+    assert set(resolution_schema["properties"]) == {"change_id", "expected_disposition_id"}
+    assert set(tools["prepare_review_repair"].input_schema["properties"]) == {"change_id"}
     supersession_schema = tools["supersede_publication"].input_schema
-    supersession_request = supersession_schema["$defs"]["SupersedePublicationParams"]
-    assert set(supersession_request["properties"]) == {
+    assert set(supersession_schema["properties"]) == {
         "change_id",
         "expected_publication_id",
         "operation_id",
@@ -504,8 +506,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
         "publication_history",
     } <= set(tools["supersede_publication"].output_schema["required"])
     sync_schema = tools["sync_change_with_target"].input_schema
-    sync_request = sync_schema["$defs"]["TargetSyncParams"]
-    assert set(sync_request["properties"]) == {"change_id", "expected_target", "operation_id"}
+    assert set(sync_schema["properties"]) == {"change_id", "expected_target", "operation_id"}
     assert {
         "receipt_id",
         "operation_id",
@@ -518,6 +519,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
         "merge_commit",
     } <= set(tools["sync_change_with_target"].output_schema["required"])
     assert "integration_target" not in tools["sync_change_with_target"].output_schema["properties"]
+    assert set(tools["transition_delivery"].input_schema["properties"]) == {"change_id", "transition"}
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
@@ -540,7 +542,7 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
-    conflict_request = tools["abort_target_sync_conflict"].input_schema["$defs"]["TargetSyncConflictParams"]
+    conflict_request = tools["abort_target_sync_conflict"].input_schema
     assert set(conflict_request["properties"]) == {
         "change_id",
         "expected_disposition_id",
@@ -566,6 +568,26 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
         "merge_commit",
     } <= set(tools["resolve_target_sync_conflict"].output_schema["required"])
     assert "integration_target" not in tools["resolve_target_sync_conflict"].output_schema["properties"]
+    repair_request = tools["repair_target_sync_publication"].input_schema
+    assert set(repair_request["properties"]) == {
+        "change_id",
+        "confirmed_repair",
+        "expected_remote_head",
+        "expected_merged_head",
+        "target_sync_operation_id",
+        "operation_id",
+    }
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "target_sync_operation_id",
+        "target_branch",
+        "target_head",
+        "expected_remote_head",
+        "repaired_head",
+        "review_required",
+    } <= set(tools["repair_target_sync_publication"].output_schema["required"])
 
 
 @pytest.mark.asyncio
@@ -606,7 +628,7 @@ async def test_external_head_adoption_tool_has_exact_contract() -> None:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     adoption_schema = tools["adopt_external_head"].input_schema
-    adoption_request = adoption_schema["$defs"]["ExternalHeadAdoptionParams"]
+    adoption_request = adoption_schema
     assert set(adoption_request["properties"]) == {"change_id", "expected_head", "adopted_head", "operation_id"}
     assert {
         "receipt_id",
@@ -628,7 +650,7 @@ async def test_external_head_promotion_tool_has_exact_contract() -> None:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
 
     promotion_schema = tools["promote_external_head"].input_schema
-    promotion_request = promotion_schema["$defs"]["ExternalHeadPromotionParams"]
+    promotion_request = promotion_schema
     assert set(promotion_request["properties"]) == {"change_id", "expected_head", "operation_id"}
     assert {
         "receipt_id",
@@ -863,7 +885,7 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     async with Client(server) as client:
         before = await client.call_tool(
             "show_work_item",
-            {"request": {"change_id": "change-a", "work_item_id": "OUT-001"}},
+            {"change_id": "change-a", "work_item_id": "OUT-001"},
         )
         application.administrative_move(
             "change-a",
@@ -879,10 +901,10 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
                 ).snapshot_version,
             ),
         )
-        listed = await client.call_tool("list_work_items", {"request": {}})
+        listed = await client.call_tool("list_work_items", {})
         after = await client.call_tool(
             "show_work_item",
-            {"request": {"change_id": "change-a", "work_item_id": "OUT-001"}},
+            {"change_id": "change-a", "work_item_id": "OUT-001"},
         )
 
     assert before.structured_content is not None

@@ -872,6 +872,58 @@ class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
+class DeliveryTargetSyncRepairReceipt(_ApplicationModel):
+    """Evidence that one target-sync head and its portable state were reconciled."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    target_branch: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    repaired_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    review_required: Literal[True] = True
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        target_sync_operation_id: str,
+        target_branch: str,
+        target_head: str,
+        expected_remote_head: str,
+        repaired_head: str,
+    ) -> DeliveryTargetSyncRepairReceipt:
+        """Create deterministic evidence for one target-sync publication repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "target_sync_operation_id": target_sync_operation_id,
+            "target_branch": target_branch,
+            "target_head": target_head,
+            "expected_remote_head": expected_remote_head,
+            "repaired_head": repaired_head,
+            "review_required": True,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryTargetSyncRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "target-sync publication repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
@@ -1235,6 +1287,7 @@ class PortfolioApplication:
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
+            self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
             self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
             return receipt
 
@@ -1513,6 +1566,7 @@ class PortfolioApplication:
             self._fail("target synchronization resolution differs from runtime evidence")
         resolution = runtime.change_disposition_resolution()
         if resolution is not None:
+            self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
             self._publish_delivery_state(
                 request.change_id,
                 runtime,
@@ -1540,6 +1594,7 @@ class PortfolioApplication:
         resolution = runtime.change_disposition_resolution()
         if resolution is None:
             self._fail("target synchronization resolution did not record attention resolution")
+        self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
         self._publish_delivery_state(
             request.change_id,
             runtime,
@@ -1892,6 +1947,8 @@ class PortfolioApplication:
         change_id: str,
         *,
         confirmed_discard: Literal[True],
+        expected_target_head: str,
+        expected_operation_id: str,
     ) -> DeliveryChangeWorktreeCleanup:
         """Discard one abandoned target merge and then clean its exact Change worktree."""
         if confirmed_discard is not True:
@@ -1901,37 +1958,54 @@ class PortfolioApplication:
             if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
                 self._fail("abandoned target synchronization conflict cleanup requires an abandoned Change")
             coordination = self._workspace_manager.show(change_id)
-            conflict = coordination.target_sync_conflict
-            if conflict is not None:
-                retained = next(
-                    (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
-                    None,
-                )
-                if retained is None:
-                    self._fail("abandoned target synchronization conflict worktree is not registered")
-                if not retained.worktree_present or not retained.git_registered:
-                    try:
-                        coordination = self._workspace_manager.recover(
-                            change_id,
-                            coordination.last_reviewed_commit,
-                        )
-                    except ChangeWorktreeAttentionError:
-                        raise
-                    except CoordinationConflictError:
-                        raise
-                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                        self._fail("abandoned target synchronization conflict worktree could not be recovered", exc)
-                try:
-                    self._workspace_manager.abort_target_sync_conflict(
-                        TargetSyncConflictRequest(
-                            change_id=change_id,
-                            target_head=conflict.target_head,
-                            operation_id=conflict.operation_id,
-                        )
-                    )
-                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                    self._fail("abandoned target synchronization conflict could not be discarded", exc)
+            self._discard_abandoned_target_sync_conflict(
+                change_id,
+                coordination,
+                expected_target_head,
+                expected_operation_id,
+            )
             return self._cleanup_change_worktree_locked(change_id, runtime)
+
+    def _discard_abandoned_target_sync_conflict(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination,
+        expected_target_head: str,
+        expected_operation_id: str,
+    ) -> None:
+        conflict = coordination.target_sync_conflict
+        if conflict is None:
+            return
+        if conflict.target_head != expected_target_head or conflict.operation_id != expected_operation_id:
+            self._fail("abandoned target synchronization conflict evidence is stale")
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        if retained is None:
+            self._fail("abandoned target synchronization conflict worktree is not registered")
+        if not retained.worktree_present or not retained.git_registered:
+            try:
+                coordination = self._workspace_manager.recover(
+                    change_id,
+                    coordination.last_reviewed_commit,
+                )
+            except ChangeWorktreeAttentionError:
+                raise
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("abandoned target synchronization conflict worktree could not be recovered", exc)
+        try:
+            self._workspace_manager.abort_target_sync_conflict(
+                TargetSyncConflictRequest(
+                    change_id=change_id,
+                    target_head=conflict.target_head,
+                    operation_id=conflict.operation_id,
+                )
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("abandoned target synchronization conflict could not be discarded", exc)
 
     def cleanup_completed_change_worktree(
         self,
@@ -3010,17 +3084,7 @@ class PortfolioApplication:
         self._validate_package_authority(runtime, package)
         summary = _checkpoint_summary(runtime, package, pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
-        branch_request = PublishChangeBranch(
-            change_id=change_id,
-            expected_remote_head=initial.published_head,
-            expected_published_head=head,
-            operation_id=_checkpoint_operation_id(
-                "branch",
-                change_id,
-                head,
-            ),
-        )
-        branch_receipt = self._change_branch_publisher.publish(branch_request)
+        branch_receipt = self._publish_checkpoint_branch(change_id, initial, head)
         if initial.published_head != head:
             state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
         else:
@@ -3090,6 +3154,42 @@ class PortfolioApplication:
             state=state,
             reconciled=state.pending_checkpoint is None,
         )
+
+    def _publish_checkpoint_branch(
+        self,
+        change_id: str,
+        checkpoint: DeliveryCheckpointPublicationState,
+        head: str,
+    ) -> ChangeBranchPublicationReceipt:
+        """Publish one exact checkpoint head through the managed Change branch."""
+        publisher = self._change_branch_publisher
+        if publisher is None:
+            self._fail("Change branch publication is not configured")
+        pending = checkpoint.pending_checkpoint
+        if pending is None or pending.head != head:
+            self._fail("Change branch publication does not match the pending checkpoint")
+        return publisher.publish(
+            PublishChangeBranch(
+                change_id=change_id,
+                expected_remote_head=checkpoint.published_head,
+                expected_published_head=head,
+                operation_id=_checkpoint_operation_id("branch", change_id, head),
+            )
+        )
+
+    def _publish_target_sync_branch(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        merged_head: str,
+    ) -> ChangeBranchPublicationReceipt | None:
+        """Publish a target-sync head before its portable Delivery snapshot."""
+        if self._change_branch_publisher is None:
+            return None
+        checkpoint = runtime.checkpoint_publication_state()
+        branch_receipt = self._publish_checkpoint_branch(change_id, checkpoint, merged_head)
+        runtime.record_checkpoint_branch_publication(checkpoint, branch_receipt.published_head)
+        return branch_receipt
 
     def _prepare_checkpoint_head(
         self,
@@ -3186,10 +3286,6 @@ class PortfolioApplication:
         """Compile one verified package without publishing generated authority."""
         package = self._package_store.read_verified(change_id)
         return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
-
-    def validate_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
-        """Return deterministic compiler diagnostics for one verified package."""
-        return self.derive_delivery_contract(change_id)
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
@@ -3359,6 +3455,129 @@ class PortfolioApplication:
         """Return bounded diagnostics for state excluded from Delivery authority."""
         self._reconcile_runtimes()
         return self._delivery_health_view()
+
+    def repair_target_sync_publication(  # noqa: PLR0913 - repair binds each exact remote and target identity.
+        self,
+        change_id: str,
+        expected_remote_head: str,
+        expected_merged_head: str,
+        target_sync_operation_id: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryTargetSyncRepairReceipt:
+        """Reconcile one quarantined target-sync head through Delivery-owned publication."""
+        if confirmed_repair is not True:
+            self._fail("target-sync publication repair requires explicit confirmation")
+        if self._change_branch_publisher is None or self._delivery_state_publisher is None:
+            self._fail("target-sync publication repair requires configured publishers")
+        self._reconcile_runtimes()
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime = self._target_sync_repair_runtime(
+                change_id,
+                expected_remote_head,
+                expected_merged_head,
+                target_sync_operation_id,
+            )
+            branch_receipt = self._publish_target_sync_branch(change_id, runtime, expected_merged_head)
+            if branch_receipt is None:
+                self._fail("target-sync publication repair could not publish the Change branch")
+            self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.pending_checkpoint is not None:
+                runtime.acknowledge_checkpoint_publication(
+                    checkpoint.pending_checkpoint,
+                    branch_receipt.published_head,
+                )
+            self._clear_target_sync_reconciliation(change_id)
+            target_sync = runtime.target_sync_receipt()
+            if target_sync is None:
+                self._fail("target-sync publication repair lost target-sync authority")
+            return DeliveryTargetSyncRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                target_sync_operation_id=target_sync_operation_id,
+                target_branch=target_sync.integration_target,
+                target_head=target_sync.target_head,
+                expected_remote_head=expected_remote_head,
+                repaired_head=branch_receipt.published_head,
+            )
+
+    def _target_sync_repair_runtime(
+        self,
+        change_id: str,
+        expected_remote_head: str,
+        expected_merged_head: str,
+        target_sync_operation_id: str,
+    ) -> DeliveryRuntime:
+        runtime = self._runtimes.get(change_id)
+        if runtime is None:
+            self._fail("target-sync publication repair requires an available Change runtime")
+        reconciliation_error = self._runtime_reconciliation_errors.get(change_id)
+        matching_diagnostics = tuple(
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if (
+                diagnostic.source == "remote-state"
+                and diagnostic.code == "remote-state-reconciliation-required"
+                and diagnostic.change_id == change_id
+                and (
+                    "remote Change branch differs from Delivery-state snapshot" in diagnostic.detail
+                    or "local Delivery runtime artifact differs from its remote snapshot: frontier.json"
+                    in diagnostic.detail
+                )
+            )
+        )
+        if reconciliation_error is not None and not matching_diagnostics:
+            self._fail("target-sync publication repair diagnostic is absent or incompatible")
+        if any(
+            diagnostic.source == "remote-state"
+            and diagnostic.change_id == change_id
+            and diagnostic.code == "remote-state-reconciliation-required"
+            and diagnostic not in matching_diagnostics
+            for diagnostic in self._startup_health_diagnostics
+        ):
+            self._fail("target-sync publication repair diagnostic is absent or incompatible")
+        target_sync = runtime.target_sync_receipt()
+        if (
+            target_sync is None
+            or not target_sync.review_required
+            or target_sync.operation_id != target_sync_operation_id
+            or target_sync.merged_head != expected_merged_head
+        ):
+            self._fail("target-sync publication repair does not match current target-sync authority")
+        coordination = self._workspace_manager.show(change_id)
+        checkpoint = runtime.checkpoint_publication_state()
+        if (
+            coordination.last_reviewed_commit != expected_merged_head
+            or checkpoint.published_head not in {expected_remote_head, expected_merged_head}
+            or checkpoint.pending_checkpoint is None
+            or checkpoint.pending_checkpoint.head != expected_merged_head
+            or runtime.finalization() is not None
+            or runtime.change_disposition() is not None
+            or runtime.active_claims()
+            or runtime.integration_repair_claim() is not None
+        ):
+            self._fail("target-sync publication repair authority has changed")
+        if self._workspace_manager.source_head(change_id) != expected_merged_head:
+            self._fail("target-sync publication repair local head differs from the expected merge")
+        return runtime
+
+    def _clear_target_sync_reconciliation(self, change_id: str) -> None:
+        self._startup_health_diagnostics = tuple(
+            diagnostic
+            for diagnostic in self._startup_health_diagnostics
+            if not (
+                diagnostic.source == "remote-state"
+                and diagnostic.code == "remote-state-reconciliation-required"
+                and diagnostic.change_id == change_id
+            )
+        )
+        self._runtime_reconciliation_errors.pop(change_id, None)
+        self._runtime_snapshots.pop(change_id, None)
+        self._reconcile_runtimes()
+        if change_id in self._runtime_reconciliation_errors:
+            self._fail("target-sync publication repair completed with remaining Change reconciliation errors")
 
     def _delivery_health_view(self) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [

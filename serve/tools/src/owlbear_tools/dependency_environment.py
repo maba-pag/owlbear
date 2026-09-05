@@ -28,9 +28,8 @@ _UV_SYNC = (
 _NPM_ROOTS = (
     ("Cockpit npm", Path("serve/cockpit/web")),
     ("Root npm", Path()),
-    ("Diagram exporter npm", Path(".owlbear/scripts/export-diagrams")),
 )
-_BROWSER_ROOTS = (_NPM_ROOTS[0], _NPM_ROOTS[2])
+_BROWSER_ROOTS = (_NPM_ROOTS[0],)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +107,7 @@ def _selected_npm_roots(*, include_all: bool, include_browsers: bool) -> tuple[t
     if include_all:
         return _NPM_ROOTS
     if include_browsers:
-        return (_NPM_ROOTS[0], _NPM_ROOTS[2])
+        return _BROWSER_ROOTS
     return _NPM_ROOTS[:1]
 
 

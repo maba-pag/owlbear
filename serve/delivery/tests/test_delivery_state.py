@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery import (
+    ChangeBranchPublisher,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
@@ -43,6 +44,8 @@ from owlbear_delivery import (
     DesignPackageStore,
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
+    PublishChangeBranch,
+    SyncChangeWithTarget,
 )
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -882,3 +885,112 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
         for diagnostic in health.diagnostics
     )
     assert degraded.list_work_items() == ()
+
+
+def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "state-target-sync"
+    contract, intent, design = _contract(change_id)
+    state_root = tmp_path / "state"
+    package_root = repository / ".owlbear/delivery/packages"
+    package_store = DesignPackageStore(package_root, repository)
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = (
+        json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    coordinator = PortfolioCoordinator(state_root)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main", "origin")
+    manager.ensure(change_id)
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "target-sync-package",
+    )
+    branch_publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=state_root / "publications/change-branches/operations",
+    )
+    branch_publisher.publish(
+        PublishChangeBranch(
+            change_id=change_id,
+            expected_remote_head=None,
+            expected_published_head=snapshot.snapshot_head,
+            operation_id="target-sync-initial-branch",
+        )
+    )
+
+    target_repository = tmp_path / "target-repository"
+    _git(tmp_path, "clone", str(remote), str(target_repository))
+    _git(target_repository, "config", "user.name", "Target User")
+    _git(target_repository, "config", "user.email", "target@example.invalid")
+    (target_repository / "target.txt").write_text("target\n", encoding="utf-8")
+    _git(target_repository, "add", "target.txt")
+    _git(target_repository, "commit", "-m", "advance target")
+    target_head = _git(target_repository, "rev-parse", "HEAD")
+    _git(target_repository, "push", "origin", "HEAD:refs/heads/main")
+
+    sync_receipt = manager.sync_with_target(
+        SyncChangeWithTarget(
+            change_id=change_id,
+            expected_target=target_head,
+            operation_id="target-sync-restart",
+        )
+    )
+    runtime.record_target_sync(sync_receipt, datetime(2026, 8, 23, tzinfo=UTC))
+    checkpoint = runtime.checkpoint_publication_state()
+    branch_publisher.publish(
+        PublishChangeBranch(
+            change_id=change_id,
+            expected_remote_head=snapshot.snapshot_head,
+            expected_published_head=sync_receipt.merged_head,
+            operation_id="target-sync-restart-branch",
+        )
+    )
+    runtime.record_checkpoint_branch_publication(checkpoint, sync_receipt.merged_head)
+    state_publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+    state_receipt = state_publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="target-sync-restart-state",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+
+    fresh = tmp_path / "fresh-target-sync"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+
+    assert application.delivery_health().status.value == "healthy"
+    assert application.list_work_items()
+    assert _git(fresh, "rev-parse", f"refs/heads/owlbear/change/{change_id}") == sync_receipt.merged_head
+    assert state_receipt.published_head == _git(fresh, "rev-parse", "refs/remotes/origin/owlbear/delivery-state")
+    assert application.show_finalization_context(change_id).ready_for_finalization is False

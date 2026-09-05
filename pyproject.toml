@@ -88,6 +88,10 @@ ignore = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
+".owlbear/scripts/diagrams/*.py" = [
+  "INP001", # .owlbear/scripts/diagrams/ is not a package — direct-run files are expected here
+  "T201",   # print() is intentional in CLI scripts
+]
 ".github/scripts/*.py" = [
   "INP001", # .github/scripts/ contains direct-run CI helpers, not an importable package
   "T201",   # print() is intentional in direct-run CI helpers

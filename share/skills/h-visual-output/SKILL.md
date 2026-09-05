@@ -12,8 +12,6 @@ Boundary: this skill is for explanatory artifacts, reports, and diagrams. It is 
 
 > Adapted from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) (MIT).
 
-For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
-
 ## Content Type Routing
 
 | Content type | Approach | When to use |
