@@ -179,11 +179,11 @@ class ContentStore(ContentStoreProtocol):
 
         if existing_doc is not None and not stale_document_ids and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
+            replaced_chunk_ids: tuple[str, ...] = ()
             if not bool(existing_doc["vectors_synced"]):
                 pending_delete_chunk_ids = self._load_json_str_list(existing_doc["pending_delete_chunk_ids"])
                 if pending_delete_chunk_ids:
                     self._delete_vectors(pending_delete_chunk_ids)
-                    self._set_pending_delete_chunk_ids(document_id, ())
                 existing_chunk_rows = self._existing_chunks_for_document(document_id)
                 chunk_texts = [row[1] for row in existing_chunk_rows]
                 if chunk_texts:
@@ -194,13 +194,14 @@ class ContentStore(ContentStoreProtocol):
                         scope=request.scope,
                     )
                 self._mark_vectors_synced(document_id)
+                replaced_chunk_ids = pending_delete_chunk_ids
             return ContentIngestResult(
                 document_id=document_id,
                 source_id=request.source_id,
-                state=ContentIngestState.UNCHANGED,
+                state=ContentIngestState.REPLACED if replaced_chunk_ids else ContentIngestState.UNCHANGED,
                 content_hash=content_hash,
                 chunk_ids=chunk_ids,
-                replaced_chunk_ids=(),
+                replaced_chunk_ids=replaced_chunk_ids,
                 created_at=datetime.fromisoformat(existing_doc["ingested_at"]),
             )
 
@@ -321,7 +322,6 @@ class ContentStore(ContentStoreProtocol):
         new_chunk_ids = tuple(chunk_id for chunk_id, _, _, _ in chunk_rows)
         if matching_documents:
             self._delete_vectors(replaced_ids)
-            self._set_pending_delete_chunk_ids(document_id, ())
             state = ContentIngestState.REPLACED
         else:
             state = ContentIngestState.CREATED
@@ -544,29 +544,10 @@ class ContentStore(ContentStoreProtocol):
         try:
             with self._db:
                 self._db.execute(
-                    "UPDATE content_documents SET vectors_synced = 1 WHERE document_id = ?",
+                    "UPDATE content_documents "
+                    "SET vectors_synced = 1, pending_delete_chunk_ids = '[]' "
+                    "WHERE document_id = ?",
                     (document_id,),
-                )
-        except KnowledgeOperationError:
-            raise
-        except Exception as exc:
-            raise _operation_error(
-                KnowledgeFailureStage.PERSISTENCE,
-                "persistence_failed",
-                retryable=True,
-                message="Content persistence failed",
-            ) from exc
-
-    def _set_pending_delete_chunk_ids(
-        self,
-        document_id: str,
-        pending_delete_chunk_ids: tuple[str, ...],
-    ) -> None:
-        try:
-            with self._db:
-                self._db.execute(
-                    "UPDATE content_documents SET pending_delete_chunk_ids = ? WHERE document_id = ?",
-                    (json.dumps(list(pending_delete_chunk_ids)), document_id),
                 )
         except KnowledgeOperationError:
             raise

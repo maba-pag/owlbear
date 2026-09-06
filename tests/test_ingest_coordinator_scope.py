@@ -227,6 +227,48 @@ async def test_ingest_replaces_same_identity_content_from_old_scope(old_scope: s
         runtime.connection.close()
 
 
+@pytest.mark.parametrize("failed_operation", ["delete_embedding", "store_embedding"])
+@pytest.mark.asyncio
+async def test_scope_migration_retry_cascades_replaced_chunks(failed_operation: str) -> None:
+    runtime = _runtime("project:new")
+    try:
+        stale = await runtime.content_store.ingest(
+            ContentIngestRequest(
+                source_id=runtime.source.id,
+                title="Fixture",
+                text="Scoped fixture content",
+                external_id="fixture-1",
+                scope="global",
+            )
+        )
+        operation = getattr(runtime.vectors, failed_operation)
+        failed = False
+
+        def fail_once(*args: object, **kwargs: object) -> None:
+            nonlocal failed
+            if not failed:
+                failed = True
+                raise RuntimeError("vector synchronization failed")
+            operation(*args, **kwargs)
+
+        setattr(runtime.vectors, failed_operation, fail_once)
+
+        first = await runtime.coordinator.ingest(
+            _request(IngestDocument(title="Fixture", text="Scoped fixture content", external_id="fixture-1"))
+        )
+        retry = await runtime.coordinator.ingest(
+            _request(IngestDocument(title="Fixture", text="Scoped fixture content", external_id="fixture-1"))
+        )
+
+        assert first.errors
+        assert retry.documents_replaced == 1
+        assert retry.content_results[0].replaced_chunk_ids == stale.chunk_ids
+        assert runtime.enrichment.discard_chunks.call_args.args[0] == stale.chunk_ids
+        assert runtime.graph.invalidate_evidence_by_chunks.call_args.args[0] == stale.chunk_ids
+    finally:
+        runtime.connection.close()
+
+
 @pytest.mark.asyncio
 async def test_multi_document_ingest_preserves_scope_for_every_document(runtime: _Runtime) -> None:
     result = await runtime.coordinator.ingest(
