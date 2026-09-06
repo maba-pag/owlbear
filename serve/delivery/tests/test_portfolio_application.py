@@ -15,7 +15,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock
 from typing import Literal
 from unittest.mock import Mock, patch, sentinel
 
@@ -331,6 +331,21 @@ def _publication_observation(
         ).encode()
     ).hexdigest()
     return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
+
+
+class _ObservedLock:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self.observe_attempts = Event()
+        self.attempted = Event()
+
+    def __enter__(self) -> None:
+        if self.observe_attempts.is_set():
+            self.attempted.set()
+        self._lock.acquire()
+
+    def __exit__(self, *_args: object) -> None:
+        self._lock.release()
 
 
 def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
@@ -4104,6 +4119,8 @@ dependencies: []
     allow_admission = Event()
     health_reconciling = Event()
     allow_health = Event()
+    observed_lock = _ObservedLock()
+    application._runtime_reconciliation_lock = observed_lock
     original_admit = application._authority_registry.admit
     original_reconcile = application._reconcile_existing_runtime
 
@@ -4133,8 +4150,9 @@ dependencies: []
         with patch.object(application, "_reconcile_existing_runtime", side_effect=blocking_reconcile):
             health = executor.submit(application.delivery_health)
             assert health_reconciling.wait(2)
+            observed_lock.observe_attempts.set()
             allow_admission.set()
-            time.sleep(0.1)
+            assert observed_lock.attempted.wait(2)
             allow_health.set()
             assert health.result(timeout=2).status.value == "healthy"
         assert admitted.result(timeout=2).contract.change_id == "change-b"
