@@ -649,6 +649,9 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     packet = (_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8")
     orchestration = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
     curation = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
+    finalization = (_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8")
+    finalizer = (_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8")
+    reviewer = (_AGENTS_ROOT / "build-reviewer.agent.md").read_text(encoding="utf-8")
     content = " ".join(f"{guidance}\n{packet}\n{orchestration}\n{curation}".split())
 
     assert "human-assisted and sampled" in content
@@ -656,6 +659,9 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "memory_candidate" in content
     assert "pre-execution `dispatch_failure`" in content
     assert "does not schedule or require a post-task assessment" in content
+    assert "`memory_candidate` for the task-owning caller to save" in reviewer
+    assert "Validate the optional `memory_candidate` against `h-memory-structure`" in finalization
+    assert "Preserve reviewer memory provenance" in finalizer
     assert "not an idempotency key" in content
     assert "cycle 3, then cycles 13, 23" in content
     assert "opportunistic, not an eventual-processing SLA" in content
