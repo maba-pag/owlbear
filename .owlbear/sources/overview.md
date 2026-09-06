@@ -4,6 +4,23 @@
 
 External repos and resources studied during OwlBear development.
 
+## Memory System End-to-End Audit
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Git commit reference | <https://git-scm.com/docs/git-commit> | Explicit-path commit semantics and the distinction between validated snapshots, staged content, and current worktree bytes | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+| SQLite atomic commit | <https://sqlite.org/atomiccommit.html> | Locking, atomic transactions, crash recovery, and failure-test principles for comparison with Markdown-backed memory | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+| OWASP LLM Prompt Injection Prevention Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html> | Persistent memory poisoning threat model, retrieved-data authority separation, and layered defenses; no example code adopted | [Memory system audit](../research/memory-system-audit-2026-09-05.md) | 2026-09-05 |
+
+## Browser Package and Knowledge Integration Audit
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Microsoft Enterprise SSO plug-in for Apple devices | <https://learn.microsoft.com/en-us/entra/identity-platform/apple-sso-plugin> | macOS Company Portal and MDM prerequisites, browser-specific SSO integration, and limits of extension-only discovery | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Playwright BrowserType API | <https://playwright.dev/python/docs/api/class-browsertype> | Edge channel selection, persistent-profile ownership constraints, context defaults and lower-fidelity CDP attachment | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Playwright Chrome extensions guide | <https://playwright.dev/python/docs/chrome-extensions> | Persistent Chromium extension loading and removal of extension sideload flags from branded Chrome and Edge | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+| Microsoft Edge DevTools Protocol | <https://learn.microsoft.com/en-us/microsoft-edge/devtools/protocol/> | Explicit remote-debugging setup and CDP endpoints; protocol capability distinguished from implemented OwlBear attachment | [Browser audit](../research/browser-package-audit-2026-09-05.md) | 2026-09-05 |
+
 ## Delivery Proposal Acceptance Redesign
 
 | Source | URL | What | Where Used | Date |
