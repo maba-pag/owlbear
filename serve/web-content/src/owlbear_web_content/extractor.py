@@ -6,7 +6,7 @@ import re
 
 import trafilatura
 
-from owlbear_web_content.cleaner import html_to_markdown, strip_noise
+from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 
 def _preserves_link_targets(result: str, fallback: str) -> bool:
@@ -25,9 +25,9 @@ def _extract_markdown(html: str, url: str | None = None) -> str:
         include_links=True,
         include_tables=True,
     )
-    fallback = html_to_markdown(noise_free)
+    fallback = normalize(html_to_markdown(noise_free, url=url))
     if result and _preserves_link_targets(result, fallback):
-        return result
+        return normalize(result)
     return fallback
 
 

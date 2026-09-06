@@ -1,6 +1,7 @@
 import pytest
 
 import owlbear_web_content.cleaner as cleaner_module
+import owlbear_web_content.extractor as extractor_module
 from owlbear_web_content import (
     clean,
     extract,
@@ -26,6 +27,50 @@ REPRESENTATIVE_HTML = """
     </main>
     <script>Fixture script payload</script>
     <div class="cookie-banner">Fixture cookie chrome</div>
+  </body>
+</html>
+"""
+
+
+ENTERPRISE_SOURCE_URL = "https://intranet.example.test/handbook/guide.html"
+
+ENTERPRISE_HTML = """
+<html>
+  <head><title>Enterprise guide</title></head>
+  <body>
+    <nav>Enterprise navigation</nav>
+    <div role="navigation">Secondary navigation</div>
+  <aside>Unrelated page furniture</aside>
+  <main>
+      <h1>Enterprise guide</h1>
+      <h2>Deployment</h2>
+      <p>Use the <a href="../api/v1?format=html">deployment API</a>.</p>
+      <ul>
+        <li>Prepare the service
+          <ul>
+            <li>Set the environment</li>
+            <li>Run <code>owlbear serve --check</code></li>
+          </ul>
+        </li>
+      </ul>
+      <pre><code class="language-python">def ready():
+    return True
+</code></pre>
+      <p><img src="./images/runbook.png" alt="Deployment runbook diagram"></p>
+      <table>
+        <tr><th>Setting</th><th>Value</th></tr>
+        <tr><td>Allowed | hosts</td><td>intranet</td></tr>
+        <tr><td colspan="2">Shared policy row</td></tr>
+      </table>
+      <p hidden>Hidden tab content</p>
+      <p aria-hidden="true">Screen-reader-hidden content</p>
+      <p style="display: none">CSS-hidden content</p>
+      <p style="visibility: hidden">Visibility-hidden content</p>
+      <p aria-hidden="false">Visible explanatory content</p>
+    </main>
+    <script>Enterprise script payload</script>
+    <div class="cookie-banner">Cookie consent</div>
+    <footer>Enterprise footer</footer>
   </body>
 </html>
 """
@@ -57,6 +102,91 @@ def test_html_to_markdown_preserves_structure() -> None:
     assert "1. Item" in markdown
     assert "| A |" in markdown
     assert "| B |" in markdown
+
+
+def test_enterprise_fallback_preserves_structure_and_resolves_relative_urls() -> None:
+    markdown = html_to_markdown(strip_noise(ENTERPRISE_HTML), url=ENTERPRISE_SOURCE_URL)
+
+    assert "# Enterprise guide" in markdown
+    assert "## Deployment" in markdown
+    assert "[deployment API](https://intranet.example.test/api/v1?format=html)" in markdown
+    assert "- Prepare the service" in markdown
+    assert "  - Set the environment" in markdown
+    assert "  - Run `owlbear serve --check`" in markdown
+    assert "```python\ndef ready():\n    return True\n```" in markdown
+    assert "![Deployment runbook diagram](https://intranet.example.test/handbook/images/runbook.png)" in markdown
+    assert "| Allowed \\| hosts | intranet |" in markdown
+    assert "| Shared policy row |  |" in markdown
+    assert "Visible explanatory content" in markdown
+    assert "Hidden tab content" not in markdown
+    assert "Screen-reader-hidden content" not in markdown
+    assert "CSS-hidden content" not in markdown
+    assert "Visibility-hidden content" not in markdown
+    assert "Enterprise navigation" not in markdown
+    assert "Unrelated page furniture" not in markdown
+    assert "Enterprise script payload" not in markdown
+    assert "Cookie consent" not in markdown
+    assert "Enterprise footer" not in markdown
+
+
+def test_relative_urls_remain_relative_without_a_source_url() -> None:
+    markdown = html_to_markdown(strip_noise(ENTERPRISE_HTML))
+
+    assert "[deployment API](../api/v1?format=html)" in markdown
+    assert "![Deployment runbook diagram](./images/runbook.png)" in markdown
+
+
+def test_extract_content_preserves_the_enterprise_corpus() -> None:
+    markdown = extract_content(ENTERPRISE_HTML, url=ENTERPRISE_SOURCE_URL)
+
+    assert "# Enterprise guide" in markdown
+    assert "  - Set the environment" in markdown
+    assert "```python\ndef ready():\n    return True\n```" in markdown
+    assert "![Deployment runbook diagram](https://intranet.example.test/handbook/images/runbook.png)" in markdown
+    assert "| Allowed \\| hosts | intranet |" in markdown
+    assert "Hidden tab content" not in markdown
+    assert "Enterprise navigation" not in markdown
+
+
+def test_normalize_preserves_nested_list_indentation_and_code_whitespace() -> None:
+    markdown = normalize("- parent\n  - child\n\n```python\n  indented()\n    nested()\n```")
+
+    assert markdown == "- parent\n  - child\n\n```python\n  indented()\n    nested()\n```"
+
+
+def test_extract_prefers_trafilatura_when_all_fallback_links_are_retained(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = "[deployment API](https://intranet.example.test/api/v1?format=html)"
+
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return expected
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert (
+        extract_content(
+            '<main><p><a href="../api/v1?format=html">deployment API</a></p></main>',
+            url=ENTERPRISE_SOURCE_URL,
+        )
+        == expected
+    )
+
+
+def test_extract_falls_back_when_trafilatura_drops_a_link_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "Deployment API"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    markdown = extract_content(
+        '<main><p><a href="../api/v1?format=html">deployment API</a></p></main>',
+        url=ENTERPRISE_SOURCE_URL,
+    )
+
+    assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
 
 
 def test_strip_noise_removes_known_page_chrome() -> None:
