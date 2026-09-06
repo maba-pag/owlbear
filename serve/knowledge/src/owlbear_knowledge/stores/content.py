@@ -237,6 +237,7 @@ class ContentStore(ContentStoreProtocol):
                 self._chunk_ids_for_document(str(row["document_id"])),
             )
         pending_vector_ids = self._collect_pending_vector_ids(list(matching_documents))
+        replaced_ids = self._merge_unique_ids(replaced_ids, pending_vector_ids)
         chunk_rows = [(uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata)) for chunk in chunks]
 
         try:
@@ -319,7 +320,7 @@ class ContentStore(ContentStoreProtocol):
 
         new_chunk_ids = tuple(chunk_id for chunk_id, _, _, _ in chunk_rows)
         if matching_documents:
-            self._delete_vectors(self._merge_unique_ids(replaced_ids, pending_vector_ids))
+            self._delete_vectors(replaced_ids)
             self._set_pending_delete_chunk_ids(document_id, ())
             state = ContentIngestState.REPLACED
         else:
