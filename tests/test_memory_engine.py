@@ -45,21 +45,30 @@ def test_load_counts_malformed_files_without_raising(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("title", "content"),
+    ("title", "content", "source_agent"),
     [
-        ("x" * 7819, "Some content"),
-        ("é" * 3909 + "x", "Some content"),
-        ("x" * 3735, "😀" * 1024),
+        ("x" * 7819, "Some content", "test-agent"),
+        ("é" * 3909 + "x", "Some content", "test-agent"),
+        ("x" * 3735, "😀" * 1024, "test-agent"),
+        ("Test Entry", "Some content", "é" * 3909 + "x"),
     ],
-    ids=["ascii-title", "multibyte-title", "multibyte-content"],
+    ids=["ascii-title", "multibyte-title", "multibyte-content", "multibyte-metadata"],
 )
 def test_fresh_engine_reads_each_successful_boundary_write(
     tmp_path: Path,
     title: str,
     content: str,
+    source_agent: str,
 ) -> None:
     """Successful boundary writes remain readable by a fresh MemoryEngine."""
-    entry = MemoryEntry(**{**_valid_entry_data(), "title": title, "content": content})
+    entry = MemoryEntry(
+        **{
+            **_valid_entry_data(),
+            "title": title,
+            "content": content,
+            "source_agent": source_agent,
+        }
+    )
     target = tmp_path / "boundary.md"
     storage.write_entry(target, entry, memory_dir=tmp_path)
 
