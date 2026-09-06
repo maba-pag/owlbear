@@ -77,7 +77,7 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
-| `assess_memories` | Record whether recalled entries were useful for a completed task | `task_id`, `assessments` |
+| `assess_memories` | Record whether recalled entries were useful for a substantive task attempt | `task_id`, `assessments` |
 | `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
@@ -280,13 +280,13 @@ Behavior:
 
 ## assess_memories
 
-Records how useful recalled memory entries were for a completed task. When a
+Records how useful recalled memory entries were for a substantive task attempt. When a
 caller uses the sampled assessment path, include every entry returned by
 `recall_memory` in one assessment batch.
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `task_id` | str | (required) | Non-empty identifier for the completed task |
+| `task_id` | str | (required) | Non-empty identifier for the substantive task attempt |
 | `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
 
 Each assessment item requires these fields:
