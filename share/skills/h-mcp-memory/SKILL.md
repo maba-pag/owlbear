@@ -96,6 +96,12 @@ policy.
 The loop is **human-assisted and sampled**, not universally mandatory and not
 expected to become automatic without a later evidence-based policy change.
 
+This follows F11/F12 in the [2026-09-05 memory-system
+audit](../../../.owlbear/research/memory-system-audit-2026-09-05.md): historical
+assessment totals show past use, not role coverage or effectiveness, and the
+observed pending entries do not establish starvation. Existing role/tool
+matrices and workflow cadence are the evidence boundary for this policy.
+
 - `builder` is the only assessment consumer. It is the feedback sample owner,
   not a Delivery completion gate. Other outcome owners and specialist
   producers may recall and save candidates but do not assess recalled entries.
@@ -112,6 +118,8 @@ expected to become automatic without a later evidence-based policy change.
 When Builder performs the sample, it submits one complete batch at the end of
 the substantive task attempt while the recalled entry IDs are still available:
 
+- The assessment boundary is the end of substantive work, not proof of a
+  successful Delivery completion.
 - An ordinary `advance` attempt is eligible after the task work reaches its
   terminal boundary.
 - A `retry`, `return`, or `block` after substantive work is also an eligible
