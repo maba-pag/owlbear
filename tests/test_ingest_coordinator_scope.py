@@ -284,14 +284,11 @@ async def test_ingest_replaces_same_identity_content_from_old_scope(old_scope: s
         assert runtime.content_store.get_document(stale.document_id) is None
         assert runtime.enrichment.discard_chunks.call_args.args[0] == stale.chunk_ids
         assert runtime.graph.invalidate_evidence_by_chunks.call_args.args[0] == stale.chunk_ids
-        assert await runtime.content_store.search(
-            ContentSearchQuery(text="fixture", scopes=(old_scope,))
-        ) == ()
-        assert len(
-            await runtime.content_store.search(
-                ContentSearchQuery(text="fixture", scopes=(runtime.source.scope,))
-            )
-        ) == 1
+        assert await runtime.content_store.search(ContentSearchQuery(text="fixture", scopes=(old_scope,))) == ()
+        assert (
+            len(await runtime.content_store.search(ContentSearchQuery(text="fixture", scopes=(runtime.source.scope,))))
+            == 1
+        )
     finally:
         runtime.connection.close()
 
