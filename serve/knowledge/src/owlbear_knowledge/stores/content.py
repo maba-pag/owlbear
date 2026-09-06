@@ -84,7 +84,7 @@ class ContentStore(ContentStoreProtocol):
         self._embedding_provider = embedding_provider
         self._chunker = chunker
         self._legacy_scopes: dict[str, tuple[str, ...]] = {}
-        self._legacy_scopes_data_version = int(self._db.execute("PRAGMA data_version").fetchone()[0])
+        self._legacy_scopes_data_version: int | None = None
 
     def ensure_tables(self) -> None:
         """Create Content-owned tables if they do not yet exist."""
