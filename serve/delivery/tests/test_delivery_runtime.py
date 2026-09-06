@@ -1193,9 +1193,7 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
         abandoned_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
         reason="user stopped the Change",
     )
-    attention_payload = parse_delivery_frontier(attention_runtime.frontier_bytes())[0].model_dump(
-        mode="python"
-    )
+    attention_payload = parse_delivery_frontier(attention_runtime.frontier_bytes())[0].model_dump(mode="python")
     attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
 
     with pytest.raises(ValueError, match="abandoned Change cannot retain active or terminal authority"):

@@ -32,9 +32,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceAttentionReason,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
-    parse_delivery_frontier,
     DeliveryRuntime,
     DeliveryWorkerRole,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.delivery_state import (
     DeliveryStatePublicationError,
