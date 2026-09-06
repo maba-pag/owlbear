@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING, Literal, Never
 
 from markdown_it import MarkdownIt
@@ -1182,6 +1183,7 @@ class PortfolioApplication:
         if set(runtimes) != {runtime.contract.change_id for runtime in runtimes.values()}:
             message = "runtime mapping keys must match admitted change identities"
             raise ValueError(message)
+        self._runtime_reconciliation_lock = Lock()
         self._runtimes = dict(runtimes)
         self._discovered_changes: dict[str, DeliveryChangeObservation] = {}
         self._runtime_reconciliation_errors: dict[str, str] = {}
@@ -3307,12 +3309,13 @@ class PortfolioApplication:
                 request.change_id,
                 recovery_reviewed_head=request.recovery_reviewed_head,
             )
-            self._runtimes[request.change_id] = DeliveryRuntime(
+            runtime = DeliveryRuntime(
                 self._target_root,
                 result.contract,
                 workspace_manager=self._workspace_manager,
             )
-            runtime = self._runtimes[request.change_id]
+            with self._runtime_reconciliation_lock:
+                self._runtimes[request.change_id] = runtime
             package = self._package_store.read_verified(request.change_id)
             self._validate_package_authority(runtime, package)
             snapshot = self._workspace_manager.snapshot_design_package(
@@ -4067,6 +4070,10 @@ class PortfolioApplication:
         )
 
     def _reconcile_runtimes(self) -> None:
+        with self._runtime_reconciliation_lock:
+            self._reconcile_runtimes_locked()
+
+    def _reconcile_runtimes_locked(self) -> None:
         try:
             discovered = discover_persisted_changes(self._target_root)
         except DeliveryDiscoveryRootError as exc:

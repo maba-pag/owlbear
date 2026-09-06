@@ -4071,6 +4071,77 @@ dependencies: []
     assert outcomes[0].status.value == "provider-unavailable"
 
 
+def test_health_reconciliation_does_not_race_shared_runtime_admission(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.create_design_session(
+        "change-b",
+        b"""# change-b
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: concurrency test
+statement: Preserve concurrent runtime reconciliation.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Reconcile concurrent admission
+promise: Keep admitted runtime state available.
+acceptance: [Concurrent health remains available.]
+commitments: [COM-001]
+dependencies: []
+```
+""",
+        b"# Architecture\n",
+    )
+    admission_persisted = Event()
+    allow_admission = Event()
+    health_reconciling = Event()
+    allow_health = Event()
+    original_admit = application._authority_registry.admit
+    original_reconcile = application._reconcile_existing_runtime
+
+    def blocking_admit(request):
+        result = original_admit(request)
+        admission_persisted.set()
+        assert allow_admission.wait(2)
+        return result
+
+    def blocking_reconcile(runtime, observation, *, initial_reconciliation):
+        if not health_reconciling.is_set():
+            health_reconciling.set()
+            assert allow_health.wait(2)
+        return original_reconcile(
+            runtime,
+            observation,
+            initial_reconciliation=initial_reconciliation,
+        )
+
+    request = DeliveryAdmissionRequest(change_id="change-b", active_claim_ids=())
+    with (
+        patch.object(application._authority_registry, "admit", side_effect=blocking_admit),
+        ThreadPoolExecutor(max_workers=2) as executor,
+    ):
+        admitted = executor.submit(application.admit_delivery_change, request)
+        assert admission_persisted.wait(2)
+        with patch.object(application, "_reconcile_existing_runtime", side_effect=blocking_reconcile):
+            health = executor.submit(application.delivery_health)
+            assert health_reconciling.wait(2)
+            allow_admission.set()
+            time.sleep(0.1)
+            allow_health.set()
+            assert health.result(timeout=2).status.value == "healthy"
+        assert admitted.result(timeout=2).contract.change_id == "change-b"
+
+    assert set(application._runtimes) == {"change-a", "change-b"}
+
+
 def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
