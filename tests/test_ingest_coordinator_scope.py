@@ -317,7 +317,8 @@ async def test_scope_migration_retry_cascades_replaced_chunks(failed_operation: 
             nonlocal failed
             if not failed:
                 failed = True
-                raise RuntimeError("vector synchronization failed")
+                error_message = "vector synchronization failed"
+                raise RuntimeError(error_message)
             operation(*args, **kwargs)
 
         setattr(runtime.vectors, failed_operation, fail_once)
