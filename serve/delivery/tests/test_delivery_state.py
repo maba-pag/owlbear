@@ -183,7 +183,7 @@ def _publish(  # noqa: PLR0913, PLR0917 - helper binds the exact publisher input
 
 
 def _admission(runtime: DeliveryRuntime, manager: ChangeWorkspaceManager, change_id: str) -> DeliveryAdmissionReceipt:
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     contract_bytes = (
         json.dumps(runtime.contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
     ).encode()
@@ -580,7 +580,7 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].snapshot_id == receipt.snapshot_id
     assert snapshots[0].change_id == "state-change"
     assert snapshots[0].contract == contract
-    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
 
@@ -755,7 +755,7 @@ def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: P
     runtime, manager, _worktree = _runtime(tmp_path, repository, "state-reject", contract)
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
     frontier_path = runtime._frontier_path  # noqa: SLF001
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     active = DeliveryActiveClaim(
         attempt_id="attempt",
         claim_id="claim",
@@ -898,7 +898,7 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     assert application.list_work_items()
 
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
     frontier_path.write_bytes(
         (
             json.dumps(
