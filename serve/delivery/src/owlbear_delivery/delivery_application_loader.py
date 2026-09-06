@@ -32,6 +32,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceAttentionReason,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
+    parse_delivery_frontier,
     DeliveryRuntime,
     DeliveryWorkerRole,
 )
@@ -490,7 +491,7 @@ def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     try:
         content = path.read_bytes()
-        return content, DeliveryFrontier.model_validate_json(content, strict=False)
+        return content, parse_delivery_frontier(content)[0]
     except (OSError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
 
