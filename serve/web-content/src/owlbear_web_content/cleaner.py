@@ -99,7 +99,7 @@ def _remove_hidden_elements(doc: HtmlElement) -> None:
             continue
         parent = element.getparent()
         if parent is not None:
-            parent.remove(element)
+            element.drop_tree()
 
 
 def strip_noise(html_str: str) -> str:
@@ -188,12 +188,11 @@ def _list_item_to_markdown(element: HtmlElement, url: str | None) -> str:
     return "".join(parts).strip()
 
 
-def _list_lines(element: HtmlElement, url: str | None, depth: int = 0) -> list[str]:
-    """Render nested ordered and unordered lists with stable two-space indents."""
+def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list[str]:
+    """Render nested ordered and unordered lists with valid marker-width indents."""
     ordered = element.tag.lower() == "ol"
     lines: list[str] = []
     item_number = 1
-    indent = "  " * depth
     for child in element:
         if not isinstance(child.tag, str) or child.tag.lower() != "li":
             continue
@@ -202,7 +201,7 @@ def _list_lines(element: HtmlElement, url: str | None, depth: int = 0) -> list[s
         lines.append(f"{indent}{marker}{content}".rstrip())
         for nested in child:
             if isinstance(nested.tag, str) and nested.tag.lower() in _LIST_TAGS:
-                lines.extend(_list_lines(nested, url, depth + 1))
+                lines.extend(_list_lines(nested, url, indent + " " * len(marker)))
         item_number += 1
     return lines
 
@@ -234,7 +233,8 @@ def _inline_code_to_markdown(element: HtmlElement, tail: str, _url: str | None =
     text = "".join(element.itertext())
     longest_backtick_run = max((len(run) for run in re.findall(r"`+", text)), default=0)
     delimiter = "`" * max(1, longest_backtick_run + 1)
-    padding = " " if text.startswith("`") or text.endswith("`") else ""
+    has_boundary_spaces = bool(text.strip()) and text.startswith(" ") and text.endswith(" ")
+    padding = " " if text.startswith("`") or text.endswith("`") or has_boundary_spaces else ""
     return f"{delimiter}{padding}{text}{padding}{delimiter}" + tail
 
 

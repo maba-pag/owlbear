@@ -161,6 +161,23 @@ def test_table_spans_are_flattened_without_losing_cell_text() -> None:
     assert "| Shared policy |  |" in markdown
 
 
+def test_hidden_inline_element_removal_preserves_visible_tail() -> None:
+    markdown = html_to_markdown(strip_noise('<p>Before <span aria-hidden="true">icon</span> after</p>'))
+
+    assert markdown == "Before  after"
+
+
+def test_ordered_list_nesting_uses_parent_marker_width() -> None:
+    items = "".join(f"<li>Item {number}</li>" for number in range(1, 10))
+    markdown = html_to_markdown(f"<ol>{items}<li>Parent<ul><li>Child</li></ul></li></ol>")
+
+    assert "10. Parent\n    - Child" in markdown
+
+
+def test_inline_code_preserves_leading_and_trailing_spaces() -> None:
+    assert html_to_markdown("<p><code> value </code></p>") == "`  value  `"
+
+
 def test_normalize_preserves_nested_list_indentation_and_code_whitespace() -> None:
     markdown = normalize("- parent\n  - child\n\n```python\n  indented()\n    nested()\n```")
 
@@ -200,6 +217,19 @@ def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     )
 
     assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
+
+
+def test_extract_falls_back_when_trafilatura_drops_an_image_alternative(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "Surrounding text"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    markdown = extract_content('<main><p>Surrounding text <img alt="Architecture diagram"></p></main>')
+
+    assert markdown == "Surrounding text [Image: Architecture diagram]"
 
 
 def test_strip_noise_removes_known_page_chrome() -> None:

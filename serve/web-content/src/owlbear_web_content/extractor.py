@@ -9,10 +9,13 @@ import trafilatura
 from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 
-def _preserves_link_targets(result: str, fallback: str) -> bool:
-    """Return whether an extracted result retains all structural link targets."""
+def _preserves_structure(result: str, fallback: str) -> bool:
+    """Return whether an extracted result retains structural targets and image alternatives."""
     targets = re.findall(r"\]\(([^)]*)\)", fallback)
-    return all(f"]({target})" in result for target in targets)
+    image_alternatives = re.findall(r"!\[([^\]]+)\]\([^)]*\)|\[Image: ([^\]]+)\]", fallback)
+    return all(f"]({target})" in result for target in targets) and all(
+        (markdown_alt or text_alt) in result for markdown_alt, text_alt in image_alternatives
+    )
 
 
 def _extract_markdown(html: str, url: str | None = None) -> str:
@@ -26,7 +29,7 @@ def _extract_markdown(html: str, url: str | None = None) -> str:
         include_tables=True,
     )
     fallback = normalize(html_to_markdown(noise_free, url=url))
-    if result and _preserves_link_targets(result, fallback):
+    if result and _preserves_structure(result, fallback):
         return normalize(result)
     return fallback
 
