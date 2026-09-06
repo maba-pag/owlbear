@@ -11,8 +11,8 @@ from lxml import html as lxml_html
 from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 _FENCE_LINE_RE = re.compile(r"^(?P<indent>[ ]*)(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
-_LIST_LINE_RE = re.compile(r"^\s*(?:[-+*]|\d+\.)\s+")
-_TABLE_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
+_LIST_LINE_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>[-+*]|\d+[.)])[ \t]+(?P<content>.*)$")
+_TABLE_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 
 
 def _can_open_fence(match: re.Match[str] | None) -> bool:
@@ -99,23 +99,68 @@ def _inline_code_spans(markdown: str) -> list[str]:
     return spans
 
 
-def _structural_lines(markdown: str) -> list[str]:
-    """Return list and table lines outside fenced code blocks."""
+def _table_cells(line: str) -> list[str] | None:
+    """Return canonical cells from a Markdown table row."""
+    if "|" not in line:
+        return None
+    row = line.strip().removeprefix("|")
+    if row.endswith("|") and not _is_escaped(row, len(row) - 1):
+        row = row[:-1]
+    cells: list[str] = []
+    cell: list[str] = []
+    escaped = False
+    for character in row:
+        if character == "|" and not escaped:
+            cells.append("".join(cell))
+            cell.clear()
+        else:
+            cell.append(character)
+        escaped = character == "\\" and not escaped
+    cells.append("".join(cell))
+    return [re.sub(r"\s+", " ", value.strip()).replace(r"\|", "|") for value in cells]
+
+
+def _is_escaped(text: str, index: int) -> bool:
+    """Return whether the character at ``index`` is escaped."""
+    backslashes = 0
+    index -= 1
+    while index >= 0 and text[index] == "\\":
+        backslashes += 1
+        index -= 1
+    return backslashes % 2 == 1
+
+
+def _structural_lines(markdown: str) -> list[tuple[str, ...]]:
+    """Return canonical list and table structure outside fenced code blocks."""
     visible_chunks: list[str] = []
     cursor = 0
     for start, end, _block in _fenced_code_ranges(markdown):
         visible_chunks.append(markdown[cursor:start])
         cursor = end
     visible_chunks.append(markdown[cursor:])
-    return [
-        line
-        for chunk in visible_chunks
-        for line in chunk.splitlines()
-        if _LIST_LINE_RE.match(line) or _TABLE_LINE_RE.match(line)
-    ]
+    structural_lines: list[tuple[str, ...]] = []
+    list_indents: list[int] = []
+    for chunk in visible_chunks:
+        for line in chunk.splitlines():
+            list_match = _LIST_LINE_RE.match(line)
+            if list_match is not None:
+                indent = len(list_match.group("indent").expandtabs(4))
+                while list_indents and indent < list_indents[-1]:
+                    list_indents.pop()
+                if not list_indents or indent > list_indents[-1]:
+                    list_indents.append(indent)
+                list_kind = "ordered" if list_match.group("marker")[0].isdigit() else "unordered"
+                item = re.sub(r"\s+", " ", list_match.group("content").strip())
+                structural_lines.append(("list", str(len(list_indents) - 1), list_kind, item))
+                continue
+            cells = _table_cells(line)
+            if cells is None or all(_TABLE_SEPARATOR_RE.fullmatch(cell) for cell in cells):
+                continue
+            structural_lines.append(("table", *cells))
+    return structural_lines
 
 
-def _contains_in_order(actual: list[str], expected: list[str]) -> bool:
+def _contains_in_order[T](actual: list[T], expected: list[T]) -> bool:
     """Return whether every expected value appears in order in the actual values."""
     position = 0
     for value in expected:

@@ -234,6 +234,26 @@ def test_extract_prefers_trafilatura_when_all_fallback_links_are_retained(
     )
 
 
+def test_extract_prefers_equivalent_trafilatura_list_and_table_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = "* Parent\n    + Child\n\nField | Value\n--- | ---\nAnswer | 42"
+
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return expected
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert (
+        extract_content(
+            "<main><ul><li>Parent<ul><li>Child</li></ul></li></ul>"
+            "<table><tr><th>Field</th><th>Value</th></tr>"
+            "<tr><td>Answer</td><td>42</td></tr></table></main>"
+        )
+        == expected
+    )
+
+
 def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
