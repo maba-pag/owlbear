@@ -108,6 +108,7 @@ def _runtime(scope: str, *, connection: sqlite3.Connection | None = None) -> _Ru
 
     content = MagicMock(name="content")
     content.ingest = AsyncMock(wraps=content_store.ingest)
+    content.acknowledge_replacement = MagicMock(wraps=content_store.acknowledge_replacement)
 
     enrichment = MagicMock(name="enrichment")
     enrichment.enqueue_chunks.return_value = 0
@@ -332,6 +333,103 @@ async def test_scope_migration_retry_cascades_replaced_chunks(failed_operation: 
         assert retry.content_results[0].replaced_chunk_ids == stale.chunk_ids
         assert runtime.enrichment.discard_chunks.call_args.args[0] == stale.chunk_ids
         assert runtime.graph.invalidate_evidence_by_chunks.call_args.args[0] == stale.chunk_ids
+    finally:
+        runtime.connection.close()
+
+
+@pytest.mark.parametrize("failed_step", ["enrichment", "graph"])
+@pytest.mark.asyncio
+async def test_scope_migration_retry_preserves_chunks_for_downstream_cascade(failed_step: str) -> None:
+    runtime = _runtime("project:new")
+    try:
+        stale = await runtime.content_store.ingest(
+            ContentIngestRequest(
+                source_id=runtime.source.id,
+                title="Fixture",
+                text="Scoped fixture content",
+                external_id="fixture-1",
+                scope="global",
+            )
+        )
+        operation = (
+            runtime.enrichment.discard_chunks
+            if failed_step == "enrichment"
+            else runtime.graph.invalidate_evidence_by_chunks
+        )
+        failed = False
+
+        def fail_once(*_args: object, **_kwargs: object) -> None:
+            nonlocal failed
+            if not failed:
+                failed = True
+                error_message = "downstream cascade failed"
+                raise RuntimeError(error_message)
+
+        operation.side_effect = fail_once
+
+        first = await runtime.coordinator.ingest(
+            _request(IngestDocument(title="Fixture", text="Scoped fixture content", external_id="fixture-1"))
+        )
+        retry = await runtime.coordinator.ingest(
+            _request(IngestDocument(title="Fixture", text="Scoped fixture content", external_id="fixture-1"))
+        )
+
+        assert first.documents_replaced == 0
+        assert retry.documents_replaced == 1
+        assert retry.content_results[0].replaced_chunk_ids == stale.chunk_ids
+        pending = runtime.connection.execute(
+            "SELECT pending_cascade_chunk_ids FROM content_documents WHERE document_id = ?",
+            (retry.content_results[0].document_id,),
+        ).fetchone()
+        assert pending[0] == "[]"
+        assert runtime.content.acknowledge_replacement.call_count == 1
+    finally:
+        runtime.connection.close()
+
+
+@pytest.mark.asyncio
+async def test_source_deletion_includes_pending_scope_migration_chunks() -> None:
+    runtime = _runtime("project:new")
+    try:
+        stale = await runtime.content_store.ingest(
+            ContentIngestRequest(
+                source_id=runtime.source.id,
+                title="Fixture",
+                text="Scoped fixture content",
+                external_id="fixture-1",
+                scope="global",
+            )
+        )
+        failed = False
+
+        def fail_once(*_args: object, **_kwargs: object) -> None:
+            nonlocal failed
+            if not failed:
+                failed = True
+                error_message = "downstream cascade failed"
+                raise RuntimeError(error_message)
+
+        runtime.enrichment.discard_chunks.side_effect = fail_once
+        await runtime.coordinator.ingest(
+            _request(IngestDocument(title="Fixture", text="Scoped fixture content", external_id="fixture-1"))
+        )
+
+        runtime.content.purge_source = runtime.content_store.purge_source
+        runtime.sources.delete_source.return_value = SourceDeletionInfo(
+            source_id=runtime.source.id,
+            source_name=runtime.source.name,
+            scope=runtime.source.scope,
+            deleted_at=datetime.now(tz=UTC),
+        )
+        runtime.enrichment.purge_source.return_value = EnrichmentPurgeResult(source_id=runtime.source.id)
+        runtime.graph.invalidate_evidence_by_chunks.return_value = EvidenceInvalidationResult()
+
+        purge = await runtime.coordinator.delete_source(runtime.source.id)
+
+        assert purge.status is PurgeStatus.COMPLETE
+        assert set(stale.chunk_ids).issubset(purge.content.chunk_ids)
+        assert set(stale.chunk_ids).issubset(runtime.enrichment.discard_chunks.call_args_list[-1].args[0])
+        assert set(stale.chunk_ids).issubset(runtime.graph.invalidate_evidence_by_chunks.call_args.args[0])
     finally:
         runtime.connection.close()
 

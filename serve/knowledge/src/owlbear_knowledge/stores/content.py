@@ -100,19 +100,24 @@ class ContentStore(ContentStoreProtocol):
                 content_hash TEXT NOT NULL,
                 vectors_synced INTEGER NOT NULL DEFAULT 1,
                 pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]',
+                pending_cascade_chunk_ids TEXT NOT NULL DEFAULT '[]',
                 trusted INTEGER NOT NULL,
                 metadata_json TEXT NOT NULL DEFAULT '{}',
                 ingested_at TEXT NOT NULL
             )
             """
         )
-        # Backfill compatibility for databases created before vectors_synced existed.
+        # Backfill compatibility for databases created before vector/cascade tracking.
         document_columns = {row[1] for row in self._db.execute("PRAGMA table_info(content_documents)").fetchall()}
         if "vectors_synced" not in document_columns:
             self._db.execute("ALTER TABLE content_documents ADD COLUMN vectors_synced INTEGER NOT NULL DEFAULT 1")
         if "pending_delete_chunk_ids" not in document_columns:
             self._db.execute(
                 "ALTER TABLE content_documents ADD COLUMN pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "pending_cascade_chunk_ids" not in document_columns:
+            self._db.execute(
+                "ALTER TABLE content_documents ADD COLUMN pending_cascade_chunk_ids TEXT NOT NULL DEFAULT '[]'"
             )
         if "identity_key" not in document_columns:
             self._db.execute("ALTER TABLE content_documents ADD COLUMN identity_key TEXT")
@@ -174,7 +179,7 @@ class ContentStore(ContentStoreProtocol):
         try:
             indexed_documents = self._db.execute(
                 "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, "
-                "pending_delete_chunk_ids FROM content_documents "
+                "pending_delete_chunk_ids, pending_cascade_chunk_ids FROM content_documents "
                 "WHERE source_id = ? AND identity_key = ?",
                 (request.source_id, identity_key),
             ).fetchall()
@@ -182,7 +187,7 @@ class ContentStore(ContentStoreProtocol):
             for scope in self._legacy_scopes_for_source(request.source_id):
                 legacy_document = self._db.execute(
                     "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, "
-                    "pending_delete_chunk_ids FROM content_documents "
+                    "pending_delete_chunk_ids, pending_cascade_chunk_ids FROM content_documents "
                     "WHERE document_id = ? AND identity_key IS NULL",
                     (self._document_id(request.source_id, identity, scope),),
                 ).fetchone()
@@ -221,7 +226,12 @@ class ContentStore(ContentStoreProtocol):
                         scope=request.scope,
                     )
                 self._mark_vectors_synced(document_id)
-                replaced_chunk_ids = pending_delete_chunk_ids
+                replaced_chunk_ids = self._merge_unique_ids(
+                    pending_delete_chunk_ids,
+                    self._load_json_str_list(existing_doc["pending_cascade_chunk_ids"]),
+                )
+            else:
+                replaced_chunk_ids = self._load_json_str_list(existing_doc["pending_cascade_chunk_ids"])
             return ContentIngestResult(
                 document_id=document_id,
                 source_id=request.source_id,
@@ -266,6 +276,8 @@ class ContentStore(ContentStoreProtocol):
             )
         pending_vector_ids = self._collect_pending_vector_ids(list(matching_documents))
         replaced_ids = self._merge_unique_ids(replaced_ids, pending_vector_ids)
+        pending_cascade_ids = self._collect_pending_cascade_ids(list(matching_documents))
+        replaced_ids = self._merge_unique_ids(replaced_ids, pending_cascade_ids)
         chunk_rows = [(uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata)) for chunk in chunks]
 
         try:
@@ -282,8 +294,9 @@ class ContentStore(ContentStoreProtocol):
                     """
                     INSERT INTO content_documents (
                         document_id, source_id, title, uri, scope, identity_key, content_hash,
-                        vectors_synced, pending_delete_chunk_ids, trusted, metadata_json, ingested_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        vectors_synced, pending_delete_chunk_ids, pending_cascade_chunk_ids,
+                        trusted, metadata_json, ingested_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(document_id) DO UPDATE SET
                         source_id = excluded.source_id,
                         title = excluded.title,
@@ -293,6 +306,7 @@ class ContentStore(ContentStoreProtocol):
                         content_hash = excluded.content_hash,
                         vectors_synced = excluded.vectors_synced,
                         pending_delete_chunk_ids = excluded.pending_delete_chunk_ids,
+                        pending_cascade_chunk_ids = excluded.pending_cascade_chunk_ids,
                         trusted = excluded.trusted,
                         metadata_json = excluded.metadata_json,
                         ingested_at = excluded.ingested_at
@@ -306,6 +320,7 @@ class ContentStore(ContentStoreProtocol):
                         identity_key,
                         content_hash,
                         0,
+                        json.dumps(list(replaced_ids)),
                         json.dumps(list(replaced_ids)),
                         int(request.trusted),
                         json.dumps(request.metadata),
@@ -366,6 +381,37 @@ class ContentStore(ContentStoreProtocol):
             replaced_chunk_ids=replaced_ids,
             created_at=now,
         )
+
+    def acknowledge_replacement(self, document_id: str, chunk_ids: tuple[str, ...]) -> None:
+        """Clear downstream replacement state after the cascade succeeds."""
+        if not chunk_ids:
+            return
+        try:
+            row = self._db.execute(
+                "SELECT pending_cascade_chunk_ids FROM content_documents WHERE document_id = ?",
+                (document_id,),
+            ).fetchone()
+            if row is None:
+                return
+            acknowledged = set(chunk_ids)
+            pending = self._load_json_str_list(row["pending_cascade_chunk_ids"])
+            remaining = tuple(chunk_id for chunk_id in pending if chunk_id not in acknowledged)
+            if remaining == pending:
+                return
+            with self._db:
+                self._db.execute(
+                    "UPDATE content_documents SET pending_cascade_chunk_ids = ? WHERE document_id = ?",
+                    (json.dumps(list(remaining)), document_id),
+                )
+        except KnowledgeOperationError:
+            raise
+        except Exception as exc:
+            raise _operation_error(
+                KnowledgeFailureStage.PERSISTENCE,
+                "persistence_failed",
+                retryable=True,
+                message="Content persistence failed",
+            ) from exc
 
     def get_document(self, document_id: str) -> ContentDocument | None:
         """Return one document by ID, or None when missing."""
@@ -484,19 +530,22 @@ class ContentStore(ContentStoreProtocol):
     def purge_source(self, source_id: str) -> ContentPurgeResult:
         """Remove all documents/chunks/vectors associated with one source."""
         document_rows = self._db.execute(
-            "SELECT document_id, pending_delete_chunk_ids "
+            "SELECT document_id, pending_delete_chunk_ids, pending_cascade_chunk_ids "
             "FROM content_documents WHERE source_id = ? ORDER BY document_id ASC",
             (source_id,),
         ).fetchall()
         document_ids = tuple(str(row["document_id"]) for row in document_rows)
         pending_vector_ids = self._collect_pending_vector_ids(document_rows)
+        pending_cascade_ids = self._collect_pending_cascade_ids(document_rows)
 
         chunk_rows = self._db.execute(
             "SELECT id FROM content_chunks WHERE source_id = ? ORDER BY chunk_index ASC, id ASC",
             (source_id,),
         ).fetchall()
-        chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
-        vector_ids = self._merge_unique_ids(chunk_ids, pending_vector_ids)
+        current_chunk_ids = tuple(str(row["id"]) for row in chunk_rows)
+        pending_chunk_ids = self._merge_unique_ids(pending_vector_ids, pending_cascade_ids)
+        chunk_ids = self._merge_unique_ids(current_chunk_ids, pending_chunk_ids)
+        vector_ids = self._merge_unique_ids(current_chunk_ids, pending_vector_ids)
 
         if not document_ids and not vector_ids:
             return ContentPurgeResult(source_id=source_id)
@@ -617,6 +666,12 @@ class ContentStore(ContentStoreProtocol):
         pending: list[str] = []
         for row in rows:
             pending.extend(self._load_json_str_list(row["pending_delete_chunk_ids"]))
+        return tuple(pending)
+
+    def _collect_pending_cascade_ids(self, rows: list[sqlite3.Row]) -> tuple[str, ...]:
+        pending: list[str] = []
+        for row in rows:
+            pending.extend(self._load_json_str_list(row["pending_cascade_chunk_ids"]))
         return tuple(pending)
 
     def _merge_unique_ids(self, primary: tuple[str, ...], secondary: tuple[str, ...]) -> tuple[str, ...]:

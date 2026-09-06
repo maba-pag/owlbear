@@ -277,6 +277,10 @@ class IngestCoordinator:
                         content_result.chunk_ids,
                         request.source_id,
                     )
+                self._content.acknowledge_replacement(
+                    content_result.document_id,
+                    content_result.replaced_chunk_ids,
+                )
                 outcome = (
                     content_result.state,
                     content_result,

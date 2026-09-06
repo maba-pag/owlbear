@@ -165,9 +165,12 @@ class ContentStore(Protocol):
           - Content always computes content_hash from the normalised text
             (single source of truth — CP15).
           - Unchanged content (same hash) returns state=UNCHANGED and
-            preserves current chunk IDs without re-writing.
+            preserves current chunk IDs without re-writing when no downstream
+            replacement cleanup is pending.
           - Changed content returns state=REPLACED with replaced_chunk_ids
             listing the previous chunk IDs for downstream invalidation.
+          - A retry with pending downstream replacement cleanup returns
+            state=REPLACED with the same stale chunk IDs.
           - New content returns state=CREATED.
           - chunk_ids on the result always reflects the current set of
             chunks after the operation.
@@ -183,6 +186,16 @@ class ContentStore(Protocol):
 
         Raises:
           - ``ValueError`` if text is empty or source_id is missing.
+        """
+        ...
+
+    def acknowledge_replacement(self, document_id: str, chunk_ids: tuple[str, ...]) -> None:
+        """Acknowledge downstream cleanup for replaced chunks.
+
+        Guarantees:
+          - Acknowledgement is idempotent.
+          - Only the supplied chunk IDs are removed from pending replacement
+            state for the document.
         """
         ...
 
