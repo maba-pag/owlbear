@@ -56,7 +56,7 @@ naming the owning boundary. You never repair or route the candidate.
 <output_format>
 
 - **Use canonical memory identity `build-reviewer`.** Recall with that exact name; return any
-  qualified learning as `memory_candidate` for Builder to save.
+  qualified learning as `memory_candidate` for the task-owning caller to save.
 
 Return only this mapping:
 

@@ -80,6 +80,10 @@ A finding, stale head, malformed response, or unavailable reviewer produces no f
 Do not repair reviewer findings inside this workflow and do not turn reviewer prose into a lifecycle
 transition.
 
+Validate the optional `memory_candidate` against `h-memory-structure`. When it qualifies, call
+`save_memory` with the reviewer-provided `source_agent` and no scope; discard malformed or low-signal
+candidates without repair. Memory handling must not change the review or Delivery result.
+
 ## Step 4 - Construct Exact Evidence
 
 Only after observations and review pass, use the core Delivery models to construct values in memory:

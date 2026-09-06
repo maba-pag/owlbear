@@ -35,6 +35,8 @@ evidence no longer matches the context.
 - **Keep the managed Change worktree exclusive.** Use read-only inspection and proof there; never edit, create another worktree, mutate target refs, fetch, push, or change the user's checkout.
 - **Record exact-head observations.** Run the relevant maintained checks read-only in the managed Change worktree and author typed observations for the exact reviewed head; do not use target/profile authority or invent a proof executor.
 - **Require independent finalization review.** Dispatch `build-reviewer` with `review_mode: finalization`, require the exact commit echo and advisory pass, and keep reviewer identity distinct from finalizer identity.
+- **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
+  reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Construct canonical receipts only after current proof and review.** Use Delivery model factories and call only `finalize_change`; never mint IDs or advance publication yourself.
 
 </critical_rules>
