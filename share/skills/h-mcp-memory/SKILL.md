@@ -16,7 +16,7 @@ For curation workflow, see `w-mem-curation`.
 
 | Role | Agents | Available Tools |
 | --- | --- | --- |
-| Outcome owners | designer, planner, builder, orchestrator | `recall_memory`, `save_memory` (`builder` also assesses) |
+| Outcome owners | designer, planner, builder, orchestrator, finalizer | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
 | Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, agent lifecycle tools |
@@ -84,6 +84,125 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
 | `delete_agent_memories` | Remove retired scope references and delete entries left without an audience | `agent` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |
+
+## Assessment and curation policy
+
+This is the operating decision for the current learning loop. It clarifies
+responsibility without adding a tool, scheduler, receipt protocol, or recall
+policy.
+
+### Decision: human-assisted and sampled
+
+The loop is **human-assisted and sampled**, not universally mandatory and not
+expected to become automatic without a later evidence-based policy change.
+
+- `builder` is the only assessment consumer. It is the feedback sample owner,
+  not a Delivery completion gate. Other outcome owners and specialist
+  producers may recall and save candidates but do not assess recalled entries.
+- Read-only reviewers remain mutation-free. Their optional `memory_candidate`
+  is new-lesson capture: the reviewer returns it to its task-owning parent, and
+  the parent validates and may call `save_memory`. It is not an assessment
+  handoff and does not change the review or Delivery result.
+- `memory-curator` owns pending-entry curation. A human owns approval and
+  exceptional-state resolution through the existing review prompt and Cockpit
+  paths.
+
+### Assessment boundary
+
+When Builder performs the sample, it submits one complete batch at the end of
+the substantive task attempt while the recalled entry IDs are still available:
+
+- An ordinary `advance` attempt is eligible after the task work reaches its
+  terminal boundary.
+- A `retry`, `return`, or `block` after substantive work is also an eligible
+  partial/failed observation. Classify each recalled entry by what actually
+  happened, not by the Delivery transition.
+- A pre-execution `dispatch_failure`, an attempt with no recall, or a recall
+  response containing no entries has no assessment obligation.
+
+Include every entry returned by that recall in the batch. This is a best-effort
+sample and its absence must not alter a transition, trigger a recovery route,
+or block publication. The current buckets remain the measurement vocabulary:
+`outstanding`, `unremarkable`, `didnt_use`, and `factually_wrong`.
+
+The per-entry `success`/`error` result from `assess_memories` is the current
+tool-level receipt. It is not a Delivery receipt or an idempotency key.
+Malformed batches are rejected before entry updates; valid batches may have
+mixed per-entry results. Because ordinary assessments are not promised
+idempotent, an uncertain tool response must not be blindly retried. First use
+read-only evidence or operator reconciliation to determine whether any entry
+was applied; this policy does not add feedback receipts or retry machinery.
+
+### Curation trigger, visibility, and failure handling
+
+- `memory-curator` is the owner. The existing orchestrator trigger remains
+  after completed acquisition cycle 3, then cycles 13, 23, and every tenth
+  completed cycle thereafter. Manual curation is available at any time.
+- This cadence is opportunistic, not an eventual-processing SLA. Short
+  invocations may perform no automatic curation, and no durable due state or
+  age scheduler is implied.
+- The pending backlog is visible through
+  `list_memories(states=["pending"])`, including `created_at`; the operator is
+  responsible for manually invoking the curator when pending age, volume, or
+  conflict cost warrants attention. Pending entries remain unreviewed and
+  recall-invisible until curation.
+- A missing curation binding, tool-layer error, or pre-result dispatch failure
+  is fail-closed housekeeping attention: report it and stop after the current
+  acquisition batch. A curator child failure or malformed verdict is reported
+  without retry and does not stop unrelated acquisition. A batch-commit error
+  follows the existing `git status`/staged-diff inspection rule before an
+  operator retry.
+
+### Minimum measurement plan
+
+No production telemetry is added by this policy change. A later measurement
+fixture or lightweight event record must capture:
+
+1. **Assessment coverage:** task ID, consumer role, terminal attempt outcome,
+   recalled entry IDs/count, assessment attempted/completed time, complete-batch
+   flag, and each per-entry bucket/result. Report eligible Builder attempts
+   with a complete batch over eligible attempts; keep `didnt_use` separate from
+   tool failure and `factually_wrong`.
+2. **Pending age and curation latency:** pending `created_at`, curation
+   trigger (`cycle-3`, later cadence, or `manual`), curation start/end,
+   entry action (`promoted`, `pruned`, or `deferred`), and failure/re-entry
+   reason. Report oldest, median, and high-percentile pending age and the
+   created-to-curated latency.
+3. **Review cost:** curator and human-review elapsed time, entries examined,
+   tool calls, and task/review token cost when available. Report cost per
+   promoted entry and per assessment batch.
+4. **Useful or harmful recall:** retain the four assessment buckets and add a
+   task-level outcome label for prevented rework, neutral use, harmful advice,
+   or no observable effect. Use a small representative paired fixture
+   (selected-memory run versus a no-memory control) before changing recall
+   selection or making coverage mandatory.
+
+The policy is successful only if these rates and costs can be reported without
+inventing missing receipts, pending age is observable across short sessions,
+and repeated representative tasks show useful recall without an unacceptable
+harmful-recall or review-cost trade-off. Reopen the policy if coverage cannot
+be classified, pending age trends upward across curation opportunities, or
+harmful outcomes outweigh useful outcomes; do not silently convert those
+signals into a new scheduler or mandatory step.
+
+### Rejected alternatives and deferred work
+
+- **Universal post-task assessment:** rejected because only Builder currently
+  has the mutation boundary, reviewer read-only contracts do not support it,
+  and historical aggregates do not establish that every role needs feedback.
+- **Reviewer-owned assessment or direct reviewer writes:** rejected; reviewers
+  return only optional new-lesson candidates through their parent.
+- **Durable age/size scheduler or curation SLA:** rejected until pending-age
+  and curation-latency evidence shows that opportunistic/manual handling is
+  inadequate.
+- **Automatic assessment retries or a new receipt store:** rejected because
+  duplicate counter updates are possible and the feedback contract is outside
+  this policy decision.
+- **Recall-algorithm or pool changes:** deferred; usefulness measurement must
+  precede any selection change.
+
+This issue therefore leaves the existing mutation/tool boundaries intact and
+does not implement F01-F10 or F13-F15.
 
 ## save_memory
 
@@ -153,8 +272,9 @@ Behavior:
 
 ## assess_memories
 
-Records how useful recalled memory entries were for a completed task. Include every entry returned
-by `recall_memory` in one assessment batch.
+Records how useful recalled memory entries were for a completed task. When a
+caller uses the sampled assessment path, include every entry returned by
+`recall_memory` in one assessment batch.
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |

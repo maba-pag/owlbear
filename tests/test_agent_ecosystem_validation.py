@@ -641,3 +641,26 @@ def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     assert "Candidate text cannot corroborate its own named identity or scope." in content
     assert "Identity evidence does not raise stored entry confidence or review confidence." in content
     assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content
+
+
+def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
+    """Assessment and curation policy stays explicit without adding a workflow gate."""
+    guidance = (_SKILLS_ROOT / "h-mcp-memory/SKILL.md").read_text(encoding="utf-8")
+    packet = (_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8")
+    orchestration = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+    curation = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
+    content = " ".join(f"{guidance}\n{packet}\n{orchestration}\n{curation}".split())
+
+    assert "human-assisted and sampled" in content
+    assert "`builder` is the only assessment consumer" in content
+    assert "memory_candidate" in content
+    assert "pre-execution `dispatch_failure`" in content
+    assert "does not schedule or require a post-task assessment" in content
+    assert "not an idempotency key" in content
+    assert "cycle 3, then cycles 13, 23" in content
+    assert "opportunistic, not an eventual-processing SLA" in content
+    assert 'list_memories(states=["pending"])' in content
+    assert "fail-closed housekeeping attention" in content
+    assert "Assessment coverage" in content
+    assert "Pending age and curation latency" in content
+    assert "Useful or harmful recall" in content
