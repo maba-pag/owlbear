@@ -1186,9 +1186,7 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
     )
     attention_payload = DeliveryFrontier.model_validate_json(
         attention_runtime.frontier_bytes(), strict=False
-    ).model_dump(
-        mode="python"
-    )
+    ).model_dump(mode="python")
     attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
 
     with pytest.raises(ValueError, match="abandoned Change cannot retain active or terminal authority"):
@@ -1259,9 +1257,9 @@ def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Pa
     assert disposition is not None
     assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
     assert runtime.ready_receipt() is None
-    publication = (
-        DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False).change_disposition_publication
-    )
+    publication = DeliveryFrontier.model_validate_json(
+        runtime.frontier_bytes(), strict=False
+    ).change_disposition_publication
     assert publication is not None
     assert (publication.repository, publication.number, publication.head_sha) == (
         "example/project",
