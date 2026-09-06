@@ -94,6 +94,7 @@ class ContentStore(ContentStoreProtocol):
                 title TEXT NOT NULL,
                 uri TEXT,
                 scope TEXT NOT NULL,
+                identity_key TEXT,
                 content_hash TEXT NOT NULL,
                 vectors_synced INTEGER NOT NULL DEFAULT 1,
                 pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]',
@@ -111,6 +112,22 @@ class ContentStore(ContentStoreProtocol):
             self._db.execute(
                 "ALTER TABLE content_documents ADD COLUMN pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]'"
             )
+        if "identity_key" not in document_columns:
+            self._db.execute("ALTER TABLE content_documents ADD COLUMN identity_key TEXT")
+            legacy_rows = self._db.execute(
+                "SELECT document_id, source_id, title, uri, scope FROM content_documents"
+            ).fetchall()
+            for row in legacy_rows:
+                identity = row["uri"] or row["title"]
+                if row["document_id"] == self._document_id(str(row["source_id"]), str(identity), str(row["scope"])):
+                    self._db.execute(
+                        "UPDATE content_documents SET identity_key = ? WHERE document_id = ?",
+                        (self._identity_key(str(row["source_id"]), str(identity)), row["document_id"]),
+                    )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_content_documents_source_identity "
+            "ON content_documents(source_id, identity_key)"
+        )
         self._db.execute(
             """
             CREATE TABLE IF NOT EXISTS content_chunks (
@@ -149,11 +166,18 @@ class ContentStore(ContentStoreProtocol):
             raise ValueError(msg)
 
         document_id = self._document_id_for(request)
+        identity_key = self._identity_key_for(request)
         content_hash = compute_content_hash(request.text)
         try:
-            source_documents = self._db.execute(
+            indexed_documents = self._db.execute(
+                "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, "
+                "pending_delete_chunk_ids FROM content_documents "
+                "WHERE source_id = ? AND identity_key = ?",
+                (request.source_id, identity_key),
+            ).fetchall()
+            legacy_documents = self._db.execute(
                 "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
-                "FROM content_documents WHERE source_id = ?",
+                "FROM content_documents WHERE source_id = ? AND identity_key IS NULL",
                 (request.source_id,),
             ).fetchall()
         except KnowledgeOperationError:
@@ -166,11 +190,10 @@ class ContentStore(ContentStoreProtocol):
                 message="Content persistence failed",
             ) from exc
 
-        matching_documents = tuple(
+        matching_documents = tuple(indexed_documents) + tuple(
             row
-            for row in source_documents
-            if row["document_id"]
-            == self._document_id_for(request.model_copy(update={"scope": row["scope"]}))
+            for row in legacy_documents
+            if row["document_id"] == self._document_id_for(request.model_copy(update={"scope": row["scope"]}))
         )
         existing_doc = next((row for row in matching_documents if row["document_id"] == document_id), None)
         stale_document_ids = tuple(
@@ -254,14 +277,15 @@ class ContentStore(ContentStoreProtocol):
                 self._db.execute(
                     """
                     INSERT INTO content_documents (
-                        document_id, source_id, title, uri, scope, content_hash,
+                        document_id, source_id, title, uri, scope, identity_key, content_hash,
                         vectors_synced, pending_delete_chunk_ids, trusted, metadata_json, ingested_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(document_id) DO UPDATE SET
                         source_id = excluded.source_id,
                         title = excluded.title,
                         uri = excluded.uri,
                         scope = excluded.scope,
+                        identity_key = excluded.identity_key,
                         content_hash = excluded.content_hash,
                         vectors_synced = excluded.vectors_synced,
                         pending_delete_chunk_ids = excluded.pending_delete_chunk_ids,
@@ -275,6 +299,7 @@ class ContentStore(ContentStoreProtocol):
                         request.title,
                         request.uri,
                         request.scope,
+                        identity_key,
                         content_hash,
                         0,
                         json.dumps(list(replaced_ids)),
@@ -503,8 +528,18 @@ class ContentStore(ContentStoreProtocol):
 
     def _document_id_for(self, request: ContentIngestRequest) -> str:
         identity = request.external_id or request.uri or request.title
-        key = f"{request.source_id}|{identity}|{request.scope}"
+        return self._document_id(request.source_id, identity, request.scope)
+
+    def _document_id(self, source_id: str, identity: str, scope: str) -> str:
+        key = f"{source_id}|{identity}|{scope}"
         return uuid5(NAMESPACE_URL, key).hex
+
+    def _identity_key_for(self, request: ContentIngestRequest) -> str:
+        identity = request.external_id or request.uri or request.title
+        return self._identity_key(request.source_id, identity)
+
+    def _identity_key(self, source_id: str, identity: str) -> str:
+        return uuid5(NAMESPACE_URL, f"{source_id}|{identity}").hex
 
     def _chunk_ids_for_document(self, document_id: str) -> tuple[str, ...]:
         try:
