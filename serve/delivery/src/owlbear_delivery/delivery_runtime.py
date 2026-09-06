@@ -1042,7 +1042,7 @@ class DeliveryFrontier(_DeliveryModel):
         cls,
         json_data: str | bytes | bytearray,
         *,
-        strict: bool | None = None,
+        strict: bool | None = False,
         **kwargs: object,
     ) -> DeliveryFrontier:
         """Load persisted JSON with JSON-compatible coercion unless strictness is explicit."""
