@@ -150,7 +150,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     failed_required_publication_checks,
 )
-from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.storage_io import atomic_write, locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -223,6 +223,7 @@ def _canonical_model_bytes(model: BaseModel) -> bytes:
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
+_ACCEPTANCE_RECONCILIATION_CURSOR_FILE = "cursor.json"
 _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS = 2.0
 _ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS = 0.05
 _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
@@ -1000,6 +1001,13 @@ class DeliveryAcceptanceReconciliationOutcome(_ApplicationModel):
     completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+class _AcceptanceReconciliationCursor(_ApplicationModel):
+    """Persisted next starting Change for bounded acceptance polling."""
+
+    schema_version: Literal[1] = 1
+    next_change_id: str | None = Field(default=None, min_length=1)
+
+
 class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
     """Bind one Git successor publication to its provider and runtime evidence."""
 
@@ -1190,6 +1198,7 @@ class PortfolioApplication:
             str,
             tuple[float, str, PublicationPullRequestObservationReceipt | None],
         ] = {}
+        self._acceptance_reconciliation_cursor: str | None = None
         self._has_reconciled_runtimes = False
         self._target_root = dependencies.target_root.resolve()
         self._package_store = dependencies.package_store
@@ -2416,12 +2425,24 @@ class PortfolioApplication:
             raise ValueError(message)
         effective_limit = min(limit, _MAX_ACCEPTANCE_RECONCILIATION_CHANGES)
         requested = None if change_ids is None else frozenset(change_ids)
-        eligible = tuple(
+        all_eligible = tuple(
             change_id
             for change_id, runtime in sorted(self._runtimes.items())
-            if (requested is None or change_id in requested) and self._is_acceptance_reconciliation_eligible(runtime)
+            if self._is_acceptance_reconciliation_eligible(runtime)
         )
-        selected = eligible[:effective_limit]
+        eligible = (
+            all_eligible
+            if requested is None
+            else tuple(change_id for change_id in all_eligible if change_id in requested)
+        )
+        if not eligible:
+            return ()
+        selected = self._select_acceptance_reconciliation_changes(
+            all_eligible,
+            effective_limit,
+            requested=requested,
+        )
+        selected_ids = frozenset(selected)
         outcomes = [self._reconcile_awaiting_acceptance_change(change_id) for change_id in selected]
         outcomes.extend(
             DeliveryAcceptanceReconciliationOutcome(
@@ -2430,9 +2451,87 @@ class PortfolioApplication:
                 code="ERR_DELIVERY_RECONCILIATION_LIMIT",
                 detail="Acceptance reconciliation batch limit reached.",
             )
-            for change_id in eligible[effective_limit:]
+            for change_id in eligible
+            if change_id not in selected_ids
         )
         return tuple(outcomes)
+
+    def _select_acceptance_reconciliation_changes(
+        self,
+        eligible: tuple[str, ...],
+        limit: int,
+        *,
+        requested: frozenset[str] | None,
+    ) -> tuple[str, ...]:
+        """Reserve a fair bounded batch and persist its next starting Change."""
+        if not eligible:
+            return ()
+        cursor_root = self._target_root / "claims" / "acceptance-reconciliation"
+        cursor = self._acceptance_reconciliation_cursor
+        try:
+            with locked_roots((cursor_root,)):
+                with suppress(OSError, ValueError):
+                    cursor = _AcceptanceReconciliationCursor.model_validate_json(
+                        (cursor_root / _ACCEPTANCE_RECONCILIATION_CURSOR_FILE).read_bytes()
+                    ).next_change_id
+                selected, next_cursor = self._rotate_acceptance_reconciliation_batch(
+                    eligible,
+                    limit,
+                    cursor,
+                    requested=requested,
+                )
+                atomic_write(
+                    cursor_root / _ACCEPTANCE_RECONCILIATION_CURSOR_FILE,
+                    json.dumps(
+                        _AcceptanceReconciliationCursor(next_change_id=next_cursor).model_dump(
+                            mode="json",
+                        ),
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                    + "\n",
+                )
+        except (OSError, ValueError):
+            selected, next_cursor = self._rotate_acceptance_reconciliation_batch(
+                eligible,
+                limit,
+                self._acceptance_reconciliation_cursor,
+                requested=requested,
+            )
+        self._acceptance_reconciliation_cursor = next_cursor
+        return selected
+
+    @staticmethod
+    def _rotate_acceptance_reconciliation_batch(
+        eligible: tuple[str, ...],
+        limit: int,
+        cursor: str | None,
+        *,
+        requested: frozenset[str] | None,
+    ) -> tuple[tuple[str, ...], str]:
+        """Return one wrapped batch and the deterministic cursor after it."""
+        start = (
+            0
+            if cursor is None
+            else next(
+                (index for index, change_id in enumerate(eligible) if change_id >= cursor),
+                0,
+            )
+        )
+        ordered = tuple(eligible[(start + offset) % len(eligible)] for offset in range(len(eligible)))
+        selected = tuple(change_id for change_id in ordered if requested is None or change_id in requested)[:limit]
+        eligible_ids = frozenset(eligible)
+        requested_eligible_ids = frozenset(
+            change_id for change_id in eligible if requested is not None and change_id in requested
+        )
+        if requested is not None and requested_eligible_ids != eligible_ids:
+            return selected, ordered[0]
+        selected_ids = frozenset(selected)
+        next_cursor = next(
+            (change_id for change_id in ordered if change_id not in selected_ids),
+            ordered[0],
+        )
+        return selected, next_cursor
 
     @staticmethod
     def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool:

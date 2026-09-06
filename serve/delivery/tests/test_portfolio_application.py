@@ -44,6 +44,8 @@ from owlbear_delivery import (
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
+    DeliveryAcceptanceReconciliationOutcome,
+    DeliveryAcceptanceReconciliationStatus,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
@@ -687,7 +689,7 @@ def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
         DeliveryStage.COMPLETED,
         coordination.last_reviewed_commit,
     )
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     change_root = runtime_root / "changes" / "change-a"
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "admission.json").write_bytes(
@@ -3315,6 +3317,139 @@ def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path
     assert application.reconcile_awaiting_acceptance() == ()
 
 
+def _stub_acceptance_reconciliation(
+    application: PortfolioApplication,
+    statuses: dict[str, DeliveryAcceptanceReconciliationStatus] | None = None,
+) -> list[str]:
+    calls: list[str] = []
+    selected_statuses = statuses or {}
+
+    def reconcile(change_id: str) -> DeliveryAcceptanceReconciliationOutcome:
+        calls.append(change_id)
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=selected_statuses.get(change_id, DeliveryAcceptanceReconciliationStatus.WAITING),
+        )
+
+    application._reconcile_awaiting_acceptance_change = reconcile
+    return calls
+
+
+def test_reconcile_awaiting_acceptance_rotates_beyond_batch_limit(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(application)
+
+    first = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == change_ids[:8]
+    assert first[-1].change_id == "change-08"
+    assert first[-1].status is DeliveryAcceptanceReconciliationStatus.SKIPPED
+
+    calls.clear()
+    second = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == ("change-08", *change_ids[:7])
+    assert second[0].change_id == "change-08"
+    assert second[0].status is DeliveryAcceptanceReconciliationStatus.WAITING
+
+
+def test_reconcile_awaiting_acceptance_partial_request_does_not_regress_cursor(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(application)
+
+    application.reconcile_awaiting_acceptance(change_ids)
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids[:8])
+    assert tuple(calls) == change_ids[:8]
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(("change-08",))
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-08"
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-07"
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(("change-00",))
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-06"
+
+
+def test_reconcile_awaiting_acceptance_full_request_with_extra_ids_advances_cursor(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(application)
+
+    application.reconcile_awaiting_acceptance((*change_ids, "change-99"))
+    assert tuple(calls) == change_ids[:8]
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-08"
+
+
+def test_reconcile_awaiting_acceptance_advances_after_failure_and_busy_change(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(
+        application,
+        {
+            "change-00": DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+            "change-01": DeliveryAcceptanceReconciliationStatus.SKIPPED,
+        },
+    )
+
+    first = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == change_ids[:8]
+    assert first[0].status is DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE
+    assert first[1].status is DeliveryAcceptanceReconciliationStatus.SKIPPED
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-08"
+
+
+def test_reconcile_awaiting_acceptance_cursor_survives_restart(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    first_calls = _stub_acceptance_reconciliation(application)
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(first_calls) == change_ids[:8]
+    cursor_path = state_root / "claims/acceptance-reconciliation/cursor.json"
+    assert json.loads(cursor_path.read_text(encoding="utf-8"))["next_change_id"] == "change-08"
+
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    reopened._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    second_calls = _stub_acceptance_reconciliation(reopened)
+    reopened.reconcile_awaiting_acceptance(change_ids)
+
+    assert second_calls[0] == "change-08"
+
+
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
 def test_observe_acceptance_preserves_user_checkout_states(
     tmp_path: Path,
@@ -3979,7 +4114,9 @@ dependencies: []
     admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
 
     delivery_root = state_root / "changes" / "admitted-change"
-    persisted_frontier = DeliveryFrontier.model_validate_json((delivery_root / "frontier.json").read_bytes())
+    persisted_frontier = DeliveryFrontier.model_validate_json(
+        (delivery_root / "frontier.json").read_bytes(), strict=False
+    )
     persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
     assert persisted_frontier == admitted.frontier
     assert persisted_receipt["receipt_id"] == admitted.receipt.receipt_id
@@ -4080,7 +4217,7 @@ def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
     replacement = previous_runtime.contract.model_copy(update={"title": "Replacement authority \u00e9"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -4110,7 +4247,7 @@ def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
     replacement = previous_runtime.contract.model_copy(update={"title": "Active replacement"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -4259,7 +4396,7 @@ def test_portfolio_projects_current_pull_request_mergeability(tmp_path: Path) ->
     )
     runtimes["change-a"].record_publication_identity(publication)
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
     frontier_path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": head, "pending_checkpoint": None}))
     )
@@ -4404,7 +4541,7 @@ def test_background_checkpoint_selection_excludes_review_required_merge(tmp_path
         triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
     )
     path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
     path.write_bytes(
         _canonical(frontier.model_copy(update={"target_sync_receipt": target_sync, "pending_checkpoint": pending}))
     )
@@ -4953,7 +5090,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     contract_path = state_root / "changes/change-a/contract.json"
     contract_path.write_bytes(_canonical(runtime.contract))
     current_frontier = DeliveryFrontier.model_validate_json(
-        (state_root / "changes/change-a/frontier.json").read_bytes()
+        (state_root / "changes/change-a/frontier.json").read_bytes(), strict=False
     )
     (state_root / "changes/change-a/admission.json").write_bytes(
         _canonical(_admission_receipt(runtime.contract, current_frontier, head))
@@ -5039,7 +5176,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     )
 
     def create_pull_request(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -5087,7 +5224,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     branch_publisher = Mock()
 
     def publish_branch(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -5129,7 +5266,7 @@ def test_reconcile_published_head_stops_after_concurrent_invalidation(tmp_path: 
     branch_publisher = Mock()
 
     def verify_branch(_request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -6633,7 +6770,7 @@ def _publish_merge_conflict_attention(
     )
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_attention": attention})))
     return attention
 
@@ -6648,7 +6785,7 @@ def _activate_legacy_integration_repair(
     claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_repair_claim": claim})))
     writer = ChangeWriter(
         attempt_id=claim.attempt_id,

@@ -668,7 +668,7 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
     assert (repository / "product.txt").read_bytes() == user_checkout_before
 
 
-@pytest.mark.parametrize("dirty_state", ("unstaged", "untracked"))
+@pytest.mark.parametrize("dirty_state", ["unstaged", "untracked"])
 def test_resolve_target_sync_conflict_rejects_unstaged_or_untracked_content(
     tmp_path: Path,
     dirty_state: str,
@@ -702,6 +702,7 @@ def test_resolve_target_sync_conflict_rejects_unstaged_or_untracked_content(
             )
         )
 
+    assert _head(worktree) == _reviewed
     assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
     assert coordinator.show(f"sync-{dirty_state}").target_sync_conflict is not None
     assert coordinator.show(f"sync-{dirty_state}").target_sync_receipt is None
