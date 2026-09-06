@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_runtime import DeliveryFrontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.target_contract import DeliveryContract
@@ -605,7 +605,7 @@ def _same_snapshot_authority(
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
     """Project a frontier after the exact checkpoint already published remotely."""
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
     pending = frontier.pending_checkpoint
     if pending is not None and pending.head == frontier.published_head:
         return frontier.model_copy(update={"pending_checkpoint": None})
