@@ -2522,8 +2522,12 @@ class PortfolioApplication:
         selected = tuple(
             change_id for change_id in ordered if requested is None or change_id in requested
         )[:limit]
-        next_index = (eligible.index(selected[-1]) + 1) % len(eligible)
-        return selected, eligible[next_index]
+        selected_ids = frozenset(selected)
+        next_cursor = next(
+            (change_id for change_id in ordered if change_id not in selected_ids),
+            ordered[0],
+        )
+        return selected, next_cursor
 
     @staticmethod
     def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool:
