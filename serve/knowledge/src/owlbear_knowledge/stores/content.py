@@ -84,6 +84,7 @@ class ContentStore(ContentStoreProtocol):
         self._embedding_provider = embedding_provider
         self._chunker = chunker
         self._legacy_scopes: dict[str, tuple[str, ...]] = {}
+        self._legacy_scopes_data_version = int(self._db.execute("PRAGMA data_version").fetchone()[0])
 
     def ensure_tables(self) -> None:
         """Create Content-owned tables if they do not yet exist."""
@@ -537,6 +538,10 @@ class ContentStore(ContentStoreProtocol):
         return uuid5(NAMESPACE_URL, f"{source_id}|{identity}").hex
 
     def _legacy_scopes_for_source(self, source_id: str) -> tuple[str, ...]:
+        data_version = int(self._db.execute("PRAGMA data_version").fetchone()[0])
+        if data_version != self._legacy_scopes_data_version:
+            self._legacy_scopes.clear()
+            self._legacy_scopes_data_version = data_version
         if source_id not in self._legacy_scopes:
             rows = self._db.execute(
                 "SELECT DISTINCT scope FROM content_documents "
