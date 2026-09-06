@@ -22,7 +22,6 @@ from owlbear_delivery import (
     ChangeBranchPublicationReceipt,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
-    DeliveryFrontier,
     DeliveryPendingCheckpoint,
     DeliveryStage,
     PublishChangeBranch,

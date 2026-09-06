@@ -253,6 +253,18 @@ def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: objec
     path.write_bytes(_canonical(frontier.model_copy(update=updates)))
 
 
+def test_frontier_json_round_trip_uses_canonical_parser(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    content = runtime.frontier_bytes()
+
+    frontier, canonical = parse_delivery_frontier(content)
+
+    assert frontier == DeliveryFrontier.model_validate_json(content, strict=False)
+    assert canonical == content
+    with pytest.raises(ValidationError):
+        DeliveryFrontier.model_validate_json(content, strict=True)
+
+
 def _output(claim_id: str, stage: DeliveryStage) -> DeliveryOutputReference:
     return DeliveryOutputReference(
         output_id=f"output-{stage.value}",
