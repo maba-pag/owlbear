@@ -251,9 +251,10 @@ class DeliveryAppContext:
 class TargetMCPAdapter:
     """Validate and delegate the strict Delivery transport contract.
 
-    Synchronous application calls run in worker threads. Cancelling a handler only
-    cancels the transport wait; an in-flight mutation may finish, so callers must
-    reconcile durable state before retrying rather than blindly replaying it.
+    Blocking Delivery handlers dispatch application calls to worker threads.
+    Cancelling a handler only cancels the transport wait; an in-flight mutation
+    may finish, so callers must reconcile durable state before retrying rather
+    than blindly replaying it.
     """
 
     def __init__(
