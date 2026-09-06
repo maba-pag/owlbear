@@ -642,6 +642,7 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
         manager.sync_with_target(request)
     (worktree / "product.txt").write_text("resolved\n", encoding="utf-8")
     _git(worktree, "add", "product.txt")
+    assert _git(worktree, "status", "--porcelain=v1").stdout == "M  product.txt\n"
 
     exit_request = TargetSyncConflictRequest(
         change_id="sync-resolve",
@@ -661,8 +662,49 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
     assert coordinator.show("sync-resolve").target_sync_receipt == receipt
     assert coordinator.show("sync-resolve").publication_base_head == initial
     assert manager.reviewed_source_head("sync-resolve") == receipt.merged_head
+    assert _git(worktree, "status", "--porcelain=v1", "--untracked-files=all").stdout == ""
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 128
     assert _head(repository, "refs/heads/main") != receipt.merged_head
     assert (repository / "product.txt").read_bytes() == user_checkout_before
+
+
+@pytest.mark.parametrize("dirty_state", ("unstaged", "untracked"))
+def test_resolve_target_sync_conflict_rejects_unstaged_or_untracked_content(
+    tmp_path: Path,
+    dirty_state: str,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, f"sync-{dirty_state}")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id=f"sync-{dirty_state}",
+        expected_target=target_head,
+        operation_id=f"sync-{dirty_state}-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+
+    (worktree / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    if dirty_state == "unstaged":
+        (worktree / "product.txt").write_text("unstaged\n", encoding="utf-8")
+    else:
+        (worktree / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="unstaged or untracked changes"):
+        manager.resolve_target_sync_conflict(
+            TargetSyncConflictRequest(
+                change_id=f"sync-{dirty_state}",
+                target_head=target_head,
+                operation_id=f"sync-{dirty_state}-1",
+            )
+        )
+
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
+    assert coordinator.show(f"sync-{dirty_state}").target_sync_conflict is not None
+    assert coordinator.show(f"sync-{dirty_state}").target_sync_receipt is None
 
 
 def _writer(change_id: str) -> ChangeWriter:

@@ -484,6 +484,30 @@ user-invocable: false
     assert _SKILL_VALIDATOR.validate_skill(invalid_dir)
 
 
+def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> None:
+    """Target conflict guidance must distinguish staged resolution from clean completion."""
+    content = (_SKILLS_ROOT / "w-target-conflict-resolution/SKILL.md").read_text(encoding="utf-8")
+
+    precommit = content.index("### Pre-commit resolution preflight")
+    postcommit = content.index("### Post-commit cleanliness")
+    handoff = content.index("## Step 2 - Handoff")
+    precommit_text = content[precommit:postcommit]
+    postcommit_text = content[postcommit:handoff]
+    normalized_precommit_text = " ".join(precommit_text.split())
+
+    assert precommit < postcommit < handoff
+    assert "unresolved paths" in precommit_text
+    assert "unstaged changes" in precommit_text
+    assert "untracked files" in precommit_text
+    assert "Staged resolved files are expected and allowed" in precommit_text
+    assert "do not require `git status` to be empty" in normalized_precommit_text
+    assert "full managed" in postcommit_text
+    assert "worktree is clean" in postcommit_text
+    assert "MERGE_HEAD` is gone" in postcommit_text
+    assert "exactly two parents" in content
+    assert "/finalize-change <change-id>" in content
+
+
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415

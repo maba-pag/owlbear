@@ -47,21 +47,29 @@ When a material choice is user-owned, ask exactly one bounded question and leave
 preserved. Do not invent a choice from the conflict-marker order. Do not edit the primary checkout,
 GitHub PR contents, target branch, or Delivery state files.
 
+### Pre-commit resolution preflight
+
 After editing, require every original conflict path to be resolved, stage only those paths in the
-managed worktree, and run the focused maintained checks for the affected packages. Include a
-whitespace/conflict-marker check and a clean-worktree check after staging. Do not create the merge
-commit yourself.
+managed worktree, and run the focused maintained checks for the affected packages. Verify that there
+are no unresolved paths, unstaged changes, or untracked files before asking Delivery to commit.
+Staged resolved files are expected and allowed at this checkpoint, so do not require `git status` to
+be empty. Include a whitespace/conflict-marker check. Do not create the merge commit yourself.
 
 Call `resolve_target_sync_conflict` with the exact retained disposition ID, target head, and
-operation ID. Delivery then requires a clean resolved worktree and a merge commit whose parents are
-the preserved Change head and requested target head. Treat its returned receipt as the only
-successful merge-resolution result.
+operation ID. Delivery performs the engine-owned commit after the pre-commit conditions above pass.
+It verifies that the resulting merge commit has exactly two parents: the preserved Change head and
+requested target head. Treat its returned receipt as the only successful merge-resolution result.
+
+### Post-commit cleanliness
+
+After Delivery returns a resolution receipt, re-read the Change state and managed worktree. Confirm
+that the exact returned merge head is checked out, `MERGE_HEAD` is gone, and the full managed
+worktree is clean, including no untracked files. The resolved merge invalidates the old
+finalization authority and requires fresh review.
 
 ## Step 2 - Handoff
 
-After Delivery returns a resolution receipt, re-read the Change state and managed worktree. The
-resolved merge invalidates the old finalization authority or requires fresh review. Return the next
-user-visible command exactly as:
+Return the next user-visible command exactly as:
 
 ```text
 /finalize-change <change-id>
@@ -109,6 +117,9 @@ next_command: /finalize-change <change-id>
 
 - An open conflicted PR is provider evidence; it is not itself a Delivery merge commit.
 - `resolve_target_sync_conflict` validates and commits staged resolutions; it does not decide file content.
-- A merge commit must be created by Delivery after the worktree is clean and all unmerged paths are gone.
+- Before Delivery's commit, staged resolved files are allowed, but unresolved paths, unstaged changes,
+  and untracked files block the engine-owned commit.
+- After Delivery's commit, the full managed worktree must be clean, and the merge must have exactly
+  the preserved Change head and requested target head as its two parents.
 - Rebase, force-push, manual runtime edits, target-branch edits, and primary-checkout merges destroy the exact custody boundary.
 - A clean automatic merge still moves the Change head and requires fresh finalization before publication.
