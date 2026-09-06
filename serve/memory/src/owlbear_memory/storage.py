@@ -164,7 +164,9 @@ def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: 
             f"(got {serialized_size}); shorten the title, content, or metadata"
         )
         raise ValueError(msg)
-    read_entry_bytes_strict(serialized)
+    if read_entry_bytes_strict(serialized) != validated:
+        msg = "serialized entry does not round-trip unchanged"
+        raise ValueError(msg)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = mkstemp(dir=str(path.parent), suffix=".tmp")

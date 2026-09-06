@@ -494,6 +494,50 @@ class TestStorageWrite:
         assert result.title == original.title
 
     @pytest.mark.parametrize(
+        ("source_agent", "expected_size"),
+        [
+            ("é" * 3909 + "x", _8KB),
+            ("é" * 3909 + "xx", _8KB + 1),
+        ],
+        ids=["accepted", "rejected"],
+    )
+    def test_write_entry_enforces_exact_multibyte_metadata_boundary(
+        self,
+        tmp_path: Path,
+        source_agent: str,
+        expected_size: int,
+    ) -> None:
+        """Boundary: multibyte metadata is accepted at 8192 bytes and rejected at 8193."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        entry = MemoryEntry(**{**_valid_entry_data(), "source_agent": source_agent})
+
+        if expected_size > _8KB:
+            with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes"):
+                storage.write_entry(target, entry, memory_dir=memory_dir)
+            assert not target.exists()
+        else:
+            storage.write_entry(target, entry, memory_dir=memory_dir)
+            assert target.stat().st_size == expected_size
+            assert storage.read_entry(target) == entry
+
+    def test_write_entry_rejects_content_that_cannot_round_trip(self, tmp_path: Path) -> None:
+        """Error: content normalized by the reader is rejected before replacement."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        original = _make_valid_entry()
+        storage.write_entry(target, original, memory_dir=memory_dir)
+        original_bytes = target.read_bytes()
+        lossy = MemoryEntry(**{**_valid_entry_data(), "content": " padded "})
+
+        with pytest.raises(ValueError, match="does not round-trip unchanged"):
+            storage.write_entry(target, lossy, memory_dir=memory_dir)
+
+        assert target.read_bytes() == original_bytes
+
+    @pytest.mark.parametrize(
         "overrides",
         [
             {"source_agent": "x" * 9000},
