@@ -78,7 +78,10 @@ and does not become a health response.
 
 Current per-Change custody records live under `.owlbear/delivery/runtime/coordination/changes/`.
 The sibling `.owlbear/delivery/runtime/claims/` namespace is reserved for acquisition, publication,
-and verification locks. Recoverable runtime transaction manifests live under
+verification locks, and the acceptance reconciler's host-local round-robin cursor is stored under
+`claims/acceptance-reconciliation/cursor.json`; the cursor is scheduling state, not Delivery
+authority, and a missing or invalid cursor safely starts a new rotation. Recoverable runtime
+transaction manifests live under
 `.owlbear/delivery/runtime/transactions/`.
 
 ## Configuration
