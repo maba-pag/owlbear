@@ -249,7 +249,12 @@ class DeliveryAppContext:
 
 
 class TargetMCPAdapter:
-    """Validate and delegate the strict Delivery transport contract."""
+    """Validate and delegate the strict Delivery transport contract.
+
+    Synchronous application calls run in worker threads. Cancelling a handler only
+    cancels the transport wait; an in-flight mutation may finish, so callers must
+    reconcile durable state before retrying rather than blindly replaying it.
+    """
 
     def __init__(
         self,
@@ -317,7 +322,11 @@ class TargetMCPAdapter:
     async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
         """Admit one source-bound Delivery change."""
         params = self._validate(DeliveryAdmissionRequest, request)
-        return self._call(params, lambda: self._application.admit_delivery_change(params))
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.admit_delivery_change(params),
+        )
 
     async def list_work_items(self, request: EmptyRequest) -> list[object]:
         """List bounded work-item projections."""
@@ -465,7 +474,11 @@ class TargetMCPAdapter:
     async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
         """Acquire currently available frontier work."""
         params = self._validate(EmptyParams, request)
-        return self._call(params, self._application.acquire_frontier_work)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            self._application.acquire_frontier_work,
+        )
 
     async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Planning context for one claim."""
