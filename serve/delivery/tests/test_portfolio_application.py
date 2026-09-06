@@ -3387,6 +3387,23 @@ def test_reconcile_awaiting_acceptance_partial_request_does_not_regress_cursor(t
     assert calls[0] == "change-06"
 
 
+def test_reconcile_awaiting_acceptance_full_request_with_extra_ids_advances_cursor(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(application)
+
+    application.reconcile_awaiting_acceptance((*change_ids, "change-99"))
+    assert tuple(calls) == change_ids[:8]
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-08"
+
+
 def test_reconcile_awaiting_acceptance_advances_after_failure_and_busy_change(tmp_path: Path) -> None:
     change_ids = tuple(f"change-{index:02d}" for index in range(9))
     application, _runtimes, _coordinator, _state_root = _portfolio(

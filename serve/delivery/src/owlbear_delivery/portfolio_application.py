@@ -2520,7 +2520,11 @@ class PortfolioApplication:
         )
         ordered = tuple(eligible[(start + offset) % len(eligible)] for offset in range(len(eligible)))
         selected = tuple(change_id for change_id in ordered if requested is None or change_id in requested)[:limit]
-        if requested is not None and requested != frozenset(eligible):
+        eligible_ids = frozenset(eligible)
+        requested_eligible_ids = frozenset(
+            change_id for change_id in eligible if requested is not None and change_id in requested
+        )
+        if requested is not None and requested_eligible_ids != eligible_ids:
             return selected, ordered[0]
         selected_ids = frozenset(selected)
         next_cursor = next(
