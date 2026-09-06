@@ -3315,7 +3315,7 @@ class PortfolioApplication:
                 workspace_manager=self._workspace_manager,
             )
             with self._runtime_reconciliation_lock:
-                self._runtimes[request.change_id] = runtime
+                self._runtimes = {**self._runtimes, request.change_id: runtime}
             package = self._package_store.read_verified(request.change_id)
             self._validate_package_authority(runtime, package)
             snapshot = self._workspace_manager.snapshot_design_package(

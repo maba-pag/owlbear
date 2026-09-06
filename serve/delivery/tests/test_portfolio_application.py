@@ -338,11 +338,14 @@ class _ObservedLock:
         self._lock = Lock()
         self.observe_attempts = Event()
         self.attempted = Event()
+        self.acquired = Event()
 
     def __enter__(self) -> None:
         if self.observe_attempts.is_set():
             self.attempted.set()
         self._lock.acquire()
+        if self.observe_attempts.is_set():
+            self.acquired.set()
 
     def __exit__(self, *_args: object) -> None:
         self._lock.release()
@@ -4153,7 +4156,9 @@ dependencies: []
             observed_lock.observe_attempts.set()
             allow_admission.set()
             assert observed_lock.attempted.wait(2)
+            assert not observed_lock.acquired.is_set()
             allow_health.set()
+            assert observed_lock.acquired.wait(2)
             assert health.result(timeout=2).status.value == "healthy"
         assert admitted.result(timeout=2).contract.change_id == "change-b"
 
