@@ -248,6 +248,15 @@ Return the selected `DeliveryTransition` or pre-execution `dispatch_failure` dir
 `transition_delivery` or `recover_claim`; orchestration validates the launch identity and applies the
 matching route. Do not call job, receipt, request, or other lifecycle operations.
 
+## Memory assessment policy
+
+The sampled assessment policy is authoritative in `h-mcp-memory`. This workflow
+intentionally does not schedule or require a post-task assessment, make missing
+feedback a transition failure, or add a retry/receipt path. If Builder elects
+to assess recalled entries, it does so at the terminal boundary of the
+substantive attempt, including eligible partial or failed attempts; a
+pre-execution `dispatch_failure` is not an assessment boundary.
+
 ## Optional Process Observation
 
 When a reviewed result exposes a trigger from `h-process-observations`, load that handbook for a

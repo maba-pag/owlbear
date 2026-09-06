@@ -27,8 +27,8 @@ Curated and approved MCP entries are what future agents recall. Pending entries 
 | `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
 | `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
 | `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
-| `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` | task-owning agent |
-| `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` | task-owning agent |
+| `curated` / `approved` | `contested` | First factually-wrong assessment | `assess_memories` | builder |
+| `contested` | `disputed` | A second task reports the entry factually wrong | `assess_memories` | builder |
 | `curated` / `approved` / `contested` | `stale` | Non-use exceeds the slot-efficiency threshold | `assess_memories` | memory service |
 | `contested` / `disputed` / `stale` | `approved` | User resolves the exceptional state | Cockpit | human user |
 | `pending` | removed | Noise/duplicate pruned before commit | `delete_memory` | curator agent |
