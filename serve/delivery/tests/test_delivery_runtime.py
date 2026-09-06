@@ -1186,9 +1186,7 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
     )
     attention_payload = DeliveryFrontier.model_validate_json(
         attention_runtime.frontier_bytes(), strict=False
-    ).model_dump(
-        mode="python"
-    )
+    ).model_dump(mode="python")
     attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
 
     with pytest.raises(ValueError, match="abandoned Change cannot retain active or terminal authority"):
