@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 
@@ -89,9 +90,9 @@ def _source(scope: str) -> ConfiguredSourceRecord:
     )
 
 
-def _runtime(scope: str) -> _Runtime:
+def _runtime(scope: str, *, connection: sqlite3.Connection | None = None) -> _Runtime:
     source = _source(scope)
-    connection = sqlite3.connect(":memory:")
+    connection = connection or sqlite3.connect(":memory:")
     vectors = _ScopeAwareVectorStore()
     content_store = ContentStore(
         db=connection,
@@ -131,6 +132,48 @@ def runtime(request: pytest.FixtureRequest) -> _Runtime:
     value.connection.close()
 
 
+@pytest.fixture
+def legacy_schema_runtime() -> _Runtime:
+    connection = sqlite3.connect(":memory:")
+    connection.execute(
+        """
+        CREATE TABLE content_documents (
+            document_id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            uri TEXT,
+            scope TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            vectors_synced INTEGER NOT NULL DEFAULT 1,
+            pending_delete_chunk_ids TEXT NOT NULL DEFAULT '[]',
+            trusted INTEGER NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            ingested_at TEXT NOT NULL
+        )
+        """
+    )
+    now = datetime.now(tz=UTC).isoformat()
+    legacy_rows = (
+        ("URI fixture", "https://example.test/fixture", "https://example.test/fixture"),
+        ("External fixture", None, "fixture-external"),
+    )
+    for title, uri, identity in legacy_rows:
+        document_id = uuid5(NAMESPACE_URL, f"source-1|{identity}|global").hex
+        connection.execute(
+            """
+            INSERT INTO content_documents (
+                document_id, source_id, title, uri, scope, content_hash, trusted, ingested_at
+            ) VALUES (?, 'source-1', ?, ?, 'global', 'legacy-hash', 0, ?)
+            """,
+            (document_id, title, uri, now),
+        )
+    connection.commit()
+
+    value = _runtime("project:new", connection=connection)
+    yield value
+    value.connection.close()
+
+
 @pytest.mark.asyncio
 async def test_registered_scope_reaches_request_persistence_vectors_and_search(runtime: _Runtime) -> None:
     result = await runtime.coordinator.ingest(
@@ -157,6 +200,32 @@ async def test_registered_scope_reaches_request_persistence_vectors_and_search(r
     global_only = await runtime.content_store.search(ContentSearchQuery(text="fixture", scopes=("global",)))
     assert len(intended) == 1
     assert len(global_only) == (1 if runtime.source.scope == "global" else 0)
+
+
+@pytest.mark.asyncio
+async def test_legacy_schema_upgrade_replaces_rows_from_old_scope(legacy_schema_runtime: _Runtime) -> None:
+    runtime = legacy_schema_runtime
+    legacy_rows = runtime.connection.execute(
+        "SELECT document_id, identity_key FROM content_documents ORDER BY title"
+    ).fetchall()
+    legacy_document_ids = {str(row["document_id"]) for row in legacy_rows}
+
+    assert legacy_rows[0]["identity_key"] is None
+    assert legacy_rows[1]["identity_key"] is not None
+
+    result = await runtime.coordinator.ingest(
+        _request(
+            IngestDocument(title="URI fixture", text="URI content", uri="https://example.test/fixture"),
+            IngestDocument(title="External fixture", text="External content", external_id="fixture-external"),
+        )
+    )
+
+    assert result.documents_replaced == 2
+    assert all(runtime.content_store.get_document(document_id) is None for document_id in legacy_document_ids)
+    assert {
+        runtime.content_store.get_document(content_result.document_id).scope
+        for content_result in result.content_results
+    } == {"project:new"}
 
 
 @pytest.mark.asyncio
