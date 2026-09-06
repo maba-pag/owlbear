@@ -1048,7 +1048,7 @@ class DeliveryFrontier(_DeliveryModel):
         """Load persisted JSON with JSON-compatible coercion unless strictness is explicit."""
         return super().model_validate_json(
             json_data,
-            strict=False if strict is None else strict,
+            strict=strict,
             **kwargs,
         )
 
