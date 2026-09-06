@@ -126,40 +126,54 @@ def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
         raise ValueError(_pydantic_error_detail(exc)) from exc
 
 
+def _serialize_entry(entry: MemoryEntry) -> bytes:
+    frontmatter = {
+        "id": entry.id,
+        "title": entry.title,
+        "categories": list(entry.categories),
+        "confidence": entry.confidence,
+        "state": str(entry.state),
+        "outstanding_count": entry.outstanding_count,
+        "unremarkable_count": entry.unremarkable_count,
+        "didnt_use_count": entry.didnt_use_count,
+        "score": entry.score,
+        "scope_agents": entry.scope_agents,
+        "source_agent": entry.source_agent,
+        "created_at": entry.created_at,
+        "updated_at": entry.updated_at,
+        "approved_at": entry.approved_at,
+        "contested_by_task": entry.contested_by_task,
+    }
+
+    yaml_stream = StringIO()
+    _YAML.dump(frontmatter, yaml_stream)
+    content = f"---\n{yaml_stream.getvalue()}---\n\n{entry.content}\n"
+    return content.encode("utf-8")
+
+
 def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: Path) -> None:
     """Write one memory entry file atomically after strict validation and guards."""
     _assert_within_memory_dir(path, memory_dir)
     _reject_symlink(path)
     validated = MemoryEntry.model_validate(entry)
-
-    frontmatter = {
-        "id": validated.id,
-        "title": validated.title,
-        "categories": list(validated.categories),
-        "confidence": validated.confidence,
-        "state": str(validated.state),
-        "outstanding_count": validated.outstanding_count,
-        "unremarkable_count": validated.unremarkable_count,
-        "didnt_use_count": validated.didnt_use_count,
-        "score": validated.score,
-        "scope_agents": validated.scope_agents,
-        "source_agent": validated.source_agent,
-        "created_at": validated.created_at,
-        "updated_at": validated.updated_at,
-        "approved_at": validated.approved_at,
-        "contested_by_task": validated.contested_by_task,
-    }
-
-    yaml_stream = StringIO()
-    _YAML.dump(frontmatter, yaml_stream)
-    content = f"---\n{yaml_stream.getvalue()}---\n\n{validated.content}\n"
+    serialized = _serialize_entry(validated)
+    serialized_size = len(serialized)
+    if serialized_size > _MAX_FILE_SIZE_BYTES:
+        msg = (
+            f"serialized entry exceeds {_MAX_FILE_SIZE_BYTES} bytes "
+            f"(got {serialized_size}); shorten the title, content, or metadata"
+        )
+        raise ValueError(msg)
+    if read_entry_bytes_strict(serialized) != validated:
+        msg = "serialized entry does not round-trip unchanged"
+        raise ValueError(msg)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = mkstemp(dir=str(path.parent), suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-            tmp_file.write(content)
+        with os.fdopen(fd, "wb") as tmp_file:
+            tmp_file.write(serialized)
             tmp_file.flush()
             os.fsync(tmp_file.fileno())
         tmp_path.replace(path)
