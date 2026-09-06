@@ -484,7 +484,7 @@ class TestStorageWrite:
         original_bytes = target.read_bytes()
         oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7820})
 
-        with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes.*metadata"):
+        with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got 8193\).*metadata"):
             storage.write_entry(target, oversized, memory_dir=memory_dir)
 
         assert target.read_bytes() == original_bytes
@@ -514,7 +514,7 @@ class TestStorageWrite:
         entry = MemoryEntry(**{**_valid_entry_data(), "source_agent": source_agent})
 
         if expected_size > _8KB:
-            with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes"):
+            with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got {expected_size}\)"):
                 storage.write_entry(target, entry, memory_dir=memory_dir)
             assert not target.exists()
         else:
@@ -538,11 +538,11 @@ class TestStorageWrite:
         assert target.read_bytes() == original_bytes
 
     @pytest.mark.parametrize(
-        "overrides",
+        ("overrides", "serialized_size"),
         [
-            {"source_agent": "x" * 9000},
-            {"scope_agents": ["x" * 9000]},
-            {"title": "x" * 3736, "content": "😀" * 1024},
+            ({"source_agent": "x" * 9000}, 9373),
+            ({"scope_agents": ["x" * 9000]}, 9385),
+            ({"title": "x" * 3736, "content": "😀" * 1024}, 8193),
         ],
         ids=["provenance", "scope", "body-content"],
     )
@@ -550,6 +550,7 @@ class TestStorageWrite:
         self,
         tmp_path: Path,
         overrides: dict,
+        serialized_size: int,
     ) -> None:
         """Error: oversized metadata or body content is rejected before creating a file."""
         memory_dir = tmp_path / "memory"
@@ -557,7 +558,10 @@ class TestStorageWrite:
         target = memory_dir / "entry.md"
         entry = MemoryEntry(**{**_valid_entry_data(), **overrides})
 
-        with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes"):
+        with pytest.raises(
+            ValueError,
+            match=rf"serialized entry exceeds {_8KB} bytes \(got {serialized_size}\)",
+        ):
             storage.write_entry(target, entry, memory_dir=memory_dir)
 
         assert not target.exists()

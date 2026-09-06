@@ -93,7 +93,7 @@ def test_rejected_engine_edit_preserves_previous_file(tmp_path: Path) -> None:
     target = tmp_path / f"{entry.id}.md"
     original_bytes = target.read_bytes()
 
-    with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes"):
+    with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes \(got \d+\)"):
         engine.edit(
             entry.id,
             {"title": "x" * 9000},

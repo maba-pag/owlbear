@@ -687,7 +687,7 @@ def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
         DeliveryStage.COMPLETED,
         coordination.last_reviewed_commit,
     )
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     change_root = runtime_root / "changes" / "change-a"
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "admission.json").write_bytes(
@@ -3979,9 +3979,7 @@ dependencies: []
     admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
 
     delivery_root = state_root / "changes" / "admitted-change"
-    persisted_frontier = DeliveryFrontier.model_validate_json(
-        (delivery_root / "frontier.json").read_bytes(), strict=False
-    )
+    persisted_frontier = DeliveryFrontier.model_validate_json((delivery_root / "frontier.json").read_bytes())
     persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
     assert persisted_frontier == admitted.frontier
     assert persisted_receipt["receipt_id"] == admitted.receipt.receipt_id
@@ -4082,7 +4080,7 @@ def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
     replacement = previous_runtime.contract.model_copy(update={"title": "Replacement authority \u00e9"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -4112,7 +4110,7 @@ def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(
     previous_runtime = application._runtimes["change-a"]
     contract_path = state_root / "changes/change-a/contract.json"
     frontier_path = state_root / "changes/change-a/frontier.json"
-    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
     replacement = previous_runtime.contract.model_copy(update={"title": "Active replacement"})
     contract_path.write_bytes(_canonical(replacement))
     (state_root / "changes/change-a/admission.json").write_bytes(
@@ -4261,7 +4259,7 @@ def test_portfolio_projects_current_pull_request_mergeability(tmp_path: Path) ->
     )
     runtimes["change-a"].record_publication_identity(publication)
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
     frontier_path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": head, "pending_checkpoint": None}))
     )
@@ -4406,7 +4404,7 @@ def test_background_checkpoint_selection_excludes_review_required_merge(tmp_path
         triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),),
     )
     path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes())
     path.write_bytes(
         _canonical(frontier.model_copy(update={"target_sync_receipt": target_sync, "pending_checkpoint": pending}))
     )
@@ -4955,8 +4953,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     contract_path = state_root / "changes/change-a/contract.json"
     contract_path.write_bytes(_canonical(runtime.contract))
     current_frontier = DeliveryFrontier.model_validate_json(
-        (state_root / "changes/change-a/frontier.json").read_bytes(),
-        strict=False,
+        (state_root / "changes/change-a/frontier.json").read_bytes()
     )
     (state_root / "changes/change-a/admission.json").write_bytes(
         _canonical(_admission_receipt(runtime.contract, current_frontier, head))
@@ -5042,7 +5039,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     )
 
     def create_pull_request(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -5090,7 +5087,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     branch_publisher = Mock()
 
     def publish_branch(request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -5132,7 +5129,7 @@ def test_reconcile_published_head_stops_after_concurrent_invalidation(tmp_path: 
     branch_publisher = Mock()
 
     def verify_branch(_request):
-        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
                 current.model_copy(
@@ -6636,7 +6633,7 @@ def _publish_merge_conflict_attention(
     )
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_attention": attention})))
     return attention
 
@@ -6651,7 +6648,7 @@ def _activate_legacy_integration_repair(
     claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_repair_claim": claim})))
     writer = ChangeWriter(
         attempt_id=claim.attempt_id,

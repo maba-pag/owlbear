@@ -138,7 +138,7 @@ def test_checkpoint_reconcile_rejects_mismatched_heads_without_pending_queue(tmp
     exact_head = coordinator.show("change-a").last_reviewed_commit
     application.finalize_change("change-a", _finalization_request("change-a", exact_head))
     frontier_path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
     frontier_path.write_bytes(
         _canonical(frontier.model_copy(update={"published_head": "2" * 40, "pending_checkpoint": None}))
     )
