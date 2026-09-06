@@ -665,10 +665,12 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "Validate the optional `memory_candidate` against `h-memory-structure`" in finalization
     assert "Preserve reviewer memory provenance" in finalizer
     assert "not an idempotency key" in content
-    assert "cycle 3, then cycles 13, 23" in content
-    assert "opportunistic, not an eventual-processing SLA" in content
-    assert 'list_memories(states=["pending"])' in content
-    assert "fail-closed housekeeping attention" in content
+    orchestration_text = " ".join(orchestration.split())
+    assert "cycle 3, then after cycles 13, 23" in orchestration_text
+    assert "record a fail-closed housekeeping failure" in orchestration_text
+    assert "opportunistic, not an eventual-processing SLA" in guidance
+    assert 'list_memories(states=["pending"])' in guidance
+    assert "fail-closed housekeeping attention" in guidance
     assert "Assessment coverage" in content
     assert "Pending age and curation latency" in content
     assert "Useful or harmful recall" in content
