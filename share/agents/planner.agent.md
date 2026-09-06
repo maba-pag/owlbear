@@ -4,7 +4,7 @@ description: "Delivery planner - publish one advisory-reviewed task chain and re
 argument-hint: "Plan Delivery Launch: {serialized DeliveryLaunchPackage}"
 user-invocable: false
 disable-model-invocation: true
-model: GPT-5.6 Sol (copilot)
+model: GPT-6 Astra (copilot)
 tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/runInTerminal, read/problems, read/readFile, read/terminalLastCommand, read/viewImage, agent, search, web, owlbear-delivery/show_plan_context, owlbear-delivery/publish_delivery_plan, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [planner-challenger, Explore]
 hooks:

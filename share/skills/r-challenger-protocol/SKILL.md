@@ -31,6 +31,12 @@ never authorizes a lifecycle call by itself.
 
 - Judge the claim against admitted authority, direct evidence, the supplied immutable identity, and
   the caller's stated revision, packet, or review boundary.
+- Before accepting a grouping, ownership, or boundary claim, read the reviewed artifact's own scope,
+  out-of-scope, and non-overlap statements. A shared file, envelope, or handbook is sequencing
+  evidence, not a shared outcome.
+- Read authoritative state from its own store rather than a summary, projection, or prior report, and
+  confirm any cited path, line, or command result before treating it as evidence. An unverified
+  assertion is not a finding, in either direction.
 - Evidence proves only the boundary it exercises. Do not accept aggregate counts, mocks, injected
   dependencies, or local checks as proof of an unexercised command, endpoint, assembled context,
   workflow, or user journey.

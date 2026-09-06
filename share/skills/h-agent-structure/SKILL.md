@@ -98,6 +98,7 @@ hooks:                         # only if enforcement needed
 
 - `user-invocable: false` — hides from the `/` slash-command menu. Use for internal agents/skills that should only be dispatched by an owning workflow.
 - `disable-model-invocation: true` — prevents autonomous invocation by other models. Use for L1/L2 delivery agents. **Must be `false` for ND3 agents** (agents that may be called at nesting depth ≥3), because VS Code does not resolve agents with `true` at depth ≥2. See § Nesting Depth & DMI below.
+- `model:` — a producing agent and the reviewer or challenger of its output must never share a model family. Independent review that shares a family shares its blind spots, so a same-family pair silently converts a gate into agreement. This constraint outranks per-role capability preference and must be rechecked whenever any model in a pair is changed.
 
 ### Required Sections
 
