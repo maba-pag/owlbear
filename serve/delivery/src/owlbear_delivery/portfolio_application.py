@@ -2425,12 +2425,23 @@ class PortfolioApplication:
             raise ValueError(message)
         effective_limit = min(limit, _MAX_ACCEPTANCE_RECONCILIATION_CHANGES)
         requested = None if change_ids is None else frozenset(change_ids)
-        eligible = tuple(
+        all_eligible = tuple(
             change_id
             for change_id, runtime in sorted(self._runtimes.items())
-            if (requested is None or change_id in requested) and self._is_acceptance_reconciliation_eligible(runtime)
+            if self._is_acceptance_reconciliation_eligible(runtime)
         )
-        selected = self._select_acceptance_reconciliation_changes(eligible, effective_limit)
+        eligible = (
+            all_eligible
+            if requested is None
+            else tuple(change_id for change_id in all_eligible if change_id in requested)
+        )
+        if not eligible:
+            return ()
+        selected = self._select_acceptance_reconciliation_changes(
+            all_eligible,
+            effective_limit,
+            requested=requested,
+        )
         selected_ids = frozenset(selected)
         outcomes = [self._reconcile_awaiting_acceptance_change(change_id) for change_id in selected]
         outcomes.extend(
@@ -2449,6 +2460,8 @@ class PortfolioApplication:
         self,
         eligible: tuple[str, ...],
         limit: int,
+        *,
+        requested: frozenset[str] | None,
     ) -> tuple[str, ...]:
         """Reserve a fair bounded batch and persist its next starting Change."""
         if not eligible:
@@ -2461,7 +2474,12 @@ class PortfolioApplication:
                     cursor = _AcceptanceReconciliationCursor.model_validate_json(
                         (cursor_root / _ACCEPTANCE_RECONCILIATION_CURSOR_FILE).read_bytes()
                     ).next_change_id
-                selected, next_cursor = self._rotate_acceptance_reconciliation_batch(eligible, limit, cursor)
+                selected, next_cursor = self._rotate_acceptance_reconciliation_batch(
+                    eligible,
+                    limit,
+                    cursor,
+                    requested=requested,
+                )
                 atomic_write(
                     cursor_root / _ACCEPTANCE_RECONCILIATION_CURSOR_FILE,
                     json.dumps(
@@ -2478,6 +2496,7 @@ class PortfolioApplication:
                 eligible,
                 limit,
                 self._acceptance_reconciliation_cursor,
+                requested=requested,
             )
         self._acceptance_reconciliation_cursor = next_cursor
         return selected
@@ -2487,6 +2506,8 @@ class PortfolioApplication:
         eligible: tuple[str, ...],
         limit: int,
         cursor: str | None,
+        *,
+        requested: frozenset[str] | None,
     ) -> tuple[tuple[str, ...], str]:
         """Return one wrapped batch and the deterministic cursor after it."""
         start = (
@@ -2497,9 +2518,12 @@ class PortfolioApplication:
                 0,
             )
         )
-        selected_count = min(limit, len(eligible))
-        selected = tuple(eligible[(start + offset) % len(eligible)] for offset in range(selected_count))
-        return selected, eligible[(start + selected_count) % len(eligible)]
+        ordered = tuple(eligible[(start + offset) % len(eligible)] for offset in range(len(eligible)))
+        selected = tuple(
+            change_id for change_id in ordered if requested is None or change_id in requested
+        )[:limit]
+        next_index = (eligible.index(selected[-1]) + 1) % len(eligible)
+        return selected, eligible[next_index]
 
     @staticmethod
     def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool:
