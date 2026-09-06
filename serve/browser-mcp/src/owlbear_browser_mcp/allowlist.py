@@ -31,3 +31,7 @@ class DomainAllowlist:
         if "*" not in self._domains and hostname not in self._domains:
             msg = f"Domain not in allowlist: {hostname!r}"
             raise PermissionError(msg)
+
+    def allows_exact_hostname(self, hostname: str) -> bool:
+        """Return whether *hostname* is explicitly allowlisted, excluding wildcard mode."""
+        return "*" not in self._domains and hostname.casefold() in self._domains

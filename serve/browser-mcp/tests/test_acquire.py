@@ -47,6 +47,38 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
 
 
 @pytest.mark.asyncio
+async def test_acquire_delegates_exact_allowlisted_private_fixture() -> None:
+    """An exact internal hostname can reach the synthetic private acquisition fixture."""
+    url = "http://internal.fixture.test/page"
+    launcher = MagicMock()
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionSuccess(
+            status=AcquisitionStatus.SUCCESS,
+            requested_url=url,
+            canonical_url=url,
+            redirect_chain=(url,),
+            title="Internal fixture",
+            markdown="Internal fixture content",
+            discovered_links=(),
+            content_hash="internal-fixture-hash",
+            fetched_at=datetime.now(UTC),
+            diagnostics=Diagnostics("complete"),
+        )
+    )
+    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["internal.fixture.test"]), launcher=launcher)
+    ctx = MagicMock()
+    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+
+    with patch("socket.getaddrinfo", return_value=[("AF_INET", 0, 0, "", ("10.0.0.7", 80))]):
+        result = await acquire(ctx, url)
+
+    request = launcher.acquire.await_args.args[0]
+    assert request.url == url
+    assert result["status"] == "success"
+    assert result["markdown"] == "Internal fixture content"
+
+
+@pytest.mark.asyncio
 async def test_acquire_rejects_a_domain_outside_the_allowlist() -> None:
     """Acquisition does not delegate when the requested hostname is not allowed."""
     launcher = MagicMock()

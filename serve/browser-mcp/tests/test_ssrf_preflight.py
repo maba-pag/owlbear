@@ -4,6 +4,7 @@ The security boundary requires:
   - _check_ssrf(url) called BEFORE allowlist.check(url) in navigate()
   - Scheme check: non-http/https schemes raise ToolError
   - DNS resolution via asyncio.to_thread(socket.getaddrinfo, hostname, port)
+  - Exact allowlisted hostnames may use private/internal IPs; other hosts are blocked
   - IP blocklist: loopback / private / link-local / reserved / unspecified → ToolError
   - IPv4-mapped IPv6 unwrapping before blocklist check
     - DNS failure (OSError from getaddrinfo) → ToolError with hostname in message
@@ -31,6 +32,7 @@ from owlbear_browser_mcp.server import navigate
 # ---------------------------------------------------------------------------
 
 _ALLOWED_HOST = "target.example.com"
+_UNALLOWLISTED_HOST = "blocked.example.com"
 
 
 def _make_ctx(domains: list[str] | None = None) -> MagicMock:
@@ -110,12 +112,57 @@ class TestFromAC_NavigateSchemeCheck:
 
 
 # ---------------------------------------------------------------------------
+# Trusted internal destinations
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_NavigateTrustedInternal:
+    """Exact allowlist entries may opt into private/internal DNS results."""
+
+    @pytest.mark.asyncio
+    async def test_exact_allowlisted_hostname_allows_private_ip(self) -> None:
+        """An exact hostname approval permits a synthetic private destination."""
+        url = f"https://{_ALLOWED_HOST}/internal"
+        ctx = _make_ctx([_ALLOWED_HOST])
+        with patch("socket.getaddrinfo", return_value=_addr4("10.0.0.7")):
+            assert await navigate(ctx, url) == url
+
+    @pytest.mark.asyncio
+    async def test_exact_allowlisted_hostname_allows_mapped_private_ip(self) -> None:
+        """IPv4-mapped private results use the same exact-host approval."""
+        url = f"https://{_ALLOWED_HOST}/internal"
+        ctx = _make_ctx([_ALLOWED_HOST])
+        with patch("socket.getaddrinfo", return_value=_addr6("::ffff:10.0.0.7")):
+            assert await navigate(ctx, url) == url
+
+    @pytest.mark.asyncio
+    async def test_empty_allowlist_does_not_allow_private_ip(self) -> None:
+        """The default empty allowlist does not trust private destinations."""
+        ctx = _make_ctx([])
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("10.0.0.7")),
+            pytest.raises(ToolError, match="blocked IP address"),
+        ):
+            await navigate(ctx, f"https://{_ALLOWED_HOST}/internal")
+
+    @pytest.mark.asyncio
+    async def test_wildcard_does_not_allow_private_ip(self) -> None:
+        """Wildcard testing mode does not become a trusted-internal policy."""
+        ctx = _make_ctx(["*"])
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("10.0.0.7")),
+            pytest.raises(ToolError, match="blocked IP address"),
+        ):
+            await navigate(ctx, f"https://{_ALLOWED_HOST}/internal")
+
+
+# ---------------------------------------------------------------------------
 # AC1 — IP blocklist
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_NavigateIPBlocklist:
-    """AC1: navigate() resolves hostname and blocks private/loopback/link-local IPs.
+    """AC1: navigate() blocks private/loopback/link-local IPs for unapproved hosts.
 
     All tests fail in RED because the current code does not resolve the hostname
     or check the resolved IPs — it proceeds directly to allowlist.check() which
@@ -124,8 +171,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_loopback_127_0_0_1(self) -> None:
-        """Hostname resolving to 127.0.0.1 (loopback) must raise ToolError."""
-        ctx = _make_ctx()
+        """An unallowlisted hostname resolving to 127.0.0.1 must raise ToolError."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("127.0.0.1")),
             pytest.raises(ToolError),
@@ -134,8 +181,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_loopback_127_x_non_zero(self) -> None:
-        """127.0.0.100 is still in 127.0.0.0/8 — must raise ToolError."""
-        ctx = _make_ctx()
+        """127.0.0.100 is still in 127.0.0.0/8 — unallowlisted hosts must raise ToolError."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("127.0.0.100")),
             pytest.raises(ToolError),
@@ -144,8 +191,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_private_10_x(self) -> None:
-        """10.0.0.1 (RFC-1918 /8) must raise ToolError."""
-        ctx = _make_ctx()
+        """10.0.0.1 (RFC-1918 /8) must raise ToolError for an unallowlisted host."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("10.0.0.1")),
             pytest.raises(ToolError),
@@ -154,8 +201,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_private_172_16_x(self) -> None:
-        """172.16.0.1 (RFC-1918 /12) must raise ToolError."""
-        ctx = _make_ctx()
+        """172.16.0.1 (RFC-1918 /12) must raise ToolError for an unallowlisted host."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("172.16.0.1")),
             pytest.raises(ToolError),
@@ -164,8 +211,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_private_192_168_x(self) -> None:
-        """192.168.1.1 (RFC-1918 /16) must raise ToolError."""
-        ctx = _make_ctx()
+        """192.168.1.1 (RFC-1918 /16) must raise ToolError for an unallowlisted host."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("192.168.1.1")),
             pytest.raises(ToolError),
@@ -174,8 +221,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_link_local_169_254_x(self) -> None:
-        """169.254.0.1 (link-local / AWS IMDS range) must raise ToolError."""
-        ctx = _make_ctx()
+        """169.254.0.1 (link-local / AWS IMDS range) must raise ToolError for an unallowlisted host."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr4("169.254.169.254")),
             pytest.raises(ToolError),
@@ -184,12 +231,12 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_ipv4_mapped_ipv6_loopback(self) -> None:
-        """::ffff:127.0.0.1 (IPv4-mapped IPv6 loopback) must raise ToolError.
+        """An unallowlisted host resolving to mapped loopback must raise ToolError.
 
         The implementation must unwrap the IPv4-mapped address before checking
         properties — ipaddress.IPv6Address.ipv4_mapped returns the inner IPv4Address.
         """
-        ctx = _make_ctx()
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr6("::ffff:127.0.0.1")),
             pytest.raises(ToolError),
@@ -198,8 +245,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_ipv4_mapped_ipv6_private(self) -> None:
-        """::ffff:10.0.0.1 (IPv4-mapped IPv6 private) must raise ToolError."""
-        ctx = _make_ctx()
+        """An unallowlisted host resolving to mapped private IP must raise ToolError."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         with (
             patch("socket.getaddrinfo", return_value=_addr6("::ffff:10.0.0.1")),
             pytest.raises(ToolError),
@@ -208,8 +255,8 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_all_ips_when_multi_blocked(self) -> None:
-        """Multiple resolved IPs — all blocked — must raise ToolError (no single-IP bypass)."""
-        ctx = _make_ctx()
+        """Multiple blocked addresses must raise ToolError for an unallowlisted host."""
+        ctx = _make_ctx([_UNALLOWLISTED_HOST])
         addrs = _addr4("10.0.0.1") + _addr4("192.168.1.1")
         with (
             patch("socket.getaddrinfo", return_value=addrs),
@@ -219,10 +266,9 @@ class TestFromAC_NavigateIPBlocklist:
 
     @pytest.mark.asyncio
     async def test_blocks_literal_ip_loopback_in_url(self) -> None:
-        """http://127.0.0.1/ with the literal IP in the allowlist must still be blocked.
+        """http://127.0.0.1/ must remain blocked even when the IP is allowlisted.
 
-        Literal-IP URLs are a boundary condition: the blocklist must catch them even
-        when the domain allowlist has been (incorrectly) configured to allow them.
+        The trusted-internal policy applies to exact hostnames, not literal IPs.
         """
         ctx = _make_ctx(["127.0.0.1"])
         with (

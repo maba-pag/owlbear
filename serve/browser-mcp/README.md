@@ -26,8 +26,10 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 For local testing across multiple public sites, set `BROWSER_ALLOWED_DOMAINS="*"` in the Browser
 server's `env` object. This is a testing convenience, not a production policy: exact hostnames
-remain the recommended configuration. The wildcard does not disable SSRF protection; DNS results
-for private, loopback, link-local, reserved, or unspecified addresses are still rejected.
+remain the recommended configuration. An exact hostname entry is also the explicit approval for
+that hostname's private, loopback, or link-local DNS results. Reserved and unspecified addresses
+remain rejected. The wildcard does not grant that internal approval, so private destinations
+remain rejected in testing mode.
 
 Fresh consumer setup seeds this wildcard so the Browser can be exercised immediately. Replace it
 with exact hostnames before using the project against production or sensitive sites.
@@ -53,7 +55,7 @@ converted into a generic transport error.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `BROWSER_ALLOWED_DOMAINS` | _(empty; consumer seed uses `*`)_ | Comma-separated list of permitted hostnames; navigation and acquisition to any other domain are blocked. **Required** — all domains are blocked when unset. Use `*` only for local testing. |
+| `BROWSER_ALLOWED_DOMAINS` | _(empty; consumer seed uses `*`)_ | Comma-separated list of permitted hostnames; navigation and acquisition to any other domain are blocked. Exact entries explicitly permit that hostname's private/internal DNS results (not reserved or unspecified addresses); **required** — all domains are blocked when unset. Use `*` only for local testing; it does not permit private destinations. |
 | `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions |
 
 ## Dependencies
