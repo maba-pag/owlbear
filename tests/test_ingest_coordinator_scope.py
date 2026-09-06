@@ -11,7 +11,7 @@ import pytest
 
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
-from owlbear_knowledge.protocols.content import ContentSearchQuery
+from owlbear_knowledge.protocols.content import ContentIngestRequest, ContentSearchQuery
 from owlbear_knowledge.protocols.enrichment import EnrichmentDiscardResult, EnrichmentPurgeResult
 from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage, KnowledgeOperationError
 from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
@@ -184,6 +184,47 @@ async def test_registered_scope_is_consistent_for_created_unchanged_and_replaced
     }
     assert {scope for _vector, scope in runtime.vectors.vectors.values()} == {runtime.source.scope}
     assert all(call.args[1].health is SourceHealth.OK for call in runtime.sources.record_health.call_args_list)
+
+
+@pytest.mark.parametrize("old_scope", ["global", "project:old"])
+@pytest.mark.asyncio
+async def test_ingest_replaces_same_identity_content_from_old_scope(old_scope: str) -> None:
+    runtime = _runtime("project:new")
+    try:
+        stale = await runtime.content_store.ingest(
+            ContentIngestRequest(
+                source_id=runtime.source.id,
+                title="Fixture",
+                text="Scoped fixture content",
+                external_id="fixture-1",
+                scope=old_scope,
+            )
+        )
+
+        result = await runtime.coordinator.ingest(
+            _request(
+                IngestDocument(
+                    title="Fixture",
+                    text="Scoped fixture content",
+                    external_id="fixture-1",
+                )
+            )
+        )
+
+        assert result.documents_replaced == 1
+        assert runtime.content_store.get_document(stale.document_id) is None
+        assert runtime.enrichment.discard_chunks.call_args.args[0] == stale.chunk_ids
+        assert runtime.graph.invalidate_evidence_by_chunks.call_args.args[0] == stale.chunk_ids
+        assert await runtime.content_store.search(
+            ContentSearchQuery(text="fixture", scopes=(old_scope,))
+        ) == ()
+        assert len(
+            await runtime.content_store.search(
+                ContentSearchQuery(text="fixture", scopes=(runtime.source.scope,))
+            )
+        ) == 1
+    finally:
+        runtime.connection.close()
 
 
 @pytest.mark.asyncio

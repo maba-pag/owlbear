@@ -151,11 +151,11 @@ class ContentStore(ContentStoreProtocol):
         document_id = self._document_id_for(request)
         content_hash = compute_content_hash(request.text)
         try:
-            existing_doc = self._db.execute(
-                "SELECT document_id, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
-                "FROM content_documents WHERE document_id = ?",
-                (document_id,),
-            ).fetchone()
+            source_documents = self._db.execute(
+                "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
+                "FROM content_documents WHERE source_id = ?",
+                (request.source_id,),
+            ).fetchall()
         except KnowledgeOperationError:
             raise
         except Exception as exc:
@@ -166,7 +166,18 @@ class ContentStore(ContentStoreProtocol):
                 message="Content persistence failed",
             ) from exc
 
-        if existing_doc is not None and existing_doc["content_hash"] == content_hash:
+        matching_documents = tuple(
+            row
+            for row in source_documents
+            if row["document_id"]
+            == self._document_id_for(request.model_copy(update={"scope": row["scope"]}))
+        )
+        existing_doc = next((row for row in matching_documents if row["document_id"] == document_id), None)
+        stale_document_ids = tuple(
+            str(row["document_id"]) for row in matching_documents if row["document_id"] != document_id
+        )
+
+        if existing_doc is not None and not stale_document_ids and existing_doc["content_hash"] == content_hash:
             chunk_ids = self._chunk_ids_for_document(document_id)
             if not bool(existing_doc["vectors_synced"]):
                 pending_delete_chunk_ids = self._load_json_str_list(existing_doc["pending_delete_chunk_ids"])
@@ -219,11 +230,25 @@ class ContentStore(ContentStoreProtocol):
                 message="Document embedding failed",
             )
 
-        replaced_ids = self._chunk_ids_for_document(document_id) if existing_doc is not None else ()
+        replaced_ids: tuple[str, ...] = ()
+        for row in matching_documents:
+            replaced_ids = self._merge_unique_ids(
+                replaced_ids,
+                self._chunk_ids_for_document(str(row["document_id"])),
+            )
+        pending_vector_ids = self._collect_pending_vector_ids(list(matching_documents))
         chunk_rows = [(uuid4().hex, chunk.index, chunk.text, json.dumps(chunk.metadata)) for chunk in chunks]
 
         try:
             with self._db:
+                self._db.executemany(
+                    "DELETE FROM content_chunks WHERE document_id = ?",
+                    ((stale_document_id,) for stale_document_id in stale_document_ids),
+                )
+                self._db.executemany(
+                    "DELETE FROM content_documents WHERE document_id = ?",
+                    ((stale_document_id,) for stale_document_id in stale_document_ids),
+                )
                 self._db.execute(
                     """
                     INSERT INTO content_documents (
@@ -293,8 +318,8 @@ class ContentStore(ContentStoreProtocol):
             ) from exc
 
         new_chunk_ids = tuple(chunk_id for chunk_id, _, _, _ in chunk_rows)
-        if existing_doc is not None:
-            self._delete_vectors(replaced_ids)
+        if matching_documents:
+            self._delete_vectors(self._merge_unique_ids(replaced_ids, pending_vector_ids))
             self._set_pending_delete_chunk_ids(document_id, ())
             state = ContentIngestState.REPLACED
         else:
