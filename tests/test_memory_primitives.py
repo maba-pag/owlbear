@@ -445,6 +445,79 @@ class TestStorageWrite:
         assert result.title == entry.title
         assert result.content == entry.content
 
+    @pytest.mark.parametrize(
+        ("title", "content"),
+        [
+            ("x" * 7819, "Some content"),
+            ("é" * 3909 + "x", "Some content"),
+            ("x" * 3735, "😀" * 1024),
+        ],
+        ids=["ascii-title", "multibyte-title", "multibyte-content"],
+    )
+    def test_write_entry_accepts_exact_utf8_serialized_size(
+        self,
+        tmp_path: Path,
+        title: str,
+        content: str,
+    ) -> None:
+        """Boundary: an entry whose UTF-8 serialization is exactly 8192 bytes is accepted."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        entry = MemoryEntry(**{**_valid_entry_data(), "title": title, "content": content})
+
+        storage.write_entry(target, entry, memory_dir=memory_dir)
+
+        assert target.stat().st_size == _8KB
+        result = storage.read_entry(target)
+        assert result is not None
+        assert result.title == title
+        assert result.content == content
+
+    def test_write_entry_rejects_8193_byte_serialization_before_replacement(self, tmp_path: Path) -> None:
+        """Error: an oversized update leaves the previous serialized entry unchanged."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        original = _make_valid_entry()
+        storage.write_entry(target, original, memory_dir=memory_dir)
+        original_bytes = target.read_bytes()
+        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7820})
+
+        with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes.*metadata"):
+            storage.write_entry(target, oversized, memory_dir=memory_dir)
+
+        assert target.read_bytes() == original_bytes
+        result = storage.read_entry(target)
+        assert result is not None
+        assert result.id == original.id
+        assert result.title == original.title
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"source_agent": "x" * 9000},
+            {"scope_agents": ["x" * 9000]},
+            {"title": "x" * 3736, "content": "😀" * 1024},
+        ],
+        ids=["provenance", "scope", "body-content"],
+    )
+    def test_write_entry_rejects_oversized_yaml_or_body_content(
+        self,
+        tmp_path: Path,
+        overrides: dict,
+    ) -> None:
+        """Error: oversized metadata or body content is rejected before creating a file."""
+        memory_dir = tmp_path / "memory"
+        memory_dir.mkdir()
+        target = memory_dir / "entry.md"
+        entry = MemoryEntry(**{**_valid_entry_data(), **overrides})
+
+        with pytest.raises(ValueError, match=r"serialized entry exceeds 8192 bytes"):
+            storage.write_entry(target, entry, memory_dir=memory_dir)
+
+        assert not target.exists()
+
     def test_write_entry_path_outside_memory_dir_raises(self, tmp_path: Path) -> None:
         """Error: path outside memory_dir raises ValueError (containment assertion)."""
         memory_dir = tmp_path / "memory"

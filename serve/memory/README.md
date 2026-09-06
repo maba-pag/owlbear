@@ -139,8 +139,10 @@ Writes one memory entry file atomically:
 
 1. Validates `entry` via Pydantic (strict — raises `PydanticValidationError` on failure)
 2. Asserts path containment and rejects symlinks (raises `ValueError` on violation)
-3. Writes content to a same-directory temp file via `mkstemp`, then replaces the target
-   with `Path.replace()` (atomic on POSIX)
+3. Validates the final UTF-8 Markdown representation is at most 8 192 bytes and parseable by the
+   canonical reader (raises an actionable `ValueError` before touching the target when it is not)
+4. Writes content to a same-directory temp file via `mkstemp`, then replaces the target with
+   `Path.replace()` (atomic on POSIX)
 
 ### `delete_entry(path: Path, *, memory_dir: Path) -> None`
 
