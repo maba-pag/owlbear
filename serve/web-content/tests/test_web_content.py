@@ -136,6 +136,13 @@ def test_relative_urls_remain_relative_without_a_source_url() -> None:
     assert "![Deployment runbook diagram](./images/runbook.png)" in markdown
 
 
+def test_image_labels_escape_markdown_metacharacters() -> None:
+    alt = r"Architecture \ [draft]"
+    escaped_alt = alt.replace("\\", "\\\\").replace("[", r"\[").replace("]", r"\]")
+
+    assert html_to_markdown(f'<img src="diagram.png" alt="{alt}">') == f"![{escaped_alt}](diagram.png)"
+
+
 def test_extract_content_preserves_the_enterprise_corpus() -> None:
     markdown = extract_content(ENTERPRISE_HTML, url=ENTERPRISE_SOURCE_URL)
 
@@ -237,6 +244,23 @@ def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
 
 
+def test_extract_falls_back_when_trafilatura_drops_an_image_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "[Image: Diagram]"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert (
+        extract_content(
+            '<main><p><img src="../images/diagram.png" alt="Diagram"></p></main>',
+            url=ENTERPRISE_SOURCE_URL,
+        )
+        == "![Diagram](https://intranet.example.test/images/diagram.png)"
+    )
+
+
 def test_extract_falls_back_for_a_truncated_parenthesized_link_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -267,7 +291,8 @@ def test_extract_falls_back_when_trafilatura_drops_an_image_alternative(
 
     markdown = extract_content(f'<main><p>Surrounding text <img alt="{alternative}"></p></main>')
 
-    assert markdown == f"Surrounding text [Image: {alternative}]"
+    escaped_alternative = alternative.replace("\\", "\\\\").replace("[", r"\[").replace("]", r"\]")
+    assert markdown == f"Surrounding text [Image: {escaped_alternative}]"
 
 
 def test_extract_falls_back_when_trafilatura_drops_inline_code(
@@ -279,6 +304,17 @@ def test_extract_falls_back_when_trafilatura_drops_inline_code(
     monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
 
     assert extract_content("<p>Run <code> value </code> now</p>") == "Run `  value  ` now"
+
+
+def test_extract_falls_back_when_trafilatura_changes_fenced_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "```python\nchanged()\n```"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert extract_content("<pre><code class='language-python'>kept()\n</code></pre>") == ("```python\nkept()\n```")
 
 
 def test_strip_noise_removes_known_page_chrome() -> None:

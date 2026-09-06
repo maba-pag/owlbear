@@ -264,10 +264,11 @@ def _image_to_markdown(element: HtmlElement, tail: str, url: str | None = None) 
     alt = (element.get("alt") or "").strip()
     if not alt:
         return tail
+    escaped_alt = alt.replace("\\", "\\\\").replace("[", r"\[").replace("]", r"\]")
     src = _resolve_url(element.get("src", ""), url)
     if not src:
-        return f"[Image: {alt}]" + tail
-    return f"![{alt}]({src})" + tail
+        return f"[Image: {escaped_alt}]" + tail
+    return f"![{escaped_alt}]({src})" + tail
 
 
 def _inline_code_to_markdown(element: HtmlElement, tail: str, _url: str | None = None) -> str:
