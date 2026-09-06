@@ -4071,23 +4071,41 @@ class PortfolioApplication:
 
     def _reconcile_runtimes(self) -> None:
         with self._runtime_reconciliation_lock:
-            self._reconcile_runtimes_locked()
+            previous_runtimes = self._runtimes
+            initial_reconciliation = not self._has_reconciled_runtimes
+        reconciled, observations, reconciliation_errors = self._reconcile_runtime_snapshot(
+            previous_runtimes,
+            initial_reconciliation=initial_reconciliation,
+        )
+        self._publish_reconciled_runtimes(
+            previous_runtimes,
+            reconciled,
+            observations,
+            reconciliation_errors,
+        )
 
-    def _reconcile_runtimes_locked(self) -> None:
+    def _reconcile_runtime_snapshot(
+        self,
+        previous_runtimes: dict[str, DeliveryRuntime],
+        *,
+        initial_reconciliation: bool,
+    ) -> tuple[
+        dict[str, DeliveryRuntime],
+        dict[str, DeliveryChangeObservation],
+        dict[str, str],
+    ]:
         try:
             discovered = discover_persisted_changes(self._target_root)
         except DeliveryDiscoveryRootError as exc:
             raise DeliveryRuntimeReconciliationError(None, exc.detail) from exc
 
         observations = {observation.change_id: observation for observation in discovered}
-        previous_runtimes = self._runtimes
         reconciled: dict[str, DeliveryRuntime] = {}
         reconciliation_errors = {
             diagnostic.change_id: f"{diagnostic.code}: {diagnostic.detail}"
             for diagnostic in self._startup_health_diagnostics
             if diagnostic.change_id is not None
         }
-        initial_reconciliation = not self._has_reconciled_runtimes
 
         for change_id, runtime in previous_runtimes.items():
             observation = observations.get(change_id)
@@ -4112,10 +4130,31 @@ class PortfolioApplication:
             if error is not None and change_id not in reconciliation_errors:
                 reconciliation_errors[change_id] = error
 
-        self._runtimes = reconciled
-        self._discovered_changes = observations
-        self._runtime_reconciliation_errors = reconciliation_errors
-        self._has_reconciled_runtimes = True
+        return reconciled, observations, reconciliation_errors
+
+    def _publish_reconciled_runtimes(
+        self,
+        previous_runtimes: dict[str, DeliveryRuntime],
+        reconciled: dict[str, DeliveryRuntime],
+        observations: dict[str, DeliveryChangeObservation],
+        reconciliation_errors: dict[str, str],
+    ) -> None:
+        with self._runtime_reconciliation_lock:
+            current_runtimes = self._runtimes
+            if current_runtimes is not previous_runtimes:
+                for change_id in previous_runtimes.keys() - current_runtimes.keys():
+                    reconciled.pop(change_id, None)
+                reconciled.update(
+                    {
+                        change_id: runtime
+                        for change_id, runtime in current_runtimes.items()
+                        if previous_runtimes.get(change_id) is not runtime
+                    }
+                )
+            self._runtimes = reconciled
+            self._discovered_changes = observations
+            self._runtime_reconciliation_errors = reconciliation_errors
+            self._has_reconciled_runtimes = True
 
     def _reconcile_existing_runtime(
         self,

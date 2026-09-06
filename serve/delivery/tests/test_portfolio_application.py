@@ -4156,11 +4156,10 @@ dependencies: []
             observed_lock.observe_attempts.set()
             allow_admission.set()
             assert observed_lock.attempted.wait(2)
-            assert not observed_lock.acquired.is_set()
-            allow_health.set()
             assert observed_lock.acquired.wait(2)
+            assert admitted.result(timeout=2).contract.change_id == "change-b"
+            allow_health.set()
             assert health.result(timeout=2).status.value == "healthy"
-        assert admitted.result(timeout=2).contract.change_id == "change-b"
 
     assert set(application._runtimes) == {"change-a", "change-b"}
 
