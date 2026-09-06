@@ -923,7 +923,10 @@ def test_publication_history_refreshes_one_pr_and_appends_successors(tmp_path: P
     assert current.publications == (refreshed,)
     assert history.publications == (refreshed, successor)
     assert runtime.publication_history() == history
-    assert DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).change_disposition_publication == successor
+    assert (
+        DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False).change_disposition_publication
+        == successor
+    )
 
 
 def test_publication_history_rejects_stale_or_duplicate_successors(tmp_path: Path) -> None:
@@ -1000,7 +1003,7 @@ def test_change_attention_recapture_clears_prior_resolution(tmp_path: Path) -> N
 
 def test_change_attention_capture_rejects_active_claims(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     claim = DeliveryActiveClaim(
         attempt_id="attempt-capture",
         claim_id="claim-capture",
@@ -1028,7 +1031,7 @@ def test_change_attention_resolution_rejects_active_claims(tmp_path: Path) -> No
         datetime(2026, 8, 11, 16, tzinfo=UTC),
         ("provider unavailable",),
     )
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     claim = DeliveryActiveClaim(
         attempt_id="attempt-resolution",
         claim_id="claim-resolution",
@@ -1113,7 +1116,7 @@ def test_abandonment_clears_live_publication_and_integration_authority(tmp_path:
 
     runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 18, tzinfo=UTC))
 
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     assert frontier.integration_attention is None
     assert frontier.integration_repair_claim is None
     assert frontier.pending_checkpoint is None
@@ -1132,7 +1135,7 @@ def test_change_deferral_rejects_active_claims(tmp_path: Path) -> None:
 def test_frontier_rejects_deferred_change_with_completion_authority(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     runtime.defer_change("pause for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     payload = frontier.model_dump(mode="python")
     payload["change_completion"] = DeliveryChangeCompletion(
         completion_id="a" * 64,
@@ -1181,7 +1184,7 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
         abandoned_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
         reason="user stopped the Change",
     )
-    attention_payload = DeliveryFrontier.model_validate_json(attention_runtime.frontier_bytes()).model_dump(
+    attention_payload = DeliveryFrontier.model_validate_json(attention_runtime.frontier_bytes(), strict=False).model_dump(
         mode="python"
     )
     attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
@@ -1254,7 +1257,9 @@ def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Pa
     assert disposition is not None
     assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
     assert runtime.ready_receipt() is None
-    publication = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).change_disposition_publication
+    publication = DeliveryFrontier.model_validate_json(
+        runtime.frontier_bytes(), strict=False
+    ).change_disposition_publication
     assert publication is not None
     assert (publication.repository, publication.number, publication.head_sha) == (
         "example/project",
@@ -2111,7 +2116,7 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     path = tmp_path / "changes/delivery-runtime/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     pending = DeliveryPendingCheckpoint(
         head="3" * 40,
         triggers=(
