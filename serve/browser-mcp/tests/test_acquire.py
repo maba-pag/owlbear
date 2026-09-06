@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import Thread
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,8 +13,20 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_browser import AcquisitionStatus, AcquisitionSuccess, Diagnostics
+from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_browser_mcp.allowlist import DomainAllowlist
 from owlbear_browser_mcp.server import AppContext, acquire
+
+
+class _InternalFixtureHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"<html><body><main>Internal fixture content</main></body></html>")
+
+    def log_message(self, *_args: object) -> None:
+        return
 
 
 @pytest.mark.asyncio
@@ -47,35 +62,26 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
 
 
 @pytest.mark.asyncio
-async def test_acquire_delegates_exact_allowlisted_private_fixture() -> None:
+@pytest.mark.browser
+async def test_acquire_delegates_exact_allowlisted_private_fixture(tmp_path: Path) -> None:
     """An exact internal hostname can reach the synthetic private acquisition fixture."""
-    url = "http://internal.fixture.test/page"
-    launcher = MagicMock()
-    launcher.acquire = AsyncMock(
-        return_value=AcquisitionSuccess(
-            status=AcquisitionStatus.SUCCESS,
-            requested_url=url,
-            canonical_url=url,
-            redirect_chain=(url,),
-            title="Internal fixture",
-            markdown="Internal fixture content",
-            discovered_links=(),
-            content_hash="internal-fixture-hash",
-            fetched_at=datetime.now(UTC),
-            diagnostics=Diagnostics("complete"),
-        )
-    )
-    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["internal.fixture.test"]), launcher=launcher)
-    ctx = MagicMock()
-    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _InternalFixtureHandler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://localhost:{server.server_port}/page"
+    try:
+        async with PlaywrightLauncher(user_data_dir=str(tmp_path / "profile"), headless=True) as launcher:
+            app_ctx = AppContext(allowlist=DomainAllowlist(domains=["localhost"]), launcher=launcher)
+            ctx = MagicMock()
+            ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+            result = await acquire(ctx, url)
+    finally:
+        server.shutdown()
+        server.server_close()
 
-    with patch("socket.getaddrinfo", return_value=[("AF_INET", 0, 0, "", ("10.0.0.7", 80))]):
-        result = await acquire(ctx, url)
-
-    request = launcher.acquire.await_args.args[0]
-    assert request.url == url
     assert result["status"] == "success"
-    assert result["markdown"] == "Internal fixture content"
+    assert result["requested_url"] == url
+    assert result["canonical_url"] == url
+    assert "Internal fixture content" in result["markdown"]
 
 
 @pytest.mark.asyncio
