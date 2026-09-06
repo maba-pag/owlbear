@@ -1037,6 +1037,21 @@ class DeliveryFrontier(_DeliveryModel):
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
 
+    @classmethod
+    def model_validate_json(
+        cls,
+        json_data: str | bytes | bytearray,
+        *,
+        strict: bool | None = None,
+        **kwargs: object,
+    ) -> DeliveryFrontier:
+        """Load persisted JSON with JSON-compatible coercion unless strictness is explicit."""
+        return super().model_validate_json(
+            json_data,
+            strict=False if strict is None else strict,
+            **kwargs,
+        )
+
     @model_validator(mode="before")
     @classmethod
     def _discard_stale_target_sync_receipt(cls, value: object) -> object:
