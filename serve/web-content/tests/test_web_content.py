@@ -148,6 +148,19 @@ def test_extract_content_preserves_the_enterprise_corpus() -> None:
     assert "Enterprise navigation" not in markdown
 
 
+def test_table_spans_are_flattened_without_losing_cell_text() -> None:
+    markdown = html_to_markdown(
+        "<table><tr><th>Setting</th><th>Value</th></tr>"
+        "<tr><td rowspan='2'>Owner</td><td>Runbook</td></tr>"
+        "<tr><td>Escalation</td></tr>"
+        "<tr><td colspan='2'>Shared policy</td></tr></table>"
+    )
+
+    assert "| Owner | Runbook |" in markdown
+    assert "| Escalation |  |" in markdown
+    assert "| Shared policy |  |" in markdown
+
+
 def test_normalize_preserves_nested_list_indentation_and_code_whitespace() -> None:
     markdown = normalize("- parent\n  - child\n\n```python\n  indented()\n    nested()\n```")
 
