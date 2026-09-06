@@ -183,7 +183,7 @@ def test_ordered_list_nesting_uses_parent_marker_width() -> None:
 def test_nested_list_tail_remains_after_the_nested_list() -> None:
     markdown = html_to_markdown("<ul><li>Before<ul><li>Child</li></ul>After</li></ul>")
 
-    assert markdown == "- Before\n  - Child\n  After"
+    assert markdown == "- Before\n  - Child\n\n  After"
 
 
 def test_inline_code_preserves_leading_and_trailing_spaces() -> None:

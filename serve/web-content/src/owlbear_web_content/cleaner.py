@@ -181,22 +181,21 @@ def _paragraph_to_markdown(element: HtmlElement, tail: str, url: str | None = No
 def _append_list_content(
     lines: list[str],
     content_parts: list[str],
-    indent: str,
-    marker: str,
+    first_prefix: str,
+    continuation_indent: str,
     *,
-    item_started: bool,
+    separate: bool = False,
 ) -> bool:
     """Append item content at the marker or continuation indentation."""
     content_lines = "".join(content_parts).strip().splitlines()
     if not content_lines:
-        return item_started
-    continuation_indent = indent + " " * len(marker)
-    if not item_started:
-        lines.append(f"{indent}{marker}{content_lines[0]}".rstrip())
-        content_lines = content_lines[1:]
-        item_started = True
+        return False
+    if separate:
+        lines.append("")
+    lines.append(f"{first_prefix}{content_lines[0]}".rstrip())
+    content_lines = content_lines[1:]
     lines.extend(f"{continuation_indent}{line}".rstrip() for line in content_lines)
-    return item_started
+    return True
 
 
 def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list[str]:
@@ -208,16 +207,21 @@ def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list
         if not isinstance(child.tag, str) or child.tag.lower() != "li":
             continue
         marker = f"{item_number}. " if ordered else "- "
+        continuation_indent = indent + " " * len(marker)
         content_parts = [child.text or ""]
         item_started = False
+        after_nested_list = False
         for nested in child:
             if isinstance(nested.tag, str) and nested.tag.lower() in _LIST_TAGS:
-                item_started = _append_list_content(
-                    lines,
-                    content_parts,
-                    indent,
-                    marker,
-                    item_started=item_started,
+                item_started = (
+                    _append_list_content(
+                        lines,
+                        content_parts,
+                        continuation_indent if item_started else f"{indent}{marker}",
+                        continuation_indent,
+                        separate=after_nested_list,
+                    )
+                    or item_started
                 )
                 content_parts.clear()
                 if not item_started:
@@ -225,9 +229,19 @@ def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list
                     item_started = True
                 lines.extend(_list_lines(nested, url, indent + " " * len(marker)))
                 content_parts.append(nested.tail or "")
+                after_nested_list = True
             else:
                 content_parts.append(_element_to_markdown(nested, url))  # type: ignore[arg-type]
-        item_started = _append_list_content(lines, content_parts, indent, marker, item_started=item_started)
+        item_started = (
+            _append_list_content(
+                lines,
+                content_parts,
+                continuation_indent if item_started else f"{indent}{marker}",
+                continuation_indent,
+                separate=after_nested_list,
+            )
+            or item_started
+        )
         if not item_started:
             lines.append(f"{indent}{marker}".rstrip())
         item_number += 1
