@@ -16,7 +16,7 @@ def _preserves_structure(result: str, fallback: str, image_alternatives: list[st
     code_spans = [match.group() for match in re.finditer(r"(?P<delimiter>`+).*?(?P=delimiter)", fallback)]
     return (
         all(f"]({target})" in result for target in targets)
-        and all(alternative in result for alternative in image_alternatives)
+        and all(re.search(rf"(?<!\w){re.escape(alternative)}(?!\w)", result) for alternative in image_alternatives)
         and all(code_span in result for code_span in code_spans)
     )
 

@@ -219,17 +219,26 @@ def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
 
 
+@pytest.mark.parametrize(
+    ("alternative", "extracted"),
+    [
+        ("Architecture ] diagram", "Surrounding text"),
+        ("cat", "Surrounding concatenate text"),
+    ],
+)
 def test_extract_falls_back_when_trafilatura_drops_an_image_alternative(
     monkeypatch: pytest.MonkeyPatch,
+    alternative: str,
+    extracted: str,
 ) -> None:
     def fake_extract(*_args: object, **_kwargs: object) -> str:
-        return "Surrounding text"
+        return extracted
 
     monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
 
-    markdown = extract_content('<main><p>Surrounding text <img alt="Architecture ] diagram"></p></main>')
+    markdown = extract_content(f'<main><p>Surrounding text <img alt="{alternative}"></p></main>')
 
-    assert markdown == "Surrounding text [Image: Architecture ] diagram]"
+    assert markdown == f"Surrounding text [Image: {alternative}]"
 
 
 def test_extract_falls_back_when_trafilatura_drops_inline_code(
