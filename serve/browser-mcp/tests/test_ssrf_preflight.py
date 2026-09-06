@@ -273,6 +273,18 @@ class TestFromAC_NavigateIPBlocklist:
             await navigate(ctx, "http://127.0.0.1/")
 
     @pytest.mark.asyncio
+    async def test_blocks_backslash_authority_before_allowlist(self) -> None:
+        """A backslash must not turn a loopback URL into an allowlisted hostname."""
+        ctx = _make_ctx([_ALLOWED_HOST])
+        url = f"http://127.0.0.1\\@{_ALLOWED_HOST}/"
+        with (
+            patch("socket.getaddrinfo") as mock_dns,
+            pytest.raises(ToolError, match="Backslashes"),
+        ):
+            await navigate(ctx, url)
+        mock_dns.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_blocks_reserved_ip(self) -> None:
         """240.0.0.1 (class E / is_reserved=True) must raise ToolError.
 
