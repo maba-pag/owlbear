@@ -44,6 +44,8 @@ from owlbear_delivery import (
     CoordinationConflictError,
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceAttentionReason,
+    DeliveryAcceptanceReconciliationOutcome,
+    DeliveryAcceptanceReconciliationStatus,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
@@ -3313,6 +3315,91 @@ def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path
     )
 
     assert application.reconcile_awaiting_acceptance() == ()
+
+
+def _stub_acceptance_reconciliation(
+    application: PortfolioApplication,
+    statuses: dict[str, DeliveryAcceptanceReconciliationStatus] | None = None,
+) -> list[str]:
+    calls: list[str] = []
+    selected_statuses = statuses or {}
+
+    def reconcile(change_id: str) -> DeliveryAcceptanceReconciliationOutcome:
+        calls.append(change_id)
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=selected_statuses.get(change_id, DeliveryAcceptanceReconciliationStatus.WAITING),
+        )
+
+    application._reconcile_awaiting_acceptance_change = reconcile
+    return calls
+
+
+def test_reconcile_awaiting_acceptance_rotates_beyond_batch_limit(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(application)
+
+    first = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == change_ids[:8]
+    assert first[-1].change_id == "change-08"
+    assert first[-1].status is DeliveryAcceptanceReconciliationStatus.SKIPPED
+
+    calls.clear()
+    second = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == ("change-08", *change_ids[:7])
+    assert second[0].change_id == "change-08"
+    assert second[0].status is DeliveryAcceptanceReconciliationStatus.WAITING
+
+
+def test_reconcile_awaiting_acceptance_advances_after_failure_and_busy_change(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    calls = _stub_acceptance_reconciliation(
+        application,
+        {
+            "change-00": DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+            "change-01": DeliveryAcceptanceReconciliationStatus.SKIPPED,
+        },
+    )
+
+    first = application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(calls) == change_ids[:8]
+    assert first[0].status is DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE
+    assert first[1].status is DeliveryAcceptanceReconciliationStatus.SKIPPED
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-08"
+
+
+def test_reconcile_awaiting_acceptance_cursor_survives_restart(tmp_path: Path) -> None:
+    change_ids = tuple(f"change-{index:02d}" for index in range(9))
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        dict.fromkeys(change_ids, DeliveryStage.COMPLETED),
+    )
+    application._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    first_calls = _stub_acceptance_reconciliation(application)
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert tuple(first_calls) == change_ids[:8]
+    cursor_path = state_root / "claims/acceptance-reconciliation/cursor.json"
+    assert json.loads(cursor_path.read_text(encoding="utf-8"))["next_change_id"] == "change-08"
+
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    reopened._is_acceptance_reconciliation_eligible = lambda _runtime: True
+    second_calls = _stub_acceptance_reconciliation(reopened)
+    reopened.reconcile_awaiting_acceptance(change_ids)
+
+    assert second_calls[0] == "change-08"
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
