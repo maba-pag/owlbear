@@ -3371,14 +3371,20 @@ def test_reconcile_awaiting_acceptance_partial_request_does_not_regress_cursor(t
     assert tuple(calls) == change_ids[:8]
 
     calls.clear()
+    application.reconcile_awaiting_acceptance(("change-08",))
+    calls.clear()
     application.reconcile_awaiting_acceptance(change_ids)
     assert calls[0] == "change-08"
+
+    calls.clear()
+    application.reconcile_awaiting_acceptance(change_ids)
+    assert calls[0] == "change-07"
 
     calls.clear()
     application.reconcile_awaiting_acceptance(("change-00",))
     calls.clear()
     application.reconcile_awaiting_acceptance(change_ids)
-    assert calls[0] == "change-07"
+    assert calls[0] == "change-06"
 
 
 def test_reconcile_awaiting_acceptance_advances_after_failure_and_busy_change(tmp_path: Path) -> None:

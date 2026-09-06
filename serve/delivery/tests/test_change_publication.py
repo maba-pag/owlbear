@@ -661,8 +661,52 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
     assert coordinator.show("sync-resolve").target_sync_receipt == receipt
     assert coordinator.show("sync-resolve").publication_base_head == initial
     assert manager.reviewed_source_head("sync-resolve") == receipt.merged_head
+    assert _git(worktree, "status", "--porcelain=v1").stdout == ""
     assert _head(repository, "refs/heads/main") != receipt.merged_head
     assert (repository / "product.txt").read_bytes() == user_checkout_before
+
+
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [
+        ("product.txt", "resolved with unstaged edit\n"),
+        ("untracked.txt", "untracked content\n"),
+    ],
+)
+def test_resolve_target_sync_conflict_rejects_unstaged_or_untracked_changes_without_mutation(
+    tmp_path: Path,
+    filename: str,
+    content: str,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-dirty")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-dirty",
+        expected_target=target_head,
+        operation_id="sync-dirty-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+    (worktree / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    (worktree / filename).write_text(content, encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="unstaged or untracked changes"):
+        manager.resolve_target_sync_conflict(
+            TargetSyncConflictRequest(
+                change_id="sync-dirty",
+                target_head=target_head,
+                operation_id="sync-dirty-1",
+            )
+        )
+
+    assert _head(worktree) == reviewed
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
+    assert coordinator.show("sync-dirty").target_sync_conflict is not None
+    assert coordinator.show("sync-dirty").target_sync_receipt is None
 
 
 def _writer(change_id: str) -> ChangeWriter:
