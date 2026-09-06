@@ -15,7 +15,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock
 from typing import Literal
 from unittest.mock import Mock, patch, sentinel
 
@@ -333,6 +333,24 @@ def _publication_observation(
         ).encode()
     ).hexdigest()
     return PublicationPullRequestObservationReceipt(observation_id=observation_id, **payload)
+
+
+class _ObservedLock:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self.observe_attempts = Event()
+        self.attempted = Event()
+        self.acquired = Event()
+
+    def __enter__(self) -> None:
+        if self.observe_attempts.is_set():
+            self.attempted.set()
+        self._lock.acquire()
+        if self.observe_attempts.is_set():
+            self.acquired.set()
+
+    def __exit__(self, *_args: object) -> None:
+        self._lock.release()
 
 
 def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
@@ -4206,6 +4224,81 @@ dependencies: []
     assert len(outcomes) == 1
     assert outcomes[0].change_id == "late-change"
     assert outcomes[0].status.value == "provider-unavailable"
+
+
+def test_health_reconciliation_does_not_race_shared_runtime_admission(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.create_design_session(
+        "change-b",
+        b"""# change-b
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: concurrency test
+statement: Preserve concurrent runtime reconciliation.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Reconcile concurrent admission
+promise: Keep admitted runtime state available.
+acceptance: [Concurrent health remains available.]
+commitments: [COM-001]
+dependencies: []
+```
+""",
+        b"# Architecture\n",
+    )
+    admission_persisted = Event()
+    allow_admission = Event()
+    health_reconciling = Event()
+    allow_health = Event()
+    observed_lock = _ObservedLock()
+    application._runtime_reconciliation_lock = observed_lock
+    original_admit = application._authority_registry.admit
+    original_reconcile = application._reconcile_existing_runtime
+
+    def blocking_admit(request):
+        result = original_admit(request)
+        admission_persisted.set()
+        assert allow_admission.wait(2)
+        return result
+
+    def blocking_reconcile(runtime, observation, *, initial_reconciliation):
+        if not health_reconciling.is_set():
+            health_reconciling.set()
+            assert allow_health.wait(2)
+        return original_reconcile(
+            runtime,
+            observation,
+            initial_reconciliation=initial_reconciliation,
+        )
+
+    request = DeliveryAdmissionRequest(change_id="change-b", active_claim_ids=())
+    with (
+        patch.object(application._authority_registry, "admit", side_effect=blocking_admit),
+        ThreadPoolExecutor(max_workers=2) as executor,
+    ):
+        admitted = executor.submit(application.admit_delivery_change, request)
+        assert admission_persisted.wait(2)
+        with patch.object(application, "_reconcile_existing_runtime", side_effect=blocking_reconcile):
+            health = executor.submit(application.delivery_health)
+            assert health_reconciling.wait(2)
+            observed_lock.observe_attempts.set()
+            allow_admission.set()
+            assert observed_lock.attempted.wait(2)
+            assert observed_lock.acquired.wait(2)
+            assert admitted.result(timeout=2).contract.change_id == "change-b"
+            allow_health.set()
+            assert health.result(timeout=2).status.value == "healthy"
+
+    assert set(application._runtimes) == {"change-a", "change-b"}
 
 
 def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path: Path) -> None:

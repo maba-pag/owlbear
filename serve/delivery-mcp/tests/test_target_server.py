@@ -41,6 +41,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryReviewReceipt,
     PublishDeliveryResult,
 )
+from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
     app_lifespan,
@@ -198,6 +199,36 @@ class _BlockingAcceptanceApplication(_RecordingApplication):
         self._started.set()
         self._release.wait(timeout=2)
         return _Result(operation="observe_acceptance")
+
+
+class _BlockingFoundationalApplication(_RecordingApplication):
+    def __init__(self, operation_name: str, started: threading.Event, release: threading.Event) -> None:
+        super().__init__()
+        self._operation_name = operation_name
+        self._started = started
+        self._release = release
+        self.completed = threading.Event()
+        self.mutation_count = 0
+        self.health_observations: list[int] = []
+
+    def _run_foundational_operation(self) -> _Result:
+        self.calls.append(self._operation_name)
+        self._started.set()
+        self._release.wait(timeout=2)
+        self.mutation_count += 1
+        self.completed.set()
+        return _Result(operation=self._operation_name)
+
+    def admit_delivery_change(self, _request: object) -> _Result:
+        return self._run_foundational_operation()
+
+    def acquire_frontier_work(self) -> _Result:
+        return self._run_foundational_operation()
+
+    def delivery_health(self) -> DeliveryHealthView:
+        self.calls.append("delivery_health")
+        self.health_observations.append(self.mutation_count)
+        return DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
 
 
 def _git(repository: Path, *arguments: str) -> None:
@@ -681,6 +712,60 @@ async def test_acceptance_observation_yields_the_mcp_event_loop() -> None:
 
     assert elapsed < 0.5
     assert result == {"operation": "observe_acceptance"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("operation_name", "payload"),
+    [
+        ("admit_delivery_change", {"change_id": "change-a", "active_claim_ids": []}),
+        ("acquire_frontier_work", {}),
+    ],
+)
+async def test_foundational_operations_yield_to_independent_health_requests(
+    operation_name: str,
+    payload: dict[str, object],
+) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    application = _BlockingFoundationalApplication(operation_name, started, release)
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    task = asyncio.create_task(getattr(adapter, operation_name)(payload))
+    assert await asyncio.to_thread(started.wait, 2)
+    try:
+        health = await asyncio.wait_for(adapter.delivery_health({}), timeout=0.5)
+    finally:
+        release.set()
+    result = await task
+
+    assert health.status is DeliveryHealthStatus.HEALTHY
+    assert result == {"operation": operation_name}
+    assert application.calls == [operation_name, "delivery_health"]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_admission_is_reconciled_without_a_blind_retry() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    application = _BlockingFoundationalApplication("admit_delivery_change", started, release)
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {"change_id": "change-a", "active_claim_ids": []}
+
+    task = asyncio.create_task(adapter.admit_delivery_change(request))
+    assert await asyncio.to_thread(started.wait, 2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    release.set()
+    assert await asyncio.to_thread(application.completed.wait, 2)
+    health = await adapter.delivery_health({})
+
+    assert health.status is DeliveryHealthStatus.HEALTHY
+    assert application.health_observations == [1]
+    assert application.mutation_count == 1
+    assert application.calls == ["admit_delivery_change", "delivery_health"]
 
 
 MISSING_FIELDS = [
