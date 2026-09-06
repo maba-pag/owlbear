@@ -11,6 +11,8 @@ from lxml import html as lxml_html
 from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 _FENCE_LINE_RE = re.compile(r"^(?P<indent>[ ]*)(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
+_LIST_LINE_RE = re.compile(r"^\s*(?:[-+*]|\d+\.)\s+")
+_TABLE_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
 
 
 def _can_open_fence(match: re.Match[str] | None) -> bool:
@@ -97,6 +99,22 @@ def _inline_code_spans(markdown: str) -> list[str]:
     return spans
 
 
+def _structural_lines(markdown: str) -> list[str]:
+    """Return list and table lines outside fenced code blocks."""
+    visible_chunks: list[str] = []
+    cursor = 0
+    for start, end, _block in _fenced_code_ranges(markdown):
+        visible_chunks.append(markdown[cursor:start])
+        cursor = end
+    visible_chunks.append(markdown[cursor:])
+    return [
+        line
+        for chunk in visible_chunks
+        for line in chunk.splitlines()
+        if _LIST_LINE_RE.match(line) or _TABLE_LINE_RE.match(line)
+    ]
+
+
 def _contains_in_order(actual: list[str], expected: list[str]) -> bool:
     """Return whether every expected value appears in order in the actual values."""
     position = 0
@@ -124,7 +142,9 @@ def _preserves_structure(
     result_blocks = [block for _start, _end, block in _fenced_code_ranges(result)]
     if not _contains_in_order(result_blocks, fallback_blocks):
         return False
-    return _contains_in_order(_inline_code_spans(result), _inline_code_spans(fallback))
+    if not _contains_in_order(_inline_code_spans(result), _inline_code_spans(fallback)):
+        return False
+    return _contains_in_order(_structural_lines(result), _structural_lines(fallback))
 
 
 def _extract_markdown(html: str, url: str | None = None) -> str:
@@ -147,7 +167,7 @@ def _extract_markdown(html: str, url: str | None = None) -> str:
     image_targets = [
         urljoin(url, source) if url is not None else source
         for image in document.iter("img")
-        if (source := image.get("src"))
+        if (image.get("alt") or "").strip() and (source := image.get("src"))
     ]
     image_fragments = [
         normalize(
