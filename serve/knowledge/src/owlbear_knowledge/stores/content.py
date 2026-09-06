@@ -83,6 +83,7 @@ class ContentStore(ContentStoreProtocol):
         self._vector_store = vector_store
         self._embedding_provider = embedding_provider
         self._chunker = chunker
+        self._legacy_scopes: dict[str, tuple[str, ...]] = {}
 
     def ensure_tables(self) -> None:
         """Create Content-owned tables if they do not yet exist."""
@@ -165,8 +166,9 @@ class ContentStore(ContentStoreProtocol):
             msg = "text must not be empty"
             raise ValueError(msg)
 
-        document_id = self._document_id_for(request)
-        identity_key = self._identity_key_for(request)
+        identity = request.external_id or request.uri or request.title
+        document_id = self._document_id(request.source_id, identity, request.scope)
+        identity_key = self._identity_key(request.source_id, identity)
         content_hash = compute_content_hash(request.text)
         try:
             indexed_documents = self._db.execute(
@@ -175,11 +177,16 @@ class ContentStore(ContentStoreProtocol):
                 "WHERE source_id = ? AND identity_key = ?",
                 (request.source_id, identity_key),
             ).fetchall()
-            legacy_documents = self._db.execute(
-                "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, pending_delete_chunk_ids "
-                "FROM content_documents WHERE source_id = ? AND identity_key IS NULL",
-                (request.source_id,),
-            ).fetchall()
+            legacy_documents: list[sqlite3.Row] = []
+            for scope in self._legacy_scopes_for_source(request.source_id):
+                legacy_document = self._db.execute(
+                    "SELECT document_id, scope, content_hash, ingested_at, vectors_synced, "
+                    "pending_delete_chunk_ids FROM content_documents "
+                    "WHERE document_id = ? AND identity_key IS NULL",
+                    (self._document_id(request.source_id, identity, scope),),
+                ).fetchone()
+                if legacy_document is not None:
+                    legacy_documents.append(legacy_document)
         except KnowledgeOperationError:
             raise
         except Exception as exc:
@@ -190,11 +197,7 @@ class ContentStore(ContentStoreProtocol):
                 message="Content persistence failed",
             ) from exc
 
-        matching_documents = tuple(indexed_documents) + tuple(
-            row
-            for row in legacy_documents
-            if row["document_id"] == self._document_id_for(request.model_copy(update={"scope": row["scope"]}))
-        )
+        matching_documents = tuple(indexed_documents) + tuple(legacy_documents)
         existing_doc = next((row for row in matching_documents if row["document_id"] == document_id), None)
         stale_document_ids = tuple(
             str(row["document_id"]) for row in matching_documents if row["document_id"] != document_id
@@ -526,20 +529,22 @@ class ContentStore(ContentStoreProtocol):
         )
         return ContentStats(documents=documents, chunks=chunks, vectors=vectors)
 
-    def _document_id_for(self, request: ContentIngestRequest) -> str:
-        identity = request.external_id or request.uri or request.title
-        return self._document_id(request.source_id, identity, request.scope)
-
     def _document_id(self, source_id: str, identity: str, scope: str) -> str:
         key = f"{source_id}|{identity}|{scope}"
         return uuid5(NAMESPACE_URL, key).hex
 
-    def _identity_key_for(self, request: ContentIngestRequest) -> str:
-        identity = request.external_id or request.uri or request.title
-        return self._identity_key(request.source_id, identity)
-
     def _identity_key(self, source_id: str, identity: str) -> str:
         return uuid5(NAMESPACE_URL, f"{source_id}|{identity}").hex
+
+    def _legacy_scopes_for_source(self, source_id: str) -> tuple[str, ...]:
+        if source_id not in self._legacy_scopes:
+            rows = self._db.execute(
+                "SELECT DISTINCT scope FROM content_documents "
+                "WHERE source_id = ? AND identity_key IS NULL ORDER BY scope",
+                (source_id,),
+            ).fetchall()
+            self._legacy_scopes[source_id] = tuple(str(row["scope"]) for row in rows)
+        return self._legacy_scopes[source_id]
 
     def _chunk_ids_for_document(self, document_id: str) -> tuple[str, ...]:
         try:
