@@ -175,7 +175,7 @@ def test_ordered_list_nesting_uses_parent_marker_width() -> None:
 
 
 def test_inline_code_preserves_leading_and_trailing_spaces() -> None:
-    assert html_to_markdown("<p><code> value </code></p>") == "`  value  `"
+    assert clean("<p><code> value </code></p>") == "`  value  `"
 
 
 def test_normalize_preserves_nested_list_indentation_and_code_whitespace() -> None:
@@ -227,9 +227,20 @@ def test_extract_falls_back_when_trafilatura_drops_an_image_alternative(
 
     monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
 
-    markdown = extract_content('<main><p>Surrounding text <img alt="Architecture diagram"></p></main>')
+    markdown = extract_content('<main><p>Surrounding text <img alt="Architecture ] diagram"></p></main>')
 
-    assert markdown == "Surrounding text [Image: Architecture diagram]"
+    assert markdown == "Surrounding text [Image: Architecture ] diagram]"
+
+
+def test_extract_falls_back_when_trafilatura_drops_inline_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "Run value now"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert extract_content("<p>Run <code> value </code> now</p>") == "Run `  value  ` now"
 
 
 def test_strip_noise_removes_known_page_chrome() -> None:

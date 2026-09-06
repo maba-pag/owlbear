@@ -5,16 +5,19 @@ from __future__ import annotations
 import re
 
 import trafilatura
+from lxml import html as lxml_html
 
 from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 
-def _preserves_structure(result: str, fallback: str) -> bool:
-    """Return whether an extracted result retains structural targets and image alternatives."""
+def _preserves_structure(result: str, fallback: str, image_alternatives: list[str]) -> bool:
+    """Return whether an extracted result retains structural content."""
     targets = re.findall(r"\]\(([^)]*)\)", fallback)
-    image_alternatives = re.findall(r"!\[([^\]]+)\]\([^)]*\)|\[Image: ([^\]]+)\]", fallback)
-    return all(f"]({target})" in result for target in targets) and all(
-        (markdown_alt or text_alt) in result for markdown_alt, text_alt in image_alternatives
+    code_spans = [match.group() for match in re.finditer(r"(?P<delimiter>`+).*?(?P=delimiter)", fallback)]
+    return (
+        all(f"]({target})" in result for target in targets)
+        and all(alternative in result for alternative in image_alternatives)
+        and all(code_span in result for code_span in code_spans)
     )
 
 
@@ -29,7 +32,9 @@ def _extract_markdown(html: str, url: str | None = None) -> str:
         include_tables=True,
     )
     fallback = normalize(html_to_markdown(noise_free, url=url))
-    if result and _preserves_structure(result, fallback):
+    document = lxml_html.fromstring(noise_free)
+    image_alternatives = [alt for image in document.iter("img") if (alt := (image.get("alt") or "").strip())]
+    if result and _preserves_structure(result, fallback, image_alternatives):
         return normalize(result)
     return fallback
 

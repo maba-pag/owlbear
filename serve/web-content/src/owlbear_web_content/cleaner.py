@@ -50,6 +50,7 @@ _HIDDEN_STYLE_RE = re.compile(
 )
 _LANGUAGE_CLASS_RE = re.compile(r"(?:^|\s)(?:language|lang)-([A-Za-z0-9_.+-]+)(?:\s|$)")
 _FENCE_RE = re.compile(r"^(?P<indent>[ ]*)(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
+_CODE_SPAN_RE = re.compile(r"(?P<delimiter>`+).*?(?P=delimiter)")
 
 
 def _remove_noise_tags(doc: HtmlElement, tags: frozenset[str]) -> None:
@@ -302,6 +303,18 @@ def html_to_markdown(html_str: str, url: str | None = None) -> str:
     return _element_to_markdown(root, url).strip()  # type: ignore[arg-type]
 
 
+def _collapse_spaces_outside_code_spans(text: str) -> str:
+    """Collapse repeated spaces without changing inline code delimiters or content."""
+    parts: list[str] = []
+    previous_end = 0
+    for match in _CODE_SPAN_RE.finditer(text):
+        parts.append(re.sub(r" {2,}", " ", text[previous_end : match.start()]))
+        parts.append(match.group())
+        previous_end = match.end()
+    parts.append(re.sub(r" {2,}", " ", text[previous_end:]))
+    return "".join(parts)
+
+
 def normalize(text: str) -> str:
     """Normalize Markdown whitespace without changing fenced code contents."""
     text = text.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
@@ -333,7 +346,7 @@ def normalize(text: str) -> str:
             continue
         normalized_line = line.replace("\u00a0", " ")
         leading_spaces = re.match(r"^ *", normalized_line).group()
-        content = re.sub(r" {2,}", " ", normalized_line[len(leading_spaces) :].rstrip())
+        content = _collapse_spaces_outside_code_spans(normalized_line[len(leading_spaces) :].rstrip())
         normalized_line = leading_spaces + content if content else ""
         is_blank = normalized_line == ""
         if is_blank and previous_blank:
