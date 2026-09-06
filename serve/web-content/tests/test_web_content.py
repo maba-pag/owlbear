@@ -167,11 +167,23 @@ def test_hidden_inline_element_removal_preserves_visible_tail() -> None:
     assert markdown == "Before  after"
 
 
+def test_role_based_noise_removal_preserves_visible_tail() -> None:
+    markdown = html_to_markdown(strip_noise('<p><span role="navigation">Menu</span>Article</p>'))
+
+    assert markdown == "Article"
+
+
 def test_ordered_list_nesting_uses_parent_marker_width() -> None:
     items = "".join(f"<li>Item {number}</li>" for number in range(1, 10))
     markdown = html_to_markdown(f"<ol>{items}<li>Parent<ul><li>Child</li></ul></li></ol>")
 
     assert "10. Parent\n    - Child" in markdown
+
+
+def test_nested_list_tail_remains_after_the_nested_list() -> None:
+    markdown = html_to_markdown("<ul><li>Before<ul><li>Child</li></ul>After</li></ul>")
+
+    assert markdown == "- Before\n  - Child\n  After"
 
 
 def test_inline_code_preserves_leading_and_trailing_spaces() -> None:
@@ -182,6 +194,12 @@ def test_normalize_preserves_nested_list_indentation_and_code_whitespace() -> No
     markdown = normalize("- parent\n  - child\n\n```python\n  indented()\n    nested()\n```")
 
     assert markdown == "- parent\n  - child\n\n```python\n  indented()\n    nested()\n```"
+
+
+def test_normalize_does_not_treat_code_span_as_fenced_block() -> None:
+    markdown = normalize("`````value`````\nPlain  text")
+
+    assert markdown == "`````value`````\nPlain text"
 
 
 def test_extract_prefers_trafilatura_when_all_fallback_links_are_retained(
@@ -217,6 +235,17 @@ def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     )
 
     assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
+
+
+def test_extract_falls_back_for_a_truncated_parenthesized_link_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "[x](https://host/a(b))"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert extract_content('<p><a href="https://host/a(b)c">x</a></p>') == "[x](https://host/a(b)c)"
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urljoin
 
 import trafilatura
 from lxml import html as lxml_html
@@ -10,12 +11,16 @@ from lxml import html as lxml_html
 from owlbear_web_content.cleaner import html_to_markdown, normalize, strip_noise
 
 
-def _preserves_structure(result: str, fallback: str, image_alternatives: list[str]) -> bool:
+def _preserves_structure(
+    result: str,
+    fallback: str,
+    link_targets: list[str],
+    image_alternatives: list[str],
+) -> bool:
     """Return whether an extracted result retains structural content."""
-    targets = re.findall(r"\]\(([^)]*)\)", fallback)
     code_spans = [match.group() for match in re.finditer(r"(?P<delimiter>`+).*?(?P=delimiter)", fallback)]
     return (
-        all(f"]({target})" in result for target in targets)
+        all(f"]({target})" in result for target in link_targets)
         and all(re.search(rf"(?<!\w){re.escape(alternative)}(?!\w)", result) for alternative in image_alternatives)
         and all(code_span in result for code_span in code_spans)
     )
@@ -33,8 +38,13 @@ def _extract_markdown(html: str, url: str | None = None) -> str:
     )
     fallback = normalize(html_to_markdown(noise_free, url=url))
     document = lxml_html.fromstring(noise_free)
+    link_targets = [
+        urljoin(url, target) if url is not None else target
+        for link in document.iter("a")
+        if (target := link.get("href")) is not None
+    ]
     image_alternatives = [alt for image in document.iter("img") if (alt := (image.get("alt") or "").strip())]
-    if result and _preserves_structure(result, fallback, image_alternatives):
+    if result and _preserves_structure(result, fallback, link_targets, image_alternatives):
         return normalize(result)
     return fallback
 

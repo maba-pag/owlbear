@@ -81,7 +81,7 @@ def _remove_cookie_elements(doc: HtmlElement) -> None:
         if (element.get("role") or "").strip().lower() in _NOISE_ROLES:
             parent = element.getparent()
             if parent is not None:
-                parent.remove(element)
+                element.drop_tree()
 
 
 def _is_hidden(element: HtmlElement) -> bool:
@@ -178,15 +178,25 @@ def _paragraph_to_markdown(element: HtmlElement, tail: str, url: str | None = No
     return f"\n{_inner(element, url).strip()}\n" + tail
 
 
-def _list_item_to_markdown(element: HtmlElement, url: str | None) -> str:
-    """Render an item's non-list children while leaving nested lists separate."""
-    parts: list[str] = [element.text or ""]
-    for child in element:
-        if isinstance(child.tag, str) and child.tag.lower() in _LIST_TAGS:
-            parts.append(child.tail or "")
-        else:
-            parts.append(_element_to_markdown(child, url))  # type: ignore[arg-type]
-    return "".join(parts).strip()
+def _append_list_content(
+    lines: list[str],
+    content_parts: list[str],
+    indent: str,
+    marker: str,
+    *,
+    item_started: bool,
+) -> bool:
+    """Append item content at the marker or continuation indentation."""
+    content_lines = "".join(content_parts).strip().splitlines()
+    if not content_lines:
+        return item_started
+    continuation_indent = indent + " " * len(marker)
+    if not item_started:
+        lines.append(f"{indent}{marker}{content_lines[0]}".rstrip())
+        content_lines = content_lines[1:]
+        item_started = True
+    lines.extend(f"{continuation_indent}{line}".rstrip() for line in content_lines)
+    return item_started
 
 
 def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list[str]:
@@ -198,11 +208,28 @@ def _list_lines(element: HtmlElement, url: str | None, indent: str = "") -> list
         if not isinstance(child.tag, str) or child.tag.lower() != "li":
             continue
         marker = f"{item_number}. " if ordered else "- "
-        content = _list_item_to_markdown(child, url)
-        lines.append(f"{indent}{marker}{content}".rstrip())
+        content_parts = [child.text or ""]
+        item_started = False
         for nested in child:
             if isinstance(nested.tag, str) and nested.tag.lower() in _LIST_TAGS:
+                item_started = _append_list_content(
+                    lines,
+                    content_parts,
+                    indent,
+                    marker,
+                    item_started=item_started,
+                )
+                content_parts.clear()
+                if not item_started:
+                    lines.append(f"{indent}{marker}".rstrip())
+                    item_started = True
                 lines.extend(_list_lines(nested, url, indent + " " * len(marker)))
+                content_parts.append(nested.tail or "")
+            else:
+                content_parts.append(_element_to_markdown(nested, url))  # type: ignore[arg-type]
+        item_started = _append_list_content(lines, content_parts, indent, marker, item_started=item_started)
+        if not item_started:
+            lines.append(f"{indent}{marker}".rstrip())
         item_number += 1
     return lines
 
@@ -337,7 +364,7 @@ def normalize(text: str) -> str:
                 fence_character = None
                 fence_length = 0
             continue
-        if fence_match:
+        if fence_match and not (fence_match.group("marker").startswith("`") and "`" in fence_match.group("rest")):
             result.append(line.rstrip())
             marker = fence_match.group("marker")
             fence_character = marker[0]
