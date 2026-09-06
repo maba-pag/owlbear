@@ -50,11 +50,15 @@ def _is_blocked_ip(ip_str: str) -> bool:
 
 
 def _is_ip_literal(value: str) -> bool:
-    """Return whether *value* is a parseable IP address literal."""
+    """Return whether *value* is an IP address literal, including legacy IPv4 forms."""
+    candidate = value.removesuffix(".")
     try:
-        ipaddress.ip_address(value)
+        ipaddress.ip_address(candidate)
     except ValueError:
-        return False
+        try:
+            socket.inet_aton(candidate)
+        except OSError:
+            return False
     return True
 
 
