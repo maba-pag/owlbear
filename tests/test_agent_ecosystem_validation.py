@@ -656,6 +656,8 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
 
     assert "human-assisted and sampled" in content
     assert "`builder` is the only assessment consumer" in content
+    assert guidance.count("substantive task attempt") == 4
+    assert "`assess_memories` | builder" in curation
     assert "memory_candidate" in content
     assert "pre-execution `dispatch_failure`" in content
     assert "does not schedule or require a post-task assessment" in content
