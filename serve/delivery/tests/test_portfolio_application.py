@@ -3979,7 +3979,9 @@ dependencies: []
     admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
 
     delivery_root = state_root / "changes" / "admitted-change"
-    persisted_frontier = DeliveryFrontier.model_validate_json((delivery_root / "frontier.json").read_bytes(), strict=False)
+    persisted_frontier = DeliveryFrontier.model_validate_json(
+        (delivery_root / "frontier.json").read_bytes(), strict=False
+    )
     persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
     assert persisted_frontier == admitted.frontier
     assert persisted_receipt["receipt_id"] == admitted.receipt.receipt_id

@@ -937,7 +937,10 @@ def test_publication_history_refreshes_one_pr_and_appends_successors(tmp_path: P
     assert current.publications == (refreshed,)
     assert history.publications == (refreshed, successor)
     assert runtime.publication_history() == history
-    assert DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False).change_disposition_publication == successor
+    assert (
+        DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False).change_disposition_publication
+        == successor
+    )
 
 
 def test_publication_history_rejects_stale_or_duplicate_successors(tmp_path: Path) -> None:
@@ -1195,9 +1198,9 @@ def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Pa
         abandoned_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
         reason="user stopped the Change",
     )
-    attention_payload = DeliveryFrontier.model_validate_json(attention_runtime.frontier_bytes(), strict=False).model_dump(
-        mode="python"
-    )
+    attention_payload = DeliveryFrontier.model_validate_json(
+        attention_runtime.frontier_bytes(), strict=False
+    ).model_dump(mode="python")
     attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
 
     with pytest.raises(ValueError, match="abandoned Change cannot retain active or terminal authority"):
@@ -1268,7 +1271,9 @@ def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Pa
     assert disposition is not None
     assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
     assert runtime.ready_receipt() is None
-    publication = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False).change_disposition_publication
+    publication = DeliveryFrontier.model_validate_json(
+        runtime.frontier_bytes(), strict=False
+    ).change_disposition_publication
     assert publication is not None
     assert (publication.repository, publication.number, publication.head_sha) == (
         "example/project",
