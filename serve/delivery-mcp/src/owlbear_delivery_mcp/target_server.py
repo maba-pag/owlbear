@@ -321,7 +321,12 @@ class TargetMCPAdapter:
         return self._call(params, lambda: self._application.derive_delivery_contract(params.change_id))
 
     async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
-        """Admit one source-bound Delivery change."""
+        """Admit one source-bound Delivery change.
+
+        Cancelling a handler only cancels the transport wait; an in-flight mutation
+        may finish, so callers must reconcile durable state before retrying rather
+        than blindly replaying it.
+        """
         params = self._validate(DeliveryAdmissionRequest, request)
         return await asyncio.to_thread(
             self._call,
@@ -473,7 +478,12 @@ class TargetMCPAdapter:
         return AdministrativeMoveResponse.from_result(result)
 
     async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
-        """Acquire currently available frontier work."""
+        """Acquire currently available frontier work.
+
+        Cancelling a handler only cancels the transport wait; an in-flight mutation
+        may finish, so callers must reconcile durable state before retrying rather
+        than blindly replaying it.
+        """
         params = self._validate(EmptyParams, request)
         return await asyncio.to_thread(
             self._call,
