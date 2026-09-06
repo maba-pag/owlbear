@@ -162,12 +162,7 @@ class TestFromAC_NavigateTrustedInternal:
 
 
 class TestFromAC_NavigateIPBlocklist:
-    """AC1: navigate() blocks private/loopback/link-local IPs for unapproved hosts.
-
-    All tests fail in RED because the current code does not resolve the hostname
-    or check the resolved IPs — it proceeds directly to allowlist.check() which
-    passes, then returns the URL without raising ToolError.
-    """
+    """AC1: navigate() blocks private/loopback/link-local IPs for unapproved hosts."""
 
     @pytest.mark.asyncio
     async def test_blocks_loopback_127_0_0_1(self) -> None:
