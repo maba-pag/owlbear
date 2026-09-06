@@ -134,7 +134,7 @@ or block publication. The current buckets remain the measurement vocabulary:
 `outstanding`, `unremarkable`, `didnt_use`, and `factually_wrong`.
 
 The per-entry `success`/`error` result from `assess_memories` is the current
-tool-level receipt. It is not a Delivery receipt or an idempotency key.
+tool-level receipt. It is not a Delivery receipt and not an idempotency key.
 Malformed batches are rejected before entry updates; valid batches may have
 mixed per-entry results. Because ordinary assessments are not promised
 idempotent, an uncertain tool response must not be blindly retried. First use
