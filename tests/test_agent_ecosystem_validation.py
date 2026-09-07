@@ -528,6 +528,7 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
 async def test_orchestration_transition_envelope_matches_registered_field() -> None:
     """Orchestrator guidance must use the live transition_delivery envelope field."""
     from mcp import Client  # noqa: PLC0415
+
     from owlbear_delivery_mcp.target_server import assemble_target_server  # noqa: PLC0415
 
     content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
