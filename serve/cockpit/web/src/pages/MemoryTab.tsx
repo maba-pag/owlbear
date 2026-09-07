@@ -16,6 +16,7 @@ import {
   PTextarea,
 } from '@porsche-design-system/components-react'
 import rehypeSanitize from 'rehype-sanitize'
+import { getResponseErrorMessage } from '../api/errorMessage'
 import {
   approveMemory,
   deleteMemory,
@@ -297,6 +298,14 @@ function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
   }
 }
 
+async function parseMemoriesResponse(response: Response): Promise<MemoriesResponse> {
+  const payload = (await response.json()) as Partial<MemoriesResponse>
+  if (!Array.isArray(payload.entries) || typeof payload.parse_errors !== 'number') {
+    throw new Error('Malformed memory response')
+  }
+  return payload as MemoriesResponse
+}
+
 function MemoryTab() {
   const [entries, setEntries] = useState<MemoryEntry[]>([])
   const [parseErrors, setParseErrors] = useState(0)
@@ -328,23 +337,38 @@ function MemoryTab() {
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
     paused: true,
-    parse: async (response) => {
-      const payload = (await response.json()) as Partial<MemoriesResponse>
-      if (!Array.isArray(payload.entries) || typeof payload.parse_errors !== 'number') {
-        throw new Error('Malformed memory response')
-      }
-      return payload as MemoriesResponse
-    },
+    parse: parseMemoriesResponse,
     onSuccess: async (payload) => {
       setLoadError(null)
       setEntries(payload.entries)
       setParseErrors(payload.parse_errors)
+    },
+    onError: async (error) => {
+      setLoadError(error)
+    },
+  })
+
+  const refreshConflictEntry = async (entryId: string): Promise<void> => {
+    try {
+      const response = await fetch('/api/memories')
+      if (!response.ok) {
+        const message = await getResponseErrorMessage(
+          response,
+          `Memory refresh failed with status ${response.status}`,
+        )
+        throw new Error(message)
+      }
+
+      const payload = await parseMemoriesResponse(response)
+      setLoadError(null)
+      setEntries(payload.entries)
+      setParseErrors(payload.parse_errors)
       setMemoryConflict((current) => {
-        if (!current) {
-          return null
+        if (!current || current.entryId !== entryId) {
+          return current
         }
 
-        const currentEntry = payload.entries.find((entry) => entry.id === current.entryId) ?? null
+        const currentEntry = payload.entries.find((entry) => entry.id === entryId) ?? null
         if (!currentEntry) {
           return {
             ...current,
@@ -361,16 +385,16 @@ function MemoryTab() {
           refreshError: null,
         }
       })
-    },
-    onError: async (error) => {
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error('Memory refresh failed')
       setLoadError(error)
-      setMemoryConflict((current) => current ? {
+      setMemoryConflict((current) => current && current.entryId === entryId ? {
         ...current,
         status: 'error',
         refreshError: error.message,
       } : current)
-    },
-  })
+    }
+  }
 
   const purgeFlow = useMemoryPurgeFlow({ onSuccess: () => void refetch() })
 
@@ -649,12 +673,16 @@ function MemoryTab() {
   const isMutationPending = (entryId: string): boolean => Boolean(mutationPendingByEntryId[entryId])
 
   const retryConflictRefresh = (): void => {
+    const entryId = memoryConflict?.entryId
+    if (!entryId) {
+      return
+    }
     setMemoryConflict((current) => current ? {
       ...current,
       status: 'refreshing',
       refreshError: null,
     } : current)
-    void refetch()
+    void refreshConflictEntry(entryId)
   }
 
   const reloadConflictEntry = (entryId: string): void => {
@@ -685,18 +713,20 @@ function MemoryTab() {
     const parsedValidationMessages = mutationError?.validationMessages ?? []
 
     if (apiError?.status === 409) {
-      setEntryError(entry.id, apiError.message)
       if (editingEntryId === entry.id && editDraft) {
         setMemoryConflict({
           entryId: entry.id,
           baseEntry: entry,
           status: 'refreshing',
-          message: apiError.message,
+          message: 'Entry was modified on the server. Review the latest version before saving again.',
           currentEntry: null,
           refreshError: null,
         })
+        void refreshConflictEntry(entry.id)
+      } else {
+        setEntryError(entry.id, 'Entry was modified — refreshing')
+        void refetch()
       }
-      void refetch()
       return
     }
 

@@ -167,7 +167,7 @@ describe('MemoryTab load state', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
-      .mockResolvedValueOnce(response({ code: 'MEM_CONFLICT', message: 'Entry revision is stale' }, false, 409))
+      .mockResolvedValueOnce(response({ code: 'MEM_CONFLICT', message: "OCC check failed for entry entry-1: expected updated_at 'old', got 'new'" }, false, 409))
       .mockResolvedValueOnce(response({ entries: [currentEntry], parse_errors: 0 }))
       .mockResolvedValueOnce(response({ entry: savedEntry }))
       .mockResolvedValueOnce(response({ entries: [savedEntry], parse_errors: 0 }))
@@ -183,6 +183,8 @@ describe('MemoryTab load state', () => {
     expect(screen.getByTestId('memory-conflict-current-content')).toHaveTextContent('Server content')
     expect(screen.getByTestId('memory-conflict-draft-title')).toHaveTextContent('Draft title')
     expect(screen.getByTestId('memory-conflict-draft-content')).toHaveTextContent('Draft content')
+    expect(screen.getByTestId('memory-conflict-panel')).toHaveTextContent('Entry was modified on the server')
+    expect(screen.getByTestId('memory-conflict-panel')).not.toHaveTextContent('OCC check failed')
     expect((screen.getByTestId('memory-edit-save-btn') as HTMLElement & { disabled?: boolean }).disabled).toBe(true)
 
     fireEvent.click(screen.getByTestId('memory-conflict-reapply'))
@@ -262,6 +264,56 @@ describe('MemoryTab load state', () => {
     expect(screen.getByTestId('memory-conflict-current-title')).toHaveTextContent('Curated server title')
     expect(screen.getByTestId('memory-edit-form')).toBeInTheDocument()
     expect(screen.getByTestId('memory-conflict-draft-title')).toHaveTextContent('Draft title')
+  })
+
+  it('keeps the draft and exposes retry when the server entry disappears during refresh', async () => {
+    const initialEntry = memoryEntry()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
+      .mockResolvedValueOnce(response({ code: 'MEM_CONFLICT', message: 'Entry revision is stale' }, false, 409))
+      .mockResolvedValueOnce(response({ entries: [], parse_errors: 0 }))
+      .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<MemoryTab />)
+    expect(await screen.findByText('Draft title')).toBeInTheDocument()
+    await openMemoryEntry()
+    fireEvent.click(screen.getByTestId('memory-edit-btn'))
+    fireEvent.click(await screen.findByTestId('memory-edit-save-btn'))
+
+    expect(await screen.findByTestId('memory-conflict-refresh-error')).toHaveTextContent('no longer exists')
+    expect(screen.getByTestId('memory-edit-form')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('memory-conflict-retry'))
+
+    await waitFor(() => expect(screen.getByTestId('memory-conflict-current-title')).toHaveTextContent('Draft title'))
+  })
+
+  it('ignores a duplicate Save click while the first mutation is pending', async () => {
+    const initialEntry = memoryEntry()
+    let resolveMutation!: (value: Response) => void
+    const mutationResponse = new Promise<Response>((resolve) => {
+      resolveMutation = resolve
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
+      .mockReturnValueOnce(mutationResponse)
+      .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<MemoryTab />)
+    expect(await screen.findByText('Draft title')).toBeInTheDocument()
+    await openMemoryEntry()
+    fireEvent.click(screen.getByTestId('memory-edit-btn'))
+    const saveButton = await screen.findByTestId('memory-edit-save-btn')
+    fireEvent.click(saveButton)
+    fireEvent.click(saveButton)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    resolveMutation(response({ entry: initialEntry }))
+    await waitFor(() => expect(screen.queryByTestId('memory-edit-form')).not.toBeInTheDocument())
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('keeps the draft visible after a validation mutation failure', async () => {
