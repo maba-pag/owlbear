@@ -135,8 +135,8 @@ supported alpha path:
 
    **Expected result:** Browser requests are limited to the exact hostnames you named. For local
    testing across public sites only, keep `"*"`; keep exact hostnames for production. SSRF checks
-   reject private, loopback, link-local, reserved, and unspecified DNS results for hostnames that
-   are not exact allowlist entries.
+  reject private, loopback, and link-local DNS results for hostnames that are not exact allowlist
+  entries; reserved and unspecified addresses are always rejected.
 3. Restart the `owlbear-browser` MCP server and try `acquire` or `navigate` against an allowed
    public URL. `acquire` accepts optional readiness/content selectors and returns a structured
    success or failure result; it does not expose diagnostic HTML or automatically ingest content.

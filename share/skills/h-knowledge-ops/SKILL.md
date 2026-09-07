@@ -307,7 +307,7 @@ Each whole object below is the complete `register_knowledge_source` argument map
 ```python
 results = knowledge_search(query="retry logic patterns")
 if not results:
-  knowledge_ingest(text=content, source_url=".owlbear/research/retry.md", scope="project:{id}")
+    knowledge_ingest(text=content, source_url=".owlbear/research/retry.md", scope="project:{id}")
 ```
 
 ### Delta checking

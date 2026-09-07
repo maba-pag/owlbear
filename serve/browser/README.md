@@ -74,7 +74,7 @@ managed-SSO workflow or concurrent session ownership model. See the maintained
 | Package | Purpose |
 | --- | --- |
 | `playwright` | Chromium browser automation and persistent contexts |
-| `trafilatura` | HTML extraction used by the shared Markdown pipeline |
+| `owlbear-web-content` | Shared HTML-to-Markdown extraction (workspace package) |
 | `lxml` | HTML parsing (trafilatura dependency) |
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
