@@ -566,9 +566,7 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         transition_schema = tools["transition_delivery"].input_schema
-        transition_fields = tuple(
-            field for field in transition_schema["properties"] if field != "change_id"
-        )
+        transition_fields = tuple(field for field in transition_schema["properties"] if field != "change_id")
         assert len(transition_fields) == 1
         transition_field = transition_fields[0]
         assert transition_field != "request"
