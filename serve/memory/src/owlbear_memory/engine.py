@@ -611,7 +611,12 @@ class MemoryEngine:
                     cache_error,
                     recovery_status,
                 ) from operation_error
-            raise
+            raise LifecycleRecoveryError(
+                operation_error,
+                (),
+                None,
+                recovery_status,
+            ) from operation_error
         try:
             self._entries = self._load()
         except Exception:

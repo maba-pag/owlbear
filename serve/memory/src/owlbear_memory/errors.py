@@ -53,15 +53,15 @@ class LifecycleRecoveryError(RuntimeError):
         self.cache_error = cache_error
         self.recovery_status = recovery_status
         details = [
-            f"memory lifecycle operation failed ({recovery_status} recovery): {operation_error}",
+            f"memory lifecycle operation failed ({recovery_status} recovery): {type(operation_error).__name__}",
         ]
         if rollback_errors:
             details.append(
                 "rollback failures: "
                 + "; ".join(
-                    f"entry {failure.entry_id} at {failure.path}: {failure.error}" for failure in rollback_errors
+                    f"entry {failure.entry_id}: {type(failure.error).__name__}" for failure in rollback_errors
                 )
             )
         if cache_error is not None:
-            details.append(f"cache reload failed: {cache_error}")
+            details.append(f"cache reload failed: {type(cache_error).__name__}")
         super().__init__("; ".join(details))

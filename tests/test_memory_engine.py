@@ -164,7 +164,7 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
     assert len(error.rollback_errors) == 1
     assert error.rollback_errors[0].error is rollback_error
     assert error.rollback_errors[0].entry_id in str(error)
-    assert str(error.rollback_errors[0].path) in str(error)
+    assert str(error.rollback_errors[0].path) not in str(error)
     assert error.cache_error is None
     assert unrelated_path not in written_paths
     assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",), ("other",)}
@@ -215,9 +215,8 @@ def test_lifecycle_recovery_status_is_uncertain_for_unreadable_affected_record(t
     assert len(error.rollback_errors) == 1
     assert error.rollback_errors[0].error is rollback_error
     assert error.cache_error is None
-    assert str(initial_error) in str(error)
-    assert str(rollback_error) in str(error)
-    assert str(entry_path) in str(error)
+    assert "OSError" in str(error)
+    assert str(entry_path) not in str(error)
     health = engine.health()
     assert health.healthy is False
     assert health.unreadable_paths == [entry_path.name]
@@ -417,11 +416,14 @@ def test_lifecycle_operation_failure_with_successful_rollback_reraises_original_
 
     with (
         patch.object(storage, "write_entry", side_effect=failing_write),
-        pytest.raises(OSError, match="initial write failed") as exc_info,
+        pytest.raises(LifecycleRecoveryError) as exc_info,
     ):
         engine.rename_agent("old", "new")
 
-    assert exc_info.value is initial_error
+    assert exc_info.value.operation_error is initial_error
+    assert exc_info.value.recovery_status == "complete"
+    assert exc_info.value.rollback_errors == ()
+    assert exc_info.value.cache_error is None
     assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",)}
     assert engine.health().healthy is True
 
@@ -485,7 +487,6 @@ def test_delete_lifecycle_rollback_failure_restores_only_recoverable_files(tmp_p
     assert first_path.is_file()
     assert not second_path.exists()
     assert [entry.id for entry in engine.get_entries()] == [first.id]
-    assert str(initial_error) in str(error)
-    assert str(rollback_error) in str(error)
-    assert str(second_path) in str(error)
+    assert "OSError" in str(error)
+    assert str(second_path) not in str(error)
     assert engine.health().healthy is True

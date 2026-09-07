@@ -168,3 +168,4 @@ async def test_lifecycle_recovery_diagnostics_are_exposed_as_tool_errors(
         await operation_call
 
     assert str(exc_info.value) == str(diagnostic)
+    assert str(tmp_path) not in str(exc_info.value)
