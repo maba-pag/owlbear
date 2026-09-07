@@ -308,7 +308,10 @@ def test_lifecycle_cache_reload_failure_resets_cache_until_subsequent_reload(tmp
     assert health.unreadable_paths == []
     assert health.duplicate_paths == {}
 
-    with pytest.raises(OSError, match="cache reload failed") as second_reload:
+    with patch.object(engine, "_load", side_effect=failing_load), pytest.raises(
+        OSError,
+        match="cache reload failed",
+    ) as second_reload:
         engine.get_entries()
     assert second_reload.value is reload_error
 
