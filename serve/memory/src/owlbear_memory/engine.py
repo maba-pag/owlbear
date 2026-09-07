@@ -632,26 +632,44 @@ class MemoryEngine:
         """Classify recovery from the reloaded entries and strict path verification."""
         try:
             reloaded_by_id = {entry.id: entry for entry in reloaded_entries}
-            for original in originals:
-                reloaded = reloaded_by_id.get(original.id)
-                path = original_paths[original.id]
-                try:
-                    verified = storage.read_entry_strict(path)
-                except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
-                    try:
-                        if path.is_symlink():
-                            return "uncertain"
-                        path.stat()
-                    except FileNotFoundError:
-                        return "partial"
-                    except OSError:
-                        return "uncertain"
-                    return "uncertain"
-
-                if reloaded is None or reloaded != original or verified != original:
-                    return "partial"
+            statuses = [
+                MemoryEngine._lifecycle_recovery_entry_status(
+                    original,
+                    reloaded_by_id.get(original.id),
+                    original_paths[original.id],
+                )
+                for original in originals
+            ]
+            if "uncertain" in statuses:
+                return "uncertain"
+            if "partial" in statuses:
+                return "partial"
         except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
             return "uncertain"
+        return "complete"
+
+    @staticmethod
+    def _lifecycle_recovery_entry_status(
+        original: MemoryEntry,
+        reloaded: MemoryEntry | None,
+        path: Path,
+    ) -> str:
+        """Verify one affected entry and classify its recovered disk state."""
+        try:
+            verified = storage.read_entry_strict(path)
+        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
+            try:
+                if path.is_symlink():
+                    return "uncertain"
+                path.stat()
+            except FileNotFoundError:
+                return "partial"
+            except OSError:
+                return "uncertain"
+            return "uncertain"
+
+        if reloaded is None or reloaded != original or verified != original:
+            return "partial"
         return "complete"
 
     def _upsert_cache(self, entry: MemoryEntry) -> None:
