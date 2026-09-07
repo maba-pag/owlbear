@@ -312,7 +312,8 @@ if not results:
 
 ### Delta checking
 
-The pipeline deduplicates by content hash. Re-ingesting the same content is a no-op.
+Within one source and document identity (`external_id` → `source_url`/URI → title), unchanged
+content is a no-op. The same text with a different source URL or title creates a separate document.
 
 ## Curation Lifecycle
 
@@ -341,7 +342,8 @@ tool set.
 ## Known Gotchas
 
 - **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
-- **Search before ingesting** to avoid duplicates — the dedup is by content hash, not by topic.
+- **Search before ingesting** to avoid duplicates — identity is scoped to a source and document
+  identity, then content hashing distinguishes unchanged content from a replacement.
 - **Do not infer source binding from `source_url`** in `knowledge_ingest`; it supplies document URI
   identity for the inline source and does not create a refreshable source registration.
 - **Do not advertise authenticated-browser refresh as available** until a live browser fetcher is

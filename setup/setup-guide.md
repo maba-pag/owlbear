@@ -127,8 +127,8 @@ supported alpha path:
    ```json
    {
      "env": {
-        "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com",
-        "PLAYWRIGHT_USER_DATA_DIR": "/Users/you/.owlbear/chromium-profile"
+       "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com",
+       "PLAYWRIGHT_USER_DATA_DIR": "/Users/you/.owlbear/chromium-profile"
      }
    }
    ```
