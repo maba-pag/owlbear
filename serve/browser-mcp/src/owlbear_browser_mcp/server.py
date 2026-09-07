@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import logging
 import os
 import socket
 from contextlib import asynccontextmanager
@@ -31,6 +32,7 @@ __all__ = ["AppContext", "acquire", "app_lifespan", "mcp"]
 _ALLOWED_DOMAINS_ENV = "BROWSER_ALLOWED_DOMAINS"
 _DEFAULT_USER_DATA_DIR = Path.home() / ".owlbear" / "chromium-profile"
 _USER_DATA_DIR_ENV = "PLAYWRIGHT_USER_DATA_DIR"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _is_blocked_ip(ip_str: str) -> bool:
@@ -147,6 +149,31 @@ class AppContext:
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     last_content: str = ""
+    browser_diagnostic: str | None = None
+
+
+def _safe_browser_diagnostic(stage: str, error: BaseException) -> str:
+    """Return a stable startup/cleanup diagnostic without exposing exception details."""
+    return f"{stage} failed ({type(error).__name__})"
+
+
+async def _close_browser_resources(
+    page: Any,
+    launcher: PlaywrightLauncher | None,
+) -> tuple[str, ...]:
+    """Close owned browser resources independently and return safe failure diagnostics."""
+    failures: list[str] = []
+    if page is not None:
+        try:
+            await page.close()
+        except Exception as exc:  # noqa: BLE001 - cleanup must continue after one failure.
+            failures.append(_safe_browser_diagnostic("page cleanup", exc))
+    if launcher is not None:
+        try:
+            await launcher.close()
+        except Exception as exc:  # noqa: BLE001 - launcher attempts each owned resource itself.
+            failures.append(_safe_browser_diagnostic("launcher cleanup", exc))
+    return tuple(failures)
 
 
 @asynccontextmanager
@@ -158,26 +185,42 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
 
     launcher: PlaywrightLauncher | None = None
     page: Any = None
+    browser_diagnostic: str | None = None
     try:
         user_data_dir = os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_USER_DATA_DIR))
         launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
         await launcher.launch()
         page = await launcher.page()
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - startup degrades to an observable unavailable context.
+        diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
+        diagnostics.extend(await _close_browser_resources(page, launcher))
+        browser_diagnostic = "; ".join(diagnostics)
         launcher = None
         page = None
 
     try:
-        yield AppContext(allowlist=allowlist, launcher=launcher, page=page)
+        yield AppContext(
+            allowlist=allowlist,
+            launcher=launcher,
+            page=page,
+            browser_diagnostic=browser_diagnostic,
+        )
     finally:
-        if page is not None:
-            await page.close()
-        if launcher is not None:
-            await launcher.close()
+        for diagnostic in await _close_browser_resources(page, launcher):
+            _LOGGER.warning(diagnostic)
 
 
 _MSG_NO_PAGE = "No browser session"
 _MSG_BROWSER_UNAVAILABLE = "Browser unavailable"
+
+
+def _browser_unavailable_message(app_ctx: object) -> str:
+    """Return a safe diagnostic for an unavailable browser context."""
+    if not isinstance(app_ctx, AppContext):
+        return _MSG_BROWSER_UNAVAILABLE
+    if app_ctx.browser_diagnostic:
+        return f"{_MSG_BROWSER_UNAVAILABLE}: {app_ctx.browser_diagnostic}"
+    return _MSG_NO_PAGE
 
 mcp = MCPServer("owlbear-browser", lifespan=app_lifespan)
 
@@ -218,7 +261,7 @@ async def acquire(  # noqa: PLR0913
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
     if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
-        raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+        raise ToolError(_browser_unavailable_message(app_ctx))
     await _check_ssrf(url, allowlist=app_ctx.allowlist)
     try:
         app_ctx.allowlist.check(url)
@@ -252,6 +295,8 @@ async def navigate(ctx: Context, url: str) -> str:
         raise ToolError(str(exc)) from exc
 
     if isinstance(app_ctx, AppContext):
+        if app_ctx.launcher is None:
+            raise ToolError(_browser_unavailable_message(app_ctx))
         if app_ctx.page is not None:
             try:
                 await app_ctx.page.goto(url, wait_until="domcontentloaded")
@@ -283,7 +328,7 @@ async def click(ctx: Context, selector: str) -> str:
     if page is not None:
         await page.locator(selector).click()
     else:
-        raise ToolError(_MSG_NO_PAGE)
+        raise ToolError(_browser_unavailable_message(app_ctx))
     return selector
 
 
@@ -298,7 +343,7 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
     if page is not None:
         await page.locator(selector).fill(text)
     else:
-        raise ToolError(_MSG_NO_PAGE)
+        raise ToolError(_browser_unavailable_message(app_ctx))
     return f"{selector}:{text}"
 
 
@@ -310,7 +355,7 @@ async def select(ctx: Context, selector: str, value: str) -> str:
     if page is not None:
         await page.locator(selector).select_option(value)
     else:
-        raise ToolError(_MSG_NO_PAGE)
+        raise ToolError(_browser_unavailable_message(app_ctx))
     return f"{selector}:{value}"
 
 
@@ -325,6 +370,8 @@ async def read_text(ctx: Context) -> str:
     if page is not None:
         html = await page.content()
         return extract_content(html, page.url)
+    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
+        raise ToolError(_browser_unavailable_message(app_ctx))
     return getattr(app_ctx, "last_content", "")
 
 
@@ -338,4 +385,6 @@ async def snapshot(ctx: Context) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         return await page.locator("body").aria_snapshot()
+    if isinstance(app_ctx, AppContext) and app_ctx.browser_diagnostic:
+        raise ToolError(_browser_unavailable_message(app_ctx))
     return getattr(app_ctx, "last_content", "")

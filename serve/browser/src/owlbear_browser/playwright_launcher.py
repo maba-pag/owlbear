@@ -175,14 +175,37 @@ class PlaywrightLauncher:
 
     async def close(self) -> None:
         """Close the persistent context and stop the Playwright instance."""
-        if self._fetcher is not None:
-            await self._fetcher.close()
-            self._fetcher = None
-        if self._context is not None:
-            await self._context.close()
-            self._context = None
-        if self._pw is not None:
-            await self._pw.stop()
+        fetcher = self._fetcher
+        context = self._context
+        playwright = self._pw
+        self._fetcher = None
+        self._context = None
+        self._pw = None
+        self._capabilities = AuthenticationCapabilities(
+            persistent_session=False,
+            visible_manual_auth=False,
+            microsoft_sso=False,
+        )
+        first_error: Exception | None = None
+        if fetcher is not None:
+            try:
+                await fetcher.close()
+            except Exception as exc:  # noqa: BLE001 - later resources still require cleanup.
+                first_error = exc
+        if context is not None:
+            try:
+                await context.close()
+            except Exception as exc:  # noqa: BLE001 - later resources still require cleanup.
+                if first_error is None:
+                    first_error = exc
+        if playwright is not None:
+            try:
+                await playwright.stop()
+            except Exception as exc:  # noqa: BLE001 - preserve the first cleanup failure.
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
 
     async def __aenter__(self) -> Self:
         await self.launch()
