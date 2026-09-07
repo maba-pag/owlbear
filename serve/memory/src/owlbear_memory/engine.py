@@ -583,9 +583,7 @@ class MemoryEngine:
                 self._cache = MtimeScanCache(self._memory_dir)
 
             if rollback_errors or cache_error is not None:
-                recovery_status = (
-                    "uncertain" if cache_error is not None or rollback_succeeded == 0 else "partial"
-                )
+                recovery_status = "uncertain" if cache_error is not None or rollback_succeeded == 0 else "partial"
                 raise LifecycleRecoveryError(
                     operation_error,
                     tuple(rollback_errors),

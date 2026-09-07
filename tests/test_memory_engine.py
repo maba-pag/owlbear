@@ -141,9 +141,10 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
             raise rollback_error
         original_write(*args, **kwargs)
 
-    with patch.object(storage, "write_entry", side_effect=failing_write), pytest.raises(
-        LifecycleRecoveryError
-    ) as exc_info:
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        pytest.raises(LifecycleRecoveryError) as exc_info,
+    ):
         engine.rename_agent("old", "new")
 
     error = exc_info.value
