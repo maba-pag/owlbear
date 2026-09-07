@@ -10,7 +10,14 @@ from typing import TypedDict
 from uuid import uuid4
 
 from owlbear_memory import storage
-from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
+from owlbear_memory.errors import (
+    ConcurrencyError,
+    LifecycleRecoveryError,
+    LifecycleRollbackFailure,
+    NotFoundError,
+    TransitionError,
+    ValidationError,
+)
 from owlbear_memory.models import (
     MemoryCategory,
     MemoryEntry,
@@ -81,6 +88,10 @@ class MtimeScanCache:
             return True
         return False
 
+    def invalidate(self) -> None:
+        """Force the next change check to request a reload."""
+        self._last_mtime_ns = None
+
 
 class MemoryEngine:
     """Orchestrate markdown storage with state machine and OCC enforcement."""
@@ -97,7 +108,11 @@ class MemoryEngine:
     def load(self) -> list[MemoryEntry]:
         """Parse memory files from disk, skipping malformed files leniently."""
         with self._lock:
-            return self._load()
+            try:
+                return self._load()
+            except Exception:
+                self._cache.invalidate()
+                raise
 
     def _load(self) -> list[MemoryEntry]:
         self.parse_errors = 0
@@ -135,7 +150,11 @@ class MemoryEngine:
         """Return cached entries, reparsing only when directory mtime changes."""
         with self._lock:
             if self._cache.has_changed():
-                self._load()
+                try:
+                    self._load()
+                except Exception:
+                    self._cache.invalidate()
+                    raise
             return list(self._entries)
 
     def preview_purge(self, min_age_days: int = 30) -> PurgePreview:
@@ -547,18 +566,111 @@ class MemoryEngine:
         updated_entries: list[MemoryEntry],
         deleted_entries: list[MemoryEntry],
     ) -> None:
-        """Apply a multi-entry lifecycle change and restore originals on failure."""
+        """Apply a multi-entry lifecycle change and report incomplete recovery."""
         original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
+        affected_ids = {entry.id for entry in (*updated_entries, *deleted_entries)}
+        affected_entries = [entry for entry in originals if entry.id in affected_ids]
         try:
             for entry in updated_entries:
                 storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
             for entry in deleted_entries:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
+        except Exception as operation_error:
+            rollback_errors: list[LifecycleRollbackFailure] = []
+            for entry in affected_entries:
+                try:
+                    storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+                except Exception as rollback_error:  # noqa: BLE001 - preserve every recovery failure.
+                    rollback_errors.append(
+                        LifecycleRollbackFailure(
+                            entry_id=entry.id,
+                            path=original_paths[entry.id],
+                            error=rollback_error,
+                        )
+                    )
+
+            cache_error: Exception | None = None
+            recovery_status = "uncertain"
+            try:
+                reloaded_entries = self._load()
+                recovery_status = self._lifecycle_recovery_status(
+                    affected_entries,
+                    reloaded_entries,
+                    original_paths,
+                )
+            except Exception as reload_error:  # noqa: BLE001 - cache state is part of recovery diagnostics.
+                cache_error = reload_error
+                self._entries = []
+                self._id_to_path = {}
+                self._cache.invalidate()
+
+            if rollback_errors or cache_error is not None or recovery_status != "complete":
+                raise LifecycleRecoveryError(
+                    operation_error,
+                    tuple(rollback_errors),
+                    cache_error,
+                    recovery_status,
+                ) from operation_error
+            raise LifecycleRecoveryError(
+                operation_error,
+                (),
+                None,
+                recovery_status,
+            ) from operation_error
+        try:
+            self._entries = self._load()
         except Exception:
-            for entry in originals:
-                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+            self._cache.invalidate()
             raise
-        self._entries = self._load()
+
+    @staticmethod
+    def _lifecycle_recovery_status(
+        originals: list[MemoryEntry],
+        reloaded_entries: list[MemoryEntry],
+        original_paths: dict[str, Path],
+    ) -> str:
+        """Classify recovery from the reloaded entries and strict path verification."""
+        try:
+            reloaded_by_id = {entry.id: entry for entry in reloaded_entries}
+            statuses = [
+                MemoryEngine._lifecycle_recovery_entry_status(
+                    original,
+                    reloaded_by_id.get(original.id),
+                    original_paths[original.id],
+                )
+                for original in originals
+            ]
+            if "uncertain" in statuses:
+                return "uncertain"
+            if "partial" in statuses:
+                return "partial"
+        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
+            return "uncertain"
+        return "complete"
+
+    @staticmethod
+    def _lifecycle_recovery_entry_status(
+        original: MemoryEntry,
+        reloaded: MemoryEntry | None,
+        path: Path,
+    ) -> str:
+        """Verify one affected entry and classify its recovered disk state."""
+        try:
+            verified = storage.read_entry_strict(path)
+        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
+            try:
+                if path.is_symlink():
+                    return "uncertain"
+                path.stat()
+            except FileNotFoundError:
+                return "partial"
+            except OSError:
+                return "uncertain"
+            return "uncertain"
+
+        if reloaded is None or reloaded != original or verified != original:
+            return "partial"
+        return "complete"
 
     def _upsert_cache(self, entry: MemoryEntry) -> None:
         for index, current in enumerate(self._entries):

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
     ConcurrencyError,
+    LifecycleRecoveryError,
     MemoryCategory,
     MemoryEngine,
     MemoryEntry,
@@ -543,7 +544,7 @@ async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.rename_agent(old_name, new_name)
-    except ValidationError as exc:
+    except (LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_updated"] == 0:
         msg = f"No memory references found for agent {old_name!r}."
@@ -559,7 +560,7 @@ async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.delete_agent(agent)
-    except ValidationError as exc:
+    except (LifecycleRecoveryError, ValidationError) as exc:
         raise ToolError(str(exc)) from exc
     if result["entries_deleted"] == 0 and result["scopes_updated"] == 0:
         msg = f"No memory references found for agent {agent!r}."

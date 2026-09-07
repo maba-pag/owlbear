@@ -17,7 +17,14 @@ Import and use directly:
 
 ```python
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryCategory, MemoryState
-from owlbear_memory import NotFoundError, ConcurrencyError, ValidationError, TransitionError
+from owlbear_memory import (
+    ConcurrencyError,
+    LifecycleRecoveryError,
+    LifecycleRollbackFailure,
+    NotFoundError,
+    TransitionError,
+    ValidationError,
+)
 from owlbear_memory.storage import read_entry, write_entry, delete_entry
 from pathlib import Path
 
@@ -160,6 +167,15 @@ Raises `ValueError` on containment or symlink violations.
 | `ConcurrencyError` | Optimistic concurrency validation fails (caller use) |
 | `ValidationError` | User input or payload validation fails (caller use) |
 | `TransitionError` | A memory state transition is not permitted (caller use) |
+| `LifecycleRollbackFailure` | Describes a failed rollback for one affected entry, including its ID, path, and exception |
+| `LifecycleRecoveryError` | A failed multi-entry lifecycle operation with diagnostics for the primary failure and recovery state |
+
+`LifecycleRecoveryError` exposes `operation_error`, `rollback_errors`, `cache_error`, and
+`recovery_status`. The status is `complete` when strict verification finds every affected original
+entry restored, `partial` when an affected entry is verified missing or mismatched, and `uncertain`
+when a reload or strict read cannot establish the final state. A `complete` status can still include
+rollback failures when the final reload verifies that the originals are intact; callers should
+inspect all diagnostic fields. Process interruption should be treated as `uncertain`.
 
 ---
 
