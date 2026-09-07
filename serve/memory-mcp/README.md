@@ -61,7 +61,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 
 | Tool | Description |
 | --- | --- |
-| `save_memory` | Create an unscoped `pending` entry from an active canonical agent identity |
+| `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body on consecutive lines; other metadata omitted); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
@@ -90,7 +90,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
 | `score` | float | Default `0.0`; initialized to `confidence` on creation |
 | `source_agent` | str | Non-blank provenance label required at creation; immutable historical provenance except through an explicit lifecycle rename |
-| `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]` |
+| `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]`; supplied members must be nonblank strings; `*` means all agents |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |

@@ -17,6 +17,7 @@ from owlbear_memory import (
     MemoryState,
     NotFoundError,
     TransitionError,
+    validate_scope_agents,
 )
 from pydantic import ValidationError
 
@@ -78,9 +79,10 @@ def _memory_dir_from_ctx(ctx: Context) -> Path:
 
 def _validate_scope(agents: list[str]) -> None:
     """Validate nonblank named and universal scope values."""
-    if any(not isinstance(agent, str) or not agent.strip() for agent in agents):
-        msg = "scope_agents must contain only non-empty strings."
-        raise ToolError(msg)
+    try:
+        validate_scope_agents(agents)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def _recognized_agent_names(engine: MemoryEngine) -> list[str]:
@@ -100,9 +102,9 @@ def _recall_fallback(known_agents: list[str]) -> str:
     """Render the universal-only guidance for an unrecognized caller."""
     names = ", ".join(known_agents) or "none discovered"
     return (
-        f"This recall_memory caller is not a known agent. Known agents: {names}. "
-        "This caller is read-only and must not write memories. It therefore receives only memories "
-        "scoped to all agents (*)."
+        f"This recall_memory caller is not recognized from stored memory data. Known agents: {names}. "
+        "It receives only memories scoped to all agents (*); recognition is relevance scoping, "
+        "not write authorization."
     )
 
 

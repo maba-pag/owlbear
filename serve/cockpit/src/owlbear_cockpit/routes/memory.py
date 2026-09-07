@@ -11,8 +11,9 @@ from owlbear_memory.models import (
     MemoryState,
     PurgePreview,
     PurgeResult,
+    validate_scope_agents,
 )
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
 from owlbear_cockpit.deps import get_memory_engine
 
@@ -81,6 +82,11 @@ class EditRequest(BaseModel):
     categories: Annotated[list[MemoryCategory], Field(min_length=1)] | None = None
     confidence: Annotated[float, Field(ge=0.7, le=1.0)] | None = None
     scope_agents: list[str] | None = None
+
+    @field_validator("scope_agents")
+    @classmethod
+    def _validate_scope_agents(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else validate_scope_agents(value)
 
 
 class DeleteRequest(BaseModel):

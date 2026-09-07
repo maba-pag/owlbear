@@ -78,7 +78,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `unremarkable_count` | `int` | Default: `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | `int` | Default: `0`; incremented by assessment tool when entry was skipped |
 | `score` | `float` | Default: `0.0`; initialized to `confidence` on `save()` |
-| `scope_agents` | `list[str]` | Default: `[]` |
+| `scope_agents` | `list[str]` | Default: `[]`; supplied members must be nonblank strings; `*` means all agents. Human Cockpit editing may clear scope to `[]`; MCP curation requires scope when promoting pending entries. |
 | `source_agent` | `str` | Non-blank; frozen after creation |
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
 | `updated_at` | `str` | Timezone-aware ISO 8601 timestamp |
@@ -218,6 +218,11 @@ entry.didnt_use_count > STALE_THRESHOLD × max(entry.outstanding_count + entry.u
 ```
 
 Exported from the `owlbear_memory` package top-level. Used internally by `MemoryEngine.try_stale_transition`.
+
+#### `validate_scope_agents(value: list[str]) → list[str]`
+
+Validates the shared scope invariant and returns the original list when every member is a nonblank
+string. The universal `*` member is allowed; an empty list is allowed for pending entries.
 
 | Method | Signature | Notes |
 | --- | --- | --- |
