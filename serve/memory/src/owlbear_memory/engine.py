@@ -10,7 +10,13 @@ from typing import TypedDict
 from uuid import uuid4
 
 from owlbear_memory import storage
-from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
+from owlbear_memory.errors import (
+    ConcurrencyError,
+    LifecycleRecoveryError,
+    NotFoundError,
+    TransitionError,
+    ValidationError,
+)
 from owlbear_memory.models import (
     MemoryCategory,
     MemoryEntry,
@@ -547,16 +553,45 @@ class MemoryEngine:
         updated_entries: list[MemoryEntry],
         deleted_entries: list[MemoryEntry],
     ) -> None:
-        """Apply a multi-entry lifecycle change and restore originals on failure."""
+        """Apply a multi-entry lifecycle change and report incomplete recovery."""
         original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
+        affected_ids = {entry.id for entry in (*updated_entries, *deleted_entries)}
+        affected_entries = [entry for entry in originals if entry.id in affected_ids]
         try:
             for entry in updated_entries:
                 storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
             for entry in deleted_entries:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
-        except Exception:
-            for entry in originals:
-                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+        except Exception as operation_error:
+            rollback_errors: list[Exception] = []
+            rollback_succeeded = 0
+            for entry in affected_entries:
+                try:
+                    storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+                except Exception as rollback_error:  # noqa: BLE001 - preserve every recovery failure.
+                    rollback_errors.append(rollback_error)
+                else:
+                    rollback_succeeded += 1
+
+            cache_error: Exception | None = None
+            try:
+                self._load()
+            except Exception as reload_error:  # noqa: BLE001 - cache state is part of recovery diagnostics.
+                cache_error = reload_error
+                self._entries = []
+                self._id_to_path = {}
+                self._cache = MtimeScanCache(self._memory_dir)
+
+            if rollback_errors or cache_error is not None:
+                recovery_status = (
+                    "uncertain" if cache_error is not None or rollback_succeeded == 0 else "partial"
+                )
+                raise LifecycleRecoveryError(
+                    operation_error,
+                    tuple(rollback_errors),
+                    cache_error,
+                    recovery_status,
+                ) from operation_error
             raise
         self._entries = self._load()
 

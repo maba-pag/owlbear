@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-from owlbear_memory import MemoryEngine, storage
+from owlbear_memory import LifecycleRecoveryError, MemoryEngine, storage
 from owlbear_memory.models import MemoryEntry
 
 _VALID_ID = "550e8400-e29b-41d4-a716-446655440000"
@@ -105,3 +106,49 @@ def test_rejected_engine_edit_preserves_previous_file(tmp_path: Path) -> None:
     loaded = fresh_engine.get_entry(entry.id)
     assert loaded.title == "Original title"
     assert fresh_engine.parse_errors == 0
+
+
+def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_path: Path) -> None:
+    """A partial lifecycle recovery reports both failures and reflects disk state."""
+    engine = MemoryEngine(tmp_path)
+    engine.save(
+        title="First",
+        content="Original first",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    engine.save(
+        title="Second",
+        content="Original second",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    original_write = storage.write_entry
+    initial_error = OSError("initial write failed")
+    rollback_error = OSError("rollback write failed")
+    calls = 0
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise initial_error
+        if calls == 3:
+            raise rollback_error
+        original_write(*args, **kwargs)
+
+    with patch.object(storage, "write_entry", side_effect=failing_write), pytest.raises(
+        LifecycleRecoveryError
+    ) as exc_info:
+        engine.rename_agent("old", "new")
+
+    error = exc_info.value
+    assert error.recovery_status == "partial"
+    assert error.operation_error is initial_error
+    assert error.rollback_errors == (rollback_error,)
+    assert error.cache_error is None
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",)}
