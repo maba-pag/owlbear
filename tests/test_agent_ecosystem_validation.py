@@ -594,6 +594,9 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     assert f"transition as `{transition_field}` byte-for-structure unchanged" in step
     assert "transition as `request` byte-for-structure unchanged" not in step
     assert rejected.is_error
+    rejected_text = "\n".join(getattr(item, "text", "") for item in rejected.content)
+    assert "transition" in rejected_text
+    assert "request" in rejected_text
 
 
 @pytest.mark.asyncio
