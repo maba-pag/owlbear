@@ -158,11 +158,14 @@ async def test_lifecycle_recovery_diagnostics_are_exposed_as_tool_errors(
         "partial",
     )
     ctx = _make_ctx(engine)
+    operation_call = (
+        rename_agent_memories(ctx, old_name="verifier", new_name="builder")
+        if operation == "rename_agent"
+        else delete_agent_memories(ctx, agent="verifier")
+    )
 
-    with patch.object(engine, operation, side_effect=diagnostic), pytest.raises(ToolError) as exc_info:
-        if operation == "rename_agent":
-            await rename_agent_memories(ctx, old_name="verifier", new_name="builder")
-        else:
-            await delete_agent_memories(ctx, agent="verifier")
+    with patch.object(engine, operation, side_effect=diagnostic):
+        with pytest.raises(ToolError) as exc_info:
+            await operation_call
 
     assert str(exc_info.value) == str(diagnostic)
