@@ -10,7 +10,9 @@ from owlbear_browser import (
     Diagnostics,
     content_hash,
     normalize_links,
+    redact_url,
 )
+from owlbear_browser.contract import redact_diagnostics
 
 
 def test_request_accepts_private_http_url_and_rejects_prohibited_inputs() -> None:
@@ -21,6 +23,8 @@ def test_request_accepts_private_http_url_and_rejects_prohibited_inputs() -> Non
         AcquisitionRequest("https://user:secret@example.test/page")
     with pytest.raises(ValueError, match="credentials"):
         AcquisitionRequest("https://example.test", password="secret")  # noqa: S106
+    with pytest.raises(TypeError, match="include_diagnostic_html"):
+        AcquisitionRequest("https://example.test", include_diagnostic_html=True)  # type: ignore[call-arg]
 
 
 def test_links_are_absolute_fragmentless_and_ordered() -> None:
@@ -86,7 +90,29 @@ def test_success_and_failure_are_discriminated_and_diagnostics_redact_secrets() 
         )
 
 
-def test_opt_in_diagnostic_html_is_sanitized_and_bounded() -> None:
+def test_acquisition_urls_redact_credentials_and_preserve_document_identity() -> None:
+    assert (
+        redact_url("https://user:secret@example.test/page?code=oauth-code&state=csrf&public=value#fragment")
+        == "https://example.test/page?code=%5BREDACTED%5D&state=%5BCORRELATION%5D&public=value"
+    )
+
+    assert redact_url("https://example.test/page?view=full&lang=en#section") == (
+        "https://example.test/page?view=full&lang=en"
+    )
+    assert redact_diagnostics("authorization: Bearer secret") == "[REDACTED]"
+    assert redact_url("https://oidc.example.test/cb?id_token=jwt&refresh_token=long-lived") == (
+        "https://oidc.example.test/cb?id_token=%5BREDACTED%5D&refresh_token=%5BREDACTED%5D"
+    )
+    assert redact_url("https://shop.example.test/p?country_code=US&product_code=ABC123") == (
+        "https://shop.example.test/p?country_code=US&product_code=ABC123"
+    )
+    assert redact_url("https://sso.example.test/cb?SAMLResponse=assertion&sid=session&state=csrf") == (
+        "https://sso.example.test/cb?SAMLResponse=%5BREDACTED%5D&sid=%5BREDACTED%5D&state=%5BCORRELATION%5D"
+    )
+    assert redact_diagnostics("https://example.test/reset/token/abc123#fragment") == "[REDACTED]"
+
+
+def test_internal_diagnostic_html_sanitizer_remains_bounded_and_non_executable() -> None:
     diagnostics = Diagnostics(
         "extract",
         {"diagnostic_html_requested": True},
@@ -101,24 +127,3 @@ def test_opt_in_diagnostic_html_is_sanitized_and_bounded() -> None:
     assert "onclick" not in diagnostics.html
     assert "javascript:" not in diagnostics.html
     assert "sessionToken" not in diagnostics.html
-
-
-def test_opt_in_diagnostic_html_redacts_session_token_attributes_and_text() -> None:
-    diagnostics = Diagnostics(
-        "extract",
-        {"diagnostic_html_requested": True},
-        '<main data-session-token="secret-value">session token: secret-value</main>',
-        include_diagnostic_html=True,
-    )
-
-    assert diagnostics.html == "<main>[REDACTED]</main>"
-
-
-def test_diagnostic_html_requires_request_level_opt_in() -> None:
-    diagnostics = Diagnostics(
-        "extract",
-        {"diagnostic_html_requested": True},
-        "<main>visible</main>",
-    )
-
-    assert diagnostics.html is None

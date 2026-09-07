@@ -10,12 +10,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp import Client
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_browser import AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_browser_mcp.allowlist import DomainAllowlist
-from owlbear_browser_mcp.server import AppContext, acquire
+from owlbear_browser_mcp.server import AppContext, _serialize_acquisition, acquire, mcp
 
 
 class _InternalFixtureHandler(BaseHTTPRequestHandler):
@@ -59,6 +60,39 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert request.url == url
     assert result["status"] == "success"
     assert result["markdown"] == "Rendered fixture content"
+
+
+def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
+    url = "https://user:secret@example.test/page?code=oauth-code&state=csrf&view=full#fragment"
+    result = AcquisitionSuccess(
+        status=AcquisitionStatus.SUCCESS,
+        requested_url=url,
+        canonical_url=url,
+        redirect_chain=(url,),
+        title="Title",
+        markdown="# Content",
+        discovered_links=(url,),
+        content_hash="fixture-hash",
+        fetched_at=datetime.now(UTC),
+        diagnostics=Diagnostics("complete"),
+    )
+
+    serialized = _serialize_acquisition(result)
+
+    assert (
+        serialized["requested_url"] == "https://example.test/page?code=%5BREDACTED%5D&state=%5BCORRELATION%5D&view=full"
+    )
+    assert serialized["canonical_url"] == serialized["requested_url"]
+    assert serialized["redirect_chain"] == [serialized["requested_url"]]
+    assert serialized["discovered_links"] == [serialized["requested_url"]]
+
+
+@pytest.mark.asyncio
+async def test_acquire_schema_does_not_advertise_removed_diagnostic_html_option() -> None:
+    async with Client(mcp) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    assert "include_diagnostic_html" not in tools["acquire"].input_schema["properties"]
 
 
 @pytest.mark.asyncio
