@@ -249,7 +249,7 @@ def _runtime(
 
 def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: object) -> None:
     path = tmp_path / "changes/delivery-runtime/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     path.write_bytes(_canonical(frontier.model_copy(update=updates)))
 
 
