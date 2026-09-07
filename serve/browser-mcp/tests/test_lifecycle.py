@@ -16,7 +16,7 @@ from owlbear_browser_mcp.server import AppContext, acquire, app_lifespan, mcp
 
 
 class _FakePage:
-    def __init__(self, calls: list[str], *, error: Exception | None = None) -> None:
+    def __init__(self, calls: list[str], *, error: BaseException | None = None) -> None:
         self._calls = calls
         self._error = error
 
@@ -58,7 +58,7 @@ class _FakeLauncher:
 
 
 class _AsyncResource:
-    def __init__(self, name: str, calls: list[str], *, error: Exception | None = None) -> None:
+    def __init__(self, name: str, calls: list[str], *, error: BaseException | None = None) -> None:
         self._name = name
         self._calls = calls
         self._error = error
@@ -70,7 +70,7 @@ class _AsyncResource:
 
 
 class _AsyncPlaywright:
-    def __init__(self, calls: list[str], *, error: Exception | None = None) -> None:
+    def __init__(self, calls: list[str], *, error: BaseException | None = None) -> None:
         self._calls = calls
         self._error = error
 
@@ -147,6 +147,26 @@ async def test_shutdown_attempts_page_and_launcher_cleanup_after_page_failure() 
             assert context.page is page
 
     assert calls == ["launch", "page-create", "page", "launcher"]
+    assert context.page is None
+    assert context.launcher is None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_defers_page_cancellation_until_launcher_cleanup() -> None:
+    calls: list[str] = []
+    page = _FakePage(calls, error=asyncio.CancelledError())
+    launcher = _FakeLauncher(calls, page_resource=page)
+
+    with (
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.page is page
+
+    assert calls == ["launch", "page-create", "page", "launcher"]
+    assert context.page is None
+    assert context.launcher is None
 
 
 @pytest.mark.asyncio
@@ -175,6 +195,48 @@ async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_re
     )
 
     with pytest.raises(RuntimeError, match=f"{failed_resource} failed"):
+        await launcher.close()
+
+    assert calls == ["fetcher", "context", "playwright"]
+    assert launcher._fetcher is None  # noqa: SLF001
+    assert launcher._context is None  # noqa: SLF001
+    assert launcher._pw is None  # noqa: SLF001
+    assert launcher.capabilities == AuthenticationCapabilities(
+        persistent_session=False,
+        visible_manual_auth=False,
+        microsoft_sso=False,
+    )
+
+    await launcher.close()
+    assert calls == ["fetcher", "context", "playwright"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancelled_resource", ["fetcher", "context", "playwright"])
+async def test_launcher_close_defers_cancellation_until_all_resources_attempted(cancelled_resource: str) -> None:
+    calls: list[str] = []
+    launcher = PlaywrightLauncher()
+    launcher._fetcher = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
+        "fetcher",
+        calls,
+        error=asyncio.CancelledError() if cancelled_resource == "fetcher" else None,
+    )
+    launcher._context = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
+        "context",
+        calls,
+        error=asyncio.CancelledError() if cancelled_resource == "context" else None,
+    )
+    launcher._pw = _AsyncPlaywright(  # noqa: SLF001
+        calls,
+        error=asyncio.CancelledError() if cancelled_resource == "playwright" else None,
+    )
+    launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
+        persistent_session=True,
+        visible_manual_auth=True,
+        microsoft_sso=True,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
         await launcher.close()
 
     assert calls == ["fetcher", "context", "playwright"]

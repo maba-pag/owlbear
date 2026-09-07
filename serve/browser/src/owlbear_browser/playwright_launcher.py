@@ -186,22 +186,22 @@ class PlaywrightLauncher:
             visible_manual_auth=False,
             microsoft_sso=False,
         )
-        first_error: Exception | None = None
+        first_error: BaseException | None = None
         if fetcher is not None:
             try:
                 await fetcher.close()
-            except Exception as exc:  # noqa: BLE001 - later resources still require cleanup.
+            except BaseException as exc:  # noqa: BLE001 - later resources still require cleanup.
                 first_error = exc
         if context is not None:
             try:
                 await context.close()
-            except Exception as exc:  # noqa: BLE001 - later resources still require cleanup.
+            except BaseException as exc:  # noqa: BLE001 - later resources still require cleanup.
                 if first_error is None:
                     first_error = exc
         if playwright is not None:
             try:
                 await playwright.stop()
-            except Exception as exc:  # noqa: BLE001 - preserve the first cleanup failure.
+            except BaseException as exc:  # noqa: BLE001 - preserve the first cleanup failure.
                 if first_error is None:
                     first_error = exc
         if first_error is not None:

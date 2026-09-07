@@ -163,16 +163,23 @@ async def _close_browser_resources(
 ) -> tuple[str, ...]:
     """Close owned browser resources independently and return safe failure diagnostics."""
     failures: list[str] = []
+    first_control_flow: BaseException | None = None
     if page is not None:
         try:
             await page.close()
-        except Exception as exc:  # noqa: BLE001 - cleanup must continue after one failure.
+        except BaseException as exc:  # noqa: BLE001 - cleanup must continue after one failure.
             failures.append(_safe_browser_diagnostic("page cleanup", exc))
+            if not isinstance(exc, Exception) and first_control_flow is None:
+                first_control_flow = exc
     if launcher is not None:
         try:
             await launcher.close()
-        except Exception as exc:  # noqa: BLE001 - launcher attempts each owned resource itself.
+        except BaseException as exc:  # noqa: BLE001 - launcher attempts each owned resource itself.
             failures.append(_safe_browser_diagnostic("launcher cleanup", exc))
+            if not isinstance(exc, Exception) and first_control_flow is None:
+                first_control_flow = exc
+    if first_control_flow is not None:
+        raise first_control_flow
     return tuple(failures)
 
 
@@ -202,16 +209,23 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
         launcher = None
         page = None
 
+    app_context = AppContext(
+        allowlist=allowlist,
+        launcher=launcher,
+        page=page,
+        browser_diagnostic=browser_diagnostic,
+    )
     try:
-        yield AppContext(
-            allowlist=allowlist,
-            launcher=launcher,
-            page=page,
-            browser_diagnostic=browser_diagnostic,
-        )
+        yield app_context
     finally:
-        for diagnostic in await _close_browser_resources(page, launcher):
-            _LOGGER.warning(diagnostic)
+        try:
+            for diagnostic in await _close_browser_resources(page, launcher):
+                _LOGGER.warning(diagnostic)
+        finally:
+            app_context.page = None
+            app_context.launcher = None
+            page = None
+            launcher = None
 
 
 _MSG_NO_PAGE = "No browser session"
