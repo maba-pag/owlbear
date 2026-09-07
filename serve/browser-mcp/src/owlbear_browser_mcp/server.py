@@ -21,7 +21,7 @@ from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates to
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess
+from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess, redact_url
 from owlbear_browser._errors import AuthenticationRequired
 from owlbear_browser.extractor import extract_content
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
@@ -137,7 +137,7 @@ async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> 
     for _family, _type, _proto, _canonname, sockaddr in addrs:
         ip_str = sockaddr[0]
         if _is_blocked_ip(ip_str) and (not trusted_internal or not _is_trusted_internal_ip(ip_str)):
-            msg = f"URL '{url}' resolved to a blocked IP address ({ip_str!r})."
+            msg = f"URL '{redact_url(url)}' resolved to a blocked IP address ({ip_str!r})."
             raise ToolError(msg)
 
 
@@ -252,12 +252,12 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
         return {"status": result.status.value, "diagnostics": diagnostics}
     return {
         "status": result.status.value,
-        "requested_url": result.requested_url,
-        "canonical_url": result.canonical_url,
-        "redirect_chain": list(result.redirect_chain),
+        "requested_url": redact_url(result.requested_url),
+        "canonical_url": redact_url(result.canonical_url),
+        "redirect_chain": [redact_url(url) for url in result.redirect_chain],
         "title": result.title,
         "markdown": result.markdown,
-        "discovered_links": list(result.discovered_links),
+        "discovered_links": [redact_url(url) for url in result.discovered_links],
         "content_hash": result.content_hash,
         "fetched_at": result.fetched_at.isoformat(),
         "diagnostics": diagnostics,
@@ -273,7 +273,6 @@ async def acquire(  # noqa: PLR0913
     content_selector: str | None = None,
     navigation_timeout_ms: int = 30_000,
     readiness_timeout_ms: int = 10_000,
-    include_diagnostic_html: bool = False,
 ) -> dict[str, Any]:
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
@@ -291,7 +290,6 @@ async def acquire(  # noqa: PLR0913
             content_selector=content_selector,
             navigation_timeout_ms=navigation_timeout_ms,
             readiness_timeout_ms=readiness_timeout_ms,
-            include_diagnostic_html=include_diagnostic_html,
         )
         result = await app_ctx.launcher.acquire(request)
     except PermissionError as exc:

@@ -9,9 +9,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from urllib.parse import (
-    parse_qsl,
+    unquote_plus,
     urldefrag,
-    urlencode,
     urljoin,
     urlparse,
     urlunparse,
@@ -45,7 +44,6 @@ class AcquisitionRequest:
     content_selector: str | None = None
     navigation_timeout_ms: int = 30_000
     readiness_timeout_ms: int = 10_000
-    include_diagnostic_html: bool = False
     password: str | None = field(default=None, repr=False)
     mfa_code: str | None = field(default=None, repr=False)
     javascript: str | None = field(default=None, repr=False)
@@ -160,12 +158,78 @@ _SENSITIVE = re.compile(
     r"cookie|storage|authorization|auth|header|password|credential|secret|token",
     re.IGNORECASE,
 )
-_SENSITIVE_QUERY_PARAMETER = re.compile(
-    r"api[_.-]?key|access[_.-]?token|client[_.-]?secret|cookie|password|secret|token",
-    re.IGNORECASE,
+_SENSITIVE_QUERY_KEYS = frozenset(
+    {
+        "apikey",
+        "accesstoken",
+        "authorization",
+        "authcode",
+        "clientsecret",
+        "code",
+        "cookie",
+        "idtoken",
+        "password",
+        "refreshtoken",
+        "secret",
+        "samlrequest",
+        "samlresponse",
+        "sessionid",
+        "sid",
+        "signature",
+        "sig",
+        "ticket",
+        "token",
+        "jwt",
+        "assertion",
+    }
 )
+_CORRELATION_QUERY_KEYS = frozenset({"state", "sessionstate", "nonce"})
 _DIAGNOSTIC_HTML_LIMIT = 100_000
 _REMOVED_HTML_ELEMENTS = {"base", "embed", "iframe", "link", "object", "script", "style"}
+
+
+def redact_url(value: str) -> str:
+    """Redact URL credentials, preserve document identity, and mark correlation values.
+
+    Userinfo and fragments are removed. Exact credential/callback query keys are replaced with
+    ``[REDACTED]``; ``state``, ``session_state``, and ``nonce`` become ``[CORRELATION]``. Other
+    query bytes remain unchanged so ordinary document identity is stable.
+    """
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc:
+        return value
+
+    has_userinfo = parsed.username is not None or parsed.password is not None
+    has_fragment = bool(parsed.fragment)
+    query_parts = parsed.query.split("&") if parsed.query else []
+    redacted_parts: list[str] = []
+    changed_query = False
+    for part in query_parts:
+        raw_key, separator, _raw_value = part.partition("=")
+        normalized_key = re.sub(r"[^a-z0-9]", "", unquote_plus(raw_key).casefold())
+        replacement = None
+        if normalized_key in _CORRELATION_QUERY_KEYS:
+            replacement = "%5BCORRELATION%5D"
+        elif normalized_key in _SENSITIVE_QUERY_KEYS:
+            replacement = "%5BREDACTED%5D"
+        if replacement is None:
+            redacted_parts.append(part)
+            continue
+        redacted_parts.append(f"{raw_key}{separator or '='}{replacement}")
+        changed_query = True
+
+    if not has_userinfo and not has_fragment and not changed_query:
+        return value
+
+    hostname = parsed.hostname or ""
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
+    netloc = host if port is None else f"{host}:{port}"
+    query = "&".join(redacted_parts)
+    return urlunparse(parsed._replace(netloc=netloc, query=query, fragment=""))
 
 
 def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
@@ -175,25 +239,18 @@ def redact_diagnostics(value: Any) -> Any:  # noqa: ANN401
     if isinstance(value, (list, tuple)):
         return [redact_diagnostics(item) for item in value]
     if isinstance(value, str):
-        redacted_url = _redact_url_query(value)
-        return "[REDACTED]" if redacted_url == value and _SENSITIVE.search(value) else redacted_url
+        redacted_url = redact_url(value)
+        parsed = urlparse(value)
+        if not parsed.scheme or not parsed.netloc:
+            return "[REDACTED]" if _SENSITIVE.search(value) else value
+        if parsed.username is not None or parsed.password is not None or _SENSITIVE.search(parsed.path):
+            return "[REDACTED]"
+        return redacted_url
     return value
 
 
-def _redact_url_query(value: str) -> str:
-    """Remove credential material from URL query parameters in diagnostics."""
-    parsed = urlparse(value)
-    if not parsed.scheme or not parsed.netloc or not parsed.query:
-        return value
-    query_items = [
-        (key, "[REDACTED]" if _SENSITIVE_QUERY_PARAMETER.search(key) else item) for key, item in parse_qsl(parsed.query)
-    ]
-    query = urlencode(query_items, doseq=True)
-    return urlunparse(parsed._replace(query=query))
-
-
 def _sanitize_diagnostic_html(value: str) -> str:
-    """Keep bounded, non-executable markup for explicitly requested diagnostics."""
+    """Keep bounded, non-executable markup for internal diagnostic callers."""
     root = html.fragment_fromstring(value, create_parent=True)
     for element in root.iter():
         if element.tag in _REMOVED_HTML_ELEMENTS:

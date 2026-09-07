@@ -14,6 +14,7 @@ from owlbear_browser.contract import (
     content_hash,
     normalize_links,
     normalize_markdown,
+    redact_url,
 )
 from owlbear_browser.extractor import extract_content
 from owlbear_browser.fetcher import BrowserContentFetcher
@@ -40,4 +41,5 @@ __all__ = [
     "find_sso_extension",
     "normalize_links",
     "normalize_markdown",
+    "redact_url",
 ]
