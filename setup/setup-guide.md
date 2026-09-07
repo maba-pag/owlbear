@@ -107,7 +107,10 @@ check below because it also depends on Chromium and its allowlist.
 ### Browser readiness
 
 `MCP: List Servers` confirms that the stdio processes started; it does not prove that Chromium is
-installed or that Browser acquisition is ready. To enable Browser use:
+installed, an approved session is authenticated, internal routing is permitted, or Knowledge
+ingestion is ready. The Browser server launches a persistent Playwright Chromium context; it does
+not select Microsoft Edge or attach to an existing browser through CDP. To enable and verify the
+supported alpha path:
 
 1. From the consumer project root, install Chromium for the sibling OwlBear checkout:
 
@@ -117,25 +120,48 @@ installed or that Browser acquisition is ready. To enable Browser use:
 
    **Expected result:** the Playwright Chromium executable is available to the Browser MCP server.
 2. Review the `env` member on the `owlbear-browser` entry in `.vscode/mcp.json`. Fresh setup seeds
-   wildcard testing access; replace it with exact hostnames for normal or production use:
+  wildcard testing access; replace it with exact hostnames for normal or production use. Set
+  `PLAYWRIGHT_USER_DATA_DIR` only when an approved existing Chromium profile should be used; use
+  an absolute path because the launcher does not expand `~` in this environment:
 
    ```json
    {
      "env": {
-       "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com"
+       "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com",
+       "PLAYWRIGHT_USER_DATA_DIR": "/Users/you/.owlbear/chromium-profile"
      }
    }
    ```
 
    **Expected result:** Browser requests are limited to the exact hostnames you named. For local
    testing across public sites only, keep `"*"`; keep exact hostnames for production. SSRF checks
-   still reject private, loopback, link-local, reserved, and unspecified DNS results.
+  reject private, loopback, and link-local DNS results for hostnames that are not exact allowlist
+  entries; reserved and unspecified addresses are always rejected.
 3. Restart the `owlbear-browser` MCP server and try `acquire` or `navigate` against an allowed
-   public URL.
+   public URL. `acquire` accepts optional readiness/content selectors and returns a structured
+   success or failure result; it does not expose diagnostic HTML or automatically ingest content.
 
    **Expected result:** the tool returns page content or its typed acquisition result. A running
-   server with no configured domains still denies every hostname. See the
+   server with no configured domains still denies every hostname. Exact allowlist entries are the
+   explicit approval for private, loopback, or link-local DNS results from that hostname; wildcard
+   mode does not grant that approval. See the
    [Browser MCP guide](../serve/browser-mcp/README.md) for the full boundary and limitations.
+
+- **Managed SSO readiness:** Treat managed SSO as a separate readiness check. The launcher can load an extension directory
+  named by `SSO_EXTENSION_PATH` and can reuse a persistent Chromium profile, but discovering or
+  loading an extension is not proof of tenant authentication, MFA, Conditional Access, or device
+  compliance. On macOS, configure an approved profile or extension explicitly and verify one
+  permitted target site with the organization's normal login flow. Do not collect cookies or
+  tokens, weaken enterprise policy, or claim SSO support from MCP process startup alone.
+
+- **Knowledge ingestion readiness:** Treat Knowledge ingestion as a separate, currently agent-mediated check. After inspecting a
+  successful `acquire` result, call `knowledge_ingest` with the captured text, an intentional
+  scope, and an optional `source_url`. Direct ingestion creates or reuses a non-refreshable inline
+  source for that scope; `source_url` supplies document identity but does not attach the capture to
+  a registered browser source. Registered `authenticated_web` refresh is not a working end-to-end
+  Browser-to-Knowledge path in the current Knowledge MCP process. Use the
+  [Knowledge operations guide](../share/skills/h-knowledge-ops/SKILL.md) for the current result
+  and limitation contract.
 
 If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
 OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
