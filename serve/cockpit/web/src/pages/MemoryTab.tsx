@@ -289,6 +289,7 @@ function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
 function MemoryTab() {
   const [entries, setEntries] = useState<MemoryEntry[]>([])
   const [parseErrors, setParseErrors] = useState(0)
+  const [loadError, setLoadError] = useState<Error | null>(null)
   const [filter, setFilter] = useState<MemoryFilterState>(INITIAL_FILTER)
   const [openEntryId, setOpenEntryId] = useState<string | null>(null)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
@@ -312,14 +313,20 @@ function MemoryTab() {
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
     paused: true,
-    onSuccess: async (payload) => {
-      if (Array.isArray(payload.entries)) {
-        setEntries(payload.entries)
+    parse: async (response) => {
+      const payload = (await response.json()) as Partial<MemoriesResponse>
+      if (!Array.isArray(payload.entries) || typeof payload.parse_errors !== 'number') {
+        throw new Error('Malformed memory response')
       }
-      setParseErrors(typeof payload.parse_errors === 'number' ? payload.parse_errors : 0)
+      return payload as MemoriesResponse
     },
-    onError: async () => {
-      setParseErrors(0)
+    onSuccess: async (payload) => {
+      setLoadError(null)
+      setEntries(payload.entries)
+      setParseErrors(payload.parse_errors)
+    },
+    onError: async (error) => {
+      setLoadError(error)
     },
   })
 
@@ -823,6 +830,15 @@ function MemoryTab() {
           entries region — not the page identity, and not the filter panel it deliberately ignores. */}
       {!hasFetched && isFetching ? <div data-testid="memory-loading" role="status">Collecting memory entries...</div> : null}
 
+      {loadError ? (
+        <div data-testid="memory-load-error" className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-sm text-primary">
+          <span role="alert">{entries.length > 0 ? `Memory entries may be stale: ${loadError.message}` : `Memory entries could not be loaded: ${loadError.message}`}</span>
+          <PButton type="button" compact variant="secondary" data-testid="memory-retry" disabled={isFetching} aria-busy={isFetching} onClick={() => void refetch()}>
+            Retry
+          </PButton>
+        </div>
+      ) : null}
+
       {parseErrors > 0 ? (
         <p data-testid="parse-errors-warning" className="rounded-lg border border-warning bg-warning-low p-static-sm text-primary">{parseErrors} entries couldn't be read</p>
       ) : null}
@@ -850,7 +866,7 @@ function MemoryTab() {
           </PButtonPure>
         </div>
 
-        {!hasEntries && hasFetched && !isFetching ? (
+        {!hasEntries && hasFetched && !isFetching && !loadError ? (
           <section className="grid min-h-40 place-items-center border border-dashed border-contrast-low bg-canvas px-static-lg py-static-xl text-center" data-testid="memory-empty-state">
             <div className="grid max-w-[44rem] gap-static-xs">
               <PHeading tag="h2" size="small">No memory entries yet</PHeading>
