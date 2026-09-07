@@ -229,6 +229,41 @@ describe('MemoryTab load state', () => {
     expect(saveBody.content).toBe(currentEntry.content)
   })
 
+  it('keeps conflict recovery visible when refresh moves the entry outside the active filter', async () => {
+    const initialEntry = memoryEntry()
+    const currentEntry = memoryEntry({
+      title: 'Curated server title',
+      content: 'Curated server content',
+      state: 'curated',
+      approved_at: null,
+      updated_at: '2026-01-02T00:00:00+00:00',
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response({ entries: [initialEntry], parse_errors: 0 }))
+      .mockResolvedValueOnce(response({ code: 'MEM_CONFLICT', message: 'Entry revision is stale' }, false, 409))
+      .mockResolvedValueOnce(response({ entries: [currentEntry], parse_errors: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<MemoryTab />)
+    expect(await screen.findByText('Draft title')).toBeInTheDocument()
+    const stateFilter = document.querySelector('p-multi-select[name="state-filter"]')
+    if (!stateFilter) {
+      throw new Error('Memory state filter was not rendered')
+    }
+    stateFilter.dispatchEvent(new CustomEvent('change', { detail: { value: ['approved'] } }))
+    await waitFor(() => expect(screen.getByTestId('memory-entry-title')).toHaveTextContent('Draft title'))
+
+    await openMemoryEntry()
+    fireEvent.click(screen.getByTestId('memory-edit-btn'))
+    fireEvent.click(await screen.findByTestId('memory-edit-save-btn'))
+
+    expect(await screen.findByTestId('memory-conflict-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('memory-conflict-current-title')).toHaveTextContent('Curated server title')
+    expect(screen.getByTestId('memory-edit-form')).toBeInTheDocument()
+    expect(screen.getByTestId('memory-conflict-draft-title')).toHaveTextContent('Draft title')
+  })
+
   it('keeps the draft visible after a validation mutation failure', async () => {
     const initialEntry = memoryEntry()
     const validationFetch = vi

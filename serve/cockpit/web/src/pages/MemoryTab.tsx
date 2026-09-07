@@ -51,6 +51,7 @@ type MemoryConflictStatus = 'refreshing' | 'ready' | 'error'
 
 interface MemoryConflictState {
   entryId: string
+  baseEntry: MemoryEntry
   status: MemoryConflictStatus
   message: string
   currentEntry: MemoryEntry | null
@@ -481,10 +482,17 @@ function MemoryTab() {
     [entries],
   )
 
+  const activeConflictEntry = useMemo(() => {
+    if (!memoryConflict || editingEntryId !== memoryConflict.entryId) {
+      return null
+    }
+    return entries.find((entry) => entry.id === memoryConflict.entryId) ?? memoryConflict.baseEntry
+  }, [editingEntryId, entries, memoryConflict])
+
   const visibleEntries = useMemo(() => {
     const loweredSearch = filter.text.trim().toLowerCase()
 
-    return sortEntries(entries).filter((entry) => {
+    const filteredEntries = sortEntries(entries).filter((entry) => {
       const matchesState = filter.states.length === 0 || filter.states.includes(entry.state)
       const matchesCategory =
         filter.categories.length === 0 || filter.categories.every((category) => entry.categories.includes(category))
@@ -493,14 +501,19 @@ function MemoryTab() {
 
       return matchesState && matchesCategory && matchesAgentFilter && matchesTextSearch
     })
-  }, [entries, filter])
+    if (!activeConflictEntry || filteredEntries.some((entry) => entry.id === activeConflictEntry.id)) {
+      return filteredEntries
+    }
+    return sortEntries([...filteredEntries, activeConflictEntry])
+  }, [activeConflictEntry, entries, filter])
 
-  const hasEntries = entries.length > 0
+  const totalEntryCount = entries.length + (activeConflictEntry && !entries.some((entry) => entry.id === activeConflictEntry.id) ? 1 : 0)
+  const hasEntries = totalEntryCount > 0
   const hasVisibleEntries = visibleEntries.length > 0
   const deletedCount = entries.filter((entry) => entry.state === 'deleted').length
-  const memoryCountMetric = visibleEntries.length === entries.length
-    ? <WorkspaceHeaderMetric value={entries.length} label={entries.length === 1 ? 'entry' : 'entries'} />
-    : <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${entries.length}`} label="shown" />
+  const memoryCountMetric = visibleEntries.length === totalEntryCount
+    ? <WorkspaceHeaderMetric value={totalEntryCount} label={totalEntryCount === 1 ? 'entry' : 'entries'} />
+    : <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${totalEntryCount}`} label="shown" />
 
   const updateMemoryListScrollCue = useCallback(() => {
     const list = memoryListRef.current
@@ -676,6 +689,7 @@ function MemoryTab() {
       if (editingEntryId === entry.id && editDraft) {
         setMemoryConflict({
           entryId: entry.id,
+          baseEntry: entry,
           status: 'refreshing',
           message: apiError.message,
           currentEntry: null,
