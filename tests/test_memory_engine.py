@@ -174,6 +174,55 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
     assert health.duplicate_paths == {}
 
 
+def test_lifecycle_recovery_status_is_uncertain_for_unreadable_affected_record(tmp_path: Path) -> None:
+    """An unreadable affected file cannot be classified from a lenient reload."""
+    engine = MemoryEngine(tmp_path)
+    entry = engine.save(
+        title="Original",
+        content="Original content",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    engine.get_entries()
+
+    entry_path = tmp_path / f"{entry.id}.md"
+    original_write = storage.write_entry
+    initial_error = OSError("initial write failed")
+    rollback_error = OSError("rollback write failed")
+    calls = 0
+
+    def failing_write(path: Path, *args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise initial_error
+        if calls == 2:
+            path.write_text("not markdown", encoding="utf-8")
+            raise rollback_error
+        original_write(path, *args, **kwargs)
+
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        pytest.raises(LifecycleRecoveryError) as exc_info,
+    ):
+        engine.rename_agent("old", "new")
+
+    error = exc_info.value
+    assert error.recovery_status == "uncertain"
+    assert error.operation_error is initial_error
+    assert len(error.rollback_errors) == 1
+    assert error.rollback_errors[0].error is rollback_error
+    assert error.cache_error is None
+    assert str(initial_error) in str(error)
+    assert str(rollback_error) in str(error)
+    assert str(entry_path) in str(error)
+    health = engine.health()
+    assert health.healthy is False
+    assert health.unreadable_paths == [entry_path.name]
+
+
 def test_lifecycle_recovery_status_uses_reloaded_originals(tmp_path: Path) -> None:
     """A rollback error does not imply partial disk state when reload finds originals."""
     engine = MemoryEngine(tmp_path)

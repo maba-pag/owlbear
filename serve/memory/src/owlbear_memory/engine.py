@@ -593,7 +593,11 @@ class MemoryEngine:
             recovery_status = "uncertain"
             try:
                 reloaded_entries = self._load()
-                recovery_status = self._lifecycle_recovery_status(affected_entries, reloaded_entries)
+                recovery_status = self._lifecycle_recovery_status(
+                    affected_entries,
+                    reloaded_entries,
+                    original_paths,
+                )
             except Exception as reload_error:  # noqa: BLE001 - cache state is part of recovery diagnostics.
                 cache_error = reload_error
                 self._entries = []
@@ -618,15 +622,28 @@ class MemoryEngine:
     def _lifecycle_recovery_status(
         originals: list[MemoryEntry],
         reloaded_entries: list[MemoryEntry],
+        original_paths: dict[str, Path],
     ) -> str:
-        """Classify recovery from the entries found after reloading the store."""
+        """Classify recovery from the reloaded entries and strict path verification."""
         try:
             reloaded_by_id = {entry.id: entry for entry in reloaded_entries}
             for original in originals:
                 reloaded = reloaded_by_id.get(original.id)
-                if reloaded is None:
-                    return "partial"
-                if reloaded != original:
+                path = original_paths[original.id]
+                try:
+                    verified = storage.read_entry_strict(path)
+                except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
+                    try:
+                        if path.is_symlink():
+                            return "uncertain"
+                        path.stat()
+                    except FileNotFoundError:
+                        return "partial"
+                    except OSError:
+                        return "uncertain"
+                    return "uncertain"
+
+                if reloaded is None or reloaded != original or verified != original:
                     return "partial"
         except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
             return "uncertain"
