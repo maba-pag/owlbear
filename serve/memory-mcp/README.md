@@ -64,7 +64,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `save_memory` | Create an unscoped `pending` entry from self-reported provenance; recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
-| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body on consecutive lines; other metadata omitted); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
+| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body; contested entries add `State: contested` and an available `Challenge task:` reference); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
