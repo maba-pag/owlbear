@@ -158,7 +158,7 @@ def _safe_browser_diagnostic(stage: str, error: BaseException) -> str:
 
 
 async def _close_browser_resources(
-    page: Any,
+    page: Any,  # noqa: ANN401 - Playwright page objects are external runtime values.
     launcher: PlaywrightLauncher | None,
 ) -> tuple[str, ...]:
     """Close owned browser resources independently and return safe failure diagnostics."""
@@ -221,6 +221,7 @@ def _browser_unavailable_message(app_ctx: object) -> str:
     if app_ctx.browser_diagnostic:
         return f"{_MSG_BROWSER_UNAVAILABLE}: {app_ctx.browser_diagnostic}"
     return _MSG_NO_PAGE
+
 
 mcp = MCPServer("owlbear-browser", lifespan=app_lifespan)
 
