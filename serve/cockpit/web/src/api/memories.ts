@@ -30,8 +30,8 @@ export interface MemoryEditPayload {
 }
 
 export interface MemoriesResponse {
-  entries?: MemoryEntry[]
-  parse_errors?: number
+  entries: MemoryEntry[]
+  parse_errors: number
 }
 
 export interface ValidationMessage {
