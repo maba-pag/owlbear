@@ -30,41 +30,6 @@ from owlbear_delivery.change_workspace import (
     WriterIdentity,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
-from owlbear_delivery.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
-from owlbear_delivery.target_runtime import TargetJob, TargetRuntime
-
-
-def _runtime(root: Path, change_id: str, job_id: int) -> TargetRuntime:
-    authority = TargetAuthority(
-        change_id=change_id,
-        title=f"Change {change_id}",
-        outcomes=(
-            Outcome(
-                outcome_id="OUT-001",
-                title="Outcome",
-                promise="Deliver the outcome",
-                acceptance=("The outcome is observable",),
-            ),
-        ),
-        task_plan_scopes=(TaskPlanScope(scope_id="PLAN-001", kind=PlanScopeKind.OUTCOME, target_id="OUT-001"),),
-    )
-    runtime = TargetRuntime(authority, root / change_id)
-    runtime.materialize(
-        (
-            TargetJob(
-                job_id=job_id,
-                kind="plan",
-                change_id=change_id,
-                authority_digest=runtime.authority_digest,
-                work_item_id="OUT-001",
-                plan_scope_id="PLAN-001",
-                created_at=f"2026-08-02T00:00:0{job_id}Z",
-            ),
-        )
-    )
-    return runtime
-
-
 def _coordination(root: Path, change_id: str) -> ChangeCoordination:
     return ChangeCoordination(
         change_id=change_id,

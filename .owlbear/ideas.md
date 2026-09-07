@@ -14,8 +14,8 @@ coordination, and MCP transport modules.
 The historical lesson still applies, but file length is not sufficient evidence for another split.
 The current large classes hide real state-machine and Git coordination complexity. Splitting them
 into mixins or forwarding-only managers would increase the effective interface without improving
-ownership. The more consequential current problems are lifecycle correctness and the coexistence of
-active schema-v2 Delivery with retained target-v1 cutover and execution contracts.
+ownership. The more consequential current problems are lifecycle correctness in current schema-v2
+Delivery.
 
 ## Audit method and baseline
 
@@ -40,7 +40,7 @@ Baseline on 2026-08-07:
 | `PortfolioApplication` | 865 class lines, 56 methods | Large, but its acquisition, recovery, projection, and Integration orchestration are real responsibilities. Do not split by line count alone. |
 | `ChangeWorkspaceManager` | 805 class lines, 49 methods | Large, but Git/worktree invariants span creation, recovery, proof, and Integration. Remove dead paths before considering extraction. |
 | `DeliveryRuntime` | 699 class lines, 35 methods | Cohesive owner of one schema-v2 frontier and its mechanical transitions. Keep intact unless a behavior-driven boundary emerges. |
-| `TargetRuntime` | 642 class lines inside a 1,203-line module | Retained target-v1 execution generation, not the active schema-v2 runtime. Its disposition is a cutover/evidence decision, not a decomposition task. |
+| `DeliveryRuntime` | Current frontier and transition owner | Cohesive owner of the active schema-v2 state machine; keep intact unless a behavior-driven boundary emerges. |
 | `TargetMCPAdapter` | 266 class lines, 35 methods | Explicit transport contract. Repetition preserves typed schemas, tool documentation, annotations, and error mapping. |
 
 Current startup verification measurement for this workspace:
@@ -59,14 +59,12 @@ integrity.
 | Generation | Current role | Main modules |
 | --- | --- | --- |
 | Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, `delivery_admission.py`, `portfolio_application.py` |
-| Retained target-v1 execution | Job/attempt/review/receipt runtime and semantic authority used by cutover/finalizer and retained public evidence contracts | `target_runtime.py`, `target_authority.py`, the `TargetAuthorityRegistry` half of `target_admission.py` |
-| One-time cutover and snapshot retention | Bootstrap source retirement, snapshot verification, receipt publication, and mutation gate | `target_cutover.py`, `snapshot.py`, `setup/finalize.py` |
+| Current Delivery execution | Outcome stages, claims, task results, Integration, and receipt-backed completion history | `delivery_runtime.py`, `delivery_admission.py`, `portfolio_application.py` |
+| One-time cutover and snapshot retention | Historical migration evidence only; not part of the current runtime | `.owlbear/legacy/` before reset |
 | Transport | Process configuration/lifespan and explicit MCP adaptation | `delivery-mcp/server.py`, `delivery-mcp/target_server.py`, `delivery-mcp/target_models.py` |
 
-The active and retained generations are isolated at the admission-module boundary. Current
-source-bound admission lives in `delivery_admission.py`; `target_admission.py` contains only the
-retained Target-era registry and models. The package root still exports both generations while the
-Target-era public surface remains supported.
+Current source-bound admission lives in `delivery_admission.py`; the retired Target-era registry
+and runtime modules have been removed. The package root exports current Delivery contracts only.
 
 ## Reconciliation of the initial assessment
 
@@ -76,11 +74,11 @@ Target-era public surface remains supported.
 | Split `PortfolioApplication` and `ChangeWorkspaceManager` now | Deferred | First remove obsolete paths and fix live lifecycle defects. Reapply the module deletion test afterward. |
 | Merge MCP `server.py` and `target_server.py` | Rejected | `server.py` owns environment resolution, authorization, composition, and lifespan. `target_server.py` owns the typed adapter, error translation, and registration. The provider indirection is required because tools register before lifespan construction. |
 | Replace explicit MCP methods with generated wrappers | Rejected | The apparent repetition carries distinct input schemas, output handling, annotations, docstrings, and an auditable allow-list. More metaprogramming would reduce clarity. |
-| Delete all target-v1 runtime code immediately | Narrowed | Some old Integration code is dead now. `TargetRuntime` and `TargetAuthorityRegistry` still participate in cutover/finalizer and documented evidence contracts; retire them only through an explicit cutover disposition. |
+| Delete all target-v1 runtime code immediately | Accepted | The orphaned Target-era kernel has no current production callers and is removed with its exports and tests. |
 | Rewrite work projection directly onto schema v2 immediately | Narrowed | A direct native projector is probably the right end state, but first fix the current Design-stage defect and decide which target-v1-only semantics remain product requirements. |
 | Add a frontier snapshot API to fix an acquisition race | Rejected as stated | The proposed publish/acquire interleaving ignored active-claim preconditions. Exact-byte OCC already prevents lost updates. A different, confirmed acquisition defect exists: automatic recovery can revoke live claims. |
 | Remove Assembly immediately | Decision required | Assembly is unreachable through current compilation and incomplete at MCP, but is intentionally represented in runtime and UI contracts. Choose complete, remove, or explicitly defer it; do not leave it accidentally half-live. |
-| Broadly rename all `target_*` modules | Rejected for now | `target` still has a real cutover/activation meaning. Rename only symbols proven stale after target-v1 retirement; do not rename serialized artifact paths for aesthetics. |
+| Broadly rename all `target_*` modules | Rejected for now | `target` remains a meaningful activation and synchronization term in current Delivery. Rename only symbols proven stale; do not rename serialized artifact paths for aesthetics. |
 
 ## Priority 0 — prevent acquisition from revoking live work
 
@@ -255,7 +253,7 @@ does not promise backward compatibility, but the surface change must still be ex
   `.owlbear/target/target-runtime/integration-findings/*.json` path nor the current host-local
   `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. They are
   inert historical bytes and no longer participate in runtime discovery or authority. The retained
-  `.owlbear/legacy/completed` catalog is read-only information for completed-history search, not
+  Receipt-backed completion records are read-only information for completed-history search, not
   executable or runtime state.
 
 The first prerequisite is now covered by the independent-application contention regression. No local

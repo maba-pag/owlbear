@@ -257,8 +257,7 @@ provide bounded list, search, and exact lookup of receipt-backed history.
 - Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
   configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
-  authority. Files under `.owlbear/legacy/completed/` are read-only historical completion evidence
-  available through the completed-history search.
+  authority. Completed-history search reads current receipt-backed runtime records only.
 
 ```text
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>

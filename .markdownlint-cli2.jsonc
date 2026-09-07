@@ -2,16 +2,13 @@
   // Authority for markdownlint-cli2 consumers: the pre-commit hook and VS Code extension.
   // MegaLinter uses markdownlint-cli with .markdownlint.json and .markdownlintignore.
   "ignores": [
-    ".owlbear/completed/**",
     ".owlbear/delivery/packages/**",
     ".owlbear/delivery/runtime/**",
     ".owlbear/doc-index.md",
     ".owlbear/py-index.md",
     ".owlbear/ts-index.md",
-    ".owlbear/legacy/**",
     ".owlbear/memory/**",
     ".owlbear/research/**",
-    ".owlbear/target/**",
     ".venv/**",
     "**/node_modules/**",
     "**/scratch/**",

@@ -938,9 +938,6 @@ def _compose_application(  # noqa: PLR0913, PLR0917 - composition binds independ
         coordinator=coordinator,
         workspace_manager=workspace_manager,
         completed_history_catalog=CompletedHistoryCatalog(
-            paths.repository_root,
-            config.target_branch,
-            f"refs/remotes/{config.remote}/{config.target_branch}",
             paths.runtime_root,
         ),
         delivery_state_publisher=delivery_state_publisher,

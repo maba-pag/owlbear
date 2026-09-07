@@ -22,10 +22,9 @@ exclude: |
   (?x)(^|/)(
     [^/]*\.egg-info/
     |\.owlbear/(
-      completed/
-      |delivery/(packages|runtime)/
+      delivery/(packages|runtime)/
       |(doc|py|ts)-index\.md$
-      |(legacy|memory|research|target)/
+      |(memory|research|target)/
     )
     |store/(audit|knowledge)/.*\.db$
     |(

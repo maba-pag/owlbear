@@ -94,39 +94,6 @@ class VerifiedDesignPackage(_PackageModel):
     manifest: DesignPackageManifest
 
 
-class CompletionPackageManifest(_PackageModel):
-    """Canonical identity binding one completed package to reviewed Delivery state."""
-
-    schema_version: Literal[1] = 1
-    change_id: ChangeId
-    package_id: Digest
-    authority_digest: Digest
-    runtime_sha256: Digest
-    result_history_sha256: Digest
-    reviewed_change_head: str
-    integration_target: str
-    completion_path: str
-
-    def canonical_bytes(self) -> bytes:
-        """Return the canonical persisted representation."""
-        payload = self.model_dump(mode="json")
-        return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
-
-    @property
-    def completion_id(self) -> Digest:
-        """Return the stable identity of this exact completion package."""
-        return _digest(self.canonical_bytes())
-
-
-class CompletionPackageSnapshot(_PackageModel):
-    """Validated immutable package tree supplied to Integration candidate proof."""
-
-    completion_id: Digest
-    package_id: Digest
-    manifest: CompletionPackageManifest
-    package_tree: str
-
-
 class DesignCheckpointResult(_PackageModel):
     """One package-history checkpoint selected by its dedicated ref."""
 

@@ -3,9 +3,8 @@
 `owlbear-delivery` is the transport-free control plane for Change delivery. It projects semantic work
 items from admitted Design authority, owns deterministic Planning and Build transitions, coordinates
 bounded execution, publishes reviewed Change checkpoints, observes user-owned
-pull-request acceptance, and projects recoverable completed history. Historical completion packages
-under `.owlbear/legacy/completed` remain available through the read-only history catalog for
-information; they are not Delivery runtime authority.
+pull-request acceptance, and projects recoverable completed history from current receipt-backed
+runtime records. Completed history is informational and is not Delivery runtime authority.
 
 **Use this guide when:** you need to extend or integrate the core Change authority, understand its
 worktree and publication boundaries, or call its public stores and runtimes.

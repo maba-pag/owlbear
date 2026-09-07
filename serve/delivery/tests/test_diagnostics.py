@@ -49,7 +49,6 @@ from owlbear_delivery.runtime_transaction import (
     TransactionManifestError,
     TransactionPathError,
 )
-from owlbear_delivery.target_admission import TargetAdmissionError
 
 
 def _history_error(error_type: type[Exception], code: CompletedHistoryDiagnosticCode) -> Exception:
@@ -140,7 +139,6 @@ def _known_delivery_failures() -> tuple[Exception, ...]:
         DeliveryRuntimeReferenceError("outcome is absent"),
         DesignPackageConflictError("package identity is stale"),
         DeliveryAdmissionError("admission failed"),
-        TargetAdmissionError("target admission failed"),
         TransactionConflictError("transaction changed"),
         TransactionManifestError("manifest is invalid"),
         TransactionPathError("path is unsafe"),

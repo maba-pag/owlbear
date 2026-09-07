@@ -98,6 +98,25 @@
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
 
+## .github/prompts/challenge-implementation_opus.prompt.md
+- ## `Implementation Frame`
+- ## `Review Contract`
+- ### `Conformance And Implementation Soundness`
+- ### `Evidence Sufficiency`
+- ### `Necessity And Proportionality`
+- ## `Dispatch Requirements`
+- ## `Required Challenger Memo`
+- ## `Caller Reconciliation`
+
+## .github/prompts/challenge-plan_opus.prompt.md
+- ## `Decision Frame And Necessity Gate`
+- ## `Evidence Sufficiency Gate`
+- ## `Dispatch Requirements`
+- ## `Evidence To Request`
+- ## `Required Challenger Memo`
+- ## `Reconciliation After The Subagent`
+- ### `Recommendation`
+
 ## .github/skills/h-hook-authoring/SKILL.md
 - # `Hook Authoring`
 - ## `Authority And Boundary`
@@ -408,7 +427,9 @@
 - # `owlbear-knowledge-mcp — Knowledge MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
+- ### `Response shapes`
 - ## `Configuration`
+- ### `Opt-in model proof`
 - ## `Dependencies`
 
 ### Outbound links
@@ -435,6 +456,7 @@
 - #### `Scoring Constants`
 - #### ``compute_score(confidence, outstanding_count, unremarkable_count) → float``
 - #### ``check_slot_efficiency(entry: MemoryEntry) → bool``
+- #### ``validate_scope_agents(value: list[str]) → list[str]``
 - #### `State Machine`
 - #### `OCC`
 - #### `Lenient Read`
@@ -475,6 +497,17 @@
 ### Outbound links
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
+
+## serve/web-content/README.md
+- # `owlbear-web-content - Shared HTML to Markdown Converter`
+- ## `Launch / Usage`
+- ## `Configuration`
+- ## `Dependencies`
+- ## `Public API`
+
+### Outbound links
+- [serve/README.md](../serve/README.md)
+- [Project README](../README.md)
 
 ## setup/operating-owlbear.md
 - # `Operating OwlBear`
@@ -874,6 +907,7 @@
 - ### `knowledge_ingest`
 - ### `list_knowledge_sources`
 - ### `refresh_knowledge_source`
+- ## `Typed failure and extraction rules`
 - ### `register_knowledge_source`
 - ### `delete_knowledge_source`
 - ### `knowledge_stats`
@@ -901,6 +935,12 @@
 - ### `Exceptional-state resolution`
 - ### `Batch commits`
 - ## `Tool Summary`
+- ## `Assessment and curation policy`
+- ### `Decision: human-assisted and sampled`
+- ### `Assessment boundary`
+- ### `Curation trigger, visibility, and failure handling`
+- ### `Minimum measurement plan`
+- ### `Rejected alternatives and deferred work`
 - ## `save_memory`
 - ## `list_memories`
 - ## `read_memory`
@@ -1003,6 +1043,7 @@
 - ## `Role Boundary`
 - ## `Decision Contract`
 - ## `Evidence Rules`
+- ### `Test Evidence Boundary`
 - ### `Minimum Change Review`
 - ## `Caller Routing`
 - ## `Memory Candidate Routing`
@@ -1146,6 +1187,7 @@
 - ## `Step 3 - Obtain Advisory Exact-Commit Review`
 - ### `Triage Review Findings Before Repair`
 - ## `Step 4 - Publish Pass Or Route Finding`
+- ## `Memory assessment policy`
 - ## `Optional Process Observation`
 - ## `Known Pitfalls`
 
@@ -1163,6 +1205,8 @@
 - # `Target Conflict Resolution`
 - ## `Step 0 - Bind Current Authority`
 - ## `Step 1 - Resolve In Managed Custody`
+- ### `Pre-commit resolution preflight`
+- ### `Post-commit cleanliness`
 - ## `Step 2 - Handoff`
 - ## `Output Template`
 - ## `Known Pitfalls`

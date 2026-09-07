@@ -38,7 +38,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest, DesignPackageStore
+from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -304,58 +304,6 @@ def _write_publication_delivery(runtime_root: Path, head: str) -> None:
     _write_admission(change_root, contract, frontier, head)
 
 
-def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]:
-    intent = f"intent for completed {change_id}\n".encode()
-    design = f"design for completed {change_id}\n".encode()
-    contract = _contract(change_id, title, (_outcome("OUT-001", f"Ship {title}", "Publish verified work."),))
-    authority = _canonical(contract)
-    task = _task("OUT-001", 1)
-    result = _result(contract, task, reviewed_head)
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(result,),
-            ),
-        )
-    )
-    runtime = _canonical(frontier)
-    results = _canonical((result,))
-    package = DesignPackageManifest.from_content(change_id, intent, design, authority)
-    completion = CompletionPackageManifest(
-        change_id=change_id,
-        package_id=hashlib.sha256(package.canonical_bytes()).hexdigest(),
-        authority_digest=hashlib.sha256(authority).hexdigest(),
-        runtime_sha256=hashlib.sha256(runtime).hexdigest(),
-        result_history_sha256=hashlib.sha256(results).hexdigest(),
-        reviewed_change_head=reviewed_head,
-        integration_target="main",
-        completion_path=f".owlbear/completed/{change_id}",
-    )
-    return {
-        "authority.json": authority,
-        "completion.json": completion.canonical_bytes(),
-        "design.md": design,
-        "intent.md": intent,
-        "manifest.json": package.canonical_bytes(),
-        "results.json": results,
-        "runtime.json": runtime,
-    }
-
-
-def _publish_completion(repository: Path, change_id: str, title: str, reviewed_head: str) -> str:
-    package_root = repository / ".owlbear/completed" / change_id
-    package_root.mkdir(parents=True)
-    for name, content in _completion_content(change_id, title, reviewed_head).items():
-        (package_root / name).write_bytes(content)
-    _git(repository, "add", str(package_root.relative_to(repository)))
-    _git(repository, "commit", "-m", f"complete {change_id}")
-    return _git(repository, "rev-parse", "HEAD")
-
-
 def _seed_repository(repository: Path) -> str:
     repository.mkdir(exist_ok=True)
     _git(repository, "init", "-b", "main")
@@ -365,42 +313,41 @@ def _seed_repository(repository: Path) -> str:
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
     _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
-    baseline = _git(repository, "rev-parse", "HEAD")
-    first = _publish_completion(repository, "completed-alpha", "Alpha delivery", baseline)
-    _publish_completion(repository, "completed-beta", "Beta search", first)
-    legacy_root = repository / ".owlbear/legacy"
-    legacy_root.mkdir()
-    (repository / ".owlbear/completed").rename(legacy_root / "completed")
-    _git(repository, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
-    _git(repository, "commit", "-m", "move completed packages to legacy history")
     head = _git(repository, "rev-parse", "HEAD")
     _git(repository, "update-ref", "refs/remotes/origin/main", head)
     return head
 
 
-def _write_completion_receipt(runtime_root: Path) -> None:
-    change_id = "completed-beta"
+def _write_completion_receipt(
+    runtime_root: Path,
+    change_id: str,
+    title: str,
+    pull_request_number: int,
+) -> None:
     receipt = CompletionReceipt.create(
         CompletionEvidence(
             change_id=change_id,
-            finalization_receipt_id=hashlib.sha256(b"completed-beta-finalization").hexdigest(),
-            finalized_change_head=hashlib.sha256(b"completed-beta-finalized-head").hexdigest()[:40],
+            finalization_receipt_id=hashlib.sha256(f"{change_id}-finalization".encode()).hexdigest(),
+            finalized_change_head=hashlib.sha256(f"{change_id}-finalized-head".encode()).hexdigest()[:40],
             repository_identity="example/project",
-            pull_request_identity=CompletionPullRequestIdentity(number=42, node_id="PR_completed_beta_42"),
+            pull_request_identity=CompletionPullRequestIdentity(
+                number=pull_request_number,
+                node_id=f"PR_{change_id}_{pull_request_number}",
+            ),
             accepted_target_ref="main",
-            accepted_merge_commit=hashlib.sha256(b"completed-beta-accepted-merge").hexdigest()[:40],
+            accepted_merge_commit=hashlib.sha256(f"{change_id}-accepted-merge".encode()).hexdigest()[:40],
             merged_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
-            acceptance_observation_id=hashlib.sha256(b"completed-beta-acceptance").hexdigest(),
-            check_observation_ids=(hashlib.sha256(b"completed-beta-checks").hexdigest(),),
-            review_receipt_ids=(hashlib.sha256(b"completed-beta-review").hexdigest(),),
+            acceptance_observation_id=hashlib.sha256(f"{change_id}-acceptance".encode()).hexdigest(),
+            check_observation_ids=(hashlib.sha256(f"{change_id}-checks".encode()).hexdigest(),),
+            review_receipt_ids=(hashlib.sha256(f"{change_id}-review".encode()).hexdigest(),),
             completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
         )
     )
     display = CompletionDisplayMetadata.create(
         change_id=change_id,
         completion_id=receipt.completion_id,
-        title="Beta search",
-        outcome_titles=("Ship Beta search",),
+        title=title,
+        outcome_titles=(f"Ship {title}",),
     )
     store = CompletionReceiptStore(runtime_root)
     for participant in (store.participant(receipt), store.display_participant(display)):
@@ -434,7 +381,8 @@ def seed_delivery(workspace: Path) -> None:
     runtime_root = workspace / ".owlbear/delivery/runtime"
     worktrees = workspace / ".owlbear/delivery/worktrees"
     head = _seed_repository(repository)
-    _write_completion_receipt(runtime_root)
+    _write_completion_receipt(runtime_root, "completed-alpha", "Alpha delivery", 41)
+    _write_completion_receipt(runtime_root, "completed-beta", "Beta search", 42)
     DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
         "design-operations-roadmap",
         b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",

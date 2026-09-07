@@ -39,7 +39,7 @@ Determine scope:
 Unless the user explicitly includes them, exclude:
 
 - `.owlbear/legacy/**` except for provenance lookups;
-- `.owlbear/delivery/runtime/**`, `.owlbear/delivery/worktrees/**`, `.owlbear/completed/**`,
+- `.owlbear/delivery/runtime/**`, `.owlbear/delivery/worktrees/**`,
    `.owlbear/target/**`, and `.owlbear/scratch/**`;
 - `.venv/**`, `**/node_modules/**`, `**/__pycache__/**`, `**/.pytest_cache/**`,
    `**/.ruff_cache/**`, and `**/*.egg-info/**`;

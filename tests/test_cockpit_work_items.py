@@ -38,7 +38,6 @@ from owlbear_delivery.change_workspace import (
 )
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
-    LegacyCompletedChangeRecord,
     ReceiptCompletedChangeRecord,
 )
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
@@ -527,18 +526,25 @@ class _DeliveryApplicationFake:
     def _completed_history() -> CompletedChangePage:
         return CompletedChangePage(
             records=(
-                LegacyCompletedChangeRecord(
+                ReceiptCompletedChangeRecord(
                     change_id="change-a",
                     completion_id="b" * 64,
-                    title="Legacy completion",
-                    semantic_summary="A migrated completion package.",
-                    outcome_titles=("Migrate the completion package",),
-                    outcome_promises=("Make historical completion evidence available.",),
-                    completion_path=".owlbear/legacy/completed/change-a",
-                    historical_completion_locator=".owlbear/completed/change-a",
-                    package_id="c" * 64,
-                    introducing_target_commit="d" * 40,
-                    source_target_commit="e" * 40,
+                    title="Receipt completion",
+                    semantic_summary="A merged pull request completion receipt.",
+                    outcome_titles=("Accept the merged Change",),
+                    outcome_promises=("Record the accepted Delivery result.",),
+                    finalization_receipt_id="c" * 64,
+                    finalized_change_head="d" * 40,
+                    repository_identity="owlbear/example",
+                    pull_request_identity=CompletionPullRequestIdentity(number=41, node_id="PR_example_41"),
+                    accepted_target_ref="main",
+                    accepted_merge_commit="e" * 40,
+                    merged_at=datetime(2026, 8, 11, 11, tzinfo=UTC),
+                    acceptance_observation_id="f" * 64,
+                    check_observation_ids=("0" * 64,),
+                    review_receipt_ids=("1" * 64,),
+                    acceptance_evidence_digest="2" * 64,
+                    completed_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
                 ),
                 ReceiptCompletedChangeRecord(
                     change_id="change-b",
@@ -573,7 +579,7 @@ class _DeliveryApplicationFake:
         self.calls.append(("completed-search", args))
         return self._completed_history()
 
-    def show_completed_change(self, *args: object) -> LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord:
+    def show_completed_change(self, *args: object) -> ReceiptCompletedChangeRecord:
         self.calls.append(("completed-show", args))
         records = self._completed_history().records
         return records[1] if args[1] == "1" * 64 else records[0]
@@ -1545,14 +1551,12 @@ def test_completed_history_routes_publish_versioned_discriminated_schema() -> No
 
     record_schema = components["CompletedChangeRecord"]
     assert record_schema["oneOf"] == [
-        {"$ref": "#/components/schemas/LegacyCompletedChangeRecord"},
         {"$ref": "#/components/schemas/ReceiptCompletedChangeRecord"},
         {"$ref": "#/components/schemas/AbandonedChangeRecord"},
     ]
     assert record_schema["discriminator"] == {
         "propertyName": "record_kind",
         "mapping": {
-            "legacy-package": "#/components/schemas/LegacyCompletedChangeRecord",
             "completion-receipt": "#/components/schemas/ReceiptCompletedChangeRecord",
             "abandoned-change": "#/components/schemas/AbandonedChangeRecord",
         },

@@ -504,15 +504,6 @@ interface CompletedChangeRecordBase {
   outcome_promises?: string[] | null
 }
 
-export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase {
-  record_kind: 'legacy-package'
-  completion_path: string
-  historical_completion_locator: string
-  package_id: string
-  introducing_target_commit: string
-  source_target_commit: string
-}
-
 export interface CompletionPullRequestIdentity {
   number: number
   node_id: string
@@ -552,7 +543,7 @@ export interface AbandonedChangeRecord {
   target_sync_conflict_operation_id: string | null
 }
 
-export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord
+export type CompletedChangeRecord = ReceiptCompletedChangeRecord | AbandonedChangeRecord
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[]

@@ -6,8 +6,6 @@ not the portable source tree copied into a consumer project.
 
 ## What lives here
 
-> **TODO:** cleanup — perform the deliberate destructive runtime reset once no active Changes remain on the board [#destructive-runtime-reset]
-
 | Area | Role |
 | --- | --- |
 | `delivery/` | Change configuration and Delivery authority; admitted package snapshots and sparse state checkpoints are remote-backed, while runtime capacity, worktrees, and locks are host-local or ignored |
@@ -19,7 +17,7 @@ not the portable source tree copied into a consumer project.
 | `memory/` | Tracked agent memory entries; host-local memory databases are ignored |
 | `knowledge/` | Local Knowledge database and placeholders; databases and vectors are ignored |
 | `ideas.md` | Markdown ideas notebook read by Cockpit and edited through its ideas workflow |
-| `legacy/` | Retired briefs and historical artifacts kept for provenance, not active authority |
+| `legacy/` | Removed from the current workspace; historical artifacts remain recoverable through Git history |
 | `scratch/` | Temporary investigation output; it is ignored and should be cleaned up after use |
 | `*-index.md` | Generated navigation indexes; regenerate them from the repository root with `uv run indexes` |
 

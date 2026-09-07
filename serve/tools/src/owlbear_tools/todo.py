@@ -31,11 +31,9 @@ _SKIP_DIRS = frozenset(
 )
 _EXCLUDED_RELATIVE_DIRS = frozenset(
     {
-        ".owlbear/completed",
         ".owlbear/delivery/packages",
         ".owlbear/delivery/runtime",
         ".owlbear/kanban/archive",
-        ".owlbear/legacy",
         ".owlbear/memory",
         ".owlbear/research",
         ".owlbear/sources",

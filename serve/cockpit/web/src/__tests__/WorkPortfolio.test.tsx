@@ -234,14 +234,21 @@ function publicationCardForChecks(overrides: Partial<WorkItemCardView> = {}): Wo
 
 const completed: CompletedChangeRecord = {
   schema_version: 2,
-  record_kind: 'legacy-package',
+  record_kind: 'completion-receipt',
   change_id: 'change-alpha',
   completion_id: 'b'.repeat(64),
-  completion_path: '.owlbear/legacy/completed/change-alpha',
-  historical_completion_locator: '.owlbear/completed/change-alpha',
-  package_id: 'c'.repeat(64),
-  introducing_target_commit: 'd'.repeat(40),
-  source_target_commit: 'e'.repeat(40),
+  finalization_receipt_id: 'c'.repeat(64),
+  finalized_change_head: 'd'.repeat(40),
+  repository_identity: 'owlbear/example',
+  pull_request_identity: { number: 41, node_id: 'PR_example_41' },
+  accepted_target_ref: 'main',
+  accepted_merge_commit: 'e'.repeat(40),
+  merged_at: '2026-08-11T12:00:00Z',
+  acceptance_observation_id: 'f'.repeat(64),
+  check_observation_ids: ['0'.repeat(64)],
+  review_receipt_ids: ['1'.repeat(64)],
+  acceptance_evidence_digest: '2'.repeat(64),
+  completed_at: '2026-08-11T13:00:00Z',
   title: 'Portfolio redesign',
   semantic_summary: 'Shipped the grouped Delivery workspace.',
   outcome_titles: ['Ship the grouped Delivery workspace'],
@@ -3322,7 +3329,7 @@ it('closes live detail before entering completed history', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Change history', exact: true })).toHaveFocus())
 })
 
-it('presents legacy completion package provenance explicitly', async () => {
+it('presents receipt-backed completion evidence explicitly', async () => {
   renderPage()
   fireEvent.click(screen.getByText('Change history'))
   const record = await screen.findByTestId('completed-change-record')
@@ -3335,10 +3342,9 @@ it('presents legacy completion package provenance explicitly', async () => {
   expect(detailView).toHaveTextContent('Give operators a clear view of grouped Delivery work.')
   expect(detailView).toHaveTextContent('Delivered outcomes')
   expect(detailView).toHaveTextContent('Ship the grouped Delivery workspace')
-  expect(detailView).toHaveTextContent('Historical delivery')
-  expect(detailView).toHaveTextContent('Legacy package')
-  expect(detailView).toHaveTextContent('.owlbear/legacy/completed/change-alpha')
-  expect(detailView).toHaveTextContent('.owlbear/completed/change-alpha')
+  expect(detailView).toHaveTextContent('Accepted delivery')
+  expect(detailView).toHaveTextContent('Completion receipt')
+  expect(detailView).toHaveTextContent('owlbear/example')
 })
 
 it('refreshes current delivery immediately after returning from completed history', async () => {
@@ -3542,7 +3548,7 @@ it('retries failed completed history detail in place', async () => {
   fireEvent.click(within(alert).getByText('Retry completion detail', { exact: true }))
 
   await screen.findByTestId('completed-change-detail')
-  expect(screen.getByTestId('completed-change-detail')).toHaveTextContent('Historical delivery')
+  expect(screen.getByTestId('completed-change-detail')).toHaveTextContent('Accepted delivery')
   expect(requests.filter(({ url, method }) => method === 'GET' && url.includes('/api/work-items/completed/change-alpha?')).length).toBe(2)
 })
 
@@ -3618,7 +3624,7 @@ it('keeps a deep-linked completion open while the initial history list fails', a
   renderPage(`/delivery/history/${completed.change_id}/${completed.completion_id}`)
 
   const detailView = await screen.findByTestId('completed-change-detail')
-  expect(detailView).toHaveTextContent('Historical delivery')
+  expect(detailView).toHaveTextContent('Accepted delivery')
   const alert = await screen.findByRole('alert')
   expect(alert).toHaveTextContent('Change history is unavailable.')
 
@@ -3642,7 +3648,7 @@ it('rejects a completion detail response with the wrong identity', async () => {
   completedDetailMismatch = null
   fireEvent.click(within(alert).getByText('Retry completion detail', { exact: true }))
   const detailView = await screen.findByTestId('completed-change-detail')
-  expect(detailView).toHaveTextContent('Historical delivery')
+  expect(detailView).toHaveTextContent('Accepted delivery')
 })
 
 it('retries a failed completed history page without resetting loaded records', async () => {

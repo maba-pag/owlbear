@@ -41,10 +41,6 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debouncedValue
 }
 
-function isReceipt(record: CompletedChangeRecord): record is ReceiptCompletedChangeRecord {
-  return record.record_kind === 'completion-receipt'
-}
-
 function isAbandoned(record: CompletedChangeRecord): record is AbandonedChangeRecord {
   return record.record_kind === 'abandoned-change'
 }
@@ -130,7 +126,7 @@ function CompletedRecord({
       </div>
       <div className="relative z-[1] min-w-0">
         <p className="max-w-[70ch] text-sm leading-relaxed">{record.semantic_summary}</p>
-        {isReceipt(record) ? (
+        {!isAbandoned(record) ? (
           <div className="mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs text-xs text-contrast-medium">
             <PullRequestLink record={record} />
             <CopyValue label="accepted merge commit" value={record.accepted_merge_commit} truncate />
@@ -198,9 +194,9 @@ function CompletedDetail({
         </ul>
       </section>
       <PTag compact className="mt-static-md">
-        {record.record_kind === 'completion-receipt' ? 'Completion receipt' : record.record_kind === 'abandoned-change' ? 'Abandonment record' : 'Legacy package'}
+        {record.record_kind === 'completion-receipt' ? 'Completion receipt' : 'Abandonment record'}
       </PTag>
-      {isReceipt(record) ? (
+      {!abandoned ? (
         <section className="mt-static-lg grid gap-static-xs">
           <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Accepted delivery</h4>
           <dl className="grid gap-static-sm text-sm">
@@ -253,7 +249,7 @@ function CompletedDetail({
               <dt className="font-semibold">Abandonment ID</dt>
               <dd><CopyValue label="abandonment ID" value={record.abandonment_id} /></dd>
             </div>
-          ) : isReceipt(record) ? (
+          ) : !abandoned ? (
             <>
               <div>
                 <dt className="font-semibold">Completion</dt>
@@ -268,34 +264,7 @@ function CompletedDetail({
                 <dd><CopyValue label="accepted merge commit" value={record.accepted_merge_commit} /></dd>
               </div>
             </>
-          ) : (
-            <>
-              <div>
-                <dt className="font-semibold">Completion</dt>
-                <dd><CopyValue label="completion ID" value={record.completion_id} /></dd>
-              </div>
-              <div>
-                <dt className="font-semibold">Package path</dt>
-                <dd className="break-all font-mono text-xs text-contrast-medium">{record.completion_path}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold">Package ID</dt>
-                <dd><CopyValue label="package ID" value={record.package_id} /></dd>
-              </div>
-              <div>
-                <dt className="font-semibold">Introducing target commit</dt>
-                <dd><CopyValue label="introducing target commit" value={record.introducing_target_commit} /></dd>
-              </div>
-              <div>
-                <dt className="font-semibold">Source target commit</dt>
-                <dd><CopyValue label="source target commit" value={record.source_target_commit} /></dd>
-              </div>
-              <div>
-                <dt className="font-semibold">Historical locator</dt>
-                <dd className="break-all font-mono text-xs text-contrast-medium">{record.historical_completion_locator}</dd>
-              </div>
-            </>
-          )}
+          ) : null}
         </dl>
       </details>
       {abandoned && record.cleanup_available ? (

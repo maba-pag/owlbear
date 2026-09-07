@@ -1,12 +1,10 @@
 {
   "ignores": [
-    ".owlbear/completed/**",
     ".owlbear/doc-index.md",
     ".owlbear/delivery/packages/**",
     ".owlbear/delivery/runtime/**",
     ".owlbear/hooks/**",
     ".owlbear/py-index.md",
-    ".owlbear/legacy/**",
     ".owlbear/memory/**",
     ".owlbear/research/**",
     ".owlbear/ts-index.md",

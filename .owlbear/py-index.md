@@ -45,15 +45,17 @@ Validate the checked-in Node runtime against the Cockpit lower bound.
 
 ## .github/scripts/check_ruff_toolchain.py
 
-Verify exact Ruff version parity across repository tooling and MegaLinter.
+Verify exact Ruff version parity across repository tooling and MegaLinter declarations.
 
 ### Imports
 
 - `__future__`
 - `argparse`
+- `json`
 - `owlbear_tools.megalinter`
 - `pathlib`
 - `re`
+- `shutil`
 - `subprocess`
 - `tomllib`
 - `typing`
@@ -69,8 +71,10 @@ Verify exact Ruff version parity across repository tooling and MegaLinter.
 - `def _read_standalone_ruff_version(root: Path) -> str`
 - `def _read_pre_commit_ruff_version(root: Path) -> str`
 - `def _read_megalinter_action_version(root: Path) -> tuple[str, str]`
+- `def _fetch_megalinter_versions(url: str) -> object`
+- `def _read_megalinter_declared_ruff_version(version: str, *, json_loader: Callable[[str], object] | None = None) -> str`
 - `def _read_ruff_command_version(command: list[str], source: str) -> str`
-- `def check_ruff_toolchain(root: Path, *, ruff_executable: str = 'ruff', docker_executable: str = 'docker') -> None`
+- `def check_ruff_toolchain(root: Path, *, ruff_executable: str = 'ruff', megalinter_versions_loader: Callable[[str], object] | None = None) -> None`
 - `def main() -> int`
 
 ## .github/scripts/check_uv_version.py
@@ -440,6 +444,86 @@ Validate OwlBear skill directories against the Agent Skills Spec.
 - `def validate_skill(skill_dir: Path) -> list[str]`
 - `def main(argv: list[str] | None = None) -> int`
 
+## .owlbear/scripts/diagrams/render.py
+
+Validate an Archify architecture source and write a standalone SVG artifact.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `json`
+- `os`
+- `pathlib`
+- `re`
+- `shutil`
+- `subprocess`
+- `sync`
+- `sys`
+- `tempfile`
+- `typing`
+- `xml.etree.ElementTree`
+
+### Interfaces
+
+- `class RenderError(RuntimeError)`
+- `def _fail(message: str, cause: BaseException | None = None) -> None`
+- `def _extract_tag(content: str, tag: str) -> str`
+- `def _consume_css_lexeme(css: str, index: int, quote: str | None, *, comment: bool) -> tuple[int, str | None, bool, bool]`
+- `def _top_level_css_rules(css: str) -> list[tuple[str, str]]`
+- `def _extract_svg_css(css: str) -> str`
+- `def _validate_svg_css_coverage(svg: str, css: str) -> None`
+- `def _replace_attribute(opening: str, name: str, value: str) -> str`
+- `def _standalone_svg(html: str, theme: str) -> str`
+- `def _run_node(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]`
+- `def _archify_cli(archify_root: Path) -> Path`
+- `def _validate(cli: Path, archify_root: Path, source: Path, quality: str) -> None`
+- `def render_diagram(source: Path, output: Path, *, theme: str = 'light', quality: str = 'showcase', offline: bool = False) -> None`
+- `def _parse_args(argv: list[str]) -> argparse.Namespace`
+- `def main(argv: list[str] | None = None) -> int`
+
+## .owlbear/scripts/diagrams/sync.py
+
+Synchronize the pinned Archify release into the local development cache.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `hashlib`
+- `json`
+- `pathlib`
+- `re`
+- `shutil`
+- `stat`
+- `sys`
+- `tempfile`
+- `typing`
+- `urllib.error`
+- `urllib.request`
+- `zipfile`
+
+### Interfaces
+
+- `class SyncError(RuntimeError)`
+- `def _fail(message: str, cause: BaseException | None = None) -> NoReturn`
+- `def _read_lock(path: Path) -> dict[str, str]`
+- `def _release_url(version: str) -> str`
+- `def _open_url(request: urllib.request.Request) -> BinaryIO`
+- `def _download(url: str, destination: Path) -> None`
+- `def _sha256(path: Path) -> str`
+- `def _validated_member_path(name: str) -> tuple[str, ...]`
+- `def _extract_archive(archive: Path, destination: Path) -> None`
+- `def _cache_directory(lock: dict[str, str], cache_root: Path) -> Path`
+- `def _cache_is_valid(lock: dict[str, str], cache_root: Path) -> bool`
+- `def _write_marker(directory: Path, lock: dict[str, str]) -> None`
+- `def _install_archive(archive: Path, lock: dict[str, str], cache_root: Path) -> Path`
+- `def ensure_archify(lock_path: Path = LOCK_PATH, cache_root: Path = CACHE_ROOT, *, offline: bool = False) -> Path`
+- `def _write_lock(path: Path, lock: dict[str, str]) -> None`
+- `def update_pin(version: str, lock_path: Path = LOCK_PATH, cache_root: Path = CACHE_ROOT) -> Path`
+- `def _parse_args(argv: list[str]) -> argparse.Namespace`
+- `def main(argv: list[str] | None = None) -> int`
+
 ## .owlbear/scripts/skills_ref/__init__.py
 
 skills_ref — SKILL.md frontmatter parser and validator for OwlBear skills.
@@ -633,32 +717,12 @@ Shared error types for the owlbear_browser package.
 
 ## serve/browser/src/owlbear_browser/cleaner.py
 
-HTML noise stripper and markdown converter for owlbear_browser.
+Compatibility exports for the shared HTML cleaner.
 
 ### Imports
 
 - `__future__`
-- `lxml`
-- `re`
-- `typing`
-
-### Interfaces
-
-- `def _remove_noise_tags(doc: HtmlElement, tags: frozenset[str]) -> None`
-- `def _remove_cookie_elements(doc: HtmlElement) -> None`
-- `def strip_noise(html_str: str) -> str`
-- `def _inner(el: HtmlElement) -> str`
-- `def _table_to_md(table: HtmlElement) -> str`
-- `def _heading_md(el: HtmlElement, tail: str) -> str`
-- `def _p_md(el: HtmlElement, tail: str) -> str`
-- `def _ul_md(el: HtmlElement, tail: str) -> str`
-- `def _ol_md(el: HtmlElement, tail: str) -> str`
-- `def _a_md(el: HtmlElement, tail: str) -> str`
-- `def _table_md_dispatch(el: HtmlElement, tail: str) -> str`
-- `def _elem_to_md(el: HtmlElement) -> str`
-- `def html_to_markdown(html_str: str) -> str`
-- `def _normalize_content(text: str) -> str`
-- `def clean(html_str: str) -> str`
+- `owlbear_web_content.cleaner`
 
 ## serve/browser/src/owlbear_browser/contract.py
 
@@ -690,24 +754,18 @@ Typed, side-effect-free browser acquisition contract and content helpers.
 - `def normalize_markdown(markdown: str) -> str`
 - `def content_hash(markdown: str) -> str`
 - `def normalize_links(links: list[str] | tuple[str, ...], base_url: str) -> tuple[str, ...]`
+- `def redact_url(value: str) -> str`
 - `def redact_diagnostics(value: Any) -> Any`
-- `def _redact_url_query(value: str) -> str`
 - `def _sanitize_diagnostic_html(value: str) -> str`
 
 ## serve/browser/src/owlbear_browser/extractor.py
 
-HTML content extractor for owlbear_browser.
+Compatibility exports for the shared HTML content extractor.
 
 ### Imports
 
 - `__future__`
-- `owlbear_browser.cleaner`
-- `trafilatura`
-
-### Interfaces
-
-- `def extract(html: str) -> str`
-- `def extract_content(html: str, url: str | None = None) -> str`
+- `owlbear_web_content.extractor`
 
 ## serve/browser/src/owlbear_browser/fetcher.py
 
@@ -750,6 +808,7 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 
 ### Interfaces
 
+- `def _prefer_cleanup_error(current: BaseException | None, candidate: BaseException) -> BaseException`
 - `class AuthenticationCapabilities`
 - `def find_sso_extension() -> Path`
 - `def build_playwright_args(sso_ext_path: Path) -> list[str]`
@@ -795,6 +854,7 @@ Domain allowlist for browser MCP navigation.
 - `class DomainAllowlist`
   - `def __init__(self, domains: list[str]) -> None`
   - `def check(self, url: str) -> None`
+  - `def allows_exact_hostname(self, hostname: str) -> bool`
 
 ## serve/browser-mcp/src/owlbear_browser_mcp/server.py
 
@@ -807,6 +867,7 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `contextlib`
 - `dataclasses`
 - `ipaddress`
+- `logging`
 - `mcp.server`
 - `mcp.server.mcpserver`
 - `mcp.server.mcpserver.exceptions`
@@ -825,11 +886,16 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 ### Interfaces
 
 - `def _is_blocked_ip(ip_str: str) -> bool`
-- `async def _check_ssrf(url: str) -> None`
+- `def _is_ip_literal(value: str) -> bool`
+- `def _is_trusted_internal_ip(ip_str: str) -> bool`
+- `async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> None`
 - `class AppContext`
+- `def _safe_browser_diagnostic(stage: str, error: BaseException) -> str`
+- `async def _close_browser_resources(page: Any, launcher: PlaywrightLauncher | None) -> tuple[str, ...]`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
+- `def _browser_unavailable_message(app_ctx: object) -> str`
 - `def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]`
-- `async def acquire(ctx: Context, url: str, *, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
+- `async def acquire(ctx: Context, url: str, *, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000) -> dict[str, Any]`
 - `async def navigate(ctx: Context, url: str) -> str`
 - `async def click(ctx: Context, selector: str) -> str`
 - `async def type_input(ctx: Context, selector: str, text: str) -> str`
@@ -1078,6 +1144,7 @@ Memory management routes for cockpit API.
 - `class ApproveRequest(BaseModel)`
 - `class ResolveRequest(BaseModel)`
 - `class EditRequest(BaseModel)`
+  - `def _validate_scope_agents(cls, value: list[str] | None) -> list[str] | None`
 - `class DeleteRequest(BaseModel)`
 - `class DeleteResponse(BaseModel)`
 - `class PurgeRequest(BaseModel)`
@@ -1224,10 +1291,8 @@ Seed real Delivery owners and completed history for assembled Work E2E.
 - `def _write_admission(change_root: Path, contract: DeliveryContract, frontier: DeliveryFrontier, checkpoint_commit: str) -> None`
 - `def _write_current_delivery(runtime_root: Path, head: str) -> None`
 - `def _write_publication_delivery(runtime_root: Path, head: str) -> None`
-- `def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]`
-- `def _publish_completion(repository: Path, change_id: str, title: str, reviewed_head: str) -> str`
 - `def _seed_repository(repository: Path) -> str`
-- `def _write_completion_receipt(runtime_root: Path) -> None`
+- `def _write_completion_receipt(runtime_root: Path, change_id: str, title: str, pull_request_number: int) -> None`
 - `def _write_config(workspace: Path) -> None`
 - `def _write_host_config(workspace: Path) -> None`
 - `def seed_delivery(workspace: Path) -> None`
@@ -1254,10 +1319,7 @@ OwlBear target delivery authority, runtime, and cutover package.
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.publication_provider`
-- `owlbear_delivery.target_admission`
-- `owlbear_delivery.target_authority`
 - `owlbear_delivery.target_contract`
-- `owlbear_delivery.target_runtime`
 - `owlbear_delivery.work_items`
 
 ## serve/delivery/src/owlbear_delivery/acceptance.py
@@ -1301,55 +1363,6 @@ Receipt-backed completion authority for one merged Delivery Change.
   - `def display_participant(self, display: CompletionDisplayMetadata) -> TransactionParticipant`
 - `def _digest(payload: object) -> str`
 - `def _model_content(model: BaseModel) -> bytes`
-
-## serve/delivery/src/owlbear_delivery/attempts.py
-
-Immutable attempt lifecycle event contracts.
-
-### Imports
-
-- `__future__`
-- `collections.abc`
-- `contextlib`
-- `enum`
-- `errno`
-- `json`
-- `os`
-- `owlbear_delivery.identities`
-- `owlbear_delivery.runtime_transaction`
-- `pathlib`
-- `pydantic`
-- `stat`
-- `typing`
-
-### Interfaces
-
-- `class AttemptEventDiagnosticCode(StrEnum)`
-- `class AttemptDiagnosticCode(StrEnum)`
-- `class _AttemptEventModel(BaseModel)`
-- `class AttemptEvent(_AttemptEventModel)`
-- `class AttemptEventDiagnostic(_AttemptEventModel)`
-- `class AttemptEventParseResult(_AttemptEventModel)`
-  - `def model_post_init(self, __context: object, /) -> None`
-- `class AttemptDiagnostic(_AttemptEventModel)`
-- `class AttemptResult(_AttemptEventModel)`
-  - `def _require_one_outcome(self) -> AttemptResult`
-- `class AttemptConflictError(FileExistsError)`
-  - `def __init__(self, attempt_id: str, sequence: int) -> None`
-- `def _diagnostic_from_validation(exc: PydanticValidationError) -> AttemptEventDiagnosticCode`
-- `def parse_attempt_event_mapping(value: Mapping[str, object]) -> AttemptEventParseResult`
-- `def serialize_attempt_event_mapping(event: AttemptEvent) -> dict[str, object]`
-- `def _diagnostic(code: AttemptDiagnosticCode, detail: str, path: str | None = None, target: str | None = None) -> AttemptDiagnostic`
-- `def _event_location(attempt_id: str, sequence: int) -> tuple[str, str, str]`
-- `def _event_content(event: AttemptEvent) -> bytes`
-- `class AttemptStore`
-  - `def __init__(self, work_root: Path) -> None`
-  - `def _directory(self, attempt_id: str, *, create: bool) -> Iterator[int | None]`
-  - `def _read(directory_fd: int, event: AttemptEvent, filename: str, path: str) -> AttemptResult`
-  - `def create(self, event: AttemptEvent) -> AttemptResult`
-  - `def create_participant(self, event: AttemptEvent) -> TransactionParticipant`
-  - `def read(self, attempt_id: str, sequence: int) -> AttemptResult`
-  - `def list(self) -> tuple[AttemptEvent, ...]`
 
 ## serve/delivery/src/owlbear_delivery/change_publication.py
 
@@ -1515,6 +1528,7 @@ Per-change writer coordination and Git workspace management.
   - `def owns(self, coordinator: PortfolioCoordinator, change_id: str) -> bool`
 - `class ChangeCoordination(_WorkspaceModel)`
   - `def _discard_retired_publication_reservation(cls, value: object) -> object`
+  - `def _discard_stale_target_sync_receipt(cls, value: object) -> object`
   - `def _normalize_external_head_adoption_receipts(cls, value: object) -> object`
   - `def _normalize_external_head_promotion_receipts(cls, value: object) -> object`
   - `def publication_expiry(self) -> datetime | None`
@@ -1568,7 +1582,7 @@ Per-change writer coordination and Git workspace management.
   - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
   - `def prepare_finalization_boundary(self, change_id: str, exact_head: str, promoted_commits: tuple[str, ...], lock: PublicationLock) -> ReplacementTransactionParticipant | None`
   - `def snapshot_design_package(self, change_id: str, package_id: str, package_files: Mapping[str, bytes], operation_id: str) -> ChangeDesignPackageSnapshotReceipt`
-  - `def _validate_design_package_snapshot_replay(self, receipt: ChangeDesignPackageSnapshotReceipt, package_id: str, operation_id: str) -> None`
+  - `def _validate_design_package_snapshot_replay(self, receipt: ChangeDesignPackageSnapshotReceipt, package_id: str) -> None`
   - `def _commit_design_package_snapshot(self, coordination: ChangeCoordination, intent: ChangeDesignPackageSnapshotIntent, package_files: Mapping[str, bytes], branch_head: str | None) -> str`
   - `def _replay_design_package_snapshot(self, coordination: ChangeCoordination, intent: ChangeDesignPackageSnapshotIntent, package_files: Mapping[str, bytes], branch_head: str) -> str`
   - `def _package_files_match_commit(self, commit: str, relative_paths: tuple[str, ...], existing: Mapping[str, bytes | None], package_files: Mapping[str, bytes]) -> bool`
@@ -1715,7 +1729,7 @@ Background reconciliation for durable Delivery checkpoint obligations.
 
 ## serve/delivery/src/owlbear_delivery/completed_history.py
 
-Bounded Git-backed projections of completed Delivery packages.
+Bounded projections of current completed Delivery records.
 
 ### Imports
 
@@ -1729,22 +1743,15 @@ Bounded Git-backed projections of completed Delivery packages.
 - `owlbear_delivery.acceptance`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.delivery_runtime`
-- `owlbear_delivery.design_package`
-- `owlbear_delivery.git_executable`
 - `owlbear_delivery.identities`
 - `owlbear_delivery.target_contract`
 - `pydantic`
 - `re`
-- `subprocess`
 - `typing`
 
 ### Interfaces
 
 - `class _CompletedHistoryModel(BaseModel)`
-- `class _LegacyTaskResult(_CompletedHistoryModel)`
-- `class _LegacyRuntimeBinding(_CompletedHistoryModel)`
-  - `def _validate_task_results(self) -> _LegacyRuntimeBinding`
-- `class _LegacyRuntimeFrontier(_CompletedHistoryModel)`
 - `class CompletedHistoryDiagnosticCode(StrEnum)`
 - `class CompletedHistoryDiagnostic(_CompletedHistoryModel)`
 - `class CompletedHistoryError(RuntimeError)`
@@ -1753,9 +1760,7 @@ Bounded Git-backed projections of completed Delivery packages.
 - `class CompletedHistoryMalformedError(CompletedHistoryError)`
 - `class CompletedHistoryStaleError(CompletedHistoryError)`
 - `class CompletedHistoryReceiptSetAdvancedError(CompletedHistoryError)`
-- `class CompletedHistoryDigestMismatchError(CompletedHistoryError)`
 - `class _CompletedChangeRecordBase(_CompletedHistoryModel)`
-- `class LegacyCompletedChangeRecord(_CompletedChangeRecordBase)`
 - `class ReceiptCompletedChangeRecord(_CompletedChangeRecordBase)`
 - `class AbandonedChangeRecord(_CompletedHistoryModel)`
 - `class CompletedChangePage(_CompletedHistoryModel)`
@@ -1765,48 +1770,23 @@ Bounded Git-backed projections of completed Delivery packages.
 - `def _encode_cursor(cursor: _Cursor) -> str`
 - `def _query_digest(query: str) -> str`
 - `class CompletedHistoryCatalog`
-  - `def __init__(self, repository: Path, target_branch: str, legacy_source_ref: str, runtime_root: Path) -> None`
+  - `def __init__(self, runtime_root: Path) -> None`
   - `def list(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
   - `def search(self, query: str, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
   - `def show(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord`
   - `def _rebuild(self) -> _CatalogSnapshot`
-  - `def _legacy_record(self, target_commit: str, path: str) -> LegacyCompletedChangeRecord`
   - `def _receipt_record(bundle: CompletionReceiptBundle) -> ReceiptCompletedChangeRecord`
   - `def _abandoned_observations(self) -> tuple[tuple[str, DeliveryFrontier], ...]`
   - `def _abandoned_record(self, observation: tuple[str, DeliveryFrontier]) -> AbandonedChangeRecord`
   - `def _local_contract(self, change_id: str) -> DeliveryContract`
-  - `def _cleanup_state(self, change_id: str) -> tuple[bool, bool]`
+  - `def _cleanup_state(self, change_id: str) -> tuple[bool, bool, str | None, str | None]`
   - `def _search_text(record: CompletedChangeRecord) -> str`
-  - `def _snapshot(self, commit: str, path: str) -> CompletionPackageSnapshot`
-  - `def _verify_design_package(self, commit: str, path: str, snapshot: CompletionPackageSnapshot) -> DeliveryContract`
-  - `def _verify_authored_digests(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, manifest: DesignPackageManifest) -> None`
-  - `def _contract(self, commit: str, path: str, snapshot: CompletionPackageSnapshot) -> DeliveryContract`
-  - `def _verify_runtime_capture(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, contract: DeliveryContract) -> None`
-  - `def _verify_legacy_runtime_capture(self, runtime_bytes: bytes, results_bytes: bytes, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, *, cause: Exception) -> None`
-  - `def _require_legacy_capture_shape(self, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, frontier: _LegacyRuntimeFrontier, results: tuple[_LegacyTaskResult, ...]) -> None`
-  - `def _require_capture_digests(self, snapshot: CompletionPackageSnapshot, runtime_bytes: bytes, results_bytes: bytes) -> None`
-  - `def _require_capture_shape(self, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, frontier: DeliveryFrontier, results: tuple[DeliveryTaskResult, ...]) -> None`
-  - `def _introduction(self, target_commit: str, snapshot: CompletionPackageSnapshot) -> tuple[str, str]`
-  - `def _require_reviewed_ancestry(self, introducing: str, snapshot: CompletionPackageSnapshot) -> None`
-  - `def _completion_paths(self, target_commit: str) -> tuple[str, ...]`
-  - `def _completion_path(self, entry: bytes) -> str`
-  - `def _require_completion_names(self, commit: str, path: str) -> None`
-  - `def _require_snapshot_binding(self, path: str, snapshot: CompletionPackageSnapshot) -> None`
   - `def _page(self, snapshot: _CatalogSnapshot, query: str, cursor: str | None, limit: int) -> CompletedChangePage`
-  - `def _cursor_offset(self, cursor: str | None, source_commit: str, receipt_set_digest: str, query: str) -> int`
-  - `def _resolve_target(self) -> str`
-  - `def _blob(self, commit: str, path: str, name: str) -> bytes`
-  - `def _git(self, *arguments: str) -> bytes`
-  - `def _run_git(self, *arguments: str, check: bool) -> subprocess.CompletedProcess[bytes]`
+  - `def _cursor_offset(self, cursor: str | None, record_set_digest: str, query: str) -> int`
   - `def _missing(detail: str, change_id: str | None = None, completion_id: str | None = None) -> Never`
   - `def _malformed(detail: str, change_id: str | None = None, *, cause: Exception | None = None) -> Never`
-  - `def _stale(detail: str, snapshot: CompletionPackageSnapshot) -> Never`
-  - `def _digest_mismatch(detail: str, snapshot: CompletionPackageSnapshot) -> Never`
-- `def _canonical_model(model: BaseModel) -> bytes`
-- `def _receipt_set_digest(bundles: tuple[CompletionReceiptBundle, ...]) -> str`
 - `def _record_identity(record: CompletedChangeRecord) -> str`
 - `def _history_record_set_digest(records: tuple[CompletedChangeRecord, ...]) -> str`
-- `def _canonical_results(results: tuple[BaseModel, ...]) -> bytes`
 
 ## serve/delivery/src/owlbear_delivery/delivery_admission.py
 
@@ -1917,6 +1897,7 @@ Transport-free Delivery application configuration and composition.
 - `def _fetch_remote_snapshot_change_head(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, repository: Path, remote_branch: str) -> tuple[str, bool]`
 - `def _local_snapshot_change_head(snapshot: DeliveryStateSnapshot, repository: Path, *, allow_local_branch: bool, allow_local_descendant: bool) -> str | None`
 - `def _is_unpublished_acceptance_attention_successor(snapshot_frontier: DeliveryFrontier, local_frontier: DeliveryFrontier) -> bool`
+- `def _is_unpublished_target_sync_attention_successor(snapshot_frontier: DeliveryFrontier, local_frontier: DeliveryFrontier) -> bool`
 - `def _fetch_completed_snapshot_change_head(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, repository: Path) -> tuple[str, bool]`
 - `def _fetch_finalized_snapshot_change_head(snapshot: DeliveryStateSnapshot, config: DeliveryStartupConfig, repository: Path) -> tuple[str, bool]`
 - `class _DeferredRemoteStateReconciliationError(Exception)`
@@ -2087,6 +2068,7 @@ Mechanical Delivery state and worker-owned transitions.
   - `def active_claim_id(self) -> str | None`
   - `def active_task_id(self) -> str | None`
 - `class DeliveryFrontier(_DeliveryModel)`
+  - `def _discard_stale_target_sync_receipt(self) -> DeliveryFrontier`
   - `def _validate_identities(self) -> DeliveryFrontier`
   - `def _validate_lifecycle_dispositions(self) -> None`
   - `def _validate_change_disposition(self) -> None`
@@ -2334,10 +2316,6 @@ Replay-safe authored Design packages and semantic Git checkpoints.
   - `def canonical_bytes(self) -> bytes`
 - `class DesignPackageResult(_PackageModel)`
 - `class VerifiedDesignPackage(_PackageModel)`
-- `class CompletionPackageManifest(_PackageModel)`
-  - `def canonical_bytes(self) -> bytes`
-  - `def completion_id(self) -> Digest`
-- `class CompletionPackageSnapshot(_PackageModel)`
 - `class DesignCheckpointResult(_PackageModel)`
 - `class DesignPackageStore`
   - `def __init__(self, active_root: Path, repository: Path, *, failure: Callable[[str], None] | None = None, transaction_root: Path | None = None) -> None`
@@ -2382,7 +2360,6 @@ Transport-neutral classification of Delivery failures.
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.publication_provider`
 - `owlbear_delivery.runtime_transaction`
-- `owlbear_delivery.target_admission`
 
 ### Interfaces
 
@@ -2435,6 +2412,10 @@ Idempotent draft pull-request creation for published Change branches.
   - `def _validate_receipt(self) -> PublicationCheckObservationReceipt`
 - `class _PublicationPullRequestObservationPayload(_DraftPullRequestModel)`
 - `class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservationPayload)`
+  - `def _provider_evidence(self) -> dict[str, object]`
+  - `def _identity_payload(self) -> dict[str, object]`
+  - `def _legacy_provider_evidence(self) -> dict[str, object]`
+  - `def _legacy_identity_payload(self) -> dict[str, object]`
   - `def _validate_receipt(self) -> PublicationPullRequestObservationReceipt`
 - `class _PullRequestDraftStateReceipt(_DraftPullRequestModel)`
   - `def _validate_receipt(self) -> _PullRequestDraftStateReceipt`
@@ -2587,6 +2568,7 @@ Deterministic portfolio acquisition and bounded worker context.
 - `pathlib`
 - `pydantic`
 - `subprocess`
+- `threading`
 - `time`
 - `typing`
 - `uuid`
@@ -2642,6 +2624,9 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryOperatorIntegrationAttention(_ApplicationModel)`
 - `class DeliveryOperatorContext(_ApplicationModel)`
 - `class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel)`
+- `class DeliveryTargetSyncRepairReceipt(_ApplicationModel)`
+  - `def create(cls, *, operation_id: str, change_id: str, target_sync_operation_id: str, target_branch: str, target_head: str, expected_remote_head: str, repaired_head: str) -> DeliveryTargetSyncRepairReceipt`
+  - `def _validate_identity(self) -> DeliveryTargetSyncRepairReceipt`
 - `class PortfolioApplicationError(RuntimeError)`
 - `class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError)`
   - `def __init__(self, change_id: str | None, detail: str) -> None`
@@ -2651,6 +2636,7 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryCheckpointReconciliationResult(_ApplicationModel)`
 - `class DeliveryAcceptanceReconciliationStatus(StrEnum)`
 - `class DeliveryAcceptanceReconciliationOutcome(_ApplicationModel)`
+- `class _AcceptanceReconciliationCursor(_ApplicationModel)`
 - `class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel)`
   - `def create(cls, *, operation_id: str, predecessor_publication_id: str, git_supersession: ChangeBranchSupersessionReceipt, provider_supersession: DraftPullRequestSupersessionReceipt, publication_history: DeliveryChangePublicationHistory) -> DeliveryChangePublicationSupersessionReceipt`
   - `def _validate_binding(self) -> DeliveryChangePublicationSupersessionReceipt`
@@ -2692,7 +2678,8 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def cleanup_change_worktree(self, change_id: str, expected_completion_id: str | None = None) -> DeliveryChangeWorktreeCleanup`
   - `def _cleanup_change_worktree_locked(self, change_id: str, runtime: DeliveryRuntime, expected_completion_id: str | None = None) -> DeliveryChangeWorktreeCleanup`
   - `def cleanup_abandoned_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup`
-  - `def cleanup_abandoned_change_worktree_after_target_sync_discard(self, change_id: str, *, confirmed_discard: Literal[True]) -> DeliveryChangeWorktreeCleanup`
+  - `def cleanup_abandoned_change_worktree_after_target_sync_discard(self, change_id: str, *, confirmed_discard: Literal[True], expected_target_head: str, expected_operation_id: str) -> DeliveryChangeWorktreeCleanup`
+  - `def _discard_abandoned_target_sync_conflict(self, change_id: str, coordination: ChangeCoordination, expected_target_head: str, expected_operation_id: str) -> None`
   - `def cleanup_completed_change_worktree(self, change_id: str, completion_id: str) -> DeliveryChangeWorktreeCleanup`
   - `def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext`
   - `def finalize_change(self, change_id: str, request: FinalizeDeliveryChange) -> DeliveryFinalizationReceipt`
@@ -2710,6 +2697,8 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral`
   - `def resume_change(self, change_id: str) -> DeliveryChangeDeferral`
   - `def reconcile_awaiting_acceptance(self, change_ids: tuple[str, ...] | None = None, *, limit: int = _MAX_ACCEPTANCE_RECONCILIATION_CHANGES) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]`
+  - `def _select_acceptance_reconciliation_changes(self, eligible: tuple[str, ...], limit: int, *, requested: frozenset[str] | None) -> tuple[str, ...]`
+  - `def _rotate_acceptance_reconciliation_batch(eligible: tuple[str, ...], limit: int, cursor: str | None, *, requested: frozenset[str] | None) -> tuple[tuple[str, ...], str]`
   - `def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool`
   - `def _reconcile_awaiting_acceptance_change(self, change_id: str) -> DeliveryAcceptanceReconciliationOutcome`
   - `def _reconcile_awaiting_acceptance_locked(self, change_id: str, runtime: DeliveryRuntime) -> DeliveryAcceptanceReconciliationOutcome | None`
@@ -2727,13 +2716,15 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult`
   - `def reconcile_pending_checkpoints(self, *, limit: int = 8) -> tuple[DeliveryCheckpointReconciliationResult, ...]`
   - `def _reconcile_change_checkpoint(self, change_id: str, runtime: DeliveryRuntime) -> DeliveryCheckpointReconciliationResult`
+  - `def _publish_checkpoint_branch(self, change_id: str, checkpoint: DeliveryCheckpointPublicationState, head: str) -> ChangeBranchPublicationReceipt`
+  - `def _publish_target_sync_branch(self, change_id: str, runtime: DeliveryRuntime, merged_head: str) -> ChangeBranchPublicationReceipt | None`
+  - `def _acknowledge_published_target_sync_checkpoint(runtime: DeliveryRuntime, published_head: str) -> None`
   - `def _prepare_checkpoint_head(self, change_id: str, runtime: DeliveryRuntime, initial: DeliveryCheckpointPublicationState, pending: DeliveryPendingCheckpoint) -> _PreparedCheckpointHead`
   - `def read_design_session(self, change_id: str) -> VerifiedDesignPackage`
   - `def revise_design_session(self, change_id: str, expected_package_id: str, intent_bytes: bytes, design_bytes: bytes) -> VerifiedDesignPackage`
   - `def _admitted_design_revision_allowed(runtime: DeliveryRuntime) -> bool`
   - `def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult`
   - `def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult`
-  - `def validate_delivery_contract(self, change_id: str) -> DeliveryCompilationResult`
   - `def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult`
   - `def publish_delivery_plan(self, change_id: str, request: PublishDeliveryPlan) -> DeliveryPlanCandidate`
   - `def publish_delivery_result(self, change_id: str, request: PublishDeliveryResult) -> DeliveryResultCandidate`
@@ -2747,6 +2738,9 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def portfolio_read_view(self) -> PortfolioReadView`
   - `def portfolio_operating_view(self) -> PortfolioOperatingView`
   - `def delivery_health(self) -> DeliveryHealthView`
+  - `def repair_target_sync_publication(self, change_id: str, expected_remote_head: str, expected_merged_head: str, target_sync_operation_id: str, operation_id: str, *, confirmed_repair: Literal[True]) -> DeliveryTargetSyncRepairReceipt`
+  - `def _target_sync_repair_runtime(self, change_id: str, expected_remote_head: str, expected_merged_head: str, target_sync_operation_id: str) -> DeliveryRuntime`
+  - `def _clear_target_sync_reconciliation(self, change_id: str) -> None`
   - `def _delivery_health_view(self) -> DeliveryHealthView`
   - `def _portfolio_operating_view(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...], groups: tuple[ChangeGroupView, ...]) -> PortfolioOperatingView`
   - `def _change_lifecycle_status(self, change_id: str, observation: DeliveryChangeObservation | None) -> PortfolioChangeLifecycleStatus`
@@ -2766,6 +2760,8 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _worktree_cleanup_view(self, runtime: DeliveryRuntime) -> WorkItemWorktreeCleanupView | None`
   - `def _worktree_recovery_view(self, retained: RetainedChangeWorktree) -> WorkItemWorktreeRecoveryView | None`
   - `def _reconcile_runtimes(self) -> None`
+  - `def _reconcile_runtime_snapshot(self, previous_runtimes: dict[str, DeliveryRuntime], *, initial_reconciliation: bool) -> tuple[dict[str, DeliveryRuntime], dict[str, DeliveryChangeObservation], dict[str, str]]`
+  - `def _publish_reconciled_runtimes(self, previous_runtimes: dict[str, DeliveryRuntime], reconciled: dict[str, DeliveryRuntime], observations: dict[str, DeliveryChangeObservation], reconciliation_errors: dict[str, str]) -> None`
   - `def _reconcile_existing_runtime(self, runtime: DeliveryRuntime, observation: DeliveryChangeObservation, *, initial_reconciliation: bool) -> tuple[DeliveryRuntime | None, str | None]`
   - `def _retain_unadmitted_runtime(observation: DeliveryChangeObservation, *, active: bool, initial_reconciliation: bool) -> bool`
   - `def _reconcile_new_runtime(self, observation: DeliveryChangeObservation) -> tuple[DeliveryRuntime | None, str | None]`
@@ -2776,6 +2772,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _capture_portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]`
   - `def _execution_occupancy(self) -> int`
   - `def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot`
+  - `def _publication_observation(self, change_id: str, frontier: DeliveryFrontier) -> PublicationPullRequestObservationReceipt | None`
   - `def _retained_change_worktree_view(self, retained: RetainedChangeWorktree) -> DeliveryRetainedChangeWorktree`
   - `def _retained_cleanup_block_reason(self, retained: RetainedChangeWorktree, runtime: DeliveryRuntime | None, lifecycle: DeliveryChangeStage | None, completion: CompletionReceipt | None, *, completion_state_inconsistent: bool) -> DeliveryRetainedWorktreeCleanupBlockReason | None`
   - `def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage`
@@ -2970,83 +2967,6 @@ Crash-safe atomic text write utility.
 - `def locked_roots(roots: Sequence[Path], *, blocking: bool = True) -> Iterator[None]`
 - `def atomic_write(target: Path, content: str) -> None`
 
-## serve/delivery/src/owlbear_delivery/target_admission.py
-
-Transactional admission of target semantic authority and initial plan work.
-
-### Imports
-
-- `__future__`
-- `hashlib`
-- `json`
-- `owlbear_delivery.runtime_transaction`
-- `owlbear_delivery.target_authority`
-- `owlbear_delivery.target_runtime`
-- `pathlib`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class TargetAdmissionError(RuntimeError)`
-- `class TargetAdmissionValidationError(TargetAdmissionError)`
-- `class TargetAdmissionConflictError(TargetAdmissionError)`
-- `class TargetAdmissionReferenceError(TargetAdmissionError)`
-- `class _AdmissionModel(BaseModel)`
-- `class TargetChallengeEntry(_AdmissionModel)`
-- `class TargetAdmissionCandidate(_AdmissionModel)`
-- `class TargetAdmissionRequest(_AdmissionModel)`
-- `class TargetAdmissionAssessment(_AdmissionModel)`
-- `class TargetAdmissionReceipt(_AdmissionModel)`
-  - `def validate_receipt_id(self) -> TargetAdmissionReceipt`
-- `class TargetAdmissionResult(_AdmissionModel)`
-- `class TargetAuthorityRegistry`
-  - `def __init__(self, target_root: Path) -> None`
-  - `def list_authorities(self) -> tuple[TargetAuthority, ...]`
-  - `def show_authority(self, change_id: str) -> TargetAuthority`
-  - `def validate(self, candidate: TargetAdmissionCandidate) -> TargetAdmissionAssessment`
-  - `def admit(self, request: TargetAdmissionRequest) -> TargetAdmissionResult`
-  - `def _publication_participants(self, relative_root: Path, content: tuple[bytes, bytes, bytes]) -> tuple[tuple[TransactionParticipant | ReplacementTransactionParticipant, ...], bool]`
-  - `def _revision_participants(self, relative_paths: tuple[Path, Path, Path], current: tuple[bytes | None, bytes | None, bytes | None], replacements: tuple[bytes, bytes, bytes]) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]`
-  - `def _read_authority(self, change_root: Path) -> TargetAuthority`
-- `def _initial_jobs(authority: TargetAuthority, digest: str, created_at: str) -> tuple[TargetJob, ...]`
-- `def _receipt(request: TargetAdmissionRequest, assessment: TargetAdmissionAssessment) -> TargetAdmissionReceipt`
-- `def _authority_digest(authority: TargetAuthority) -> str`
-- `def _canonical_json(payload: object) -> bytes`
-- `def _model_content(model: BaseModel) -> bytes`
-
-## serve/delivery/src/owlbear_delivery/target_authority.py
-
-Semantic authority for the target delivery runtime.
-
-### Imports
-
-- `__future__`
-- `enum`
-- `owlbear_delivery.identities`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class CommitmentClass(StrEnum)`
-- `class AuthorityStatus(StrEnum)`
-- `class PlanScopeKind(StrEnum)`
-- `class _AuthorityModel(BaseModel)`
-- `class Commitment(_AuthorityModel)`
-  - `def _validate_supersession(self) -> Commitment`
-- `class Outcome(_AuthorityModel)`
-  - `def _validate_supersession(self) -> Outcome`
-- `class TaskPlanScope(_AuthorityModel)`
-- `class DesignReentryBriefing(_AuthorityModel)`
-- `class SemanticUpdate(_AuthorityModel)`
-- `class CompletionSummary(_AuthorityModel)`
-- `class TargetAuthority(_AuthorityModel)`
-  - `def _validate_references(self) -> TargetAuthority`
-- `def _unique(items: tuple[BaseModel, ...], field: str, label: str) -> set[str]`
-- `def _require_references(references: tuple[str, ...], available: set[str], label: str) -> None`
-- `def _require_work_item(work_item_id: str, available: set[str]) -> None`
-
 ## serve/delivery/src/owlbear_delivery/target_contract.py
 
 Deterministic schema-v2 Delivery Contract compilation.
@@ -3099,120 +3019,6 @@ Deterministic schema-v2 Delivery Contract compilation.
 - `def _canonical_json(contract: DeliveryContract) -> bytes`
 - `def _digest(content: bytes) -> str`
 
-## serve/delivery/src/owlbear_delivery/target_runtime.py
-
-Dormant target execution contracts and runtime kernel.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `enum`
-- `hashlib`
-- `json`
-- `owlbear_delivery.attempts`
-- `owlbear_delivery.identities`
-- `owlbear_delivery.runtime_transaction`
-- `owlbear_delivery.target_authority`
-- `pathlib`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class TargetJobState(StrEnum)`
-- `class ReturnLevel(StrEnum)`
-- `class ReviewDisposition(StrEnum)`
-- `class _TargetModel(BaseModel)`
-- `class TargetJob(_TargetModel)`
-  - `def _validate_kind_and_state(self) -> TargetJob`
-- `class StartTargetJobRequest(_TargetModel)`
-- `class TargetTask(_TargetModel)`
-  - `def _validate_reviewed_receipt(self) -> TargetTask`
-- `class FinishTargetJobRequest(_TargetModel)`
-  - `def _validate_receipt_identity(self) -> FinishTargetJobRequest`
-- `class RecoverInterruptedTaskRequest(_TargetModel)`
-- `class RespondToReviewRequest(_TargetModel)`
-- `class ArbitrateTargetAttemptRequest(_TargetModel)`
-  - `def _validate_receipt_identity(self) -> ArbitrateTargetAttemptRequest`
-- `class TargetReview(_TargetModel)`
-- `class TargetEvidenceResponse(_TargetModel)`
-- `class TargetArbiterDecision(_TargetModel)`
-- `class TargetAttemptState(StrEnum)`
-- `class TargetAttempt(_TargetModel)`
-- `class TargetRequestStatus(StrEnum)`
-- `class TargetRequest(_TargetModel)`
-  - `def _validate_resolution(self) -> TargetRequest`
-- `class TargetReceipt(_TargetModel)`
-- `class StartedTargetJob(_TargetModel)`
-- `class FinishedTargetJob(_TargetModel)`
-- `class _ClosingEvidence(_TargetModel)`
-- `class _AttemptEventContext(_TargetModel)`
-- `class TargetRuntimeState(_TargetModel)`
-  - `def _validate_identities(self) -> TargetRuntimeState`
-- `class TargetRuntimeConflictError(RuntimeError)`
-- `class TargetRuntimeReferenceError(ValueError)`
-- `class TargetRecoveryError(RuntimeError)`
-- `class _TargetRuntimeStore`
-  - `def __init__(self, work_root: Path) -> None`
-  - `def initialize(self, state: TargetRuntimeState) -> None`
-  - `def read(self) -> tuple[TargetRuntimeState, bytes]`
-  - `def replace(self, previous: bytes, state: TargetRuntimeState, *, receipt: TargetReceipt | None = None, attempt_events: tuple[AttemptEvent, ...] = ()) -> None`
-  - `def _commit(self, transaction_id: str, participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]) -> None`
-- `class TargetRuntime`
-  - `def __init__(self, authority: TargetAuthority, work_root: Path) -> None`
-  - `def authority_digest(self) -> str`
-  - `def materialize(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...] = ()) -> None`
-  - `def show_job(self, job_id: int) -> TargetJob`
-  - `def show_attempt(self, attempt_id: str) -> TargetAttempt`
-  - `def show_receipt(self, receipt_id: str) -> TargetReceipt`
-  - `def list_attempts(self, work_item_id: str | None = None) -> tuple[TargetAttempt, ...]`
-  - `def list_requests(self, work_item_id: str | None = None) -> tuple[TargetRequest, ...]`
-  - `def list_receipts(self, work_item_id: str | None = None) -> tuple[TargetReceipt, ...]`
-  - `def list_frontier(self) -> tuple[TargetJob, ...]`
-  - `def create_request(self, request: TargetRequest) -> TargetRequest`
-  - `def resolve_request(self, request_id: str, resolved_at: str) -> TargetRequest`
-  - `def start_job(self, request: StartTargetJobRequest) -> StartedTargetJob`
-  - `def finish_job(self, request: FinishTargetJobRequest) -> FinishedTargetJob`
-  - `def respond_to_review(self, request: RespondToReviewRequest) -> TargetAttempt`
-  - `def arbitrate(self, request: ArbitrateTargetAttemptRequest) -> FinishedTargetJob`
-  - `def recover_expired_claims(self, recovered_at: str) -> tuple[TargetJob, ...]`
-  - `def recover_interrupted_task(self, request: RecoverInterruptedTaskRequest, *, process_is_alive: Callable[[str], bool]) -> TargetJob`
-  - `def _validate_materialization(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...]) -> None`
-  - `def _validate_request(self, request: TargetRequest, state: TargetRuntimeState) -> None`
-  - `def _validate_start_identity(self, state: TargetRuntimeState, job: TargetJob, request: StartTargetJobRequest) -> None`
-  - `def _validate_review(self, state: TargetRuntimeState, attempt: TargetAttempt, request: FinishTargetJobRequest) -> None`
-  - `def _validate_planned_tasks(self, state: TargetRuntimeState, job: TargetJob, tasks: tuple[TargetTask, ...]) -> None`
-  - `def _validate_arbitration(self, attempt: TargetAttempt, request: ArbitrateTargetAttemptRequest) -> None`
-  - `def _active_attempt(self, state: TargetRuntimeState, job_id: int, attempt_id: str, claim_id: str) -> tuple[TargetJob, TargetAttempt]`
-  - `def _review_transition(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, request: FinishTargetJobRequest) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent | None]`
-  - `def _arbiter_transition(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, request: ArbitrateTargetAttemptRequest) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent]`
-  - `def _close_attempt(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, closing: _ClosingEvidence) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent]`
-  - `def _apply_return(self, state: TargetRuntimeState, job: TargetJob, closing: _ClosingEvidence) -> tuple[TargetRuntimeState, str]`
-  - `def _republish_plan(self, state: TargetRuntimeState, job: TargetJob, level: ReturnLevel, timestamp: str) -> tuple[TargetRuntimeState, str]`
-  - `def _validated_briefing(self, briefing: DesignReentryBriefing | None, job: TargetJob) -> DesignReentryBriefing`
-  - `def _publish_accepted_plan(self, state: TargetRuntimeState, job: TargetJob, receipt: TargetReceipt | None) -> TargetRuntimeState`
-  - `def _target_receipt(self, job: TargetJob, attempt: TargetAttempt, closing: _ClosingEvidence) -> TargetReceipt`
-  - `def _review_task(tasks: tuple[TargetTask, ...], job: TargetJob, receipt_id: str) -> tuple[TargetTask, ...]`
-  - `def _crash_attempt(self, state: TargetRuntimeState, attempt: TargetAttempt, timestamp: str, detail: str) -> tuple[TargetRuntimeState, TargetJob, AttemptEvent]`
-  - `def _attempt_event(self, job: TargetJob, attempt: TargetAttempt, kind: Literal['started', 'failed', 'crashed', 'succeeded'], context: _AttemptEventContext | None = None) -> AttemptEvent`
-  - `def _blocked_work_items(self, state: TargetRuntimeState) -> set[str]`
-- `def _require_unique(items: tuple[BaseModel, ...], field: str, label: str) -> None`
-- `def _find(items: tuple[ItemT, ...], field: str, identity: object, label: str) -> ItemT`
-- `def _replace(items: tuple[ItemT, ...], current: ItemT, replacement: ItemT) -> tuple[ItemT, ...]`
-- `def _rebind_predecessor(job: TargetJob, previous_job_id: int, replacement_job_id: int) -> TargetJob`
-- `def _model_identity(model: BaseModel) -> tuple[str, object]`
-- `def _timestamp(value: str) -> datetime`
-- `def _completed_job(job: TargetJob, receipt_id: str) -> TargetJob`
-- `def _restarted_job(job: TargetJob, reviewer_id: str) -> TargetJob`
-- `def _returned_job(job: TargetJob, level: ReturnLevel) -> TargetJob`
-- `def _conflict(detail: str) -> Never`
-- `def _reference(detail: str, cause: Exception | None = None) -> Never`
-- `def _recovery_failure(detail: str) -> Never`
-- `def _model_content(model: BaseModel) -> bytes`
-- `def _state_content(state: TargetRuntimeState) -> bytes`
-- `def _participant_content(participant: TransactionParticipant | ReplacementTransactionParticipant) -> bytes`
-
 ## serve/delivery/src/owlbear_delivery/work_items.py
 
 Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
@@ -3223,6 +3029,7 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
 - `enum`
 - `hashlib`
 - `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.target_contract`
 - `pydantic`
 
@@ -3242,7 +3049,7 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
 - `class WorkItemProjection(_ProjectionModel)`
 - `class WorkItemDetail(_ProjectionModel)`
 - `class DeliveryPortfolioSnapshot(_ProjectionModel)`
-  - `def capture(cls, contract: DeliveryContract, frontier_bytes: bytes) -> DeliveryPortfolioSnapshot`
+  - `def capture(cls, contract: DeliveryContract, frontier_bytes: bytes, publication_observation: PublicationPullRequestObservationReceipt | None = None) -> DeliveryPortfolioSnapshot`
   - `def _validate_bindings(self) -> DeliveryPortfolioSnapshot`
 - `class WorkItemActivity(_ProjectionModel)`
 - `class WorkItemAction(_ProjectionModel)`
@@ -3275,12 +3082,14 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
   - `def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction`
   - `def _outcome_progress(binding: OutcomeAuthorityBinding) -> WorkItemProgress`
   - `def _publication_card(self) -> WorkItemCardView`
+  - `def _awaiting_merge_state(self) -> tuple[WorkItemNeed, str | None, WorkItemNextActor, str, str, WorkItemAction]`
   - `def _draft_publication_card(self, phase: WorkItemPublicationPhase) -> WorkItemCardView`
   - `def _attention_card(self, disposition: DeliveryChangeDisposition) -> WorkItemCardView`
   - `def _head_move_attention_card(self, disposition: DeliveryChangeDisposition) -> WorkItemCardView | None`
-  - `def _prompt_attention_card(self, disposition: DeliveryChangeDisposition, label: str, *, headline: str = 'Change attention requires resolution', next_step: str = 'Use the exact attention recovery route') -> WorkItemCardView`
+  - `def _prompt_attention_card(self, disposition: DeliveryChangeDisposition, label: str, *, headline: str = 'Change attention requires resolution', next_step: str = 'Use the exact attention recovery route', command: str | None = None) -> WorkItemCardView`
   - `def _finalization_action_available(self) -> bool`
   - `def _publication_head_requires_reconciliation(self) -> bool`
+  - `def _current_publication_observation(self) -> PublicationPullRequestObservationReceipt | None`
   - `def _change_lifecycle(self) -> WorkItemChangeLifecycle`
   - `def _publication_phase(self) -> WorkItemPublicationPhase`
   - `def _publication_view(self) -> WorkItemPublicationView`
@@ -3375,7 +3184,7 @@ Fixed-operation GitHub CLI publication provider.
   - `def _check_page_identity(self, response: _CheckQueryResponse, request: ObservePublicationChecks, operation: str) -> _CheckCommitResponse`
   - `def _publication_checks(self, nodes: list[dict[str, _JsonValue] | None], head_sha: str, operation: str) -> tuple[PublicationCheck, ...]`
   - `def _timestamp(self, value: str | None, operation: str, *, retry_safe: bool = True) -> datetime | None`
-  - `def _duration(self, started_at: datetime | None, completed_at: datetime | None, operation: str) -> float | None`
+  - `def _duration(self, started_at: datetime | None, completed_at: datetime | None) -> float | None`
   - `def _read_open_pull_request(self, repository: str, number: int, operation: str) -> _PullRequestRead`
   - `def _require_open_head(self, repository: str, number: int, expected_head_sha: str, operation: str) -> _PullRequestRead`
   - `def _read_merged_evidence(self, repository: str, number: int, pull_request: _PullRequestRead, operation: str) -> _MergedEvidence`
@@ -3505,22 +3314,23 @@ Protocol models for the target delivery MCP surface.
 - `class CreateDesignSessionParams(ChangeParams)`
 - `class ReviseDesignSessionParams(CreateDesignSessionParams)`
 - `class WorkItemParams(ChangeParams)`
+- `class WorkItemViewParams(ChangeParams)`
 - `class OperatorContextParams(ChangeParams)`
 - `class ResolveRequestParams(ChangeParams)`
 - `class ClearBlockParams(ChangeParams)`
 - `class PreviewAdministrativeMoveParams(ChangeParams)`
 - `class ClaimContextParams(ChangeParams)`
 - `class RepairClaimContextParams(ChangeParams)`
-- `class AdmitDeliveryChangeParams(_TargetProtocolModel)`
 - `class PublishDeliveryPlanParams(ChangeParams)`
 - `class PublishDeliveryResultParams(ChangeParams)`
 - `class FinalizeDeliveryChangeParams(ChangeParams)`
-- `class MarkChangeReadyParams(_TargetProtocolModel)`
+- `class AdministrativeMoveParams(ChangeParams)`
 - `class SupersedePublicationParams(ChangeParams)`
 - `class TargetSyncParams(ChangeParams)`
 - `class ExternalHeadAdoptionParams(ChangeParams)`
 - `class ExternalHeadPromotionParams(ChangeParams)`
 - `class TargetSyncConflictParams(ChangeParams)`
+- `class RepairTargetSyncPublicationParams(ChangeParams)`
 - `class DeliveryPlanPublication(_TargetProtocolModel)`
   - `def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication`
 - `class RetainedChangeWorktreeResponse(_TargetProtocolModel)`
@@ -3542,10 +3352,14 @@ Protocol models for the target delivery MCP surface.
 - `class ClearedDeliveryBlockResponse(_TargetProtocolModel)`
 - `class AdministrativeMovePreviewResponse(_TargetProtocolModel)`
   - `def from_preview(cls, preview: AdministrativeDeliveryMovePreview) -> AdministrativeMovePreviewResponse`
+- `class AdministrativeMoveResponse(_TargetProtocolModel)`
+  - `def from_result(cls, result: AdministrativeDeliveryMoveResult) -> AdministrativeMoveResponse`
 - `class DeliveryPublicationSupersessionResponse(_TargetProtocolModel)`
   - `def from_receipt(cls, receipt: DeliveryChangePublicationSupersessionReceipt) -> DeliveryPublicationSupersessionResponse`
 - `class ChangeTargetSyncResponse(_TargetProtocolModel)`
   - `def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> ChangeTargetSyncResponse`
+- `class TargetSyncPublicationRepairResponse(_TargetProtocolModel)`
+  - `def from_receipt(cls, receipt: DeliveryTargetSyncRepairReceipt) -> TargetSyncPublicationRepairResponse`
 - `class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel)`
   - `def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ChangeExternalHeadAdoptionResponse`
 - `class ChangeExternalHeadPromotionResponse(_TargetProtocolModel)`
@@ -3569,14 +3383,18 @@ Strict MCPServer adapter for the Delivery portfolio application.
 - `collections.abc`
 - `contextlib`
 - `dataclasses`
+- `functools`
+- `inspect`
 - `json`
 - `mcp.server`
 - `mcp.server.mcpserver.exceptions`
 - `mcp.types`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_admission`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.diagnostics`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery_mcp.target_models`
@@ -3595,16 +3413,18 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def revise_design_session(self, request: ReviseDesignSessionRequest) -> dict[str, object]`
   - `async def publish_design_checkpoint(self, request: ChangeRequest) -> dict[str, object]`
   - `async def derive_delivery_contract(self, request: ChangeRequest) -> dict[str, object]`
-  - `async def validate_delivery_contract(self, request: ChangeRequest) -> dict[str, object]`
   - `async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]`
   - `async def list_work_items(self, request: EmptyRequest) -> list[object]`
   - `async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse`
+  - `async def repair_target_sync_publication(self, request: RepairTargetSyncPublicationRequest) -> TargetSyncPublicationRepairResponse`
   - `async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]`
   - `async def show_work_item(self, request: WorkItemRequest) -> dict[str, object]`
+  - `async def show_work_item_view(self, request: WorkItemViewRequest) -> dict[str, object]`
   - `async def show_operator_context(self, request: OperatorContextRequest) -> DeliveryOperatorContextResponse`
   - `async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse`
   - `async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse`
   - `async def preview_administrative_move(self, request: PreviewAdministrativeMoveRequest) -> AdministrativeMovePreviewResponse`
+  - `async def administrative_move(self, request: AdministrativeMoveRequest) -> AdministrativeMoveResponse`
   - `async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]`
   - `async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]`
@@ -3651,6 +3471,10 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `def _raise(code: str, detail: str, authority: str, *, retry_safe: bool) -> Never`
 - `def assemble_target_server(application: PortfolioApplication) -> MCPServer`
 - `def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None`
+- `def _install_strict_argument_model(server: MCPServer, name: str) -> None`
+- `def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]`
+- `def _parse_flat_field(annotation: object, value: object) -> object`
+- `def _json_default(value: object) -> object`
 
 ## serve/knowledge/src/owlbear_knowledge/__init__.py
 
@@ -3682,15 +3506,22 @@ SSRF preflight checks for outbound knowledge HTTP fetches.
 
 - `__future__`
 - `asyncio`
+- `collections.abc`
+- `inspect`
 - `ipaddress`
+- `owlbear_knowledge.protocols.failures`
 - `socket`
+- `typing`
 - `urllib.parse`
 
 ### Interfaces
 
 - `class SSRFProtectionError(ValueError)`
+  - `def __init__(self, failure: KnowledgeFailure) -> None`
 - `def _is_blocked_ip(ip_str: str) -> bool`
-- `async def check_url_allowed(url: str) -> None`
+- `async def system_host_resolver(hostname: str, port: int) -> list[AddressInfo]`
+- `async def _resolve_addresses(resolver: HostResolver, hostname: str, port: int) -> tuple[AddressInfo, ...]`
+- `async def check_url_allowed(url: str, *, resolver: HostResolver = system_host_resolver) -> None`
 
 ## serve/knowledge/src/owlbear_knowledge/cancellation.py
 
@@ -3785,15 +3616,24 @@ HttpxContentFetcher — unauthenticated fetch via httpx.
 ### Imports
 
 - `__future__`
+- `asyncio`
+- `dataclasses`
 - `httpx`
 - `owlbear_knowledge._ssrf`
+- `owlbear_knowledge.protocols.failures`
 - `typing`
 
 ### Interfaces
 
+- `class HttpResponse`
+- `class HttpResponseFetcher(Protocol)`
+  - `async def fetch_response(self, url: str) -> HttpResponse`
 - `class ContentFetcher(Protocol)`
   - `async def fetch(self, url: str) -> str`
-- `class HttpxContentFetcher(ContentFetcher)`
+- `def failure_for_fetch_exception(exc: Exception) -> KnowledgeFailure`
+- `class HttpxContentFetcher(ContentFetcher, HttpResponseFetcher)`
+  - `def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None, resolver: HostResolver = system_host_resolver) -> None`
+  - `async def fetch_response(self, url: str) -> HttpResponse`
   - `async def fetch(self, url: str) -> str`
 
 ## serve/knowledge/src/owlbear_knowledge/ingest_coordinator.py
@@ -3819,8 +3659,10 @@ Ingest coordinator implementation for protocol-based knowledge ingest.
   - `def __init__(self, *, sources: SourceStore, content: ContentStore, enrichment: EnrichmentStore, graph: GraphStore, fetcher: SourceFetcher | None = None) -> None`
   - `async def ingest(self, request: IngestRequest) -> IngestResult`
   - `async def delete_source(self, source_id: str, *, reason: str | None = None) -> PurgeResult`
-  - `async def _process_document(self, request: IngestRequest, document: IngestDocument) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure | None`
+  - `async def _process_document(self, request: IngestRequest, document: IngestDocument, *, scope: str) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure | None`
   - `async def refresh(self, request: RefreshRequest) -> RefreshResult`
+  - `def _fetch_failure(fetch_error: object) -> KnowledgeFailure`
+  - `def _refresh_error(source_id: str, failure: KnowledgeFailure) -> RefreshError`
   - `def stats(self) -> IngestStats`
 
 ## serve/knowledge/src/owlbear_knowledge/intake.py
@@ -3834,6 +3676,8 @@ Content intake: read files, URLs, or plain text into IntakeResult.
 - `datetime`
 - `owlbear_knowledge._paths`
 - `owlbear_knowledge.fetcher`
+- `owlbear_knowledge.protocols.failures`
+- `owlbear_web_content`
 - `pydantic`
 - `typing`
 
@@ -3841,7 +3685,7 @@ Content intake: read files, URLs, or plain text into IntakeResult.
 
 - `class IntakeResult(BaseModel)`
 - `async def read_file(path: Path, *, workspace_root: Path) -> IntakeResult`
-- `async def read_url(url: str) -> IntakeResult`
+- `async def read_url(url: str, *, fetcher: HttpResponseFetcher | None = None) -> IntakeResult`
 - `def read_text(text: str, source: str = 'inline') -> IntakeResult`
 
 ## serve/knowledge/src/owlbear_knowledge/qdrant.py
@@ -3908,20 +3752,25 @@ Source fetcher adapter implementing the SourceFetcher protocol.
 - `__future__`
 - `owlbear_knowledge`
 - `owlbear_knowledge._paths`
+- `owlbear_knowledge.fetcher`
+- `owlbear_knowledge.protocols.failures`
 - `owlbear_knowledge.protocols.fetcher`
 - `owlbear_knowledge.protocols.sources`
 - `pathlib`
 - `typing`
+- `urllib.parse`
 
 ### Interfaces
 
 - `class CompositeSourceFetcher(SourceFetcher)`
-  - `def __init__(self, *, workspace_root: Path, content_fetcher_factory: Callable[[FetchTransport], ContentFetcher]) -> None`
+  - `def __init__(self, *, workspace_root: Path, content_fetcher_factory: Callable[[FetchTransport], ContentFetcher], http_response_fetcher_factory: Callable[[], HttpResponseFetcher] = HttpxContentFetcher) -> None`
   - `async def fetch_source(self, source: ConfiguredSourceRecord, *, cancel: CancelSignal | None = None) -> FetchResult`
   - `async def _fetch_url_list(self, config: UrlListConfig, *, cancel: CancelSignal | None) -> FetchResult`
   - `async def _fetch_file_glob(self, config: FileGlobConfig, *, cancel: CancelSignal | None) -> FetchResult`
   - `async def _fetch_authenticated_web(self, source: ConfiguredSourceRecord, config: AuthenticatedWebConfig) -> FetchResult`
   - `def _cancelled(cancel: CancelSignal | None) -> bool`
+  - `def _fetch_error(uri: str, failure: KnowledgeFailure) -> FetchError`
+- `def _safe_uri(uri: str) -> str`
 
 ## serve/knowledge/src/owlbear_knowledge/protocols/__init__.py
 
@@ -3985,6 +3834,7 @@ ContentStore Protocol — Content module public surface.
 - `class ContentStats(BoundaryModel)`
 - `class ContentStore(Protocol)`
   - `async def ingest(self, request: ContentIngestRequest) -> ContentIngestResult`
+  - `def acknowledge_replacement(self, document_id: str, chunk_ids: tuple[str, ...]) -> None`
   - `def get_document(self, document_id: str) -> ContentDocument | None`
   - `def get_chunk(self, chunk_id: str) -> ContentChunk | None`
   - `def list_chunks(self, document_id: str) -> tuple[ContentChunk, ...]`
@@ -4032,7 +3882,7 @@ EnrichmentStore Protocol — Enrichment module public surface.
 
 ## serve/knowledge/src/owlbear_knowledge/protocols/failures.py
 
-Typed, redacted failure carriers for Knowledge operation boundaries.
+Typed, redacted failure carriers for the Knowledge boundaries.
 
 ### Imports
 
@@ -4056,6 +3906,7 @@ Source fetcher protocol and boundary models for source refresh.
 
 - `__future__`
 - `owlbear_knowledge.protocols.common`
+- `owlbear_knowledge.protocols.failures`
 - `pydantic`
 - `typing`
 
@@ -4263,25 +4114,29 @@ SQLite implementation of the ContentStore protocol.
 
 ### Interfaces
 
+- `def _operation_error(stage: KnowledgeFailureStage, code: KnowledgeFailureCode, *, retryable: bool, message: str) -> KnowledgeOperationError`
 - `def compute_content_hash(content: str) -> str`
 - `def _embedding_failure(*, query: bool) -> KnowledgeOperationError`
 - `class ContentStore(ContentStoreProtocol)`
   - `def __init__(self, *, db: sqlite3.Connection, vector_store: object, embedding_provider: EmbeddingProvider, chunker: TextChunker) -> None`
   - `def ensure_tables(self) -> None`
   - `async def ingest(self, request: ContentIngestRequest) -> ContentIngestResult`
+  - `def acknowledge_replacement(self, document_id: str, chunk_ids: tuple[str, ...]) -> None`
   - `def get_document(self, document_id: str) -> ContentDocument | None`
   - `def get_chunk(self, chunk_id: str) -> ContentChunk | None`
   - `def list_chunks(self, document_id: str) -> tuple[ContentChunk, ...]`
   - `async def search(self, query: ContentSearchQuery) -> tuple[ContentSearchResult, ...]`
   - `def purge_source(self, source_id: str) -> ContentPurgeResult`
   - `def stats(self) -> ContentStats`
-  - `def _document_id_for(self, request: ContentIngestRequest) -> str`
+  - `def _document_id(self, source_id: str, identity: str, scope: str) -> str`
+  - `def _identity_key(self, source_id: str, identity: str) -> str`
+  - `def _legacy_scopes_for_source(self, source_id: str) -> tuple[str, ...]`
   - `def _chunk_ids_for_document(self, document_id: str) -> tuple[str, ...]`
   - `def _existing_chunks_for_document(self, document_id: str) -> list[tuple[str, str]]`
   - `def _mark_vectors_synced(self, document_id: str) -> None`
-  - `def _set_pending_delete_chunk_ids(self, document_id: str, pending_delete_chunk_ids: tuple[str, ...]) -> None`
   - `def _load_json_str_list(self, value: str | None) -> tuple[str, ...]`
   - `def _collect_pending_vector_ids(self, rows: list[sqlite3.Row]) -> tuple[str, ...]`
+  - `def _collect_pending_cascade_ids(self, rows: list[sqlite3.Row]) -> tuple[str, ...]`
   - `def _merge_unique_ids(self, primary: tuple[str, ...], secondary: tuple[str, ...]) -> tuple[str, ...]`
   - `def _embed_for_storage(self, texts: list[str]) -> list[object]`
   - `def _embed_query(self, query_text: str) -> object`
@@ -4504,7 +4359,6 @@ MCPServer application for knowledge ingestion and search tools.
 - `._helpers`
 - `._types`
 - `__future__`
-- `asyncio`
 - `contextlib`
 - `dataclasses`
 - `datetime`
@@ -4513,6 +4367,9 @@ MCPServer application for knowledge ingestion and search tools.
 - `mcp.server.mcpserver`
 - `mcp.server.mcpserver.exceptions`
 - `mcp.types`
+- `owlbear_knowledge.chunker`
+- `owlbear_knowledge.embeddings`
+- `owlbear_knowledge.fetcher`
 - `owlbear_knowledge.ingest_coordinator`
 - `owlbear_knowledge.protocols.common`
 - `owlbear_knowledge.protocols.enrichment`
@@ -4543,16 +4400,23 @@ MCPServer application for knowledge ingestion and search tools.
 - `def _parse_protocol_relation_type(edge: dict[str, Any]) -> ProtocolRelationType`
 - `async def retry_enrichment(ctx: Context, chunk_ids: list[str] | None = None, limit: int = 100, scopes: list[str] | None = None) -> RetryEnrichmentResult`
 - `class AppContext`
+- `class KnowledgeRuntimeFactories`
+- `def build_app_context(*, workspace_root: Path, conn: sqlite3.Connection, factories: KnowledgeRuntimeFactories) -> AppContext`
 - `class RegisteredSourceResult(TypedDict)`
+- `class KnowledgeFailureResult(TypedDict)`
+- `class RefreshErrorResult(KnowledgeFailureResult)`
+- `class RefreshToolResult(TypedDict)`
+- `def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureResult`
+- `def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]`
-- `async def knowledge_search(ctx: Context, query: str, limit: int = 5, scopes: list[str] | None = None) -> list[SearchResult]`
+- `async def knowledge_search(ctx: Context, query: str, limit: int = 5, scopes: list[str] | None = None) -> list[SearchResult] | KnowledgeFailureResult`
 - `async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]`
 - `async def lookup_knowledge_entity(ctx: Context, entity_id: str | None = None, entity_name: str | None = None, entity_type: str | None = None, expand_hops: int = 1) -> dict[str, Any]`
 - `async def register_knowledge_source(ctx: Context, name: str, kind: str, fetch_method: str, config: dict[str, Any], *, scope: str = 'global', enrich: bool = False, refreshable: bool = True, priority: int = 0, metadata: dict[str, Any] | None = None) -> RegisteredSourceResult`
 - `async def knowledge_ingest(ctx: Context, text: str, metadata: dict[str, Any] | None = None, scope: str = 'global', source_url: str | None = None) -> str`
 - `async def knowledge_stats(ctx: Context) -> StatsResult`
-- `async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]`
+- `async def refresh_knowledge_source(ctx: Context, source_id: str) -> RefreshToolResult | KnowledgeFailureResult`
 - `async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]`
 
 ## serve/memory/src/owlbear_memory/__init__.py
@@ -4593,6 +4457,7 @@ Memory engine with state transitions, OCC, and mtime-based caching.
 - `class MtimeScanCache`
   - `def __init__(self, memory_dir: Path) -> None`
   - `def has_changed(self) -> bool`
+  - `def invalidate(self) -> None`
 - `class MemoryEngine`
   - `def __init__(self, memory_dir: Path | str = '.owlbear/memory') -> None`
   - `def load(self) -> list[MemoryEntry]`
@@ -4617,6 +4482,8 @@ Memory engine with state transitions, OCC, and mtime-based caching.
   - `def _remove_from_cache(self, entry_id: str) -> None`
   - `def _write_updated_entry(self, entry: MemoryEntry) -> MemoryEntry`
   - `def _write_agent_lifecycle_changes(self, originals: list[MemoryEntry], updated_entries: list[MemoryEntry], deleted_entries: list[MemoryEntry]) -> None`
+  - `def _lifecycle_recovery_status(originals: list[MemoryEntry], reloaded_entries: list[MemoryEntry], original_paths: dict[str, Path]) -> str`
+  - `def _lifecycle_recovery_entry_status(original: MemoryEntry, reloaded: MemoryEntry | None, path: Path) -> str`
   - `def _upsert_cache(self, entry: MemoryEntry) -> None`
   - `def _now_iso(self) -> str`
   - `def _parse_iso_datetime(self, value: str) -> datetime`
@@ -4628,6 +4495,8 @@ Domain exception types for memory primitives.
 ### Imports
 
 - `__future__`
+- `dataclasses`
+- `typing`
 
 ### Interfaces
 
@@ -4635,6 +4504,9 @@ Domain exception types for memory primitives.
 - `class ConcurrencyError(Exception)`
 - `class ValidationError(Exception)`
 - `class TransitionError(Exception)`
+- `class LifecycleRollbackFailure`
+- `class LifecycleRecoveryError(RuntimeError)`
+  - `def __init__(self, operation_error: Exception, rollback_errors: tuple[LifecycleRollbackFailure, ...], cache_error: Exception | None, recovery_status: str) -> None`
 
 ## serve/memory/src/owlbear_memory/models.py
 
@@ -4654,9 +4526,11 @@ Pydantic data models for memory entries.
 - `class MemoryState(enum.StrEnum)`
 - `class MemoryHealth(BaseModel)`
   - `def healthy(self) -> bool`
+- `def validate_scope_agents(value: list[str]) -> list[str]`
 - `class PurgePreview(BaseModel)`
 - `class PurgeResult(BaseModel)`
 - `class MemoryEntry(BaseModel)`
+  - `def _validate_scope_agents(cls, value: list[str]) -> list[str]`
   - `def _drop_legacy_approval_state(cls, data: object) -> object`
   - `def _validate_title_not_blank(cls, value: str) -> str`
   - `def _validate_source_agent_not_blank(cls, value: str) -> str`
@@ -4693,6 +4567,7 @@ File I/O primitives for markdown-backed memory entries.
 - `def _read_entry_bytes(raw: bytes) -> MemoryEntry`
 - `def read_entry_strict(path: Path) -> MemoryEntry`
 - `def read_entry_bytes_strict(raw: bytes) -> MemoryEntry`
+- `def _serialize_entry(entry: MemoryEntry) -> bytes`
 - `def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: Path) -> None`
 - `def delete_entry(path: Path, *, memory_dir: Path) -> None`
 
@@ -4799,6 +4674,7 @@ MCP tool implementations for markdown-backed memory entries.
 - `def _validate_scope(agents: list[str]) -> None`
 - `def _recognized_agent_names(engine: MemoryEngine) -> list[str]`
 - `def _recall_fallback(known_agents: list[str]) -> str`
+- `def _recall_block(entry: MemoryEntry) -> str`
 - `def _allowed_category_values() -> str`
 - `def _allowed_state_values() -> str`
 - `def _coerce_categories(categories: list[MemoryCategory | str] | None) -> list[MemoryCategory] | None`
@@ -4949,6 +4825,8 @@ Classify dependency-update diffs for focused CI proof.
 - `def _git_executable() -> str`
 - `def _read_revision_files(root: Path, revision: str, paths: Iterable[str]) -> dict[str, str | None]`
 - `def _collect_ruff_dependencies(value: object) -> list[str]`
+- `def _without_ruff_dependencies(value: object) -> object`
+- `def _python_dependency_values(content: str | None) -> object | None`
 - `def _ruff_dependency_values(content: str | None) -> tuple[str, ...] | None`
 - `def _ruff_lock_values(content: str | None) -> tuple[str, ...] | None`
 - `def _ruff_pre_commit_values(content: str | None) -> tuple[str, ...] | None`
@@ -4957,6 +4835,7 @@ Classify dependency-update diffs for focused CI proof.
 - `def _megalinter_action_values(content: str | None) -> tuple[str, ...]`
 - `def _changed_snapshot_value(path: str, before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None, extractor: Callable[[str | None], object]) -> bool`
 - `def _ruff_toolchain_changed(changed: set[str], before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None) -> bool`
+- `def _python_behavior_changed(changed: set[str], before_files: Mapping[str, str | None] | None, after_files: Mapping[str, str | None] | None) -> bool`
 - `class DependencyScope`
   - `def compatibility(self) -> bool`
   - `def applicable(self) -> bool`
@@ -5037,12 +4916,21 @@ Doc-index generator and parser for the OwlBear workspace.
 
 - `class LinkEntry(TypedDict)`
 - `class DocEntry(TypedDict)`
+- `class DiagramEntry(TypedDict)`
+- `class DiagramManifestError(ValueError)`
+  - `def __init__(self, manifest_path: Path, detail: str) -> None`
+- `class DiagramManifestTypeError(TypeError)`
+  - `def __init__(self, manifest_path: Path, detail: str) -> None`
 - `def _is_excluded_dir(dirpath: Path, root: Path) -> bool`
 - `def collect_docs(root: Path) -> list[Path]`
 - `def _parse_markdown(content: str) -> tuple[list[str], list[tuple[str, str]]]`
 - `def _rebase_link_target(rel_path: Path, target: str, root: Path) -> str`
-- `def _read_diagram_describes(doc_path: Path) -> list[str]`
+- `def _manifest_path(root: Path, value: str, field: str, manifest_path: Path) -> Path`
+- `def _read_manifest_payload(manifest_path: Path) -> list[object]`
+- `def _read_diagram_entry(root: Path, manifest_path: Path, index: int, diagram: object, seen_paths: tuple[set[str], set[str]]) -> DiagramEntry`
+- `def _read_diagram_manifest(root: Path) -> list[DiagramEntry]`
 - `def _render_entry(rel_path: Path, doc_path: Path, root: Path) -> str`
+- `def _render_diagram_entry(diagram: dict[str, object]) -> str`
 - `def generate_index(root: Path) -> None`
 - `def _update_entry(line: str, entry: DocEntry, *, in_outbound: bool) -> bool`
 - `def parse_index(text: str) -> list[DocEntry]`
@@ -5280,17 +5168,38 @@ Maintained test commands for the OwlBear development checkout.
 
 - `__future__`
 - `argparse`
+- `ast`
+- `dataclasses`
 - `pathlib`
+- `re`
+- `shutil`
 - `subprocess`
+- `tomllib`
 - `typing`
 
 ### Interfaces
 
+- `class _WorkspacePackage`
+- `class _ChangedScopeError(RuntimeError)`
 - `def _require_development_checkout() -> None`
-- `def _existing_paths(paths: Iterable[Path]) -> list[str]`
-- `def _matching_root_tests(*patterns: str) -> list[str]`
+- `def _workspace_packages() -> tuple[_WorkspacePackage, ...]`
+- `def _canonical_project_name(value: str) -> str`
+- `def _dependency_name(value: str) -> str`
+- `def _package_tests(package: _WorkspacePackage) -> list[Path]`
+- `def _root_tests() -> list[Path]`
+- `def _imported_namespaces(path: Path) -> frozenset[str]`
+- `def _tests_importing(namespace: str, paths: Iterable[Path]) -> list[Path]`
+- `def _direct_consumers(package: _WorkspacePackage, packages: tuple[_WorkspacePackage, ...]) -> tuple[_WorkspacePackage, ...]`
+- `def _relative_paths(paths: Iterable[Path]) -> list[str]`
+- `def _package_scope(package: _WorkspacePackage) -> list[str]`
+- `def _package_for_path(normalized: str) -> _WorkspacePackage | None`
 - `def _python_scope(path: str) -> list[str] | None`
 - `def _is_web_path(path: str) -> bool`
+- `def _git_executable() -> str`
+- `def _run_git(arguments: list[str]) -> subprocess.CompletedProcess[bytes]`
+- `def _git_paths(arguments: list[str]) -> set[str]`
+- `def _default_changed_base() -> str`
+- `def _changed_paths(base: str | None) -> list[str]`
 - `def _commands_for_paths(paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool) -> list[tuple[list[str], Path]]`
 - `def _run_commands(commands: list[tuple[list[str], Path]]) -> int`
 - `def test_main() -> None`
@@ -5343,6 +5252,84 @@ Generate a structural index of TypeScript and JavaScript source files.
 - `def _render_module(path: Path, root: Path) -> str`
 - `def generate_index(root: Path) -> None`
 - `def main() -> None`
+
+## serve/web-content/src/owlbear_web_content/__init__.py
+
+OwlBear shared web content extraction and cleaning module.
+
+### Imports
+
+- `owlbear_web_content.cleaner`
+- `owlbear_web_content.extractor`
+
+## serve/web-content/src/owlbear_web_content/cleaner.py
+
+HTML noise stripping and Markdown conversion for web content.
+
+### Imports
+
+- `__future__`
+- `lxml`
+- `re`
+- `typing`
+- `urllib.parse`
+
+### Interfaces
+
+- `def _remove_noise_tags(doc: HtmlElement, tags: frozenset[str]) -> None`
+- `def _remove_cookie_elements(doc: HtmlElement) -> None`
+- `def _is_hidden(element: HtmlElement) -> bool`
+- `def _remove_hidden_elements(doc: HtmlElement) -> None`
+- `def strip_noise(html_str: str) -> str`
+- `def _resolve_url(value: str, url: str | None) -> str`
+- `def _inner(element: HtmlElement, url: str | None = None) -> str`
+- `def _table_cell_text(cell: HtmlElement, url: str | None) -> str`
+- `def _table_to_markdown(table: HtmlElement, url: str | None = None) -> str`
+- `def _heading_to_markdown(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _paragraph_to_markdown(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _append_list_content(lines: list[str], content_parts: list[str], first_prefix: str, continuation_indent: str, *, separate: bool = False) -> bool`
+- `def _list_lines(element: HtmlElement, url: str | None, indent: str = '') -> list[str]`
+- `def _list_to_markdown(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _link_to_markdown(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _image_to_markdown(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _inline_code_to_markdown(element: HtmlElement, tail: str, _url: str | None = None) -> str`
+- `def _code_language(element: HtmlElement) -> str`
+- `def _code_block_to_markdown(element: HtmlElement, tail: str, _url: str | None = None) -> str`
+- `def _break_to_markdown(_element: HtmlElement, tail: str, _url: str | None = None) -> str`
+- `def _table_markdown_dispatch(element: HtmlElement, tail: str, url: str | None = None) -> str`
+- `def _element_to_markdown(element: HtmlElement, url: str | None = None) -> str`
+- `def html_to_markdown(html_str: str, url: str | None = None) -> str`
+- `def _collapse_spaces_outside_code_spans(text: str) -> str`
+- `def normalize(text: str) -> str`
+- `def clean(html_str: str) -> str`
+
+## serve/web-content/src/owlbear_web_content/extractor.py
+
+HTML content extraction for the shared web-content package.
+
+### Imports
+
+- `__future__`
+- `lxml`
+- `owlbear_web_content.cleaner`
+- `re`
+- `trafilatura`
+- `urllib.parse`
+
+### Interfaces
+
+- `def _can_open_fence(match: re.Match[str] | None) -> bool`
+- `def _fenced_code_ranges(markdown: str) -> list[tuple[int, int, str]]`
+- `def _inline_code_spans_in_text(text: str) -> list[str]`
+- `def _inline_code_spans(markdown: str) -> list[str]`
+- `def _table_cells(line: str) -> list[str] | None`
+- `def _is_escaped(text: str, index: int) -> bool`
+- `def _structural_lines(markdown: str) -> list[tuple[str, ...]]`
+- `def _contains_in_order(actual: list[T], expected: list[T]) -> bool`
+- `def _preserves_structure(result: str, link_targets: list[str], image_targets: list[str], image_fragments: list[str], fallback: str) -> bool`
+- `def _extract_markdown(html: str, url: str | None = None) -> str`
+- `def extract(html: str) -> str`
+- `def extract_content(html: str, url: str | None = None) -> str`
 
 ## setup/init.py
 

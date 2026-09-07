@@ -115,7 +115,7 @@ No platform-specific configuration is required:
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | Delivery package authority | `.owlbear/delivery/packages/` in project | No — tracked per-project |
 | Delivery runtime and worktrees | `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` in project | No — ignored and host-local |
-| Historical completion packages | `.owlbear/legacy/completed/` in project, when present | No — read-only search source |
+| Completed history receipts | `.owlbear/delivery/runtime/completions/` in project | No — read-only search source |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 

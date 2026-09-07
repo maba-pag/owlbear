@@ -671,7 +671,7 @@ def _portfolio(
             authority_registry=authority_registry,
             coordinator=coordinator,
             workspace_manager=manager,
-            completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+            completed_history_catalog=CompletedHistoryCatalog(state_root),
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
@@ -744,7 +744,7 @@ def _reopen_portfolio(
             authority_registry=authority_registry,
             coordinator=coordinator,
             workspace_manager=manager,
-            completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+            completed_history_catalog=CompletedHistoryCatalog(state_root),
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
@@ -824,7 +824,7 @@ application = PortfolioApplication(
         authority_registry=authority_registry,
         coordinator=coordinator,
         workspace_manager=workspace_manager,
-        completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+        completed_history_catalog=CompletedHistoryCatalog(state_root),
     ),
     PortfolioApplicationConfig(package_root=package_root, execution_capacity=3, role_policies=policies),
 )

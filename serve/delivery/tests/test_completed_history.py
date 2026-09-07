@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,7 +20,6 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnosticCode,
     CompletedHistoryError,
     CompletedHistoryReceiptSetAdvancedError,
-    LegacyCompletedChangeRecord,
     ReceiptCompletedChangeRecord,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -38,7 +35,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -46,15 +42,6 @@ from owlbear_delivery.target_contract import (
     DeliveryOutcome,
     DeliveryPlanScope,
 )
-
-
-def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(  # noqa: S603
-        ("git", "-C", str(repository), *arguments),  # noqa: S607
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
 
 
 def _canonical(value: object) -> bytes:
@@ -134,35 +121,6 @@ def _task_result(
     )
 
 
-def _capture_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]:
-    intent = f"intent body sentinel {change_id}\n".encode()
-    design = f"design body sentinel {change_id}\n".encode()
-    contract = _contract(change_id, title, intent, design)
-    authority = _canonical(contract)
-    authority_digest = hashlib.sha256(authority).hexdigest()
-    task = _task()
-    result = _task_result(
-        f"result-{change_id}",
-        change_id,
-        authority_digest,
-        task,
-        reviewed_head,
-    )
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=DeliveryStage.COMPLETED,
-                tasks=(task,),
-                results=(result,),
-            ),
-        )
-    )
-    authored = {"authority.json": authority, "design.md": design, "intent.md": intent}
-    return _completion_files(change_id, authored, frontier, (result,), reviewed_head)
-
-
 def _task() -> DeliveryTaskDefinition:
     return DeliveryTaskDefinition(
         task_id="TASK-001",
@@ -179,70 +137,6 @@ def _task() -> DeliveryTaskDefinition:
         acceptance_observations=("History is bounded.",),
         proof_boundaries=("CompletedHistoryCatalog",),
     )
-
-
-def _completion_files(
-    change_id: str,
-    authored: dict[str, bytes],
-    frontier: DeliveryFrontier,
-    results: tuple[DeliveryTaskResult, ...],
-    reviewed_head: str,
-) -> dict[str, bytes]:
-    authority = authored["authority.json"]
-    runtime = _canonical(frontier)
-    result_history = _canonical([result.model_dump(mode="json") for result in results])
-    package = DesignPackageManifest.from_content(
-        change_id,
-        authored["intent.md"],
-        authored["design.md"],
-        authority,
-    )
-    completion = CompletionPackageManifest(
-        change_id=change_id,
-        package_id=hashlib.sha256(package.canonical_bytes()).hexdigest(),
-        authority_digest=hashlib.sha256(authority).hexdigest(),
-        runtime_sha256=hashlib.sha256(runtime).hexdigest(),
-        result_history_sha256=hashlib.sha256(result_history).hexdigest(),
-        reviewed_change_head=reviewed_head,
-        integration_target="main",
-        completion_path=f".owlbear/completed/{change_id}",
-    )
-    return {
-        **authored,
-        "completion.json": completion.canonical_bytes(),
-        "manifest.json": package.canonical_bytes(),
-        "results.json": result_history,
-        "runtime.json": runtime,
-    }
-
-
-def _repository(root: Path) -> tuple[Path, dict[str, str]]:
-    root.mkdir()
-    _git(root, "init", "-b", "main")
-    _git(root, "config", "user.name", "Completed History Test")
-    _git(root, "config", "user.email", "completed-history@example.invalid")
-    (root / "product.txt").write_text("baseline\n", encoding="utf-8")
-    _git(root, "add", "product.txt")
-    _git(root, "commit", "-m", "baseline")
-    baseline = _git(root, "rev-parse", "HEAD")
-    first = _publish(root, "change-a", "Alpha delivery", baseline)
-    second = _publish(root, "change-b", "Beta search", first)
-    legacy_root = root / ".owlbear/legacy"
-    legacy_root.mkdir()
-    (root / ".owlbear/completed").rename(legacy_root / "completed")
-    _git(root, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
-    _git(root, "commit", "-m", "move completed packages to legacy history")
-    return root, {"baseline": baseline, "first": first, "second": second}
-
-
-def _publish(repository: Path, change_id: str, title: str, reviewed_head: str) -> str:
-    package_root = repository / ".owlbear/completed" / change_id
-    package_root.mkdir(parents=True)
-    for name, content in _capture_content(change_id, title, reviewed_head).items():
-        (package_root / name).write_bytes(content)
-    _git(repository, "add", str(package_root.relative_to(repository)))
-    _git(repository, "commit", "-m", f"complete {change_id}")
-    return _git(repository, "rev-parse", "HEAD")
 
 
 def _receipt_digest(value: str) -> str:
@@ -295,83 +189,13 @@ def _publish_receipt(
     return receipt
 
 
-def _stale_target_binding(path: Path) -> int:
-    manifest = CompletionPackageManifest.model_validate_json(path.read_bytes())
-    stale = manifest.model_copy(update={"integration_target": "other-target"})
-    return path.write_bytes(stale.canonical_bytes())
-
-
-def test_catalog_pages_searches_and_shows_verified_sibling_history(tmp_path: Path) -> None:
-    repository, commits = _repository(tmp_path / "repository")
-    catalog = CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime")
-    target_before = _git(repository, "rev-parse", "main")
-
-    first_page = catalog.list(limit=1)
-    second_page = catalog.list(cursor=first_page.next_cursor, limit=1)
-    search = catalog.search("ship beta", limit=10)
-    shown = catalog.show("change-b", search.records[0].completion_id)
-
-    assert tuple(record.change_id for record in (*first_page.records, *second_page.records)) == (
-        "change-a",
-        "change-b",
-    )
-    assert first_page.total_count == second_page.total_count == 2
-    assert first_page.next_cursor is not None
-    assert second_page.next_cursor is None
-    assert search.records == (shown,)
-    assert search.total_count == 1
-    assert isinstance(shown, LegacyCompletedChangeRecord)
-    assert shown.semantic_summary == "Ship Beta search"
-    assert shown.outcome_titles == ("Ship Beta search",)
-    assert shown.outcome_promises == ("Return a verified semantic record.",)
-    assert shown.introducing_target_commit == commits["second"]
-    assert shown.source_target_commit == commits["first"]
-    assert shown.completion_path == ".owlbear/legacy/completed/change-b"
-    assert shown.historical_completion_locator == ".owlbear/completed/change-b"
-    projection = shown.model_dump_json()
-    assert "intent body sentinel" not in projection
-    assert "design body sentinel" not in projection
-    assert _git(repository, "rev-parse", "main") == target_before
-
-
-@pytest.mark.parametrize(
-    ("corrupt", "expected"),
-    [
-        (lambda path: path.write_bytes(b"not-json\n"), CompletedHistoryDiagnosticCode.MALFORMED),
-        (
-            lambda path: path.with_name("intent.md").write_bytes(b"changed\n"),
-            CompletedHistoryDiagnosticCode.DIGEST_MISMATCH,
-        ),
-        (_stale_target_binding, CompletedHistoryDiagnosticCode.STALE),
-    ],
-)
-def test_catalog_reports_corrupt_history_without_mutating_target(
-    tmp_path: Path,
-    corrupt: Callable[[Path], object],
-    expected: CompletedHistoryDiagnosticCode,
-) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
-    completion = repository / ".owlbear/legacy/completed/change-a/completion.json"
-    corrupt(completion)
-    _git(repository, "add", ".owlbear/legacy/completed/change-a")
-    _git(repository, "commit", "-m", "corrupt completed history")
-    target_before = _git(repository, "rev-parse", "main")
-
-    with pytest.raises(CompletedHistoryError) as raised:
-        CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime").list()
-
-    assert raised.value.diagnostic.code == expected
-    assert _git(repository, "rev-parse", "main") == target_before
-
-
-def test_catalog_reports_missing_and_stale_queries_without_mutating_target(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
-    catalog = CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime")
+def test_catalog_reports_missing_queries(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "runtime"
+    catalog = CompletedHistoryCatalog(runtime_root)
+    _publish_receipt(runtime_root, "change-a", "Alpha", pull_request_number=7)
+    _publish_receipt(runtime_root, "change-b", "Beta", pull_request_number=8)
     cursor = catalog.list(limit=1).next_cursor
-    (repository / "product.txt").write_text("new target state\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "advance target")
-    target_before = _git(repository, "rev-parse", "main")
+    _publish_receipt(runtime_root, "change-c", "Gamma", pull_request_number=9)
 
     with pytest.raises(CompletedHistoryError) as missing:
         catalog.show("missing-change")
@@ -382,48 +206,39 @@ def test_catalog_reports_missing_and_stale_queries_without_mutating_target(tmp_p
 
     assert missing.value.diagnostic.code == CompletedHistoryDiagnosticCode.MISSING
     assert exact_missing.value.diagnostic.code == CompletedHistoryDiagnosticCode.MISSING
-    assert stale.value.diagnostic.code == CompletedHistoryDiagnosticCode.STALE
-    assert _git(repository, "rev-parse", "main") == target_before
+    assert stale.value.diagnostic.code == CompletedHistoryDiagnosticCode.RECEIPT_SET_ADVANCED
 
 
-def test_catalog_combines_legacy_and_receipt_history_without_false_graph_claims(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
+def test_catalog_pages_searches_and_shows_receipt_history(tmp_path: Path) -> None:
     runtime_root = tmp_path / "runtime"
-    replacement = _publish_receipt(runtime_root, "change-b", "Beta accepted", pull_request_number=7)
-    added = _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
-    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+    _publish_receipt(runtime_root, "change-a", "Alpha", pull_request_number=7)
+    second = _publish_receipt(runtime_root, "change-b", "Beta", pull_request_number=8)
+    catalog = CompletedHistoryCatalog(runtime_root)
 
     page = catalog.list()
-    search = catalog.search("beta accepted")
-    shown = catalog.show("change-c", added.completion_id)
+    search = catalog.search("beta")
+    shown = catalog.show("change-b", second.completion_id)
 
     assert tuple((record.change_id, record.record_kind) for record in page.records) == (
-        ("change-a", "legacy-package"),
+        ("change-a", "completion-receipt"),
         ("change-b", "completion-receipt"),
-        ("change-c", "completion-receipt"),
     )
-    assert page.records[1].semantic_summary == "Ship Beta accepted"
-    assert page.records[1].outcome_promises == ("Deliver the purpose of Beta accepted.",)
-    assert search.records[0].completion_id == replacement.completion_id
-    assert search.records[0].semantic_summary == "Ship Beta accepted"
+    assert page.total_count == 2
+    assert search.records[0].completion_id == second.completion_id
     assert isinstance(shown, ReceiptCompletedChangeRecord)
-    assert shown.finalized_change_head == added.finalized_change_head
-    assert shown.accepted_merge_commit == added.accepted_merge_commit
+    assert shown.finalized_change_head == second.finalized_change_head
+    assert shown.accepted_merge_commit == second.accepted_merge_commit
     assert shown.finalized_change_head != shown.accepted_merge_commit
-    projection = shown.model_dump(mode="json")
-    assert "merge_method" not in projection
-    assert "source_target_commit" not in projection
-    assert "introducing_target_commit" not in projection
-    assert "completion_path" not in projection
 
 
 def test_catalog_reports_receipt_growth_separately_from_target_staleness(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
     runtime_root = tmp_path / "runtime"
-    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+    catalog = CompletedHistoryCatalog(runtime_root)
+    _publish_receipt(runtime_root, "change-a", "Alpha accepted", pull_request_number=7)
+    _publish_receipt(runtime_root, "change-b", "Beta accepted", pull_request_number=8)
     cursor = catalog.list(limit=1).next_cursor
     assert cursor is not None
-    _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
+    _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=9)
 
     with pytest.raises(CompletedHistoryReceiptSetAdvancedError) as advanced:
         catalog.list(cursor=cursor, limit=1)
@@ -432,19 +247,17 @@ def test_catalog_reports_receipt_growth_separately_from_target_staleness(tmp_pat
 
 
 def test_catalog_fails_closed_for_malformed_receipt_display_metadata(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
     runtime_root = tmp_path / "runtime"
     _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
     (runtime_root / "completions/change-c/display.json").write_bytes(b"not-json\n")
 
     with pytest.raises(CompletedHistoryError) as malformed:
-        CompletedHistoryCatalog(repository, "main", "main", runtime_root).list()
+        CompletedHistoryCatalog(runtime_root).list()
 
     assert malformed.value.diagnostic.code == CompletedHistoryDiagnosticCode.MALFORMED
 
 
 def test_catalog_ignores_stray_runtime_entries_but_rejects_recognized_corruption(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
     runtime_root = tmp_path / "runtime"
     changes_root = runtime_root / "changes"
     changes_root.mkdir(parents=True)
@@ -476,10 +289,10 @@ def test_catalog_ignores_stray_runtime_entries_but_rejects_recognized_corruption
     (abandoned_root / "contract.json").write_bytes(_canonical(contract))
     (abandoned_root / "frontier.json").write_bytes(_canonical(frontier))
 
-    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+    catalog = CompletedHistoryCatalog(runtime_root)
     page = catalog.list()
 
-    assert tuple(record.change_id for record in page.records) == (abandoned_id, "change-a", "change-b")
+    assert tuple(record.change_id for record in page.records) == (abandoned_id,)
     assert page.records[0].record_kind == "abandoned-change"
 
     corrupt_root = changes_root / "recognized-corruption"
@@ -494,7 +307,6 @@ def test_catalog_ignores_stray_runtime_entries_but_rejects_recognized_corruption
 
 
 def test_catalog_preserves_abandoned_target_sync_conflict_identity(tmp_path: Path) -> None:
-    repository, _commits = _repository(tmp_path / "repository")
     runtime_root = tmp_path / "runtime"
     change_id = "abandoned-change"
     changes_root = runtime_root / "changes" / change_id
@@ -539,7 +351,7 @@ def test_catalog_preserves_abandoned_target_sync_conflict_identity(tmp_path: Pat
     )
     (coordination_root / f"{change_id}.json").write_bytes(coordination.model_dump_json().encode())
 
-    record = CompletedHistoryCatalog(repository, "main", "main", runtime_root).list().records[0]
+    record = CompletedHistoryCatalog(runtime_root).list().records[0]
 
     assert record.record_kind == "abandoned-change"
     assert record.target_sync_conflict is True

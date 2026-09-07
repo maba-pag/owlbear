@@ -32,7 +32,6 @@ from owlbear_delivery.runtime_transaction import (
     TransactionManifestError,
     TransactionPathError,
 )
-from owlbear_delivery.target_admission import TargetAdmissionError
 
 
 class DeliveryFailureCategory(StrEnum):
@@ -125,7 +124,6 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
             DeliveryRuntimeReferenceError,
             DesignPackageConflictError,
             DeliveryAdmissionError,
-            TargetAdmissionError,
             TransactionManifestError,
             TransactionPathError,
             PortfolioApplicationError,

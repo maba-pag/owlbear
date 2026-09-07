@@ -740,10 +740,10 @@ test.describe('assembled Delivery portfolio', () => {
       await searchInput.fill('Beta')
       await expect(page.getByTestId('completed-history-stale-status')).toBeVisible()
 
-      const legacyRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
-      const trigger = legacyRecord.getByRole('button', { name: 'Inspect' })
+      const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
+      const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
       await trigger.click()
-      await expect(page.getByTestId('completed-change-detail')).toContainText('Legacy package')
+      await expect(page.getByTestId('completed-change-detail')).toContainText('Completion receipt')
 
       releaseSearch?.()
       await expect(page.getByTestId('completed-change-record')).toHaveCount(1)
@@ -775,10 +775,10 @@ test.describe('assembled Delivery portfolio', () => {
       await searchInput.fill('Beta')
       await expect(page.getByTestId('completed-history-stale-status')).toBeVisible()
 
-      const legacyRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
-      await legacyRecord.getByRole('button', { name: 'Inspect' }).click()
+      const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
+      await receiptRecord.getByRole('button', { name: 'Inspect' }).click()
       const completionDetail = page.getByTestId('completed-change-detail')
-      await expect(completionDetail).toContainText('Legacy package')
+      await expect(completionDetail).toContainText('Completion receipt')
 
       await completionDetail.getByRole('button', { name: 'Close' }).click()
       await expect(completionDetail).not.toBeVisible()

@@ -12,19 +12,15 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[1]
 _JSONC_LINE_COMMENT = re.compile(r"(?m)^\s*//.*$")
 _SEED_ONLY_CLI2_IGNORES = frozenset({".owlbear/hooks"})
-_SEED_PROFILE_OMISSIONS = frozenset({".owlbear/target"})
 _P01_SHARED_EXCLUDED_PATHS = (
     "package.egg-info/PKG-INFO",
-    ".owlbear/completed/change.json",
     ".owlbear/delivery/packages/package.whl",
     ".owlbear/delivery/runtime/frontier.json",
     ".owlbear/doc-index.md",
     ".owlbear/py-index.md",
     ".owlbear/ts-index.md",
-    ".owlbear/legacy/old.md",
     ".owlbear/memory/entry.md",
     ".owlbear/research/notes.md",
-    ".owlbear/target/output.json",
     "store/audit/history.db",
     "store/knowledge/entities.db",
     "generated/.benchmarks/results.json",
@@ -52,7 +48,6 @@ _P01_SHARED_INCLUDED_PATHS = (
     ".owlbear/ideas.md",
     "store/audit/history.txt",
     "generated/output.txt",
-    ".owlbear/target.md",
 )
 _P04_LOCAL_ESLINT_SCOPE = r"^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$"
 _P04_CI_ESLINT_SCOPE = r"^serve/cockpit/web/.*\.(ts|tsx)$"
@@ -105,15 +100,6 @@ _M09_GENERATED_INDEX_MARKDOWN_PATHS = (
     ".owlbear/py-index.md",
     ".owlbear/ts-index.md",
 )
-_M09_LEGACY_MARKDOWN_PATHS = (
-    ".owlbear/legacy/briefs/README.md",
-    ".owlbear/legacy/completed/knowledge-source-contract-alignment/design.md",
-    ".owlbear/legacy/openspec-final/content/changes/complete-browser-content-acquisition/design.md",
-    ".owlbear/legacy/target-cutover/changes/content/replace-delivery-pipeline/design.md",
-    ".owlbear/legacy/target-cutover-incidents/20260802/README.md",
-    ".owlbear/legacy/target-delivery-cutover-design/20260804/README.md",
-    ".owlbear/legacy/target-delivery-cutover-runtime/20260804/README.md",
-)
 _M09_MEMORY_MARKDOWN_PATHS = (
     ".owlbear/memory/4c207941-f94b-4abd-a6e3-67b73ed1020a.md",
     ".owlbear/memory/45d05ede-bf24-4f64-9810-87a88e46084a.md",
@@ -127,7 +113,6 @@ _M09_RESEARCH_MARKDOWN_PATHS = (
     ".owlbear/research/cockpit-work-items-redesign-evidence/opus-final-plan-review.md",
 )
 _M09_SOURCES_MARKDOWN_PATH = ".owlbear/sources/overview.md"
-_M09_TARGET_MARKDOWN_PATH = ".owlbear/target/runtime.md"
 _X04_FORMATTERS = {
     "[json]": "vscode.json-language-features",
     "[jsonc]": "vscode.json-language-features",
@@ -244,8 +229,8 @@ def test_markdownlint_ignore_authorities_share_normalized_policy() -> None:
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
     assert root_bare == root_cli2
-    assert seed_bare | _SEED_PROFILE_OMISSIONS == root_bare
-    assert seed_cli2 | _SEED_PROFILE_OMISSIONS == root_bare | _SEED_ONLY_CLI2_IGNORES
+    assert seed_bare == root_bare
+    assert seed_cli2 | _SEED_ONLY_CLI2_IGNORES == root_bare | _SEED_ONLY_CLI2_IGNORES
 
 
 def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
@@ -372,28 +357,6 @@ def test_generated_indexes_remain_excluded_from_markdown_consumers() -> None:
     )
 
 
-def test_legacy_archive_remains_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
-
-    assert ".owlbear/legacy" in root_bare
-    assert ".owlbear/legacy" in root_cli2
-    assert ".owlbear/legacy" in seed_bare
-    assert ".owlbear/legacy" in seed_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
-    assert all(precommit_exclude.search(path) is not None for path in _M09_LEGACY_MARKDOWN_PATHS)
-    assert all(
-        _is_megalinter_excluded(path, megalinter_exclude, megalinter_directories) for path in _M09_LEGACY_MARKDOWN_PATHS
-    )
-
-
 def test_memory_store_remains_excluded_from_markdown_consumers() -> None:
     root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
@@ -457,26 +420,6 @@ def test_sources_document_is_included_in_markdown_consumers() -> None:
     )
     assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is None
     assert not _is_megalinter_excluded(_M09_SOURCES_MARKDOWN_PATH, megalinter_exclude, megalinter_directories)
-
-
-def test_target_runtime_remains_excluded_from_markdown_consumers() -> None:
-    root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
-    seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
-
-    assert ".owlbear/target" in root_bare
-    assert ".owlbear/target" in root_cli2
-    assert ".owlbear/target" not in seed_bare
-    assert ".owlbear/target" not in seed_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
-        _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    )
-    assert precommit_exclude.search(_M09_TARGET_MARKDOWN_PATH) is not None
-    assert _is_megalinter_excluded(_M09_TARGET_MARKDOWN_PATH, megalinter_exclude, megalinter_directories)
 
 
 def test_precommit_and_megalinter_share_exclusion_taxonomy() -> None:

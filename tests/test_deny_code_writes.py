@@ -13,9 +13,7 @@ _REPO_ROOT = Path(__file__).parent.parent
 _DELIVERY_TESTS = _REPO_ROOT / "serve" / "delivery" / "tests"
 _TARGET_PATTERNS = (
     "test_runtime_transaction.py",
-    "test_target_admission.py",
     "test_target_cutover.py",
-    "test_target_runtime.py",
 )
 _WRITE_METHODS = {"write_text", "write_bytes", "touch", "mkdir", "rmdir", "unlink"}
 

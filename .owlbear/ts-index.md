@@ -59,157 +59,28 @@
 - `import { skipCheckForPorscheDesignSystemProviderDuringTests, skipPorscheDesignSystemCDNRequestsDuringTests, } from '@porsche-design-system/components-react'`
 - `import { vi } from 'vitest'`
 
-## serve/cockpit/web/.owlbear/scratch/staged-cockpit/src/api/workItems.ts
-
-### Interfaces
-
-- `export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'completed'`
-- `export type WorkItemScope = 'outcome' | 'change-publication'`
-- `export type WorkItemNeed = 'you' | 'dependency' | 'none'`
-- `export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'`
-- `export type WorkItemActivityState = 'idle' | 'ready' | 'working'`
-- `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'finalize' | 'reconcile-checkpoint' | 'mark-ready' | 'observe-acceptance' | 'resolve-attention' | 'resume-change' | 'start-orchestration'`
-- `export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'`
-- `export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance' | 'deferred' | 'abandoned'`
-- `export type DeliveryWorkerRole = 'planner' | 'builder'`
-- `export type WorkItemPublicationPhase = | 'finalization-invalidated' | 'review-repair' | 'ready-for-finalization' | 'checkpoint-pending' | 'pull-request-draft' | 'awaiting-merge' | 'acceptance-observed' | 'deferred' | 'abandoned'`
-- `export interface WorkItemActivity`
-- `export interface WorkItemAction`
-- `export interface WorkItemProgress`
-- `export interface WorkItemCardView`
-- `export interface ChangeGroupView`
-- `export interface NeedsCounts`
-- `export interface ActivityCounts`
-- `export interface WorkItemPortfolioTotals`
-- `export type PortfolioChangeAdmission = 'admitted' | 'unadmitted'`
-- `export type PortfolioChangeStage = | 'design' | 'building' | 'finalized' | 'awaiting-merge' | 'publication-attention' | 'acceptance-attention' | 'deferred' | 'abandoned' | 'completed'`
-- `export interface PortfolioChangeLifecycleStatus`
-- `export type PortfolioWorkScope = 'outcome' | 'publication'`
-- `export type PortfolioGuidanceKind = | 'resume-design' | 'start-orchestration' | 'work-underway' | 'intervene' | 'wait' | 'create-change'`
-- `export interface PortfolioWorkReference`
-- `export interface PortfolioGuidance`
-- `export interface PortfolioOperatingView`
-- `export interface WorkItemPortfolioResponse`
-- `export type AcceptanceReconciliationStatus = | 'completed' | 'waiting' | 'head-moved' | 'attention' | 'provider-unavailable' | 'skipped'`
-- `export interface AcceptanceReconciliationOutcome`
-- `export interface AcceptanceReconciliationResponse`
-- `export interface DesignWorkDetailResponse`
-- `export interface DeliveryRequestResolution`
-- `export interface DeliveryRequest`
-- `export interface DeliveryBlock`
-- `export interface WorkItemCommitment`
-- `export interface WorkItemDependency`
-- `export interface WorkItemTaskEvidence`
-- `export interface WorkItemPublicationGeneration`
-- `export type PublicationCheckKind = 'check_run' | 'status_context'`
-- `export type PublicationCheckBlockingState = 'blocking' | 'required-pending' | 'not-blocking'`
-- `export interface PublicationCheckView`
-- `export interface PublicationChecksObservationResponse`
-- `export interface WorkItemPublicationReconciliationResponse`
-- `export interface WorkItemPublicationView`
-- `export interface WorkItemTargetSyncView`
-- `export interface WorkItemTargetSyncConflictView`
-- `export interface WorkItemWorktreeCleanupView`
-- `export interface WorkItemWorktreeRecoveryView`
-- `export interface ChangeWorktreeCleanupResponse`
-- `export interface ChangeWorktreeRecoveryResponse`
-- `export interface TargetSyncResponse`
-- `export interface TargetSyncAbortResponse`
-- `export interface PublicationSupersessionResponse`
-- `export interface WorkItemDetailView`
-- `export interface WorkItemDetailResponse`
-- `export interface BackwardMoveResult`
-- `export interface BackwardMovePreview`
-- `interface CompletedChangeRecordBase`
-- `export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase`
-- `export interface CompletionPullRequestIdentity`
-- `export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase`
-- `export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord`
-- `export interface CompletedChangePage`
-- `interface WorkItemRequestOptions extends RequestInit`
-- `export class WorkItemApiError extends Error`
-  - `readonly status: number`
-  - `readonly code: string`
-  - `readonly authority: string | null`
-  - `readonly retrySafe: boolean`
-  - `constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean)`
-- `async function workItemRequest<T>(url: string, options: WorkItemRequestOptions): Promise<T>`
-- `function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T>`
-- `export function listWorkItems(): Promise<WorkItemPortfolioResponse>`
-- `export function listCompletedChanges(cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage>`
-- `export function searchCompletedChanges(query: string, cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage>`
-- `export function showCompletedChange(changeId: string, completionId: string): Promise<CompletedChangeRecord>`
-- `export function workItemDetailUrl(changeId: string, itemKey: string): string`
-- `export function showWorkItem(changeId: string, itemKey: string): Promise<WorkItemDetailResponse>`
-- `export function designWorkDetailUrl(changeId: string): string`
-- `export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse>`
-- `export function answerWorkItemRequest( changeId: string, requestId: string, resolution: DeliveryRequestResolution, ): Promise<DeliveryRequest>`
-- `export function clearWorkItemBlock( changeId: string, outcomeId: string, blockId: string, operatorNote: string, locators: string[], ): Promise<unknown>`
-- `export function recoverWorkItemClaim( changeId: string, outcomeId: string, attemptId: string, claimId: string, ): Promise<unknown>`
-- `export function moveWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, reason: string, snapshotVersion: string, ): Promise<BackwardMoveResult>`
-- `export function previewWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, ): Promise<BackwardMovePreview>`
-- `export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse>`
-- `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
-- `export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse>`
-- `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
-- `export function reconcileWorkItemAcceptance( changeIds: string[], signal?: AbortSignal, ): Promise<AcceptanceReconciliationResponse>`
-- `export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown>`
-- `export function supersedeWorkItemPublication( changeId: string, operationId: string, ): Promise<PublicationSupersessionResponse>`
-- `export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse>`
-- `export function abortWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncAbortResponse>`
-- `export function resolveWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncResponse>`
-- `export function deferWorkItemChange(changeId: string, reason: string): Promise<unknown>`
-- `export function resumeWorkItemChange(changeId: string): Promise<unknown>`
-- `export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown>`
-- `export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse>`
-- `export function cleanupCompletedWorkItemChange( changeId: string, completionId: string, ): Promise<ChangeWorktreeCleanupResponse>`
-- `export function recoverWorkItemChange( changeId: string, recoveryReviewedHead: string, ): Promise<ChangeWorktreeRecoveryResponse>`
-
-## serve/cockpit/web/.owlbear/scratch/staged-cockpit/src/components/WorkItemDetail.tsx
+## serve/cockpit/web/e2e/support/api-fixtures.ts
 
 ### Imports
 
-- `import { type ReactNode, useEffect, useState } from 'react'`
-- `import { PButton, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from '@porsche-design-system/components-react'`
-- `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemDetailResponse, type PublicationCheckBlockingState, type PublicationChecksObservationResponse, type WorkItemPublicationPhase, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
-- `import { PROGRESS_STAGE_LABELS, workItemStatus, workItemStatusClassName, workItemStatusLabel, } from './workItemPresentation'`
-- `import CopyCommand from './CopyCommand'`
+- `import type { WorkItemPortfolioResponse } from '../../src/api/workItems'`
 
 ### Interfaces
 
-- `type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }`
-- `function fieldValue(event: FieldValueEvent): string`
-- `function ConfirmationContent({ children, onClose }: { children: ReactNode; onClose: () => void })`
-- `interface WorkItemDetailProps`
-- `const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string>`
-- `const REQUEST_KIND_LABELS: Record<DeliveryRequest['kind'], string>`
-- `const TASK_STATUS_LABELS: Record<WorkItemDetailResponse['item']['tasks'][number]['status'], string>`
-- `function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
-- `function RequestControl({ request, pending, onAnswer }: { request: DeliveryRequest pending: boolean onAnswer: WorkItemDetailProps['onAnswerRequest'] })`
-- `function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps)`
-- `function ChangeDispositionSection(props: WorkItemDetailProps)`
-- `function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailProps)`
-- `function elapsedAge(startedAt: string): string`
-- `function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: WorkItemDetailProps)`
-- `function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
-- `function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
-- `function AttentionItem({ label, reason, retry, evidence, sourceBoundary }: { label: string reason: string retry?: string evidence?: string sourceBoundary?: string | null })`
-- `const STAGES: WorkItemStage[]`
-- `function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward }: WorkItemDetailProps)`
-- `function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
-- `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
-- `function IdentityRow({ label, value }: { label: string; value: string | number | null })`
-- `function pullRequestUrl(repository: string, number: number): string`
-- `function WorktreeRecoverySection(props: WorkItemDetailProps)`
-- `function WorktreeCleanupSection(props: WorkItemDetailProps)`
-- `function TargetSyncConflictSection(props: WorkItemDetailProps)`
-- `function TargetSyncSection(props: WorkItemDetailProps)`
-- `const PUBLICATION_CHECK_STATE_LABELS: Record<PublicationCheckBlockingState, string>`
-- `function PublicationCheckItem({ check }: { check: PublicationChecksObservationResponse['checks'][number] })`
-- `function PublicationChecksSection(props: WorkItemDetailProps)`
-- `function PublicationSection(props: WorkItemDetailProps)`
-- `function ActionFeedback({ error, result }: { error: Error | null; result: string | null })`
-- `export default function WorkItemDetail(props: WorkItemDetailProps)`
+- `export const EMPTY_WORK_ITEM_PORTFOLIO`
+
+## serve/cockpit/web/e2e/support/page-errors.ts
+
+### Imports
+
+- `import { expect, type Page } from '@playwright/test'`
+
+### Interfaces
+
+- `const WORKSPACE_SELECTOR`
+- `export interface PageErrorTracker`
+- `export function trackPageErrors(page: Page): PageErrorTracker`
+- `export async function waitForWorkspaceWithoutPageErrors( page: Page, tracker: PageErrorTracker, ): Promise<void>`
 
 ## serve/cockpit/web/e2e/support/workspace-readiness.ts
 
@@ -283,9 +154,11 @@
 ### Interfaces
 
 - `const REQUIRED_PDS_ELEMENTS`
+- `const PDS_BOOTSTRAP_TIMEOUT_MS`
 - `function applyTokenFallbacks(): void`
 - `function installPdsCdnTrap(): void`
-- `async function waitForRequiredPdsElements(): Promise<void>`
+- `function waitForRequiredPdsElements(): Promise<void>`
+- `function renderBootstrapFailure(): void`
 - `async function bootstrap(): Promise<void>`
 
 ## serve/cockpit/web/src/routes.ts
@@ -322,7 +195,8 @@
 
 - `export class ApiError extends Error`
   - `readonly status: number`
-  - `constructor(status: number, message: string)`
+  - `readonly code: string | null`
+  - `constructor(status: number, message: string, code: string | null = null)`
 
 ## serve/cockpit/web/src/api/health.ts
 
@@ -373,7 +247,8 @@
   - `constructor(apiError: ApiError, validationMessages: ValidationMessage[] = [])`
 - `function parseValidationField(loc: unknown): string`
 - `function parseValidationErrors(payload: unknown): ValidationMessage[]`
-- `function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[]; message: string | null }`
+- `function parseMutationErrorCode(payload: unknown): string | null`
+- `function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[] message: string | null code: string | null }`
 - `async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>): Promise<T>`
 - `export async function approveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse>`
 - `export async function resolveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse>`
@@ -460,11 +335,10 @@
 - `export interface BackwardMoveResult`
 - `export interface BackwardMovePreview`
 - `interface CompletedChangeRecordBase`
-- `export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase`
 - `export interface CompletionPullRequestIdentity`
 - `export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase`
 - `export interface AbandonedChangeRecord`
-- `export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord | AbandonedChangeRecord`
+- `export type CompletedChangeRecord = ReceiptCompletedChangeRecord | AbandonedChangeRecord`
 - `export interface CompletedChangePage`
 - `interface WorkItemRequestOptions extends RequestInit`
 - `export class WorkItemApiError extends Error`
@@ -504,7 +378,7 @@
 - `export function resumeWorkItemChange(changeId: string): Promise<unknown>`
 - `export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown>`
 - `export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse>`
-- `export function discardAbandonedTargetSyncAndCleanup(changeId: string): Promise<ChangeWorktreeCleanupResponse>`
+- `export function discardAbandonedTargetSyncAndCleanup( changeId: string, expectedTargetHead: string, expectedOperationId: string, ): Promise<ChangeWorktreeCleanupResponse>`
 - `export function cleanupCompletedWorkItemChange( changeId: string, completionId: string, ): Promise<ChangeWorktreeCleanupResponse>`
 - `export function recoverWorkItemChange( changeId: string, recoveryReviewedHead: string, ): Promise<ChangeWorktreeRecoveryResponse>`
 
@@ -529,7 +403,6 @@
 - `function historyDetailPath(record: CompletedChangeRecord): string`
 - `function fieldValue(event: FieldValueEvent): string`
 - `function useDebouncedValue<T>(value: T, delayMs: number): T`
-- `function isReceipt(record: CompletedChangeRecord): record is ReceiptCompletedChangeRecord`
 - `function isAbandoned(record: CompletedChangeRecord): record is AbandonedChangeRecord`
 - `function formatCompletedAt(value: string): string`
 - `function pullRequestUrl(repositoryIdentity: string, number: number): string`
@@ -978,6 +851,7 @@
 - `import { useCallback, useEffect, useMemo, useRef, useState } from 'react'`
 - `import { PButton, PButtonPure, PHeading, PInputNumber, PInputSearch, PInputText, PModal, PMultiSelect, PMultiSelectOption, PSelect, PSelectOption, PTag, PTagDismissible, PTextarea, } from '@porsche-design-system/components-react'`
 - `import rehypeSanitize from 'rehype-sanitize'`
+- `import { getResponseErrorMessage } from '../api/errorMessage'`
 - `import { approveMemory, deleteMemory, editMemory, MemoryMutationError, resolveMemory, type MemoriesResponse, type MemoryEditPayload, type MemoryEntry, type MemoryState, type ValidationMessage, } from '../api/memories'`
 - `import MarkdownPreview from '../components/MarkdownPreview'`
 - `import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../components/WorkspaceHeader'`
@@ -989,6 +863,8 @@
 
 - `type AgentFilter = | { mode: 'any' } | { mode: 'all' } | { mode: 'unscoped' } | { mode: 'named'; agent: string }`
 - `interface MemoryFilterState`
+- `type MemoryConflictStatus = 'refreshing' | 'ready' | 'error'`
+- `interface MemoryConflictState`
 - `const DEFAULT_STATES: MemoryState[]`
 - `const ALL_AGENTS_SCOPE`
 - `const AGENT_FILTER_VALUES`
@@ -1018,6 +894,7 @@
 - `function pendingValue(entry: MemoryEntry | null): number`
 - `function emitPendingCountDelta(before: MemoryEntry, after: MemoryEntry | null): void`
 - `function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload`
+- `async function parseMemoriesResponse(response: Response): Promise<MemoriesResponse>`
 - `function MemoryTab()`
 - `export default MemoryTab`
 
