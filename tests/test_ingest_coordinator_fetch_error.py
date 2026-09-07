@@ -190,9 +190,8 @@ class TestFetchErrorPropagation:
     ) -> None:
         """AC2: With documents AND errors, fetch errors must be in RefreshResult.errors.
 
-        Current code does not propagate fetch_result.errors — this test fails until
-        the propagation fix is applied.  The partial-success path (sources_refreshed
-        incremented) must coexist with captured errors.
+        The coordinator preserves fetch_result.errors while the partial-success path
+        increments sources_refreshed.
         """
         mock_fetcher.fetch_source = AsyncMock(
             return_value=FetchResult(
@@ -217,8 +216,8 @@ class TestFetchErrorPropagation:
     ) -> None:
         """AC3: When documents is empty and errors is non-empty, sources_refreshed must be 0.
 
-        Current code always increments sources_refreshed after fetch, so this
-        test fails until the total-failure branch is guarded.
+        The total-failure branch does not update the source or increment
+        sources_refreshed.
         """
         mock_fetcher.fetch_source = AsyncMock(
             return_value=FetchResult(
