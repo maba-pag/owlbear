@@ -383,11 +383,11 @@ def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path, ruff_toolch
             url
             == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.1.0/.automation/generated/linter-versions.json"
         )
-        return {"ruff": "0.16.2"}
+        return {"ruff": "0.16.5"}
 
     ruff_toolchain_module.check_ruff_toolchain(
         ROOT,
-        ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+        ruff_executable=str(_fake_ruff(tmp_path, "0.16.5")),
         megalinter_versions_loader=load_versions,
     )
 
@@ -399,7 +399,7 @@ def test_ruff_toolchain_proof_rejects_declared_version_drift(
     with pytest.raises(ValueError, match=r"MegaLinter declared Ruff=0\.16\.1"):
         ruff_toolchain_module.check_ruff_toolchain(
             ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.5")),
             megalinter_versions_loader=lambda _: {"ruff": "0.16.1"},
         )
 
@@ -411,7 +411,7 @@ def test_ruff_toolchain_proof_rejects_malformed_declared_metadata(
     with pytest.raises(ValueError, match="invalid ruff entry"):
         ruff_toolchain_module.check_ruff_toolchain(
             ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.5")),
             megalinter_versions_loader=lambda _: {"ruff": "0.16"},
         )
 
@@ -427,7 +427,7 @@ def test_ruff_toolchain_proof_rejects_unavailable_declared_metadata(
     with pytest.raises(RuntimeError, match="Unable to fetch MegaLinter linter versions"):
         ruff_toolchain_module.check_ruff_toolchain(
             ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.5")),
             megalinter_versions_loader=unavailable,
         )
 
