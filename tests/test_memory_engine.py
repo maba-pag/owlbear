@@ -153,3 +153,195 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
     assert error.rollback_errors == (rollback_error,)
     assert error.cache_error is None
     assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",)}
+    health = engine.health()
+    assert health.healthy is True
+    assert health.unreadable_paths == []
+    assert health.duplicate_paths == {}
+
+
+def test_lifecycle_recovery_status_uses_reloaded_originals(tmp_path: Path) -> None:
+    """A rollback error does not imply partial disk state when reload finds originals."""
+    engine = MemoryEngine(tmp_path)
+    for title in ("First", "Second"):
+        engine.save(
+            title=title,
+            content=f"Original {title.lower()}",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="source",
+            scope_agents=["old"],
+        )
+
+    original_write = storage.write_entry
+    initial_error = OSError("initial write failed")
+    rollback_error = OSError("rollback write failed")
+    calls = 0
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise initial_error
+        if calls == 2:
+            raise rollback_error
+        original_write(*args, **kwargs)
+
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        pytest.raises(LifecycleRecoveryError) as exc_info,
+    ):
+        engine.rename_agent("old", "new")
+
+    error = exc_info.value
+    assert error.recovery_status == "complete"
+    assert error.operation_error is initial_error
+    assert error.rollback_errors == (rollback_error,)
+    assert error.cache_error is None
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",)}
+    assert engine.health().healthy is True
+
+
+def test_lifecycle_recovery_status_uses_partial_reload_when_all_rollbacks_fail(tmp_path: Path) -> None:
+    """A successful reload identifies partial disk state even when no rollback call succeeds."""
+    engine = MemoryEngine(tmp_path)
+    for title in ("First", "Second"):
+        engine.save(
+            title=title,
+            content=f"Original {title.lower()}",
+            categories=["domain-knowledge"],
+            confidence=0.9,
+            source_agent="source",
+            scope_agents=["old"],
+        )
+
+    original_write = storage.write_entry
+    initial_error = OSError("initial write failed")
+    rollback_errors = (OSError("first rollback failed"), OSError("second rollback failed"))
+    calls = 0
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise initial_error
+        if calls in (3, 4):
+            raise rollback_errors[calls - 3]
+        original_write(*args, **kwargs)
+
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        pytest.raises(LifecycleRecoveryError) as exc_info,
+    ):
+        engine.rename_agent("old", "new")
+
+    error = exc_info.value
+    assert error.recovery_status == "partial"
+    assert error.operation_error is initial_error
+    assert error.rollback_errors == rollback_errors
+    assert error.cache_error is None
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",)}
+    assert engine.health().healthy is True
+
+
+def test_lifecycle_cache_reload_failure_resets_cache_until_subsequent_reload(tmp_path: Path) -> None:
+    """A failed recovery reload clears the cache and permits a later reload from disk."""
+    engine = MemoryEngine(tmp_path)
+    engine.save(
+        title="First",
+        content="Original first",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    engine.save(
+        title="Second",
+        content="Original second",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    engine.get_entries()
+
+    original_write = storage.write_entry
+    original_load = engine._load
+    initial_error = OSError("initial write failed")
+    reload_error = OSError("cache reload failed")
+    calls = 0
+    load_calls = 0
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise initial_error
+        original_write(*args, **kwargs)
+
+    def failing_load() -> list[MemoryEntry]:
+        nonlocal load_calls
+        load_calls += 1
+        if load_calls == 1:
+            raise reload_error
+        return original_load()
+
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        patch.object(engine, "_load", side_effect=failing_load),
+        pytest.raises(LifecycleRecoveryError) as exc_info,
+    ):
+        engine.rename_agent("old", "new")
+
+    error = exc_info.value
+    assert error.recovery_status == "uncertain"
+    assert error.operation_error is initial_error
+    assert error.rollback_errors == ()
+    assert error.cache_error is reload_error
+    assert engine._entries == []
+    assert engine._id_to_path == {}
+    health = engine.health()
+    assert health.healthy is True
+    assert health.unreadable_paths == []
+    assert health.duplicate_paths == {}
+
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",)}
+    assert engine.parse_errors == 0
+
+
+def test_lifecycle_operation_failure_with_successful_rollback_reraises_original_error(tmp_path: Path) -> None:
+    """A fully successful rollback preserves the ordinary operation exception."""
+    engine = MemoryEngine(tmp_path)
+    engine.save(
+        title="First",
+        content="Original first",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+    engine.save(
+        title="Second",
+        content="Original second",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["old"],
+    )
+
+    original_write = storage.write_entry
+    initial_error = OSError("initial write failed")
+    calls = 0
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise initial_error
+        original_write(*args, **kwargs)
+
+    with patch.object(storage, "write_entry", side_effect=failing_write), pytest.raises(OSError) as exc_info:
+        engine.rename_agent("old", "new")
+
+    assert exc_info.value is initial_error
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",)}
+    assert engine.health().healthy is True

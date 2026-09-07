@@ -564,26 +564,24 @@ class MemoryEngine:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
         except Exception as operation_error:
             rollback_errors: list[Exception] = []
-            rollback_succeeded = 0
             for entry in affected_entries:
                 try:
                     storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
                 except Exception as rollback_error:  # noqa: BLE001 - preserve every recovery failure.
                     rollback_errors.append(rollback_error)
-                else:
-                    rollback_succeeded += 1
 
             cache_error: Exception | None = None
+            recovery_status = "uncertain"
             try:
-                self._load()
+                reloaded_entries = self._load()
+                recovery_status = self._lifecycle_recovery_status(affected_entries, reloaded_entries)
             except Exception as reload_error:  # noqa: BLE001 - cache state is part of recovery diagnostics.
                 cache_error = reload_error
                 self._entries = []
                 self._id_to_path = {}
                 self._cache = MtimeScanCache(self._memory_dir)
 
-            if rollback_errors or cache_error is not None:
-                recovery_status = "uncertain" if cache_error is not None or rollback_succeeded == 0 else "partial"
+            if rollback_errors or cache_error is not None or recovery_status != "complete":
                 raise LifecycleRecoveryError(
                     operation_error,
                     tuple(rollback_errors),
@@ -592,6 +590,24 @@ class MemoryEngine:
                 ) from operation_error
             raise
         self._entries = self._load()
+
+    @staticmethod
+    def _lifecycle_recovery_status(
+        originals: list[MemoryEntry],
+        reloaded_entries: list[MemoryEntry],
+    ) -> str:
+        """Classify recovery from the entries found after reloading the store."""
+        try:
+            reloaded_by_id = {entry.id: entry for entry in reloaded_entries}
+            for original in originals:
+                reloaded = reloaded_by_id.get(original.id)
+                if reloaded is None:
+                    return "uncertain"
+                if reloaded != original:
+                    return "partial"
+        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
+            return "uncertain"
+        return "complete"
 
     def _upsert_cache(self, entry: MemoryEntry) -> None:
         for index, current in enumerate(self._entries):

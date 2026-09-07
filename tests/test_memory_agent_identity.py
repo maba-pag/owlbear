@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import MemoryCategory, MemoryEngine
+from owlbear_memory import LifecycleRecoveryError, MemoryCategory, MemoryEngine
 
 from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
@@ -141,3 +141,27 @@ async def test_rename_and_delete_reject_wildcard_names(tmp_path: Path) -> None:
         await rename_agent_memories(ctx, old_name="*", new_name="builder")
     with pytest.raises(ToolError, match="non-wildcard"):
         await delete_agent_memories(ctx, agent="*")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["rename_agent", "delete_agent"])
+async def test_lifecycle_recovery_diagnostics_are_exposed_as_tool_errors(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    engine = MemoryEngine(tmp_path / ".owlbear/memory")
+    diagnostic = LifecycleRecoveryError(
+        OSError("initial write failed"),
+        (OSError("rollback write failed"),),
+        None,
+        "partial",
+    )
+    ctx = _make_ctx(engine)
+
+    with patch.object(engine, operation, side_effect=diagnostic), pytest.raises(ToolError) as exc_info:
+        if operation == "rename_agent":
+            await rename_agent_memories(ctx, old_name="verifier", new_name="builder")
+        else:
+            await delete_agent_memories(ctx, agent="verifier")
+
+    assert str(exc_info.value) == str(diagnostic)
