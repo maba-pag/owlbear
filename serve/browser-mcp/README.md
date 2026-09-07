@@ -88,7 +88,9 @@ future adapter is explicitly wired; do not advertise registered browser refresh 
 end-to-end capability. For the currently supported manual path, inspect the acquisition result and
 then call `knowledge_ingest` with the captured text and an intentional scope. That creates or reuses
 an inline Knowledge source; `source_url` supplies document identity for that ingest but does not bind
-the capture to a refreshable browser source.
+the capture to a refreshable browser source. If both `source_url` and `metadata.title` are omitted,
+anonymous captures share the `Untitled inline document` identity within their scope and a later
+capture replaces the earlier one.
 
 See the [Browser package guide](../browser/README.md), the [acquisition tests](tests/test_acquire.py),
 and the [SSRF policy tests](tests/test_ssrf_preflight.py) for the exercised boundary.

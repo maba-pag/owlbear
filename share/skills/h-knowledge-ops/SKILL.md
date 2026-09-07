@@ -59,6 +59,9 @@ Behavior:
   promoted into a registered source by this tool.
 - The source's configured scope is used by the coordinator for document, chunk, and vector
   persistence. Choose `project:{id}` explicitly for project-scoped direct captures.
+- If both `source_url` and `metadata.title` are omitted, the document identity is the shared title
+  `Untitled inline document` within `mcp-inline-{scope}`; a later anonymous capture replaces the
+  earlier one. Set `source_url` or `metadata.title` for each capture that must remain distinct.
 - The current text adapter summarizes counts even when the coordinator records per-document
   failures. Inspect source health or use the typed refresh path when failure detail matters.
 
@@ -304,7 +307,7 @@ Each whole object below is the complete `register_knowledge_source` argument map
 ```python
 results = knowledge_search(query="retry logic patterns")
 if not results:
-    knowledge_ingest(text=content, metadata={"source": ".owlbear/research/retry.md"})
+  knowledge_ingest(text=content, source_url=".owlbear/research/retry.md", scope="project:{id}")
 ```
 
 ### Delta checking

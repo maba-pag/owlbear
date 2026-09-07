@@ -36,6 +36,9 @@ async with PlaywrightLauncher() as launcher:
 | --- | --- |
 | `BrowserContentFetcher` | Async fetcher backed by a Playwright `BrowserContext` |
 | `PlaywrightLauncher` | Manages Playwright browser lifecycle |
+| `AcquisitionRequest` | Validated URL, selector, and timeout inputs for structured acquisition |
+| `AcquisitionSuccess` / `AcquisitionFailure` | Typed success and failure result variants |
+| `AcquisitionStatus` | Status enum carried by each acquisition result |
 | `extract_content(html, url)` | Convert rendered HTML to normalized Markdown through the shared web-content package |
 | `find_sso_extension()` | Locate an explicitly configured or platform-discovered extension directory |
 | `AuthenticationRequired` | Authentication exception used by interactive page-control callers; structured acquisition reports an `AcquisitionFailure` instead |
