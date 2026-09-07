@@ -92,6 +92,7 @@ test.describe('Memory conflict recovery', () => {
 
       const panel = entry.getByTestId('memory-conflict-panel')
       const reapply = entry.getByTestId('memory-conflict-reapply')
+      const save = entry.getByTestId('memory-edit-save-btn')
       await expect(panel).toBeFocused()
       await page.keyboard.press('Tab')
       await expect(entry.getByTestId('memory-conflict-reload')).toBeFocused()
@@ -101,9 +102,8 @@ test.describe('Memory conflict recovery', () => {
       await page.keyboard.press('Enter')
       await expect(entry.getByTestId('memory-conflict-panel')).toHaveCount(0)
 
-      const save = entry.getByTestId('memory-edit-save-btn')
-      await expect(save).toBeEnabled()
-      await save.click()
+      await expect(save).toBeFocused()
+      await page.keyboard.press('Enter')
       await expect(entry.getByTestId('memory-edit-form')).toHaveCount(0)
     })
   }

@@ -333,6 +333,7 @@ function MemoryTab() {
   const accordionRefs = useRef<Record<string, HTMLElement>>({})
   const memoryEditActionsRef = useRef<HTMLDivElement | null>(null)
   const conflictPanelRef = useRef<HTMLElement | null>(null)
+  const restoreConflictFocusRef = useRef<string | null>(null)
   const pendingMutationIdsRef = useRef(new Set<string>())
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
@@ -417,6 +418,18 @@ function MemoryTab() {
     }
     conflictPanelRef.current?.focus()
   }, [memoryConflict?.entryId, memoryConflict?.status])
+
+  useEffect(() => {
+    const entryId = restoreConflictFocusRef.current
+    if (memoryConflict || !entryId || editingEntryId !== entryId) {
+      return
+    }
+
+    restoreConflictFocusRef.current = null
+    memoryEditActionsRef.current
+      ?.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
+      ?.focus()
+  }, [editingEntryId, memoryConflict])
 
   useEffect(() => {
     const element = stateFilterRef.current
@@ -689,6 +702,7 @@ function MemoryTab() {
     if (memoryConflict?.entryId !== entryId || !memoryConflict.currentEntry) {
       return
     }
+    restoreConflictFocusRef.current = entryId
     setEditDraft(makeInitialDraft(memoryConflict.currentEntry))
     clearEntryErrors(entryId)
     setMemoryConflict(null)
@@ -698,6 +712,7 @@ function MemoryTab() {
     if (memoryConflict?.entryId !== entryId || !memoryConflict.currentEntry) {
       return
     }
+    restoreConflictFocusRef.current = entryId
     const currentUpdatedAt = memoryConflict.currentEntry.updated_at
     setEditDraft((previous) => previous ? { ...previous, expected_updated_at: currentUpdatedAt } : previous)
     clearEntryErrors(entryId)
