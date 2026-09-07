@@ -64,7 +64,8 @@ class IngestCoordinator:
 
     async def ingest(self, request: IngestRequest) -> IngestResult:
         """Ingest a batch of documents and run per-document cascade steps."""
-        if self._sources.get_source(request.source_id) is None:
+        source = self._sources.get_source(request.source_id)
+        if source is None:
             msg = f"source {request.source_id!r} not found"
             raise LookupError(msg)
 
@@ -82,7 +83,7 @@ class IngestCoordinator:
 
         for document in request.documents:
             documents_processed += 1
-            outcome = await self._process_document(request, document)
+            outcome = await self._process_document(request, document, scope=source.scope)
             if isinstance(outcome, KnowledgeFailure):
                 errors.append(outcome)
                 continue
@@ -240,6 +241,8 @@ class IngestCoordinator:
         self,
         request: IngestRequest,
         document: IngestDocument,
+        *,
+        scope: str,
     ) -> tuple[ContentIngestState, ContentIngestResult, int, int, int] | KnowledgeFailure | None:
         """Run ingest and cascade actions for one document."""
         try:
@@ -250,6 +253,7 @@ class IngestCoordinator:
                     text=document.text,
                     uri=document.uri,
                     external_id=document.external_id,
+                    scope=scope,
                     metadata=dict(document.metadata),
                 )
             )
@@ -273,6 +277,10 @@ class IngestCoordinator:
                         content_result.chunk_ids,
                         request.source_id,
                     )
+                self._content.acknowledge_replacement(
+                    content_result.document_id,
+                    content_result.replaced_chunk_ids,
+                )
                 outcome = (
                     content_result.state,
                     content_result,
