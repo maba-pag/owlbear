@@ -508,6 +508,17 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
     assert "/finalize-change <change-id>" in content
 
 
+def test_orchestration_transition_envelope_matches_registered_field() -> None:
+    """Orchestrator guidance must use the live transition_delivery envelope field."""
+    content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+    step_start = content.index("## Step 3 - Forward One Worker Transition")
+    step_end = content.index("## Step 4 - Preserve Typed Integration Attention")
+    step = content[step_start:step_end]
+
+    assert "transition as `transition` byte-for-structure unchanged" in step
+    assert "transition as `request` byte-for-structure unchanged" not in step
+
+
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415

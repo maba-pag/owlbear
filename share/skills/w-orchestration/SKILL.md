@@ -70,7 +70,7 @@ Require the worker result to be one `DeliveryTransition` mapping. Validate only 
 
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
 commit fields. Call `transition_delivery` with outer `change_id=launch.change_id` and the returned
-transition as `request` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
+transition as `transition` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
 is forwarded normally and must not be recovered.
 
 Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
