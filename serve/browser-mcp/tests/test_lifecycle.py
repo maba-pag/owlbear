@@ -26,17 +26,30 @@ class _FakePage:
 
 
 class _FakeLauncher:
-    def __init__(self, calls: list[str], *, page_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        calls: list[str],
+        *,
+        launch_error: Exception | None = None,
+        page_error: Exception | None = None,
+        page_resource: _FakePage | None = None,
+    ) -> None:
         self._calls = calls
+        self._launch_error = launch_error
         self._page_error = page_error
+        self._page_resource = page_resource
 
     async def launch(self) -> None:
         self._calls.append("launch")
+        if self._launch_error is not None:
+            raise self._launch_error
 
     async def page(self) -> _FakePage:
         self._calls.append("page-create")
         if self._page_error is not None:
             raise self._page_error
+        if self._page_resource is not None:
+            return self._page_resource
         return _FakePage(self._calls)
 
     async def close(self) -> None:
@@ -85,34 +98,59 @@ async def test_startup_page_failure_closes_launcher_and_exposes_safe_diagnostic(
 
 
 @pytest.mark.asyncio
-async def test_shutdown_attempts_page_and_launcher_cleanup_after_page_failure() -> None:
+async def test_startup_launch_failure_closes_launcher_and_exposes_safe_diagnostic() -> None:
     calls: list[str] = []
-    launcher = _FakeLauncher(calls)
-    page = _FakePage(calls, error=RuntimeError("page cleanup failed"))
+    launcher = _FakeLauncher(calls, launch_error=RuntimeError("/private/profile/token"))
 
     with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
         async with app_lifespan(mcp) as context:
-            context.page = page
+            assert context.launcher is None
+            assert context.page is None
+            assert context.browser_diagnostic == "browser startup failed (RuntimeError)"
+            assert "/private/profile/token" not in context.browser_diagnostic
+
+    assert calls == ["launch", "launcher"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_attempts_page_and_launcher_cleanup_after_page_failure() -> None:
+    calls: list[str] = []
+    page = _FakePage(calls, error=RuntimeError("page cleanup failed"))
+    launcher = _FakeLauncher(calls, page_resource=page)
+
+    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+        async with app_lifespan(mcp) as context:
+            assert context.page is page
 
     assert calls == ["launch", "page-create", "page", "launcher"]
 
 
 @pytest.mark.asyncio
-async def test_launcher_close_attempts_all_resources_and_is_idempotent() -> None:
+@pytest.mark.parametrize("failed_resource", ["fetcher", "context", "playwright"])
+async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_resource: str) -> None:
     calls: list[str] = []
     launcher = PlaywrightLauncher()
     launcher._fetcher = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
-        "fetcher", calls, error=RuntimeError("fetcher failed")
+        "fetcher",
+        calls,
+        error=RuntimeError(f"{failed_resource} failed") if failed_resource == "fetcher" else None,
     )
-    launcher._context = _AsyncResource("context", calls)  # type: ignore[assignment]  # noqa: SLF001
-    launcher._pw = _AsyncPlaywright(calls)  # noqa: SLF001
+    launcher._context = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
+        "context",
+        calls,
+        error=RuntimeError(f"{failed_resource} failed") if failed_resource == "context" else None,
+    )
+    launcher._pw = _AsyncPlaywright(  # noqa: SLF001
+        calls,
+        error=RuntimeError(f"{failed_resource} failed") if failed_resource == "playwright" else None,
+    )
     launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
         persistent_session=True,
         visible_manual_auth=True,
         microsoft_sso=True,
     )
 
-    with pytest.raises(RuntimeError, match="fetcher failed"):
+    with pytest.raises(RuntimeError, match=f"{failed_resource} failed"):
         await launcher.close()
 
     assert calls == ["fetcher", "context", "playwright"]
