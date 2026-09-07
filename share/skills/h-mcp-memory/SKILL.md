@@ -278,7 +278,8 @@ Behavior:
 - includes `curated`, `approved`, and `contested` entries scoped to the agent
 - treats omitted `categories` as all categories; this is the standard pre-flight call
 - returns `approved` entries before `curated`
-- formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
+- formats ordinary blocks as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
+- adds `State: contested` to contested blocks, plus `Challenge task:` when `contested_by_task` is available
 - omits all other entry metadata
 - does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
 - accepts named and universal recall guidance according to the memory service's recognition rules

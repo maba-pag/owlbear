@@ -9,13 +9,11 @@ AC4 (td:1): recall with agent="*" receives guided universal-only fallback
     AC5 (td:2): return format has title, entry ID, and content, but no other metadata
   AC6 (td:2): ordering — approved entries first, then curated entries fill remaining slots
   AC7 (td:1): limit parameter works (default 20)
-  AC8 (td:0): all tests fail — RED state
+    AC8 (td:2): contested entries expose state and available challenge context
 
 Interface strategy:
-  recall_memory does not exist in owlbear_memory_mcp.tools yet.
-  The module-level import causes ImportError, guaranteeing RED for every test.
   Expected signature: recall_memory(ctx, *, agent, categories=None, limit=None) -> str
-    Return: concatenated "## {title}\\nEntry ID: `{id}`\\n{content}" blocks.
+        Return: concatenated identity-bearing blocks with conditional contested markers.
 """
 
 # ruff: noqa: N801
@@ -27,7 +25,7 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-from owlbear_memory import MemoryEngine, MemoryEntry
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 
 
 async def _recall(*args: object, **kwargs: object) -> str:
@@ -468,6 +466,102 @@ class TestFromAC_IdentityBearingFormat:
             f"## Alpha Entry\nEntry ID: `{e1.id}`\nAlpha content.\n\n## Beta Entry\nEntry ID: `{e2.id}`\nBeta content."
         )
         assert result == expected
+
+
+class TestFromAC_ContestedMarker:
+    """Contested entries carry structural challenge context in recall output."""
+
+    @pytest.mark.asyncio
+    async def test_contested_entry_includes_state_and_challenge_task(self, tmp_path: Path) -> None:
+        """A contested entry exposes its lifecycle state and originating task."""
+        entry = _make_entry(
+            id=_uuid(1),
+            title="Challenged guidance",
+            content="Check this guidance before applying it.",
+            state=MemoryState.CONTESTED,
+            scope_agents=["builder"],
+            contested_by_task="task-243",
+        )
+        storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder")
+
+        assert result == (
+            f"## Challenged guidance\nEntry ID: `{entry.id}`\nState: contested\n"
+            "Challenge task: `task-243`\nCheck this guidance before applying it."
+        )
+
+    @pytest.mark.asyncio
+    async def test_contested_entry_without_task_still_includes_state_marker(self, tmp_path: Path) -> None:
+        """A contested entry remains identifiable when no task reference is stored."""
+        entry = _make_entry(
+            id=_uuid(1),
+            title="Unreferenced challenge",
+            state=MemoryState.CONTESTED,
+            scope_agents=["builder"],
+            contested_by_task=None,
+        )
+        storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder")
+
+        assert result == f"## Unreferenced challenge\nEntry ID: `{entry.id}`\nState: contested\nEntry body text."
+        assert "Challenge task:" not in result
+
+    @pytest.mark.asyncio
+    async def test_mixed_recall_marks_only_contested_entries(self, tmp_path: Path) -> None:
+        """A mixed recall keeps ordinary approved and curated blocks unchanged."""
+        approved = _make_entry(
+            id=_uuid(1),
+            title="Approved guidance",
+            content="Approved body.",
+            state="approved",
+            confidence=0.95,
+            scope_agents=["builder"],
+        )
+        contested = _make_entry(
+            id=_uuid(2),
+            title="Contested guidance",
+            content="Contested body.",
+            state="approved",
+            confidence=0.85,
+            scope_agents=["builder"],
+        )
+        curated = _make_entry(
+            id=_uuid(3),
+            title="Curated guidance",
+            content="Curated body.",
+            state="curated",
+            confidence=0.8,
+            scope_agents=["builder"],
+        )
+        engine = MemoryEngine(memory_dir=tmp_path)
+        approved_live = _seed_entry(engine, approved)
+        contested_live = _seed_entry(engine, contested)
+        _seed_entry(engine, curated)
+        contested_live = engine.record_factually_wrong(
+            contested_live.id,
+            "task-mixed-243",
+            expected_updated_at=contested_live.updated_at,
+        )
+        ctx = _make_ctx(engine)
+
+        result = await _recall(ctx, agent="builder")
+
+        assert result == "\n\n".join(
+            (
+                f"## Approved guidance\nEntry ID: `{approved_live.id}`\nApproved body.",
+                (
+                    f"## Contested guidance\nEntry ID: `{contested_live.id}`\nState: contested\n"
+                    "Challenge task: `task-mixed-243`\nContested body."
+                ),
+                f"## Curated guidance\nEntry ID: `{_uuid(3)}`\nCurated body.",
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
