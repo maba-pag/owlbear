@@ -668,7 +668,7 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
     assert (repository / "product.txt").read_bytes() == user_checkout_before
 
 
-@pytest.mark.parametrize("dirty_state", ("unstaged", "untracked"))
+@pytest.mark.parametrize("dirty_state", ["unstaged", "untracked"])
 def test_resolve_target_sync_conflict_rejects_unstaged_or_untracked_content(
     tmp_path: Path,
     dirty_state: str,
