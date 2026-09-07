@@ -24,7 +24,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `confidence` | float | Inclusive `[0.7, 1.0]` |
 | `state` | str | One of: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted` |
 | `content` | str | Markdown body |
-| `scope_agents` | list[str] | Scope list (empty list allowed) |
+| `scope_agents` | list[str] | Scope list (empty list allowed); supplied members must be nonblank strings; `*` means all agents |
 | `source_agent` | str | Required; immutable historical provenance marker |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |

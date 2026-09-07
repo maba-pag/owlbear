@@ -299,9 +299,9 @@ class TestFromAC_WildcardAgentFallback:
         result = await _recall(ctx, agent="*")
 
         assert result == (
-            "This recall_memory caller is not a known agent. Known agents: none discovered. "
-            "This caller is read-only and must not write memories. "
-            "It therefore receives only memories scoped to all agents (*)."
+            "This recall_memory caller is not recognized from stored memory data. Known agents: none discovered. "
+            "It receives only memories scoped to all agents (*); recognition is relevance scoping, "
+            "not write authorization."
         )
 
 

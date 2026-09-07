@@ -47,6 +47,14 @@ class MemoryHealth(BaseModel):
         return not self.unreadable_paths and not self.duplicate_paths
 
 
+def validate_scope_agents(value: list[str]) -> list[str]:
+    """Validate that every relevance-scope member is a nonblank string."""
+    if any(not isinstance(agent, str) or not agent.strip() for agent in value):
+        msg = "scope_agents must contain only non-empty strings"
+        raise ValueError(msg)
+    return value
+
+
 class PurgePreview(BaseModel):
     """Counts from classifying deleted memories for purge."""
 
@@ -84,6 +92,11 @@ class MemoryEntry(BaseModel):
     updated_at: str
     approved_at: str | None = None
     contested_by_task: str | None = None
+
+    @field_validator("scope_agents")
+    @classmethod
+    def _validate_scope_agents(cls, value: list[str]) -> list[str]:
+        return validate_scope_agents(value)
 
     @model_validator(mode="before")
     @classmethod

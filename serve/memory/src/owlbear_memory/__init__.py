@@ -11,7 +11,7 @@ from owlbear_memory.errors import (
     TransitionError,
     ValidationError,
 )
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryHealth, MemoryState
+from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryHealth, MemoryState, validate_scope_agents
 
 __all__ = [
     "ConcurrencyError",
@@ -28,4 +28,5 @@ __all__ = [
     "ValidationError",
     "check_slot_efficiency",
     "compute_score",
+    "validate_scope_agents",
 ]

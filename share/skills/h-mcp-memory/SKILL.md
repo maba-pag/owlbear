@@ -73,7 +73,7 @@ may remain staged. Inspect `git status` and the staged diff before retrying.
 
 | Tool | Description | Key parameters |
 | --- | --- | --- |
-| `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent`, `scope_agents` |
+| `save_memory` | Create a new `pending` memory entry; scope is assigned later by curation | `title`, `content`, `categories`, `confidence`, `source_agent` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
@@ -224,10 +224,14 @@ Creates a new `pending` entry in `.owlbear/memory/*.md`.
 | `categories` | list[str] | (required) | One or more category values |
 | `confidence` | float | (required) | Must be within `[0.7, 1.0]` |
 | `source_agent` | str | (required) | Non-blank immutable provenance label |
-| `scope_agents` | list[str] \| null | `[]` | Initial relevance scope; omit it so curation owns assignment |
 
 Named provenance is accepted at intake without active-agent runtime validation. A readable local
 `.agent.md` is corroboration the curator may use later; it is not an authorization boundary.
+
+Scope members are validated at the shared memory-model boundary and must be nonblank strings. An
+empty list is valid for a pending entry; `*` is valid universal scope and is not authorization.
+`save_memory` always creates an unscoped pending entry; curation or human Cockpit editing assigns
+scope.
 
 Returns: the unscoped pending entry and a guidance hint indicating next-step curation.
 
@@ -265,7 +269,7 @@ Returns identity-bearing markdown blocks scoped to one agent for pre-flight load
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
-| `agent` | str | (required) | Agent name requesting relevant memory |
+| `agent` | str \| null | `null` | Agent name requesting relevant memory; omitted, blank, and `*` callers receive universal-only guidance |
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `limit` | int \| null | `20` | Maximum entries to return; non-negative |
 
@@ -276,7 +280,7 @@ Behavior:
 - returns `approved` entries before `curated`
 - formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
 - omits all other entry metadata
-- rejects blank or wildcard agent names
+- does not reject blank or wildcard callers; unrecognized callers receive universal-only guidance
 - accepts named and universal recall guidance according to the memory service's recognition rules
 
 ## assess_memories
@@ -324,7 +328,7 @@ Curator update tool for content edits and lifecycle transitions.
 | `content` | str \| null | `null` | Replace markdown body |
 | `categories` | list[str] \| null | `null` | Replace categories |
 | `confidence` | float \| null | `null` | Replace confidence |
-| `scope_agents` | list[str] \| null | `null` | Replace scope list |
+| `scope_agents` | list[str] \| null | `null` | Replace scope list; pending promotion requires a non-empty scope, while human Cockpit editing may clear scope to `[]` |
 
 State is code-managed and is not a caller-supplied parameter.
 
@@ -477,7 +481,6 @@ All tools raise `ToolError` (surfaced as MCP error responses) for invalid operat
 | Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
 | Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
-| Blank agent | Empty or whitespace-only agent name | `recall_memory(agent="")` |
-| Unknown agent | Recall identity has no recognized memory-derived guidance | `recall_memory(agent="unknown-role")` |
+| Blank or unknown agent | Not an error; returns universal-only guidance | `recall_memory(agent="")` or `recall_memory(agent="unknown-role")` |
 
 Tool responses include a `hint` field with human-readable guidance about what happened and suggested next steps.
