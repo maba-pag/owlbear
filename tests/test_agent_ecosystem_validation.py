@@ -250,7 +250,7 @@ class _TransitionApplicationDouble(_TargetApplicationDouble):
     def __init__(self) -> None:
         self.transitions: list[tuple[str, dict[str, object]]] = []
 
-    def transition_delivery(self, change_id: str, transition: object) -> None:
+    def transition_delivery(self, change_id: str, transition: object) -> _TransitionResult:
         model_dump = getattr(transition, "model_dump", None)
         assert callable(model_dump)
         self.transitions.append((change_id, model_dump(mode="json")))
