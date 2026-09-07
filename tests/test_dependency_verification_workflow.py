@@ -1024,7 +1024,7 @@ def test_renovate_keeps_ruff_and_megalinter_policies_separate() -> None:
         for rule in renovate["packageRules"]
         if rule.get("description") == "Keep standalone Ruff within the current MegaLinter-compatible ceiling"
     )
-    assert ruff_ceiling["allowedVersions"] == "<=0.16.5"
+    assert ruff_ceiling["allowedVersions"] == f"<={dependency_match.group('version')}"
     assert ruff_ceiling["matchPackageNames"] == ruff_rule["matchPackageNames"]
     assert megalinter_rule["matchManagers"] == ["custom.regex", "github-actions"]
     assert megalinter_rule["matchDatasources"] == ["github-tags"]

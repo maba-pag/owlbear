@@ -151,6 +151,7 @@ jobs:
                 workspace_lock_tooling=true
                 ;;
               .github/workflows/*|\
+              .github/renovate.json|\
               .github/scripts/check_ruff_toolchain.py|\
               serve/tools/src/owlbear_tools/dependency_ci.py|\
               serve/tools/src/owlbear_tools/megalinter.py|\
