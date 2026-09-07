@@ -6,7 +6,6 @@ not the portable source tree copied into a consumer project.
 
 ## What lives here
 
-> **TODO:** cleanup — remove Delivery runtime path bridges after no active Changes remain on the board [#runtime-path-shims]
 > **TODO:** cleanup — perform the deliberate destructive runtime reset once no active Changes remain on the board [#destructive-runtime-reset]
 
 | Area | Role |
