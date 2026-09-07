@@ -29,6 +29,16 @@ _SSO_EXT_ID = "ppnbnpeolgkicgegkbkbjmhlideopiji"
 _EXT_REL = Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
 
 
+def _prefer_cleanup_error(
+    current: BaseException | None,
+    candidate: BaseException,
+) -> BaseException:
+    """Prefer later control-flow failures over ordinary cleanup errors."""
+    if current is None or (isinstance(current, Exception) and not isinstance(candidate, Exception)):
+        return candidate
+    return current
+
+
 @dataclass(frozen=True, slots=True)
 class AuthenticationCapabilities:
     """Authentication integrations available to the launched browser."""
@@ -191,19 +201,17 @@ class PlaywrightLauncher:
             try:
                 await fetcher.close()
             except BaseException as exc:  # noqa: BLE001 - later resources still require cleanup.
-                first_error = exc
+                first_error = _prefer_cleanup_error(first_error, exc)
         if context is not None:
             try:
                 await context.close()
             except BaseException as exc:  # noqa: BLE001 - later resources still require cleanup.
-                if first_error is None:
-                    first_error = exc
+                first_error = _prefer_cleanup_error(first_error, exc)
         if playwright is not None:
             try:
                 await playwright.stop()
             except BaseException as exc:  # noqa: BLE001 - preserve the first cleanup failure.
-                if first_error is None:
-                    first_error = exc
+                first_error = _prefer_cleanup_error(first_error, exc)
         if first_error is not None:
             raise first_error
 

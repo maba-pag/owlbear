@@ -137,6 +137,21 @@ async def test_startup_cancellation_closes_launcher_and_reraises(failure_stage: 
 
 
 @pytest.mark.asyncio
+async def test_startup_keyboard_interrupt_closes_launcher_and_reraises() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls, launch_error=KeyboardInterrupt())
+
+    with (
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        async with app_lifespan(mcp):
+            pytest.fail("control-flow failure must not yield a browser context")
+
+    assert calls == ["launch", "launcher"]
+
+
+@pytest.mark.asyncio
 async def test_shutdown_attempts_page_and_launcher_cleanup_after_page_failure() -> None:
     calls: list[str] = []
     page = _FakePage(calls, error=RuntimeError("page cleanup failed"))
@@ -250,6 +265,24 @@ async def test_launcher_close_defers_cancellation_until_all_resources_attempted(
     )
 
     await launcher.close()
+    assert calls == ["fetcher", "context", "playwright"]
+
+
+@pytest.mark.asyncio
+async def test_launcher_close_preserves_later_cancellation_over_ordinary_error() -> None:
+    calls: list[str] = []
+    launcher = PlaywrightLauncher()
+    launcher._fetcher = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
+        "fetcher", calls, error=RuntimeError("fetcher failed")
+    )
+    launcher._context = _AsyncResource(  # type: ignore[assignment]  # noqa: SLF001
+        "context", calls, error=asyncio.CancelledError()
+    )
+    launcher._pw = _AsyncPlaywright(calls)  # noqa: SLF001
+
+    with pytest.raises(asyncio.CancelledError):
+        await launcher.close()
+
     assert calls == ["fetcher", "context", "playwright"]
 
 
