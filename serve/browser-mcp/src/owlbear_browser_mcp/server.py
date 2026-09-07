@@ -49,17 +49,57 @@ def _is_blocked_ip(ip_str: str) -> bool:
     return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
 
 
-async def _check_ssrf(url: str) -> None:
+def _is_ip_literal(value: str) -> bool:
+    """Return whether *value* is an IP address literal, including legacy IPv4 forms."""
+    candidate = value.removesuffix(".")
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        try:
+            socket.inet_aton(candidate)
+        except OSError:
+            return False
+    return True
+
+
+def _is_trusted_internal_ip(ip_str: str) -> bool:
+    """Return whether *ip_str* is private/internal, excluding reserved non-loopback space."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    check: ipaddress.IPv4Address | ipaddress.IPv6Address = (
+        addr.ipv4_mapped if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None else addr
+    )
+    return (
+        (check.is_loopback or check.is_private or check.is_link_local)
+        and not check.is_unspecified
+        and (check.is_loopback or not check.is_reserved)
+    )
+
+
+async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> None:
     """Pre-flight SSRF check for *url* (CWE-918).
+
+    Args:
+        url: URL to resolve and validate.
+        allowlist: Configured hostname allowlist used to identify an exact
+            trusted-internal hostname. Wildcard mode never permits private IPs.
 
     Raises :class:`~mcp.server.mcpserver.exceptions.ToolError` if:
 
     - The scheme is not ``http`` or ``https``.
     - DNS resolution raises ``OSError`` (unresolvable hostname).
-    - Any resolved IP is loopback / private / link-local / reserved / unspecified.
+    - Any resolved IP is loopback / private / link-local / reserved / unspecified and
+      the hostname is not an exact entry in the domain allowlist. Reserved,
+      unspecified, and unparseable addresses are always rejected.
 
     Accepted limitations:
 
+    - **Trusted internal destinations**: an exact hostname entry in
+      ``BROWSER_ALLOWED_DOMAINS`` is an explicit approval for that hostname's
+      private/internal DNS results. Wildcard mode and unallowlisted hostnames do
+      not receive this approval.
     - **TOCTOU / DNS rebinding**: Playwright cannot connect to a pre-resolved IP, so
       the URL cannot be rewritten after DNS lookup. An attacker controlling DNS can change
       the resolution between the check and ``page.goto()``. Mitigated by the
@@ -73,9 +113,18 @@ async def _check_ssrf(url: str) -> None:
     if parsed.scheme not in ("http", "https"):
         msg = f"URL scheme '{parsed.scheme}' is not allowed — only http and https are permitted."
         raise ToolError(msg)
+    if "\\" in parsed.netloc:
+        msg = "Backslashes are not allowed in URL authorities."
+        raise ToolError(msg)
 
     hostname = parsed.hostname or ""
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    trusted_internal = (
+        bool(hostname)
+        and not _is_ip_literal(hostname)
+        and isinstance(allowlist, DomainAllowlist)
+        and allowlist.allows_exact_hostname(hostname)
+    )
 
     try:
         addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port)
@@ -85,7 +134,7 @@ async def _check_ssrf(url: str) -> None:
 
     for _family, _type, _proto, _canonname, sockaddr in addrs:
         ip_str = sockaddr[0]
-        if _is_blocked_ip(ip_str):
+        if _is_blocked_ip(ip_str) and (not trusted_internal or not _is_trusted_internal_ip(ip_str)):
             msg = f"URL '{url}' resolved to a blocked IP address ({ip_str!r})."
             raise ToolError(msg)
 
@@ -170,7 +219,7 @@ async def acquire(  # noqa: PLR0913
     app_ctx = ctx.request_context.lifespan_context
     if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
-    await _check_ssrf(url)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:
@@ -196,7 +245,7 @@ async def acquire(  # noqa: PLR0913
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     app_ctx = ctx.request_context.lifespan_context
-    await _check_ssrf(url)
+    await _check_ssrf(url, allowlist=app_ctx.allowlist)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:
