@@ -91,25 +91,39 @@ function parseValidationErrors(payload: unknown): ValidationMessage[] {
     .filter((message): message is ValidationMessage => message !== null)
 }
 
-function parseMutationErrorPayload(payload: unknown): { validationMessages: ValidationMessage[]; message: string | null } {
+function parseMutationErrorCode(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null
+  }
+
+  const code = (payload as { code?: unknown }).code
+  return typeof code === 'string' && code.trim().length > 0 ? code.trim() : null
+}
+
+function parseMutationErrorPayload(payload: unknown): {
+  validationMessages: ValidationMessage[]
+  message: string | null
+  code: string | null
+} {
+  const code = parseMutationErrorCode(payload)
   const validationMessages = parseValidationErrors(payload)
   if (validationMessages.length > 0) {
-    return { validationMessages, message: null }
+    return { validationMessages, message: null, code }
   }
 
   if (typeof payload === 'object' && payload !== null) {
     const detail = (payload as { detail?: unknown }).detail
     if (typeof detail === 'string' && detail.trim().length > 0) {
-      return { validationMessages: [], message: detail.trim() }
+      return { validationMessages: [], message: detail.trim(), code }
     }
 
     const message = (payload as { message?: unknown }).message
     if (typeof message === 'string' && message.trim().length > 0) {
-      return { validationMessages: [], message: message.trim() }
+      return { validationMessages: [], message: message.trim(), code }
     }
   }
 
-  return { validationMessages: [], message: null }
+  return { validationMessages: [], message: null, code }
 }
 
 async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>): Promise<T> {
@@ -133,7 +147,7 @@ async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>
     const message =
       parsed.message ??
       (await getResponseErrorMessage(response, `Memory mutation failed with status ${response.status}`))
-    throw new MemoryMutationError(new ApiError(response.status, message), parsed.validationMessages)
+    throw new MemoryMutationError(new ApiError(response.status, message, parsed.code), parsed.validationMessages)
   }
 
   return (await response.json()) as T

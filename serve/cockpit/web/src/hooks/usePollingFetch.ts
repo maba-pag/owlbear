@@ -94,8 +94,12 @@ export function usePollingFetch<TPayload = unknown>(
         setHasFetched(true)
       }
       const pendingReason = pendingPollReasonRef.current
-      if (pendingReason !== null && isMountedRef.current && (pendingReason === 'initial' || !pausedRef.current)) {
-        pendingPollReasonRef.current = null
+      pendingPollReasonRef.current = null
+      if (
+        pendingReason !== null &&
+        isMountedRef.current &&
+        (pendingReason === 'initial' || pendingReason === 'manual' || !pausedRef.current)
+      ) {
         void poll(pendingReason)
       }
     }
