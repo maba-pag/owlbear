@@ -281,7 +281,7 @@ def test_lifecycle_cache_reload_failure_resets_cache_until_subsequent_reload(tmp
     engine.get_entries()
 
     original_write = storage.write_entry
-    original_load = engine._load
+    original_load = engine._load  # noqa: SLF001
     initial_error = OSError("initial write failed")
     reload_error = OSError("cache reload failed")
     calls = 0
@@ -313,19 +313,25 @@ def test_lifecycle_cache_reload_failure_resets_cache_until_subsequent_reload(tmp
     assert error.operation_error is initial_error
     assert error.rollback_errors == ()
     assert error.cache_error is reload_error
-    assert engine._entries == []
-    assert engine._id_to_path == {}
+    assert engine._entries == []  # noqa: SLF001
+    assert engine._id_to_path == {}  # noqa: SLF001
     health = engine.health()
     assert health.healthy is True
     assert health.unreadable_paths == []
     assert health.duplicate_paths == {}
 
-    with pytest.raises(OSError, match="cache reload failed") as second_reload:
+    with (
+        patch.object(engine, "_load", side_effect=failing_load),
+        pytest.raises(
+            OSError,
+            match="cache reload failed",
+        ) as second_reload,
+    ):
         engine.get_entries()
     assert second_reload.value is reload_error
 
     assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",)}
-    assert load_calls == 3
+    assert load_calls == 2
     assert engine.parse_errors == 0
 
 
@@ -362,7 +368,7 @@ def test_lifecycle_operation_failure_with_successful_rollback_reraises_original_
 
     with (
         patch.object(storage, "write_entry", side_effect=failing_write),
-        pytest.raises(OSError) as exc_info,
+        pytest.raises(OSError, match="initial write failed") as exc_info,
     ):
         engine.rename_agent("old", "new")
 
