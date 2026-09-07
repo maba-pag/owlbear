@@ -292,10 +292,11 @@ def _code_language(element: HtmlElement) -> str:
 
 def _code_block_to_markdown(element: HtmlElement, tail: str, _url: str | None = None) -> str:
     """Convert a preformatted block to a fenced Markdown code block."""
-    text = "".join(element.itertext()).strip("\n")
+    text = "".join(element.itertext())
     longest_backtick_run = max((len(run) for run in re.findall(r"`+", text)), default=0)
     fence = "`" * max(3, longest_backtick_run + 1)
-    return f"\n{fence}{_code_language(element)}\n{text}\n{fence}\n" + tail
+    separator = "" if text.endswith("\n") else "\n"
+    return f"\n{fence}{_code_language(element)}\n{text}{separator}{fence}\n" + tail
 
 
 def _break_to_markdown(_element: HtmlElement, tail: str, _url: str | None = None) -> str:

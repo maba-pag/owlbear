@@ -104,6 +104,12 @@ def test_html_to_markdown_preserves_structure() -> None:
     assert "| B |" in markdown
 
 
+def test_html_to_markdown_preserves_pre_boundary_blank_lines() -> None:
+    markdown = html_to_markdown("<pre><code>\nfirst\n\n</code></pre>")
+
+    assert markdown == "```\n\nfirst\n\n```"
+
+
 def test_enterprise_fallback_preserves_structure_and_resolves_relative_urls() -> None:
     markdown = html_to_markdown(strip_noise(ENTERPRISE_HTML), url=ENTERPRISE_SOURCE_URL)
 
@@ -228,6 +234,26 @@ def test_extract_prefers_trafilatura_when_all_fallback_links_are_retained(
     )
 
 
+def test_extract_prefers_equivalent_trafilatura_list_and_table_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = "* Parent\n    + Child\n\nField | Value\n--- | ---\nAnswer | 42"
+
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return expected
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    assert (
+        extract_content(
+            "<main><ul><li>Parent<ul><li>Child</li></ul></li></ul>"
+            "<table><tr><th>Field</th><th>Value</th></tr>"
+            "<tr><td>Answer</td><td>42</td></tr></table></main>"
+        )
+        == expected
+    )
+
+
 def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -244,6 +270,33 @@ def test_extract_falls_back_when_trafilatura_drops_a_link_target(
     assert markdown == "[deployment API](https://intranet.example.test/api/v1?format=html)"
 
 
+def test_extract_falls_back_when_trafilatura_flattens_nested_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "Parent Child"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    markdown = extract_content("<main><ul><li>Parent<ul><li>Child</li></ul></li></ul></main>")
+
+    assert markdown == "- Parent\n  - Child"
+
+
+def test_extract_falls_back_when_trafilatura_flattens_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "A B 1 2"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+
+    markdown = extract_content("<main><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table></main>")
+
+    assert "| A | B |" in markdown
+    assert "| 1 | 2 |" in markdown
+
+
 def test_extract_falls_back_when_trafilatura_drops_an_image_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -258,6 +311,23 @@ def test_extract_falls_back_when_trafilatura_drops_an_image_target(
             url=ENTERPRISE_SOURCE_URL,
         )
         == "![Diagram](https://intranet.example.test/images/diagram.png)"
+    )
+
+
+def test_extract_does_not_fallback_for_decorative_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_extract(*_args: object, **_kwargs: object) -> str:
+        return "Trafilatura content"
+
+    def fake_fallback(*_args: object, **_kwargs: object) -> str:
+        return "Fallback content"
+
+    monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
+    monkeypatch.setattr(extractor_module, "html_to_markdown", fake_fallback)
+
+    assert extract_content('<main><p>Trafilatura content <img src="decorative.png"></p></main>') == (
+        "Trafilatura content"
     )
 
 
