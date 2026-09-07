@@ -339,7 +339,10 @@ def test_lifecycle_operation_failure_with_successful_rollback_reraises_original_
             raise initial_error
         original_write(*args, **kwargs)
 
-    with patch.object(storage, "write_entry", side_effect=failing_write), pytest.raises(OSError) as exc_info:
+    with (
+        patch.object(storage, "write_entry", side_effect=failing_write),
+        pytest.raises(OSError) as exc_info,
+    ):
         engine.rename_agent("old", "new")
 
     assert exc_info.value is initial_error
