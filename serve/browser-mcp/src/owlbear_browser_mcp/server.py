@@ -114,7 +114,8 @@ async def _check_ssrf(url: str, *, allowlist: DomainAllowlist | None = None) -> 
         msg = f"URL scheme '{parsed.scheme}' is not allowed — only http and https are permitted."
         raise ToolError(msg)
     if "\\" in parsed.netloc:
-        raise ToolError("Backslashes are not allowed in URL authorities.")
+        msg = "Backslashes are not allowed in URL authorities."
+        raise ToolError(msg)
 
     hostname = parsed.hostname or ""
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
