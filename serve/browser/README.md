@@ -75,7 +75,7 @@ managed-SSO workflow or concurrent session ownership model. See the maintained
 | --- | --- |
 | `playwright` | Chromium browser automation and persistent contexts |
 | `owlbear-web-content` | Shared HTML-to-Markdown extraction (workspace package) |
-| `lxml` | HTML parsing (trafilatura dependency) |
+| `lxml` | Direct HTML parsing for diagnostic sanitization |
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
 > with `uv run --project ../owlbear playwright install chromium`.

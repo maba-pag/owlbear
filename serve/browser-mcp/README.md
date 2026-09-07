@@ -59,7 +59,7 @@ are redacted for credentials and sensitive query values before they cross the MC
 | Variable | Default | Description |
 | --- | --- | --- |
 | `BROWSER_ALLOWED_DOMAINS` | _(empty; consumer seed uses `*`)_ | Comma-separated list of permitted hostnames; navigation and acquisition to any other domain are blocked. Exact entries explicitly permit that hostname's private/internal DNS results (not reserved or unspecified addresses); **required** — all domains are blocked when unset. Use `*` only for local testing; it does not permit private destinations. |
-| `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions |
+| `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions; provide an absolute path because a leading `~` is not expanded |
 | `SSO_EXTENSION_PATH` | unset | Optional extension directory passed to the Chromium launcher; finding or loading it does not prove managed SSO readiness |
 
 ## Dependencies
