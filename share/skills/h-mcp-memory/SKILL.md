@@ -155,9 +155,10 @@ was applied; this policy does not add feedback receipts or retry machinery.
   conflict cost warrants attention. Pending entries remain unreviewed and
   recall-invisible until curation.
 - A missing curation binding, tool-layer error, or pre-result dispatch failure
-  is fail-closed housekeeping attention: report it and stop after the current
-  acquisition batch. A curator child failure or malformed verdict is reported
-  without retry and does not stop unrelated acquisition. A batch-commit error
+  is non-blocking housekeeping attention: report it, finish the current batch,
+  and continue independent acquisition without Delivery recovery. A curator
+  child failure or malformed verdict is reported without retry and does not stop
+  unrelated acquisition. A batch-commit error
   follows the existing `git status`/staged-diff inspection rule before an
   operator retry.
 

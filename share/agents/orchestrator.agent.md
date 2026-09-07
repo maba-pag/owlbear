@@ -44,7 +44,7 @@ periodic memory-curator housekeeping is the explicit non-Delivery dispatch defin
   `transition_delivery`; route claim-bound dispatch failures only to recovery.
 - **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
   use exact Integration claim recovery only when a legacy claim's identities are supplied.
-- **Refresh until quiescent.** Stop on an empty acquisition result or a fail-closed condition that
+- **Refresh until quiescent.** Stop on an empty acquisition result or a Delivery safety condition that
   requires operator/user attention.
 
 </critical_rules>

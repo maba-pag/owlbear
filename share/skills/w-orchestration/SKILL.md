@@ -108,18 +108,19 @@ identity; do not call `transition_delivery` or `recover_claim` for it.
 The curator's successful Channel A result must use the `w-mem-curation` form
 `DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
 present. If the dispatch binding is unavailable, the `runSubagent` invocation itself returns a
-tool-layer error, or capability dispatch fails before a child result exists, record a fail-closed
-housekeeping failure, report it separately, and stop after the current batch; do not use Delivery
-recovery. If the invocation completes but returns no result, a result without the curator's Channel A
-verdict, or a child report of its own internal failure, record a malformed housekeeping result, do
-not retry it, and continue acquisition. A scheduled attempt consumes its cadence slot regardless of
-its result.
+tool-layer error, or capability dispatch fails before a child result exists, record a non-blocking
+housekeeping failure, report it separately, finish the current batch, and continue with the next
+acquisition cycle; do not use Delivery recovery. If the invocation completes but returns no result,
+a result without the curator's Channel A verdict, or a child report of its own internal failure,
+record a malformed housekeeping result, do not retry it, and continue acquisition. A scheduled
+attempt consumes its cadence slot regardless of its result.
 
 ## Step 6 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
 independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
-a fail-closed diagnostic requires user/operator action.
+a Delivery safety diagnostic requires user/operator action. A housekeeping failure is reported but
+does not stop independent Delivery acquisition.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
 Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
