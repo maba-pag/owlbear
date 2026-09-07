@@ -127,19 +127,30 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
         source_agent="source",
         scope_agents=["old"],
     )
+    unrelated = engine.save(
+        title="Unrelated",
+        content="Original unrelated",
+        categories=["domain-knowledge"],
+        confidence=0.9,
+        source_agent="source",
+        scope_agents=["other"],
+    )
+    unrelated_path = tmp_path / f"{unrelated.id}.md"
     original_write = storage.write_entry
     initial_error = OSError("initial write failed")
     rollback_error = OSError("rollback write failed")
     calls = 0
+    written_paths: list[Path] = []
 
-    def failing_write(*args: object, **kwargs: object) -> None:
+    def failing_write(path: Path, *args: object, **kwargs: object) -> None:
         nonlocal calls
         calls += 1
+        written_paths.append(path)
         if calls == 2:
             raise initial_error
         if calls == 3:
             raise rollback_error
-        original_write(*args, **kwargs)
+        original_write(path, *args, **kwargs)
 
     with (
         patch.object(storage, "write_entry", side_effect=failing_write),
@@ -155,7 +166,8 @@ def test_lifecycle_rollback_failure_preserves_both_errors_and_reloads_cache(tmp_
     assert error.rollback_errors[0].entry_id in str(error)
     assert str(error.rollback_errors[0].path) in str(error)
     assert error.cache_error is None
-    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",)}
+    assert unrelated_path not in written_paths
+    assert {tuple(entry.scope_agents) for entry in engine.get_entries()} == {("old",), ("new",), ("other",)}
     health = engine.health()
     assert health.healthy is True
     assert health.unreadable_paths == []

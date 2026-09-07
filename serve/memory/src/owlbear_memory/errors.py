@@ -32,7 +32,11 @@ class LifecycleRollbackFailure:
 
 
 class LifecycleRecoveryError(RuntimeError):
-    """Raised when a failed multi-entry lifecycle operation cannot be fully restored."""
+    """Raised when a failed multi-entry lifecycle operation needs recovery diagnostics.
+
+    Recovery can be reported as complete when reloading verifies the original entries
+    despite a rollback call failure.
+    """
 
     def __init__(
         self,
