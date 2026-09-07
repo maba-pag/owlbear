@@ -13,6 +13,7 @@ from owlbear_memory import storage
 from owlbear_memory.errors import (
     ConcurrencyError,
     LifecycleRecoveryError,
+    LifecycleRollbackFailure,
     NotFoundError,
     TransitionError,
     ValidationError,
@@ -87,6 +88,10 @@ class MtimeScanCache:
             return True
         return False
 
+    def invalidate(self) -> None:
+        """Force the next change check to request a reload."""
+        self._last_mtime_ns = None
+
 
 class MemoryEngine:
     """Orchestrate markdown storage with state machine and OCC enforcement."""
@@ -103,7 +108,11 @@ class MemoryEngine:
     def load(self) -> list[MemoryEntry]:
         """Parse memory files from disk, skipping malformed files leniently."""
         with self._lock:
-            return self._load()
+            try:
+                return self._load()
+            except Exception:
+                self._cache.invalidate()
+                raise
 
     def _load(self) -> list[MemoryEntry]:
         self.parse_errors = 0
@@ -141,7 +150,11 @@ class MemoryEngine:
         """Return cached entries, reparsing only when directory mtime changes."""
         with self._lock:
             if self._cache.has_changed():
-                self._load()
+                try:
+                    self._load()
+                except Exception:
+                    self._cache.invalidate()
+                    raise
             return list(self._entries)
 
     def preview_purge(self, min_age_days: int = 30) -> PurgePreview:
@@ -563,12 +576,18 @@ class MemoryEngine:
             for entry in deleted_entries:
                 storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
         except Exception as operation_error:
-            rollback_errors: list[Exception] = []
+            rollback_errors: list[LifecycleRollbackFailure] = []
             for entry in affected_entries:
                 try:
                     storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
                 except Exception as rollback_error:  # noqa: BLE001 - preserve every recovery failure.
-                    rollback_errors.append(rollback_error)
+                    rollback_errors.append(
+                        LifecycleRollbackFailure(
+                            entry_id=entry.id,
+                            path=original_paths[entry.id],
+                            error=rollback_error,
+                        )
+                    )
 
             cache_error: Exception | None = None
             recovery_status = "uncertain"
@@ -579,7 +598,7 @@ class MemoryEngine:
                 cache_error = reload_error
                 self._entries = []
                 self._id_to_path = {}
-                self._cache = MtimeScanCache(self._memory_dir)
+                self._cache.invalidate()
 
             if rollback_errors or cache_error is not None or recovery_status != "complete":
                 raise LifecycleRecoveryError(
@@ -589,7 +608,11 @@ class MemoryEngine:
                     recovery_status,
                 ) from operation_error
             raise
-        self._entries = self._load()
+        try:
+            self._entries = self._load()
+        except Exception:
+            self._cache.invalidate()
+            raise
 
     @staticmethod
     def _lifecycle_recovery_status(
@@ -602,7 +625,7 @@ class MemoryEngine:
             for original in originals:
                 reloaded = reloaded_by_id.get(original.id)
                 if reloaded is None:
-                    return "uncertain"
+                    return "partial"
                 if reloaded != original:
                     return "partial"
         except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.

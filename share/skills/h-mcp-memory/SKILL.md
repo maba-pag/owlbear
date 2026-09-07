@@ -354,8 +354,11 @@ it, while `*` is anonymous provenance rather than a named identity.
 - When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent`
     provenance remains unchanged. The retired name is removed from relevance scopes, and entries
     left with no audience are physically deleted.
-- Both operations restore original entries if a multi-file write fails. They return mutation counts
-    and fail when no matching memory references exist.
+- Both operations attempt to restore original entries if a multi-file write fails, but recovery can
+    be `complete`, `partial`, or `uncertain`. Inspect the `LifecycleRecoveryError` diagnostics instead
+    of assuming every original entry was restored. A process interruption during the operation or its
+    recovery leaves the resulting state uncertain and requires a health check before retrying. They
+    return mutation counts and fail when no matching memory references exist.
 
 ## delete_memory
 

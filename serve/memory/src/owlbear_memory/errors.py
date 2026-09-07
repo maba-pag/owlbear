@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 
 class NotFoundError(Exception):
     """Raised when a memory entry does not exist."""
@@ -19,13 +22,22 @@ class TransitionError(Exception):
     """Raised when a memory state transition is not allowed."""
 
 
+@dataclass(frozen=True, slots=True)
+class LifecycleRollbackFailure:
+    """Describe a failed rollback for one affected memory entry."""
+
+    entry_id: str
+    path: Path
+    error: Exception
+
+
 class LifecycleRecoveryError(RuntimeError):
     """Raised when a failed multi-entry lifecycle operation cannot be fully restored."""
 
     def __init__(
         self,
         operation_error: Exception,
-        rollback_errors: tuple[Exception, ...],
+        rollback_errors: tuple[LifecycleRollbackFailure, ...],
         cache_error: Exception | None,
         recovery_status: str,
     ) -> None:
@@ -37,7 +49,12 @@ class LifecycleRecoveryError(RuntimeError):
             f"memory lifecycle operation failed ({recovery_status} recovery): {operation_error}",
         ]
         if rollback_errors:
-            details.append("rollback failures: " + "; ".join(str(error) for error in rollback_errors))
+            details.append(
+                "rollback failures: "
+                + "; ".join(
+                    f"entry {failure.entry_id} at {failure.path}: {failure.error}" for failure in rollback_errors
+                )
+            )
         if cache_error is not None:
             details.append(f"cache reload failed: {cache_error}")
         super().__init__("; ".join(details))

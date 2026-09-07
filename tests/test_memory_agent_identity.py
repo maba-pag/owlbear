@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import LifecycleRecoveryError, MemoryCategory, MemoryEngine
+from owlbear_memory import LifecycleRecoveryError, LifecycleRollbackFailure, MemoryCategory, MemoryEngine
 
 from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
@@ -150,9 +150,10 @@ async def test_lifecycle_recovery_diagnostics_are_exposed_as_tool_errors(
     operation: str,
 ) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
+    rollback_error = OSError("rollback write failed")
     diagnostic = LifecycleRecoveryError(
         OSError("initial write failed"),
-        (OSError("rollback write failed"),),
+        (LifecycleRollbackFailure("entry-id", tmp_path / "entry.md", rollback_error),),
         None,
         "partial",
     )
