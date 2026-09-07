@@ -599,6 +599,24 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     assert "request" in rejected_text
 
 
+def test_orchestration_housekeeping_failure_does_not_stop_acquisition() -> None:
+    """Optional curation failures remain visible without stopping Delivery work."""
+    content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+    step_start = content.index("## Step 5 - Run Periodic Housekeeping")
+    step_end = content.index("## Step 6 - Refresh")
+    housekeeping = " ".join(content[step_start:step_end].split())
+    refresh_end = content.index("## Output")
+    refresh = " ".join(content[step_end:refresh_end].split())
+
+    assert "non-blocking housekeeping failure" in housekeeping
+    assert "continue with the next" in housekeeping
+    assert "finish the current batch" in housekeeping
+    assert "do not use Delivery recovery" in housekeeping
+    assert "housekeeping failure is reported but" in refresh
+    assert "does not stop independent Delivery acquisition" in refresh
+    assert "stop after the current batch" not in housekeeping
+
+
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
@@ -782,10 +800,11 @@ def test_memory_learning_loop_policy_is_sampled_and_opportunistic() -> None:
     assert "not an idempotency key" in content
     orchestration_text = " ".join(orchestration.split())
     assert "cycle 3, then after cycles 13, 23" in orchestration_text
-    assert "record a fail-closed housekeeping failure" in orchestration_text
+    assert "record a non-blocking housekeeping failure" in orchestration_text
+    assert "record a malformed housekeeping result" in orchestration_text
     assert "opportunistic, not an eventual-processing SLA" in guidance
     assert 'list_memories(states=["pending"])' in guidance
-    assert "fail-closed housekeeping attention" in guidance
+    assert "non-blocking housekeeping attention" in guidance
     assert "Assessment coverage" in content
     assert "Pending age and curation latency" in content
     assert "Useful or harmful recall" in content

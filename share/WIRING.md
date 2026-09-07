@@ -133,7 +133,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | builder | orchestrator | An acquired Build launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
-| memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; a fail-closed dispatch error stops the current batch and is reported |
+| memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
