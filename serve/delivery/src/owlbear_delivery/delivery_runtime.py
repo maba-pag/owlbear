@@ -1040,8 +1040,10 @@ class DeliveryFrontier(_DeliveryModel):
     @model_validator(mode="after")
     def _discard_stale_target_sync_receipt(self) -> DeliveryFrontier:
         disposition = self.change_disposition
-        if disposition is None or self.target_sync_receipt is None or not any(
-            item.startswith("target-sync-operation:") for item in disposition.diagnostics
+        if (
+            disposition is None
+            or self.target_sync_receipt is None
+            or not any(item.startswith("target-sync-operation:") for item in disposition.diagnostics)
         ):
             return self
         return self.model_copy(update={"target_sync_receipt": None})
