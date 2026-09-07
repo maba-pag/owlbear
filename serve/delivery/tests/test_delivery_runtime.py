@@ -836,7 +836,7 @@ def test_target_sync_conflict_replaces_stale_receipt_and_normalizes_legacy_front
 
     assert runtime.target_sync_receipt() is None
     frontier_path = tmp_path / "changes/delivery-runtime/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     frontier_path.write_bytes(_canonical(frontier.model_copy(update={"target_sync_receipt": receipt})))
 
     reloaded = DeliveryRuntime(tmp_path, _contract())
