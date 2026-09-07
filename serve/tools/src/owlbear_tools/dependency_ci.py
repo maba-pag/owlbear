@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
 
-_PYTHON_FILES = {".python-version", "pyproject.toml", "uv.lock"}
 _SHARED_NODE_RUNTIME_FILES = {"serve/cockpit/web/.nvmrc"}
 _COCKPIT_NODE_FILES = {
     "serve/cockpit/web/.nvmrc",
@@ -25,6 +24,11 @@ _COCKPIT_NODE_FILES = {
 }
 _ROOT_NODE_FILES = {"package-lock.json", "package.json"}
 _DIAGRAM_FILES = {".owlbear/scripts/diagrams/archify.lock.json"}
+_PYTHON_BEHAVIOR_FILES = {
+    ".github/workflows/source-verification.yml",
+    ".python-version",
+    "conftest.py",
+}
 _RUFF_TOOLCHAIN_FILES = {
     ".github/scripts/check_ruff_toolchain.py",
 }
@@ -114,6 +118,30 @@ def _collect_ruff_dependencies(value: object) -> list[str]:
     if isinstance(value, list):
         return [dependency for child in value for dependency in _collect_ruff_dependencies(child)]
     return []
+
+
+def _without_ruff_dependencies(value: object) -> object:
+    """Return a parsed dependency document with Ruff entries removed."""
+    if isinstance(value, str):
+        return None if _RUFF_DEPENDENCY_PATTERN.fullmatch(value.strip()) is not None else value
+    if isinstance(value, dict):
+        if value.get("name") == "ruff":
+            return None
+        return {key: child for key, item in value.items() if (child := _without_ruff_dependencies(item)) is not None}
+    if isinstance(value, list):
+        return [child for item in value if (child := _without_ruff_dependencies(item)) is not None]
+    return value
+
+
+def _python_dependency_values(content: str | None) -> object | None:
+    """Return Python dependency metadata with Ruff-only changes normalized away."""
+    if content is None:
+        return ()
+    try:
+        document = tomllib.loads(content)
+    except tomllib.TOMLDecodeError:
+        return None
+    return _without_ruff_dependencies(document)
 
 
 def _ruff_dependency_values(content: str | None) -> tuple[str, ...] | None:
@@ -238,6 +266,26 @@ def _ruff_toolchain_changed(
     )
 
 
+def _python_behavior_changed(
+    changed: set[str],
+    before_files: Mapping[str, str | None] | None,
+    after_files: Mapping[str, str | None] | None,
+) -> bool:
+    """Return whether source verification needs the full Python behavior proof."""
+    if changed & _PYTHON_BEHAVIOR_FILES or any(
+        path.startswith(("serve/", "tests/", "setup/", "seed/")) for path in changed
+    ):
+        return True
+    for path in ("pyproject.toml", "uv.lock"):
+        if path in changed and (
+            before_files is None
+            or after_files is None
+            or _changed_snapshot_value(path, before_files, after_files, _python_dependency_values)
+        ):
+            return True
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class DependencyScope:
     """Proof surfaces affected by one pull-request diff."""
@@ -286,9 +334,7 @@ def classify_dependency_change(
 ) -> DependencyScope:
     """Classify changed paths and dependency declarations into proof surfaces."""
     changed = {path for path in paths if path}
-    python = bool(changed & _PYTHON_FILES) or any(
-        path.startswith("serve/") and path.endswith("/pyproject.toml") for path in changed
-    )
+    python = _python_behavior_changed(changed, before_files, after_files)
     node = bool(changed & _COCKPIT_NODE_FILES)
     shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)

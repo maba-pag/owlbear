@@ -122,6 +122,24 @@
       "minimumReleaseAge": "24 hours"
     },
     {
+      "description": "Give MegaLinter routine updates a one-day maturity floor",
+      "matchManagers": [
+        "custom.regex",
+        "github-actions"
+      ],
+      "matchDatasources": [
+        "github-tags"
+      ],
+      "matchPackageNames": [
+        "oxsecurity/megalinter"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "minimumReleaseAge": "24 hours"
+    },
+    {
       "description": "Group integrity updates by ecosystem on Friday",
       "matchUpdateTypes": [
         "pin",
@@ -135,24 +153,18 @@
       "automerge": false
     },
     {
-      "description": "Keep Ruff and MegaLinter toolchain versions coupled",
+      "description": "Keep standalone Ruff tool versions coupled",
       "matchManagers": [
         "pep621",
-        "pre-commit",
-        "custom.regex",
-        "github-actions"
+        "pre-commit"
       ],
       "matchDatasources": [
         "pypi",
-        "github-tags",
-        "docker"
+        "github-tags"
       ],
       "matchPackageNames": [
         "ruff",
-        "astral-sh/ruff-pre-commit",
-        "ghcr.io/oxsecurity/megalinter",
-        "ghcr.io/oxsecurity/megalinter-cupcake",
-        "oxsecurity/megalinter"
+        "astral-sh/ruff-pre-commit"
       ],
       "matchUpdateTypes": [
         "major",
@@ -162,26 +174,27 @@
         "pinDigest",
         "digest"
       ],
-      "groupName": "Ruff and MegaLinter toolchain"
+      "groupName": "Ruff toolchain"
     },
     {
-      "description": "Disable unsupported MegaLinter Docker pin and digest updates",
+      "description": "Keep native and action MegaLinter versions coupled",
       "matchManagers": [
-        "custom.regex"
+        "custom.regex",
+        "github-actions"
       ],
       "matchDatasources": [
-        "docker"
+        "github-tags"
       ],
       "matchPackageNames": [
-        "ghcr.io/oxsecurity/megalinter",
-        "ghcr.io/oxsecurity/megalinter-cupcake"
+        "oxsecurity/megalinter"
       ],
       "matchUpdateTypes": [
-        "pin",
-        "pinDigest",
-        "digest"
+        "major",
+        "minor",
+        "patch",
+        "pin"
       ],
-      "enabled": false
+      "groupName": "MegaLinter declarations"
     },
     {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",
@@ -263,18 +276,19 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "MegaLinter image version; keep version match last for combination write-back",
+      "description": "MegaLinter native version; keep version match last for combination write-back",
       "managerFilePatterns": [
         "/^\\.mega-linter\\.yml$/"
       ],
       "matchStringsStrategy": "combination",
       "matchStrings": [
-            "MEGALINTER_FLAVOR:[ \\t]*[\\x22']?(?:all|(?<flavor>[a-z0-9_-]+))[\\x22']?[ \\t]*(?:#.*)?(?:\\r?\\n|$)",
+        "MEGALINTER_FLAVOR:[ \\t]*[\\x22']?(?:all|(?<flavor>[a-z0-9_-]+))[\\x22']?[ \\t]*(?:#.*)?(?:\\r?\\n|$)",
         "MEGALINTER_VERSION:[ \\t]*(?:\\x22|')?v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)(?:\\x22|')?"
       ],
       "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
-      "depNameTemplate": "ghcr.io/oxsecurity/megalinter{{#if flavor}}-{{{flavor}}}{{/if}}",
-      "datasourceTemplate": "docker"
+      "depNameTemplate": "oxsecurity/megalinter",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
     },
     {
       "customType": "regex",

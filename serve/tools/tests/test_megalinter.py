@@ -257,7 +257,7 @@ def test_wait_for_docker_retries_until_engine_is_ready() -> None:
     assert is_ready.call_count == 2
 
 
-def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: Path) -> None:
+def test_renovate_megalinter_manager_tracks_native_fields_with_action_identity() -> None:
     """Use Python regex as a syntax approximation; RE2 compatibility needs separate validation."""
     root = Path(__file__).resolve().parents[3]
     config = json.loads((root / ".github/renovate.json").read_text(encoding="utf-8"))
@@ -283,16 +283,6 @@ def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: 
     native_version_match = re.search(version_pattern, native_config)
     extracted_version_match = re.fullmatch(extract_pattern, "v10.1.0")
     native_image = load_megalinter_image(root / ".mega-linter.yml")
-    base_config = tmp_path / ".mega-linter-all.yml"
-    base_config.write_text(f"MEGALINTER_FLAVOR: all\nMEGALINTER_VERSION: {native_image.tag}\n", encoding="utf-8")
-    base_image = load_megalinter_image(base_config)
-    template = manager["depNameTemplate"]
-    flavor_template = "{{#if flavor}}-{{{flavor}}}{{/if}}"
-    rendered_flavored_repository = template.replace(
-        flavor_template,
-        f"-{native_flavor_match.group('flavor')}" if native_flavor_match is not None else "",
-    )
-    rendered_base_repository = template.replace(flavor_template, "")
     allowed_manager_fields = {
         "customType",
         "description",
@@ -312,6 +302,9 @@ def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: 
     }
 
     assert manager["matchStringsStrategy"] == "combination"
+    assert manager["depNameTemplate"] == "oxsecurity/megalinter"
+    assert manager["datasourceTemplate"] == "github-tags"
+    assert manager["versioningTemplate"] == "semver"
     assert set(manager).issubset(allowed_manager_fields)
     assert version_match_index == len(manager["matchStrings"]) - 1
     assert flavor_match is not None
@@ -329,8 +322,6 @@ def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: 
     assert native_version_match.group("currentValue") == native_image.tag.removeprefix("v")
     assert extracted_version_match is not None
     assert extracted_version_match.group("version") == "10.1.0"
-    assert rendered_flavored_repository == native_image.repository
-    assert rendered_base_repository == base_image.repository
     for invalid_tag in ("latest", "v10", "v10.0", "v10.0.0-beta", "v10.0.0-alpha.1"):
         assert re.fullmatch(extract_pattern, invalid_tag) is None
 

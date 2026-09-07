@@ -84,6 +84,18 @@ def _fake_ruff(tmp_path: Path, version: str) -> Path:
     return executable
 
 
+def _workspace_ruff_version() -> str:
+    document = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    groups = document["dependency-groups"]
+    requirements = [requirement for dependencies in groups.values() for requirement in dependencies]
+    match = next(
+        match
+        for requirement in requirements
+        if (match := re.fullmatch(r"ruff==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)", requirement)) is not None
+    )
+    return match.group("version")
+
+
 def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         [sys.executable, str(UV_VERSION_SCRIPT), "--uv-executable", str(executable)],
@@ -263,6 +275,7 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
     text = VERIFY_PATH.read_text(encoding="utf-8")
 
     assert "ruff_toolchain: ${{ steps.scope.outputs.ruff_toolchain }}" in text
+    assert "uv sync --locked --group dev" in text
     parity_steps = [step for step in compatibility["steps"] if step.get("name") == "Verify Ruff toolchain parity"]
     assert parity_steps == [
         {
@@ -273,7 +286,7 @@ def test_dependency_workflow_proves_ruff_toolchain_parity() -> None:
     ]
 
 
-def test_dependency_workflow_keeps_megalinter_execution_active() -> None:
+def test_dependency_workflow_does_not_download_megalinter_image() -> None:
     workflow = _workflow(VERIFY_PATH)
     compatibility = _job(workflow, "compatibility")
     text = VERIFY_PATH.read_text(encoding="utf-8")
@@ -281,15 +294,27 @@ def test_dependency_workflow_keeps_megalinter_execution_active() -> None:
     megalinter_steps = [
         step for step in compatibility["steps"] if step.get("name") == "Exercise updated MegaLinter image"
     ]
-    assert megalinter_steps == [
-        {
-            "name": "Exercise updated MegaLinter image",
-            "if": "needs.classify.outputs.megalinter == 'true'",
-            "run": "uv run megalint --no-fix",
-        }
-    ]
-    assert "# Deferred removal option (comment-only; keep the step below active for now):" in text
-    assert "# - name: Exercise updated MegaLinter image" in text
+    assert megalinter_steps == []
+    assert "megalint --no-fix" not in text
+
+
+def test_source_verification_keeps_ruff_only_updates_lightweight() -> None:
+    workflow = _workflow(SOURCE_VERIFY_PATH)
+    classify = _job(workflow, "classify")
+    python = _job(workflow, "python")
+    steps = {step["name"]: step for step in python["steps"]}
+    text = SOURCE_VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert classify["outputs"] == {"python": "${{ steps.scope.outputs.python }}"}
+    assert python["needs"] == "classify"
+    assert steps["Install locked Python workspace"]["if"] == "needs.classify.outputs.python == 'true'"
+    assert steps["Install locked Python tooling"]["if"] == "needs.classify.outputs.python != 'true'"
+    assert steps["Install locked Python tooling"]["run"] == "uv sync --locked --group dev"
+    assert steps["Install Chromium for browser-marked tests"]["if"] == "needs.classify.outputs.python == 'true'"
+    assert steps["Compile Python sources"]["if"] == "needs.classify.outputs.python == 'true'"
+    assert steps["Run Python behavior tests"]["if"] == "needs.classify.outputs.python == 'true'"
+    assert "dependency_ci.py" in text
+    assert "git diff --name-only -z" in text
 
 
 def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling() -> None:
@@ -377,58 +402,25 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
     assert "below" in result.stderr
 
 
-def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path, ruff_toolchain_module: ModuleType) -> None:
-    def load_versions(url: str) -> object:
-        assert (
-            url
-            == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.0.0/.automation/generated/linter-versions.json"
-        )
-        return {"ruff": "0.16.2"}
-
+def test_ruff_toolchain_proof_accepts_aligned_repository_versions(
+    tmp_path: Path,
+    ruff_toolchain_module: ModuleType,
+) -> None:
+    version = _workspace_ruff_version()
     ruff_toolchain_module.check_ruff_toolchain(
         ROOT,
-        ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
-        megalinter_versions_loader=load_versions,
+        ruff_executable=str(_fake_ruff(tmp_path, version)),
     )
 
 
-def test_ruff_toolchain_proof_rejects_declared_version_drift(
+def test_ruff_toolchain_proof_rejects_installed_version_drift(
     tmp_path: Path,
     ruff_toolchain_module: ModuleType,
 ) -> None:
-    with pytest.raises(ValueError, match=r"MegaLinter declared Ruff=0\.16\.1"):
+    with pytest.raises(ValueError, match=r"installed Ruff=0\.16\.1"):
         ruff_toolchain_module.check_ruff_toolchain(
             ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
-            megalinter_versions_loader=lambda _: {"ruff": "0.16.1"},
-        )
-
-
-def test_ruff_toolchain_proof_rejects_malformed_declared_metadata(
-    tmp_path: Path,
-    ruff_toolchain_module: ModuleType,
-) -> None:
-    with pytest.raises(ValueError, match="invalid ruff entry"):
-        ruff_toolchain_module.check_ruff_toolchain(
-            ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
-            megalinter_versions_loader=lambda _: {"ruff": "0.16"},
-        )
-
-
-def test_ruff_toolchain_proof_rejects_unavailable_declared_metadata(
-    tmp_path: Path,
-    ruff_toolchain_module: ModuleType,
-) -> None:
-    def unavailable(_: str) -> object:
-        message = "network unavailable"
-        raise OSError(message)
-
-    with pytest.raises(RuntimeError, match="Unable to fetch MegaLinter linter versions"):
-        ruff_toolchain_module.check_ruff_toolchain(
-            ROOT,
-            ruff_executable=str(_fake_ruff(tmp_path, "0.16.2")),
-            megalinter_versions_loader=unavailable,
+            ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")),
         )
 
 
@@ -533,6 +525,20 @@ def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> No
 
     assert getattr(scope, surface)
     assert scope.applicable
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".github/workflows/source-verification.yml",
+        "serve/delivery/src/owlbear_delivery/example.py",
+        "tests/test_example.py",
+    ],
+)
+def test_classifier_marks_source_paths_for_python_behavior_proof(path: str) -> None:
+    scope = classify_dependency_change([path], "")
+
+    assert scope.python
 
 
 def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
@@ -650,6 +656,53 @@ def test_ruff_toolchain_classification_uses_relevant_snapshot_values(
     assert scope.compatibility is (
         ruff_toolchain or path in {".pre-commit-config.yaml", ".mega-linter.yml", ".github/workflows/megalinter.yml"}
     )
+
+
+@pytest.mark.parametrize(
+    ("path", "before", "after"),
+    [
+        (
+            "pyproject.toml",
+            '[dependency-groups]\ndev = ["ruff==0.16.2"]\n',
+            '[dependency-groups]\ndev = ["ruff==0.16.5"]\n',
+        ),
+        (
+            "uv.lock",
+            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n',
+            '[[package]]\nname = "ruff"\nversion = "0.16.5"\n',
+        ),
+    ],
+)
+def test_ruff_only_root_manifest_changes_skip_python_behavior_proof(
+    path: str,
+    before: str,
+    after: str,
+) -> None:
+    scope = classify_dependency_change(
+        [path],
+        "",
+        before_files={path: before},
+        after_files={path: after},
+    )
+
+    assert scope.ruff_toolchain
+    assert not scope.python
+    assert scope.compatibility
+
+
+def test_non_ruff_root_manifest_changes_keep_python_behavior_proof() -> None:
+    before = '[dependency-groups]\ndev = ["ruff==0.16.2", "pytest==9.0.3"]\n'
+    after = '[dependency-groups]\ndev = ["ruff==0.16.2", "pytest==9.0.4"]\n'
+
+    scope = classify_dependency_change(
+        ["pyproject.toml"],
+        "",
+        before_files={"pyproject.toml": before},
+        after_files={"pyproject.toml": after},
+    )
+
+    assert scope.python
+    assert not scope.ruff_toolchain
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:
@@ -903,13 +956,19 @@ def test_renovate_policy_keeps_maturity_and_lockfile_controls() -> None:
         for rule in renovate["packageRules"]
     )
     assert any(
+        rule.get("minimumReleaseAge") == "24 hours"
+        and rule.get("matchDatasources") == ["github-tags"]
+        and rule.get("matchPackageNames") == ["oxsecurity/megalinter"]
+        for rule in renovate["packageRules"]
+    )
+    assert any(
         rule.get("minimumReleaseAge") == "72 hours" and rule.get("matchUpdateTypes") == ["major"]
         for rule in renovate["packageRules"]
     )
     assert all("Renovate CLI" not in manager.get("description", "") for manager in renovate["customManagers"])
 
 
-def test_ruff_declarations_and_renovate_updates_stay_coupled() -> None:
+def test_renovate_keeps_ruff_and_megalinter_policies_separate() -> None:
     renovate = json.loads((ROOT / ".github/renovate.json").read_text(encoding="utf-8"))
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     precommit = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
@@ -918,7 +977,10 @@ def test_ruff_declarations_and_renovate_updates_stay_coupled() -> None:
         r"repo: https://github\.com/astral-sh/ruff-pre-commit\s+rev: v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
         precommit,
     )
-    rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff and MegaLinter toolchain")
+    ruff_rule = next(rule for rule in renovate["packageRules"] if rule.get("groupName") == "Ruff toolchain")
+    megalinter_rule = next(
+        rule for rule in renovate["packageRules"] if rule.get("groupName") == "MegaLinter declarations"
+    )
     generic_group_index = next(
         index
         for index, candidate in enumerate(renovate["packageRules"])
@@ -929,19 +991,20 @@ def test_ruff_declarations_and_renovate_updates_stay_coupled() -> None:
         for index, candidate in enumerate(renovate["packageRules"])
         if candidate.get("description") == "Group integrity updates by ecosystem on Friday"
     )
-    toolchain_index = renovate["packageRules"].index(rule)
+    ruff_index = renovate["packageRules"].index(ruff_rule)
+    megalinter_index = renovate["packageRules"].index(megalinter_rule)
 
     assert dependency_match is not None
     assert hook_match is not None
     assert dependency_match.group("version") == hook_match.group("version")
-    assert generic_group_index < toolchain_index
-    assert integrity_group_index < toolchain_index
-    assert rule["matchManagers"] == ["pep621", "pre-commit", "custom.regex", "github-actions"]
-    assert rule["matchDatasources"] == ["pypi", "github-tags", "docker"]
-    assert rule["matchPackageNames"] == [
-        "ruff",
-        "astral-sh/ruff-pre-commit",
-        "ghcr.io/oxsecurity/megalinter",
-        "ghcr.io/oxsecurity/megalinter-cupcake",
-        "oxsecurity/megalinter",
-    ]
+    assert generic_group_index < ruff_index
+    assert integrity_group_index < ruff_index
+    assert generic_group_index < megalinter_index
+    assert integrity_group_index < megalinter_index
+    assert ruff_rule["matchManagers"] == ["pep621", "pre-commit"]
+    assert ruff_rule["matchDatasources"] == ["pypi", "github-tags"]
+    assert ruff_rule["matchPackageNames"] == ["ruff", "astral-sh/ruff-pre-commit"]
+    assert megalinter_rule["matchManagers"] == ["custom.regex", "github-actions"]
+    assert megalinter_rule["matchDatasources"] == ["github-tags"]
+    assert megalinter_rule["matchPackageNames"] == ["oxsecurity/megalinter"]
+    assert not any("MegaLinter Docker pin" in rule.get("description", "") for rule in renovate["packageRules"])

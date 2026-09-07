@@ -32,8 +32,49 @@ permissions:
   contents: read
 
 jobs:
+  classify:
+    name: Classify Python proof scope
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.scope.outputs.python }}
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Classify changed Python surfaces
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "python=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MERGE_BASE="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/source-paths"
+          git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/source.diff"
+          python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+            --paths-file "$RUNNER_TEMP/source-paths" \
+            --diff-file "$RUNNER_TEMP/source.diff" \
+            --base-ref "$MERGE_BASE" \
+            --head-ref "$HEAD_SHA" \
+            --repository-root "$GITHUB_WORKSPACE" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
   python:
     name: Prove Python source behavior
+    needs: classify
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.draft == false
@@ -58,12 +99,19 @@ jobs:
         run: uv python install
 
       - name: Install locked Python workspace
+        if: needs.classify.outputs.python == 'true'
         run: uv sync --locked --all-packages --all-extras --all-groups
 
+      - name: Install locked Python tooling
+        if: needs.classify.outputs.python != 'true'
+        run: uv sync --locked --group dev
+
       - name: Install Chromium for browser-marked tests
+        if: needs.classify.outputs.python == 'true'
         run: uv run playwright install --with-deps chromium
 
       - name: Compile Python sources
+        if: needs.classify.outputs.python == 'true'
         run: uv run python -m compileall -q serve setup tests .owlbear/hooks seed
 
       - name: Check Python sources
@@ -72,4 +120,5 @@ jobs:
           uv run ruff format --check .
 
       - name: Run Python behavior tests
+        if: needs.classify.outputs.python == 'true'
         run: uv run pytest tests serve -m "not e2e"

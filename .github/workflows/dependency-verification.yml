@@ -358,7 +358,7 @@ jobs:
         run: python3 .github/scripts/check_uv_version.py
 
       - name: Install locked Python workspace
-        run: uv sync --locked --all-packages --all-extras --all-groups
+        run: uv sync --locked --group dev
 
       - name: Exercise dependency proof tooling
         if: needs.classify.outputs.proof_tooling == 'true'
@@ -391,14 +391,6 @@ jobs:
       - name: Exercise updated pre-commit hooks
         if: needs.classify.outputs.precommit == 'true'
         run: uv run lint --no-fix
-
-      # Deferred removal option (comment-only; keep the step below active for now):
-      # - name: Exercise updated MegaLinter image
-      #   if: needs.classify.outputs.megalinter == 'true'
-      #   run: uv run megalint --no-fix
-      - name: Exercise updated MegaLinter image
-        if: needs.classify.outputs.megalinter == 'true'
-        run: uv run megalint --no-fix
 
       - name: Validate Renovate policy JSON
         if: needs.classify.outputs.renovate == 'true'
