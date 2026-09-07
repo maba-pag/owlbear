@@ -177,6 +177,22 @@
       "groupName": "Ruff toolchain"
     },
     {
+      "description": "Keep standalone Ruff within the current MegaLinter-compatible ceiling",
+      "matchManagers": [
+        "pep621",
+        "pre-commit"
+      ],
+      "matchDatasources": [
+        "pypi",
+        "github-tags"
+      ],
+      "matchPackageNames": [
+        "ruff",
+        "astral-sh/ruff-pre-commit"
+      ],
+      "allowedVersions": "<=0.16.5"
+    },
+    {
       "description": "Keep native and action MegaLinter versions coupled",
       "matchManagers": [
         "custom.regex",

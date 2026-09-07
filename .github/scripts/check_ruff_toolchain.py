@@ -3,19 +3,28 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import yaml
 
 from owlbear_tools.megalinter import load_megalinter_image
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 _VERSION_PATTERN = re.compile(r"^(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
 _RUFF_REQUIREMENT_PATTERN = re.compile(r"^ruff==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
 _RUFF_PRE_COMMIT_REPOSITORY = "https://github.com/astral-sh/ruff-pre-commit"
+_MEGALINTER_VERSIONS_URL = (
+    "https://raw.githubusercontent.com/oxsecurity/megalinter/{version}/.automation/generated/linter-versions.json"
+)
+_MEGALINTER_METADATA_TIMEOUT_SECONDS = 10
 _ACTION_PATTERN = re.compile(
     r"uses:\s*oxsecurity/megalinter(?:/flavors/(?P<flavor>[a-z0-9-]+))?@[^\s]+\s+#\s*"
     r"v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
@@ -96,6 +105,53 @@ def _read_megalinter_action_version(root: Path) -> tuple[str, str]:
     return match.group("flavor") or "all", match.group("version")
 
 
+def _fetch_megalinter_versions(url: str) -> object:
+    curl_executable = shutil.which("curl")
+    if curl_executable is None:
+        _raise_runtime_error("curl is unavailable")
+    completed = subprocess.run(  # noqa: S603
+        [
+            curl_executable,
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--location",
+            "--max-time",
+            str(_MEGALINTER_METADATA_TIMEOUT_SECONDS),
+            url,
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or "no output"
+        _raise_runtime_error(f"curl exited with status {completed.returncode}: {detail}")
+    return json.loads(completed.stdout)
+
+
+def _read_megalinter_declared_ruff_version(
+    version: str,
+    *,
+    json_loader: Callable[[str], object] | None = None,
+) -> str:
+    url = _MEGALINTER_VERSIONS_URL.format(version=version)
+    loader = json_loader or _fetch_megalinter_versions
+    try:
+        document = loader(url)
+    except OSError as error:
+        _raise_runtime_error(f"Unable to fetch MegaLinter linter versions from {url}: {error}")
+    except (TypeError, UnicodeError, ValueError) as error:
+        _raise_value_error(f"MegaLinter linter versions at {url} are malformed: {error}")
+
+    if not isinstance(document, dict):
+        _raise_type_error(f"MegaLinter linter versions at {url} must contain a JSON object")
+    try:
+        return _normalise_version(document.get("ruff"), f"{url} ruff")
+    except (TypeError, ValueError) as error:
+        _raise_value_error(f"MegaLinter linter versions at {url} have an invalid ruff entry: {error}")
+
+
 def _read_ruff_command_version(command: list[str], source: str) -> str:
     completed = subprocess.run(command, capture_output=True, check=False, text=True)  # noqa: S603
     if completed.returncode != 0:
@@ -111,6 +167,7 @@ def check_ruff_toolchain(
     root: Path,
     *,
     ruff_executable: str = "ruff",
+    megalinter_versions_loader: Callable[[str], object] | None = None,
 ) -> None:
     """Raise when repository Ruff declarations or MegaLinter declarations diverge."""
     standalone_version = _read_standalone_ruff_version(root)
@@ -128,10 +185,15 @@ def check_ruff_toolchain(
         [ruff_executable, "--version"],
         f"{ruff_executable} --version",
     )
+    declared_version = _read_megalinter_declared_ruff_version(
+        image.tag,
+        json_loader=megalinter_versions_loader,
+    )
     versions = {
         "pyproject.toml": standalone_version,
         "ruff-pre-commit": pre_commit_version,
         "installed Ruff": installed_version,
+        "MegaLinter declared Ruff": declared_version,
     }
     if len(set(versions.values())) != 1:
         details = ", ".join(f"{name}={version}" for name, version in versions.items())

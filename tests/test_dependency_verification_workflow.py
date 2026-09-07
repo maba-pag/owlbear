@@ -410,7 +410,21 @@ def test_ruff_toolchain_proof_accepts_aligned_repository_versions(
     ruff_toolchain_module.check_ruff_toolchain(
         ROOT,
         ruff_executable=str(_fake_ruff(tmp_path, version)),
+        megalinter_versions_loader=lambda _: {"ruff": version},
     )
+
+
+def test_megalinter_metadata_url_uses_requested_version(ruff_toolchain_module: ModuleType) -> None:
+    urls: list[str] = []
+
+    metadata_version = ruff_toolchain_module._read_megalinter_declared_ruff_version(  # noqa: SLF001
+        "v9.9.9",
+        json_loader=lambda url: urls.append(url) or {"ruff": "0.16.5"},
+    )
+    assert metadata_version == "0.16.5"
+    assert urls == [
+        ("https://raw.githubusercontent.com/oxsecurity/megalinter/v9.9.9/.automation/generated/linter-versions.json")
+    ]
 
 
 def test_ruff_toolchain_proof_rejects_installed_version_drift(
@@ -421,6 +435,7 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
         ruff_toolchain_module.check_ruff_toolchain(
             ROOT,
             ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")),
+            megalinter_versions_loader=lambda _: {"ruff": _workspace_ruff_version()},
         )
 
 
@@ -1004,6 +1019,13 @@ def test_renovate_keeps_ruff_and_megalinter_policies_separate() -> None:
     assert ruff_rule["matchManagers"] == ["pep621", "pre-commit"]
     assert ruff_rule["matchDatasources"] == ["pypi", "github-tags"]
     assert ruff_rule["matchPackageNames"] == ["ruff", "astral-sh/ruff-pre-commit"]
+    ruff_ceiling = next(
+        rule
+        for rule in renovate["packageRules"]
+        if rule.get("description") == "Keep standalone Ruff within the current MegaLinter-compatible ceiling"
+    )
+    assert ruff_ceiling["allowedVersions"] == "<=0.16.5"
+    assert ruff_ceiling["matchPackageNames"] == ruff_rule["matchPackageNames"]
     assert megalinter_rule["matchManagers"] == ["custom.regex", "github-actions"]
     assert megalinter_rule["matchDatasources"] == ["github-tags"]
     assert megalinter_rule["matchPackageNames"] == ["oxsecurity/megalinter"]
