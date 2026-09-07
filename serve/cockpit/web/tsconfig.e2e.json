@@ -6,6 +6,7 @@
   },
   "include": [
     "e2e/pds-*.spec.ts",
+    "e2e/memory-conflict.spec.ts",
     "e2e/smoke.spec.ts",
     "e2e/support/api-fixtures.ts",
     "e2e/support/page-errors.ts",

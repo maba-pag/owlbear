@@ -47,6 +47,16 @@ interface MemoryFilterState {
   text: string
 }
 
+type MemoryConflictStatus = 'refreshing' | 'ready' | 'error'
+
+interface MemoryConflictState {
+  entryId: string
+  status: MemoryConflictStatus
+  message: string
+  currentEntry: MemoryEntry | null
+  refreshError: string | null
+}
+
 const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved', 'contested', 'disputed', 'stale']
 const ALL_AGENTS_SCOPE = '*'
 const AGENT_FILTER_VALUES = {
@@ -298,6 +308,8 @@ function MemoryTab() {
   const [newScopeAgent, setNewScopeAgent] = useState('')
   const [deleteConfirmEntryId, setDeleteConfirmEntryId] = useState<string | null>(null)
   const [mutationErrorByEntryId, setMutationErrorByEntryId] = useState<Record<string, string>>({})
+  const [memoryConflict, setMemoryConflict] = useState<MemoryConflictState | null>(null)
+  const [mutationPendingByEntryId, setMutationPendingByEntryId] = useState<Record<string, boolean>>({})
   const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([])
   const [promotionMessageByEntryId, setPromotionMessageByEntryId] = useState<Record<string, string>>({})
   const [globalMutationMessage, setGlobalMutationMessage] = useState<string | null>(null)
@@ -310,6 +322,8 @@ function MemoryTab() {
   const memoryListRef = useRef<HTMLUListElement | null>(null)
   const accordionRefs = useRef<Record<string, HTMLElement>>({})
   const memoryEditActionsRef = useRef<HTMLDivElement | null>(null)
+  const conflictPanelRef = useRef<HTMLElement | null>(null)
+  const pendingMutationIdsRef = useRef(new Set<string>())
 
   const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>('/api/memories', {
     paused: true,
@@ -324,9 +338,36 @@ function MemoryTab() {
       setLoadError(null)
       setEntries(payload.entries)
       setParseErrors(payload.parse_errors)
+      setMemoryConflict((current) => {
+        if (!current) {
+          return null
+        }
+
+        const currentEntry = payload.entries.find((entry) => entry.id === current.entryId) ?? null
+        if (!currentEntry) {
+          return {
+            ...current,
+            status: 'error',
+            currentEntry: null,
+            refreshError: 'The memory entry no longer exists on the server.',
+          }
+        }
+
+        return {
+          ...current,
+          status: 'ready',
+          currentEntry,
+          refreshError: null,
+        }
+      })
     },
     onError: async (error) => {
       setLoadError(error)
+      setMemoryConflict((current) => current ? {
+        ...current,
+        status: 'error',
+        refreshError: error.message,
+      } : current)
     },
   })
 
@@ -344,6 +385,13 @@ function MemoryTab() {
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [refetch])
+
+  useEffect(() => {
+    if (!memoryConflict || memoryConflict.status === 'refreshing') {
+      return
+    }
+    conflictPanelRef.current?.focus()
+  }, [memoryConflict?.entryId, memoryConflict?.status])
 
   useEffect(() => {
     const element = stateFilterRef.current
@@ -543,6 +591,7 @@ function MemoryTab() {
       setEditingEntryId(null)
       setEditDraft(null)
     }
+    setMemoryConflict((current) => current?.entryId === entryId ? null : current)
     setDeleteConfirmEntryId((current) => (current === entryId ? null : current))
   }
 
@@ -563,6 +612,57 @@ function MemoryTab() {
     setMutationErrorByEntryId((previous) => ({ ...previous, [entryId]: message }))
   }
 
+  const beginMutation = (entryId: string): boolean => {
+    if (pendingMutationIdsRef.current.has(entryId)) {
+      return false
+    }
+    pendingMutationIdsRef.current.add(entryId)
+    setMutationPendingByEntryId((previous) => ({ ...previous, [entryId]: true }))
+    return true
+  }
+
+  const finishMutation = (entryId: string): void => {
+    pendingMutationIdsRef.current.delete(entryId)
+    setMutationPendingByEntryId((previous) => {
+      if (!previous[entryId]) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[entryId]
+      return next
+    })
+  }
+
+  const isMutationPending = (entryId: string): boolean => Boolean(mutationPendingByEntryId[entryId])
+
+  const retryConflictRefresh = (): void => {
+    setMemoryConflict((current) => current ? {
+      ...current,
+      status: 'refreshing',
+      refreshError: null,
+    } : current)
+    void refetch()
+  }
+
+  const reloadConflictEntry = (entryId: string): void => {
+    if (memoryConflict?.entryId !== entryId || !memoryConflict.currentEntry) {
+      return
+    }
+    setEditDraft(makeInitialDraft(memoryConflict.currentEntry))
+    clearEntryErrors(entryId)
+    setMemoryConflict(null)
+  }
+
+  const reapplyConflictDraft = (entryId: string): void => {
+    if (memoryConflict?.entryId !== entryId || !memoryConflict.currentEntry) {
+      return
+    }
+    const currentUpdatedAt = memoryConflict.currentEntry.updated_at
+    setEditDraft((previous) => previous ? { ...previous, expected_updated_at: currentUpdatedAt } : previous)
+    clearEntryErrors(entryId)
+    setMemoryConflict(null)
+  }
+
   const handleMutationFailure = async (
     entry: MemoryEntry,
     caught: unknown,
@@ -571,13 +671,17 @@ function MemoryTab() {
     const apiError = mutationError?.apiError ?? null
     const parsedValidationMessages = mutationError?.validationMessages ?? []
 
-    if (apiError?.status === 409 && apiError.message.includes('MEM_CONFLICT')) {
-      setEntryError(entry.id, apiError.message)
-      return
-    }
-
     if (apiError?.status === 409) {
-      setEntryError(entry.id, 'Entry was modified — refreshing')
+      setEntryError(entry.id, apiError.message)
+      if (editingEntryId === entry.id && editDraft) {
+        setMemoryConflict({
+          entryId: entry.id,
+          status: 'refreshing',
+          message: apiError.message,
+          currentEntry: null,
+          refreshError: null,
+        })
+      }
       void refetch()
       return
     }
@@ -597,6 +701,9 @@ function MemoryTab() {
   }
 
   const handleApprove = async (entry: MemoryEntry): Promise<void> => {
+    if (!beginMutation(entry.id)) {
+      return
+    }
     clearEntryErrors(entry.id)
     try {
       const payload = await approveMemory(entry.id, entry.updated_at)
@@ -607,10 +714,15 @@ function MemoryTab() {
       void refetch()
     } catch (caught) {
       await handleMutationFailure(entry, caught)
+    } finally {
+      finishMutation(entry.id)
     }
   }
 
   const handleResolve = async (entry: MemoryEntry): Promise<void> => {
+    if (!beginMutation(entry.id)) {
+      return
+    }
     clearEntryErrors(entry.id)
     try {
       const payload = await resolveMemory(entry.id, entry.updated_at)
@@ -620,10 +732,15 @@ function MemoryTab() {
       void refetch()
     } catch (caught) {
       await handleMutationFailure(entry, caught)
+    } finally {
+      finishMutation(entry.id)
     }
   }
 
   const handleDelete = async (entry: MemoryEntry): Promise<void> => {
+    if (!beginMutation(entry.id)) {
+      return
+    }
     clearEntryErrors(entry.id)
     try {
       await deleteMemory(entry.id, entry.updated_at)
@@ -640,6 +757,8 @@ function MemoryTab() {
       void refetch()
     } catch (caught) {
       await handleMutationFailure(entry, caught)
+    } finally {
+      finishMutation(entry.id)
     }
   }
 
@@ -647,6 +766,7 @@ function MemoryTab() {
     clearEntryErrors(entry.id)
     setEditingEntryId(entry.id)
     setEditDraft(makeInitialDraft(entry))
+    setMemoryConflict(null)
     setNewCategory('')
     setNewScopeAgent('')
   }
@@ -654,6 +774,7 @@ function MemoryTab() {
   const cancelEdit = () => {
     setEditingEntryId(null)
     setEditDraft(null)
+    setMemoryConflict(null)
     setNewCategory('')
     setNewScopeAgent('')
     setValidationMessages([])
@@ -683,7 +804,7 @@ function MemoryTab() {
   }
 
   const handleEditSave = async (entry: MemoryEntry): Promise<void> => {
-    if (!editDraft) {
+    if (!editDraft || memoryConflict?.entryId === entry.id || !beginMutation(entry.id)) {
       return
     }
 
@@ -721,6 +842,8 @@ function MemoryTab() {
       void refetch()
     } catch (caught) {
       await handleMutationFailure(entry, caught)
+    } finally {
+      finishMutation(entry.id)
     }
   }
 
@@ -958,29 +1081,113 @@ function MemoryTab() {
                       <p data-testid="memory-occ-banner" className="rounded-lg border border-warning bg-warning-low p-static-sm text-primary">{mutationErrorByEntryId[entry.id]}</p>
                     ) : null}
 
+                    {memoryConflict?.entryId === entry.id ? (
+                      <section
+                        data-testid="memory-conflict-panel"
+                        ref={(element) => {
+                          conflictPanelRef.current = element as unknown as HTMLElement | null
+                        }}
+                        role="region"
+                        aria-labelledby={`memory-conflict-title-${entry.id}`}
+                        tabIndex={-1}
+                        className="grid gap-static-sm rounded-lg border border-warning bg-warning-low p-static-md text-primary"
+                      >
+                        <div className="grid gap-static-xs">
+                          <h3 id={`memory-conflict-title-${entry.id}`} className="m-0 text-base font-semibold">This memory changed while you were editing.</h3>
+                          <p className="m-0 text-sm">Your draft is preserved. Review the latest server version before saving again.</p>
+                          <p className="m-0 break-words text-sm">{memoryConflict.message}</p>
+                        </div>
+                        <span className="sr-only" role="status" aria-live="polite">
+                          {memoryConflict.status === 'refreshing'
+                            ? 'Loading the latest server version.'
+                            : memoryConflict.status === 'error'
+                              ? memoryConflict.refreshError ?? 'The latest server version could not be loaded.'
+                              : 'The latest server version is ready. Choose whether to discard the draft or reapply it.'}
+                        </span>
+                        {memoryConflict.status === 'refreshing' ? (
+                          <p data-testid="memory-conflict-refreshing" className="m-0 text-sm">Loading the latest server version...</p>
+                        ) : null}
+                        {memoryConflict.status === 'error' ? (
+                          <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                            <p data-testid="memory-conflict-refresh-error" className="m-0 min-w-0 flex-1 break-words text-sm">
+                              {memoryConflict.refreshError ?? 'The latest server version could not be loaded.'}
+                            </p>
+                            <PButton type="button" data-testid="memory-conflict-retry" compact variant="secondary" onClick={retryConflictRefresh}>
+                              Retry latest
+                            </PButton>
+                          </div>
+                        ) : null}
+                        {memoryConflict.status === 'ready' && memoryConflict.currentEntry ? (
+                          <>
+                            <dl className="grid min-w-0 gap-static-sm text-sm sm:grid-cols-2">
+                              <div className="min-w-0">
+                                <dt className="font-semibold">Latest server title</dt>
+                                <dd data-testid="memory-conflict-current-title" className="m-0 break-words">{memoryConflict.currentEntry.title}</dd>
+                              </div>
+                              <div className="min-w-0">
+                                <dt className="font-semibold">Your draft title</dt>
+                                <dd data-testid="memory-conflict-draft-title" className="m-0 break-words">{editDraft?.title ?? ''}</dd>
+                              </div>
+                              <div className="min-w-0">
+                                <dt className="font-semibold">Latest server content</dt>
+                                <dd data-testid="memory-conflict-current-content" className="m-0 whitespace-pre-wrap break-words">{memoryConflict.currentEntry.content}</dd>
+                              </div>
+                              <div className="min-w-0">
+                                <dt className="font-semibold">Your draft content</dt>
+                                <dd data-testid="memory-conflict-draft-content" className="m-0 whitespace-pre-wrap break-words">{editDraft?.content ?? ''}</dd>
+                              </div>
+                            </dl>
+                            <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
+                              <PButton
+                                type="button"
+                                data-testid="memory-conflict-reload"
+                                compact
+                                variant="secondary"
+                                disabled={isMutationPending(entry.id)}
+                                onClick={() => reloadConflictEntry(entry.id)}
+                              >
+                                Discard draft and load latest
+                              </PButton>
+                              <PButton
+                                type="button"
+                                data-testid="memory-conflict-reapply"
+                                compact
+                                disabled={isMutationPending(entry.id)}
+                                onClick={() => reapplyConflictDraft(entry.id)}
+                              >
+                                Reapply draft
+                              </PButton>
+                            </div>
+                          </>
+                        ) : null}
+                      </section>
+                    ) : null}
+
                     {promotionMessageByEntryId[entry.id] ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{promotionMessageByEntryId[entry.id]}</p> : null}
 
                     <div data-testid="memory-detail-actions" className="flex flex-wrap items-center gap-static-xs">
                       {entry.state === 'contested' || entry.state === 'disputed' || entry.state === 'stale' ? (
-                        <PButton type="button" data-testid="memory-resolve-btn" compact onClick={() => void handleResolve(entry)}>
+                        <PButton type="button" data-testid="memory-resolve-btn" compact disabled={isMutationPending(entry.id)} aria-busy={isMutationPending(entry.id)} onClick={() => void handleResolve(entry)}>
                           Resolve
                         </PButton>
                       ) : null}
                       {entry.state === 'curated' ? (
-                        <PButton type="button" data-testid="memory-approve-btn" compact onClick={() => void handleApprove(entry)}>
+                        <PButton type="button" data-testid="memory-approve-btn" compact disabled={isMutationPending(entry.id)} aria-busy={isMutationPending(entry.id)} onClick={() => void handleApprove(entry)}>
                           Approve
                         </PButton>
                       ) : null}
 
                       {entry.state !== 'deleted' ? (
                         <>
-                          <PButton type="button" data-testid="memory-edit-btn" compact variant="secondary" onClick={() => startEdit(entry)}>
+                          <PButton type="button" data-testid="memory-edit-btn" compact variant="secondary" disabled={isMutationPending(entry.id)} onClick={() => startEdit(entry)}>
                             Edit
                           </PButton>
                           <PButton
                             type="button"
                             data-testid="memory-delete-btn"
                             compact
+                            disabled={isMutationPending(entry.id)}
+                            aria-busy={isMutationPending(entry.id)}
                             variant="secondary"
                             onClick={() => setDeleteConfirmEntryId(entry.id)}
                           >
@@ -1001,10 +1208,17 @@ function MemoryTab() {
                             <span className="text-sm font-semibold text-primary">Edit memory</span>
                           </div>
                           <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
-                            <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" onClick={cancelEdit}>
+                            <PButton type="button" data-testid="memory-edit-cancel-btn" compact variant="secondary" disabled={isMutationPending(entry.id)} onClick={cancelEdit}>
                               Cancel
                             </PButton>
-                            <PButton type="button" data-testid="memory-edit-save-btn" compact onClick={() => void handleEditSave(entry)}>
+                            <PButton
+                              type="button"
+                              data-testid="memory-edit-save-btn"
+                              compact
+                              disabled={isMutationPending(entry.id) || memoryConflict?.entryId === entry.id}
+                              aria-busy={isMutationPending(entry.id)}
+                              onClick={() => void handleEditSave(entry)}
+                            >
                               Save
                             </PButton>
                           </div>
@@ -1247,6 +1461,8 @@ function MemoryTab() {
                 type="button"
                 data-testid="memory-delete-confirm-btn"
                 compact
+                disabled={deleteConfirmEntry ? isMutationPending(deleteConfirmEntry.id) : false}
+                aria-busy={deleteConfirmEntry ? isMutationPending(deleteConfirmEntry.id) : false}
                 onClick={() => void handleDelete(deleteConfirmEntry)}
               >
                 Confirm delete

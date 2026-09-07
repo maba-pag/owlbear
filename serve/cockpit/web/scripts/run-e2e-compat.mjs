@@ -8,6 +8,7 @@ const compatibilitySpecs = [
   'e2e/smoke.spec.ts',
   'e2e/pds-runtime-csp.spec.ts',
   'e2e/pds-scheme-dark.spec.ts',
+  'e2e/memory-conflict.spec.ts',
 ]
 
 let browsersAvailable = true

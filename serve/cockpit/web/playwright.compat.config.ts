@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const compatibilitySpecs = /(?:smoke|pds-runtime-csp|pds-scheme-dark)\.spec\.ts/
+const compatibilitySpecs = /(?:smoke|pds-runtime-csp|pds-scheme-dark|memory-conflict)\.spec\.ts/
 
 export default defineConfig({
   testDir: 'e2e',

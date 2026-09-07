@@ -56,6 +56,31 @@ describe('usePollingFetch paused polling', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('runs a queued explicit refetch after an active request while paused', async () => {
+    let releaseFirst!: () => void
+    const firstResponse = new Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>((resolve) => {
+      releaseFirst = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    })
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => firstResponse)
+      .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => usePollingFetch('/api/tasks', { intervalMs: 1_000, paused: true }))
+    await act(async () => {})
+    await act(async () => { result.current.refetch() })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      releaseFirst()
+      await Promise.resolve()
+    })
+    await act(async () => {})
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('drops a queued interval poll when pausing before the active request completes', async () => {
     const { fn: slowFetch, resolve } = makeSlowFetch()
     vi.stubGlobal('fetch', slowFetch)
