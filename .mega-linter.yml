@@ -3,7 +3,7 @@
 # https://megalinter.io/latest/config-file/
 # Native runner metadata. Local tooling derives the same image from these fields.
 MEGALINTER_FLAVOR: cupcake
-MEGALINTER_VERSION: v10.0.0
+MEGALINTER_VERSION: v10.1.0
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:
