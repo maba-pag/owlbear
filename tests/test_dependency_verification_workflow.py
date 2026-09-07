@@ -381,7 +381,7 @@ def test_ruff_toolchain_proof_accepts_equal_versions(tmp_path: Path, ruff_toolch
     def load_versions(url: str) -> object:
         assert (
             url
-            == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.0.0/.automation/generated/linter-versions.json"
+            == "https://raw.githubusercontent.com/oxsecurity/megalinter/v10.1.0/.automation/generated/linter-versions.json"
         )
         return {"ruff": "0.16.2"}
 
