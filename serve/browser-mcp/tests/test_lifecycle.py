@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -30,8 +31,8 @@ class _FakeLauncher:
         self,
         calls: list[str],
         *,
-        launch_error: Exception | None = None,
-        page_error: Exception | None = None,
+        launch_error: BaseException | None = None,
+        page_error: BaseException | None = None,
         page_resource: _FakePage | None = None,
     ) -> None:
         self._calls = calls
@@ -110,6 +111,29 @@ async def test_startup_launch_failure_closes_launcher_and_exposes_safe_diagnosti
             assert "/private/profile/token" not in context.browser_diagnostic
 
     assert calls == ["launch", "launcher"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["launch", "page"])
+async def test_startup_cancellation_closes_launcher_and_reraises(failure_stage: str) -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(
+        calls,
+        launch_error=asyncio.CancelledError() if failure_stage == "launch" else None,
+        page_error=asyncio.CancelledError() if failure_stage == "page" else None,
+    )
+
+    with (
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        async with app_lifespan(mcp):
+            pytest.fail("startup cancellation must not yield a browser context")
+
+    expected_calls = ["launch", "launcher"]
+    if failure_stage == "page":
+        expected_calls.insert(1, "page-create")
+    assert calls == expected_calls
 
 
 @pytest.mark.asyncio

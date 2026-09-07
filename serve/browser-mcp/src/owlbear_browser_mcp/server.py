@@ -191,6 +191,10 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
         launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
         await launcher.launch()
         page = await launcher.page()
+    except asyncio.CancelledError:
+        for diagnostic in await _close_browser_resources(page, launcher):
+            _LOGGER.warning(diagnostic)
+        raise
     except Exception as exc:  # noqa: BLE001 - startup degrades to an observable unavailable context.
         diagnostics = [_safe_browser_diagnostic("browser startup", exc)]
         diagnostics.extend(await _close_browser_resources(page, launcher))
