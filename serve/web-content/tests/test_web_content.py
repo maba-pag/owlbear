@@ -291,9 +291,7 @@ def test_extract_falls_back_when_trafilatura_flattens_table(
 
     monkeypatch.setattr(extractor_module.trafilatura, "extract", fake_extract)
 
-    markdown = extract_content(
-        "<main><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table></main>"
-    )
+    markdown = extract_content("<main><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table></main>")
 
     assert "| A | B |" in markdown
     assert "| 1 | 2 |" in markdown
