@@ -165,8 +165,7 @@ class TestFetchErrorPropagation:
     ) -> None:
         """AC1: A FetchError from the fetcher must be mapped to RefreshResult.errors.
 
-        Current code ignores fetch_result.errors entirely — this test fails until
-        the propagation fix is applied.
+        The coordinator must preserve the fetcher's typed error in the refresh result.
         """
         mock_fetcher.fetch_source = AsyncMock(
             return_value=FetchResult(

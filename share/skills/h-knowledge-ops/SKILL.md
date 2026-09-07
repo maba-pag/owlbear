@@ -35,13 +35,35 @@ Ingest a text document into the knowledge base.
 | `text` | str | required | Text content to ingest |
 | `metadata` | dict | None | Optional metadata dict |
 | `scope` | str | `global` | Knowledge scope for ingested document |
-| `source_url` | str | None | Optional source identity URL; creates/reuses a source row and enables delta detection |
+| `source_url` | str | None | Optional document URI/identity for the inline ingest; does not create a refreshable source |
 
-Returns: document ID, chunk count, entity count, edge count, status, and warnings when automatic graph extraction partially fails.
+Returns a human-readable `str`, not a typed result envelope. A successful call currently looks
+like:
 
-Behavior: direct text ingestion uses the same source/status delta detection as registered source refresh. When `source_url` is supplied, unchanged content returns `status: skipped`; changed content replaces the prior document for that source and scope. `http`/`https` URLs register as web sources; `file://` URLs and plain local paths register as file sources. If `source_url` is omitted, `metadata.url` is promoted to the same source-linked path; URL/file-like `metadata.source` values are also promoted. Plain labels and anonymous direct text create `inline` source rows that are active and enrichment-eligible but not refreshable.
+```text
+Ingested: documents_processed=1, chunks_created=4, chunks_enqueued=4
+```
 
-If document/chunk/vector persistence succeeds but automatic per-chunk graph extraction fails for some chunks, ingestion returns `status: partial`, stores successful extraction results against their original chunk IDs, and surfaces warnings. Treat `partial` as searchable content with incomplete automatic graph extraction.
+Failures currently return a string beginning with `error: ingestion failed:`. The text adapter does
+not expose document IDs, replacement/unchanged status, per-document `IngestResult.errors`, or graph
+warnings as structured MCP fields. Do not parse the summary as a stable machine-readable contract.
+
+Behavior:
+
+- Every direct call uses or creates the inline source named `mcp-inline-{scope}`. That source is
+  active and enrichment-eligible but `refreshable` is false.
+- `source_url`, when supplied, becomes the ingested document URI/identity. It does not register or
+  reuse a URL, file, or authenticated-browser source, and it does not make the inline source
+  refreshable.
+- `metadata` is passed to the document request. `metadata.url` and URL-like metadata values are not
+  promoted into a registered source by this tool.
+- The source's configured scope is used by the coordinator for document, chunk, and vector
+  persistence. Choose `project:{id}` explicitly for project-scoped direct captures.
+- The current text adapter summarizes counts even when the coordinator records per-document
+  failures. Inspect source health or use the typed refresh path when failure detail matters.
+
+Automatic graph extraction and persistence details are recorded by the coordinator, but this string
+adapter does not expose a separate `partial` status or warning field.
 
 ### list_knowledge_sources
 
@@ -64,6 +86,17 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 Returns on a count result: `{"source_id": str, "sources_refreshed": int, "documents_created": int, "documents_replaced": int, "documents_unchanged": int, "chunks_created": int, "chunks_replaced": int, "errors": list[RefreshError]}`. Each `errors` entry retains `source_id`, `stage`, `code`, `retryable`, redacted `message`, and `timestamp`. The return union is this count result or a serialized `KnowledgeFailure` when refresh orchestration fails.
 
 Partial URL-list success preserves successful document and chunk counts beside typed per-source `errors`; a total failure has zero successful counts and must not be reported as refreshed work. An error-free no-op is also success: unchanged content increments `documents_unchanged`, leaves creation and replacement counts at zero, and returns `errors: []`.
+
+Current connector boundary:
+
+- `url_list` with `fetch_method="http"` and `file_glob` with `fetch_method="filesystem"` use the
+  maintained source-fetcher paths.
+- `authenticated_web` with `fetch_method="browser"` is accepted by source registration, but the
+  current Knowledge MCP process selects a placeholder browser fetcher because it does not own or
+  inject a live Browser MCP session. Refresh therefore returns an acquisition/transport failure;
+  `auth_profile` and `page_limit` are persisted configuration, not proof of working browser
+  traversal.
+- `inline` sources have no refresh operation. Direct `knowledge_ingest` is the manual capture path.
 
 Raises `ToolError` when the source store or ingest coordinator is unavailable, the source ID is unknown, or the source is inactive. These are preconditions, not `KnowledgeFailure` results.
 
@@ -306,5 +339,9 @@ tool set.
 
 - **Always set `scope`** to `project:{id}` when a project is active; use `global` otherwise.
 - **Search before ingesting** to avoid duplicates — the dedup is by content hash, not by topic.
+- **Do not infer source binding from `source_url`** in `knowledge_ingest`; it supplies document URI
+  identity for the inline source and does not create a refreshable source registration.
+- **Do not advertise authenticated-browser refresh as available** until a live browser fetcher is
+  explicitly wired into the Knowledge process and its failure/provenance contract is tested.
 - **Do not run concurrent enrichment workers**. Claims can become stale and be reassigned, while `store_enrichment` does not authenticate the batch correlation token.
 - **Failed chunks stay failed until reset**. If `chunks_failed` is non-zero, inspect the cause, then call `retry_enrichment` only when the extractor/payload issue has been corrected.

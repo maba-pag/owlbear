@@ -66,8 +66,7 @@ def _addr6(ip: str, port: int = 80) -> list:
 class TestFromAC_NavigateSchemeCheck:
     """AC2: navigate() rejects non-http/https schemes with ToolError.
 
-    All tests fail in RED because the current code has no scheme check —
-    navigate() returns the URL without raising ToolError for these cases.
+    These cases guard the MCP SSRF preflight contract against scheme bypasses.
     """
 
     @pytest.mark.asyncio
@@ -321,8 +320,8 @@ class TestFromAC_NavigateIPBlocklist:
 class TestFromAC_NavigateDNSFailure:
     """Binding guidance §2: DNS failures must become ToolError, not raw OSError.
 
-    All tests fail in RED because the current code never calls getaddrinfo — no
-    OSError is raised and no ToolError wraps it.
+    The preflight resolves the hostname and translates resolver failures into a
+    stable MCP tool error.
     """
 
     @pytest.mark.asyncio
@@ -355,9 +354,7 @@ class TestFromAC_NavigatePassthrough:
     """AC5: Allowed domain with public IP passes the SSRF check; DNS is resolved.
 
     The pass-through test verifies the contract that DNS resolution IS performed
-    even for allowlisted domains (not bypassed).  It fails in RED because the
-    current code never calls getaddrinfo — mock_dns.assert_called() raises
-    AssertionError.
+    even for allowlisted domains (not bypassed).
     """
 
     @pytest.mark.asyncio
@@ -366,7 +363,7 @@ class TestFromAC_NavigatePassthrough:
         ctx = _make_ctx()
         with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
             result = await navigate(ctx, f"https://{_ALLOWED_HOST}/page")
-        mock_dns.assert_called()  # DNS resolution must be called — AssertionError in RED
+        mock_dns.assert_called()
         assert result is not None
 
     @pytest.mark.asyncio
@@ -374,7 +371,6 @@ class TestFromAC_NavigatePassthrough:
         """navigate() returns a non-empty result for an allowed HTTPS URL with public IP.
 
         This also acts as a regression guard: the SSRF check must not block public IPs.
-        Fails in RED because mock_dns.assert_called() is never satisfied.
         """
         ctx = _make_ctx()
         with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
