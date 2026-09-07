@@ -58,9 +58,7 @@ class LifecycleRecoveryError(RuntimeError):
         if rollback_errors:
             details.append(
                 "rollback failures: "
-                + "; ".join(
-                    f"entry {failure.entry_id}: {type(failure.error).__name__}" for failure in rollback_errors
-                )
+                + "; ".join(f"entry {failure.entry_id}: {type(failure.error).__name__}" for failure in rollback_errors)
             )
         if cache_error is not None:
             details.append(f"cache reload failed: {type(cache_error).__name__}")
