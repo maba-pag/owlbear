@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import BaseModel
 
 _REPO_ROOT = Path(__file__).parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "share/agents"
@@ -239,6 +240,21 @@ class _TargetApplicationDouble:
             return None
 
         return operation
+
+
+class _TransitionResult(BaseModel):
+    operation: str
+
+
+class _TransitionApplicationDouble(_TargetApplicationDouble):
+    def __init__(self) -> None:
+        self.transitions: list[tuple[str, dict[str, object]]] = []
+
+    def transition_delivery(self, change_id: str, transition: object) -> None:
+        model_dump = getattr(transition, "model_dump", None)
+        assert callable(model_dump)
+        self.transitions.append((change_id, model_dump(mode="json")))
+        return _TransitionResult(operation="transition_delivery")
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
@@ -508,15 +524,77 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
     assert "/finalize-change <change-id>" in content
 
 
-def test_orchestration_transition_envelope_matches_registered_field() -> None:
+@pytest.mark.asyncio
+async def test_orchestration_transition_envelope_matches_registered_field() -> None:
     """Orchestrator guidance must use the live transition_delivery envelope field."""
+    from mcp import Client  # noqa: PLC0415
+    from owlbear_delivery_mcp.target_server import assemble_target_server  # noqa: PLC0415
+
     content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
     step_start = content.index("## Step 3 - Forward One Worker Transition")
     step_end = content.index("## Step 4 - Preserve Typed Integration Attention")
     step = content[step_start:step_end]
 
-    assert "transition as `transition` byte-for-structure unchanged" in step
+    planner_transition = {
+        "action": "advance",
+        "outcome_id": "OUT-001",
+        "claim_id": "planner-claim",
+        "output": {
+            "output_id": "planner-output",
+            "claim_id": "planner-claim",
+            "stage": "planning",
+            "kind": "planning",
+            "digest": "a" * 64,
+        },
+    }
+    builder_transition = {
+        "action": "advance",
+        "outcome_id": "OUT-002",
+        "claim_id": "builder-claim",
+        "output": {
+            "output_id": "builder-output",
+            "claim_id": "builder-claim",
+            "stage": "implementation",
+            "kind": "implementation",
+            "digest": "b" * 64,
+        },
+    }
+    application = _TransitionApplicationDouble()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        transition_schema = tools["transition_delivery"].input_schema
+        transition_fields = tuple(
+            field for field in transition_schema["properties"] if field != "change_id"
+        )
+        assert len(transition_fields) == 1
+        transition_field = transition_fields[0]
+        assert transition_field != "request"
+        assert transition_field in transition_schema["required"]
+
+        for change_id, transition in (
+            ("planner-change", planner_transition),
+            ("builder-change", builder_transition),
+        ):
+            result = await client.call_tool(
+                "transition_delivery",
+                {"change_id": change_id, transition_field: transition},
+            )
+            assert not result.is_error
+
+        rejected = await client.call_tool(
+            "transition_delivery",
+            {"change_id": "planner-change", "request": planner_transition},
+        )
+
+    assert application.transitions == [
+        ("planner-change", planner_transition),
+        ("builder-change", builder_transition),
+    ]
+    assert f"transition as `{transition_field}` byte-for-structure unchanged" in step
     assert "transition as `request` byte-for-structure unchanged" not in step
+    assert rejected.is_error
 
 
 @pytest.mark.asyncio
