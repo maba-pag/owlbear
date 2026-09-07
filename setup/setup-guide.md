@@ -121,28 +121,30 @@ supported alpha path:
    **Expected result:** the Playwright Chromium executable is available to the Browser MCP server.
 2. Review the `env` member on the `owlbear-browser` entry in `.vscode/mcp.json`. Fresh setup seeds
   wildcard testing access; replace it with exact hostnames for normal or production use. Set
-  `PLAYWRIGHT_USER_DATA_DIR` only when an approved existing Chromium profile should be used:
+  `PLAYWRIGHT_USER_DATA_DIR` only when an approved existing Chromium profile should be used; use
+  an absolute path because the launcher does not expand `~` in this environment:
 
    ```json
    {
-     "env": {
+      "env": {
         "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com",
-        "PLAYWRIGHT_USER_DATA_DIR": "~/.owlbear/chromium-profile"
+        "PLAYWRIGHT_USER_DATA_DIR": "/Users/you/.owlbear/chromium-profile"
      }
    }
    ```
 
    **Expected result:** Browser requests are limited to the exact hostnames you named. For local
    testing across public sites only, keep `"*"`; keep exact hostnames for production. SSRF checks
-   still reject private, loopback, link-local, reserved, and unspecified DNS results.
+   reject private, loopback, link-local, reserved, and unspecified DNS results for hostnames that
+   are not exact allowlist entries.
 3. Restart the `owlbear-browser` MCP server and try `acquire` or `navigate` against an allowed
-  public URL. `acquire` accepts optional readiness/content selectors and returns a structured
-  success or failure result; it does not expose diagnostic HTML or automatically ingest content.
+   public URL. `acquire` accepts optional readiness/content selectors and returns a structured
+   success or failure result; it does not expose diagnostic HTML or automatically ingest content.
 
-  **Expected result:** the tool returns page content or its typed acquisition result. A running
-  server with no configured domains still denies every hostname. Exact allowlist entries are the
-  explicit approval for private, loopback, or link-local DNS results from that hostname; wildcard
-  mode does not grant that approval. See the
+   **Expected result:** the tool returns page content or its typed acquisition result. A running
+   server with no configured domains still denies every hostname. Exact allowlist entries are the
+   explicit approval for private, loopback, or link-local DNS results from that hostname; wildcard
+   mode does not grant that approval. See the
    [Browser MCP guide](../serve/browser-mcp/README.md) for the full boundary and limitations.
 
 - **Managed SSO readiness:** Treat managed SSO as a separate readiness check. The launcher can load an extension directory
