@@ -4621,6 +4621,7 @@ class PortfolioApplication:
                     candidate.runtime,
                     candidate.binding.outcome_id,
                     candidate.role,
+                    allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
                 )
                 if isinstance(source, DeliveryAcquisitionFailure):
                     failures.append(source)
@@ -4886,12 +4887,14 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         outcome_id: str,
         worker_role: DeliveryWorkerRole,
+        *,
+        allow_dirty: bool = False,
     ) -> _PreparedSource | DeliveryAcquisitionFailure:
         try:
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
             coordination = self._workspace_manager.show(change_id)
-            source_head = self._workspace_manager.source_head(change_id)
+            source_head = self._workspace_manager.source_head(change_id, require_clean=not allow_dirty)
             adoption = coordination.external_head_adoption_receipt
             promotion = coordination.external_head_promotion_receipt
             if promotion != runtime.external_head_promotion_receipt():
@@ -5065,7 +5068,13 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         binding: OutcomeAuthorityBinding,
     ) -> DeliveryLaunchPackage:
-        source = self._prepare_source(change_id, runtime, binding.outcome_id, binding.active_claim.worker_role)
+        source = self._prepare_source(
+            change_id,
+            runtime,
+            binding.outcome_id,
+            binding.active_claim.worker_role,
+            allow_dirty=binding.active_claim.worker_role is DeliveryWorkerRole.BUILDER,
+        )
         if isinstance(source, DeliveryAcquisitionFailure):
             self._fail(source.detail)
         claim = binding.active_claim

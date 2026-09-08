@@ -2711,8 +2711,8 @@ class ChangeWorkspaceManager:
             _workspace_failure("change source worktree is not clean")
         return branch_head
 
-    def source_head(self, change_id: str) -> str:
-        """Return one clean source head at the reviewed or durably adopted boundary."""
+    def source_head(self, change_id: str, *, require_clean: bool = True) -> str:
+        """Return one source head at the reviewed or durably adopted boundary."""
         coordination = self._coordinator.show(change_id)
         if coordination.external_head_adoption_intent is not None:
             _coordination_conflict("external Change head adoption requires operation replay")
@@ -2728,7 +2728,7 @@ class ChangeWorkspaceManager:
             coordination.branch,
             branch_head,
         )
-        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+        if require_clean and self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("change source worktree is not clean")
         return branch_head
 

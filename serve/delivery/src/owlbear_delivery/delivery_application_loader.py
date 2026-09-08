@@ -466,6 +466,10 @@ def _validate_local_snapshot(
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
         snapshot.frontier, frontier
     ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
+    local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
+    local_recoverable_successor = local_attention_successor or local_claim_successor
+    if local_claim_successor:
+        _require_local_snapshot_branch(snapshot, paths.repository_root)
     _fetch_snapshot_change_head(
         snapshot,
         config,
@@ -473,7 +477,7 @@ def _validate_local_snapshot(
         allow_local_branch=True,
         allow_local_descendant=local_attention_successor,
     )
-    if frontier_bytes != expected["frontier.json"] and not local_attention_successor:
+    if frontier_bytes != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
     _validate_local_snapshot_artifacts(relative_root, expected)
     try:
@@ -597,6 +601,50 @@ def _local_snapshot_change_head(
     ):
         return snapshot.change_head
     return None
+
+
+def _require_local_snapshot_branch(snapshot: DeliveryStateSnapshot, repository: Path) -> None:
+    """Require one active local snapshot branch to remain at its reviewed head."""
+    local_head = _local_snapshot_change_head(
+        snapshot,
+        repository,
+        allow_local_branch=True,
+        allow_local_descendant=False,
+    )
+    if local_head != snapshot.change_head:
+        _bootstrap_failure("local Change branch differs from Delivery-state snapshot")
+
+
+def _is_unpublished_claim_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize only a local frontier that adds host-local claim leases."""
+    if snapshot_frontier.change_completion is not None or local_frontier.change_completion is not None:
+        return False
+    if len(snapshot_frontier.bindings) != len(local_frontier.bindings):
+        return False
+    local_has_claim = False
+    for snapshot_binding, local_binding in zip(snapshot_frontier.bindings, local_frontier.bindings, strict=True):
+        if snapshot_binding.outcome_id != local_binding.outcome_id:
+            return False
+        if snapshot_binding.active_claim is not None:
+            return False
+        if local_binding.active_claim is not None:
+            local_has_claim = True
+    snapshot_without_claims = snapshot_frontier.model_copy(
+        update={
+            "bindings": tuple(
+                binding.model_copy(update={"active_claim": None}) for binding in snapshot_frontier.bindings
+            )
+        }
+    )
+    local_without_claims = local_frontier.model_copy(
+        update={
+            "bindings": tuple(binding.model_copy(update={"active_claim": None}) for binding in local_frontier.bindings)
+        }
+    )
+    return local_has_claim and snapshot_without_claims == local_without_claims
 
 
 def _is_unpublished_acceptance_attention_successor(

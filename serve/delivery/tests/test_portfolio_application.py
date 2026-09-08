@@ -7312,6 +7312,66 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     assert (interrupted.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
 
 
+def test_acquisition_claims_dirty_builder_for_worker_triage(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    dirty_file = tmp_path / "worktrees/change-a/product.txt"
+    dirty_file.write_text("uncommitted source\n", encoding="utf-8")
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.failures == ()
+    launch = acquired.launch_packages[0]
+    assert launch.claim.worker_role == DeliveryWorkerRole.BUILDER
+    assert launch.writer == coordinator.show("change-a").writer
+    context = application.show_build_context(
+        launch.change_id,
+        launch.outcome_id,
+        launch.claim.attempt_id,
+        launch.claim.claim_id,
+    )
+    assert context.launch == launch
+    assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
+    recovered = application.recover_claim(
+        launch.change_id,
+        launch.outcome_id,
+        launch.claim.attempt_id,
+        launch.claim.claim_id,
+    )
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.quarantine_commit is not None
+    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{launch.claim.attempt_id}"
+    assert _git(launch.worktree_path, "status", "--porcelain") == ""
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") == launch.last_reviewed_commit
+    assert _git(launch.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted source"
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+
+
+def test_acquisition_rejects_dirty_planner_before_claim(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    dirty_file = tmp_path / "worktrees/change-a/product.txt"
+    dirty_file.write_text("uncommitted source\n", encoding="utf-8")
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.launch_packages == ()
+    assert len(acquired.failures) == 1
+    failure = acquired.failures[0]
+    assert failure.change_id == "change-a"
+    assert failure.outcome_id == "OUT-001"
+    assert failure.attempt_id is None
+    assert failure.claim_id is None
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    assert dirty_file.read_text(encoding="utf-8") == "uncommitted source\n"
+
+
 def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,

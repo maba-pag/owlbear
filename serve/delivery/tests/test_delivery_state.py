@@ -62,7 +62,9 @@ from owlbear_delivery.delivery_application_loader import (
     _DeferredRemoteStateReconciliationError,
     _fetch_snapshot_change_head,
     _is_unpublished_acceptance_attention_successor,
+    _is_unpublished_claim_successor,
     _is_unpublished_target_sync_attention_successor,
+    _require_local_snapshot_branch,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -804,6 +806,95 @@ def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: P
 
     assert first.published_head != "0" * 40
     assert isinstance(publisher.read_snapshot("state-reject"), DeliveryStateSnapshot)
+
+
+def test_loader_accepts_claim_only_local_frontier_successor() -> None:
+    snapshot_frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),
+            OutcomeAuthorityBinding(outcome_id="OUT-002", plan_scope_id="SCOPE-002"),
+        )
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": (
+                snapshot_frontier.bindings[0].model_copy(
+                    update={
+                        "active_claim": DeliveryActiveClaim(
+                            attempt_id="attempt",
+                            claim_id="claim",
+                            owner_id="owner",
+                            process_id="process",
+                            started_at="2026-08-23T00:00:00Z",
+                            worker_role=DeliveryWorkerRole.PLANNER,
+                        ),
+                        "stage": DeliveryStage.PLANNING,
+                    }
+                ),
+                snapshot_frontier.bindings[1],
+            )
+        }
+    )
+
+    assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"published_head": "1" * 40},
+        {"operator_moves": ("unexpected",)},
+    ],
+)
+def test_loader_rejects_claim_successor_with_unrelated_frontier_drift(
+    update: dict[str, object],
+) -> None:
+    snapshot_frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={
+            **update,
+            "bindings": (snapshot_frontier.bindings[0].model_copy(update={"active_claim": claim}),),
+        }
+    )
+
+    assert not _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
+
+
+def test_loader_claim_successor_never_allows_advanced_branch(tmp_path: Path) -> None:
+    repository, _remote, _snapshot_head = _repository(tmp_path)
+    contract, _intent, _design = _contract("claim-successor")
+    runtime, manager, worktree = _runtime(tmp_path, repository, "claim-successor", contract)
+    snapshot = _snapshot(runtime, manager, "claim-successor")
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    local_frontier = snapshot.frontier.model_copy(
+        update={"bindings": (snapshot.frontier.bindings[0].model_copy(update={"active_claim": claim}),)}
+    )
+
+    assert _is_unpublished_claim_successor(snapshot.frontier, local_frontier)
+    _git(repository, "push", "origin", f"{snapshot.change_head}:refs/heads/{snapshot.branch}")
+    _git(worktree, "commit", "--allow-empty", "-m", "advanced")
+    with pytest.raises(
+        DeliveryApplicationLoadError,
+        match="local Change branch differs from Delivery-state snapshot",
+    ):
+        _require_local_snapshot_branch(snapshot, repository)
 
 
 def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(tmp_path: Path) -> None:
