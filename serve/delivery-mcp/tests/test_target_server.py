@@ -552,6 +552,10 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     assert "integration_target" not in tools["sync_change_with_target"].output_schema["properties"]
     assert set(tools["transition_delivery"].input_schema["properties"]) == {"change_id", "transition"}
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
+    assert all(
+        "action" in transition_definitions[branch["$ref"].removeprefix("#/$defs/")]["required"]
+        for branch in transition_definitions["DeliveryTransition"]["oneOf"]
+    )
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
     assert output == {

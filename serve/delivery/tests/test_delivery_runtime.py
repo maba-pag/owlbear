@@ -1414,7 +1414,9 @@ def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: 
     assert runtime.show_binding("OUT-001").stage == DeliveryStage.PLANNING
     assert runtime.show_binding("OUT-001").tasks == ()
 
-    promoted = runtime.transition(AdvanceDelivery(outcome_id="OUT-001", claim_id="claim-001", output=candidate.output))
+    promoted = runtime.transition(
+        AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id="claim-001", output=candidate.output)
+    )
 
     assert promoted.tasks == request.tasks
     assert promoted.candidate is None
@@ -1527,7 +1529,7 @@ def _plan_single_task(runtime: DeliveryRuntime, outcome_id: str, task: DeliveryT
             tasks=(task,),
         )
     )
-    runtime.transition(AdvanceDelivery(outcome_id=outcome_id, claim_id=claim_id, output=plan.output))
+    runtime.transition(AdvanceDelivery(action="advance", outcome_id=outcome_id, claim_id=claim_id, output=plan.output))
 
 
 def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp_path: Path) -> None:
@@ -1557,7 +1559,9 @@ def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp
             job_id=index,
             outcome_id=outcome_id,
         )
-        runtime.transition(AdvanceDelivery(outcome_id=outcome_id, claim_id=claim_id, output=candidate.output))
+        runtime.transition(
+            AdvanceDelivery(action="advance", outcome_id=outcome_id, claim_id=claim_id, output=candidate.output)
+        )
 
     pending = runtime.checkpoint_publication_state().pending_checkpoint
     assert pending is not None
@@ -1592,7 +1596,9 @@ def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp
         coordination,
         job_id=4,
     )
-    runtime.transition(AdvanceDelivery(outcome_id="OUT-001", claim_id=claim_id, output=candidate.output))
+    runtime.transition(
+        AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id=claim_id, output=candidate.output)
+    )
     reanchored = runtime.checkpoint_publication_state().pending_checkpoint
     assert reanchored is not None
     assert reanchored.head == reviewed_head
@@ -1695,7 +1701,9 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
             ),
         )
     )
-    runtime.transition(AdvanceDelivery(outcome_id="OUT-001", claim_id="plan-claim", output=plan.output))
+    runtime.transition(
+        AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id="plan-claim", output=plan.output)
+    )
     result, candidate, completed_commit, first_claim = _publish_task_result(
         runtime,
         coordinator,
@@ -1703,7 +1711,7 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
         job_id=1,
     )
 
-    advance = AdvanceDelivery(outcome_id="OUT-001", claim_id=first_claim, output=candidate.output)
+    advance = AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id=first_claim, output=candidate.output)
     with (
         patch.object(runtime, "_replace", side_effect=RuntimeError("injected after workspace completion")),
         pytest.raises(RuntimeError, match="injected"),
@@ -1737,6 +1745,7 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
 
     second_advance = runtime.transition(
         AdvanceDelivery(
+            action="advance",
             outcome_id="OUT-001",
             claim_id=second_claim,
             output=second_candidate.output,
@@ -1759,6 +1768,7 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
 
     completed = runtime.transition(
         AdvanceDelivery(
+            action="advance",
             outcome_id="OUT-001",
             claim_id=third_claim,
             output=third_candidate.output,
@@ -1840,12 +1850,14 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
     runtime, coordinator, coordination, initial, attempt_commit, first_result, tasks = _active_second_task(tmp_path)
     requests = {
         "retry": RetryDelivery(
+            action="retry",
             outcome_id="OUT-001",
             claim_id="claim-002",
             abandoned_commit=attempt_commit,
             attempt_id="attempt-002",
         ),
         "planning": ReturnDelivery(
+            action="return",
             outcome_id="OUT-001",
             claim_id="claim-002",
             target=DeliveryStage.PLANNING,
@@ -1855,6 +1867,7 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
             attempt_id="attempt-002",
         ),
         "design": ReturnDelivery(
+            action="return",
             outcome_id="OUT-001",
             claim_id="claim-002",
             target=DeliveryStage.DESIGN,
@@ -1864,6 +1877,7 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
             attempt_id="attempt-002",
         ),
         "block": BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id="claim-002",
             block_id="block-002",
@@ -1937,6 +1951,7 @@ def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(t
     with pytest.raises(RuntimeError, match="clean change worktree"):
         runtime.transition(
             RetryDelivery(
+                action="retry",
                 outcome_id="OUT-001",
                 claim_id="claim-002",
                 abandoned_commit=attempt_commit,
@@ -1965,9 +1980,10 @@ def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_in
     output = _claim_with_output(runtime, "OUT-001", "claim-001")
 
     request = {
-        "advance": AdvanceDelivery(outcome_id="OUT-001", claim_id="claim-001", output=output),
-        "retry": RetryDelivery(outcome_id="OUT-001", claim_id="claim-001"),
+        "advance": AdvanceDelivery(action="advance", outcome_id="OUT-001", claim_id="claim-001", output=output),
+        "retry": RetryDelivery(action="retry", outcome_id="OUT-001", claim_id="claim-001"),
         "return": ReturnDelivery(
+            action="return",
             outcome_id="OUT-001",
             claim_id="claim-001",
             target=DeliveryStage.PLANNING,
@@ -1975,6 +1991,7 @@ def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_in
             locators=("TASK-001",),
         ),
         "block": BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id="claim-001",
             block_id="block-001",
@@ -2020,6 +2037,7 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     )
     runtime.transition(
         BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id="claim-001",
             block_id="block-001",
@@ -2045,6 +2063,7 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     _activate(runtime, "OUT-003", "claim-003")
     runtime.transition(
         BlockDelivery(
+            action="block",
             outcome_id="OUT-003",
             claim_id="claim-003",
             block_id="block-003",
@@ -2066,6 +2085,7 @@ def test_implementation_block_requires_bounded_user_request(tmp_path: Path) -> N
     with pytest.raises(DeliveryRuntimeConflictError, match="bounded user request"):
         runtime.transition(
             BlockDelivery(
+                action="block",
                 outcome_id="OUT-001",
                 claim_id="claim-002",
                 block_id="build-context-tool-unavailable",
@@ -2088,6 +2108,7 @@ def test_implementation_block_rejects_resume_commit_not_at_branch_head(tmp_path:
     with pytest.raises(RuntimeError, match="outside the recoverable restart states"):
         runtime.transition(
             BlockDelivery(
+                action="block",
                 outcome_id="OUT-001",
                 claim_id="claim-002",
                 block_id="block-stale-resume",

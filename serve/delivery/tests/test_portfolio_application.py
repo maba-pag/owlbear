@@ -1505,6 +1505,7 @@ def test_finalization_after_builder_child_does_not_repromote_adopted_ancestor(tm
     application.transition_delivery(
         "change-a",
         AdvanceDelivery(
+            action="advance",
             outcome_id="OUT-001",
             claim_id=launch.claim.claim_id,
             output=result.output,
@@ -6470,7 +6471,12 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     assert application.publish_delivery_plan("change-a", plan_request) == plan
     advanced = application.transition_delivery(
         "change-a",
-        AdvanceDelivery(outcome_id="OUT-001", claim_id=plan_launch.claim.claim_id, output=plan.output),
+        AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id=plan_launch.claim.claim_id,
+            output=plan.output,
+        ),
     )
     assert advanced.stage == DeliveryStage.IMPLEMENTATION
 
@@ -6504,6 +6510,7 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     blocked = application.transition_delivery(
         "change-c",
         BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id=block_launch.claim.claim_id,
             block_id="block-public",
@@ -6646,6 +6653,8 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
         {"change-a": DeliveryStage.PLANNING},
     )
     launch = application.acquire_frontier_work().launch_packages[0]
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
     context = application.show_operator_context("change-a", "OUT-001")
     serialized_claim = context.active_claim.model_dump(mode="json") if context.active_claim else {}
     assert serialized_claim == {
@@ -6671,6 +6680,7 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     application.transition_delivery(
         "change-a",
         BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id=launch.claim.claim_id,
             block_id="block-operator",
@@ -6681,6 +6691,7 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
             request=request,
         ),
     )
+    assert state_publisher.publish.call_count == 1
     pending = application.show_operator_context("change-a", "OUT-001")
     assert pending.block is not None
     assert not pending.block.resolved
@@ -6690,6 +6701,7 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
         DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in source."),
     )
     assert resolved.resolution is not None
+    assert state_publisher.publish.call_count == 2
     current = application.show_operator_context("change-a", "OUT-001")
     assert current.block is not None
     assert current.block.resolved
@@ -6725,6 +6737,7 @@ def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_pat
     blocked = application.transition_delivery(
         "change-a",
         BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id=launch.claim.claim_id,
             block_id="block-implementation",
@@ -6784,6 +6797,7 @@ def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -
     application.transition_delivery(
         "change-a",
         BlockDelivery(
+            action="block",
             outcome_id="OUT-001",
             claim_id=launch.claim.claim_id,
             block_id="block-manual",
@@ -7418,7 +7432,9 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     assert runtimes["change-a"].active_claims() == ()
     assert not (state_root / "capacity.json").exists()
     with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
-        runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
+        runtimes["change-a"].transition(
+            RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=package.claim.claim_id)
+        )
 
 
 @pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-reset"])

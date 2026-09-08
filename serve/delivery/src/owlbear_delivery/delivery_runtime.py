@@ -1243,7 +1243,7 @@ class FinalizeDeliveryChange(_DeliveryModel):
 class AdvanceDelivery(_DeliveryModel):
     """Advance after naming the required current-stage output."""
 
-    action: Literal["advance"] = "advance"
+    action: Literal["advance"]
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     output: DeliveryOutputReference
@@ -1252,7 +1252,7 @@ class AdvanceDelivery(_DeliveryModel):
 class RetryDelivery(_DeliveryModel):
     """End a claim and leave its outcome in the same stage."""
 
-    action: Literal["retry"] = "retry"
+    action: Literal["retry"]
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
@@ -1262,7 +1262,7 @@ class RetryDelivery(_DeliveryModel):
 class ReturnDelivery(_DeliveryModel):
     """Return one claim to an allowed earlier stage with successor context."""
 
-    action: Literal["return"] = "return"
+    action: Literal["return"]
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     target: DeliveryStage
@@ -1276,7 +1276,7 @@ class ReturnDelivery(_DeliveryModel):
 class BlockDelivery(_DeliveryModel):
     """End one claim in place with an optional bounded user request."""
 
-    action: Literal["block"] = "block"
+    action: Literal["block"]
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     block_id: str = Field(min_length=1)
