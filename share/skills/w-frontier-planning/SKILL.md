@@ -98,10 +98,12 @@ output: <published DeliveryPlanCandidate.output unchanged>
 
 On `finding`, publish nothing. Planner chooses one transition:
 
-- `retry` for a local task-chain or transient planning failure;
+- `retry` only for a local task-chain or explicitly transient planning failure. A required reviewer-dispatch failure that is not transient is not a retry;
 - `return` with target `design`, reason, source locators, and `source_boundary` equal to the supplied
   launch package ID for missing or contradictory Design authority;
-- `block` with an embedded bounded request for one user-owned decision or action.
+- `block` with an embedded bounded request for one user-owned decision or action. When the required
+  reviewer cannot be dispatched, use an `action` request naming the reviewer capability, unblock
+  condition, expected evidence, and source locators.
 
 Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
 validates the returned outcome and claim identity and forwards the mapping byte-for-structure
