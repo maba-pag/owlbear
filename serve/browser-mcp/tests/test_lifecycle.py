@@ -12,7 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_browser.playwright_launcher import AuthenticationCapabilities, BrowserMode, PlaywrightLauncher
 from owlbear_browser_mcp import server as server_module
 from owlbear_browser_mcp.allowlist import DomainAllowlist
-from owlbear_browser_mcp.server import AppContext, acquire, app_lifespan, mcp
+from owlbear_browser_mcp.server import AppContext, acquire, app_lifespan, browser_status, mcp
 
 
 class _FakePage:
@@ -111,6 +111,25 @@ async def test_startup_launch_failure_closes_launcher_and_exposes_safe_diagnosti
             assert "/private/profile/token" not in context.browser_diagnostic
 
     assert calls == ["launch", "launcher"]
+
+
+@pytest.mark.asyncio
+async def test_macos_omitted_mode_uses_managed_edge_profile_and_ignores_override() -> None:
+    calls: list[str] = []
+    launcher = _FakeLauncher(calls)
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(server_module.os.environ, {"PLAYWRIGHT_USER_DATA_DIR": "/private/daily"}, clear=False),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.MANAGED_EDGE
+            assert (await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))))[
+                "startup_state"
+            ] == "ready"
+
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.MANAGED_EDGE
+    assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/edge-profile")
 
 
 @pytest.mark.asyncio

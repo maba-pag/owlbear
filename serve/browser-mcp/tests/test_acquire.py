@@ -60,6 +60,7 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert request.url == url
     assert result["status"] == "success"
     assert result["markdown"] == "Rendered fixture content"
+    assert app_ctx.latest_acquisition_status is AcquisitionStatus.SUCCESS
 
 
 def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
