@@ -1736,6 +1736,8 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
     assert tuple(trigger.kind for trigger in first_checkpoint.pending_checkpoint.triggers) == (
         DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
     )
+    runtime.record_checkpoint_branch_publication(first_checkpoint, completed_commit)
+    runtime.acknowledge_checkpoint_publication(first_checkpoint.pending_checkpoint, completed_commit)
 
     second_result, second_candidate, second_commit, second_claim = _publish_task_result(
         runtime,
@@ -1758,7 +1760,7 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
     assert middle_checkpoint.pending_checkpoint is not None
     assert middle_checkpoint.pending_checkpoint.head == second_commit
     assert tuple(trigger.kind for trigger in middle_checkpoint.pending_checkpoint.triggers) == (
-        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+        DeliveryCheckpointTriggerKind.VERIFIED_TASK,
     )
     third_result, third_candidate, _third_commit, third_claim = _publish_task_result(
         runtime,
@@ -1782,7 +1784,7 @@ def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path:
     assert completed_checkpoint.pending_checkpoint is not None
     assert completed_checkpoint.pending_checkpoint.head == third_result.completed_commit
     assert tuple(trigger.kind for trigger in completed_checkpoint.pending_checkpoint.triggers) == (
-        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+        DeliveryCheckpointTriggerKind.VERIFIED_TASK,
         DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
     )
     serialized = runtime.frontier_bytes().decode()

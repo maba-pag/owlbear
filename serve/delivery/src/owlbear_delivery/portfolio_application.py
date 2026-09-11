@@ -442,6 +442,8 @@ def _checkpoint_trigger_label(trigger: DeliveryCheckpointTrigger) -> str:
         return "admitted Design package"
     if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
         return "first promoted Task result"
+    if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_TASK:
+        return "verified Task result"
     if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
         return f"Outcome `{trigger.outcome_id}` verified"
     if trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
@@ -3945,11 +3947,7 @@ class PortfolioApplication:
         diagnostics: list[DeliveryHealthDiagnostic] = [
             *self._startup_health_diagnostics,
         ]
-        diagnosed_change_ids = {
-            diagnostic.change_id
-            for diagnostic in diagnostics
-            if diagnostic.change_id is not None
-        }
+        diagnosed_change_ids = {diagnostic.change_id for diagnostic in diagnostics if diagnostic.change_id is not None}
         for change_id, runtime in sorted(self._runtimes.items()):
             if change_id not in diagnosed_change_ids:
                 out_of_band = self._out_of_band_head_diagnostic(change_id)
@@ -5697,8 +5695,6 @@ class PortfolioApplication:
             expected_remote_head=expected_remote_head,
         )
         runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
-        if pending is not None and pending.head is not None:
-            runtime.acknowledge_checkpoint_publication(pending, pending.head)
         return publication
 
     def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int:

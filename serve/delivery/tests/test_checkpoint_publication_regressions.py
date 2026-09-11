@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from serve.delivery.tests.test_delivery_state import _contract, _publish, _repository, _runtime
 from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _draft_receipt,
@@ -25,6 +26,8 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryPendingCheckpoint,
     DeliveryStage,
+    DeliveryStatePublicationError,
+    DeliveryStatePublisher,
     PublishChangeBranch,
 )
 from owlbear_delivery.portfolio_application import DeliveryRuntimeReconciliationError
@@ -84,6 +87,64 @@ def test_checkpoint_snapshot_replays_after_publication_failure(tmp_path: Path) -
     assert branch_publisher.publish.call_count == 2
     assert pull_request_publisher.publish.call_count == 1
     assert pull_request_publisher.update_generated_summary.call_count == 1
+
+
+def test_state_publication_retains_checkpoint_until_pr_summary_reconciliation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    runtime = runtimes["change-a"]
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    application._publish_delivery_state("change-a", runtime, "retain-checkpoint")
+
+    pending = runtime.checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert pending.head == head
+    assert pull_request_publisher.publish.call_count == 0
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+    assert pull_request_publisher.publish.call_count == 1
+    assert pull_request_publisher.update_generated_summary.call_count == 1
+
+
+def test_state_publisher_rejects_unacknowledged_reviewed_change_head(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "unacknowledged-head"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, _worktree = _runtime(tmp_path, repository, change_id, contract)
+    frontier_path = tmp_path / "state" / "changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"published_head": "1" * 40})))
+
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    with pytest.raises(DeliveryStatePublicationError, match="acknowledged on its branch"):
+        _publish(publisher, runtime, manager, change_id, "f" * 64, "unacknowledged-head")
 
 
 def test_checkpoint_snapshot_invalidates_finalization_before_publication(tmp_path: Path) -> None:

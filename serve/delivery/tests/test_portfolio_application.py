@@ -6589,7 +6589,9 @@ def test_transition_publishes_change_branch_before_delivery_state(
     )
 
     assert advanced.stage == DeliveryStage.COMPLETED
-    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+    pending = runtime.checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert pending.head == completed_commit
     assert state_publisher.publish.call_count == 1
 
 

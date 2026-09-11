@@ -595,6 +595,11 @@ def _require_change_branch_reachability(
             retry_safe=False,
         )
     frontier = _portable_frontier(runtime)
+    if frontier.published_head is not None and frontier.published_head != coordination.last_reviewed_commit:
+        _raise_state_error(
+            "Delivery-state snapshot requires the reviewed Change head to be acknowledged on its branch",
+            retry_safe=False,
+        )
     for binding in frontier.bindings:
         for result in binding.results:
             if not _is_ancestor(repository, result.completed_commit, branch_head):

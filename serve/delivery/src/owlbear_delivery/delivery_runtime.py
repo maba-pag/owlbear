@@ -109,6 +109,7 @@ class DeliveryCheckpointTriggerKind(StrEnum):
 
     ADMITTED_DESIGN = "admitted-design"
     FIRST_PROMOTED_TASK = "first-promoted-task"
+    VERIFIED_TASK = "verified-task"
     VERIFIED_OUTCOME = "verified-outcome"
     FINALIZATION = "finalization"
     EXPLICIT = "explicit"
@@ -3695,6 +3696,12 @@ def _queue_promoted_result_checkpoint(
         triggers.append(
             DeliveryCheckpointTrigger(
                 kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+            )
+        )
+    elif pending is None and updated.stage != DeliveryStage.COMPLETED:
+        triggers.append(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_TASK,
             )
         )
     if updated.stage == DeliveryStage.COMPLETED:
