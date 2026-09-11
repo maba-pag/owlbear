@@ -226,6 +226,9 @@ from owlbear_delivery.portfolio_application import (
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
     PortfolioGuidance,
@@ -370,6 +373,9 @@ __all__ = [
     "DeliveryFinalizationReceipt",
     "DeliveryFrontier",
     "DeliveryHealthDiagnostic",
+    "DeliveryHealthHeadRelation",
+    "DeliveryHealthReason",
+    "DeliveryHealthResolution",
     "DeliveryHealthStatus",
     "DeliveryHealthView",
     "DeliveryHostConfig",

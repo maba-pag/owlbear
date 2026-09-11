@@ -88,6 +88,38 @@ class DeliveryHealthStatus(StrEnum):
     ATTENTION = "attention"
 
 
+class DeliveryHealthResolution(StrEnum):
+    """Bounded operator route for one Delivery health diagnostic."""
+
+    RETRY = "retry"
+    INSPECT = "inspect"
+    AUTHORITY_GAP = "authority-gap"
+
+
+class DeliveryHealthHeadRelation(StrEnum):
+    """Relationship between an observed Change head and expected authority."""
+
+    EQUAL = "equal"
+    DESCENDANT = "descendant"
+    ANCESTOR = "ancestor"
+    DIVERGENT = "divergent"
+
+
+class DeliveryHealthReason(StrEnum):
+    """Stable cause categories for Delivery health diagnostics."""
+
+    UNKNOWN = "unknown"
+    REMOTE_STATE_UNAVAILABLE = "remote-state-unavailable"
+    REMOTE_STATE_RECONCILIATION = "remote-state-reconciliation"
+    REMOTE_CHANGE_HEAD_AHEAD = "remote-change-head-ahead"
+    REMOTE_CHANGE_HEAD_MISMATCH = "remote-change-head-mismatch"
+    LOCAL_FRONTIER_MISMATCH = "local-frontier-mismatch"
+    RUNTIME_UNAVAILABLE = "runtime-unavailable"
+    STATE_PUBLICATION_INVALID = "state-publication-invalid"
+    STATE_PUBLICATION_PENDING = "state-publication-pending"
+    RUNTIME_RECONCILIATION_REQUIRED = "runtime-reconciliation-required"
+
+
 class DeliveryHealthDiagnostic(_OperatingModel):
     """Bounded diagnostic for state excluded from Delivery authority."""
 
@@ -97,6 +129,12 @@ class DeliveryHealthDiagnostic(_OperatingModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool = False
+    reason: DeliveryHealthReason = DeliveryHealthReason.UNKNOWN
+    resolution: DeliveryHealthResolution = DeliveryHealthResolution.AUTHORITY_GAP
+    expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_local_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    head_relation: DeliveryHealthHeadRelation | None = None
 
 
 class DeliveryHealthView(_OperatingModel):

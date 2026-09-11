@@ -70,6 +70,7 @@ from owlbear_delivery import (
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
     DeliveryHealthDiagnostic,
+    DeliveryHealthReason,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -2112,6 +2113,7 @@ def test_target_sync_publication_repair_reconciles_quarantined_state_and_preserv
             code="remote-state-reconciliation-required",
             detail="remote Change branch differs from Delivery-state snapshot: change-a",
             change_id="change-a",
+                reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
         ),
     )
     application._reconcile_runtimes()

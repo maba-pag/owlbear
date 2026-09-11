@@ -135,6 +135,8 @@ from owlbear_delivery.draft_pull_request import (
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
     PortfolioChangeAdmission,
@@ -216,6 +218,12 @@ def _health_diagnostic_key(diagnostic: DeliveryHealthDiagnostic) -> tuple[object
         diagnostic.change_id,
         diagnostic.path,
         diagnostic.retry_safe,
+        diagnostic.reason,
+        diagnostic.resolution,
+        diagnostic.expected_head,
+        diagnostic.observed_head,
+        diagnostic.observed_local_head,
+        diagnostic.head_relation,
     )
 
 
@@ -3659,8 +3667,7 @@ class PortfolioApplication:
                     diagnostic.source == "remote-state"
                     and diagnostic.code == "remote-state-reconciliation-required"
                     and diagnostic.change_id == change_id
-                    and "local Delivery runtime artifact differs from its remote snapshot: frontier.json"
-                    in diagnostic.detail
+                    and diagnostic.reason is DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
                 )
             )
             frontier_bytes = runtime.frontier_bytes()
@@ -3751,9 +3758,8 @@ class PortfolioApplication:
                 and diagnostic.code == "remote-state-reconciliation-required"
                 and diagnostic.change_id == change_id
                 and (
-                    "remote Change branch differs from Delivery-state snapshot" in diagnostic.detail
-                    or "local Delivery runtime artifact differs from its remote snapshot: frontier.json"
-                    in diagnostic.detail
+                    diagnostic.reason is DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH
+                    or diagnostic.reason is DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
                 )
             )
         )
@@ -3867,6 +3873,8 @@ class PortfolioApplication:
                         ),
                         change_id=change_id,
                         path=marker_path,
+                        reason=DeliveryHealthReason.STATE_PUBLICATION_INVALID,
+                        resolution=DeliveryHealthResolution.AUTHORITY_GAP,
                     )
                 )
             else:
@@ -3879,6 +3887,8 @@ class PortfolioApplication:
                             change_id=change_id,
                             path=marker_path,
                             retry_safe=True,
+                            reason=DeliveryHealthReason.STATE_PUBLICATION_PENDING,
+                            resolution=DeliveryHealthResolution.RETRY,
                         )
                     )
         diagnostics.extend(
@@ -3891,6 +3901,8 @@ class PortfolioApplication:
                 ),
                 change_id=observation.change_id,
                 path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                resolution=DeliveryHealthResolution.AUTHORITY_GAP,
             )
             for observation in self._discovered_changes.values()
             if observation.error is not None
@@ -3903,21 +3915,13 @@ class PortfolioApplication:
                 code="runtime-reconciliation-required",
                 detail=_health_detail(detail, "Delivery runtime reconciliation is required."),
                 change_id=change_id,
+                reason=DeliveryHealthReason.RUNTIME_RECONCILIATION_REQUIRED,
+                resolution=DeliveryHealthResolution.AUTHORITY_GAP,
             )
             for change_id, detail in self._runtime_reconciliation_errors.items()
             if change_id not in diagnostic_change_ids
         )
-        unique = {
-            (
-                diagnostic.source,
-                diagnostic.code,
-                diagnostic.detail,
-                diagnostic.change_id,
-                diagnostic.path,
-                diagnostic.retry_safe,
-            ): diagnostic
-            for diagnostic in diagnostics
-        }
+        unique = {_health_diagnostic_key(diagnostic): diagnostic for diagnostic in diagnostics}
         ordered = tuple(
             sorted(
                 unique.values(),

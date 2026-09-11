@@ -78,6 +78,8 @@ from owlbear_delivery.portfolio_application import (
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
@@ -283,6 +285,8 @@ class _RecordingApplication:
                     detail="The fixture Change requires reconciliation.",
                     change_id=CHANGE,
                     retry_safe=True,
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.RETRY,
                 ),
             ),
         )

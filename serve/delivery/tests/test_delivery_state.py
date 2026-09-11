@@ -29,6 +29,8 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
     DeliveryMergedPullRequestLatch,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -67,6 +69,7 @@ from owlbear_delivery.delivery_application_loader import (
     _is_unpublished_acceptance_attention_successor,
     _is_unpublished_claim_successor,
     _is_unpublished_target_sync_attention_successor,
+    _RemoteChangeHeadMismatchError,
     _require_local_snapshot_branch,
     load_delivery_application,
 )
@@ -567,6 +570,32 @@ def test_loader_rejects_divergent_remote_branch_drift(tmp_path: Path) -> None:
         ),
     ):
         _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+
+def test_loader_remote_head_mismatch_retains_typed_head_evidence(tmp_path: Path) -> None:
+    repository, _remote, initial = _repository(tmp_path)
+    change_id = "state-head-evidence"
+    contract, _intent, _design = _contract(change_id)
+    runtime, manager, worktree = _runtime(tmp_path, repository, change_id, contract)
+    reviewed = _commit_descendant(worktree, "reviewed.txt", "reviewed state")
+    manager.record_reviewed(change_id, reviewed)
+    snapshot = _snapshot(runtime, manager, change_id)
+
+    with (
+        patch(
+            "owlbear_delivery.delivery_application_loader._remote_branch_head",
+            return_value=initial,
+        ),
+        pytest.raises(_RemoteChangeHeadMismatchError) as exc_info,
+    ):
+        _fetch_snapshot_change_head(snapshot, _startup_config(), repository)
+
+    error = exc_info.value
+    assert error.expected_head == reviewed
+    assert error.observed_head == initial
+    assert error.observed_local_head == reviewed
+    assert error.head_relation is DeliveryHealthHeadRelation.ANCESTOR
+    assert error.reason is DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH
 
 
 def test_state_publisher_round_trips_and_replays_without_primary_checkout_changes(tmp_path: Path) -> None:

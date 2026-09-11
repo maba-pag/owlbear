@@ -776,6 +776,12 @@ def test_list_exposes_bounded_delivery_health_diagnostics() -> None:
                 "change_id": "quarantined-change",
                 "path": ".owlbear/delivery/runtime/changes/quarantined-change",
                 "retry_safe": False,
+                "reason": "unknown",
+                "resolution": "authority-gap",
+                "expected_head": None,
+                "observed_head": None,
+                "observed_local_head": None,
+                "head_relation": None,
             },
         ],
     }

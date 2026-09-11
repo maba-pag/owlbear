@@ -840,6 +840,12 @@ it('shows bounded Delivery health diagnostics for quarantined state', async () =
       change_id: 'quarantined-change',
       path: '.owlbear/delivery/runtime/changes/quarantined-change',
       retry_safe: false,
+      reason: 'runtime-unavailable',
+      resolution: 'authority-gap',
+      expected_head: null,
+      observed_head: null,
+      observed_local_head: null,
+      head_relation: null,
     }],
   })
   currentPortfolio = {
@@ -863,6 +869,50 @@ it('shows bounded Delivery health diagnostics for quarantined state', async () =
   expect(health).toHaveTextContent('local-runtime / contract-identity-invalid')
   expect(health).toHaveTextContent('Persisted Change contract identity is invalid')
   expect(screen.queryByTestId('work-portfolio-table')).not.toBeInTheDocument()
+})
+
+it('shows actionable head evidence for a quarantined Change status', async () => {
+  const expectedHead = 'a'.repeat(40)
+  const remoteHead = 'b'.repeat(40)
+  const localHead = 'c'.repeat(40)
+  const basePortfolio = portfolio([], {
+    status: 'attention',
+    diagnostics: [{
+      source: 'remote-state',
+      code: 'remote-state-reconciliation-required',
+      detail: 'remote Change branch differs from Delivery-state snapshot: quarantined-change',
+      change_id: 'quarantined-change',
+      path: null,
+      retry_safe: false,
+      reason: 'remote-change-head-mismatch',
+      resolution: 'authority-gap',
+      expected_head: expectedHead,
+      observed_head: remoteHead,
+      observed_local_head: localHead,
+      head_relation: 'ancestor',
+    }],
+  })
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [changeStatus('quarantined-change', {
+        actionable_runtime: false,
+        diagnostic_code: 'runtime_unavailable',
+        diagnostic_detail: 'Remote Change branch differs from Delivery-state snapshot.',
+      })],
+    },
+  }
+
+  renderPage()
+
+  const health = await screen.findByTestId('delivery-issues-section')
+  expect(health).toHaveTextContent('No safe automatic repair is available.')
+  expect(health).toHaveTextContent('/resolve-delivery-attention quarantined-change')
+  expect(health).toHaveTextContent(expectedHead)
+  expect(health).toHaveTextContent(remoteHead)
+  expect(health).toHaveTextContent(localHead)
+  expect(health).toHaveTextContent('ancestor')
 })
 
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {

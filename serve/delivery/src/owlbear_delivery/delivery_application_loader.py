@@ -51,7 +51,12 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
 )
-from owlbear_delivery.portfolio_operating import DeliveryHealthDiagnostic
+from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthDiagnostic,
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
+)
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 
 if TYPE_CHECKING:
@@ -238,6 +243,8 @@ def _load_contracts(runtime_root: Path) -> tuple[dict[str, DeliveryContract], tu
                     detail=detail,
                     change_id=observation.change_id,
                     path=f".owlbear/delivery/runtime/changes/{observation.change_id}",
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
                 )
             )
         if (
@@ -332,6 +339,12 @@ def _bootstrap_remote_state(
                     "Remote Delivery-state snapshots are unavailable; local state was retained.",
                 ),
                 retry_safe=exc.retry_safe,
+                reason=DeliveryHealthReason.REMOTE_STATE_UNAVAILABLE,
+                resolution=(
+                    DeliveryHealthResolution.RETRY
+                    if exc.retry_safe
+                    else DeliveryHealthResolution.AUTHORITY_GAP
+                ),
             ),
         )
     diagnostics = [
@@ -341,6 +354,8 @@ def _bootstrap_remote_state(
             detail=item.detail,
             change_id=item.change_id,
             path=item.path,
+            reason=DeliveryHealthReason.REMOTE_STATE_RECONCILIATION,
+            resolution=DeliveryHealthResolution.AUTHORITY_GAP,
         )
         for item in inventory.diagnostics
     ]
@@ -361,26 +376,59 @@ def _bootstrap_remote_state(
                 _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
             else:
                 _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
-        except _DeferredRemoteStateReconciliationError:
+        except _DeferredRemoteStateReconciliationError as exc:
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="remote-state",
                     code="remote-change-head-ahead",
                     detail="Remote Change branch is ahead of its reviewed Delivery snapshot and was quarantined.",
                     change_id=snapshot.change_id,
+                    reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_AHEAD,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+                    expected_head=exc.expected_head,
+                    observed_head=exc.observed_head,
+                    observed_local_head=exc.observed_local_head,
+                    head_relation=exc.head_relation,
                 )
             )
             continue
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+        except _RemoteChangeHeadMismatchError as exc:
             diagnostics.append(
                 DeliveryHealthDiagnostic(
                     source="remote-state",
                     code="remote-state-reconciliation-required",
-                    detail=_bounded_health_detail(
-                        str(exc),
-                        "Remote Delivery state could not be reconciled and was quarantined.",
-                    ),
+                    detail=str(exc),
                     change_id=snapshot.change_id,
+                    reason=exc.reason,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+                    expected_head=exc.expected_head,
+                    observed_head=exc.observed_head,
+                    observed_local_head=exc.observed_local_head,
+                    head_relation=exc.head_relation,
+                )
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            detail = _bounded_health_detail(
+                str(exc),
+                "Remote Delivery state could not be reconciled and was quarantined.",
+            )
+            reason = (
+                DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
+                if "local Delivery runtime artifact differs from its remote snapshot: frontier.json" in detail
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            )
+            diagnostics.append(
+                DeliveryHealthDiagnostic(
+                    source="remote-state",
+                    code="remote-state-reconciliation-required",
+                    detail=detail,
+                    change_id=snapshot.change_id,
+                    reason=reason,
+                    resolution=(
+                        DeliveryHealthResolution.INSPECT
+                        if reason is DeliveryHealthReason.LOCAL_FRONTIER_MISMATCH
+                        else DeliveryHealthResolution.AUTHORITY_GAP
+                    ),
                 )
             )
     return tuple(diagnostics)
@@ -581,9 +629,32 @@ def _fetch_remote_snapshot_change_head(
 ) -> tuple[str, bool]:
     """Validate and fetch one remote Change branch at its snapshot head."""
     if remote_branch != snapshot.change_head:
+        observed_local_head = _loader_git_output(
+            repository,
+            "rev-parse",
+            "--verify",
+            f"refs/heads/{snapshot.branch}^{{commit}}",
+        )
+        head_relation = _head_relation(repository, snapshot.change_head, remote_branch)
         if _can_defer_remote_state_reconciliation(snapshot, repository, remote_branch):
-            raise _DeferredRemoteStateReconciliationError
-        _bootstrap_failure(f"remote Change branch differs from Delivery-state snapshot: {snapshot.change_id}")
+            raise _DeferredRemoteStateReconciliationError(
+                expected_head=snapshot.change_head,
+                observed_head=remote_branch,
+                observed_local_head=observed_local_head,
+                head_relation=head_relation,
+            )
+        raise _RemoteChangeHeadMismatchError(
+            change_id=snapshot.change_id,
+            expected_head=snapshot.change_head,
+            observed_head=remote_branch,
+            observed_local_head=observed_local_head,
+            head_relation=head_relation,
+            reason=(
+                DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH
+                if head_relation is not DeliveryHealthHeadRelation.DESCENDANT
+                else DeliveryHealthReason.REMOTE_STATE_RECONCILIATION
+            ),
+        )
     result = _run_loader_git(
         repository,
         "fetch",
@@ -829,6 +900,54 @@ def _fetch_finalized_snapshot_change_head(
 class _DeferredRemoteStateReconciliationError(Exception):
     """One Change is safely deferred while its remote branch advances past its snapshot."""
 
+    __slots__ = ("expected_head", "head_relation", "observed_head", "observed_local_head")
+
+    def __init__(
+        self,
+        *,
+        expected_head: str,
+        observed_head: str,
+        observed_local_head: str | None,
+        head_relation: DeliveryHealthHeadRelation | None,
+    ) -> None:
+        self.expected_head = expected_head
+        self.observed_head = observed_head
+        self.observed_local_head = observed_local_head
+        self.head_relation = head_relation
+        super().__init__("remote Change branch is ahead of its reviewed Delivery snapshot")
+
+
+class _RemoteChangeHeadMismatchError(DeliveryApplicationLoadError):
+    """One remote Change head cannot be reconciled with its reviewed snapshot."""
+
+    __slots__ = (
+        "expected_head",
+        "head_relation",
+        "observed_head",
+        "observed_local_head",
+        "reason",
+    )
+
+    def __init__(  # noqa: PLR0913 - the exception preserves each exact head classification field.
+        self,
+        *,
+        change_id: str,
+        expected_head: str,
+        observed_head: str,
+        observed_local_head: str | None,
+        head_relation: DeliveryHealthHeadRelation | None,
+        reason: DeliveryHealthReason,
+    ) -> None:
+        self.expected_head = expected_head
+        self.observed_head = observed_head
+        self.observed_local_head = observed_local_head
+        self.head_relation = head_relation
+        self.reason = reason
+        super().__init__(
+            "runtime_root",
+            f"remote Change branch differs from Delivery-state snapshot: {change_id}",
+        )
+
 
 def _can_defer_remote_state_reconciliation(
     snapshot: DeliveryStateSnapshot,
@@ -856,6 +975,21 @@ def _loader_git_is_ancestor(repository: Path, ancestor: str, descendant: str) ->
         ).returncode
         == 0
     )
+
+
+def _head_relation(
+    repository: Path,
+    expected_head: str,
+    observed_head: str,
+) -> DeliveryHealthHeadRelation | None:
+    """Classify one observed Git head against expected Delivery authority."""
+    if expected_head == observed_head:
+        return DeliveryHealthHeadRelation.EQUAL
+    if _loader_git_is_ancestor(repository, expected_head, observed_head):
+        return DeliveryHealthHeadRelation.DESCENDANT
+    if _loader_git_is_ancestor(repository, observed_head, expected_head):
+        return DeliveryHealthHeadRelation.ANCESTOR
+    return DeliveryHealthHeadRelation.DIVERGENT
 
 
 def _restore_local_change_branch(
@@ -1068,6 +1202,8 @@ def _composed_runtimes(
                     ),
                     change_id=change_id,
                     path=f".owlbear/delivery/runtime/changes/{change_id}",
+                    reason=DeliveryHealthReason.RUNTIME_UNAVAILABLE,
+                    resolution=DeliveryHealthResolution.AUTHORITY_GAP,
                 )
             )
     return runtimes, tuple(diagnostics)

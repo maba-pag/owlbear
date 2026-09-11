@@ -156,6 +156,19 @@ export interface PortfolioOperatingView {
 }
 
 export type DeliveryHealthStatus = 'healthy' | 'attention'
+export type DeliveryHealthResolution = 'retry' | 'inspect' | 'authority-gap'
+export type DeliveryHealthReason =
+  | 'unknown'
+  | 'remote-state-unavailable'
+  | 'remote-state-reconciliation'
+  | 'remote-change-head-ahead'
+  | 'remote-change-head-mismatch'
+  | 'local-frontier-mismatch'
+  | 'runtime-unavailable'
+  | 'state-publication-invalid'
+  | 'state-publication-pending'
+  | 'runtime-reconciliation-required'
+export type DeliveryHealthHeadRelation = 'equal' | 'descendant' | 'ancestor' | 'divergent'
 
 export interface DeliveryHealthDiagnostic {
   source: string
@@ -164,6 +177,12 @@ export interface DeliveryHealthDiagnostic {
   change_id: string | null
   path: string | null
   retry_safe: boolean
+  reason: DeliveryHealthReason
+  resolution: DeliveryHealthResolution
+  expected_head: string | null
+  observed_head: string | null
+  observed_local_head: string | null
+  head_relation: DeliveryHealthHeadRelation | null
 }
 
 export interface DeliveryHealthResponse {

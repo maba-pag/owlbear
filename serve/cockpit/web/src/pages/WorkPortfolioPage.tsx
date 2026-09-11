@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Fragment, useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
@@ -318,6 +318,49 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
+function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string {
+  const command = diagnostic.change_id
+    ? `/resolve-delivery-attention ${diagnostic.change_id}`
+    : '/resolve-delivery-attention'
+  if (diagnostic.resolution === 'retry') {
+    return 'Retry Delivery after checking the recorded retry-safe condition.'
+  }
+  if (diagnostic.resolution === 'inspect') {
+    return `Inspect the exact Delivery evidence with ${command} before choosing a repair.`
+  }
+  return `No safe automatic repair is available. Inspect the exact Delivery evidence with ${command}; operator escalation may be required.`
+}
+
+function HealthDiagnosticDetails({ diagnostic }: { diagnostic: DeliveryHealthDiagnostic }) {
+  const heads = [
+    ['Expected head', diagnostic.expected_head],
+    ['Observed remote head', diagnostic.observed_head],
+    ['Observed local head', diagnostic.observed_local_head],
+  ].filter((entry): entry is [string, string] => entry[1] !== null)
+  return (
+    <>
+      <p className="mt-1 text-xs text-contrast-medium">Next: {healthNextStep(diagnostic)}</p>
+      <p className="mt-1 text-xs text-contrast-medium">Resolution: {diagnostic.resolution.replace('-', ' ')}</p>
+      {heads.length > 0 || diagnostic.head_relation ? (
+        <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+          {heads.map(([label, value]) => (
+            <Fragment key={label}>
+              <dt className="text-contrast-medium">{label}</dt>
+              <dd className="break-all font-mono">{value}</dd>
+            </Fragment>
+          ))}
+          {diagnostic.head_relation ? (
+            <>
+              <dt className="text-contrast-medium">Head relation</dt>
+              <dd className="break-words">{diagnostic.head_relation}</dd>
+            </>
+          ) : null}
+        </dl>
+      ) : null}
+    </>
+  )
+}
+
 function DeliveryIssuesSection({
   diagnostics,
   statuses,
@@ -356,7 +399,12 @@ function DeliveryIssuesSection({
             </div>
             <p className="mt-1 font-medium text-primary">Quarantined state is hidden from dispatch.</p>
             <p className="mt-1 text-xs text-contrast-medium">Runtime unavailable{status.diagnostic_detail ? `: ${status.diagnostic_detail}` : ''}</p>
-            {diagnosticByChangeId.get(status.change_id) ? <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{diagnosticByChangeId.get(status.change_id)?.source}</code><span aria-hidden="true"> / </span><code>{diagnosticByChangeId.get(status.change_id)?.code}</code></p> : null}
+            {diagnosticByChangeId.get(status.change_id) ? (
+              <>
+                <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{diagnosticByChangeId.get(status.change_id)?.source}</code><span aria-hidden="true"> / </span><code>{diagnosticByChangeId.get(status.change_id)?.code}</code></p>
+                <HealthDiagnosticDetails diagnostic={diagnosticByChangeId.get(status.change_id) as DeliveryHealthDiagnostic} />
+              </>
+            ) : null}
           </article>
         ))}
         {additionalDiagnostics.map((diagnostic, index) => (
@@ -370,6 +418,7 @@ function DeliveryIssuesSection({
               <dt className="text-contrast-medium">Detail</dt>
               <dd className="break-words">{diagnostic.detail}{diagnostic.path ? <span className="mt-1 block break-all font-mono text-2xs">{diagnostic.path}</span> : null}</dd>
             </dl>
+            <HealthDiagnosticDetails diagnostic={diagnostic} />
           </article>
         ))}
         </div>

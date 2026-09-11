@@ -35,9 +35,12 @@ for request resolution or block clearing; an unblocked outcome may continue to t
 move preview. For a standalone `change_id`, bind either an abandoned Change with a retained
 target-sync conflict through `show_work_item_view(change_id, "publication")`, or a quarantined
 target-sync publication repair through `delivery_health()` and the exact persisted target-sync
-receipt/publication evidence, or a Delivery-state snapshot repair through the exact
-`remote-state-reconciliation-required` diagnostic. For target-sync repair, retain
-`expected_remote_head`, `expected_merged_head`, and `target_sync_operation_id`. Reject missing,
+receipt/publication evidence, or a Delivery-state snapshot repair through a diagnostic whose typed
+`reason` is `local-frontier-mismatch`. A diagnostic whose typed `reason` is
+`remote-change-head-mismatch`, `remote-change-head-ahead`, or `remote-state-reconciliation` is an
+inspection/authority-gap route, not permission to call snapshot repair. For target-sync repair,
+retain `expected_remote_head`, `expected_merged_head`, and `target_sync_operation_id`; the exact
+target-sync evidence may qualify the remote-head diagnostic for that repair route. Reject missing,
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
@@ -146,8 +149,8 @@ Use only an existing operation whose contract owns the selected result:
   confirmation, then call `repair_target_sync_publication(..., confirmed_repair=true)`. Re-read the
   returned receipt and finalization context; repair publishes only the already-recorded managed Change
   head and requires fresh finalization review.
-- Delivery-state snapshot repair: when Delivery reports a local frontier mismatch whose exact
-  successor is one added block/request, present one explicit confirmation, then call
+- Delivery-state snapshot repair: when Delivery reports `reason=local-frontier-mismatch` and the
+  exact successor is one added block/request, present one explicit confirmation, then call
   `repair_delivery_state_snapshot(change_id, operation_id, confirmed_repair=true)`. Re-read health
   and the operator context for the repaired Change; the operation uses compare-and-swap publication
   and does not accept unrelated local frontier edits.

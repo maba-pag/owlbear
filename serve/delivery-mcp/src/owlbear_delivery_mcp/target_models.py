@@ -56,6 +56,9 @@ from owlbear_delivery.portfolio_application import (
     DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
+    DeliveryHealthHeadRelation,
+    DeliveryHealthReason,
+    DeliveryHealthResolution,
     DeliveryHealthStatus,
     DeliveryHealthView,
 )
@@ -105,6 +108,12 @@ class DeliveryHealthDiagnosticResponse(_TargetProtocolModel):
     change_id: str | None = Field(default=None, min_length=1)
     path: str | None = Field(default=None, min_length=1)
     retry_safe: bool
+    reason: DeliveryHealthReason
+    resolution: DeliveryHealthResolution
+    expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    observed_local_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    head_relation: DeliveryHealthHeadRelation | None = None
 
 
 class DeliveryHealthResponse(_TargetProtocolModel):
@@ -119,7 +128,8 @@ class DeliveryHealthResponse(_TargetProtocolModel):
         return cls(
             status=view.status,
             diagnostics=tuple(
-                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump())
+                for diagnostic in view.diagnostics
             ),
         )
 
