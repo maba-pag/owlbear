@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_browser.playwright_launcher import AuthenticationCapabilities, PlaywrightLauncher
+from owlbear_browser.playwright_launcher import AuthenticationCapabilities, BrowserMode, PlaywrightLauncher
 from owlbear_browser_mcp import server as server_module
 from owlbear_browser_mcp.allowlist import DomainAllowlist
 from owlbear_browser_mcp.server import AppContext, acquire, app_lifespan, mcp
@@ -204,9 +204,9 @@ async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_re
         error=RuntimeError(f"{failed_resource} failed") if failed_resource == "playwright" else None,
     )
     launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
-        persistent_session=True,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=True,
         visible_manual_auth=True,
-        microsoft_sso=True,
     )
 
     with pytest.raises(RuntimeError, match=f"{failed_resource} failed"):
@@ -217,9 +217,9 @@ async def test_launcher_close_attempts_all_resources_and_is_idempotent(failed_re
     assert launcher._context is None  # noqa: SLF001
     assert launcher._pw is None  # noqa: SLF001
     assert launcher.capabilities == AuthenticationCapabilities(
-        persistent_session=False,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=False,
         visible_manual_auth=False,
-        microsoft_sso=False,
     )
 
     await launcher.close()
@@ -246,9 +246,9 @@ async def test_launcher_close_defers_cancellation_until_all_resources_attempted(
         error=asyncio.CancelledError() if cancelled_resource == "playwright" else None,
     )
     launcher._capabilities = AuthenticationCapabilities(  # noqa: SLF001
-        persistent_session=True,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=True,
         visible_manual_auth=True,
-        microsoft_sso=True,
     )
 
     with pytest.raises(asyncio.CancelledError):
@@ -259,9 +259,9 @@ async def test_launcher_close_defers_cancellation_until_all_resources_attempted(
     assert launcher._context is None  # noqa: SLF001
     assert launcher._pw is None  # noqa: SLF001
     assert launcher.capabilities == AuthenticationCapabilities(
-        persistent_session=False,
+        mode=BrowserMode.CHROMIUM,
+        owned_persistent_profile=False,
         visible_manual_auth=False,
-        microsoft_sso=False,
     )
 
     await launcher.close()

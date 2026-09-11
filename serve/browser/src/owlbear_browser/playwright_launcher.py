@@ -1,15 +1,20 @@
-"""Playwright-based browser launcher with Microsoft SSO extension support."""
+"""Playwright-based browser launcher for managed Edge and Chromium."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
 from playwright.async_api import async_playwright
 
-from owlbear_browser._errors import SSOExtensionNotFoundError
+from owlbear_browser._errors import (
+    ManagedEdgeUnavailableError,
+    ManagedProfileInUseError,
+    SSOExtensionNotFoundError,
+)
 from owlbear_browser.fetcher import BrowserContentFetcher
 
 if TYPE_CHECKING:
@@ -19,6 +24,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "AuthenticationCapabilities",
+    "BrowserMode",
+    "ManagedEdgeUnavailableError",
+    "ManagedProfileInUseError",
     "PlaywrightLauncher",
     "SSOExtensionNotFoundError",
     "build_playwright_args",
@@ -27,6 +35,13 @@ __all__ = [
 
 _SSO_EXT_ID = "ppnbnpeolgkicgegkbkbjmhlideopiji"
 _EXT_REL = Path("Google") / "Chrome" / "User Data" / "Default" / "Extensions" / _SSO_EXT_ID
+
+
+class BrowserMode(StrEnum):
+    """Browser engine selected by resolved composition settings."""
+
+    CHROMIUM = "chromium"
+    MANAGED_EDGE = "managed-edge"
 
 
 def _prefer_cleanup_error(
@@ -41,11 +56,11 @@ def _prefer_cleanup_error(
 
 @dataclass(frozen=True, slots=True)
 class AuthenticationCapabilities:
-    """Authentication integrations available to the launched browser."""
+    """Mechanical browser capabilities, without an authentication claim."""
 
-    persistent_session: bool
+    mode: BrowserMode
+    owned_persistent_profile: bool
     visible_manual_auth: bool
-    microsoft_sso: bool
 
 
 def find_sso_extension() -> Path:
@@ -100,13 +115,14 @@ def build_playwright_args(sso_ext_path: Path) -> list[str]:
 
 
 class PlaywrightLauncher:
-    """Async context manager that launches Chromium with the SSO extension.
+    """Async context manager that launches a resolved browser mode.
 
     Args:
         sso_ext_path: Path to the versioned SSO extension directory.  If
             ``None`` (the default), the path is auto-discovered via
             :func:`find_sso_extension` at :meth:`launch` time.
         user_data_dir: Path to the persistent Chromium profile directory.
+        mode: Resolved browser mode.
     """
 
     def __init__(
@@ -116,8 +132,10 @@ class PlaywrightLauncher:
         max_pending_pages: int = 1,
         *,
         headless: bool = False,
+        mode: BrowserMode | str = BrowserMode.CHROMIUM,
     ) -> None:
         self._sso_ext_path = sso_ext_path
+        self._mode = BrowserMode(mode)
         self._user_data_dir = user_data_dir or str(Path.home() / ".owlbear" / "browser-profile")
         if max_pending_pages < 1:
             msg = "max_pending_pages must be at least 1"
@@ -128,9 +146,9 @@ class PlaywrightLauncher:
         self._fetcher: BrowserContentFetcher | None = None
         self._pw = None
         self._capabilities = AuthenticationCapabilities(
-            persistent_session=False,
+            mode=self._mode,
+            owned_persistent_profile=False,
             visible_manual_auth=False,
-            microsoft_sso=False,
         )
 
     @property
@@ -139,30 +157,39 @@ class PlaywrightLauncher:
         return self._capabilities
 
     async def launch(self) -> None:
-        """Launch Chromium with the SSO extension and open a persistent context."""
-        sso_ext_path = self._sso_ext_path
-        if sso_ext_path is None:
-            try:
-                sso_ext_path = find_sso_extension()
-            except SSOExtensionNotFoundError:
-                sso_ext_path = None
+        """Launch the resolved browser mode with an owned persistent context."""
         cm = async_playwright()
         self._pw = await cm.__aenter__()
-        args = build_playwright_args(sso_ext_path) if sso_ext_path is not None else []
+        launch_kwargs: dict[str, object] = {"headless": self._headless}
+        if self._mode is BrowserMode.MANAGED_EDGE:
+            launch_kwargs.update(channel="msedge", chromium_sandbox=True, headless=False)
+        else:
+            sso_ext_path = self._sso_ext_path
+            if sso_ext_path is None:
+                try:
+                    sso_ext_path = find_sso_extension()
+                except SSOExtensionNotFoundError:
+                    sso_ext_path = None
+            launch_kwargs["args"] = build_playwright_args(sso_ext_path) if sso_ext_path else []
         try:
             self._context = await self._pw.chromium.launch_persistent_context(
                 self._user_data_dir,  # type: ignore[arg-type]
-                headless=self._headless,
-                args=args,
+                **launch_kwargs,
             )
-        except Exception:
+        except Exception as exc:
             await self._pw.stop()
             self._pw = None
+            if self._mode is BrowserMode.MANAGED_EDGE:
+                message = str(exc).lower()
+                if "user data directory" in message and "already in use" in message:
+                    raise ManagedProfileInUseError from exc
+                if "executable doesn't exist" in message or "browser_type.launch" in message:
+                    raise ManagedEdgeUnavailableError from exc
             raise
         self._capabilities = AuthenticationCapabilities(
-            persistent_session=True,
-            visible_manual_auth=not self._headless,
-            microsoft_sso=sso_ext_path is not None,
+            mode=self._mode,
+            owned_persistent_profile=True,
+            visible_manual_auth=not self._headless or self._mode is BrowserMode.MANAGED_EDGE,
         )
 
         self._fetcher = BrowserContentFetcher(self._context)
@@ -192,9 +219,9 @@ class PlaywrightLauncher:
         self._context = None
         self._pw = None
         self._capabilities = AuthenticationCapabilities(
-            persistent_session=False,
+            mode=self._mode,
+            owned_persistent_profile=False,
             visible_manual_auth=False,
-            microsoft_sso=False,
         )
         first_error: BaseException | None = None
         if fetcher is not None:
