@@ -26,6 +26,16 @@ Frontier-bearing snapshots require an owning wrapper: the outer payload must be 
 
 The current task baseline is historical context rather than proof that all 35 audit failures were reproduced. Candidate proof must be run against the exact committed candidate and must include the two assembled recovery scenarios.
 
+The pre-change tests contain consumer-side `strict=False` reads for fixture construction and direct model-boundary checks. Round-trip and consumer assertions are restored to the canonical parser boundary; direct model rejection tests remain at the model owner. On candidate commit `e858187b8aac022507d6df04b2d8341da5a2dbde`, the focused snapshot parser and named recovery checks passed, and the four maintained suites passed 317 tests in 103.18 seconds. These observations establish current candidate behavior, not historical failure reproduction.
+
+Commands:
+
+```text
+uv run pytest serve/delivery/tests/test_delivery_state.py::test_snapshot_parser_canonicalizes_embedded_frontier_and_rejects_non_objects -q --tb=short -n 0
+uv run pytest serve/delivery/tests/test_delivery_state.py::test_remote_state_bootstrap_reconstructs_fresh_clone serve/delivery/tests/test_delivery_state.py::test_target_sync_state_snapshot_is_restartable_after_branch_publication -q --tb=short -n 0
+uv run pytest serve/delivery/tests/test_delivery_runtime.py serve/delivery/tests/test_delivery_state.py serve/delivery/tests/test_portfolio_application.py serve/delivery/tests/test_checkpoint_publication_regressions.py -q --tb=short -n 0
+```
+
 ## 4. Recommendation, Confidence, And Limits
 
 **Recommendation:** Keep typed Delivery readers on `parse_delivery_frontier()` or the owning snapshot wrapper, preserve runtime-relative validation and raw-byte comparison, and use the four maintained test files plus source inventory as the proof boundary.

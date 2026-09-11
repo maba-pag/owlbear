@@ -64,9 +64,11 @@ from owlbear_delivery.delivery_application_loader import (
     _fetch_snapshot_change_head,
     _is_unpublished_acceptance_attention_successor,
     _is_unpublished_target_sync_attention_successor,
+    _read_local_snapshot_frontier,
     load_delivery_application,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.delivery_runtime import parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.target_contract import DeliverySourceBinding
 
@@ -581,7 +583,7 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].snapshot_id == receipt.snapshot_id
     assert snapshots[0].change_id == "state-change"
     assert snapshots[0].contract == contract
-    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    assert snapshots[0].frontier == parse_delivery_frontier(runtime.frontier_bytes())[0]
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
 
@@ -601,6 +603,59 @@ def test_snapshot_parser_canonicalizes_embedded_frontier_and_rejects_non_objects
         invalid = {**payload, "frontier": frontier}
         with pytest.raises(TypeError):
             parse_delivery_state_snapshot(json.dumps(invalid).encode())
+
+
+def test_snapshot_inventory_quarantines_invalid_frontiers_and_identity(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("snapshot-inventory")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "snapshot-inventory", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    snapshot = _snapshot(runtime, manager, "snapshot-inventory")
+    valid = snapshot.canonical_bytes()
+    invalid_identity = json.loads(valid)
+    invalid_identity["snapshot_id"] = "f" * 64
+    records = {
+        "snapshot-inventory/snapshot.json": valid,
+        "snapshot-invalid/snapshot.json": json.dumps({**json.loads(valid), "frontier": None}).encode(),
+        "snapshot-identity/snapshot.json": json.dumps(invalid_identity).encode(),
+    }
+    with (
+        patch.object(publisher, "_refresh_remote_head", return_value="a" * 40),
+        patch.object(
+            publisher,
+            "_git",
+            return_value="\n".join(f".owlbear/delivery/state/{path}" for path in records),
+        ),
+        patch.object(
+            publisher,
+            "_git_blob",
+            side_effect=lambda _head, path: records[path.removeprefix(".owlbear/delivery/state/")],
+        ),
+    ):
+        inventory = publisher.read_snapshot_inventory()
+
+    assert [item.change_id for item in inventory.snapshots] == ["snapshot-inventory"]
+    assert {item.code for item in inventory.diagnostics} == {"snapshot-invalid", "snapshot-identity-invalid"}
+    assert all(0 < len(item.detail) <= 240 for item in inventory.diagnostics)
+
+
+def test_local_snapshot_frontier_preserves_noncanonical_bytes_and_rejects_non_objects(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("local-frontier")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "local-frontier", contract)
+    snapshot = _snapshot(runtime, manager, "local-frontier")
+    path = tmp_path / "frontier.json"
+    raw = json.dumps(snapshot.frontier.model_dump(mode="json"), indent=2).encode()
+    path.write_bytes(raw)
+
+    returned, frontier = _read_local_snapshot_frontier(path)
+
+    assert returned == raw
+    assert frontier == parse_delivery_frontier(raw)[0]
+
+    path.write_text("null", encoding="utf-8")
+    with pytest.raises(DeliveryApplicationLoadError):
+        _read_local_snapshot_frontier(path)
 
 
 def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -> None:
@@ -916,7 +971,7 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     assert application.list_work_items()
 
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
     frontier_path.write_bytes(
         (
             json.dumps(

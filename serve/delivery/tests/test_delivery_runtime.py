@@ -77,7 +77,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
-from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication
+from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
@@ -251,6 +251,45 @@ def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: objec
     path = tmp_path / "changes/delivery-runtime/frontier.json"
     frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     path.write_bytes(_canonical(frontier.model_copy(update=updates)))
+
+
+def test_parse_delivery_frontier_round_trip_and_boundary_rejections() -> None:
+    frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
+    )
+    content = _canonical(frontier)
+
+    parsed, canonical = parse_delivery_frontier(content)
+    reparsed, reparsed_canonical = parse_delivery_frontier(canonical)
+
+    assert parsed == frontier
+    assert canonical == content
+    assert reparsed == parsed
+    assert reparsed_canonical == canonical
+
+    for invalid in (None, [], "frontier", 7, False):
+        with pytest.raises(TypeError):
+            parse_delivery_frontier(json.dumps(invalid).encode())
+    with pytest.raises(ValueError):
+        parse_delivery_frontier(json.dumps({"schema_version": 16}).encode())
+
+
+def test_parse_delivery_frontier_preserves_model_and_runtime_validation_boundaries(tmp_path: Path) -> None:
+    frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
+    )
+    extra = frontier.model_dump(mode="json") | {"unexpected": True}
+    with pytest.raises(ValidationError):
+        parse_delivery_frontier(json.dumps(extra).encode())
+    with pytest.raises(ValidationError):
+        frontier.bindings = ()
+
+    runtime = _runtime(tmp_path)
+    mismatched = frontier.model_copy(
+        update={"bindings": (OutcomeAuthorityBinding(outcome_id="OUT-999", plan_scope_id="SCOPE-999"),)}
+    )
+    with pytest.raises(DeliveryRuntimeReferenceError):
+        runtime._validate_frontier(mismatched)
 
 
 def _output(claim_id: str, stage: DeliveryStage) -> DeliveryOutputReference:
