@@ -954,7 +954,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
-    last_transition: DeliveryTransitionReceipt | None = None
+    last_transition: DeliveryTransitionReceipt | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def _validate_state(self) -> OutcomeAuthorityBinding:
