@@ -139,6 +139,13 @@ async def test_chromium_retains_extension_arguments_when_configured() -> None:
             ),
             ManagedProfileInUseError,
         ),
+        (
+            Exception(
+                "Opening in existing browser session. "
+                "This usually means that the profile is already in use by another instance of Chromium."
+            ),
+            ManagedProfileInUseError,
+        ),
     ],
 )
 async def test_managed_edge_failures_are_typed_without_chromium_fallback(
