@@ -186,6 +186,14 @@ class ChangeBranchPublisher:
                 ):
                     self._release_reserved_request(request, attempt.owner_id, lock)
 
+    def observe_remote_head(self, change_id: str) -> str | None:
+        """Read the current remote Change branch head without reserving publication."""
+        request = PublishChangeBranch(
+            change_id=change_id,
+            operation_id=f"observe-remote-{hashlib.sha256(change_id.encode()).hexdigest()[:16]}",
+        )
+        return self._remote_head(f"owlbear/change/{change_id}", request)
+
     def supersede(self, request: SupersedeChangeBranch) -> ChangeBranchSupersessionReceipt:
         """Publish one successor branch without rewriting the predecessor publication."""
         branch_request = PublishChangeBranch(

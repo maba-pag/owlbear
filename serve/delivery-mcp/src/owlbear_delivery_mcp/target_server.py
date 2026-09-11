@@ -21,6 +21,7 @@ from owlbear_delivery.change_workspace import (
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.completed_history import CompletedHistoryError
@@ -97,6 +98,7 @@ from owlbear_delivery_mcp.target_models import (
     MarkChangeReadyRequest,
     OperatorContextParams,
     OperatorContextRequest,
+    OutOfBandHeadRecoveryResponse,
     PreviewAdministrativeMoveParams,
     PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
@@ -105,6 +107,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryResultRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
+    RecoverOutOfBandHeadParams,
+    RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
@@ -157,6 +161,7 @@ DELIVERY_OPERATION_NAMES = (
     "list_work_items",
     "delivery_health",
     "repair_delivery_state_snapshot",
+    "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
@@ -367,6 +372,27 @@ class TargetMCPAdapter:
             DeliveryStateSnapshotRepairReceipt,
         )
         return DeliveryStateSnapshotRepairResponse.from_receipt(receipt)
+
+    async def recover_out_of_band_head(
+        self,
+        request: RecoverOutOfBandHeadRequest,
+    ) -> OutOfBandHeadRecoveryResponse:
+        """Preserve one out-of-band Change head and restore reviewed authority."""
+        params = self._validate(RecoverOutOfBandHeadParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_out_of_band_head(
+                params.change_id,
+                params.expected_reviewed_head,
+                params.expected_remote_head,
+                params.expected_branch_head,
+                params.operation_id,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            OutOfBandHeadRecoveryReceipt,
+        )
+        return OutOfBandHeadRecoveryResponse.from_receipt(receipt)
 
     async def repair_target_sync_publication(
         self,

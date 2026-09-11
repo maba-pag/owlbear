@@ -135,9 +135,12 @@ managed `owlbear/change/<change-id>` branch before opening its first draft pull 
 revisions are rejected for that Change; a semantic change starts a new or superseding Change.
 
 Sparse semantic checkpoints are published to the configured `delivery_state_branch` at admission,
-meaningful task or Outcome progress, finalization, and acceptance. They retain resumable authority
-and terminal evidence, but never live claims, locks, capacity ledgers, process identifiers, or local
-paths. A fresh clone can therefore recover the last published checkpoint and requeue incomplete work.
+meaningful task or Outcome progress, finalization, and acceptance. The managed Change branch is
+published to its reviewed head before a state checkpoint can reference that head; sparseness applies
+to Delivery-state snapshots, not to reviewed Change-branch commits. State snapshots retain resumable
+authority and terminal evidence, but never live claims, locks, capacity ledgers, process identifiers,
+or local paths. A fresh clone can therefore recover the last published checkpoint and requeue
+incomplete work.
 The local `refs/owlbear/packages/*` refs remain useful package history, but are not a remote backup.
 
 If the remote package branch, state snapshot, contract, or local state disagree, startup reports

@@ -46,6 +46,8 @@ from owlbear_delivery import (
     DeliveryStatePublisher,
     DeliveryStateResponseUnknownError,
     DeliveryStateSnapshot,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
     DeliveryWorkerRole,
     DesignPackageStore,
     OutcomeAuthorityBinding,
@@ -840,6 +842,84 @@ def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: P
     assert isinstance(publisher.read_snapshot("state-reject"), DeliveryStateSnapshot)
 
 
+def test_state_publisher_rejects_unreachable_result_commit(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-unreachable-result")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-unreachable-result", contract)
+    task = DeliveryTaskDefinition(
+        task_id="TASK-001",
+        outcome_id="OUT-001",
+        plan_scope_id="SCOPE-001",
+        title="Persist result",
+        result="Persist the result.",
+        commitment_ids=("COM-001",),
+        dependency_ids=(),
+        required_outputs=("Result",),
+        maintained_surfaces=("serve/delivery",),
+        constraints=("Use the reviewed branch.",),
+        exclusions=("Do not rewrite target history.",),
+        acceptance_observations=("The result is persisted.",),
+        proof_boundaries=("DeliveryStatePublisher.publish",),
+    )
+    completed_commit = "1" * 40
+    observed_at = datetime(2026, 8, 23, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="state-unreachable-result",
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="snapshot-test",
+            command_or_procedure="unreachable result fixture",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="result-author",
+            reviewer_id="result-reviewer",
+            evidence=("The result evidence is bound to the fixture commit.",),
+            reviewed_at=observed_at,
+        )
+    )
+    result = DeliveryTaskResult(
+        result_id="RESULT-001",
+        change_id="state-unreachable-result",
+        authority_digest=runtime.authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
+    frontier_path = tmp_path / "state/changes/state-unreachable-result/frontier.json"
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+                tasks=(task,),
+                results=(result,),
+            ),
+        ),
+    )
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    with pytest.raises(DeliveryStatePublicationError, match="result commit absent"):
+        _publish(
+            publisher,
+            runtime,
+            manager,
+            "state-unreachable-result",
+            "f" * 64,
+            "state-unreachable-result",
+        )
+
+
 def test_loader_accepts_claim_only_local_frontier_successor() -> None:
     snapshot_frontier = DeliveryFrontier(
         bindings=(
@@ -1188,6 +1268,7 @@ def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp
 
     assert repaired.change_id == change_id
     assert degraded.delivery_health().status.value == "healthy"
+
     restarted = load_delivery_application(config, workspace_root=repository)
     assert restarted.delivery_health().status.value == "healthy"
     assert restarted.show_operator_context(change_id, "OUT-001").block == local_block

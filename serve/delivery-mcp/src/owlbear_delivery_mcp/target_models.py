@@ -15,6 +15,7 @@ from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.delivery_admission import DeliveryAdmissionRequest
@@ -344,6 +345,16 @@ class RepairDeliveryStateSnapshotParams(ChangeParams):
     """Validate explicit repair of one quarantined local Delivery frontier."""
 
     confirmed_repair: Literal[True]
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RecoverOutOfBandHeadParams(ChangeParams):
+    """Validate explicit recovery of one out-of-band Change head."""
+
+    confirmed_recovery: Literal[True]
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -704,6 +715,31 @@ class DeliveryStateSnapshotRepairResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
+class OutOfBandHeadRecoveryResponse(_TargetProtocolModel):
+    """MCP response for one preserved out-of-band Change head recovery."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str = Field(min_length=1)
+    preserved_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: OutOfBandHeadRecoveryReceipt) -> OutOfBandHeadRecoveryResponse:
+        """Project one out-of-band recovery receipt into the transport contract."""
+        return cls(
+            **receipt.model_dump(mode="json", exclude={"worktree_path"}),
+            worktree_path=str(receipt.worktree_path),
+        )
+
+
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
     """MCP response for one exact external Change-head adoption or observation receipt."""
 
@@ -898,6 +934,10 @@ type RepairDeliveryStateSnapshotRequest = Annotated[
     RepairDeliveryStateSnapshotParams,
     BeforeValidator(partial(_parse_json_model, RepairDeliveryStateSnapshotParams)),
 ]
+type RecoverOutOfBandHeadRequest = Annotated[
+    RecoverOutOfBandHeadParams,
+    BeforeValidator(partial(_parse_json_model, RecoverOutOfBandHeadParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -993,6 +1033,7 @@ __all__ = [
     "MarkChangeReadyRequest",
     "OperatorContextParams",
     "OperatorContextRequest",
+    "OutOfBandHeadRecoveryResponse",
     "PreviewAdministrativeMoveParams",
     "PreviewAdministrativeMoveRequest",
     "PublishDeliveryPlanParams",
@@ -1001,6 +1042,8 @@ __all__ = [
     "PublishDeliveryResultRequest",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
+    "RecoverOutOfBandHeadParams",
+    "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",

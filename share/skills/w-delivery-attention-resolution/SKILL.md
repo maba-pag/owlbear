@@ -38,13 +38,16 @@ target-sync publication repair through `delivery_health()` and the exact persist
 receipt/publication evidence, or a Delivery-state snapshot repair through a diagnostic whose typed
 `reason` is `local-frontier-mismatch`. A diagnostic whose typed `reason` is
 `remote-change-head-mismatch`, `remote-change-head-ahead`, or `remote-state-reconciliation` is an
-inspection/authority-gap route, not permission to call snapshot repair. For target-sync repair,
-retain `expected_remote_head`, `expected_merged_head`, and `target_sync_operation_id`; the exact
-target-sync evidence may qualify the remote-head diagnostic for that repair route. Reject missing,
-extra, or malformed identities.
+inspection/authority-gap route unless it includes the exact reviewed, remote, and local Change
+heads required by `recover_out_of_band_head`. For that recovery route, present one decision to
+preserve or discard the out-of-band local head; retain `expected_reviewed_head`,
+`expected_remote_head`, and `expected_branch_head`, and never promote the preserved head as
+reviewed authority. For target-sync repair, retain `expected_remote_head`, `expected_merged_head`,
+and `target_sync_operation_id`; the exact target-sync evidence may qualify the remote-head
+diagnostic for that repair route. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items delivery_health repair_delivery_state_snapshot repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -81,6 +84,12 @@ one explicit confirmation, then call
 `repair_target_sync_publication(change_id, expected_remote_head, expected_merged_head,
 target_sync_operation_id, operation_id, confirmed_repair=true)`. Re-read the returned state and
 report any remaining attention; never use either route without the exact retained evidence.
+For a remote Change-head mismatch with exact reviewed, remote, and local heads, present one explicit
+preserve-or-discard decision, then call
+`recover_out_of_band_head(change_id, expected_reviewed_head, expected_remote_head,
+expected_branch_head, operation_id, confirmed_recovery=true)`. Re-read `delivery_health()` and the
+retained worktree inventory; the operation restores and publishes only the reviewed head, and a
+preserved out-of-band head remains recovery evidence rather than reviewed authority.
 
 ## Step 1 - Diagnose Current State Read-Only
 
@@ -154,6 +163,12 @@ Use only an existing operation whose contract owns the selected result:
   `repair_delivery_state_snapshot(change_id, operation_id, confirmed_repair=true)`. Re-read health
   and the operator context for the repaired Change; the operation uses compare-and-swap publication
   and does not accept unrelated local frontier edits.
+- Out-of-band Change-head recovery: when Delivery reports a remote Change-head mismatch with exact
+  reviewed, remote, and local heads, present one preserve-or-discard decision. Re-read those fences,
+  then call `recover_out_of_band_head(change_id, expected_reviewed_head, expected_remote_head,
+  expected_branch_head, operation_id, confirmed_recovery=true)`. Re-read health and retained
+  worktrees; the operation preserves the selected local head as evidence, republishes only the
+  reviewed head, and never grants review authority to the preserved head.
 - Abandoned target-sync discard: after an exact Change is abandoned and its retained worktree reports
   a preserved target-sync conflict, re-read the conflict's `target_head` and `operation_id`. Present
   one explicit confirmation, then call

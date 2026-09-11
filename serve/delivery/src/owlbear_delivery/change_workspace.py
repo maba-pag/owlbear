@@ -194,6 +194,16 @@ class RecoverPublicationBaseline(_WorkspaceModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class RecoverOutOfBandHead(_WorkspaceModel):
+    """Exact authority for preserving one out-of-band Change head."""
+
+    change_id: ChangeId
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
     """Content-addressed evidence for one explicit recovery of an unknown baseline."""
 
@@ -227,6 +237,61 @@ class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
     def _validate_receipt(self) -> Self:
         if self.receipt_id != _publication_baseline_recovery_digest(self):
             message = "publication baseline recovery receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class OutOfBandHeadRecoveryReceipt(_WorkspaceModel):
+    """Content-addressed evidence for preserving and restoring an out-of-band head."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str = Field(min_length=1)
+    preserved_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - recovery evidence binds each exact workspace identity.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        branch: str,
+        worktree_path: Path,
+        expected_reviewed_head: str,
+        expected_remote_head: str,
+        observed_branch_head: str,
+        preserved_ref: str,
+        preserved_head: str,
+        restored_head: str,
+    ) -> Self:
+        """Create deterministic evidence for one restored reviewed boundary."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "expected_reviewed_head": expected_reviewed_head,
+            "expected_remote_head": expected_remote_head,
+            "observed_branch_head": observed_branch_head,
+            "preserved_ref": preserved_ref,
+            "preserved_head": preserved_head,
+            "restored_head": restored_head,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_out_of_band_head_recovery_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> Self:
+        if self.receipt_id != _out_of_band_head_recovery_digest(self):
+            message = "out-of-band head recovery receipt identity is invalid"
             raise ValueError(message)
         return self
 
@@ -677,6 +742,7 @@ class ChangeCoordination(_WorkspaceModel):
     worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
     dirty_worktree_quarantine: DirtyWorktreeQuarantineReceipt | None = None
+    out_of_band_head_recovery: OutOfBandHeadRecoveryReceipt | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -759,6 +825,7 @@ class ChangeCoordination(_WorkspaceModel):
             raise ValueError(message)
         self._validate_design_package_snapshot()
         self._validate_dirty_worktree_quarantine()
+        self._validate_out_of_band_head_recovery()
         return self
 
     def _validate_design_package_snapshot(self) -> None:
@@ -793,6 +860,24 @@ class ChangeCoordination(_WorkspaceModel):
             self.writer.attempt_id != receipt.attempt_id or self.writer.claim_id != receipt.claim_id
         ):
             message = "dirty worktree quarantine receipt does not match active writer custody"
+            raise ValueError(message)
+
+    def _validate_out_of_band_head_recovery(self) -> None:
+        receipt = self.out_of_band_head_recovery
+        if receipt is None:
+            return
+        if receipt.change_id != self.change_id:
+            message = "out-of-band head recovery receipt does not match its Change"
+            raise ValueError(message)
+        if receipt.branch != self.branch:
+            message = "out-of-band head recovery receipt does not match its branch"
+            raise ValueError(message)
+        if receipt.worktree_path != self.worktree_path:
+            message = "out-of-band head recovery receipt does not match its worktree"
+            raise ValueError(message)
+        expected_ref = f"refs/owlbear/recovery/{receipt.change_id}/{receipt.operation_id}"
+        if receipt.preserved_ref != expected_ref:
+            message = "out-of-band head recovery receipt ref does not match its operation"
             raise ValueError(message)
 
     def _validate_publication_baseline_recovery(self) -> None:
@@ -1147,6 +1232,7 @@ class PortfolioCoordinator:
             writer = coordination.writer
             if writer is None or writer.attempt_id != receipt.attempt_id or writer.claim_id != receipt.claim_id:
                 _coordination_conflict("dirty worktree quarantine authority requires matching writer custody")
+        self._validate_out_of_band_head_recovery_update(existing, coordination)
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
             self._commit(f"update-{coordination.change_id}", (participant,))
@@ -1154,6 +1240,16 @@ class PortfolioCoordinator:
             msg = "change workspace changed concurrently"
             raise CoordinationConflictError(msg) from exc
         return coordination
+
+    @staticmethod
+    def _validate_out_of_band_head_recovery_update(
+        existing: ChangeCoordination,
+        replacement: ChangeCoordination,
+    ) -> None:
+        if existing.out_of_band_head_recovery is not None and (
+            existing.out_of_band_head_recovery != replacement.out_of_band_head_recovery
+        ):
+            _coordination_conflict("out-of-band head recovery authority cannot be replaced")
 
     def prepare_reviewed_boundary(
         self,
@@ -1457,6 +1553,111 @@ class ChangeWorkspaceManager:
         self._require_ancestor(commit, branch_head)
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
+
+    def recover_out_of_band_head(  # noqa: C901, PLR0912 - recovery binds exact staged Git states.
+        self,
+        request: RecoverOutOfBandHead,
+    ) -> OutOfBandHeadRecoveryReceipt:
+        """Preserve an out-of-band head and restore the managed branch to review authority."""
+        with self._coordinator.publication_lock(request.change_id) as lock:
+            coordination = self._coordinator.show(request.change_id)
+            existing = coordination.out_of_band_head_recovery
+            if existing is not None:
+                if (
+                    existing.operation_id != request.operation_id
+                    or existing.expected_reviewed_head != request.expected_reviewed_head
+                    or existing.expected_remote_head != request.expected_remote_head
+                    or existing.observed_branch_head != request.expected_branch_head
+                ):
+                    _coordination_conflict("out-of-band head recovery request differs from its receipt")
+                if self._resolve(existing.preserved_ref) != existing.preserved_head:
+                    _coordination_conflict("out-of-band head recovery evidence is missing")
+                self._require_worktree(
+                    request.change_id,
+                    coordination.worktree_path,
+                    coordination.branch,
+                    existing.restored_head,
+                )
+                return existing
+            if coordination.last_reviewed_commit != request.expected_reviewed_head:
+                _coordination_conflict("out-of-band head recovery requires the current reviewed boundary")
+            branch_head = self._resolve(coordination.branch)
+            if branch_head not in {request.expected_branch_head, request.expected_reviewed_head}:
+                _coordination_conflict("out-of-band head recovery branch head changed")
+            preserved_ref = f"refs/owlbear/recovery/{request.change_id}/{request.operation_id}"
+            self._git("check-ref-format", preserved_ref)
+            preserved = self._resolve(preserved_ref, missing_ok=True)
+            if branch_head == request.expected_reviewed_head:
+                if preserved != request.expected_branch_head:
+                    _coordination_conflict("out-of-band head recovery evidence is missing")
+            else:
+                self._require_ancestor(request.expected_reviewed_head, branch_head)
+            worktree_head = self._resolve("HEAD", cwd=coordination.worktree_path, missing_ok=True)
+            if branch_head == request.expected_reviewed_head and worktree_head == request.expected_branch_head:
+                self._require_clean_worktree(
+                    coordination.worktree_path,
+                    operation="out-of-band head recovery",
+                )
+            else:
+                self._require_worktree(
+                    request.change_id,
+                    coordination.worktree_path,
+                    coordination.branch,
+                    branch_head,
+                )
+                self._require_clean_worktree(
+                    coordination.worktree_path,
+                    operation="out-of-band head recovery",
+                )
+            if preserved is None:
+                self._git("update-ref", preserved_ref, branch_head, "0" * 40)
+                preserved = branch_head
+            elif preserved != request.expected_branch_head:
+                _coordination_conflict("out-of-band head recovery ref names another branch head")
+            if branch_head != request.expected_reviewed_head:
+                self._git(
+                    "update-ref",
+                    f"refs/heads/{coordination.branch}",
+                    request.expected_reviewed_head,
+                    branch_head,
+                )
+                self._git(
+                    "reset",
+                    "--hard",
+                    request.expected_reviewed_head,
+                    cwd=coordination.worktree_path,
+                )
+            elif worktree_head != request.expected_reviewed_head:
+                self._git(
+                    "reset",
+                    "--hard",
+                    request.expected_reviewed_head,
+                    cwd=coordination.worktree_path,
+                )
+            else:
+                self._require_worktree(
+                    request.change_id,
+                    coordination.worktree_path,
+                    coordination.branch,
+                    request.expected_reviewed_head,
+                )
+            receipt = OutOfBandHeadRecoveryReceipt.create(
+                operation_id=request.operation_id,
+                change_id=request.change_id,
+                branch=coordination.branch,
+                worktree_path=coordination.worktree_path,
+                expected_reviewed_head=request.expected_reviewed_head,
+                expected_remote_head=request.expected_remote_head,
+                observed_branch_head=branch_head,
+                preserved_ref=preserved_ref,
+                preserved_head=preserved,
+                restored_head=request.expected_reviewed_head,
+            )
+            self._coordinator.update(
+                coordination.model_copy(update={"out_of_band_head_recovery": receipt}),
+                lock=lock,
+            )
+            return receipt
 
     def prepare_finalization_boundary(
         self,
@@ -3873,6 +4074,12 @@ def _design_package_snapshot_digest(receipt: ChangeDesignPackageSnapshotReceipt)
 
 
 def _quarantine_digest(receipt: DirtyWorktreeQuarantineReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _out_of_band_head_recovery_digest(receipt: OutOfBandHeadRecoveryReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

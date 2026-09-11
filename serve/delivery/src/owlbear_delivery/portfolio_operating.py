@@ -113,6 +113,7 @@ class DeliveryHealthReason(StrEnum):
     REMOTE_STATE_RECONCILIATION = "remote-state-reconciliation"
     REMOTE_CHANGE_HEAD_AHEAD = "remote-change-head-ahead"
     REMOTE_CHANGE_HEAD_MISMATCH = "remote-change-head-mismatch"
+    LOCAL_CHANGE_HEAD_OUT_OF_BAND = "local-change-head-out-of-band"
     LOCAL_FRONTIER_MISMATCH = "local-frontier-mismatch"
     RUNTIME_UNAVAILABLE = "runtime-unavailable"
     STATE_PUBLICATION_INVALID = "state-publication-invalid"

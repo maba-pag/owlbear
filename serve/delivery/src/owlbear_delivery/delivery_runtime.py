@@ -1400,6 +1400,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_checkpoint_branch_publication",
         "record_design_package_snapshot",
         "queue_admitted_design_checkpoint",
+        "queue_explicit_checkpoint",
         "acknowledge_checkpoint_publication",
         "record_checkpoint_failure",
         "record_publication_identity",
@@ -1905,7 +1906,19 @@ class DeliveryRuntime:
         ):
             _conflict("checkpoint branch publication no longer matches the durable queue")
         updated = frontier.model_copy(update={"published_head": published_head})
-        self._replace(previous, updated)
+        pending_publication = self.pending_state_publication()
+        self._replace_content(
+            previous,
+            _model_content(updated),
+            base_frontier_digest=(
+                pending_publication.base_frontier_digest
+                if pending_publication is not None
+                else self.publication_base_digest(previous)
+            ),
+            transition_request_digest=(
+                pending_publication.transition_request_digest if pending_publication is not None else None
+            ),
+        )
         return self.checkpoint_publication_state()
 
     def record_design_package_snapshot(
@@ -1957,6 +1970,30 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
 
+    def queue_explicit_checkpoint(self, reviewed_head: str) -> DeliveryCheckpointPublicationState:
+        """Queue one explicit checkpoint for the current reviewed Change head."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "queue_explicit_checkpoint", allow_attention=True)
+        _require_no_active_change_claim(frontier, "explicit checkpoint")
+        trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+        pending = frontier.pending_checkpoint
+        if pending is not None:
+            if pending.head != reviewed_head:
+                _conflict("explicit checkpoint no longer matches the reviewed boundary")
+            if trigger in pending.triggers:
+                return self.checkpoint_publication_state()
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": pending.model_copy(update={"triggers": (*pending.triggers, trigger)})}
+            )
+        elif frontier.published_head == reviewed_head:
+            return self.checkpoint_publication_state()
+        else:
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": DeliveryPendingCheckpoint(head=reviewed_head, triggers=(trigger,))}
+            )
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
     def acknowledge_checkpoint_publication(
         self,
         expected: DeliveryPendingCheckpoint,
@@ -1985,7 +2022,7 @@ class DeliveryRuntime:
             )
         pending = current.model_copy(update={"triggers": retained}) if retained else None
         updated = frontier.model_copy(update={"pending_checkpoint": pending})
-        self._replace(previous, updated)
+        self._replace_content(previous, _model_content(updated), record_pending_publication=False)
         return self.checkpoint_publication_state()
 
     def record_checkpoint_failure(
@@ -3471,6 +3508,7 @@ class DeliveryRuntime:
         *,
         record_pending_publication: bool = True,
         transition_request_digest: str | None = None,
+        base_frontier_digest: str | None = None,
     ) -> None:
         """Transactionally replace frontier bytes and its local publication intent."""
         participant = ReplacementTransactionParticipant(
@@ -3484,7 +3522,7 @@ class DeliveryRuntime:
             participants.append(
                 self._pending_publication_participant(
                     replacement,
-                    self.publication_base_digest(previous),
+                    base_frontier_digest or self.publication_base_digest(previous),
                     transition_request_digest,
                 )
             )
@@ -3650,7 +3688,7 @@ def _queue_promoted_result_checkpoint(
         _conflict("promoted Task checkpoint requires the published result candidate")
     triggers: list[DeliveryCheckpointTrigger] = []
     pending = previous.pending_checkpoint
-    if previous.published_head is None and not _has_checkpoint_trigger(
+    if not any(item.results for item in previous.bindings) and not _has_checkpoint_trigger(
         pending,
         DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
     ):

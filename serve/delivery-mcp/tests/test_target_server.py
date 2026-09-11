@@ -63,6 +63,7 @@ DELIVERY_TOOLS = {
     "list_work_items",
     "delivery_health",
     "repair_delivery_state_snapshot",
+    "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",

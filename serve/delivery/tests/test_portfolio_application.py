@@ -71,6 +71,8 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryHealthDiagnostic,
     DeliveryHealthReason,
+    DeliveryHealthResolution,
+    DeliveryHealthStatus,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -6530,6 +6532,203 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     assert blocked.requests == (request,)
     assert blocked.block is not None
     assert blocked.block.request_id == request.request_id
+
+
+def test_transition_publishes_change_branch_before_delivery_state(
+    tmp_path: Path,
+) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    runtime = runtimes["change-a"]
+    task = runtime.show_binding("OUT-001").tasks[0]
+    product = launch.worktree_path / "product.txt"
+    product.write_text("completed build\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", product.name)
+    _git(launch.worktree_path, "commit", "-m", "complete build")
+    completed_commit = _git(launch.worktree_path, "rev-parse", "HEAD")
+    result = _task_result(
+        "RESULT-ORDERED",
+        "change-a",
+        runtime.authority_digest,
+        task,
+        completed_commit,
+    )
+    candidate = application.publish_delivery_result(
+        "change-a",
+        PublishDeliveryResult(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            result=result,
+        ),
+    )
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+
+    def publish_state(**kwargs: object) -> object:
+        assert branch_publisher.publish.call_count == 1
+        assert kwargs["coordination"].last_reviewed_commit == completed_commit
+        assert runtime.checkpoint_publication_state().published_head == completed_commit
+        return object()
+
+    state_publisher.publish.side_effect = publish_state
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+
+    advanced = application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+
+    assert advanced.stage == DeliveryStage.COMPLETED
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+    assert state_publisher.publish.call_count == 1
+
+
+def test_snapshot_repair_rejects_remote_head_mismatch_without_clearing_health(
+    tmp_path: Path,
+) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="remote-state-reconciliation-required",
+            detail="remote Change branch differs from Delivery-state snapshot: change-a",
+            change_id="change-a",
+            reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
+        ),
+    )
+    application._reconcile_runtimes()
+    state_publisher = Mock()
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head=reviewed_head,
+        snapshots=(
+            Mock(
+                change_id="change-a",
+                contract=runtime.contract,
+                frontier=DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False),
+            ),
+        ),
+    )
+    application._delivery_state_publisher = state_publisher
+
+    with pytest.raises(PortfolioApplicationError, match="diagnostic is absent or incompatible"):
+        application.repair_delivery_state_snapshot(
+            "change-a",
+            "repair-remote-head-mismatch",
+            confirmed_repair=True,
+        )
+
+    assert state_publisher.publish.call_count == 0
+    assert application.delivery_health().status == DeliveryHealthStatus.ATTENTION
+
+
+def test_out_of_band_head_recovery_preserves_commit_and_republishes_reviewed_state(
+    tmp_path: Path,
+) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    remote_head = coordination.last_reviewed_commit
+    reviewed_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "reviewed.txt",
+        "reviewed\n",
+        "reviewed boundary",
+    )
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"published_head": remote_head})))
+    out_of_band_head = _commit_local_descendant(coordination, "out-of-band.txt")
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="remote-state-reconciliation-required",
+            detail="remote Change branch differs from Delivery-state snapshot: change-a",
+            change_id="change-a",
+            reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
+            expected_head=reviewed_head,
+            observed_head=remote_head,
+            observed_local_head=out_of_band_head,
+        ),
+    )
+    application._reconcile_runtimes()
+    branch_publisher = Mock()
+    branch_publisher.observe_remote_head.return_value = remote_head
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    state_publisher = Mock()
+    state_publisher.publish.return_value = object()
+    pull_request_publisher = Mock()
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(reviewed_head)
+    application._change_branch_publisher = branch_publisher
+    application._delivery_state_publisher = state_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+
+    recovered = application.recover_out_of_band_head(
+        "change-a",
+        reviewed_head,
+        remote_head,
+        out_of_band_head,
+        "recover-out-of-band-change-a",
+        confirmed_recovery=True,
+    )
+
+    assert recovered.expected_reviewed_head == reviewed_head
+    assert recovered.expected_remote_head == remote_head
+    assert recovered.observed_branch_head == out_of_band_head
+    assert recovered.preserved_head == out_of_band_head
+    assert _git(
+        application._workspace_manager.repository,
+        "rev-parse",
+        recovered.preserved_ref,
+    ) == out_of_band_head
+    assert _git(application._workspace_manager.repository, "rev-parse", coordination.branch) == reviewed_head
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed_head
+    assert runtimes["change-a"].checkpoint_publication_state().published_head == reviewed_head
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is None
+    assert application.delivery_health().status == DeliveryHealthStatus.HEALTHY
+    assert branch_publisher.publish.call_count == 1
+    assert state_publisher.publish.call_count == 1
+
+
+def test_delivery_health_reports_clean_out_of_band_change_head(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    out_of_band_head = _commit_local_descendant(coordinator.show("change-a"), "out-of-band.txt")
+
+    health = application.delivery_health()
+
+    assert health.status == DeliveryHealthStatus.ATTENTION
+    assert health.diagnostics == (
+        DeliveryHealthDiagnostic(
+            source="local-runtime",
+            code="local-change-head-out-of-band",
+            detail="Local Change branch is outside its reviewed Delivery boundary without adoption evidence.",
+            change_id="change-a",
+            reason=DeliveryHealthReason.LOCAL_CHANGE_HEAD_OUT_OF_BAND,
+            resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+            expected_head=coordinator.show("change-a").last_reviewed_commit,
+            observed_local_head=out_of_band_head,
+        ),
+    )
 
 
 def test_work_item_queries_do_not_resolve_integration_target(

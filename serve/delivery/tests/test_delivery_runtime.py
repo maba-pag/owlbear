@@ -1541,7 +1541,8 @@ def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp
                 plan_scope_id=f"SCOPE-{index:03}",
             )
             for index in range(1, 4)
-        )
+        ),
+        published_head=coordination.last_reviewed_commit,
     )
     frontier_path = state_root / "changes/delivery-runtime/frontier.json"
     frontier_path.parent.mkdir(parents=True)

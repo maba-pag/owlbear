@@ -26,10 +26,13 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
+    RecoverOutOfBandHead,
     SyncChangeWithTarget,
     WriterIdentity,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+
+
 def _coordination(root: Path, change_id: str) -> ChangeCoordination:
     return ChangeCoordination(
         change_id=change_id,
@@ -1673,6 +1676,56 @@ def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path
     assert _git(repository, "rev-parse", restarted.branch) == initial
     assert _git(restarted.worktree_path, "rev-parse", "HEAD") == initial
     assert restarted.writer is None
+
+
+def test_recover_out_of_band_head_preserves_and_restores_reviewed_boundary(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("recover-out-of-band")
+    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed boundary")
+    manager.record_reviewed(coordination.change_id, reviewed)
+    out_of_band = _commit_file(coordination.worktree_path, "out-of-band\n", "out-of-band change")
+    request = RecoverOutOfBandHead(
+        change_id=coordination.change_id,
+        expected_reviewed_head=reviewed,
+        expected_remote_head=initial,
+        expected_branch_head=out_of_band,
+        operation_id="recover-out-of-band",
+    )
+
+    receipt = manager.recover_out_of_band_head(request)
+
+    assert receipt.preserved_head == out_of_band
+    assert _git(repository, "rev-parse", receipt.preserved_ref) == out_of_band
+    assert _git(repository, "rev-parse", coordination.branch) == reviewed
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed
+    assert coordinator.show(coordination.change_id).out_of_band_head_recovery == receipt
+
+
+def test_recover_out_of_band_head_replays_after_branch_ref_update(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("recover-out-of-band-replay")
+    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed boundary")
+    manager.record_reviewed(coordination.change_id, reviewed)
+    out_of_band = _commit_file(coordination.worktree_path, "out-of-band\n", "out-of-band change")
+    request = RecoverOutOfBandHead(
+        change_id=coordination.change_id,
+        expected_reviewed_head=reviewed,
+        expected_remote_head=initial,
+        expected_branch_head=out_of_band,
+        operation_id="recover-out-of-band-replay",
+    )
+    _git(repository, "update-ref", f"refs/heads/{coordination.branch}", reviewed, out_of_band)
+    _git(coordination.worktree_path, "reset", "--hard", out_of_band)
+    recovery_ref = f"refs/owlbear/recovery/{coordination.change_id}/{request.operation_id}"
+    _git(repository, "update-ref", recovery_ref, out_of_band)
+
+    receipt = manager.recover_out_of_band_head(request)
+
+    assert receipt.preserved_head == out_of_band
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed
+    assert coordinator.show(coordination.change_id).out_of_band_head_recovery == receipt
 
 
 def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Path) -> None:

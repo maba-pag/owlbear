@@ -163,6 +163,7 @@ export type DeliveryHealthReason =
   | 'remote-state-reconciliation'
   | 'remote-change-head-ahead'
   | 'remote-change-head-mismatch'
+  | 'local-change-head-out-of-band'
   | 'local-frontier-mismatch'
   | 'runtime-unavailable'
   | 'state-publication-invalid'

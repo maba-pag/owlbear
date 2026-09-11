@@ -96,6 +96,24 @@ def _reviewed_change(manager: ChangeWorkspaceManager, change_id: str) -> tuple[P
     return coordination.worktree_path, reviewed
 
 
+def test_observe_remote_head_reads_only_the_exact_change_branch(tmp_path: Path) -> None:
+    repository, _remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    coordination = manager.ensure("observe-remote")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    assert publisher.observe_remote_head("observe-remote") is None
+    _git(repository, "push", "origin", f"{initial}:refs/heads/{coordination.branch}")
+
+    assert publisher.observe_remote_head("observe-remote") == initial
+
+
 def _advance_remote_target(
     tmp_path: Path,
     remote: Path,

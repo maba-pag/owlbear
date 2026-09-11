@@ -293,6 +293,7 @@ class DeliveryStatePublisher:
         current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
         if expected_remote_head != remote_head and expected_remote_head is not None:
             _raise_state_conflict("Delivery-state branch changed before snapshot publication")
+        _require_change_branch_reachability(self._repository, coordination, runtime)
         if current is not None and _same_snapshot_inputs(current, package_id, coordination, runtime, admission):
             return DeliveryStatePublicationReceipt.create(
                 operation_id=operation_id,
@@ -579,6 +580,54 @@ def _same_snapshot_inputs(
         and current.frontier == _portable_frontier(runtime)
         and current.completion == runtime.completion_bundle()
     )
+
+
+def _require_change_branch_reachability(
+    repository: Path,
+    coordination: ChangeCoordination,
+    runtime: DeliveryRuntime,
+) -> None:
+    """Require every portable result commit to be reachable from reviewed Change authority."""
+    branch_head = _resolve_branch_head(repository, coordination.branch)
+    if branch_head is None or branch_head != coordination.last_reviewed_commit:
+        _raise_state_error(
+            "Delivery-state snapshot requires the managed Change branch at its reviewed boundary",
+            retry_safe=False,
+        )
+    frontier = _portable_frontier(runtime)
+    for binding in frontier.bindings:
+        for result in binding.results:
+            if not _is_ancestor(repository, result.completed_commit, branch_head):
+                _raise_state_error(
+                    "Delivery-state snapshot contains a result commit absent from the managed Change branch",
+                    retry_safe=False,
+                )
+
+
+def _resolve_branch_head(repository: Path, branch: str) -> str | None:
+    result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (resolve_git_executable(), "-C", str(repository), "rev-parse", "--verify", f"refs/heads/{branch}^{{commit}}"),
+        check=False,
+        capture_output=True,
+    )
+    return result.stdout.decode().strip() if result.returncode == 0 else None
+
+
+def _is_ancestor(repository: Path, ancestor: str, descendant: str) -> bool:
+    result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (
+            resolve_git_executable(),
+            "-C",
+            str(repository),
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            descendant,
+        ),
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def _same_snapshot_authority(

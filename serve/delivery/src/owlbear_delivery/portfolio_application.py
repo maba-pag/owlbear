@@ -46,10 +46,12 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     DirtyWorktreeQuarantineReceipt,
+    OutOfBandHeadRecoveryReceipt,
     PortfolioCoordinator,
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
+    RecoverOutOfBandHead,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
@@ -1351,8 +1353,8 @@ class PortfolioApplication:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
             self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
-            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
             self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
+            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
             return receipt
 
     def sync_change_with_current_target(
@@ -1631,14 +1633,14 @@ class PortfolioApplication:
         resolution = runtime.change_disposition_resolution()
         if resolution is not None:
             checkpoint = runtime.checkpoint_publication_state()
-            if checkpoint.pending_checkpoint is not None or checkpoint.published_head != receipt.merged_head:
+            if checkpoint.published_head != receipt.merged_head:
                 self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
-            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
             self._publish_delivery_state(
                 request.change_id,
                 runtime,
                 f"target-sync-resolution-{resolution.resolution_id}",
             )
+            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _record_target_sync_resolution(
@@ -1662,12 +1664,12 @@ class PortfolioApplication:
         if resolution is None:
             self._fail("target synchronization resolution did not record attention resolution")
         self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
-        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         self._publish_delivery_state(
             request.change_id,
             runtime,
             f"target-sync-resolution-{resolution.resolution_id}",
         )
+        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _resolve_target_sync_workspace(
@@ -3069,31 +3071,39 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            try:
-                return self._reconcile_change_checkpoint(change_id, runtime)
-            except (
-                PublicationProviderError,
-                PublicationBaselineUnavailableError,
-                DeliveryRuntimeConflictError,
-                OSError,
-                RuntimeError,
-                subprocess.SubprocessError,
-                ValueError,
-            ) as exc:
-                state = runtime.checkpoint_publication_state()
-                pending = state.pending_checkpoint
-                if pending is not None:
-                    with suppress(DeliveryRuntimeConflictError):
-                        runtime.record_checkpoint_failure(
-                            pending,
-                            _timestamp(self._clock()),
-                            _checkpoint_error_code(exc),
-                            _checkpoint_error_detail(
-                                str(exc),
-                                "Checkpoint reconciliation failed; the pending checkpoint was retained.",
-                            ),
-                        )
-                raise
+            return self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
+
+    def _reconcile_change_checkpoint_with_failure_recording(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryCheckpointReconciliationResult:
+        """Reconcile one checkpoint and retain bounded failure evidence for retries."""
+        try:
+            return self._reconcile_change_checkpoint(change_id, runtime)
+        except (
+            PublicationProviderError,
+            PublicationBaselineUnavailableError,
+            DeliveryRuntimeConflictError,
+            OSError,
+            RuntimeError,
+            subprocess.SubprocessError,
+            ValueError,
+        ) as exc:
+            state = runtime.checkpoint_publication_state()
+            pending = state.pending_checkpoint
+            if pending is not None:
+                with suppress(DeliveryRuntimeConflictError):
+                    runtime.record_checkpoint_failure(
+                        pending,
+                        _timestamp(self._clock()),
+                        _checkpoint_error_code(exc),
+                        _checkpoint_error_detail(
+                            str(exc),
+                            "Checkpoint reconciliation failed; the pending checkpoint was retained.",
+                        ),
+                    )
+            raise
 
     def reconcile_pending_checkpoints(
         self,
@@ -3308,7 +3318,9 @@ class PortfolioApplication:
             runtime,
             _checkpoint_operation_id("state", change_id, head),
         )
-        state = runtime.acknowledge_checkpoint_publication(pending, head)
+        state = runtime.checkpoint_publication_state()
+        if state.pending_checkpoint is not None and state.published_head == head:
+            state = runtime.acknowledge_checkpoint_publication(pending, head)
         return DeliveryCheckpointReconciliationResult(
             change_id=change_id,
             attempted_head=head,
@@ -3672,9 +3684,9 @@ class PortfolioApplication:
             )
             frontier_bytes = runtime.frontier_bytes()
             frontier = DeliveryFrontier.model_validate_json(frontier_bytes, strict=False)
-            if not diagnostics and frontier != snapshot.frontier:
+            if not diagnostics:
                 self._fail("Delivery-state snapshot repair diagnostic is absent or incompatible")
-            if diagnostics and not self._is_repairable_frontier_successor(snapshot.frontier, frontier):
+            if not self._is_repairable_frontier_successor(snapshot.frontier, frontier):
                 self._fail("Delivery-state snapshot repair successor is outside the allowed block shape")
             publication = self._publish_delivery_state(
                 change_id,
@@ -3691,6 +3703,83 @@ class PortfolioApplication:
                 publication=publication,
                 local_frontier_digest=hashlib.sha256(frontier_bytes).hexdigest(),
             )
+
+    def recover_out_of_band_head(  # noqa: C901, PLR0912, PLR0913 - recovery binds exact Delivery and Git fences.
+        self,
+        change_id: str,
+        expected_reviewed_head: str,
+        expected_remote_head: str,
+        expected_branch_head: str,
+        operation_id: str,
+        *,
+        confirmed_recovery: Literal[True],
+    ) -> OutOfBandHeadRecoveryReceipt:
+        """Preserve an out-of-band head and reconcile the reviewed Change checkpoint."""
+        if confirmed_recovery is not True:
+            self._fail("out-of-band head recovery requires explicit confirmation")
+        if (
+            self._change_branch_publisher is None
+            or self._delivery_state_publisher is None
+            or self._draft_pull_request_publisher is None
+        ):
+            self._fail("out-of-band head recovery requires configured checkpoint publishers")
+        self._reconcile_runtimes()
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                self._fail("out-of-band head recovery requires an available Change runtime")
+            diagnostic = next(
+                (
+                    item
+                    for item in self._startup_health_diagnostics
+                    if (
+                        item.source == "remote-state"
+                        and item.change_id == change_id
+                        and item.code == "remote-state-reconciliation-required"
+                        and item.reason is DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH
+                        and item.expected_head == expected_reviewed_head
+                        and item.observed_head == expected_remote_head
+                    )
+                ),
+                None,
+            )
+            if diagnostic is None:
+                self._fail("out-of-band head recovery diagnostic is absent or stale")
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.published_head != expected_remote_head:
+                self._fail("out-of-band head recovery remote checkpoint changed")
+            coordination = self._workspace_manager.show(change_id)
+            if coordination.last_reviewed_commit != expected_reviewed_head:
+                self._fail("out-of-band head recovery reviewed boundary changed")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("out-of-band head recovery cannot overlap active Delivery work")
+            if runtime.finalization() is not None or runtime.change_disposition() is not None:
+                self._fail("out-of-band head recovery requires an unresolved nonterminal Change")
+            if self._workspace_manager.observed_change_head(change_id) != expected_branch_head:
+                self._fail("out-of-band head recovery branch head changed")
+            try:
+                observed_remote_head = self._change_branch_publisher.observe_remote_head(change_id)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("out-of-band Change head recovery could not observe the remote branch", exc)
+            if observed_remote_head != expected_remote_head:
+                self._fail("out-of-band Change head recovery remote branch changed")
+            request = RecoverOutOfBandHead(
+                change_id=change_id,
+                expected_reviewed_head=expected_reviewed_head,
+                expected_remote_head=expected_remote_head,
+                expected_branch_head=expected_branch_head,
+                operation_id=operation_id,
+            )
+            try:
+                receipt = self._workspace_manager.recover_out_of_band_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("out-of-band Change head recovery could not complete", exc)
+            runtime.queue_explicit_checkpoint(expected_reviewed_head)
+            result = self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
+            if not result.reconciled:
+                self._fail("out-of-band Change head recovery checkpoint remains unreconciled")
+            self._clear_remote_state_reconciliation(change_id)
+            return receipt
 
     def repair_target_sync_publication(  # noqa: PLR0913 - repair binds each exact remote and target identity.
         self,
@@ -3719,12 +3808,10 @@ class PortfolioApplication:
             if branch_receipt is None:
                 self._fail("target-sync publication repair could not publish the Change branch")
             checkpoint = runtime.checkpoint_publication_state()
-            if checkpoint.pending_checkpoint is not None:
-                runtime.acknowledge_checkpoint_publication(
-                    checkpoint.pending_checkpoint,
-                    branch_receipt.published_head,
-                )
+            pending = checkpoint.pending_checkpoint
             self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
+            if pending is not None and runtime.checkpoint_publication_state().pending_checkpoint is not None:
+                runtime.acknowledge_checkpoint_publication(pending, branch_receipt.published_head)
             self._clear_target_sync_reconciliation(change_id)
             target_sync = runtime.target_sync_receipt()
             if target_sync is None:
@@ -3858,7 +3945,17 @@ class PortfolioApplication:
         diagnostics: list[DeliveryHealthDiagnostic] = [
             *self._startup_health_diagnostics,
         ]
+        diagnosed_change_ids = {
+            diagnostic.change_id
+            for diagnostic in diagnostics
+            if diagnostic.change_id is not None
+        }
         for change_id, runtime in sorted(self._runtimes.items()):
+            if change_id not in diagnosed_change_ids:
+                out_of_band = self._out_of_band_head_diagnostic(change_id)
+                if out_of_band is not None:
+                    diagnostics.append(out_of_band)
+                    diagnosed_change_ids.add(change_id)
             marker_path = f".owlbear/delivery/runtime/changes/{change_id}/state-publication.json"
             try:
                 pending = runtime.pending_state_publication()
@@ -3937,6 +4034,28 @@ class PortfolioApplication:
         return DeliveryHealthView(
             status=DeliveryHealthStatus.ATTENTION if bounded else DeliveryHealthStatus.HEALTHY,
             diagnostics=bounded,
+        )
+
+    def _out_of_band_head_diagnostic(self, change_id: str) -> DeliveryHealthDiagnostic | None:
+        """Report a clean local Change head that has no Delivery adoption evidence."""
+        try:
+            coordination = self._workspace_manager.show(change_id)
+            if coordination.writer is not None or coordination.external_head_adoption_receipt is not None:
+                return None
+            observed_head = self._workspace_manager.observed_change_head(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+            return None
+        if observed_head == coordination.last_reviewed_commit:
+            return None
+        return DeliveryHealthDiagnostic(
+            source="local-runtime",
+            code="local-change-head-out-of-band",
+            detail="Local Change branch is outside its reviewed Delivery boundary without adoption evidence.",
+            change_id=change_id,
+            reason=DeliveryHealthReason.LOCAL_CHANGE_HEAD_OUT_OF_BAND,
+            resolution=DeliveryHealthResolution.AUTHORITY_GAP,
+            expected_head=coordination.last_reviewed_commit,
+            observed_local_head=observed_head,
         )
 
     def _portfolio_operating_view(
@@ -5558,6 +5677,11 @@ class PortfolioApplication:
     ) -> DeliveryStatePublicationReceipt | None:
         if self._delivery_state_publisher is None:
             return None
+        checkpoint = runtime.checkpoint_publication_state()
+        pending = checkpoint.pending_checkpoint
+        if pending is not None and pending.head is not None and checkpoint.published_head != pending.head:
+            branch_receipt = self._publish_checkpoint_branch(change_id, checkpoint, pending.head)
+            runtime.record_checkpoint_branch_publication(checkpoint, branch_receipt.published_head)
         package = self._package_store.read_verified(change_id)
         self._validate_package_authority(runtime, package)
         admission_path = self._target_root / "changes" / change_id / "admission.json"
@@ -5573,6 +5697,8 @@ class PortfolioApplication:
             expected_remote_head=expected_remote_head,
         )
         runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
+        if pending is not None and pending.head is not None:
+            runtime.acknowledge_checkpoint_publication(pending, pending.head)
         return publication
 
     def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int:

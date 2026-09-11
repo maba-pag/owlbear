@@ -29,6 +29,7 @@ from owlbear_delivery.change_workspace import (
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
     CoordinationConflictError,
+    OutOfBandHeadRecoveryReceipt,
     PublicationBaselineUnavailableError,
 )
 from owlbear_delivery.completed_history import (
@@ -347,6 +348,19 @@ class _RecordingApplication:
                 result = _target_sync_repair_receipt()
             elif name == "repair_delivery_state_snapshot":
                 result = _delivery_state_repair_receipt()
+            elif name == "recover_out_of_band_head":
+                result = OutOfBandHeadRecoveryReceipt.create(
+                    operation_id="recover-out-of-band-change-a",
+                    change_id=CHANGE,
+                    branch="owlbear/change/change-a",
+                    worktree_path=WORKTREE_PATH,
+                    expected_reviewed_head=COMMIT,
+                    expected_remote_head="a" * 40,
+                    observed_branch_head="c" * 40,
+                    preserved_ref="refs/owlbear/recovery/change-a/recover-out-of-band-change-a",
+                    preserved_head="c" * 40,
+                    restored_head=COMMIT,
+                )
             elif name == "show_operator_context":
                 result = DeliveryOperatorContext(
                     change_id=CHANGE,
@@ -559,6 +573,14 @@ def _requests() -> dict[str, dict[str, object]]:
             **change,
             "confirmed_repair": True,
             "operation_id": "repair-state-change-a",
+        },
+        "recover_out_of_band_head": {
+            **change,
+            "confirmed_recovery": True,
+            "expected_reviewed_head": COMMIT,
+            "expected_remote_head": "a" * 40,
+            "expected_branch_head": "c" * 40,
+            "operation_id": "recover-out-of-band-change-a",
         },
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
@@ -777,6 +799,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "sync-change-a",
             "repair-sync-change-a",
         ),
+        "recover_out_of_band_head": (
+            CHANGE,
+            COMMIT,
+            "a" * 40,
+            "c" * 40,
+            "recover-out-of-band-change-a",
+        ),
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_abandoned_change_worktree_after_target_sync_discard": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
@@ -797,6 +826,15 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name == "repair_delivery_state_snapshot":
         assert application.calls[0][1] == (CHANGE, "repair-state-change-a")
         assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "recover_out_of_band_head":
+        assert application.calls[0][1] == (
+            CHANGE,
+            COMMIT,
+            "a" * 40,
+            "c" * 40,
+            "recover-out-of-band-change-a",
+        )
+        assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "cleanup_abandoned_change_worktree_after_target_sync_discard":
         assert application.calls[0][1] == (CHANGE,)
         assert application.calls[0][2] == {
@@ -836,6 +874,14 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "snapshot_id": DIGEST,
             "published_head": COMMIT,
             "local_frontier_digest": DIGEST,
+        },
+        "recover_out_of_band_head": {
+            "change_id": CHANGE,
+            "expected_reviewed_head": COMMIT,
+            "expected_remote_head": "a" * 40,
+            "observed_branch_head": "c" * 40,
+            "preserved_head": "c" * 40,
+            "restored_head": COMMIT,
         },
     }
     if operation_name == "list_retained_change_worktrees":
