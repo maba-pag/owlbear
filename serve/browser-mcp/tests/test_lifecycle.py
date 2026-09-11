@@ -133,84 +133,84 @@ async def test_macos_omitted_mode_uses_managed_edge_profile_and_ignores_override
     assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.MANAGED_EDGE
     assert launcher_factory.call_args.kwargs["user_data_dir"].endswith("/.owlbear/edge-profile")
 
-    @pytest.mark.asyncio
-    async def test_explicit_chromium_preserves_profile_override() -> None:
-        launcher = _FakeLauncher([])
-        profile_override = "chromium-profile"
-        with (
-            patch.object(server_module.sys, "platform", "darwin"),
-            patch.dict(
-                server_module.os.environ,
-                {"BROWSER_MODE": "chromium", "PLAYWRIGHT_USER_DATA_DIR": profile_override},
-                clear=False,
-            ),
-            patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
-        ):
-            async with app_lifespan(mcp) as context:
-                assert context.browser_mode is BrowserMode.CHROMIUM
-        assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.CHROMIUM
-        assert launcher_factory.call_args.kwargs["user_data_dir"] == profile_override
 
-    @pytest.mark.asyncio
-    async def test_invalid_mode_reports_unavailable_without_launching() -> None:
-        with (
-            patch.dict(server_module.os.environ, {"BROWSER_MODE": "safari"}, clear=False),
-            patch.object(server_module, "PlaywrightLauncher") as launcher_factory,
-        ):
-            async with app_lifespan(mcp) as context:
-                status = await browser_status(
-                    SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
-                )
-                assert status["startup_reason"] == "invalid-mode"
-                assert status["startup_state"] == "unavailable"
-                assert status["visible_authentication"] == "unavailable"
-        launcher_factory.assert_not_called()
+@pytest.mark.asyncio
+async def test_explicit_chromium_preserves_profile_override() -> None:
+    launcher = _FakeLauncher([])
+    profile_override = "chromium-profile"
+    with (
+        patch.object(server_module.sys, "platform", "darwin"),
+        patch.dict(
+            server_module.os.environ,
+            {"BROWSER_MODE": "chromium", "PLAYWRIGHT_USER_DATA_DIR": profile_override},
+            clear=False,
+        ),
+        patch.object(server_module, "PlaywrightLauncher", return_value=launcher) as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            assert context.browser_mode is BrowserMode.CHROMIUM
+    assert launcher_factory.call_args.kwargs["mode"] is BrowserMode.CHROMIUM
+    assert launcher_factory.call_args.kwargs["user_data_dir"] == profile_override
 
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("error", "reason"),
-        [
-            (ManagedEdgeUnavailableError(), "edge-unavailable"),
-            (ManagedProfileInUseError(), "profile-in-use"),
-            (RuntimeError("secret"), "startup-failed"),
-        ],
-    )
-    async def test_startup_failure_reports_bounded_reason(error: Exception, reason: str) -> None:
-        launcher = _FakeLauncher([], launch_error=error)
-        with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
-            async with app_lifespan(mcp) as context:
-                status = await browser_status(
-                    SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
-                )
-                assert status["startup_reason"] == reason
-                assert set(status) == {
-                    "browser_mode",
-                    "ownership",
-                    "startup_state",
-                    "startup_reason",
-                    "visible_authentication",
-                    "latest_acquisition_status",
-                    "startup_diagnostic",
-                }
-                assert "secret" not in str(status)
 
-    @pytest.mark.asyncio
-    async def test_registered_browser_status_contract() -> None:
-        async with Client(mcp) as client:
-            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        tool = tools["browser_status"]
-        assert tool.annotations.read_only_hint is True
-        assert tool.annotations.idempotent_hint is True
-        assert tool.annotations.destructive_hint is False
-        assert set(tool.output_schema["properties"]) == {
-            "browser_mode",
-            "ownership",
-            "startup_state",
-            "startup_reason",
-            "visible_authentication",
-            "latest_acquisition_status",
-            "startup_diagnostic",
-        }
+@pytest.mark.asyncio
+async def test_invalid_mode_reports_unavailable_without_launching() -> None:
+    with (
+        patch.dict(server_module.os.environ, {"BROWSER_MODE": "safari"}, clear=False),
+        patch.object(server_module, "PlaywrightLauncher") as launcher_factory,
+    ):
+        async with app_lifespan(mcp) as context:
+            status = await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context)))
+            assert status["startup_reason"] == "invalid-mode"
+            assert status["startup_state"] == "unavailable"
+            assert status["visible_authentication"] == "unavailable"
+    launcher_factory.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (ManagedEdgeUnavailableError(), "edge-unavailable"),
+        (ManagedProfileInUseError(), "profile-in-use"),
+        (RuntimeError("secret"), "startup-failed"),
+    ],
+)
+async def test_startup_failure_reports_bounded_reason(error: Exception, reason: str) -> None:
+    launcher = _FakeLauncher([], launch_error=error)
+    with patch.object(server_module, "PlaywrightLauncher", return_value=launcher):
+        async with app_lifespan(mcp) as context:
+            status = await browser_status(SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context)))
+            assert status["startup_reason"] == reason
+            assert set(status) == {
+                "browser_mode",
+                "ownership",
+                "startup_state",
+                "startup_reason",
+                "visible_authentication",
+                "latest_acquisition_status",
+                "startup_diagnostic",
+            }
+            assert "secret" not in str(status)
+
+
+@pytest.mark.asyncio
+async def test_registered_browser_status_contract() -> None:
+    async with Client(mcp) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+    tool = tools["browser_status"]
+    assert tool.annotations.read_only_hint is True
+    assert tool.annotations.idempotent_hint is True
+    assert tool.annotations.destructive_hint is False
+    assert set(tool.output_schema["properties"]) == {
+        "browser_mode",
+        "ownership",
+        "startup_state",
+        "startup_reason",
+        "visible_authentication",
+        "latest_acquisition_status",
+        "startup_diagnostic",
+    }
 
 
 @pytest.mark.asyncio
