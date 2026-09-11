@@ -663,6 +663,12 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
         }
         assert declared == expected
 
+    knowledge_ingestor_tools = set(metadata["knowledge-ingestor"]["tools"])
+    assert {
+        "owlbear-browser/acquire",
+        "owlbear-browser/browser_status",
+    } <= knowledge_ingestor_tools
+
 
 def test_retired_delivery_operations_are_absent_from_active_customization_prose() -> None:
     """Retired MCP mutations must not survive in active customization sources."""
