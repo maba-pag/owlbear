@@ -3781,6 +3781,8 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
     runtime = runtimes["change-a"]
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
 
     deferral = application.defer_change("change-a", "Wait for user review")
     assert runtime.change_deferral() == deferral
@@ -3792,6 +3794,7 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
     abandonment = application.abandon_change("change-a", "User stopped the Change")
     assert abandonment.prior_stage == DeliveryChangeStage.BUILDING
     assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
+    assert state_publisher.publish.call_count == 3
     retained = application.list_retained_change_worktrees()
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
@@ -6654,6 +6657,11 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     )
     launch = application.acquire_frontier_work().launch_packages[0]
     state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        None,
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        None,
+    ]
     application._delivery_state_publisher = state_publisher
     context = application.show_operator_context("change-a", "OUT-001")
     serialized_claim = context.active_claim.model_dump(mode="json") if context.active_claim else {}
@@ -6695,13 +6703,12 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     pending = application.show_operator_context("change-a", "OUT-001")
     assert pending.block is not None
     assert not pending.block.resolved
-    resolved = application.resolve_request(
-        "change-a",
-        request.request_id,
-        DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in source."),
-    )
+    resolution = DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in source.")
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.resolve_request("change-a", request.request_id, resolution)
+    resolved = application.resolve_request("change-a", request.request_id, resolution)
     assert resolved.resolution is not None
-    assert state_publisher.publish.call_count == 2
+    assert state_publisher.publish.call_count == 3
     current = application.show_operator_context("change-a", "OUT-001")
     assert current.block is not None
     assert current.block.resolved
@@ -6793,6 +6800,13 @@ def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        None,
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        None,
+    ]
+    application._delivery_state_publisher = state_publisher
     launch = application.acquire_frontier_work().launch_packages[0]
     application.transition_delivery(
         "change-a",
@@ -6807,19 +6821,17 @@ def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -
             locators=("RESULT-001",),
         ),
     )
+    assert state_publisher.publish.call_count == 1
     before = runtimes["change-a"].frontier_bytes()
     with pytest.raises(ValueError, match="operator note and locators"):
         application.clear_block("change-a", "OUT-001", "block-manual", "Verified.", ())
     assert runtimes["change-a"].frontier_bytes() == before
-    cleared = application.clear_block(
-        "change-a",
-        "OUT-001",
-        "block-manual",
-        "Verified.",
-        ("RESULT-001",),
-    )
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.clear_block("change-a", "OUT-001", "block-manual", "Verified.", ("RESULT-001",))
+    cleared = application.clear_block("change-a", "OUT-001", "block-manual", "Verified.", ("RESULT-001",))
     assert cleared.block is not None
     assert cleared.block.resolved
+    assert state_publisher.publish.call_count == 3
 
 
 def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_path: Path) -> None:
@@ -6827,6 +6839,8 @@ def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
+    state_publisher = Mock()
+    application._delivery_state_publisher = state_publisher
     assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "completed"
     preview = application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
     move = AdministrativeDeliveryMove(
@@ -6843,6 +6857,29 @@ def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_
     with pytest.raises(DeliveryRuntimeConflictError, match="earlier stage"):
         application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
     assert runtimes["change-a"].frontier_bytes() == before
+
+    assert state_publisher.publish.call_count == 1
+
+
+def test_administrative_move_rejects_active_outcome_claim(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    preview = application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
+    move = AdministrativeDeliveryMove(
+        move_id="move-active-claim",
+        outcome_id="OUT-001",
+        target=DeliveryStage.PLANNING,
+        reason="Invalidate the active result.",
+        expected_version=preview.snapshot_version,
+    )
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="active mutation claim"):
+        application.administrative_move("change-a", move)
+
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim_id == launch.claim.claim_id
 
 
 def _review_product_change(coordinator: PortfolioCoordinator, change_id: str, content: str) -> tuple[str, str]:

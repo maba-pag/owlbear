@@ -41,6 +41,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryOperatorContext,
+    DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
 )
@@ -84,6 +85,7 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
+    DeliveryStateSnapshotRepairResponse,
     EmptyParams,
     EmptyRequest,
     ExternalHeadAdoptionParams,
@@ -107,6 +109,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RepairDeliveryStateSnapshotParams,
+    RepairDeliveryStateSnapshotRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
     ResolveChangeDispositionParams,
@@ -152,6 +156,7 @@ DELIVERY_OPERATION_NAMES = (
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_delivery_state_snapshot",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
@@ -344,6 +349,24 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
+
+    async def repair_delivery_state_snapshot(
+        self,
+        request: RepairDeliveryStateSnapshotRequest,
+    ) -> DeliveryStateSnapshotRepairResponse:
+        """Repair one exact confirmed local frontier successor over remote state."""
+        params = self._validate(RepairDeliveryStateSnapshotParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_delivery_state_snapshot(
+                params.change_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStateSnapshotRepairReceipt,
+        )
+        return DeliveryStateSnapshotRepairResponse.from_receipt(receipt)
 
     async def repair_target_sync_publication(
         self,

@@ -296,6 +296,20 @@ class DeliveryOutputReference(_DeliveryModel):
     digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class DeliveryTransitionReceipt(_DeliveryModel):
+    """Claim-bound identity of the last applied worker transition."""
+
+    transition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    claim_id: str = Field(min_length=1)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(cls, claim_id: str, request_digest: str) -> DeliveryTransitionReceipt:
+        """Create one deterministic transition replay identity."""
+        transition_id = hashlib.sha256(f"{claim_id}:{request_digest}".encode()).hexdigest()
+        return cls(transition_id=transition_id, claim_id=claim_id, request_digest=request_digest)
+
+
 class DeliveryTaskDefinition(_DeliveryModel):
     """Immutable executable authority for one bounded implementation result."""
 
@@ -940,6 +954,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
+    last_transition: DeliveryTransitionReceipt | None = None
 
     @model_validator(mode="after")
     def _validate_state(self) -> OutcomeAuthorityBinding:
@@ -2882,6 +2897,7 @@ class DeliveryRuntime:
                 "output": None,
                 "result_candidate": None,
                 "recovery_attention": None,
+                "last_transition": None,
             }
         )
         self._replace(previous, _replace_binding(frontier, binding, claimed))
@@ -2970,6 +2986,13 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "transition")
         binding = _find_binding(frontier, request.outcome_id)
+        request_digest = hashlib.sha256(_model_content(request)).hexdigest()
+        if (
+            binding.last_transition is not None
+            and binding.last_transition.claim_id == request.claim_id
+            and binding.last_transition.request_digest == request_digest
+        ):
+            return binding
         _require_claim(binding, request.claim_id)
         if isinstance(request, AdvanceDelivery):
             updated = self._advance(binding, request)
@@ -2982,8 +3005,13 @@ class DeliveryRuntime:
         replacement = _replace_binding(frontier, binding, updated)
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
             replacement = _queue_promoted_result_checkpoint(replacement, frontier, binding, updated)
+        binding_after_transition = _find_binding(replacement, request.outcome_id)
+        transitioned = binding_after_transition.model_copy(
+            update={"last_transition": DeliveryTransitionReceipt.create(request.claim_id, request_digest)}
+        )
+        replacement = _replace_binding(replacement, binding_after_transition, transitioned)
         self._replace(previous, replacement)
-        return updated
+        return transitioned
 
     def resolve_request(
         self,
@@ -2994,7 +3022,10 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
+        _require_no_active_change_claim(frontier, "request resolution")
         if request.resolution is not None:
+            if request.resolution == resolution:
+                return request
             _conflict("request is already resolved")
         if resolution.selected_option_id is not None and resolution.selected_option_id not in {
             option.option_id for option in request.options
@@ -3030,7 +3061,12 @@ class DeliveryRuntime:
         _require_change_mutable(frontier, "unblock")
         binding = _find_binding(frontier, outcome_id)
         block = binding.block
-        if block is None or block.block_id != block_id or block.request_id is not None or block.resolved:
+        if block is None or block.block_id != block_id or block.request_id is not None:
+            _conflict("requestless block is not clearable")
+        _require_no_active_change_claim(frontier, "requestless block resolution")
+        if block.resolved:
+            if block.resolution_note == operator_note and block.resolution_locators == locators:
+                return binding
             _conflict("requestless block is not clearable")
         cleared = block.model_copy(update={"resolution_note": operator_note, "resolution_locators": locators})
         updated = binding.model_copy(update={"block": cleared})
@@ -3044,6 +3080,7 @@ class DeliveryRuntime:
         """Move backward and invalidate the completed dependent closure."""
         frontier, previous = self._read()
         _require_change_mutable(frontier, "administrative_move")
+        _require_no_active_change_claim(frontier, "administrative movement")
         if frontier.finalization is not None:
             _conflict("administrative movement cannot cross finalized Change authority")
         if hashlib.sha256(previous).hexdigest() != request.expected_version:
@@ -3420,7 +3457,9 @@ def _require_change_mutable(
 
 def _require_no_active_change_claim(frontier: DeliveryFrontier, operation: str) -> None:
     has_outcome_claim = any(binding.active_claim is not None for binding in frontier.bindings)
-    if has_outcome_claim or frontier.integration_repair_claim is not None:
+    if frontier.integration_repair_claim is not None:
+        _conflict(f"{operation} cannot overlap an active Integration repair claim")
+    if has_outcome_claim:
         _conflict(f"{operation} cannot overlap an active mutation claim")
 
 
@@ -3752,6 +3791,7 @@ __all__ = [
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
+    "DeliveryTransitionReceipt",
     "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PublishDeliveryOutput",

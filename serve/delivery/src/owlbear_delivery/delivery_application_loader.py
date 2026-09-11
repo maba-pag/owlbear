@@ -619,7 +619,7 @@ def _is_unpublished_claim_successor(
     snapshot_frontier: DeliveryFrontier,
     local_frontier: DeliveryFrontier,
 ) -> bool:
-    """Recognize only a local frontier that adds host-local claim leases."""
+    """Recognize a local frontier that adds host-local claim and output state."""
     if snapshot_frontier.change_completion is not None or local_frontier.change_completion is not None:
         return False
     if len(snapshot_frontier.bindings) != len(local_frontier.bindings):
@@ -632,17 +632,21 @@ def _is_unpublished_claim_successor(
             return False
         if local_binding.active_claim is not None:
             local_has_claim = True
+    transient_fields = {
+        "active_claim": None,
+        "output": None,
+        "candidate": None,
+        "result_candidate": None,
+        "recovery_attention": None,
+        "last_transition": None,
+    }
     snapshot_without_claims = snapshot_frontier.model_copy(
         update={
-            "bindings": tuple(
-                binding.model_copy(update={"active_claim": None}) for binding in snapshot_frontier.bindings
-            )
+            "bindings": tuple(binding.model_copy(update=transient_fields) for binding in snapshot_frontier.bindings)
         }
     )
     local_without_claims = local_frontier.model_copy(
-        update={
-            "bindings": tuple(binding.model_copy(update={"active_claim": None}) for binding in local_frontier.bindings)
-        }
+        update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
     )
     return local_has_claim and snapshot_without_claims == local_without_claims
 

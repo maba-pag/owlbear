@@ -2005,8 +2005,7 @@ def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_in
 
     assert result.stage == expected_stage
     before = runtime.frontier_bytes()
-    with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
-        runtime.transition(request)
+    assert runtime.transition(request) == result
     assert runtime.frontier_bytes() == before
     with pytest.raises(ValidationError):
         DELIVERY_TRANSITION_ADAPTER.validate_python(
@@ -2261,7 +2260,7 @@ def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -
     assert runtime.frontier_bytes() == before
 
 
-def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) -> None:
+def test_administrative_move_rejects_active_dependent_claim(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED),
@@ -2269,17 +2268,17 @@ def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) ->
     _activate(runtime, "OUT-002", "claim-002", task_id="TASK-002")
     active_dependent = runtime.show_binding("OUT-002")
 
-    result = runtime.administrative_move(
-        AdministrativeDeliveryMove(
-            move_id="move-001",
-            outcome_id="OUT-001",
-            target=DeliveryStage.PLANNING,
-            reason="The foundation result was invalidated by operator evidence.",
-            expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+    with pytest.raises(DeliveryRuntimeConflictError, match="active mutation claim"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="move-001",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="The foundation result was invalidated by operator evidence.",
+                expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            )
         )
-    )
 
-    assert result.invalidated_outcome_ids == ("OUT-001",)
     assert runtime.show_binding("OUT-002") == active_dependent
 
 

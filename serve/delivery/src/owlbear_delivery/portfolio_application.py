@@ -184,7 +184,7 @@ if TYPE_CHECKING:
         DeliveryAdmissionResult,
         DeliveryAuthorityRegistry,
     )
-    from owlbear_delivery.delivery_state import DeliveryStatePublisher
+    from owlbear_delivery.delivery_state import DeliveryStatePublicationReceipt, DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
@@ -922,6 +922,49 @@ class DeliveryTargetSyncRepairReceipt(_ApplicationModel):
         expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         if self.receipt_id != expected:
             message = "target-sync publication repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryStateSnapshotRepairReceipt(_ApplicationModel):
+    """Evidence that one quarantined local frontier successor was published."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    local_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        publication: DeliveryStatePublicationReceipt,
+        local_frontier_digest: str,
+    ) -> DeliveryStateSnapshotRepairReceipt:
+        """Create deterministic evidence for one local frontier repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "snapshot_id": publication.snapshot_id,
+            "published_head": publication.published_head,
+            "local_frontier_digest": local_frontier_digest,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryStateSnapshotRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "Delivery-state snapshot repair identity is invalid"
             raise ValueError(message)
         return self
 
@@ -2406,13 +2449,17 @@ class PortfolioApplication:
         """Retain one nonterminal Change and pause its claimable frontier."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return runtime.defer_change(reason, _timestamp(self._clock()))
+            deferral = runtime.defer_change(reason, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"deferral-{deferral.deferral_id}")
+            return deferral
 
     def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
         """Resume one exact deferred Change from its retained prior state."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return runtime.resume_change()
+            deferral = runtime.resume_change()
+            self._publish_delivery_state(change_id, runtime, f"resume-{deferral.deferral_id}")
+            return deferral
 
     def reconcile_awaiting_acceptance(
         self,
@@ -2760,7 +2807,9 @@ class PortfolioApplication:
         """Record one terminal user abandonment without mutating the user checkout."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return runtime.abandon_change(reason, _timestamp(self._clock()))
+            abandonment = runtime.abandon_change(reason, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"abandonment-{abandonment.abandonment_id}")
+            return abandonment
 
     def observe_acceptance(self, change_id: str) -> CompletionReceipt:
         """Complete one Change from a fresh exact merged-PR observation."""
@@ -3460,7 +3509,13 @@ class PortfolioApplication:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            return runtime.transition(request)
+            binding = runtime.transition(request)
+            self._publish_delivery_state(
+                change_id,
+                runtime,
+                _checkpoint_operation_id("transition", change_id, request.outcome_id, request.claim_id),
+            )
+            return binding
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
@@ -3567,6 +3622,65 @@ class PortfolioApplication:
         """Return bounded diagnostics for state excluded from Delivery authority."""
         self._reconcile_runtimes()
         return self._delivery_health_view()
+
+    def repair_delivery_state_snapshot(
+        self,
+        change_id: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryStateSnapshotRepairReceipt:
+        """Publish one explicitly confirmed local block successor over a stale snapshot."""
+        if confirmed_repair is not True:
+            self._fail("Delivery-state snapshot repair requires explicit confirmation")
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("Delivery-state snapshot repair requires a configured state publisher")
+        self._reconcile_runtimes()
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            inventory = publisher.read_snapshot_inventory()
+            snapshot = next((item for item in inventory.snapshots if item.change_id == change_id), None)
+            if snapshot is None or inventory.remote_head is None:
+                self._fail("Delivery-state snapshot repair requires the current remote snapshot")
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                runtime = DeliveryRuntime(
+                    self._target_root,
+                    snapshot.contract,
+                    workspace_manager=self._workspace_manager,
+                )
+            diagnostics = tuple(
+                diagnostic
+                for diagnostic in self._startup_health_diagnostics
+                if (
+                    diagnostic.source == "remote-state"
+                    and diagnostic.code == "remote-state-reconciliation-required"
+                    and diagnostic.change_id == change_id
+                    and "local Delivery runtime artifact differs from its remote snapshot: frontier.json"
+                    in diagnostic.detail
+                )
+            )
+            frontier_bytes = runtime.frontier_bytes()
+            frontier = DeliveryFrontier.model_validate_json(frontier_bytes, strict=False)
+            if not diagnostics and frontier != snapshot.frontier:
+                self._fail("Delivery-state snapshot repair diagnostic is absent or incompatible")
+            if diagnostics and not self._is_repairable_frontier_successor(snapshot.frontier, frontier):
+                self._fail("Delivery-state snapshot repair successor is outside the allowed block shape")
+            publication = self._publish_delivery_state(
+                change_id,
+                runtime,
+                operation_id,
+                expected_remote_head=inventory.remote_head,
+            )
+            if publication is None:
+                self._fail("Delivery-state snapshot repair did not produce a publication receipt")
+            self._clear_remote_state_reconciliation(change_id)
+            return DeliveryStateSnapshotRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                publication=publication,
+                local_frontier_digest=hashlib.sha256(frontier_bytes).hexdigest(),
+            )
 
     def repair_target_sync_publication(  # noqa: PLR0913 - repair binds each exact remote and target identity.
         self,
@@ -3675,7 +3789,47 @@ class PortfolioApplication:
             self._fail("target-sync publication repair local head differs from the expected merge")
         return runtime
 
+    @staticmethod
+    def _is_repairable_frontier_successor(  # noqa: PLR0911 - each rejected successor shape is a distinct safety boundary.
+        snapshot: DeliveryFrontier,
+        local: DeliveryFrontier,
+    ) -> bool:
+        """Accept only one local block/request addition over an exact remote frontier."""
+        if (
+            len(snapshot.bindings) != len(local.bindings)
+            or any(binding.active_claim is not None for binding in local.bindings)
+            or local.integration_repair_claim is not None
+        ):
+            return False
+        changed = 0
+        for snapshot_binding, local_binding in zip(snapshot.bindings, local.bindings, strict=True):
+            if snapshot_binding.outcome_id != local_binding.outcome_id:
+                return False
+            if snapshot_binding == local_binding:
+                continue
+            if snapshot_binding.block is not None or snapshot_binding.requests or local_binding.block is None:
+                return False
+            if local_binding.block.request_id is None:
+                if local_binding.requests:
+                    return False
+            elif (
+                len(local_binding.requests) != 1
+                or local_binding.requests[0].request_id != local_binding.block.request_id
+                or local_binding.requests[0].outcome_id != local_binding.outcome_id
+            ):
+                return False
+            if (
+                local_binding.model_copy(update={"block": None, "requests": (), "last_transition": None})
+                != snapshot_binding
+            ):
+                return False
+            changed += 1
+        return changed == 1
+
     def _clear_target_sync_reconciliation(self, change_id: str) -> None:
+        self._clear_remote_state_reconciliation(change_id)
+
+    def _clear_remote_state_reconciliation(self, change_id: str) -> None:
         self._startup_health_diagnostics = tuple(
             diagnostic
             for diagnostic in self._startup_health_diagnostics
@@ -3689,7 +3843,10 @@ class PortfolioApplication:
         self._runtime_snapshots.pop(change_id, None)
         self._reconcile_runtimes()
         if change_id in self._runtime_reconciliation_errors:
-            self._fail("target-sync publication repair completed with remaining Change reconciliation errors")
+            self._fail(
+                "Delivery-state reconciliation completed with remaining Change errors: "
+                f"{self._runtime_reconciliation_errors[change_id]}"
+            )
 
     def _delivery_health_view(self) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [
@@ -4083,7 +4240,15 @@ class PortfolioApplication:
     ) -> DeliveryRequest:
         """Persist one request resolution by delegating to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id, for_mutation=True).resolve_request(request_id, resolution)
+            runtime = self._runtime(change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(change_id),)):
+                resolved = runtime.resolve_request(request_id, resolution)
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    _checkpoint_operation_id("request-resolution", change_id, request_id),
+                )
+                return resolved
 
     def clear_block(
         self,
@@ -4095,7 +4260,15 @@ class PortfolioApplication:
     ) -> OutcomeAuthorityBinding:
         """Clear a requestless same-stage block with operator evidence via runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id, for_mutation=True).unblock(outcome_id, block_id, operator_note, locators)
+            runtime = self._runtime(change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(change_id),)):
+                binding = runtime.unblock(outcome_id, block_id, operator_note, locators)
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    _checkpoint_operation_id("block-resolution", change_id, outcome_id, block_id),
+                )
+                return binding
 
     def administrative_move(
         self,
@@ -4106,7 +4279,13 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
-                return runtime.administrative_move(request)
+                result = runtime.administrative_move(request)
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    _checkpoint_operation_id("administrative-move", change_id, request.move_id),
+                )
+                return result
 
     def preview_administrative_move(
         self,
@@ -5236,14 +5415,16 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         operation_id: str,
-    ) -> None:
+        *,
+        expected_remote_head: str | None = None,
+    ) -> DeliveryStatePublicationReceipt | None:
         if self._delivery_state_publisher is None:
-            return
+            return None
         package = self._package_store.read_verified(change_id)
         self._validate_package_authority(runtime, package)
         admission_path = self._target_root / "changes" / change_id / "admission.json"
         admission = DeliveryAdmissionReceipt.model_validate_json(admission_path.read_bytes())
-        self._delivery_state_publisher.publish(
+        return self._delivery_state_publisher.publish(
             change_id=change_id,
             package_id=package.package_id,
             coordination=self._workspace_manager.show(change_id),
@@ -5251,6 +5432,7 @@ class PortfolioApplication:
             admission=admission,
             operation_id=operation_id,
             captured_at=_timestamp(self._clock()),
+            expected_remote_head=expected_remote_head,
         )
 
     def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int:

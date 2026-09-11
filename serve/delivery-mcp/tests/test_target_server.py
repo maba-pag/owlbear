@@ -29,6 +29,7 @@ from owlbear_delivery import (
     DeliveryPlanScope,
     DeliverySourceBinding,
     DeliveryStage,
+    DesignPackageStore,
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
@@ -61,6 +62,7 @@ DELIVERY_TOOLS = {
     "admit_delivery_change",
     "list_work_items",
     "delivery_health",
+    "repair_delivery_state_snapshot",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
@@ -294,6 +296,14 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
             DeliverySourceBinding(source_name="intent.md", sha256=digest),
             DeliverySourceBinding(source_name="design.md", sha256=digest),
         ),
+    )
+    package_store = DesignPackageStore(repository / ".owlbear/delivery/packages", repository)
+    package = package_store.create("change-a", b"source", b"source")
+    package_store.publish_contract(
+        "change-a",
+        package.package_id,
+        (json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode(),
+        lambda *_content: None,
     )
     frontier = DeliveryFrontier(
         bindings=(
@@ -970,6 +980,7 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     _write_config(path, _config())
     config = load_delivery_config(path)
     application = load_delivery_application(config, repository)
+    application._delivery_state_publisher = None  # noqa: SLF001 - this projection test has no remote state branch.
     server = assemble_target_server(application)
     async with Client(server) as client:
         before = await client.call_tool(

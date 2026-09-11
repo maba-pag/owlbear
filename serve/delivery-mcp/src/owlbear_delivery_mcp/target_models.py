@@ -52,6 +52,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryOperatorContext,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
+    DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -326,6 +327,13 @@ class RepairTargetSyncPublicationParams(ChangeParams):
     expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_sync_operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairDeliveryStateSnapshotParams(ChangeParams):
+    """Validate explicit repair of one quarantined local Delivery frontier."""
+
+    confirmed_repair: Literal[True]
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -666,6 +674,26 @@ class TargetSyncPublicationRepairResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
+class DeliveryStateSnapshotRepairResponse(_TargetProtocolModel):
+    """MCP response for one exact Delivery-state frontier repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    local_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryStateSnapshotRepairReceipt,
+    ) -> DeliveryStateSnapshotRepairResponse:
+        """Project one Delivery-state repair receipt into the MCP contract."""
+        return cls(**receipt.model_dump())
+
+
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
     """MCP response for one exact external Change-head adoption or observation receipt."""
 
@@ -856,6 +884,10 @@ type RepairTargetSyncPublicationRequest = Annotated[
     RepairTargetSyncPublicationParams,
     BeforeValidator(partial(_parse_json_model, RepairTargetSyncPublicationParams)),
 ]
+type RepairDeliveryStateSnapshotRequest = Annotated[
+    RepairDeliveryStateSnapshotParams,
+    BeforeValidator(partial(_parse_json_model, RepairDeliveryStateSnapshotParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -939,6 +971,7 @@ __all__ = [
     "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
+    "DeliveryStateSnapshotRepairResponse",
     "EmptyParams",
     "EmptyRequest",
     "ExternalHeadAdoptionParams",
@@ -962,6 +995,8 @@ __all__ = [
     "RecoverPublicationBaselineRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "RepairDeliveryStateSnapshotParams",
+    "RepairDeliveryStateSnapshotRequest",
     "RepairTargetSyncPublicationParams",
     "RepairTargetSyncPublicationRequest",
     "ResolveChangeDispositionParams",

@@ -10,11 +10,13 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery import (
+    BlockDelivery,
     ChangeBranchPublisher,
     ChangeTargetSyncReceipt,
     DeliveryAcceptanceAttentionReason,
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
+    DeliveryBlock,
     DeliveryChangeCompletion,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -31,6 +33,7 @@ from owlbear_delivery import (
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
+    DeliveryPlanCandidate,
     DeliveryPlanScope,
     DeliveryReview,
     DeliveryReviewReceipt,
@@ -839,6 +842,41 @@ def test_loader_accepts_claim_only_local_frontier_successor() -> None:
     assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
 
 
+def test_loader_accepts_claim_successor_with_published_plan_candidate() -> None:
+    snapshot_frontier = DeliveryFrontier(
+        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    candidate = DeliveryPlanCandidate.model_construct(
+        candidate_id="plan",
+        claim_id="claim",
+        digest="a" * 64,
+        tasks=(),
+    )
+    local_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": (
+                snapshot_frontier.bindings[0].model_copy(
+                    update={
+                        "active_claim": claim,
+                        "candidate": candidate,
+                        "output": candidate.output,
+                    }
+                ),
+            )
+        }
+    )
+
+    assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
+
+
 @pytest.mark.parametrize(
     "update",
     [
@@ -918,7 +956,7 @@ def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(
     assert replayed.snapshot_id == publisher.read_snapshot("state-response-unknown").snapshot_id
 
 
-def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:
+def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:  # noqa: PLR0915 - assembled restart proof.
     repository, remote, _initial = _repository(tmp_path)
     change_id = "bootstrap-change"
     contract, intent, design = _contract(change_id)
@@ -988,6 +1026,25 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     assert _git(fresh / ".owlbear/delivery/worktrees" / change_id, "status", "--porcelain") == ""
     assert application.list_work_items()
 
+    launch = application.acquire_frontier_work().launch_packages[0]
+    blocked = application.transition_delivery(
+        change_id,
+        BlockDelivery(
+            action="block",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            block_id="bootstrap-block",
+            reason="The assembled restart proof is waiting for evidence.",
+            unblock_condition="The evidence is recorded.",
+            expected_evidence=("bootstrap-proof",),
+            locators=("test_delivery_state.py",),
+        ),
+    )
+    assert blocked.block is not None
+    restarted = load_delivery_application(config, workspace_root=fresh)
+    assert restarted.delivery_health().status.value == "healthy"
+    assert restarted.show_operator_context(change_id, "OUT-001").block == blocked.block
+
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"
     frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
     frontier_path.write_bytes(
@@ -1008,6 +1065,95 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
         for diagnostic in health.diagnostics
     )
     assert degraded.list_work_items() == ()
+
+
+def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    _git(repository, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    change_id = "repair-state"
+    contract, intent, design = _contract(change_id)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    package_root = repository / ".owlbear/delivery/packages"
+    worktree_root = repository / ".owlbear/delivery/worktrees"
+    package_store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = (
+        json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    (runtime_root / "changes" / change_id).mkdir(parents=True, exist_ok=True)
+    (runtime_root / "changes" / change_id / "contract.json").write_bytes(contract_bytes)
+    coordinator = PortfolioCoordinator(runtime_root)
+    manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
+    coordination = manager.ensure(change_id)
+    frontier_path = runtime_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    runtime = DeliveryRuntime(runtime_root, contract, workspace_manager=manager)
+    (runtime_root / "changes" / change_id / "admission.json").write_bytes(
+        _canonical_payload(_admission(runtime, manager, change_id).model_dump(mode="json"))
+    )
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "repair-state-package",
+    )
+    _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    publisher = DeliveryStatePublisher(repository, remote="origin", state_branch="owlbear/delivery-state")
+    publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="repair-state-initial",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    local_block = DeliveryBlock(
+        block_id="repair-block",
+        reason="The planner reviewer was unavailable.",
+        unblock_condition="The reviewer is dispatchable.",
+        expected_evidence=("Reviewer dispatch evidence",),
+        locators=("planner-challenger",),
+    )
+    local_frontier = frontier.model_copy(
+        update={"bindings": (frontier.bindings[0].model_copy(update={"block": local_block}),)}
+    )
+    frontier_path.write_bytes(
+        (json.dumps(local_frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+
+    degraded = load_delivery_application(config, workspace_root=repository)
+    assert degraded.delivery_health().status.value == "attention"
+    repaired = degraded.repair_delivery_state_snapshot(
+        change_id,
+        "repair-state-operation",
+        confirmed_repair=True,
+    )
+
+    assert repaired.change_id == change_id
+    assert degraded.delivery_health().status.value == "healthy"
+    restarted = load_delivery_application(config, workspace_root=repository)
+    assert restarted.delivery_health().status.value == "healthy"
+    assert restarted.show_operator_context(change_id, "OUT-001").block == local_block
 
 
 def test_target_sync_state_snapshot_is_restartable_after_branch_publication(tmp_path: Path) -> None:

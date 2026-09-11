@@ -73,6 +73,7 @@ from owlbear_delivery.draft_pull_request import (
 from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
+    DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -226,6 +227,18 @@ def _target_sync_repair_receipt() -> DeliveryTargetSyncRepairReceipt:
     )
 
 
+def _delivery_state_repair_receipt() -> DeliveryStateSnapshotRepairReceipt:
+    return DeliveryStateSnapshotRepairReceipt.model_construct(
+        schema_version=1,
+        receipt_id=DIGEST,
+        operation_id="repair-state-change-a",
+        change_id=CHANGE,
+        snapshot_id=DIGEST,
+        published_head=COMMIT,
+        local_frontier_digest=DIGEST,
+    )
+
+
 def _external_head_adoption_receipt() -> ChangeExternalHeadAdoptionReceipt:
     return ChangeExternalHeadAdoptionReceipt.create(
         operation_id="adopt-change-a",
@@ -328,6 +341,8 @@ class _RecordingApplication:
                 )
             elif name == "repair_target_sync_publication":
                 result = _target_sync_repair_receipt()
+            elif name == "repair_delivery_state_snapshot":
+                result = _delivery_state_repair_receipt()
             elif name == "show_operator_context":
                 result = DeliveryOperatorContext(
                     change_id=CHANGE,
@@ -536,6 +551,11 @@ def _requests() -> dict[str, dict[str, object]]:
         "admit_delivery_change": {"change_id": CHANGE, "active_claim_ids": []},
         "list_work_items": {},
         "delivery_health": {},
+        "repair_delivery_state_snapshot": {
+            **change,
+            "confirmed_repair": True,
+            "operation_id": "repair-state-change-a",
+        },
         "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
         "show_work_item_view": {**change, "item_key": "publication"},
@@ -770,6 +790,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name == "repair_target_sync_publication":
         assert application.calls[0][1] == (CHANGE, COMMIT, "d" * 40, "sync-change-a", "repair-sync-change-a")
         assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "repair_delivery_state_snapshot":
+        assert application.calls[0][1] == (CHANGE, "repair-state-change-a")
+        assert application.calls[0][2] == {"confirmed_repair": True}
     if operation_name == "cleanup_abandoned_change_worktree_after_target_sync_discard":
         assert application.calls[0][1] == (CHANGE,)
         assert application.calls[0][2] == {
@@ -803,6 +826,12 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "change_id": CHANGE,
             "expected_change_head": COMMIT,
             "publication_base_head": "a" * 40,
+        },
+        "repair_delivery_state_snapshot": {
+            "change_id": CHANGE,
+            "snapshot_id": DIGEST,
+            "published_head": COMMIT,
+            "local_frontier_digest": DIGEST,
         },
     }
     if operation_name == "list_retained_change_worktrees":
