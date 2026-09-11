@@ -128,8 +128,17 @@ async def test_chromium_retains_extension_arguments_when_configured() -> None:
 @pytest.mark.parametrize(
     ("error", "expected"),
     [
-        (Exception("Executable doesn't exist at /Applications/Microsoft Edge.app"), ManagedEdgeUnavailableError),
-        (Exception("user data directory is already in use"), ManagedProfileInUseError),
+        (
+            Exception("Chromium distribution 'msedge' is not found at /Applications/Microsoft Edge.app"),
+            ManagedEdgeUnavailableError,
+        ),
+        (
+            Exception(
+                "Failed to create a ProcessSingleton for your profile directory. "
+                "This usually means that the profile is already in use by another instance of Chromium."
+            ),
+            ManagedProfileInUseError,
+        ),
     ],
 )
 async def test_managed_edge_failures_are_typed_without_chromium_fallback(

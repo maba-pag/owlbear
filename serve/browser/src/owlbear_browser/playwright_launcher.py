@@ -181,9 +181,9 @@ class PlaywrightLauncher:
             self._pw = None
             if self._mode is BrowserMode.MANAGED_EDGE:
                 message = str(exc).lower()
-                if "user data directory" in message and "already in use" in message:
+                if ("processsingleton" in message or "profile directory" in message) and "already in use" in message:
                     raise ManagedProfileInUseError from exc
-                if "executable doesn't exist" in message or "browser_type.launch" in message:
+                if "distribution 'msedge' is not found" in message or "executable doesn't exist" in message:
                     raise ManagedEdgeUnavailableError from exc
             raise
         self._capabilities = AuthenticationCapabilities(
