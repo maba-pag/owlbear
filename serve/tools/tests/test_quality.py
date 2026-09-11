@@ -23,6 +23,7 @@ from owlbear_tools.quality import (
     quality_full,
     typecheck_cockpit,
 )
+from owlbear_tools.quality_runtime import _call
 
 _TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")
 
@@ -58,6 +59,23 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["npm", "run", "lint:html"],
     ]
     assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
+
+
+def test_call_bridges_node_ca_to_python_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ca_path = tmp_path / "atls-root.pem"
+    ca_path.write_text("certificate", encoding="utf-8")
+    monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(ca_path))
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    monkeypatch.delenv("SSL_CERT_DIR", raising=False)
+
+    with patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call:
+        assert _call(["editorconfig-checker"]) == 0
+
+    environment = call.call_args.kwargs["env"]
+    assert environment["SSL_CERT_FILE"] == str(ca_path)
+    assert environment["REQUESTS_CA_BUNDLE"] == str(ca_path)
+    assert environment["CURL_CA_BUNDLE"] == str(ca_path)
+    assert environment["PIP_CERT"] == str(ca_path)
 
 
 def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:

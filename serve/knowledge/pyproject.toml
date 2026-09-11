@@ -9,12 +9,13 @@ dependencies = [
 
 [project.optional-dependencies]
 qdrant = ["qdrant-client>=1.18.0"]
-embedding = ["FlagEmbedding>=1.4.0"]
+embedding = ["accelerate>=1.15.0", "FlagEmbedding>=1.4.0"]
 intake = [
     "httpx>=0.28.1",
     "owlbear-web-content",
 ]
 full = [
+    "accelerate>=1.15.0",
     "qdrant-client>=1.18.0",
     "FlagEmbedding>=1.4.0",
     "httpx>=0.28.1",

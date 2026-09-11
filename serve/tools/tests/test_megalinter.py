@@ -130,6 +130,29 @@ def test_run_megalint_uses_ready_docker_without_starting_runtime() -> None:
     assert call.call_args.args[0][:2] == ["docker", "run"]
 
 
+def test_run_megalint_forwards_atls_ca_and_proxy_to_container(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ca_path = tmp_path / "atls-root.pem"
+    ca_path.write_text("certificate", encoding="utf-8")
+    monkeypatch.setenv("NODE_EXTRA_CA_CERTS", str(ca_path))
+    monkeypatch.setenv("HTTPS_PROXY", "https://proxy.example")
+
+    with (
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value="docker"),
+        patch("owlbear_tools.megalinter._docker_is_ready", return_value=True),
+        patch("owlbear_tools.megalinter._call", return_value=0) as call,
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    command = call.call_args.args[0]
+    assert f"{ca_path}:/etc/ssl/certs/owlbear-atls-ca.pem:ro" in command
+    assert "HTTPS_PROXY" in command
+    assert "SSL_CERT_FILE=/etc/ssl/certs/owlbear-atls-ca.pem" in command
+
+
 def test_run_megalint_starts_runtime_and_leaves_it_running_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

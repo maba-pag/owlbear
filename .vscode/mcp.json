@@ -10,7 +10,14 @@
                 "python",
                 "-m",
                 "owlbear_delivery_mcp"
-            ]
+            ],
+            "env": {
+                "UV_CERT": "${env:NODE_EXTRA_CA_CERTS}",
+                "SSL_CERT_FILE": "${env:NODE_EXTRA_CA_CERTS}",
+                "REQUESTS_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "CURL_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "PIP_CERT": "${env:NODE_EXTRA_CA_CERTS}"
+            }
         },
         "owlbear-knowledge": {
             "type": "stdio",
@@ -22,7 +29,14 @@
                 "python",
                 "-m",
                 "owlbear_knowledge_mcp"
-            ]
+            ],
+            "env": {
+                "UV_CERT": "${env:NODE_EXTRA_CA_CERTS}",
+                "SSL_CERT_FILE": "${env:NODE_EXTRA_CA_CERTS}",
+                "REQUESTS_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "CURL_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "PIP_CERT": "${env:NODE_EXTRA_CA_CERTS}"
+            }
         },
         "owlbear-memory": {
             "type": "stdio",
@@ -34,7 +48,14 @@
                 "python",
                 "-m",
                 "owlbear_memory_mcp"
-            ]
+            ],
+            "env": {
+                "UV_CERT": "${env:NODE_EXTRA_CA_CERTS}",
+                "SSL_CERT_FILE": "${env:NODE_EXTRA_CA_CERTS}",
+                "REQUESTS_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "CURL_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "PIP_CERT": "${env:NODE_EXTRA_CA_CERTS}"
+            }
         },
         "owlbear-browser": {
             "type": "stdio",
@@ -46,14 +67,28 @@
                 "python",
                 "-m",
                 "owlbear_browser_mcp"
-            ]
+            ],
+            "env": {
+                "UV_CERT": "${env:NODE_EXTRA_CA_CERTS}",
+                "SSL_CERT_FILE": "${env:NODE_EXTRA_CA_CERTS}",
+                "REQUESTS_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "CURL_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "PIP_CERT": "${env:NODE_EXTRA_CA_CERTS}"
+            }
         },
         "markitdown": {
             "type": "stdio",
             "command": "uvx",
             "args": [
                 "markitdown-mcp"
-            ]
+            ],
+            "env": {
+                "UV_CERT": "${env:NODE_EXTRA_CA_CERTS}",
+                "SSL_CERT_FILE": "${env:NODE_EXTRA_CA_CERTS}",
+                "REQUESTS_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "CURL_CA_BUNDLE": "${env:NODE_EXTRA_CA_CERTS}",
+                "PIP_CERT": "${env:NODE_EXTRA_CA_CERTS}"
+            }
         }
     }
 }

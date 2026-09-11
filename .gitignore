@@ -41,6 +41,7 @@ coverage/
 htmlcov/
 .benchmarks/
 megalinter-reports/
+/htmlhint.sarif
 test-results/
 playwright-report/
 

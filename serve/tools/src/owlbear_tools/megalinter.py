@@ -29,6 +29,17 @@ _IMAGE_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 _DOCKER_READY_TIMEOUT_SECONDS = 30.0
 _DOCKER_READY_POLL_SECONDS = 0.5
 _DOCKER_STOP_RUNTIME_ENV = "OWLBEAR_DOCKER_STOP_RUNTIME"
+_DOCKER_CA_PATH = "/etc/ssl/certs/owlbear-atls-ca.pem"
+_PROXY_ENVIRONMENT = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "no_proxy",
+)
 _DOCKER_CLI_CANDIDATES = (
     Path("/usr/local/bin/docker"),
     Path("/opt/homebrew/bin/docker"),
@@ -103,7 +114,7 @@ def load_megalinter_image(path: Path = _CONFIG_PATH) -> MegaLinterImage:
 
 
 def _docker_command(binary: str = "docker") -> list[str]:
-    return [
+    command = [
         binary,
         "run",
         "--rm",
@@ -112,6 +123,23 @@ def _docker_command(binary: str = "docker") -> list[str]:
         "-v",
         f"{Path.cwd()}:/tmp/lint",
     ]
+    ca_path = _configured_ca_path()
+    if ca_path is not None:
+        command.extend(["-v", f"{ca_path}:{_DOCKER_CA_PATH}:ro"])
+    command.extend(variable for name in _PROXY_ENVIRONMENT if os.environ.get(name) for variable in ("-e", name))
+    return command
+
+
+def _configured_ca_path() -> Path | None:
+    """Return the first readable CA file configured for local tools."""
+    for variable in ("SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS"):
+        value = os.environ.get(variable)
+        if not value:
+            continue
+        path = Path(value).expanduser()
+        if path.is_file() and os.access(path, os.R_OK):
+            return path
+    return None
 
 
 def _run_host(command: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -245,6 +273,21 @@ def run_megalint(fix_mode: FixMode) -> int:
     image = load_megalinter_image()
     with _docker_runtime() as docker_binary:
         command = _docker_command(docker_binary)
+        if _configured_ca_path() is not None:
+            command.extend(
+                [
+                    "-e",
+                    f"SSL_CERT_FILE={_DOCKER_CA_PATH}",
+                    "-e",
+                    f"REQUESTS_CA_BUNDLE={_DOCKER_CA_PATH}",
+                    "-e",
+                    f"CURL_CA_BUNDLE={_DOCKER_CA_PATH}",
+                    "-e",
+                    f"PIP_CERT={_DOCKER_CA_PATH}",
+                    "-e",
+                    f"NODE_EXTRA_CA_CERTS={_DOCKER_CA_PATH}",
+                ]
+            )
         if fix_mode is FixMode.NONE:
             command.extend(["-e", "APPLY_FIXES=none"])
         if fix_mode is FixMode.UNSAFE:
