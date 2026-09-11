@@ -26,7 +26,7 @@ Frontier-bearing snapshots require an owning wrapper: the outer payload must be 
 
 The current task baseline is historical context rather than proof that all 35 audit failures were reproduced. Candidate proof must be run against the exact committed candidate and must include the two assembled recovery scenarios.
 
-The pre-change tests contain consumer-side `strict=False` reads for fixture construction and direct model-boundary checks. Round-trip and consumer assertions are restored to the canonical parser boundary; direct model rejection tests remain at the model owner. On candidate commit `e858187b8aac022507d6df04b2d8341da5a2dbde`, the focused snapshot parser and named recovery checks passed, and the four maintained suites passed 317 tests in 103.18 seconds. These observations establish current candidate behavior, not historical failure reproduction.
+The pre-change tests contain consumer-side `strict=False` reads for fixture construction and direct model-boundary checks. Round-trip and consumer assertions are restored to the canonical parser boundary; direct model rejection tests remain at the model owner. On repaired candidate commit `c7a49f8a19d4988513580a0226329db4b467054e`, the focused parser, quarantine, raw-byte, and runtime-boundary checks passed, the two named recovery checks passed, and the four maintained suites passed 321 tests in 111.25 seconds. These observations establish current candidate behavior, not historical failure reproduction.
 
 Commands:
 
