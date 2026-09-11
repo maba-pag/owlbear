@@ -101,9 +101,7 @@ async def test_chromium_retains_extension_arguments_when_configured() -> None:
     extension = Path("sso-extension")
     launcher = PlaywrightLauncher(sso_ext_path=extension, mode=BrowserMode.CHROMIUM, headless=True)
 
-    with patch.object(
-        launcher_module, "async_playwright", return_value=_FakePlaywrightManager(playwright)
-    ):
+    with patch.object(launcher_module, "async_playwright", return_value=_FakePlaywrightManager(playwright)):
         await launcher.launch()
 
     assert browser_type.calls == [
