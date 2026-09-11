@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_runtime import DeliveryFrontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.target_contract import DeliveryContract
@@ -336,7 +336,7 @@ class DeliveryStatePublisher:
         for path in paths:
             if not path.endswith("/snapshot.json"):
                 continue
-            snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path), strict=False))
+            snapshots.append(parse_delivery_state_snapshot(self._git_blob(remote_head, path)))
         return tuple(sorted(snapshots, key=lambda item: item.change_id))
 
     def read_snapshot_inventory(self) -> DeliveryStateSnapshotInventory:
@@ -362,7 +362,7 @@ class DeliveryStatePublisher:
                 continue
             try:
                 raw = self._git_blob(remote_head, path)
-                snapshot = DeliveryStateSnapshot.model_validate_json(raw, strict=False)
+                snapshot = parse_delivery_state_snapshot(raw)
             except (OSError, RuntimeError, subprocess.SubprocessError):
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
@@ -446,7 +446,7 @@ class DeliveryStatePublisher:
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
         raw = self._read_snapshot_bytes(commit, change_id)
-        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw, strict=False)
+        return None if raw is None else parse_delivery_state_snapshot(raw)
 
     def _read_snapshot_bytes(self, commit: str, change_id: str) -> bytes | None:
         path = _snapshot_path(change_id)
@@ -605,11 +605,25 @@ def _same_snapshot_authority(
 
 def _portable_frontier(runtime: DeliveryRuntime) -> DeliveryFrontier:
     """Project a frontier after the exact checkpoint already published remotely."""
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
     pending = frontier.pending_checkpoint
     if pending is not None and pending.head == frontier.published_head:
         return frontier.model_copy(update={"pending_checkpoint": None})
     return frontier
+
+
+def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
+    """Parse a snapshot through the canonical embedded frontier boundary."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    frontier_payload = payload.get("frontier")
+    if not isinstance(frontier_payload, dict):
+        raise TypeError
+    frontier_content = _canonical_payload(frontier_payload)
+    frontier, _ = parse_delivery_frontier(frontier_content)
+    payload["frontier"] = frontier.model_dump(mode="json")
+    return DeliveryStateSnapshot.model_validate_json(_canonical_payload(payload), strict=False)
 
 
 def _snapshot_path(change_id: str) -> str:

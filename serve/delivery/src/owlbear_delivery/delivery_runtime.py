@@ -3442,7 +3442,13 @@ def is_acceptance_waiting_observation(
 def parse_delivery_frontier(
     content: bytes,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse one canonical current-schema frontier."""
+    """Parse one canonical current-schema frontier at the JSON boundary.
+
+    This boundary requires a JSON object with the current schema, validates the
+    model in JSON mode, and returns both the semantic model and canonical bytes.
+    Contract-relative bindings and lifecycle consistency remain owned by
+    ``DeliveryRuntime._validate_frontier``.
+    """
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError

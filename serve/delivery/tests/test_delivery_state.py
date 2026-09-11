@@ -47,6 +47,7 @@ from owlbear_delivery import (
     PortfolioCoordinator,
     PublishChangeBranch,
     SyncChangeWithTarget,
+    parse_delivery_state_snapshot,
 )
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -583,6 +584,23 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
+
+
+def test_snapshot_parser_canonicalizes_embedded_frontier_and_rejects_non_objects(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("snapshot-parser")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "snapshot-parser", contract)
+    snapshot = _snapshot(runtime, manager, "snapshot-parser")
+    payload = json.loads(snapshot.canonical_bytes())
+
+    equivalent = json.dumps(payload, indent=2).encode()
+    assert parse_delivery_state_snapshot(equivalent) == snapshot
+    assert parse_delivery_state_snapshot(equivalent).snapshot_id == snapshot.snapshot_id
+
+    for frontier in (None, [], "frontier", 7, False):
+        invalid = {**payload, "frontier": frontier}
+        with pytest.raises(TypeError):
+            parse_delivery_state_snapshot(json.dumps(invalid).encode())
 
 
 def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -> None:

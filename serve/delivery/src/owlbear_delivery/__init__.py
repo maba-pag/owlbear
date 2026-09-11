@@ -159,6 +159,7 @@ from owlbear_delivery.delivery_state import (
     DeliveryStateSnapshot,
     DeliveryStateSnapshotDiagnostic,
     DeliveryStateSnapshotInventory,
+    parse_delivery_state_snapshot,
 )
 from owlbear_delivery.design_package import (
     DesignCheckpointResult,
@@ -417,6 +418,7 @@ __all__ = [
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
+    "parse_delivery_state_snapshot",
     "DeliveryTargetSyncRepairReceipt",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
