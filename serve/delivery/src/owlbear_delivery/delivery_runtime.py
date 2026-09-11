@@ -27,7 +27,11 @@ from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
 )
-from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
+from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionParticipant,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -296,18 +300,30 @@ class DeliveryOutputReference(_DeliveryModel):
     digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class DeliveryTransitionReceipt(_DeliveryModel):
-    """Claim-bound identity of the last applied worker transition."""
+class DeliveryPendingStatePublication(_DeliveryModel):
+    """Local durable intent for replaying a state snapshot publication."""
 
-    transition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    claim_id: str = Field(min_length=1)
-    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    schema_version: Literal[1] = 1
+    status: Literal["pending", "acknowledged"]
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    transition_request_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @classmethod
-    def create(cls, claim_id: str, request_digest: str) -> DeliveryTransitionReceipt:
-        """Create one deterministic transition replay identity."""
-        transition_id = hashlib.sha256(f"{claim_id}:{request_digest}".encode()).hexdigest()
-        return cls(transition_id=transition_id, claim_id=claim_id, request_digest=request_digest)
+    def pending(
+        cls,
+        frontier_digest: str,
+        transition_request_digest: str | None = None,
+    ) -> DeliveryPendingStatePublication:
+        """Create one pending local publication intent."""
+        return cls(
+            status="pending",
+            frontier_digest=frontier_digest,
+            transition_request_digest=transition_request_digest,
+        )
+
+    def acknowledge(self) -> DeliveryPendingStatePublication:
+        """Return the same intent marked as remotely acknowledged."""
+        return self.model_copy(update={"status": "acknowledged"})
 
 
 class DeliveryTaskDefinition(_DeliveryModel):
@@ -954,7 +970,6 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
-    last_transition: DeliveryTransitionReceipt | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def _validate_state(self) -> OutcomeAuthorityBinding:
@@ -1462,6 +1477,7 @@ class DeliveryRuntime:
         self._workspace_manager = workspace_manager
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
         self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
+        self._pending_publication_path = self._frontier_path.with_name("state-publication.json")
         self._validate_frontier(self._read()[0])
 
     @property
@@ -1477,6 +1493,39 @@ class DeliveryRuntime:
     def frontier_bytes(self) -> bytes:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
+
+    def pending_state_publication(self) -> DeliveryPendingStatePublication | None:
+        """Return the unacknowledged local state publication intent, if any."""
+        if not self._pending_publication_path.is_file():
+            return None
+        try:
+            intent = DeliveryPendingStatePublication.model_validate_json(
+                self._pending_publication_path.read_bytes(), strict=False
+            )
+        except (OSError, TypeError, ValueError):
+            _reference("Delivery state publication intent is invalid")
+        return intent if intent.status == "pending" else None
+
+    def acknowledge_pending_publication(self, frontier_digest: str) -> None:
+        """Mark the matching local publication intent acknowledged after remote push."""
+        if not self._pending_publication_path.is_file():
+            return
+        current_content = self._pending_publication_path.read_bytes()
+        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=False)
+        if current.status != "pending" or current.frontier_digest != frontier_digest:
+            return
+        replacement = _model_content(current.acknowledge())
+        participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._pending_publication_path.relative_to(self._target_root),
+            current_content,
+            replacement,
+        )
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-state-ack-{frontier_digest}",
+            (participant,),
+        ).commit()
 
     def integration_attention(self) -> DeliveryIntegrationAttention | None:
         """Return current retryable Integration evidence, if any."""
@@ -2269,13 +2318,14 @@ class DeliveryRuntime:
             previous,
             replacement,
         )
+        pending_participant = self._pending_publication_participant(replacement)
         transaction_id = hashlib.sha256(
             completion_participant.content + display_participant.content + previous + replacement
         ).hexdigest()
         RuntimeTransaction(
             self._target_root,
             f"delivery-completion-{transaction_id}",
-            (completion_participant, display_participant, frontier_participant),
+            (completion_participant, display_participant, frontier_participant, pending_participant),
         ).commit()
         return receipt
 
@@ -2365,7 +2415,7 @@ class DeliveryRuntime:
         RuntimeTransaction(
             self._target_root,
             f"delivery-finalization-{transaction_id}",
-            (frontier_participant, *additional_participants),
+            (frontier_participant, self._pending_publication_participant(replacement), *additional_participants),
         ).commit()
         return receipt
 
@@ -2897,7 +2947,6 @@ class DeliveryRuntime:
                 "output": None,
                 "result_candidate": None,
                 "recovery_attention": None,
-                "last_transition": None,
             }
         )
         self._replace(previous, _replace_binding(frontier, binding, claimed))
@@ -2987,10 +3036,11 @@ class DeliveryRuntime:
         _require_change_mutable(frontier, "transition")
         binding = _find_binding(frontier, request.outcome_id)
         request_digest = hashlib.sha256(_model_content(request)).hexdigest()
+        pending_publication = self.pending_state_publication()
         if (
-            binding.last_transition is not None
-            and binding.last_transition.claim_id == request.claim_id
-            and binding.last_transition.request_digest == request_digest
+            pending_publication is not None
+            and pending_publication.frontier_digest == hashlib.sha256(previous).hexdigest()
+            and pending_publication.transition_request_digest == request_digest
         ):
             return binding
         _require_claim(binding, request.claim_id)
@@ -3005,13 +3055,8 @@ class DeliveryRuntime:
         replacement = _replace_binding(frontier, binding, updated)
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
             replacement = _queue_promoted_result_checkpoint(replacement, frontier, binding, updated)
-        binding_after_transition = _find_binding(replacement, request.outcome_id)
-        transitioned = binding_after_transition.model_copy(
-            update={"last_transition": DeliveryTransitionReceipt.create(request.claim_id, request_digest)}
-        )
-        replacement = _replace_binding(replacement, binding_after_transition, transitioned)
-        self._replace(previous, replacement)
-        return transitioned
+        self._replace(previous, replacement, transition_request_digest=request_digest)
+        return _find_binding(replacement, request.outcome_id)
 
     def resolve_request(
         self,
@@ -3368,26 +3413,71 @@ class DeliveryRuntime:
             frontier, canonical = parse_delivery_frontier(content)
             self._validate_frontier(frontier)
             if canonical != content:
-                self._replace_content(content, canonical)
+                self._replace_content(content, canonical, record_pending_publication=False)
         except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message) from exc
         else:
             return frontier, canonical
 
-    def _replace(self, previous: bytes, frontier: DeliveryFrontier) -> None:
-        self._replace_content(previous, _model_content(frontier))
+    def _replace(
+        self,
+        previous: bytes,
+        frontier: DeliveryFrontier,
+        *,
+        transition_request_digest: str | None = None,
+    ) -> None:
+        portable = not any(binding.active_claim is not None for binding in frontier.bindings)
+        portable = portable and frontier.integration_repair_claim is None
+        self._replace_content(
+            previous,
+            _model_content(frontier),
+            transition_request_digest=transition_request_digest if portable else None,
+            record_pending_publication=portable,
+        )
 
-    def _replace_content(self, previous: bytes, replacement: bytes) -> None:
-        """Transactionally replace exact frontier bytes."""
+    def _replace_content(
+        self,
+        previous: bytes,
+        replacement: bytes,
+        *,
+        record_pending_publication: bool = True,
+        transition_request_digest: str | None = None,
+    ) -> None:
+        """Transactionally replace frontier bytes and its local publication intent."""
         participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
             previous,
             replacement,
         )
+        participants: list[TransactionParticipant | ReplacementTransactionParticipant] = [participant]
+        if record_pending_publication:
+            participants.append(self._pending_publication_participant(replacement, transition_request_digest))
         transaction_id = hashlib.sha256(previous + replacement).hexdigest()
-        RuntimeTransaction(self._target_root, f"delivery-runtime-{transaction_id}", (participant,)).commit()
+        RuntimeTransaction(self._target_root, f"delivery-runtime-{transaction_id}", tuple(participants)).commit()
+
+    def _pending_publication_participant(
+        self,
+        replacement: bytes,
+        transition_request_digest: str | None = None,
+    ) -> TransactionParticipant | ReplacementTransactionParticipant:
+        """Build the marker participant that tracks one exact local frontier replacement."""
+        content = _model_content(
+            DeliveryPendingStatePublication.pending(
+                hashlib.sha256(replacement).hexdigest(),
+                transition_request_digest,
+            )
+        )
+        relative_path = self._pending_publication_path.relative_to(self._target_root)
+        if self._pending_publication_path.exists():
+            return ReplacementTransactionParticipant(
+                self._target_root,
+                relative_path,
+                self._pending_publication_path.read_bytes(),
+                content,
+            )
+        return TransactionParticipant(self._target_root, relative_path, content)
 
     def _validate_frontier(self, frontier: DeliveryFrontier) -> None:
         expected = tuple((scope.outcome_id, scope.scope_id) for scope in self._contract.plan_scopes)
@@ -3777,6 +3867,7 @@ __all__ = [
     "DeliveryOutputKind",
     "DeliveryOutputReference",
     "DeliveryPendingCheckpoint",
+    "DeliveryPendingStatePublication",
     "DeliveryRequest",
     "DeliveryRequestKind",
     "DeliveryRequestOption",
@@ -3791,7 +3882,6 @@ __all__ = [
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
-    "DeliveryTransitionReceipt",
     "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PublishDeliveryOutput",

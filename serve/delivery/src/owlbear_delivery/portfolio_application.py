@@ -3818,10 +3818,7 @@ class PortfolioApplication:
                 or local_binding.requests[0].outcome_id != local_binding.outcome_id
             ):
                 return False
-            if (
-                local_binding.model_copy(update={"block": None, "requests": (), "last_transition": None})
-                != snapshot_binding
-            ):
+            if local_binding.model_copy(update={"block": None, "requests": ()}) != snapshot_binding:
                 return False
             changed += 1
         return changed == 1
@@ -4789,6 +4786,8 @@ class PortfolioApplication:
             failures = list(recovery_failures)
             if recoveries or recovery_failures:
                 self._reconcile_runtimes()
+            pending_publication_failures = self._replay_pending_state_publications()
+            failures.extend(pending_publication_failures)
             occupied = self._execution_occupancy()
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
@@ -4823,6 +4822,46 @@ class PortfolioApplication:
                     else None
                 ),
             )
+
+    def _replay_pending_state_publications(self) -> tuple[DeliveryAcquisitionFailure, ...]:
+        """Replay durable local state publications before exposing new claims."""
+        failures = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            pending = runtime.pending_state_publication()
+            if pending is None:
+                continue
+            current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+            if current_digest != pending.frontier_digest:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=PortfolioApplicationError.code,
+                        detail="Pending Delivery-state publication does not match the current frontier.",
+                        retry_condition="Reconcile the local frontier and its pending publication intent.",
+                    )
+                )
+                continue
+            if self._delivery_state_publisher is None:
+                runtime.acknowledge_pending_publication(current_digest)
+                continue
+            try:
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    f"replay-state-{pending.frontier_digest}",
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=getattr(exc, "code", PortfolioApplicationError.code),
+                        detail=str(exc),
+                        retry_condition="Retry Delivery-state publication replay.",
+                    )
+                )
+        return tuple(failures)
 
     def show_plan_context(
         self,
@@ -5011,10 +5050,12 @@ class PortfolioApplication:
             quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
         )
 
-    def _candidates(self) -> tuple[_Candidate, ...]:
+    def _candidates(self) -> tuple[_Candidate, ...]:  # noqa: C901 - stable ranking boundary.
         candidates = []
         for change_id, runtime in self._runtimes.items():
             if change_id in self._runtime_reconciliation_errors:
+                continue
+            if runtime.pending_state_publication() is not None:
                 continue
             if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
@@ -5424,7 +5465,7 @@ class PortfolioApplication:
         self._validate_package_authority(runtime, package)
         admission_path = self._target_root / "changes" / change_id / "admission.json"
         admission = DeliveryAdmissionReceipt.model_validate_json(admission_path.read_bytes())
-        return self._delivery_state_publisher.publish(
+        publication = self._delivery_state_publisher.publish(
             change_id=change_id,
             package_id=package.package_id,
             coordination=self._workspace_manager.show(change_id),
@@ -5434,6 +5475,8 @@ class PortfolioApplication:
             captured_at=_timestamp(self._clock()),
             expected_remote_head=expected_remote_head,
         )
+        runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
+        return publication
 
     def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int:
         dependencies = {outcome.outcome_id: outcome.dependency_ids for outcome in runtime.contract.outcomes}

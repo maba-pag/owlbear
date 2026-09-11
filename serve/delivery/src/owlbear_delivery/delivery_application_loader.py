@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -32,6 +33,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceAttentionReason,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
+    DeliveryPendingStatePublication,
     DeliveryRuntime,
     DeliveryWorkerRole,
 )
@@ -463,11 +465,15 @@ def _validate_local_snapshot(
         "admission.json": _canonical_model(snapshot.admission),
     }
     frontier_bytes, frontier = _read_local_snapshot_frontier(relative_root / "frontier.json")
+    local_pending_publication = _read_local_pending_publication(
+        relative_root / "state-publication.json",
+        frontier_bytes,
+    )
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
         snapshot.frontier, frontier
     ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
     local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
-    local_recoverable_successor = local_attention_successor or local_claim_successor
+    local_recoverable_successor = local_attention_successor or local_claim_successor or local_pending_publication
     if local_claim_successor:
         _require_local_snapshot_branch(snapshot, paths.repository_root)
     _fetch_snapshot_change_head(
@@ -497,6 +503,19 @@ def _read_local_snapshot_frontier(path: Path) -> tuple[bytes, DeliveryFrontier]:
         return content, DeliveryFrontier.model_validate_json(content, strict=False)
     except (OSError, ValueError) as exc:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json", exc)
+
+
+def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
+    """Recognize one exact pending local publication marker for restart replay."""
+    if not path.exists():
+        return False
+    if path.is_symlink() or not path.is_file():
+        _bootstrap_failure("local Delivery publication intent cannot be reconciled")
+    try:
+        intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=False)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery publication intent cannot be reconciled", exc)
+    return intent.status == "pending" and intent.frontier_digest == hashlib.sha256(frontier_bytes).hexdigest()
 
 
 def _validate_local_snapshot_artifacts(
@@ -638,7 +657,6 @@ def _is_unpublished_claim_successor(
         "candidate": None,
         "result_candidate": None,
         "recovery_attention": None,
-        "last_transition": None,
     }
     snapshot_without_claims = snapshot_frontier.model_copy(
         update={

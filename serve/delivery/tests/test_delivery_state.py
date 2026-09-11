@@ -5,7 +5,7 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -1027,23 +1027,30 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
     assert application.list_work_items()
 
     launch = application.acquire_frontier_work().launch_packages[0]
-    blocked = application.transition_delivery(
-        change_id,
-        BlockDelivery(
-            action="block",
-            outcome_id=launch.outcome_id,
-            claim_id=launch.claim.claim_id,
-            block_id="bootstrap-block",
-            reason="The assembled restart proof is waiting for evidence.",
-            unblock_condition="The evidence is recorded.",
-            expected_evidence=("bootstrap-proof",),
-            locators=("test_delivery_state.py",),
-        ),
-    )
-    assert blocked.block is not None
-    restarted = load_delivery_application(config, workspace_root=fresh)
-    assert restarted.delivery_health().status.value == "healthy"
-    assert restarted.show_operator_context(change_id, "OUT-001").block == blocked.block
+    failing_publisher = Mock()
+    failing_publisher.publish.side_effect = DeliveryStatePublicationError("state unavailable", retry_safe=True)
+    application._delivery_state_publisher = failing_publisher  # noqa: SLF001 - inject provider failure.
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            change_id,
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="restart-replay-block",
+                reason="Remote state publication is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_delivery_state.py",),
+            ),
+        )
+
+    restarted_after_failure = load_delivery_application(config, workspace_root=fresh)
+    assert restarted_after_failure.delivery_health().status.value == "healthy"
+    replayed = restarted_after_failure.acquire_frontier_work()
+    assert replayed.launch_packages == ()
+    assert replayed.failures == ()
+    assert restarted_after_failure.show_operator_context(change_id, "OUT-001").block is not None
 
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"
     frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)

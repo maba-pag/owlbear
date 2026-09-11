@@ -2021,6 +2021,32 @@ def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_in
     assert runtime.frontier_bytes() == before
 
 
+def test_portable_transition_retains_publication_intent_across_runtime_restart(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "claim-001")
+    runtime.transition(
+        BlockDelivery(
+            action="block",
+            outcome_id="OUT-001",
+            claim_id="claim-001",
+            block_id="block-publication",
+            reason="Remote publication is unavailable.",
+            unblock_condition="Remote publication succeeds.",
+            expected_evidence=("Published state",),
+            locators=("test_delivery_runtime.py",),
+        )
+    )
+
+    pending = runtime.pending_state_publication()
+    restarted = DeliveryRuntime(tmp_path, runtime.contract)
+
+    assert pending is not None
+    assert pending.status == "pending"
+    assert restarted.pending_state_publication() == pending
+    restarted.acknowledge_pending_publication(pending.frontier_digest)
+    assert restarted.pending_state_publication() is None
+
+
 def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")

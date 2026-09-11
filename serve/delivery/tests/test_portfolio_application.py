@@ -6834,6 +6834,43 @@ def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -
     assert state_publisher.publish.call_count == 3
 
 
+def test_acquisition_replays_failed_portable_state_publication_before_new_claims(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        None,
+    ]
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-replay",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+
+    assert runtimes["change-a"].pending_state_publication() is not None
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.launch_packages == ()
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+
+
 def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
