@@ -254,9 +254,7 @@ def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: objec
 
 
 def test_parse_delivery_frontier_round_trip_and_boundary_rejections() -> None:
-    frontier = DeliveryFrontier(
-        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
-    )
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
     content = _canonical(frontier)
 
     parsed, canonical = parse_delivery_frontier(content)
@@ -270,14 +268,12 @@ def test_parse_delivery_frontier_round_trip_and_boundary_rejections() -> None:
     for invalid in (None, [], "frontier", 7, False):
         with pytest.raises(TypeError):
             parse_delivery_frontier(json.dumps(invalid).encode())
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"^$"):
         parse_delivery_frontier(json.dumps({"schema_version": 16}).encode())
 
 
 def test_parse_delivery_frontier_preserves_model_and_runtime_validation_boundaries(tmp_path: Path) -> None:
-    frontier = DeliveryFrontier(
-        bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),)
-    )
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
     extra = frontier.model_dump(mode="json") | {"unexpected": True}
     with pytest.raises(ValidationError):
         parse_delivery_frontier(json.dumps(extra).encode())
@@ -289,7 +285,7 @@ def test_parse_delivery_frontier_preserves_model_and_runtime_validation_boundari
         update={"bindings": (OutcomeAuthorityBinding(outcome_id="OUT-999", plan_scope_id="SCOPE-999"),)}
     )
     with pytest.raises(DeliveryRuntimeReferenceError):
-        runtime._validate_frontier(mismatched)
+        runtime._validate_frontier(mismatched)  # noqa: SLF001
 
 
 def _output(claim_id: str, stage: DeliveryStage) -> DeliveryOutputReference:

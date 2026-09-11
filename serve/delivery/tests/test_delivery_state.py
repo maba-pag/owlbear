@@ -47,7 +47,6 @@ from owlbear_delivery import (
     PortfolioCoordinator,
     PublishChangeBranch,
     SyncChangeWithTarget,
-    parse_delivery_state_snapshot,
 )
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
@@ -67,8 +66,9 @@ from owlbear_delivery.delivery_application_loader import (
     _read_local_snapshot_frontier,
     load_delivery_application,
 )
-from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.delivery_runtime import parse_delivery_frontier
+from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
+from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.target_contract import DeliverySourceBinding
 

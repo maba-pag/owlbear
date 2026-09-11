@@ -3432,9 +3432,7 @@ class PortfolioApplication:
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
-            return result.model_copy(
-                update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]}
-            )
+            return result.model_copy(update={"frontier": parse_delivery_frontier(runtime.frontier_bytes())[0]})
 
     def publish_delivery_plan(
         self,
