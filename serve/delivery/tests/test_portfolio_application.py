@@ -77,6 +77,7 @@ from owlbear_delivery import (
     DeliveryObservationReceipt,
     DeliveryOutcome,
     DeliveryPendingCheckpoint,
+    DeliveryPendingStatePublication,
     DeliveryPlanScope,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -2069,7 +2070,7 @@ def test_target_sync_resolution_replays_branch_after_state_publication_failure(t
         )
 
     assert replayed == receipt
-    assert branch_publisher.publish.call_count == 2
+    assert branch_publisher.publish.call_count == 1
     assert state_publisher.publish.call_count == 2
 
 
@@ -6844,6 +6845,13 @@ def test_acquisition_replays_failed_portable_state_publication_before_new_claims
         DeliveryStatePublicationError("state unavailable", retry_safe=True),
         None,
     ]
+    base_frontier = DeliveryFrontier.model_validate_json(
+        runtimes["change-a"].frontier_bytes(), strict=False
+    )
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(Mock(change_id="change-a", frontier=base_frontier),),
+    )
     application._delivery_state_publisher = state_publisher
     launch = application.acquire_frontier_work().launch_packages[0]
 
@@ -6869,6 +6877,86 @@ def test_acquisition_replays_failed_portable_state_publication_before_new_claims
     assert acquisition.failures == ()
     assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 2
+
+
+def test_acquisition_does_not_replay_pending_state_over_advanced_remote_snapshot(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    application._delivery_state_publisher = state_publisher
+    launch = application.acquire_frontier_work().launch_packages[0]
+    with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id=launch.outcome_id,
+                claim_id=launch.claim.claim_id,
+                block_id="block-advanced-remote",
+                reason="Remote state is temporarily unavailable.",
+                unblock_condition="Remote state publication succeeds.",
+                expected_evidence=("Published state",),
+                locators=("test_portfolio_application.py",),
+            ),
+        )
+    advanced_snapshot = DeliveryFrontier.model_validate_json(
+        runtimes["change-a"].frontier_bytes(), strict=False
+    )
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="new-remote-head",
+        snapshots=(Mock(change_id="change-a", frontier=advanced_snapshot),),
+    )
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.launch_packages == ()
+    assert acquisition.failures
+    assert "pending publication base" in acquisition.failures[0].detail
+    assert state_publisher.publish.call_count == 1
+
+
+def test_corrupt_publication_marker_does_not_block_independent_change(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+    )
+    marker = state_root / "changes/change-a/state-publication.json"
+    marker.write_text("{", encoding="utf-8")
+
+    acquisition = application.acquire_frontier_work()
+
+    assert tuple(launch.change_id for launch in acquisition.launch_packages) == ("change-b",)
+    assert any(failure.change_id == "change-a" for failure in acquisition.failures)
+    assert application.delivery_health().status.value == "attention"
+
+
+def test_quarantined_change_pending_marker_is_not_replayed(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    marker_path = state_root / "changes/change-a/state-publication.json"
+    marker_path.write_text(
+        _canonical(
+            DeliveryPendingStatePublication.pending(
+                hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest(),
+                hashlib.sha256(b"remote-base").hexdigest(),
+            )
+        ).decode(),
+        encoding="utf-8",
+    )
+    application._runtime_reconciliation_errors["change-a"] = "quarantined for test"
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.launch_packages == ()
+    assert acquisition.failures[0].change_id == "change-a"
+    publisher.publish.assert_not_called()
 
 
 def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_path: Path) -> None:

@@ -1046,10 +1046,11 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
         )
 
     restarted_after_failure = load_delivery_application(config, workspace_root=fresh)
-    assert restarted_after_failure.delivery_health().status.value == "healthy"
+    assert restarted_after_failure.delivery_health().status.value == "attention"
     replayed = restarted_after_failure.acquire_frontier_work()
     assert replayed.launch_packages == ()
     assert replayed.failures == ()
+    assert restarted_after_failure.delivery_health().status.value == "healthy"
     assert restarted_after_failure.show_operator_context(change_id, "OUT-001").block is not None
 
     frontier_path = runtime_root / "changes" / change_id / "frontier.json"

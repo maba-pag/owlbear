@@ -515,7 +515,11 @@ def _read_local_pending_publication(path: Path, frontier_bytes: bytes) -> bool:
         intent = DeliveryPendingStatePublication.model_validate_json(path.read_bytes(), strict=False)
     except (OSError, TypeError, ValueError) as exc:
         _bootstrap_failure("local Delivery publication intent cannot be reconciled", exc)
-    return intent.status == "pending" and intent.frontier_digest == hashlib.sha256(frontier_bytes).hexdigest()
+    return (
+        intent.status == "pending"
+        and intent.base_frontier_digest is not None
+        and intent.frontier_digest == hashlib.sha256(frontier_bytes).hexdigest()
+    )
 
 
 def _validate_local_snapshot_artifacts(

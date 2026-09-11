@@ -305,18 +305,21 @@ class DeliveryPendingStatePublication(_DeliveryModel):
 
     schema_version: Literal[1] = 1
     status: Literal["pending", "acknowledged"]
+    base_frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     transition_request_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @classmethod
     def pending(
         cls,
+        base_frontier_digest: str,
         frontier_digest: str,
         transition_request_digest: str | None = None,
     ) -> DeliveryPendingStatePublication:
         """Create one pending local publication intent."""
         return cls(
             status="pending",
+            base_frontier_digest=base_frontier_digest,
             frontier_digest=frontier_digest,
             transition_request_digest=transition_request_digest,
         )
@@ -1506,6 +1509,24 @@ class DeliveryRuntime:
             _reference("Delivery state publication intent is invalid")
         return intent if intent.status == "pending" else None
 
+    def publication_base_digest(self, content: bytes) -> str:
+        """Digest the portable projection that remote state can legitimately contain."""
+        frontier, _canonical = parse_delivery_frontier(content)
+        portable_bindings = tuple(
+            binding.model_copy(
+                update={
+                    "active_claim": None,
+                    "output": None,
+                    "candidate": None,
+                    "result_candidate": None,
+                    "recovery_attention": None,
+                }
+            )
+            for binding in frontier.bindings
+        )
+        portable = frontier.model_copy(update={"bindings": portable_bindings})
+        return hashlib.sha256(_model_content(portable)).hexdigest()
+
     def acknowledge_pending_publication(self, frontier_digest: str) -> None:
         """Mark the matching local publication intent acknowledged after remote push."""
         if not self._pending_publication_path.is_file():
@@ -2318,7 +2339,10 @@ class DeliveryRuntime:
             previous,
             replacement,
         )
-        pending_participant = self._pending_publication_participant(replacement)
+        pending_participant = self._pending_publication_participant(
+            replacement,
+            self.publication_base_digest(previous),
+        )
         transaction_id = hashlib.sha256(
             completion_participant.content + display_participant.content + previous + replacement
         ).hexdigest()
@@ -2415,7 +2439,11 @@ class DeliveryRuntime:
         RuntimeTransaction(
             self._target_root,
             f"delivery-finalization-{transaction_id}",
-            (frontier_participant, self._pending_publication_participant(replacement), *additional_participants),
+            (
+                frontier_participant,
+                self._pending_publication_participant(replacement, self.publication_base_digest(previous)),
+                *additional_participants,
+            ),
         ).commit()
         return receipt
 
@@ -3453,18 +3481,26 @@ class DeliveryRuntime:
         )
         participants: list[TransactionParticipant | ReplacementTransactionParticipant] = [participant]
         if record_pending_publication:
-            participants.append(self._pending_publication_participant(replacement, transition_request_digest))
+            participants.append(
+                self._pending_publication_participant(
+                    replacement,
+                    self.publication_base_digest(previous),
+                    transition_request_digest,
+                )
+            )
         transaction_id = hashlib.sha256(previous + replacement).hexdigest()
         RuntimeTransaction(self._target_root, f"delivery-runtime-{transaction_id}", tuple(participants)).commit()
 
     def _pending_publication_participant(
         self,
         replacement: bytes,
+        base_frontier_digest: str,
         transition_request_digest: str | None = None,
     ) -> TransactionParticipant | ReplacementTransactionParticipant:
         """Build the marker participant that tracks one exact local frontier replacement."""
         content = _model_content(
             DeliveryPendingStatePublication.pending(
+                base_frontier_digest,
                 hashlib.sha256(replacement).hexdigest(),
                 transition_request_digest,
             )

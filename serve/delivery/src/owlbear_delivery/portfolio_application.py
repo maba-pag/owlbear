@@ -90,6 +90,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttentionDisposition,
     DeliveryMergedPullRequestLatch,
     DeliveryPendingCheckpoint,
+    DeliveryPendingStatePublication,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
@@ -1342,8 +1343,8 @@ class PortfolioApplication:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
             self._publish_target_sync_branch(change_id, runtime, receipt.merged_head)
-            self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
             self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
+            self._publish_delivery_state(change_id, runtime, f"target-sync-{receipt.receipt_id}")
             return receipt
 
     def sync_change_with_current_target(
@@ -1621,13 +1622,15 @@ class PortfolioApplication:
             self._fail("target synchronization resolution differs from runtime evidence")
         resolution = runtime.change_disposition_resolution()
         if resolution is not None:
-            self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.pending_checkpoint is not None or checkpoint.published_head != receipt.merged_head:
+                self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
+            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
             self._publish_delivery_state(
                 request.change_id,
                 runtime,
                 f"target-sync-resolution-{resolution.resolution_id}",
             )
-            self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _record_target_sync_resolution(
@@ -1651,12 +1654,12 @@ class PortfolioApplication:
         if resolution is None:
             self._fail("target synchronization resolution did not record attention resolution")
         self._publish_target_sync_branch(request.change_id, runtime, receipt.merged_head)
+        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         self._publish_delivery_state(
             request.change_id,
             runtime,
             f"target-sync-resolution-{resolution.resolution_id}",
         )
-        self._acknowledge_published_target_sync_checkpoint(runtime, receipt.merged_head)
         return receipt
 
     def _resolve_target_sync_workspace(
@@ -3708,13 +3711,13 @@ class PortfolioApplication:
             branch_receipt = self._publish_target_sync_branch(change_id, runtime, expected_merged_head)
             if branch_receipt is None:
                 self._fail("target-sync publication repair could not publish the Change branch")
-            self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
             checkpoint = runtime.checkpoint_publication_state()
             if checkpoint.pending_checkpoint is not None:
                 runtime.acknowledge_checkpoint_publication(
                     checkpoint.pending_checkpoint,
                     branch_receipt.published_head,
                 )
+            self._publish_delivery_state(change_id, runtime, f"target-sync-repair-{operation_id}")
             self._clear_target_sync_reconciliation(change_id)
             target_sync = runtime.target_sync_receipt()
             if target_sync is None:
@@ -3849,6 +3852,35 @@ class PortfolioApplication:
         diagnostics: list[DeliveryHealthDiagnostic] = [
             *self._startup_health_diagnostics,
         ]
+        for change_id, runtime in sorted(self._runtimes.items()):
+            marker_path = f".owlbear/delivery/runtime/changes/{change_id}/state-publication.json"
+            try:
+                pending = runtime.pending_state_publication()
+            except (OSError, RuntimeError, ValueError) as exc:
+                diagnostics.append(
+                    DeliveryHealthDiagnostic(
+                        source="local-runtime",
+                        code="state-publication-invalid",
+                        detail=_health_detail(
+                            f"Delivery-state publication intent is invalid: {exc}",
+                            "Delivery-state publication intent is invalid.",
+                        ),
+                        change_id=change_id,
+                        path=marker_path,
+                    )
+                )
+            else:
+                if pending is not None and self._delivery_state_publisher is not None:
+                    diagnostics.append(
+                        DeliveryHealthDiagnostic(
+                            source="local-runtime",
+                            code="state-publication-pending",
+                            detail="Delivery-state publication is pending replay.",
+                            change_id=change_id,
+                            path=marker_path,
+                            retry_safe=True,
+                        )
+                    )
         diagnostics.extend(
             DeliveryHealthDiagnostic(
                 source="local-runtime",
@@ -4827,8 +4859,42 @@ class PortfolioApplication:
         """Replay durable local state publications before exposing new claims."""
         failures = []
         for change_id, runtime in sorted(self._runtimes.items()):
-            pending = runtime.pending_state_publication()
+            try:
+                pending = runtime.pending_state_publication()
+            except (OSError, RuntimeError, ValueError) as exc:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=getattr(exc, "code", PortfolioApplicationError.code),
+                        detail=f"Delivery-state publication intent is invalid: {exc}",
+                        retry_condition="Repair the local Delivery-state publication intent.",
+                    )
+                )
+                continue
             if pending is None:
+                continue
+            if change_id in self._runtime_reconciliation_errors:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=PortfolioApplicationError.code,
+                        detail=self._runtime_reconciliation_errors[change_id],
+                        retry_condition="Resolve the retained Delivery reconciliation attention.",
+                    )
+                )
+                continue
+            if pending.base_frontier_digest is None:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=PortfolioApplicationError.code,
+                        detail="Pending Delivery-state publication lacks its pre-mutation frontier boundary.",
+                        retry_condition="Repair the local Delivery-state publication intent.",
+                    )
+                )
                 continue
             current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
             if current_digest != pending.frontier_digest:
@@ -4846,12 +4912,14 @@ class PortfolioApplication:
                 runtime.acknowledge_pending_publication(current_digest)
                 continue
             try:
+                remote_head = self._pending_publication_remote_head(change_id, pending)
                 self._publish_delivery_state(
                     change_id,
                     runtime,
                     f"replay-state-{pending.frontier_digest}",
+                    expected_remote_head=remote_head,
                 )
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
                 failures.append(
                     DeliveryAcquisitionFailure(
                         change_id=change_id,
@@ -4862,6 +4930,27 @@ class PortfolioApplication:
                     )
                 )
         return tuple(failures)
+
+    def _pending_publication_remote_head(
+        self,
+        change_id: str,
+        pending: DeliveryPendingStatePublication,
+    ) -> str:
+        """Return the remote state head only when its snapshot matches the pending base."""
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("pending Delivery-state publication has no configured publisher")
+        inventory = publisher.read_snapshot_inventory()
+        snapshot = next(
+            (item for item in inventory.snapshots if item.change_id == change_id),
+            None,
+        )
+        if inventory.remote_head is None or snapshot is None:
+            self._fail("remote Delivery snapshot is unavailable for pending replay")
+        remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
+        if remote_digest != pending.base_frontier_digest:
+            self._fail("remote Delivery snapshot no longer matches the pending publication base")
+        return inventory.remote_head
 
     def show_plan_context(
         self,
@@ -5055,7 +5144,11 @@ class PortfolioApplication:
         for change_id, runtime in self._runtimes.items():
             if change_id in self._runtime_reconciliation_errors:
                 continue
-            if runtime.pending_state_publication() is not None:
+            try:
+                pending_publication = runtime.pending_state_publication()
+            except (OSError, RuntimeError, ValueError):
+                continue
+            if pending_publication is not None:
                 continue
             if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
