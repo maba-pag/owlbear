@@ -13,7 +13,6 @@ import pytest
 from mcp import Client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_browser import AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser import AcquisitionFailure, AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_browser_mcp.allowlist import DomainAllowlist
@@ -62,7 +61,6 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert result["status"] == "success"
     assert result["markdown"] == "Rendered fixture content"
     assert app_ctx.latest_acquisition_status is AcquisitionStatus.SUCCESS
-
 
     @pytest.mark.asyncio
     async def test_acquisition_failure_updates_status_and_fresh_context_starts_empty() -> None:
