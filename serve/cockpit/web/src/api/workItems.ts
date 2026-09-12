@@ -847,26 +847,27 @@ export function resolveWorkItemTargetSync(
   )
 }
 
-export function deferWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+export function deferWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/defer`,
     'ERR_WORK_ITEM_CHANGE_DEFER',
-    { reason },
+    { reason, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
-export function resumeWorkItemChange(changeId: string): Promise<unknown> {
+export function resumeWorkItemChange(changeId: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/resume`,
     'ERR_WORK_ITEM_CHANGE_RESUME',
+    { expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
-export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+export function abandonWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/abandon`,
     'ERR_WORK_ITEM_CHANGE_ABANDON',
-    { confirmed_abandonment: true, reason },
+    { confirmed_abandonment: true, reason, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 

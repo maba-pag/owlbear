@@ -737,17 +737,17 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     ),
     deferChange: (reason: string) => mutate(
       'change-defer',
-      () => deferWorkItemChange(identity.changeId, reason),
+      () => deferWorkItemChange(identity.changeId, reason, data!.item.snapshot_version),
       'Change deferred.',
     ),
     resumeChange: () => mutate(
       'change-resume',
-      () => resumeWorkItemChange(identity.changeId),
+      () => resumeWorkItemChange(identity.changeId, data!.item.snapshot_version),
       'Change resumed.',
     ),
     abandonChange: (reason: string) => mutate(
       'change-abandon',
-      () => abandonWorkItemChange(identity.changeId, reason),
+      () => abandonWorkItemChange(identity.changeId, reason, data!.item.snapshot_version),
       'Change abandoned.',
     ),
     cleanupAbandonedChange: () => mutate(
