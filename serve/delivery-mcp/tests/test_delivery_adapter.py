@@ -566,7 +566,11 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "publish_design_checkpoint": change,
         "derive_delivery_contract": change,
-        "admit_delivery_change": {"change_id": CHANGE, "active_claim_ids": []},
+        "admit_delivery_change": {
+            "change_id": CHANGE,
+            "expected_package_id": DIGEST,
+            "active_claim_ids": [],
+        },
         "list_work_items": {},
         "delivery_health": {},
         "repair_delivery_state_snapshot": {
