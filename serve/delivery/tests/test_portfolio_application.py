@@ -206,6 +206,22 @@ def _canonical(model) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+def _recover_claim(
+    application: PortfolioApplication,
+    change_id: str,
+    outcome_id: str,
+    attempt_id: str,
+    claim_id: str,
+) -> object:
+    return application.recover_claim(
+        change_id,
+        outcome_id,
+        attempt_id,
+        claim_id,
+        confirmed_lost=True,
+    )
+
+
 def _approved_package_id(application: PortfolioApplication, change_id: str) -> str:
     package = application._package_store.read_verified(change_id)
     authored_manifest = DesignPackageManifest.from_content(
@@ -6930,7 +6946,7 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     assert not {"owner_id", "process_id", "output", "reviewer_id"} & serialized_claim.keys()
     before = runtimes["change-a"].frontier_bytes()
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
-        application.recover_claim("change-a", "OUT-001", "stale-attempt", launch.claim.claim_id)
+        _recover_claim(application, "change-a", "OUT-001", "stale-attempt", launch.claim.claim_id)
     assert runtimes["change-a"].frontier_bytes() == before
 
     request = DeliveryRequest(
@@ -7483,7 +7499,7 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert active[0][1].claim_id == failure.claim_id
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         "change-a",
         "OUT-001",
         failure.attempt_id,
@@ -7620,7 +7636,7 @@ def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: P
     )
     initial = application.acquire_frontier_work()
     initial_by_change = {package.change_id: package for package in initial.launch_packages}
-    application.recover_claim(
+    _recover_claim(application,
         "change-b",
         initial_by_change["change-b"].outcome_id,
         initial_by_change["change-b"].claim.attempt_id,
@@ -7670,7 +7686,7 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
     package = application.acquire_frontier_work().launch_packages[0]
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -7749,7 +7765,7 @@ def test_acquisition_claims_dirty_builder_for_worker_triage(tmp_path: Path) -> N
     )
     assert context.launch == launch
     assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         launch.change_id,
         launch.outcome_id,
         launch.claim.attempt_id,
@@ -7803,7 +7819,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
         patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after reset")),
         pytest.raises(RuntimeError, match="injected"),
     ):
-        application.recover_claim(
+        _recover_claim(application,
             package.change_id,
             package.outcome_id,
             package.claim.attempt_id,
@@ -7821,7 +7837,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
         == attempt_commit
     )
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -7869,14 +7885,14 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
         patch.object(manager, "_git", side_effect=interrupt_after_git),
         pytest.raises(RuntimeError, match="injected workspace interruption"),
     ):
-        application.recover_claim(
+        _recover_claim(application,
             package.change_id,
             package.outcome_id,
             package.claim.attempt_id,
             package.claim.claim_id,
         )
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -7901,7 +7917,7 @@ def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tm
     product.write_text("uncommitted attempt\n", encoding="utf-8")
     branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -7936,7 +7952,7 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
         patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after cleanup")),
         pytest.raises(RuntimeError, match="injected after cleanup"),
     ):
-        application.recover_claim(
+        _recover_claim(application,
             package.change_id,
             package.outcome_id,
             package.claim.attempt_id,
@@ -7951,7 +7967,7 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer is None
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -7985,7 +8001,7 @@ def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_pa
         patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected before release")),
         pytest.raises(CoordinationConflictError, match="injected before release"),
     ):
-        application.recover_claim(
+        _recover_claim(application,
             package.change_id,
             package.outcome_id,
             package.claim.attempt_id,
@@ -7999,7 +8015,7 @@ def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_pa
     assert interrupted.writer == package.writer
     assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
 
-    recovered = application.recover_claim(
+    recovered = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -8026,7 +8042,7 @@ def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: 
         "quarantine_dirty_worktree",
         side_effect=RuntimeError("injected preservation failure"),
     ):
-        retained = application.recover_claim(
+        retained = _recover_claim(application,
             package.change_id,
             package.outcome_id,
             package.claim.attempt_id,
@@ -8062,7 +8078,7 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     )
     coordinator.acquire("change-a", mismatched)
 
-    retained = application.recover_claim(
+    retained = _recover_claim(application,
         package.change_id,
         package.outcome_id,
         package.claim.attempt_id,
@@ -8075,3 +8091,21 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
     assert not (state_root / "capacity.json").exists()
+
+
+def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+
+    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    assert runtimes["change-a"].active_claims() == ((package.outcome_id, package.claim),)

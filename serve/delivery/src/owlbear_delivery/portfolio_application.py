@@ -5152,8 +5152,12 @@ class PortfolioApplication:
         outcome_id: str,
         attempt_id: str,
         claim_id: str,
+        *,
+        confirmed_lost: bool = False,
     ) -> DeliveryClaimRecoveryResult:
         """Automatically preserve and recover one exact failed claim or retain typed attention."""
+        if not confirmed_lost:
+            self._fail("claim recovery requires explicit lost-worker confirmation")
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
