@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from datetime import UTC, datetime
@@ -104,8 +105,47 @@ def _sources(*, first_statement: str = "Keep the first result stable.") -> tuple
     return intent.encode(), design.encode()
 
 
-def _request() -> DeliveryAdmissionRequest:
-    return DeliveryAdmissionRequest(change_id="source-bound-change", active_claim_ids=())
+def _request(package_store: DesignPackageStore) -> DeliveryAdmissionRequest:
+    package = package_store.read_verified("source-bound-change")
+    authored_manifest = DesignPackageManifest.from_content(
+        "source-bound-change",
+        package.intent_bytes,
+        package.design_bytes,
+    )
+    return DeliveryAdmissionRequest(
+        change_id="source-bound-change",
+        expected_package_id=hashlib.sha256(authored_manifest.canonical_bytes()).hexdigest(),
+        active_claim_ids=(),
+    )
+
+
+def test_admission_rejects_stale_approved_package_before_publication(
+    repository: Path,
+    tmp_path: Path,
+) -> None:
+    active_root = tmp_path / "active"
+    target_root = tmp_path / "target"
+    package_store = DesignPackageStore(active_root, repository)
+    intent_bytes, design_bytes = _sources()
+    package = package_store.create("source-bound-change", intent_bytes, design_bytes)
+    package_store.revise(
+        "source-bound-change",
+        package.package_id,
+        intent_bytes + b"\nRevised after approval.\n",
+        design_bytes,
+    )
+    registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
+
+    with pytest.raises(DeliveryAdmissionConflictError, match="Design package changed before admission"):
+        registry.admit(
+            DeliveryAdmissionRequest(
+                change_id="source-bound-change",
+                expected_package_id=package.package_id,
+                active_claim_ids=(),
+            )
+        )
+
+    assert not (target_root / "changes/source-bound-change").exists()
 
 
 def _canonical(model: DeliveryFrontier) -> bytes:
@@ -175,15 +215,15 @@ def test_admission_recovers_receipt_last_publication_and_replays_exact_sources(
         failure=interrupt,
     )
     with pytest.raises(RuntimeError, match="receipt-last interruption"):
-        interrupted.admit(_request())
+        interrupted.admit(_request(package_store))
 
     delivery_root = target_root / "changes/source-bound-change"
     assert (delivery_root / "contract.json").is_file()
     assert not (delivery_root / "admission.json").exists()
 
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
-    recovered = registry.admit(_request())
-    replayed = registry.admit(_request())
+    recovered = registry.admit(_request(package_store))
+    replayed = registry.admit(_request(package_store))
 
     assert recovered.replayed is True
     assert replayed == recovered
@@ -225,8 +265,8 @@ def test_admission_preserves_staged_user_checkout_outside_declared_package_path(
     )
 
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
-    result = registry.admit(_request())
-    replayed = registry.admit(_request())
+    result = registry.admit(_request(package_store))
+    replayed = registry.admit(_request(package_store))
 
     assert replayed.replayed is True
     assert result.receipt.checkpoint_commit == _git(
@@ -273,7 +313,7 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     package_store = DesignPackageStore(active_root, repository)
     package_store.create("source-bound-change", *_sources())
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
-    first = registry.admit(_request())
+    first = registry.admit(_request(package_store))
     populated_bindings = []
     for index, binding in enumerate(first.frontier.bindings, start=1):
         task = DeliveryTaskDefinition(
@@ -347,7 +387,7 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     )
     (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
 
-    revised = registry.admit(_request())
+    revised = registry.admit(_request(package_store))
 
     assert revised.carry_forward is not None
     assert revised.carry_forward.preserved_outcome_ids == ("OUT-003",)
@@ -378,7 +418,7 @@ def test_revision_rejects_active_claims_before_mutation(repository: Path, tmp_pa
     package_store = DesignPackageStore(active_root, repository)
     package_store.create("source-bound-change", *_sources())
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
-    first = registry.admit(_request())
+    first = registry.admit(_request(package_store))
     changed_intent, changed_design = _sources(first_statement="Changed behavior.")
     package_root = active_root / "source-bound-change"
     (package_root / "intent.md").write_bytes(changed_intent)
@@ -394,6 +434,7 @@ def test_revision_rejects_active_claims_before_mutation(repository: Path, tmp_pa
         registry.admit(
             DeliveryAdmissionRequest(
                 change_id="source-bound-change",
+                expected_package_id=_request(package_store).expected_package_id,
                 active_claim_ids=("active-claim",),
             )
         )

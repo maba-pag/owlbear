@@ -206,6 +206,16 @@ def _canonical(model) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+def _approved_package_id(application: PortfolioApplication, change_id: str) -> str:
+    package = application._package_store.read_verified(change_id)
+    authored_manifest = DesignPackageManifest.from_content(
+        change_id,
+        package.intent_bytes,
+        package.design_bytes,
+    )
+    return hashlib.sha256(authored_manifest.canonical_bytes()).hexdigest()
+
+
 def _receipt_id(payload: dict[str, object]) -> str:
     content = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(content.encode()).hexdigest()
@@ -4138,7 +4148,13 @@ dependencies: []
 ```
 """
     writer.create_design_session("admitted-change", intent, b"# Architecture\n")
-    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
+    admitted = writer.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id="admitted-change",
+            expected_package_id=_approved_package_id(writer, "admitted-change"),
+            active_claim_ids=(),
+        )
+    )
 
     delivery_root = state_root / "changes" / "admitted-change"
     persisted_frontier = DeliveryFrontier.model_validate_json(
@@ -4194,7 +4210,13 @@ dependencies: []
 ```
 """
     writer.create_design_session("late-change", intent, b"# Architecture\n")
-    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="late-change", active_claim_ids=()))
+    admitted = writer.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id="late-change",
+            expected_package_id=_approved_package_id(writer, "late-change"),
+            active_claim_ids=(),
+        )
+    )
     exact_head = writer_coordinator.show("late-change").last_reviewed_commit
     _runtime(state_root, admitted.contract, writer_manager, DeliveryStage.COMPLETED, exact_head)
     finalization = writer.finalize_change("late-change", _finalization_request("late-change", exact_head))
@@ -4289,7 +4311,11 @@ dependencies: []
             initial_reconciliation=initial_reconciliation,
         )
 
-    request = DeliveryAdmissionRequest(change_id="change-b", active_claim_ids=())
+    request = DeliveryAdmissionRequest(
+        change_id="change-b",
+        expected_package_id=_approved_package_id(application, "change-b"),
+        active_claim_ids=(),
+    )
     with (
         patch.object(application._authority_registry, "admit", side_effect=blocking_admit),
         ThreadPoolExecutor(max_workers=2) as executor,
@@ -5866,7 +5892,13 @@ dependencies: []
 ```
 """.encode()
     application.create_design_session(change_id, intent, b"# Architecture\n")
-    return application.admit_delivery_change(DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=()))
+    return application.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id=change_id,
+            expected_package_id=_approved_package_id(application, change_id),
+            active_claim_ids=(),
+        )
+    )
 
 
 def test_delivery_discovery_returns_valid_admission_and_stable_fingerprint(tmp_path: Path) -> None:
@@ -6208,7 +6240,11 @@ dependencies: []
     assert not (state_root / "changes/composed-delivery").exists()
 
     product_head = _git(tmp_path / "repository", "rev-parse", "main")
-    request = DeliveryAdmissionRequest(change_id="composed-delivery", active_claim_ids=())
+    request = DeliveryAdmissionRequest(
+        change_id="composed-delivery",
+        expected_package_id=_approved_package_id(application, "composed-delivery"),
+        active_claim_ids=(),
+    )
     admitted = application.admit_delivery_change(request)
     admission_replay = application.admit_delivery_change(request)
     checkpoint = application.publish_design_checkpoint("composed-delivery")
@@ -6258,6 +6294,7 @@ dependencies: []
         application.admit_delivery_change(
             DeliveryAdmissionRequest(
                 change_id="composed-delivery",
+                expected_package_id=_approved_package_id(application, "composed-delivery"),
                 active_claim_ids=("active-claim",),
             )
         )
@@ -6308,8 +6345,13 @@ dependencies: []
     application._draft_pull_request_publisher = pull_request_publisher
     application._delivery_state_publisher = state_publisher
 
-    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
-    replayed = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+    admission_request = DeliveryAdmissionRequest(
+        change_id="change-a",
+        expected_package_id=_approved_package_id(application, "change-a"),
+        active_claim_ids=(),
+    )
+    admitted = application.admit_delivery_change(admission_request)
+    replayed = application.admit_delivery_change(admission_request)
 
     coordination = coordinator.show("change-a")
     snapshot = coordination.design_package_snapshot
@@ -6394,7 +6436,13 @@ dependencies: []
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
-    application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+    application.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id="change-a",
+            expected_package_id=_approved_package_id(application, "change-a"),
+            active_claim_ids=(),
+        )
+    )
 
     summary = pull_request_publisher.publish.call_args.args[0].generated_summary
     assert "> The goal contains &lt;tag&gt;, &#64;team, &#35;123, and https&#58;&#47;&#47;example.test." in summary

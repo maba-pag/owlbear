@@ -15,6 +15,7 @@ from owlbear_delivery.delivery_runtime import (
     invalidate_checkpoint_publication,
     parse_delivery_frontier,
 )
+from owlbear_delivery.design_package import DesignPackageManifest
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -66,9 +67,10 @@ class _DeliveryAdmissionModel(BaseModel):
 
 
 class DeliveryAdmissionRequest(_DeliveryAdmissionModel):
-    """Explicit quiescence evidence for one source-bound admission call."""
+    """Exact approved package and quiescence evidence for one admission call."""
 
     change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    expected_package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     active_claim_ids: tuple[str, ...]
     recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
@@ -138,6 +140,7 @@ class _CurrentDelivery(_DeliveryAdmissionModel):
 
 class _CompiledDelivery(_DeliveryAdmissionModel):
     package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authored_package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     contract: DeliveryContract
     canonical_bytes: bytes
     digest: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -170,6 +173,9 @@ class DeliveryAuthorityRegistry:
         lock_root = self._target_root / "claims" / "admission" / request.change_id
         with locked_roots((lock_root,)):
             compiled = self._compile_package(request.change_id)
+            if compiled.authored_package_id != request.expected_package_id:
+                message = f"Design package changed before admission: {request.change_id}"
+                raise DeliveryAdmissionConflictError(message)
             current = self._read_current(request.change_id)
             self._validate_current(request, current)
             checkpoint_commit = self._publish_package_contract(request.change_id, compiled)
@@ -214,6 +220,13 @@ class DeliveryAuthorityRegistry:
             raise DeliveryAdmissionValidationError(message)
         return _CompiledDelivery(
             package_id=package.package_id,
+            authored_package_id=_digest(
+                DesignPackageManifest.from_content(
+                    change_id,
+                    package.intent_bytes,
+                    package.design_bytes,
+                ).canonical_bytes()
+            ),
             contract=compiled.contract,
             canonical_bytes=compiled.canonical_bytes,
             digest=compiled.digest,
