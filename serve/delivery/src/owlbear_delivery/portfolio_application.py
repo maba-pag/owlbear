@@ -4279,7 +4279,20 @@ class PortfolioApplication:
             )
             if diagnostic is None and inventory.remote_head == expected_remote_head:
                 self._fail("expected quarantined remote snapshot diagnostic is absent")
-            runtime = self._runtime(change_id, for_mutation=True)
+            change_diagnostics = tuple(
+                item for item in self._startup_health_diagnostics if item.change_id == change_id
+            )
+            if len(change_diagnostics) != 1 or not (
+                change_diagnostics[0].source == "remote-state"
+                and change_diagnostics[0].code == expected_diagnostic_code
+            ):
+                self._fail("quarantined remote snapshot repair has unrelated Change diagnostics")
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                detail = self._runtime_reconciliation_errors.get(change_id)
+                if detail is not None:
+                    raise DeliveryRuntimeReconciliationError(change_id, detail)
+                self._fail(f"Delivery runtime is absent: {change_id}")
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
             admission_path = self._target_root / "changes" / change_id / "admission.json"
@@ -5649,21 +5662,60 @@ class PortfolioApplication:
                 continue
             current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
             if current_digest != pending.frontier_digest:
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=PortfolioApplicationError.code,
-                        detail="Pending Delivery-state publication does not match the current frontier.",
-                        retry_condition="Reconcile the local frontier and its pending publication intent.",
+                try:
+                    inventory = self._delivery_state_publisher.read_snapshot_inventory()
+                    snapshot = next(
+                        (item for item in inventory.snapshots if item.change_id == change_id),
+                        None,
                     )
-                )
-                continue
+                    remote_digest = (
+                        None
+                        if snapshot is None
+                        else hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
+                    )
+                except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id="OUT-000",
+                            code=getattr(exc, "code", PortfolioApplicationError.code),
+                            detail=str(exc),
+                            retry_condition="Retry Delivery-state publication replay.",
+                        )
+                    )
+                    continue
+                if remote_digest == pending.frontier_digest:
+                    runtime.reanchor_pending_publication(pending.frontier_digest)
+                    pending = runtime.pending_state_publication()
+                    if pending is not None:
+                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                elif remote_digest == current_digest:
+                    runtime.reanchor_pending_publication(current_digest)
+                    pending = runtime.pending_state_publication()
+                    if pending is not None:
+                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                if pending is not None and current_digest == pending.frontier_digest:
+                    pass
+                else:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id="OUT-000",
+                            code=PortfolioApplicationError.code,
+                            detail="Pending Delivery-state publication does not match the current frontier.",
+                            retry_condition="Reconcile the local frontier and its pending publication intent.",
+                        )
+                    )
+                    continue
             if self._delivery_state_publisher is None:
                 runtime.acknowledge_pending_publication(current_digest)
                 continue
             try:
-                remote_head = self._pending_publication_remote_head(change_id, pending)
+                remote_head = self._pending_publication_remote_head(
+                    change_id,
+                    pending,
+                    current_frontier_digest=current_digest,
+                )
                 self._publish_delivery_state(
                     change_id,
                     runtime,
@@ -5686,6 +5738,7 @@ class PortfolioApplication:
         self,
         change_id: str,
         pending: DeliveryPendingStatePublication,
+        current_frontier_digest: str | None = None,
     ) -> str:
         """Return the remote state head only when its snapshot matches the pending base."""
         publisher = self._delivery_state_publisher
@@ -5699,7 +5752,7 @@ class PortfolioApplication:
         if inventory.remote_head is None or snapshot is None:
             self._fail("remote Delivery snapshot is unavailable for pending replay")
         remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
-        if remote_digest != pending.base_frontier_digest:
+        if remote_digest != pending.base_frontier_digest and remote_digest != current_frontier_digest:
             self._fail("remote Delivery snapshot no longer matches the pending publication base")
         return inventory.remote_head
 

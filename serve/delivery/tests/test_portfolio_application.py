@@ -7380,13 +7380,16 @@ def test_acquisition_replays_failed_portable_state_publication_before_new_claims
     assert state_publisher.publish.call_count == 2
 
 
-def test_acquisition_does_not_replay_pending_state_over_advanced_remote_snapshot(tmp_path: Path) -> None:
+def test_acquisition_replays_pending_state_when_remote_matches_current_frontier(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
     state_publisher = Mock()
-    state_publisher.publish.side_effect = [DeliveryStatePublicationError("state unavailable", retry_safe=True)]
+    state_publisher.publish.side_effect = [
+        DeliveryStatePublicationError("state unavailable", retry_safe=True),
+        object(),
+    ]
     application._delivery_state_publisher = state_publisher
     launch = application.acquire_frontier_work().launch_packages[0]
     with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
@@ -7411,9 +7414,67 @@ def test_acquisition_does_not_replay_pending_state_over_advanced_remote_snapshot
 
     acquisition = application.acquire_frontier_work()
 
-    assert acquisition.launch_packages == ()
-    assert acquisition.failures
-    assert "pending publication base" in acquisition.failures[0].detail
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 2
+
+
+def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.return_value = object()
+    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    previous_digest = hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest()
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(Mock(change_id="change-a", frontier=previous_frontier),),
+    )
+    application._delivery_state_publisher = state_publisher
+    revised_frontier = previous_frontier.model_copy(update={"published_head": "a" * 40})
+    runtimes["change-a"]._replace_content(
+        runtimes["change-a"].frontier_bytes(),
+        _canonical(revised_frontier),
+        base_frontier_digest=previous_digest,
+    )
+
+    acquisition = application.acquire_frontier_work()
+
+    assert len(acquisition.launch_packages) == 1
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert state_publisher.publish.call_count == 1
+
+
+def test_acquisition_acknowledges_pending_publication_when_remote_has_current_frontier(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    state_publisher = Mock()
+    state_publisher.publish.return_value = object()
+    previous_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    previous_digest = hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest()
+    revised_frontier = previous_frontier.model_copy(update={"published_head": "a" * 40})
+    runtimes["change-a"]._replace_content(
+        runtimes["change-a"].frontier_bytes(),
+        _canonical(revised_frontier),
+        base_frontier_digest=previous_digest,
+    )
+    current_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
+    state_publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=(Mock(change_id="change-a", frontier=current_frontier),),
+    )
+    application._delivery_state_publisher = state_publisher
+
+    acquisition = application.acquire_frontier_work()
+
+    assert len(acquisition.launch_packages) == 1
+    assert acquisition.failures == ()
+    assert runtimes["change-a"].pending_state_publication() is None
     assert state_publisher.publish.call_count == 1
 
 
@@ -8623,8 +8684,37 @@ def test_application_repairs_quarantined_snapshot_through_real_state_publisher(t
     corrupted_head = _commit_corrupt_snapshot(repository, first.published_head, "change-a", corrupted)
     _git(repository, "push", "origin", f"{corrupted_head}:refs/heads/owlbear/delivery-state", "--force")
     application._delivery_state_publisher = publisher
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="snapshot-identity-invalid",
+            detail="Remote Delivery snapshot is quarantined.",
+            change_id="change-a",
+            reason=DeliveryHealthReason.REMOTE_STATE_RECONCILIATION,
+        ),
+    )
 
     proposal = application.propose_quarantined_delivery_state_snapshot_repair("change-a")
+    application._startup_health_diagnostics = (
+        *application._startup_health_diagnostics,
+        DeliveryHealthDiagnostic(
+            source="remote-state",
+            code="remote-state-reconciliation-required",
+            detail="The Change branch is out of band.",
+            change_id="change-a",
+            reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
+        ),
+    )
+    with pytest.raises(PortfolioApplicationError, match="unrelated Change diagnostics"):
+        application.repair_quarantined_delivery_state_snapshot(
+            "change-a",
+            "application-repair-unrelated-diagnostic",
+            confirmed_repair=True,
+            expected_remote_head=proposal.expected_remote_head,
+            expected_snapshot_digest=proposal.snapshot_digest,
+            expected_diagnostic_code=proposal.diagnostic_code,
+        )
+    application._startup_health_diagnostics = (application._startup_health_diagnostics[0],)
     receipt = application.repair_quarantined_delivery_state_snapshot(
         "change-a",
         "application-repair-two",

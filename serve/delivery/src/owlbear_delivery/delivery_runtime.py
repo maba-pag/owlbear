@@ -1561,6 +1561,35 @@ class DeliveryRuntime:
             (participant,),
         ).commit()
 
+    def reanchor_pending_publication(self, base_frontier_digest: str) -> None:
+        """Re-anchor a pending publication after a validated authority revision."""
+        if not self._pending_publication_path.is_file():
+            return
+        current_content = self._pending_publication_path.read_bytes()
+        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=False)
+        frontier_content = self.frontier_bytes()
+        frontier_digest = hashlib.sha256(frontier_content).hexdigest()
+        if current.status != "pending" or current.frontier_digest == frontier_digest:
+            return
+        replacement = _model_content(
+            DeliveryPendingStatePublication.pending(
+                base_frontier_digest,
+                frontier_digest,
+                current.transition_request_digest,
+            )
+        )
+        participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._pending_publication_path.relative_to(self._target_root),
+            current_content,
+            replacement,
+        )
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-state-reanchor-{frontier_digest}",
+            (participant,),
+        ).commit()
+
     def integration_attention(self) -> DeliveryIntegrationAttention | None:
         """Return current retryable Integration evidence, if any."""
         return self._read()[0].integration_attention
