@@ -8490,6 +8490,26 @@ def test_set_change_intent_routes_versioned_lifecycle_dispositions(tmp_path: Pat
     assert deferred.receipt.change_id == "change-a"
     assert deferred.kind is DeliveryChangeIntentKind.DEFER
 
+    replayed_defer = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=initial.frontier_digest,
+            reason="Wait for user review.",
+        )
+    )
+    assert replayed_defer == deferred
+
+    with pytest.raises(PortfolioApplicationError, match="frontier changed"):
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.DEFER,
+                expected_frontier_digest=initial.frontier_digest,
+                reason="A different reason.",
+            )
+        )
+
     with pytest.raises(PortfolioApplicationError, match="frontier changed"):
         application.set_change_intent(
             DeliveryChangeIntent(
@@ -8517,6 +8537,24 @@ def test_set_change_intent_routes_versioned_lifecycle_dispositions(tmp_path: Pat
     )
     assert abandoned.kind is DeliveryChangeIntentKind.ABANDON
     assert abandoned.receipt.change_id == "change-a"
+    replayed_abandon = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.ABANDON,
+            expected_frontier_digest=resumed.frontier_digest,
+            reason="User stopped the Change.",
+        )
+    )
+    assert replayed_abandon == abandoned
+    with pytest.raises(PortfolioApplicationError, match="frontier changed"):
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.ABANDON,
+                expected_frontier_digest=resumed.frontier_digest,
+                reason="A different reason.",
+            )
+        )
 
 
 def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: Path) -> None:

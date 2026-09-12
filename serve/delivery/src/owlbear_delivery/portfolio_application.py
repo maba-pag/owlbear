@@ -5584,6 +5584,24 @@ class PortfolioApplication:
             with locked_roots((self._checkpoint_lock_root(intent.change_id),)):
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if current_digest != intent.expected_frontier_digest:
+                    if intent.kind is DeliveryChangeIntentKind.DEFER:
+                        receipt = runtime.change_deferral()
+                        if receipt is not None and receipt.reason == intent.reason:
+                            return DeliveryChangeIntentResult(
+                                change_id=intent.change_id,
+                                kind=intent.kind,
+                                frontier_digest=current_digest,
+                                receipt=receipt,
+                            )
+                    elif intent.kind is DeliveryChangeIntentKind.ABANDON:
+                        receipt = runtime.change_abandonment()
+                        if receipt is not None and receipt.reason == intent.reason:
+                            return DeliveryChangeIntentResult(
+                                change_id=intent.change_id,
+                                kind=intent.kind,
+                                frontier_digest=current_digest,
+                                receipt=receipt,
+                            )
                     self._fail("Change intent frontier changed")
                 if intent.kind is DeliveryChangeIntentKind.DEFER:
                     if intent.reason is None:
