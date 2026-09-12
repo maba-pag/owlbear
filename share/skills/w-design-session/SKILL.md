@@ -231,7 +231,8 @@ Record approval against the unchanged package ID and derived contract digest. Ca
 `read_design_session(change_id)` again and proceed only when its package ID and complete authored
 bytes match the approved package. Call `derive_delivery_contract(change_id)` again and require the
 same canonical contract bytes and digest, then call `admit_delivery_change` with
-`DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=())`.
+`DeliveryAdmissionRequest(change_id=change_id, expected_package_id=approved_package_id,
+active_claim_ids=())`, binding admission to the exact approved authored package version.
 
 Require the admission result contract bytes and digest to match the approved derivation. Record and
 report its persisted receipt ID, contract digest, frontier IDs, checkpoint commit, and carry-forward
