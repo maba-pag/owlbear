@@ -21,6 +21,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
     DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryCheckpointPublicationState,
@@ -300,7 +301,12 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(frontier_digest="a" * 64)
 
     def answer(self, answer: DeliveryAnswer) -> dict[str, object]:
-        self.calls.append(("answer", (answer,)))
+        operation = {
+            "request": "answer",
+            "block": "clear",
+            "disposition": "attention-resolve",
+        }[answer.kind.value]
+        self.calls.append((operation, (answer,)))
         return {"request_id": answer.request_id, "resolved": True}
 
     def clear_block(self, *args: object) -> dict[str, object]:
@@ -846,7 +852,11 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     )
     clear = client.post(
         "/api/changes/change-a/outcomes/OUT-001/blocks/block-one/clear",
-        json={"operator_note": "Verified externally", "locators": ["request:REQ-001"]},
+        json={
+            "operator_note": "Verified externally",
+            "locators": ["request:REQ-001"],
+            "expected_frontier_digest": "a" * 64,
+        },
     )
     rejected_recovery = client.post(
         "/api/changes/change-a/outcomes/OUT-001/claims/recover",
@@ -905,7 +915,10 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         client.post("/api/changes/change-a/acceptance/observe"),
         client.post(
             "/api/changes/change-a/attention/resolve",
-            json={"expected_disposition_id": "a" * 64},
+            json={
+                "expected_disposition_id": "a" * 64,
+                "expected_frontier_digest": "a" * 64,
+            },
         ),
         client.post(
             "/api/changes/change-a/defer",
@@ -975,7 +988,17 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         target_sync_call,
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
-        ("attention-resolve", ("change-a", "a" * 64)),
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
         (
             "intent",
             (
@@ -1417,7 +1440,7 @@ def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_
     ):
         response = client.post(
             "/api/changes/change-a/attention/resolve",
-            json={"expected_disposition_id": "a" * 64},
+            json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
         )
 
     assert response.status_code == 409

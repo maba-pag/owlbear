@@ -336,6 +336,7 @@ class ClearBlockBody(_TargetHTTPModel):
 
     operator_note: str = Field(min_length=1)
     locators: list[str] = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ConfirmLostClaimBody(_TargetHTTPModel):
@@ -350,6 +351,7 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     """Exact Change attention identity selected by the operator."""
 
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AdoptExternalHeadAfterAcceptanceAttentionBody(_TargetHTTPModel):

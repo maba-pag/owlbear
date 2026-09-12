@@ -60,6 +60,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     PortfolioApplication,
@@ -135,12 +136,16 @@ class TargetCockpitService:
     ) -> object:
         """Clear one exact requestless block with operator evidence."""
         return self._invoke(
-            lambda: self._application.clear_block(
-                change_id,
-                outcome_id,
-                block_id,
-                body.operator_note,
-                tuple(body.locators),
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=change_id,
+                    kind=DeliveryAnswerKind.BLOCK,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    outcome_id=outcome_id,
+                    block_id=block_id,
+                    operator_note=body.operator_note,
+                    locators=tuple(body.locators),
+                )
             )
         )
 
@@ -235,9 +240,13 @@ class TargetCockpitService:
     def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
         """Resolve one exact Change attention record without restoring provider authority."""
         return self._invoke(
-            lambda: self._application.resolve_change_disposition(
-                change_id,
-                body.expected_disposition_id,
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=change_id,
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    expected_disposition_id=body.expected_disposition_id,
+                )
             )
         )
 
