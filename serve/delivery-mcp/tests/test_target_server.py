@@ -79,6 +79,7 @@ DELIVERY_TOOLS = {
     "preview_administrative_move",
     "administrative_move",
     "acquire_frontier_work",
+    "acquire_actions",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",

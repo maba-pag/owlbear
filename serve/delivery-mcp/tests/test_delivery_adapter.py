@@ -676,6 +676,7 @@ def _requests() -> dict[str, dict[str, object]]:
             "expected_version": DIGEST,
         },
         "acquire_frontier_work": {},
+        "acquire_actions": {},
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
