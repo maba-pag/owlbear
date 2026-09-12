@@ -59,7 +59,7 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 | --- | --- | --- |
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
 | builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
-| repairer | Change-specific health diagnostic with an engine-authored repair proposal | Serialized `DeliveryChangeView` |
+| repairer | Change-specific acquisition failure or health diagnostic with an engine-authored repair proposal | Serialized `DeliveryChangeView` |
 | memory-curator | Cycle 3, then every tenth completed acquisition cycle thereafter — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 

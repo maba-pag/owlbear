@@ -63,7 +63,8 @@ as permission to edit a worktree or target.
 For an `OUT-nnn` identity, call `show_operator_context(change_id, outcome_id)` and require the
 returned context to retain the supplied outcome identity. If the context contains a current block
 and that block contains a pending request, present exactly one user decision and, after the answer, call
-`resolve_request(change_id, request_id, resolution)` with the selected option or response text. If
+`resolve_request(change_id, request_id, resolution)` with a selected option for a Decision Request
+or response text for an Action Request. If
 the context contains a requestless block, present the evidence requirement and, after explicit user
 confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note, locators)`. Re-read
 the exact operator context before either mutation; neither operation restores later-stage authority
