@@ -5,7 +5,7 @@
 > **Question:** Who uses which Delivery Python, HTTP, and MCP interfaces, when and why are they used, which surfaces are regular versus exceptional or compatibility-only, and where can the interface be reduced without weakening authority, custody, replay, or operator control?
 > **Status:** Current-state research. No Delivery state, package, claim, MCP operation, commit, or source file was mutated by this audit.
 > **Count update:** Application and MCP counts were refreshed at `eaef98036742b1d03ca7f7064c66411d0c5a50e9` after `recover_out_of_band_head` was added; the original analysis baseline remains recorded below.
-> **Post-baseline implementation delta:** The additive facade now measures **75 public `PortfolioApplication` methods**, **60 registered MCP operations**, **253 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `put_design`, `admit_change`, `get_change`, `answer`, `set_change_intent`, `list_changes`, `submit_result`, `acquire_actions`, and `repair_change`; the legacy MCP aliases `defer_change`, `resume_change`, and `abandon_change` were retired after Cockpit and attention guidance moved to the version-bound intent facade. The detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
+> **Post-baseline implementation delta:** The additive facade now measures **76 public `PortfolioApplication` methods**, **61 registered MCP operations**, **253 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `put_design`, `admit_change`, `get_change`, `answer`, `set_change_intent`, `list_changes`, `submit_result`, `acquire_actions`, and `repair`; the legacy aliases `defer_change`, `resume_change`, `abandon_change`, and `repair_change` remain only for migration parity where applicable, with the first three retired from MCP and the Repairer cut over to `repair`. The detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
 > **Implementation plan:** [Delivery Resilience Evolution Plan](delivery-resilience-evolution-plan.md) supersedes this audit's provisional implementation sequence and incorporates the later GPT-6 Astra and Claude Opus 5 challenges.
 
 ## 1. Executive Summary
@@ -51,8 +51,9 @@ Pursue interface reduction in this order:
 The current implementation adds version-bound `put_design` and `admit_change` boundaries, a coherent `get_change` read projection, a version-bound `answer`
 path for bounded Decision Request resolution, a version-bound `set_change_intent` path for pause,
 resume, and abandonment, a grouped `list_changes` projection, and a Builder-only `submit_result`
-path that publishes and promotes one exact result, and an `acquire_actions` claim-facing alias over
-the existing bounded acquisition authority. The proposal-backed `repair_change` path remains
+path that publishes and promotes one exact result, an `acquire_actions` claim-facing alias over
+the existing bounded acquisition authority, and a high-level `repair` alias used by Repairer. The
+proposal-backed `repair_change` path remains
 available to a constrained Repairer, while Orchestrator routes exact Change-specific proposals to
 it. Action free-text resolution remains on the existing operator path. This is an additive
 migration boundary, not evidence that the older low-level operations are ready for removal.
