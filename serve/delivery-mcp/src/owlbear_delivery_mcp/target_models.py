@@ -43,6 +43,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTransition,
     DeliveryWorkerRole,
     FinalizeDeliveryChange,
+    OutcomeAuthorityBinding,
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
@@ -55,6 +56,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryOperatorContext,
+    DeliveryResultSubmissionResult,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
     DeliveryStateSnapshotRepairReceipt,
@@ -319,6 +321,14 @@ class PublishDeliveryResultParams(ChangeParams):
     """Validate one Build result publication."""
 
     result: PublishDeliveryResult
+
+
+class SubmitResultParams(ChangeParams):
+    """Validate one claim-bound Builder result submission and promotion."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result: DeliveryTaskResult
 
 
 class FinalizeDeliveryChangeParams(ChangeParams):
@@ -646,6 +656,27 @@ class SetChangeIntentResponse(_TargetProtocolModel):
         )
 
 
+class SubmitResultResponse(_TargetProtocolModel):
+    """Bounded response for one promoted Builder result."""
+
+    change_id: ChangeId
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result_id: str = Field(min_length=1)
+    binding: OutcomeAuthorityBinding
+
+    @classmethod
+    def from_result(cls, result: DeliveryResultSubmissionResult) -> SubmitResultResponse:
+        """Project one core submission result into the strict MCP response."""
+        return cls(
+            change_id=result.change_id,
+            outcome_id=result.outcome_id,
+            claim_id=result.claim_id,
+            result_id=result.result_id,
+            binding=result.binding,
+        )
+
+
 class ClearedDeliveryBlockResponse(_TargetProtocolModel):
     """Bounded response for one cleared requestless block."""
 
@@ -911,6 +942,10 @@ type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json
 type SetChangeIntentRequest = Annotated[
     SetChangeIntentParams,
     BeforeValidator(partial(_parse_json_model, SetChangeIntentParams)),
+]
+type SubmitResultRequest = Annotated[
+    SubmitResultParams,
+    BeforeValidator(partial(_parse_json_model, SubmitResultParams)),
 ]
 type OperatorContextRequest = Annotated[
     OperatorContextParams,

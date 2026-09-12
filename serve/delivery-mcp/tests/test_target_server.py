@@ -84,6 +84,7 @@ DELIVERY_TOOLS = {
     "show_finalization_context",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "submit_result",
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",

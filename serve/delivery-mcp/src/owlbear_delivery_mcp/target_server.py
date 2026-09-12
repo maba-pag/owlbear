@@ -46,6 +46,8 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryOperatorContext,
+    DeliveryResultSubmission,
+    DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
@@ -143,6 +145,9 @@ from owlbear_delivery_mcp.target_models import (
     SetChangeIntentResponse,
     ShowCompletedParams,
     ShowCompletedRequest,
+    SubmitResultParams,
+    SubmitResultRequest,
+    SubmitResultResponse,
     SupersedePublicationParams,
     SupersedePublicationRequest,
     TargetDiagnostic,
@@ -196,6 +201,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_finalization_context",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "submit_result",
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
@@ -660,6 +666,24 @@ class TargetMCPAdapter:
             DeliveryResultCandidate,
         )
         return DeliveryResultPublication.from_candidate(candidate)
+
+    async def submit_result(self, request: SubmitResultRequest) -> SubmitResultResponse:
+        """Publish and promote one exact Builder result as one claim-bound operation."""
+        params = self._validate(SubmitResultParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.submit_result(
+                DeliveryResultSubmission(
+                    change_id=params.change_id,
+                    outcome_id=params.outcome_id,
+                    claim_id=params.claim_id,
+                    result=params.result,
+                )
+            ),
+            DeliveryResultSubmissionResult,
+        )
+        return SubmitResultResponse.from_result(result)
 
     async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]:
         """Finalize one exact clean reviewed Change head with persisted evidence."""

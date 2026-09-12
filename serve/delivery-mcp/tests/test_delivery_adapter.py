@@ -81,6 +81,8 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
+    DeliveryResultSubmission,
+    DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
 )
@@ -472,6 +474,18 @@ class _RecordingApplication:
                     digest=DIGEST,
                     result=result,
                 )
+            elif name == "submit_result":
+                result = DeliveryResultSubmissionResult(
+                    change_id=CHANGE,
+                    outcome_id="OUT-001",
+                    claim_id="claim",
+                    result_id="result-one",
+                    binding=OutcomeAuthorityBinding(
+                        outcome_id="OUT-001",
+                        plan_scope_id="SCOPE-001",
+                        stage=DeliveryStage.COMPLETED,
+                    ),
+                )
             elif name in {
                 "supersede_publication",
                 "sync_change_with_target",
@@ -672,6 +686,12 @@ def _requests() -> dict[str, dict[str, object]]:
         "publish_delivery_result": {
             **change,
             "result": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
+        },
+        "submit_result": {
+            **change,
+            "outcome_id": "OUT-001",
+            "claim_id": "claim",
+            "result": _result(),
         },
         "finalize_change": {**change, "finalization": _finalization()},
         "mark_change_ready": {
@@ -880,6 +900,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
+    if operation_name == "submit_result":
+        submission = application.calls[0][1][0]
+        assert isinstance(submission, DeliveryResultSubmission)
+        assert submission.change_id == CHANGE
+        assert submission.outcome_id == "OUT-001"
+        assert submission.claim_id == "claim"
+        assert submission.result.result_id == "result-one"
     if operation_name == "recover_change_worktree":
         assert application.calls[0][1] == (CHANGE, COMMIT)
         assert application.calls[0][2] == {"confirmed_recovery": True}
@@ -985,6 +1012,12 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.request.request_id == "request"
         assert result.request.resolution.response_text == "Completed."
         assert result.frontier_digest == DIGEST
+    elif operation_name == "submit_result":
+        assert result.change_id == CHANGE
+        assert result.outcome_id == "OUT-001"
+        assert result.claim_id == "claim"
+        assert result.result_id == "result-one"
+        assert result.binding.stage is DeliveryStage.COMPLETED
     elif operation_name == "set_change_intent":
         assert result.change_id == CHANGE
         assert result.kind is DeliveryChangeIntentKind.DEFER
