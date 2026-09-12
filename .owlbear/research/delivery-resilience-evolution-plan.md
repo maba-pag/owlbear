@@ -216,6 +216,9 @@ Implementation mode:
 Acceptance:
 
 - no Delivery runtime/package/claim is created for this plan;
+- Change ID `delivery-resilience-evolution` and branch
+  `owlbear/change/delivery-resilience-evolution` are permanently retired because withdrawn PR #315
+  remains discoverable as provider history; implementation must use a different Git branch name;
 - unrelated active Changes continue untouched;
 - source baseline and dirty-worktree ownership are recorded.
 
