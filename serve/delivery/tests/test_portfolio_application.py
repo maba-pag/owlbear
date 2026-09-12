@@ -6848,6 +6848,19 @@ def test_work_item_queries_do_not_resolve_integration_target(
     assert "internal completion body sentinel" not in serialized
 
 
+def test_list_changes_returns_the_grouped_portfolio_read_view(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+
+    listed = application.list_changes()
+    direct = application.portfolio_read_view()
+
+    assert listed == direct
+    assert listed.groups[0].change_id == "change-a"
+
+
 def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,

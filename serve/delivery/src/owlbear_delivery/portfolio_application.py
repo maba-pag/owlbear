@@ -3791,6 +3791,10 @@ class PortfolioApplication:
             if self._is_work_portfolio_visible(snapshot)
         )
 
+    def list_changes(self) -> PortfolioReadView:
+        """Return current grouped Change state and operating guidance."""
+        return self.portfolio_read_view()
+
     def portfolio_read_view(self) -> PortfolioReadView:
         """Return grouped work and operating facts from one immutable capture."""
         snapshots = self._portfolio_snapshots()
