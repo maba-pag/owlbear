@@ -3916,7 +3916,13 @@ class PortfolioApplication:
                 _checkpoint_operation_id("package", request.change_id, package.package_id),
                 request.expected_design_package_snapshot_receipt_id,
             )
-            runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.pending_checkpoint is not None:
+                runtime.record_design_package_snapshot(checkpoint, snapshot)
+            elif checkpoint.published_head is not None and checkpoint.published_head != snapshot.snapshot_head:
+                runtime.queue_explicit_checkpoint(snapshot.snapshot_head)
+            else:
+                runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()

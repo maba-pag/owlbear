@@ -1865,6 +1865,12 @@ class ChangeWorkspaceManager:
             if snapshot_head is None:
                 _workspace_failure("Design package snapshot commit has no resolvable head")
             self._require_clean_worktree(worktree)
+            current = {
+                name: self._read_optional_worktree_file(worktree / relative_path)
+                for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+            }
+            if not self._package_files_match_commit(snapshot_head, relative_paths, current, package_files):
+                _workspace_failure("Design package snapshot committed unexpected package bytes")
             changed = self._git(
                 "diff-tree",
                 "--no-commit-id",
@@ -1873,7 +1879,7 @@ class ChangeWorkspaceManager:
                 snapshot_head,
                 cwd=worktree,
             ).splitlines()
-            if set(changed) != set(relative_paths):
+            if not changed or not set(changed).issubset(set(relative_paths)):
                 _workspace_failure("Design package snapshot committed an unexpected path")
             return snapshot_head
 

@@ -6329,6 +6329,38 @@ dependencies: []
         )
     assert _file_bytes(delivery_root) == admitted_bytes
 
+    coordination_before_revision = _coordinator.show("composed-delivery")
+    frontier_digest = hashlib.sha256((delivery_root / "frontier.json").read_bytes()).hexdigest()
+    replacement = application.admit_delivery_change(
+        DeliveryAdmissionRequest(
+            change_id="composed-delivery",
+            expected_package_id=_approved_package_id(application, "composed-delivery"),
+            active_claim_ids=(),
+            expected_frontier_digest=frontier_digest,
+            expected_design_package_snapshot_receipt_id=(
+                coordination_before_revision.design_package_snapshot.receipt_id
+                if coordination_before_revision.design_package_snapshot is not None
+                else None
+            ),
+        )
+    )
+
+    coordination_after_revision = _coordinator.show("composed-delivery")
+    revised_package = application.read_design_session("composed-delivery")
+    assert replacement.contract != admitted.contract
+    assert coordination_after_revision.design_package_snapshot is not None
+    assert coordination_after_revision.design_package_snapshot.package_id == revised_package.package_id
+    assert coordination_after_revision.design_package_snapshot.snapshot_head != (
+        coordination_before_revision.design_package_snapshot.snapshot_head
+    )
+    assert _git(
+        coordination_after_revision.worktree_path,
+        "merge-base",
+        "--is-ancestor",
+        coordination_before_revision.design_package_snapshot.snapshot_head,
+        coordination_after_revision.design_package_snapshot.snapshot_head,
+    ) == ""
+
 
 def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state_root = _portfolio(tmp_path, {})

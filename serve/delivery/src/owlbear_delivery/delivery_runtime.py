@@ -1971,17 +1971,20 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_design_package_snapshot")
         current = frontier.pending_checkpoint
+        if current is not None and current.head == receipt.snapshot_head:
+            return self.checkpoint_publication_state()
         if (
             expected.change_id != self._contract.change_id
             or expected.pending_checkpoint is None
             or current != expected.pending_checkpoint
             or frontier.published_head != expected.published_head
             or receipt.change_id != self._contract.change_id
-            or receipt.previous_head != expected.pending_checkpoint.head
+            or (
+                expected.pending_checkpoint.head is not None
+                and receipt.previous_head != expected.pending_checkpoint.head
+            )
         ):
             _conflict("Design package snapshot no longer matches the checkpoint queue")
-        if current.head == receipt.snapshot_head:
-            return self.checkpoint_publication_state()
         updated = frontier.model_copy(
             update={"pending_checkpoint": _checkpoint_with_head(current, receipt.snapshot_head)}
         )
