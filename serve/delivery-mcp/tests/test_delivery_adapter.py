@@ -17,7 +17,10 @@ from owlbear_delivery import (
     DeliveryAdmissionValidationError,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
     DeliveryRetainedChangeWorktree,
+    DeliveryStrandedFrontierRepairReceipt,
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
@@ -360,6 +363,37 @@ class _RecordingApplication:
                 result = _target_sync_repair_receipt()
             elif name == "repair_delivery_state_snapshot":
                 result = _delivery_state_repair_receipt()
+            elif name == "propose_quarantined_delivery_state_snapshot_repair":
+                result = DeliveryQuarantinedSnapshotRepairProposal(
+                    change_id=CHANGE,
+                    diagnostic_code="snapshot-identity-invalid",
+                    expected_remote_head="c" * 40,
+                    snapshot_digest=DIGEST,
+                    consequence="Replace the invalid predecessor.",
+                )
+            elif name == "repair_quarantined_delivery_state_snapshot":
+                result = DeliveryQuarantinedSnapshotRepairReceipt.model_construct(
+                    schema_version=1,
+                    receipt_id=DIGEST,
+                    operation_id="repair-quarantined-change-a",
+                    change_id=CHANGE,
+                    invalid_snapshot_digest=DIGEST,
+                    expected_remote_head="c" * 40,
+                    snapshot_id=DIGEST,
+                    published_head="d" * 40,
+                    diagnostic_code="snapshot-identity-invalid",
+                )
+            elif name == "repair_stranded_frontier":
+                result = DeliveryStrandedFrontierRepairReceipt.model_construct(
+                    schema_version=1,
+                    receipt_id=DIGEST,
+                    operation_id="repair-frontier-change-a",
+                    change_id=CHANGE,
+                    request_id="request",
+                    previous_frontier_digest=DIGEST,
+                    frontier_digest="e" * 64,
+                    preserved_frontier_path="changes/change-a/revisions/frontier/frontier.json",
+                )
             elif name == "recover_out_of_band_head":
                 result = OutOfBandHeadRecoveryReceipt.create(
                     operation_id="recover-out-of-band-change-a",
@@ -706,10 +740,26 @@ def _requests() -> dict[str, dict[str, object]]:
             "reason": "Wait for user review",
         },
         "delivery_health": {},
+        "propose_quarantined_delivery_state_snapshot_repair": change,
         "repair_delivery_state_snapshot": {
             **change,
             "confirmed_repair": True,
             "operation_id": "repair-state-change-a",
+        },
+        "repair_quarantined_delivery_state_snapshot": {
+            **change,
+            "confirmed_repair": True,
+            "expected_remote_head": "c" * 40,
+            "expected_snapshot_digest": DIGEST,
+            "expected_diagnostic_code": "snapshot-identity-invalid",
+            "operation_id": "repair-quarantined-change-a",
+        },
+        "repair_stranded_frontier": {
+            **change,
+            "confirmed_repair": True,
+            "request_id": "request",
+            "expected_frontier_digest": DIGEST,
+            "operation_id": "repair-frontier-change-a",
         },
         "recover_out_of_band_head": {
             **change,
@@ -1010,6 +1060,20 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     if operation_name == "repair_delivery_state_snapshot":
         assert application.calls[0][1] == (CHANGE, "repair-state-change-a")
         assert application.calls[0][2] == {"confirmed_repair": True}
+    if operation_name == "propose_quarantined_delivery_state_snapshot_repair":
+        assert application.calls[0][1] == (CHANGE,)
+        assert application.calls[0][2] == {}
+    if operation_name == "repair_quarantined_delivery_state_snapshot":
+        assert application.calls[0][1] == (CHANGE, "repair-quarantined-change-a")
+        assert application.calls[0][2] == {
+            "confirmed_repair": True,
+            "expected_remote_head": "c" * 40,
+            "expected_snapshot_digest": DIGEST,
+            "expected_diagnostic_code": "snapshot-identity-invalid",
+        }
+    if operation_name == "repair_stranded_frontier":
+        assert application.calls[0][1] == (CHANGE, "request", DIGEST, "repair-frontier-change-a")
+        assert application.calls[0][2] == {"confirmed_repair": True}
     if operation_name == "recover_out_of_band_head":
         assert application.calls[0][1] == (
             CHANGE,
@@ -1059,6 +1123,21 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             "published_head": COMMIT,
             "local_frontier_digest": DIGEST,
         },
+        "repair_quarantined_delivery_state_snapshot": {
+            "change_id": CHANGE,
+            "invalid_snapshot_digest": DIGEST,
+            "expected_remote_head": "c" * 40,
+            "snapshot_id": DIGEST,
+            "published_head": "d" * 40,
+            "diagnostic_code": "snapshot-identity-invalid",
+        },
+        "repair_stranded_frontier": {
+            "change_id": CHANGE,
+            "request_id": "request",
+            "previous_frontier_digest": DIGEST,
+            "frontier_digest": "e" * 64,
+            "preserved_frontier_path": "changes/change-a/revisions/frontier/frontier.json",
+        },
         "recover_out_of_band_head": {
             "change_id": CHANGE,
             "expected_reviewed_head": COMMIT,
@@ -1085,6 +1164,12 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     elif operation_name in receipt_results:
         for field, expected in receipt_results[operation_name].items():
             assert getattr(result, field) == expected
+    elif operation_name == "propose_quarantined_delivery_state_snapshot_repair":
+        assert result.change_id == CHANGE
+        assert result.diagnostic_code == "snapshot-identity-invalid"
+        assert result.expected_remote_head == "c" * 40
+        assert result.snapshot_digest == DIGEST
+        assert result.requires_confirmation is True
     elif operation_name in publication_results:
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
@@ -1206,7 +1291,10 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "list_changes",
+        "get_change",
         "delivery_health",
+        "propose_quarantined_delivery_state_snapshot_repair",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_work_item_view",

@@ -57,10 +57,13 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryOperatorContext,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
     DeliveryResultSubmissionResult,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
     DeliveryStateSnapshotRepairReceipt,
+    DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -404,6 +407,25 @@ class RepairDeliveryStateSnapshotParams(ChangeParams):
     """Validate explicit repair of one quarantined local Delivery frontier."""
 
     confirmed_repair: Literal[True]
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairStrandedFrontierParams(ChangeParams):
+    """Validate explicit repair of one missing request-provenance defect."""
+
+    confirmed_repair: Literal[True]
+    request_id: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class RepairQuarantinedDeliveryStateSnapshotParams(ChangeParams):
+    """Validate explicit repair of one quarantined remote Delivery snapshot."""
+
+    confirmed_repair: Literal[True]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -846,6 +868,68 @@ class DeliveryStateSnapshotRepairResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
+class QuarantinedSnapshotRepairProposalResponse(_TargetProtocolModel):
+    """MCP proposal for one exact quarantined remote snapshot repair."""
+
+    change_id: ChangeId
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    requires_confirmation: Literal[True] = True
+    consequence: str = Field(min_length=1)
+
+    @classmethod
+    def from_proposal(
+        cls,
+        proposal: DeliveryQuarantinedSnapshotRepairProposal,
+    ) -> QuarantinedSnapshotRepairProposalResponse:
+        """Project one core repair proposal into the strict MCP contract."""
+        return cls(**proposal.model_dump())
+
+
+class QuarantinedSnapshotRepairResponse(_TargetProtocolModel):
+    """MCP receipt for one exact quarantined remote snapshot repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    invalid_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryQuarantinedSnapshotRepairReceipt,
+    ) -> QuarantinedSnapshotRepairResponse:
+        """Project one core quarantined-snapshot repair receipt."""
+        return cls(**receipt.model_dump())
+
+
+class StrandedFrontierRepairResponse(_TargetProtocolModel):
+    """MCP receipt for one exact local frontier provenance repair."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    request_id: str = Field(min_length=1)
+    previous_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preserved_frontier_path: str = Field(min_length=1)
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryStrandedFrontierRepairReceipt,
+    ) -> StrandedFrontierRepairResponse:
+        """Project one core stranded-frontier repair receipt."""
+        return cls(**receipt.model_dump())
+
+
 class OutOfBandHeadRecoveryResponse(_TargetProtocolModel):
     """MCP response for one preserved out-of-band Change head recovery."""
 
@@ -1070,6 +1154,14 @@ type RepairDeliveryStateSnapshotRequest = Annotated[
     RepairDeliveryStateSnapshotParams,
     BeforeValidator(partial(_parse_json_model, RepairDeliveryStateSnapshotParams)),
 ]
+type RepairQuarantinedDeliveryStateSnapshotRequest = Annotated[
+    RepairQuarantinedDeliveryStateSnapshotParams,
+    BeforeValidator(partial(_parse_json_model, RepairQuarantinedDeliveryStateSnapshotParams)),
+]
+type RepairStrandedFrontierRequest = Annotated[
+    RepairStrandedFrontierParams,
+    BeforeValidator(partial(_parse_json_model, RepairStrandedFrontierParams)),
+]
 type RecoverOutOfBandHeadRequest = Annotated[
     RecoverOutOfBandHeadParams,
     BeforeValidator(partial(_parse_json_model, RecoverOutOfBandHeadParams)),
@@ -1164,6 +1256,8 @@ __all__ = [
     "PutDesignParams",
     "PutDesignRequest",
     "PutDesignResponse",
+    "QuarantinedSnapshotRepairProposalResponse",
+    "QuarantinedSnapshotRepairResponse",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
     "RecoverClaimParams",
@@ -1178,6 +1272,8 @@ __all__ = [
     "RepairClaimContextRequest",
     "RepairDeliveryStateSnapshotParams",
     "RepairDeliveryStateSnapshotRequest",
+    "RepairQuarantinedDeliveryStateSnapshotParams",
+    "RepairStrandedFrontierParams",
     "RepairTargetSyncPublicationParams",
     "RepairTargetSyncPublicationRequest",
     "RetainedChangeWorktreeResponse",
@@ -1190,6 +1286,7 @@ __all__ = [
     "SetChangeIntentResponse",
     "ShowCompletedParams",
     "ShowCompletedRequest",
+    "StrandedFrontierRepairResponse",
     "SupersedePublicationParams",
     "SupersedePublicationRequest",
     "TargetDiagnostic",

@@ -45,9 +45,12 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeRecovery,
     DeliveryDesignPut,
     DeliveryOperatorContext,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
     DeliveryResultSubmission,
     DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
+    DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
 )
@@ -106,6 +109,8 @@ from owlbear_delivery_mcp.target_models import (
     PutDesignParams,
     PutDesignRequest,
     PutDesignResponse,
+    QuarantinedSnapshotRepairProposalResponse,
+    QuarantinedSnapshotRepairResponse,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverClaimParams,
@@ -120,6 +125,10 @@ from owlbear_delivery_mcp.target_models import (
     RepairClaimContextRequest,
     RepairDeliveryStateSnapshotParams,
     RepairDeliveryStateSnapshotRequest,
+    RepairQuarantinedDeliveryStateSnapshotParams,
+    RepairQuarantinedDeliveryStateSnapshotRequest,
+    RepairStrandedFrontierParams,
+    RepairStrandedFrontierRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
     RetainedChangeWorktreeResponse,
@@ -132,6 +141,7 @@ from owlbear_delivery_mcp.target_models import (
     SetChangeIntentResponse,
     ShowCompletedParams,
     ShowCompletedRequest,
+    StrandedFrontierRepairResponse,
     SubmitResultParams,
     SubmitResultRequest,
     SubmitResultResponse,
@@ -172,7 +182,10 @@ DELIVERY_OPERATION_NAMES = (
     "answer",
     "set_change_intent",
     "delivery_health",
+    "propose_quarantined_delivery_state_snapshot_repair",
     "repair_delivery_state_snapshot",
+    "repair_quarantined_delivery_state_snapshot",
+    "repair_stranded_frontier",
     "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
@@ -222,6 +235,7 @@ _DELIVERY_READS = frozenset(
         "list_changes",
         "get_change",
         "delivery_health",
+        "propose_quarantined_delivery_state_snapshot_repair",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_work_item_view",
@@ -237,9 +251,7 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
-_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
-    {"administrative_move", "repair", "set_change_intent"}
-)
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"administrative_move", "repair", "set_change_intent"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
@@ -456,6 +468,20 @@ class TargetMCPAdapter:
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
 
+    async def propose_quarantined_delivery_state_snapshot_repair(
+        self,
+        request: ChangeRequest,
+    ) -> QuarantinedSnapshotRepairProposalResponse:
+        """Return exact fences for one known quarantined remote snapshot."""
+        params = self._validate(ChangeParams, request)
+        proposal = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.propose_quarantined_delivery_state_snapshot_repair(params.change_id),
+            DeliveryQuarantinedSnapshotRepairProposal,
+        )
+        return QuarantinedSnapshotRepairProposalResponse.from_proposal(proposal)
+
     async def repair_delivery_state_snapshot(
         self,
         request: RepairDeliveryStateSnapshotRequest,
@@ -473,6 +499,47 @@ class TargetMCPAdapter:
             DeliveryStateSnapshotRepairReceipt,
         )
         return DeliveryStateSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_quarantined_delivery_state_snapshot(
+        self,
+        request: RepairQuarantinedDeliveryStateSnapshotRequest,
+    ) -> QuarantinedSnapshotRepairResponse:
+        """Repair one exact confirmed quarantined remote Delivery snapshot."""
+        params = self._validate(RepairQuarantinedDeliveryStateSnapshotParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_quarantined_delivery_state_snapshot(
+                params.change_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+                expected_remote_head=params.expected_remote_head,
+                expected_snapshot_digest=params.expected_snapshot_digest,
+                expected_diagnostic_code=params.expected_diagnostic_code,
+            ),
+            DeliveryQuarantinedSnapshotRepairReceipt,
+        )
+        return QuarantinedSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_stranded_frontier(
+        self,
+        request: RepairStrandedFrontierRequest,
+    ) -> StrandedFrontierRepairResponse:
+        """Repair one exact confirmed missing request-provenance defect."""
+        params = self._validate(RepairStrandedFrontierParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_stranded_frontier(
+                params.change_id,
+                params.request_id,
+                params.expected_frontier_digest,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStrandedFrontierRepairReceipt,
+        )
+        return StrandedFrontierRepairResponse.from_receipt(receipt)
 
     async def recover_out_of_band_head(
         self,

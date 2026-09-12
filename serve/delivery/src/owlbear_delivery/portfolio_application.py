@@ -117,6 +117,7 @@ from owlbear_delivery.delivery_runtime import (
     is_acceptance_waiting_observation,
     is_change_terminal,
     parse_delivery_frontier,
+    repair_missing_request_provenance,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
@@ -158,6 +159,11 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationPullRequest,
     failed_required_publication_checks,
+)
+from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionParticipant,
 )
 from owlbear_delivery.storage_io import atomic_write, locked_roots
 from owlbear_delivery.target_contract import (
@@ -911,14 +917,10 @@ class DeliveryChangeIntentResult(_ApplicationModel):
         if self.receipt.change_id != self.change_id:
             message = "Change intent receipt does not match its Change"
             raise ValueError(message)
-        if self.kind is DeliveryChangeIntentKind.ABANDON and not isinstance(
-            self.receipt, DeliveryChangeAbandonment
-        ):
+        if self.kind is DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeAbandonment):
             message = "abandon intent requires an abandonment receipt"
             raise ValueError(message)
-        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(
-            self.receipt, DeliveryChangeDeferral
-        ):
+        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeDeferral):
             message = "defer or resume intent requires a deferral receipt"
             raise ValueError(message)
         return self
@@ -1251,6 +1253,113 @@ class DeliveryStateSnapshotRepairReceipt(_ApplicationModel):
             message = "Delivery-state snapshot repair identity is invalid"
             raise ValueError(message)
         return self
+
+
+class DeliveryStrandedFrontierRepairReceipt(_ApplicationModel):
+    """Evidence that one confirmed legacy request-provenance defect was repaired."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+    previous_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preserved_frontier_path: str = Field(min_length=1)
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        request_id: str,
+        previous_frontier_digest: str,
+        frontier_digest: str,
+        preserved_frontier_path: str,
+    ) -> DeliveryStrandedFrontierRepairReceipt:
+        """Create deterministic evidence for one frontier repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "request_id": request_id,
+            "previous_frontier_digest": previous_frontier_digest,
+            "frontier_digest": frontier_digest,
+            "preserved_frontier_path": preserved_frontier_path,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryStrandedFrontierRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "stranded frontier repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryQuarantinedSnapshotRepairReceipt(_ApplicationModel):
+    """Evidence that one quarantined remote snapshot was replaced under CAS."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    invalid_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        invalid_snapshot_digest: str,
+        expected_remote_head: str,
+        publication: DeliveryStatePublicationReceipt,
+        diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        """Create deterministic evidence for one remote snapshot repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "invalid_snapshot_digest": invalid_snapshot_digest,
+            "expected_remote_head": expected_remote_head,
+            "snapshot_id": publication.snapshot_id,
+            "published_head": publication.published_head,
+            "diagnostic_code": diagnostic_code,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "quarantined snapshot repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryQuarantinedSnapshotRepairProposal(_ApplicationModel):
+    """Typed confirmation boundary for one known invalid remote snapshot."""
+
+    change_id: str = Field(min_length=1)
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    requires_confirmation: Literal[True] = True
+    consequence: str = Field(min_length=1)
 
 
 class PortfolioApplicationError(RuntimeError):
@@ -3371,8 +3480,7 @@ class PortfolioApplication:
                     state=current,
                     reconciled=False,
                     error_code=pending.last_error_code,
-                    error_detail=pending.last_error_detail
-                    or "Checkpoint retry is waiting for its next eligible time.",
+                    error_detail=pending.last_error_detail or "Checkpoint retry is waiting for its next eligible time.",
                 )
             return self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
 
@@ -4019,6 +4127,186 @@ class PortfolioApplication:
                 local_frontier_digest=hashlib.sha256(frontier_bytes).hexdigest(),
             )
 
+    def repair_stranded_frontier(
+        self,
+        change_id: str,
+        request_id: str,
+        expected_frontier_digest: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryStrandedFrontierRepairReceipt:
+        """Repair one confirmed legacy request-provenance defect with CAS fencing."""
+        if confirmed_repair is not True:
+            self._fail("stranded frontier repair requires explicit confirmation")
+        frontier_path = self._target_root / "changes" / change_id / "frontier.json"
+        history_relative = Path("changes") / change_id / "revisions" / expected_frontier_digest / "frontier.json"
+        history_path = self._target_root / history_relative
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            try:
+                current_bytes = frontier_path.read_bytes()
+            except OSError as exc:
+                self._fail("stranded frontier repair requires the current frontier", exc)
+            current_digest = hashlib.sha256(current_bytes).hexdigest()
+            if current_digest != expected_frontier_digest:
+                if not history_path.is_file():
+                    self._fail("Delivery frontier changed before stranded frontier repair")
+                history_bytes = history_path.read_bytes()
+                if hashlib.sha256(history_bytes).hexdigest() != expected_frontier_digest:
+                    self._fail("stranded frontier repair history does not match the expected frontier")
+                _frontier, repaired_bytes = repair_missing_request_provenance(history_bytes, request_id)
+                if current_bytes != repaired_bytes:
+                    self._fail("stranded frontier repair predecessor is not the expected repaired successor")
+                return DeliveryStrandedFrontierRepairReceipt.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    request_id=request_id,
+                    previous_frontier_digest=expected_frontier_digest,
+                    frontier_digest=hashlib.sha256(repaired_bytes).hexdigest(),
+                    preserved_frontier_path=history_relative.as_posix(),
+                )
+
+            _frontier, repaired_bytes = repair_missing_request_provenance(current_bytes, request_id)
+            if history_path.exists() and history_path.read_bytes() != current_bytes:
+                self._fail("stranded frontier repair history already contains different evidence")
+            participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
+            if not history_path.exists():
+                participants.append(TransactionParticipant(self._target_root, history_relative, current_bytes))
+            participants.append(
+                ReplacementTransactionParticipant(
+                    self._target_root,
+                    frontier_path.relative_to(self._target_root),
+                    current_bytes,
+                    repaired_bytes,
+                )
+            )
+            pending_path = frontier_path.with_name("state-publication.json")
+            pending_bytes = _canonical_model_bytes(
+                DeliveryPendingStatePublication.pending(
+                    expected_frontier_digest,
+                    hashlib.sha256(repaired_bytes).hexdigest(),
+                )
+            )
+            if pending_path.exists():
+                participants.append(
+                    ReplacementTransactionParticipant(
+                        self._target_root,
+                        pending_path.relative_to(self._target_root),
+                        pending_path.read_bytes(),
+                        pending_bytes,
+                    )
+                )
+            else:
+                participants.append(
+                    TransactionParticipant(
+                        self._target_root,
+                        pending_path.relative_to(self._target_root),
+                        pending_bytes,
+                    )
+                )
+            RuntimeTransaction(
+                self._target_root,
+                f"delivery-stranded-frontier-repair-{change_id}-{expected_frontier_digest}",
+                tuple(participants),
+            ).commit()
+            self._reconcile_runtimes()
+            return DeliveryStrandedFrontierRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                request_id=request_id,
+                previous_frontier_digest=expected_frontier_digest,
+                frontier_digest=hashlib.sha256(repaired_bytes).hexdigest(),
+                preserved_frontier_path=history_relative.as_posix(),
+            )
+
+    def propose_quarantined_delivery_state_snapshot_repair(
+        self,
+        change_id: str,
+    ) -> DeliveryQuarantinedSnapshotRepairProposal:
+        """Return exact fences for one known quarantined remote snapshot."""
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("quarantined snapshot repair requires a configured state publisher")
+        inventory = publisher.read_snapshot_inventory()
+        diagnostics = tuple(
+            item
+            for item in inventory.diagnostics
+            if item.change_id == change_id
+            and item.code in {"snapshot-invalid", "snapshot-identity-invalid"}
+            and item.raw_digest is not None
+        )
+        if inventory.remote_head is None or len(diagnostics) != 1:
+            self._fail("no uniquely repairable quarantined remote snapshot exists")
+        diagnostic = diagnostics[0]
+        if diagnostic.raw_digest is None:
+            self._fail("quarantined remote snapshot has no raw-byte fence")
+        return DeliveryQuarantinedSnapshotRepairProposal(
+            change_id=change_id,
+            diagnostic_code=diagnostic.code,
+            expected_remote_head=inventory.remote_head,
+            snapshot_digest=diagnostic.raw_digest,
+            consequence="Replace the quarantined predecessor with a fresh snapshot from validated local authority.",
+        )
+
+    def repair_quarantined_delivery_state_snapshot(  # noqa: PLR0913 - repair binds each exact authority fence.
+        self,
+        change_id: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+        expected_remote_head: str,
+        expected_snapshot_digest: str,
+        expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        """Replace one known invalid remote snapshot from validated local authority."""
+        if confirmed_repair is not True:
+            self._fail("quarantined snapshot repair requires explicit confirmation")
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("quarantined snapshot repair requires a configured state publisher")
+        self._reconcile_runtimes()
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            inventory = publisher.read_snapshot_inventory()
+            diagnostic = next(
+                (
+                    item
+                    for item in inventory.diagnostics
+                    if item.change_id == change_id
+                    and item.code == expected_diagnostic_code
+                    and item.raw_digest == expected_snapshot_digest
+                ),
+                None,
+            )
+            if diagnostic is None and inventory.remote_head == expected_remote_head:
+                self._fail("expected quarantined remote snapshot diagnostic is absent")
+            runtime = self._runtime(change_id, for_mutation=True)
+            package = self._package_store.read_verified(change_id)
+            self._validate_package_authority(runtime, package)
+            admission_path = self._target_root / "changes" / change_id / "admission.json"
+            admission = DeliveryAdmissionReceipt.model_validate_json(admission_path.read_bytes())
+            publication = publisher.repair_quarantined_snapshot(
+                change_id=change_id,
+                package_id=package.package_id,
+                coordination=self._workspace_manager.show(change_id),
+                runtime=runtime,
+                admission=admission,
+                operation_id=operation_id,
+                captured_at=_timestamp(self._clock()),
+                expected_remote_head=expected_remote_head,
+                expected_snapshot_digest=expected_snapshot_digest,
+                expected_diagnostic_code=expected_diagnostic_code,
+            )
+            runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
+            self._clear_remote_state_reconciliation(change_id)
+            return DeliveryQuarantinedSnapshotRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                invalid_snapshot_digest=expected_snapshot_digest,
+                expected_remote_head=expected_remote_head,
+                publication=publication,
+                diagnostic_code=expected_diagnostic_code,
+            )
+
     def recover_out_of_band_head(  # noqa: C901, PLR0912, PLR0913 - recovery binds exact Delivery and Git fences.
         self,
         change_id: str,
@@ -4243,8 +4531,15 @@ class PortfolioApplication:
             for diagnostic in self._startup_health_diagnostics
             if not (
                 diagnostic.source == "remote-state"
-                and diagnostic.code == "remote-state-reconciliation-required"
                 and diagnostic.change_id == change_id
+                and diagnostic.code
+                in {
+                    "remote-state-reconciliation-required",
+                    "snapshot-invalid",
+                    "snapshot-identity-invalid",
+                    "snapshot-path-identity-mismatch",
+                    "snapshot-unreadable",
+                }
             )
         )
         self._runtime_reconciliation_errors.pop(change_id, None)
@@ -4342,9 +4637,7 @@ class PortfolioApplication:
             )
         )
         if scoped_change_id is not None:
-            ordered = tuple(
-                item for item in ordered if item.change_id is None or item.change_id == scoped_change_id
-            )
+            ordered = tuple(item for item in ordered if item.change_id is None or item.change_id == scoped_change_id)
         bounded = ordered[:_MAX_HEALTH_DIAGNOSTICS]
         return DeliveryHealthView(
             status=DeliveryHealthStatus.ATTENTION if bounded else DeliveryHealthStatus.HEALTHY,
@@ -5220,8 +5513,7 @@ class PortfolioApplication:
                                     "confirmed before worktree recovery."
                                 ),
                                 retry_condition=(
-                                    "Confirm the Builder invocation has ended before recovering its "
-                                    "managed worktree."
+                                    "Confirm the Builder invocation has ended before recovering its managed worktree."
                                 ),
                             )
                         )
@@ -5491,13 +5783,11 @@ class PortfolioApplication:
                         expected_frontier_digest=digest,
                         summary="Confirm that the stale Builder invocation has ended before recovery.",
                         consequence=(
-                            "Delivery will preserve dirty bytes, restore the reviewed worktree, "
-                            "and release custody."
+                            "Delivery will preserve dirty bytes, restore the reviewed worktree, and release custody."
                         ),
                     )
                     for outcome_id, claim in runtime.active_claims()
-                    if claim.worker_role is DeliveryWorkerRole.BUILDER
-                    and _timestamp(claim.started_at) <= cutoff
+                    if claim.worker_role is DeliveryWorkerRole.BUILDER and _timestamp(claim.started_at) <= cutoff
                 ),
                 None,
             )
@@ -5636,12 +5926,8 @@ class PortfolioApplication:
                     None,
                 )
                 if existing is not None:
-                    if (
-                        existing != submission.result
-                        or (
-                            binding.active_claim is not None
-                            and binding.active_claim.task_id == submission.result.task_id
-                        )
+                    if existing != submission.result or (
+                        binding.active_claim is not None and binding.active_claim.task_id == submission.result.task_id
                     ):
                         self._fail("submitted result conflicts with current Outcome authority")
                     if runtime.pending_state_publication() is not None:

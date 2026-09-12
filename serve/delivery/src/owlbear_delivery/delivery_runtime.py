@@ -1058,7 +1058,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[17] = 17
+    schema_version: Literal[18] = 18
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1401,7 +1401,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_FRONTIER_SCHEMA_VERSION = 17
+_LEGACY_FRONTIER_SCHEMA_VERSION = 17
+_FRONTIER_SCHEMA_VERSION = 18
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -3325,11 +3326,7 @@ class DeliveryRuntime:
             claim.worker_role,
             request.failure_code,
         )
-        retry_count = (
-            binding.retry_count + 1
-            if binding.retry_fingerprint == retry_fingerprint
-            else 1
-        )
+        retry_count = binding.retry_count + 1 if binding.retry_fingerprint == retry_fingerprint else 1
         retry_block = None
         if retry_count >= _MAX_WORKER_RETRIES:
             retry_block = DeliveryBlock(
@@ -3692,14 +3689,51 @@ def is_acceptance_waiting_observation(
 def parse_delivery_frontier(
     content: bytes,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse one canonical current-schema frontier."""
+    """Parse one frontier and canonicalize the immediately prior persisted schema."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
-    if payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
+    schema_version = payload.get("schema_version")
+    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION:
+        payload = {**payload, "schema_version": _FRONTIER_SCHEMA_VERSION}
+    elif schema_version != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
-    frontier = DeliveryFrontier.model_validate_json(content, strict=False)
+    frontier = DeliveryFrontier.model_validate(payload, strict=False)
     return frontier, _model_content(frontier)
+
+
+def repair_missing_request_provenance(  # noqa: C901 - narrow structural migration validates each legacy layer.
+    content: bytes,
+    request_id: str,
+) -> tuple[DeliveryFrontier, bytes]:
+    """Repair only one legacy free-text request lacking explicit confirmation."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, list):
+        _reference("Delivery frontier bindings are invalid")
+    missing: list[tuple[dict[str, object], dict[str, object]]] = []
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            _reference("Delivery frontier binding is invalid")
+        requests = binding.get("requests")
+        if not isinstance(requests, list):
+            _reference("Delivery frontier requests are invalid")
+        for request in requests:
+            if not isinstance(request, dict):
+                _reference("Delivery frontier request is invalid")
+            resolution = request.get("resolution")
+            if not isinstance(resolution, dict):
+                continue
+            response_text = resolution.get("response_text")
+            if isinstance(response_text, str) and response_text.strip() and resolution.get("provenance") is None:
+                missing.append((request, resolution))
+    if len(missing) != 1 or missing[0][0].get("request_id") != request_id:
+        _reference("frontier contains an unsupported request-provenance defect")
+    missing[0][1]["provenance"] = "user-confirmed"
+    repaired_payload = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return parse_delivery_frontier(repaired_payload)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -4033,4 +4067,6 @@ __all__ = [
     "invalidate_checkpoint_publication",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
+    "parse_delivery_frontier",
+    "repair_missing_request_provenance",
 ]

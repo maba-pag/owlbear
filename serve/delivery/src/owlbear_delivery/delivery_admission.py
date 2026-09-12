@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
+    DeliveryRequest,
+    DeliveryStage,
     OutcomeAuthorityBinding,
     invalidate_checkpoint_publication,
     parse_delivery_frontier,
@@ -73,6 +75,8 @@ class DeliveryAdmissionRequest(_DeliveryAdmissionModel):
     expected_package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     active_claim_ids: tuple[str, ...]
     recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    expected_frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    preserve_unresolved_outcome_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def _validate_claims(self) -> DeliveryAdmissionRequest:
@@ -80,6 +84,12 @@ class DeliveryAdmissionRequest(_DeliveryAdmissionModel):
             not claim_id for claim_id in self.active_claim_ids
         ):
             msg = "active claim identities must be nonempty and unique"
+            raise ValueError(msg)
+        if self.preserve_unresolved_outcome_ids and self.expected_frontier_digest is None:
+            msg = "state-preserving admission requires an expected frontier digest"
+            raise ValueError(msg)
+        if len(self.preserve_unresolved_outcome_ids) != len(set(self.preserve_unresolved_outcome_ids)):
+            msg = "preserved outcome identities must be unique"
             raise ValueError(msg)
         return self
 
@@ -89,6 +99,7 @@ class RevisionCarryForward(_DeliveryAdmissionModel):
 
     preserved_outcome_ids: tuple[str, ...]
     invalidated_outcome_ids: tuple[str, ...]
+    carried_forward_outcome_ids: tuple[str, ...] = ()
 
 
 class DeliveryAdmissionReceipt(_DeliveryAdmissionModel):
@@ -179,7 +190,11 @@ class DeliveryAuthorityRegistry:
             current = self._read_current(request.change_id)
             self._validate_current(request, current)
             checkpoint_commit = self._publish_package_contract(request.change_id, compiled)
-            frontier, carry_forward = _delivery_frontier(compiled.contract, current)
+            frontier, carry_forward = _delivery_frontier(
+                compiled.contract,
+                current,
+                request.preserve_unresolved_outcome_ids,
+            )
             receipt = _delivery_receipt(
                 compiled.contract,
                 compiled.digest,
@@ -248,6 +263,14 @@ class DeliveryAuthorityRegistry:
         ):
             message = f"Delivery authority names another integration target: {request.change_id}"
             raise DeliveryAdmissionConflictError(message)
+        if request.expected_frontier_digest is not None:
+            if current is None or current.is_partial or current.frontier_bytes is None:
+                message = f"expected frontier is unavailable for Delivery authority revision: {request.change_id}"
+                raise DeliveryAdmissionConflictError(message)
+            observed = hashlib.sha256(current.frontier_bytes).hexdigest()
+            if observed != request.expected_frontier_digest:
+                message = f"Delivery frontier changed before authority revision: {request.change_id}"
+                raise DeliveryAdmissionConflictError(message)
 
     def _publish_package_contract(self, change_id: str, compiled: _CompiledDelivery) -> str:
         def validate_sources(intent_bytes: bytes, design_bytes: bytes, contract_bytes: bytes) -> None:
@@ -331,6 +354,7 @@ class DeliveryAuthorityRegistry:
 def _delivery_frontier(
     contract: DeliveryContract,
     current: _CurrentDelivery | None,
+    preserve_unresolved_outcome_ids: tuple[str, ...] = (),
 ) -> tuple[DeliveryFrontier, RevisionCarryForward | None]:
     scopes = {scope.outcome_id: scope.scope_id for scope in contract.plan_scopes}
     empty = {
@@ -346,11 +370,30 @@ def _delivery_frontier(
         raise DeliveryAdmissionConflictError
     _validate_delivery_frontier(current.contract, current.frontier)
     if current.contract == contract:
+        if preserve_unresolved_outcome_ids:
+            message = "state-preserving admission requires a revised Delivery contract"
+            raise DeliveryAdmissionConflictError(message)
         return current.frontier, None
     invalidated = _invalidated_outcomes(current.contract, contract)
+    preserved_for_revision = set(preserve_unresolved_outcome_ids)
+    if preserved_for_revision - invalidated:
+        message = "state-preserving admission names an unchanged or absent Outcome"
+        raise DeliveryAdmissionConflictError(message)
     previous_bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
     bindings = tuple(
-        previous_bindings[outcome.outcome_id] if outcome.outcome_id not in invalidated else empty[outcome.outcome_id]
+        (
+            _carry_forward_unresolved_binding(
+                previous_bindings[outcome.outcome_id],
+                outcome,
+                scopes[outcome.outcome_id],
+            )
+            if outcome.outcome_id in preserved_for_revision
+            else (
+                previous_bindings[outcome.outcome_id]
+                if outcome.outcome_id not in invalidated
+                else empty[outcome.outcome_id]
+            )
+        )
         for outcome in contract.outcomes
     )
     preserved = tuple(outcome.outcome_id for outcome in contract.outcomes if outcome.outcome_id not in invalidated)
@@ -373,7 +416,86 @@ def _delivery_frontier(
     ), RevisionCarryForward(
         preserved_outcome_ids=preserved,
         invalidated_outcome_ids=tuple(dict.fromkeys(ordered_invalidated)),
+        carried_forward_outcome_ids=tuple(
+            outcome.outcome_id for outcome in contract.outcomes if outcome.outcome_id in preserved_for_revision
+        ),
     )
+
+
+def _carry_forward_unresolved_binding(
+    previous: OutcomeAuthorityBinding,
+    outcome: DeliveryOutcome,
+    plan_scope_id: str,
+) -> OutcomeAuthorityBinding:
+    """Rebind one explicitly named unresolved gate to revised Outcome evidence."""
+    block = previous.block
+    if (
+        block is None
+        or previous.active_claim is not None
+        or previous.output is not None
+        or previous.candidate is not None
+        or previous.result_candidate is not None
+        or previous.recovery_attention is not None
+    ):
+        message = f"Outcome cannot be carried forward as an unresolved gate: {outcome.outcome_id}"
+        raise DeliveryAdmissionConflictError(message)
+    if block.request_id is None:
+        message = f"state-preserving admission requires a request-bound block: {outcome.outcome_id}"
+        raise DeliveryAdmissionConflictError(message)
+    requests = tuple(request for request in previous.requests if request.request_id == block.request_id)
+    if len(requests) != 1 or requests[0].resolution is None:
+        message = f"state-preserving admission requires a resolved repair request: {outcome.outcome_id}"
+        raise DeliveryAdmissionConflictError(message)
+    resolution = requests[0].resolution
+    if resolution.response_text and resolution.provenance != "user-confirmed":
+        message = f"state-preserving admission requires confirmed request provenance: {outcome.outcome_id}"
+        raise DeliveryAdmissionConflictError(message)
+    request_ids = {request.request_id for request in previous.requests}
+    fresh_request_id = _carry_forward_request_id(block.request_id, outcome)
+    if fresh_request_id in request_ids:
+        message = f"state-preserving admission request identity already exists: {outcome.outcome_id}"
+        raise DeliveryAdmissionConflictError(message)
+    fresh_request = DeliveryRequest(
+        request_id=fresh_request_id,
+        kind=requests[0].kind,
+        outcome_id=outcome.outcome_id,
+        summary=f"Complete the revised acceptance evidence for {outcome.title}.",
+        options=requests[0].options,
+    )
+    revised_block = block.model_copy(
+        update={
+            "reason": f"Required acceptance evidence remains pending for {outcome.title}.",
+            "unblock_condition": f"Complete the revised acceptance evidence for {outcome.title}.",
+            "expected_evidence": outcome.acceptance,
+            "locators": (
+                fresh_request_id,
+                *tuple(locator for locator in block.locators if locator != fresh_request_id),
+            ),
+            "resolution_note": None,
+            "resolution_locators": (),
+            "resume_commit": None,
+            "request_id": fresh_request_id,
+        }
+    )
+    return OutcomeAuthorityBinding(
+        outcome_id=outcome.outcome_id,
+        plan_scope_id=plan_scope_id,
+        stage=DeliveryStage.PLANNING,
+        block=revised_block,
+        requests=(*requests, fresh_request),
+    )
+
+
+def _carry_forward_request_id(request_id: str, outcome: DeliveryOutcome) -> str:
+    """Return one deterministic successor request identity for a revised gate."""
+    payload = {
+        "request_id": request_id,
+        "outcome_id": outcome.outcome_id,
+        "title": outcome.title,
+        "promise": outcome.promise,
+        "acceptance": outcome.acceptance,
+    }
+    return f"{request_id}-revised-{_digest(_canonical_json(payload))[:16]}"
 
 
 def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContract) -> set[str]:
