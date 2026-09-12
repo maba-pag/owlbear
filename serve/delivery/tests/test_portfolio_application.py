@@ -8113,3 +8113,27 @@ def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Pat
         )
 
     assert runtimes["change-a"].active_claims() == ((package.outcome_id, package.claim),)
+
+
+def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    now[0] = "2026-08-04T01:00:00Z"
+
+    diagnosed = application.repair_change("change-a")
+    assert diagnosed.proposal is not None
+    proposal = diagnosed.proposal
+    assert proposal.outcome_id == package.outcome_id
+    assert proposal.claim_id == package.claim.claim_id
+
+    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+        application.repair_change("change-a", proposal.proposal_id)
+
+    applied = application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
+    assert applied.recovery is not None
+    assert runtimes["change-a"].active_claims() == ()

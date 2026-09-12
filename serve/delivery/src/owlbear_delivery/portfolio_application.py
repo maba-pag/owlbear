@@ -731,6 +731,82 @@ class DeliveryClaimRecoveryResult(_ApplicationModel):
         return self
 
 
+class DeliveryRepairKind(StrEnum):
+    """High-level repair proposal categories exposed by the application facade."""
+
+    CONFIRM_LOST_WORKER = "confirm-lost-worker"
+
+
+class DeliveryRepairProposal(_ApplicationModel):
+    """One versioned repair choice that can be applied without caller-selected internals."""
+
+    proposal_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: DeliveryRepairKind
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    summary: str = Field(min_length=1)
+    consequence: str = Field(min_length=1)
+
+    @classmethod
+    def create(  # noqa: PLR0913 - proposal identity binds each exact repair input.
+        cls,
+        *,
+        kind: DeliveryRepairKind,
+        change_id: str,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+        expected_frontier_digest: str,
+        summary: str,
+        consequence: str,
+    ) -> DeliveryRepairProposal:
+        """Create a stable proposal identity from the exact repair evidence."""
+        values = {
+            "kind": kind,
+            "change_id": change_id,
+            "outcome_id": outcome_id,
+            "attempt_id": attempt_id,
+            "claim_id": claim_id,
+            "expected_frontier_digest": expected_frontier_digest,
+            "summary": summary,
+            "consequence": consequence,
+        }
+        proposal_id = hashlib.sha256(
+            json.dumps(
+                {key: value.value if isinstance(value, StrEnum) else value for key, value in values.items()},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        return cls(proposal_id=proposal_id, **values)
+
+
+class DeliveryRepairResult(_ApplicationModel):
+    """One repair diagnosis or the exact recovery result of an applied proposal."""
+
+    change_id: str = Field(min_length=1)
+    proposal: DeliveryRepairProposal | None = None
+    recovery: DeliveryClaimRecoveryResult | None = None
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> DeliveryRepairResult:
+        if self.proposal is None and self.recovery is None:
+            return self
+        if self.proposal is not None and self.recovery is not None:
+            message = "repair result cannot contain both proposal and recovery"
+            raise ValueError(message)
+        if self.proposal is not None and self.proposal.change_id != self.change_id:
+            message = "repair proposal does not match its Change"
+            raise ValueError(message)
+        if self.recovery is not None and self.recovery.change_id != self.change_id:
+            message = "repair recovery does not match its Change"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 
@@ -5161,6 +5237,58 @@ class PortfolioApplication:
             return_context=binding.return_context,
             recovery_attention=binding.recovery_attention,
         )
+
+    def repair_change(
+        self,
+        change_id: str,
+        proposal_id: str | None = None,
+        *,
+        confirmed_lost: bool = False,
+    ) -> DeliveryRepairResult:
+        """Diagnose or apply one exact stale-Builder recovery proposal."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(change_id, for_mutation=proposal_id is not None)
+            frontier_bytes = runtime.frontier_bytes()
+            digest = hashlib.sha256(frontier_bytes).hexdigest()
+            cutoff = _timestamp(self._clock()) - self._claim_timeout
+            proposal = next(
+                (
+                    DeliveryRepairProposal.create(
+                        kind=DeliveryRepairKind.CONFIRM_LOST_WORKER,
+                        change_id=change_id,
+                        outcome_id=outcome_id,
+                        attempt_id=claim.attempt_id,
+                        claim_id=claim.claim_id,
+                        expected_frontier_digest=digest,
+                        summary="Confirm that the stale Builder invocation has ended before recovery.",
+                        consequence=(
+                            "Delivery will preserve dirty bytes, restore the reviewed worktree, "
+                            "and release custody."
+                        ),
+                    )
+                    for outcome_id, claim in runtime.active_claims()
+                    if claim.worker_role is DeliveryWorkerRole.BUILDER
+                    and _timestamp(claim.started_at) <= cutoff
+                ),
+                None,
+            )
+            if proposal_id is None:
+                return DeliveryRepairResult(change_id=change_id, proposal=proposal)
+            if proposal is None or proposal.proposal_id != proposal_id:
+                self._fail("repair proposal is stale or unavailable")
+            if digest != proposal.expected_frontier_digest:
+                self._fail("repair proposal frontier changed")
+            if proposal.kind is not DeliveryRepairKind.CONFIRM_LOST_WORKER:
+                self._fail("repair proposal kind is unsupported")
+            if not confirmed_lost:
+                self._fail("repair application requires explicit lost-worker confirmation")
+            recovery = self._recover_claim(
+                change_id,
+                proposal.outcome_id,
+                proposal.attempt_id,
+                proposal.claim_id,
+            )
+            return DeliveryRepairResult(change_id=change_id, recovery=recovery)
 
     def recover_claim(
         self,
