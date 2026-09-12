@@ -49,20 +49,20 @@ Pursue interface reduction in this order:
 ### 1.2 Post-baseline implementation reading
 
 The current implementation adds version-bound `put_design` and `admit_change` boundaries, a coherent `get_change` read projection, a version-bound `answer`
-path for bounded Decision Request resolution, a version-bound `set_change_intent` path for pause,
-resume, and abandonment, a grouped `list_changes` projection, and a Builder-only `submit_result`
-path that publishes and promotes one exact result, an `acquire_actions` claim-facing alias over
-the existing bounded acquisition authority, and a high-level `repair` alias used by Repairer. The
-proposal-backed `repair_change` path remains
+path for bounded Decision Request, requestless Block, and Change Disposition resolution, a
+version-bound `set_change_intent` path for pause, resume, and abandonment, a grouped `list_changes`
+projection, and a Builder-only `submit_result` path that publishes and promotes one exact result,
+an `acquire_actions` claim-facing alias over the existing bounded acquisition authority, and a
+high-level `repair` alias used by Repairer. The proposal-backed `repair_change` path remains
 available to a constrained Repairer, while Orchestrator routes exact Change-specific proposals to
 it. Action free-text resolution remains on the existing operator path. This is an additive
 migration boundary, not evidence that the older low-level operations are ready for removal.
 
 The six new MCP operations are intentionally absent from the historical matrix below. Refresh the
 matrix only after bounded Decision answers, lifecycle intents, grouped listing, Builder submission,
-requestless-block and disposition handling, Action free-text provenance, and repair-proposal parity
-are complete; otherwise the document would imply a final surface while the facade is still being
-shaped.
+Action free-text provenance, and repair-proposal parity are complete; requestless-block and
+disposition handling are now covered by the unified answer facade. Otherwise the document would
+imply a final surface while the facade is still being shaped.
 
 ## 2. Scope, Method, And Evidence Limits
 
