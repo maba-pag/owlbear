@@ -3140,6 +3140,8 @@ class DeliveryRuntime:
         _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
         _require_no_active_change_claim(frontier, "request resolution")
+        if request.kind is DeliveryRequestKind.DECISION and resolution.selected_option_id is None:
+            _reference("Decision requests require a selected option")
         if request.resolution is not None:
             if request.resolution == resolution:
                 return request

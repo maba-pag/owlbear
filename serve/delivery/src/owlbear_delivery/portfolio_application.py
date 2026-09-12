@@ -3763,10 +3763,10 @@ class PortfolioApplication:
         )
         return self._portfolio_operating_view(snapshots, groups)
 
-    def delivery_health(self) -> DeliveryHealthView:
+    def delivery_health(self, change_id: str | None = None) -> DeliveryHealthView:
         """Return bounded diagnostics for state excluded from Delivery authority."""
         self._reconcile_runtimes()
-        return self._delivery_health_view()
+        return self._delivery_health_view(scoped_change_id=change_id)
 
     def repair_delivery_state_snapshot(
         self,
@@ -4063,7 +4063,7 @@ class PortfolioApplication:
                 f"{self._runtime_reconciliation_errors[change_id]}"
             )
 
-    def _delivery_health_view(self) -> DeliveryHealthView:
+    def _delivery_health_view(self, *, scoped_change_id: str | None = None) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [
             *self._startup_health_diagnostics,
         ]
@@ -4148,6 +4148,10 @@ class PortfolioApplication:
                 ),
             )
         )
+        if scoped_change_id is not None:
+            ordered = tuple(
+                item for item in ordered if item.change_id is None or item.change_id == scoped_change_id
+            )
         bounded = ordered[:_MAX_HEALTH_DIAGNOSTICS]
         return DeliveryHealthView(
             status=DeliveryHealthStatus.ATTENTION if bounded else DeliveryHealthStatus.HEALTHY,
@@ -5336,14 +5340,7 @@ class PortfolioApplication:
             "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key,
         )
         detail = self.show_work_item_view(change_id, item_key)
-        portfolio_health = self.delivery_health()
-        diagnostics = tuple(item for item in portfolio_health.diagnostics if item.change_id == change_id)
-        health = portfolio_health.model_copy(
-            update={
-                "status": DeliveryHealthStatus.ATTENTION if diagnostics else DeliveryHealthStatus.HEALTHY,
-                "diagnostics": diagnostics,
-            }
-        )
+        health = self.delivery_health(change_id)
         return DeliveryChangeView(
             change_id=change_id,
             frontier_digest=frontier_digest,

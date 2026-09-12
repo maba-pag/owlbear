@@ -74,7 +74,6 @@ from owlbear_delivery import (
     DeliveryHealthReason,
     DeliveryHealthResolution,
     DeliveryHealthStatus,
-    DeliveryHealthView,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -8167,31 +8166,29 @@ def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
-    with patch.object(
-        application,
-        "delivery_health",
-        return_value=DeliveryHealthView(
-            status=DeliveryHealthStatus.ATTENTION,
-            diagnostics=(
-                DeliveryHealthDiagnostic(
-                    source="test",
-                    code="other-change",
-                    detail="Other Change requires attention.",
-                    change_id="change-b",
-                ),
-                DeliveryHealthDiagnostic(
-                    source="test",
-                    code="requested-change",
-                    detail="Requested Change requires attention.",
-                    change_id="change-a",
-                ),
-            ),
+    application._startup_health_diagnostics = (
+        DeliveryHealthDiagnostic(
+            source="test",
+            code="other-change",
+            detail="Other Change requires attention.",
+            change_id="change-b",
         ),
-    ):
-        view = application.get_change("change-a")
+        DeliveryHealthDiagnostic(
+            source="test",
+            code="portfolio-fault",
+            detail="The Delivery portfolio requires attention.",
+        ),
+        DeliveryHealthDiagnostic(
+            source="test",
+            code="requested-change",
+            detail="Requested Change requires attention.",
+            change_id="change-a",
+        ),
+    )
+    view = application.get_change("change-a")
 
     assert view.health.status is DeliveryHealthStatus.ATTENTION
-    assert tuple(item.change_id for item in view.health.diagnostics) == ("change-a",)
+    assert tuple(item.change_id for item in view.health.diagnostics) == (None, "change-a")
 
 
 def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: Path) -> None:

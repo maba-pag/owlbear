@@ -2099,6 +2099,12 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
         )
     )
 
+    with pytest.raises(DeliveryRuntimeReferenceError, match="selected option"):
+        runtime.resolve_request(
+            "request-001",
+            DeliveryRequestResolution(response_text="Use the checked-in copy."),
+        )
+
     resolved = runtime.resolve_request(
         "request-001",
         DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in copy."),
