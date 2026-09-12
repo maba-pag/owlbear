@@ -56,6 +56,8 @@ from owlbear_delivery import (
     DeliveryAuthorityRegistry,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionResolution,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
@@ -8189,6 +8191,53 @@ def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path
 
     assert view.health.status is DeliveryHealthStatus.ATTENTION
     assert tuple(item.change_id for item in view.health.diagnostics) == (None, "change-a")
+
+
+def test_set_change_intent_routes_versioned_lifecycle_dispositions(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    initial = application.get_change("change-a")
+
+    deferred = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=initial.frontier_digest,
+            reason="Wait for user review.",
+        )
+    )
+    assert deferred.receipt.change_id == "change-a"
+    assert deferred.kind is DeliveryChangeIntentKind.DEFER
+
+    with pytest.raises(PortfolioApplicationError, match="frontier changed"):
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.RESUME,
+                expected_frontier_digest=initial.frontier_digest,
+            )
+        )
+
+    resumed = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.RESUME,
+            expected_frontier_digest=deferred.frontier_digest,
+        )
+    )
+    assert resumed.receipt == deferred.receipt
+    abandoned = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.ABANDON,
+            expected_frontier_digest=resumed.frontier_digest,
+            reason="User stopped the Change.",
+        )
+    )
+    assert abandoned.kind is DeliveryChangeIntentKind.ABANDON
+    assert abandoned.receipt.change_id == "change-a"
 
 
 def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: Path) -> None:

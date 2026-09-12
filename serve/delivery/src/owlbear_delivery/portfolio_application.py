@@ -818,6 +818,60 @@ class DeliveryChangeView(_ApplicationModel):
     repair: DeliveryRepairResult | None = None
 
 
+class DeliveryChangeIntentKind(StrEnum):
+    """User-directed Change lifecycle intent categories."""
+
+    DEFER = "defer"
+    RESUME = "resume"
+    ABANDON = "abandon"
+
+
+class DeliveryChangeIntent(_ApplicationModel):
+    """One version-bound request to pause, resume, or abandon a Change."""
+
+    change_id: str = Field(min_length=1)
+    kind: DeliveryChangeIntentKind
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_reason(self) -> DeliveryChangeIntent:
+        if self.kind is DeliveryChangeIntentKind.RESUME:
+            if self.reason is not None:
+                message = "resume intent does not accept a reason"
+                raise ValueError(message)
+        elif self.reason is None or not self.reason.strip():
+            message = "defer and abandon intents require a reason"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeIntentResult(_ApplicationModel):
+    """The applied Change intent receipt and resulting frontier version."""
+
+    change_id: str = Field(min_length=1)
+    kind: DeliveryChangeIntentKind
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryChangeIntentResult:
+        if self.receipt.change_id != self.change_id:
+            message = "Change intent receipt does not match its Change"
+            raise ValueError(message)
+        if self.kind is DeliveryChangeIntentKind.ABANDON and not isinstance(
+            self.receipt, DeliveryChangeAbandonment
+        ):
+            message = "abandon intent requires an abandonment receipt"
+            raise ValueError(message)
+        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(
+            self.receipt, DeliveryChangeDeferral
+        ):
+            message = "defer or resume intent requires a deferral receipt"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAnswer(_ApplicationModel):
     """One version-bound answer to a retained Delivery request."""
 
@@ -5348,6 +5402,36 @@ class PortfolioApplication:
             health=health,
             repair=repair if repair.proposal is not None else None,
         )
+
+    def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
+        """Apply one version-bound user lifecycle intent through the owning runtime."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(intent.change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(intent.change_id),)):
+                current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                if current_digest != intent.expected_frontier_digest:
+                    self._fail("Change intent frontier changed")
+                if intent.kind is DeliveryChangeIntentKind.DEFER:
+                    if intent.reason is None:
+                        self._fail("defer intent requires a reason")
+                    receipt = runtime.defer_change(intent.reason, _timestamp(self._clock()))
+                elif intent.kind is DeliveryChangeIntentKind.RESUME:
+                    receipt = runtime.resume_change()
+                else:
+                    if intent.reason is None:
+                        self._fail("abandon intent requires a reason")
+                    receipt = runtime.abandon_change(intent.reason, _timestamp(self._clock()))
+                self._publish_delivery_state(
+                    intent.change_id,
+                    runtime,
+                    _checkpoint_operation_id(intent.kind.value, intent.change_id, receipt.model_dump_json()),
+                )
+                return DeliveryChangeIntentResult(
+                    change_id=intent.change_id,
+                    kind=intent.kind,
+                    frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    receipt=receipt,
+                )
 
     def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:
         """Apply one request answer after revalidating the captured frontier version."""
