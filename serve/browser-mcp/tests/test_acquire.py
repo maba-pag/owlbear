@@ -13,7 +13,7 @@ import pytest
 from mcp import Client
 from mcp.server.mcpserver.exceptions import ToolError
 
-from owlbear_browser import AcquisitionStatus, AcquisitionSuccess, Diagnostics
+from owlbear_browser import AcquisitionFailure, AcquisitionStatus, AcquisitionSuccess, Diagnostics
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_browser_mcp.allowlist import DomainAllowlist
 from owlbear_browser_mcp.server import AppContext, _serialize_acquisition, acquire, mcp
@@ -60,6 +60,27 @@ async def test_acquire_delegates_allowed_public_url_after_security_checks() -> N
     assert request.url == url
     assert result["status"] == "success"
     assert result["markdown"] == "Rendered fixture content"
+    assert app_ctx.latest_acquisition_status is AcquisitionStatus.SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_acquisition_failure_updates_status_and_fresh_context_starts_empty() -> None:
+    url = "https://target.example.com/failure"
+    launcher = MagicMock()
+    launcher.acquire = AsyncMock(
+        return_value=AcquisitionFailure(
+            status=AcquisitionStatus.ACCESS_DENIED,
+            diagnostics=Diagnostics("denied"),
+        )
+    )
+    app_ctx = AppContext(allowlist=DomainAllowlist(domains=["target.example.com"]), launcher=launcher)
+    ctx = MagicMock()
+    ctx.request_context = SimpleNamespace(lifespan_context=app_ctx)
+    with patch("socket.getaddrinfo", return_value=[("AF_INET", 0, 0, "", ("93.184.216.34", 443))]):
+        result = await acquire(ctx, url)
+    assert result["status"] == "access_denied"
+    assert app_ctx.latest_acquisition_status is AcquisitionStatus.ACCESS_DENIED
+    assert AppContext(allowlist=DomainAllowlist(domains=["example.com"])).latest_acquisition_status is None
 
 
 def test_mcp_serialization_redacts_all_acquisition_url_surfaces() -> None:
