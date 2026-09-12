@@ -63,6 +63,7 @@ DELIVERY_TOOLS = {
     "list_work_items",
     "get_change",
     "answer",
+    "set_change_intent",
     "delivery_health",
     "repair_delivery_state_snapshot",
     "recover_out_of_band_head",
@@ -377,7 +378,14 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
         assert tool.annotations.idempotent_hint is (
             name
-            not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move", "repair_change"}
+            not in {
+                "acquire_frontier_work",
+                "resolve_request",
+                "clear_block",
+                "administrative_move",
+                "repair_change",
+                "set_change_intent",
+            }
         )
         assert tool.annotations.destructive_hint is (
             name

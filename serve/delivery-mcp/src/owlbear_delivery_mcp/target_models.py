@@ -6,7 +6,7 @@ import json
 from functools import partial
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
@@ -24,6 +24,8 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryBlock,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
     DeliveryChangePublicationHistory,
     DeliveryChangeStage,
     DeliveryIntegrationAttentionCode,
@@ -47,6 +49,8 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryChangeIntentKind,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
@@ -150,6 +154,25 @@ class AnswerParams(ChangeParams):
     request_id: str = Field(min_length=1)
     resolution: DeliveryRequestResolution
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class SetChangeIntentParams(ChangeParams):
+    """Validate one version-bound pause, resume, or abandon intent."""
+
+    kind: DeliveryChangeIntentKind
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_reason(self) -> SetChangeIntentParams:
+        if self.kind is DeliveryChangeIntentKind.RESUME:
+            if self.reason is not None:
+                message = "resume intent does not accept a reason"
+                raise ValueError(message)
+        elif self.reason is None or not self.reason.strip():
+            message = "defer and abandon intents require a reason"
+            raise ValueError(message)
+        return self
 
 
 class ResolveChangeDispositionParams(ChangeParams):
@@ -604,6 +627,25 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class SetChangeIntentResponse(_TargetProtocolModel):
+    """Bounded response for one applied Change lifecycle intent."""
+
+    change_id: ChangeId
+    kind: DeliveryChangeIntentKind
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment
+
+    @classmethod
+    def from_result(cls, result: DeliveryChangeIntentResult) -> SetChangeIntentResponse:
+        """Project one core intent result into the strict MCP response."""
+        return cls(
+            change_id=result.change_id,
+            kind=result.kind,
+            frontier_digest=result.frontier_digest,
+            receipt=result.receipt,
+        )
+
+
 class ClearedDeliveryBlockResponse(_TargetProtocolModel):
     """Bounded response for one cleared requestless block."""
 
@@ -866,6 +908,10 @@ type AdmitDeliveryChangeRequest = Annotated[
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
 type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
+type SetChangeIntentRequest = Annotated[
+    SetChangeIntentParams,
+    BeforeValidator(partial(_parse_json_model, SetChangeIntentParams)),
+]
 type OperatorContextRequest = Annotated[
     OperatorContextParams,
     BeforeValidator(partial(_parse_json_model, OperatorContextParams)),
@@ -1106,6 +1152,9 @@ __all__ = [
     "ReviseDesignSessionRequest",
     "SearchCompletedParams",
     "SearchCompletedRequest",
+    "SetChangeIntentParams",
+    "SetChangeIntentRequest",
+    "SetChangeIntentResponse",
     "ShowCompletedParams",
     "ShowCompletedRequest",
     "SupersedePublicationParams",

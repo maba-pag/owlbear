@@ -43,10 +43,12 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMoveResult,
     DeliveryAcceptanceWaitingError,
     DeliveryBlock,
+    DeliveryChangeDeferral,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
+    DeliveryChangeStage,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
@@ -74,6 +76,9 @@ from owlbear_delivery.draft_pull_request import (
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
     DeliveryStateSnapshotRepairReceipt,
@@ -294,8 +299,8 @@ class _RecordingApplication:
             ),
         )
 
-    def __getattr__(self, name: str) -> Any:  # noqa: C901
-        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912
+    def __getattr__(self, name: str) -> Any:  # noqa: C901, PLR0915
+        def operation(*args: object, **kwargs: object) -> object:  # noqa: C901, PLR0912, PLR0915
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
             if failure is not None:
@@ -404,6 +409,18 @@ class _RecordingApplication:
                         resolution=DeliveryRequestResolution(response_text="Completed."),
                     ),
                     frontier_digest=DIGEST,
+                )
+            elif name == "set_change_intent":
+                result = DeliveryChangeIntentResult(
+                    change_id=CHANGE,
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    frontier_digest=DIGEST,
+                    receipt=DeliveryChangeDeferral.create(
+                        change_id=CHANGE,
+                        prior_stage=DeliveryChangeStage.BUILDING,
+                        deferred_at=datetime(2026, 8, 4, tzinfo=UTC),
+                        reason="Wait for user review",
+                    ),
                 )
             elif name == "clear_block":
                 result = OutcomeAuthorityBinding(
@@ -592,6 +609,12 @@ def _requests() -> dict[str, dict[str, object]]:
             "request_id": "request",
             "resolution": {"response_text": "Completed."},
             "expected_frontier_digest": DIGEST,
+        },
+        "set_change_intent": {
+            **change,
+            "kind": "defer",
+            "expected_frontier_digest": DIGEST,
+            "reason": "Wait for user review",
         },
         "delivery_health": {},
         "repair_delivery_state_snapshot": {
@@ -805,6 +828,14 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
                 expected_frontier_digest=DIGEST,
             ),
         ),
+        "set_change_intent": (
+            DeliveryChangeIntent(
+                change_id=CHANGE,
+                kind=DeliveryChangeIntentKind.DEFER,
+                expected_frontier_digest=DIGEST,
+                reason="Wait for user review",
+            ),
+        ),
         "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
@@ -953,6 +984,11 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.request.request_id == "request"
         assert result.request.resolution.response_text == "Completed."
         assert result.frontier_digest == DIGEST
+    elif operation_name == "set_change_intent":
+        assert result.change_id == CHANGE
+        assert result.kind is DeliveryChangeIntentKind.DEFER
+        assert result.frontier_digest == DIGEST
+        assert result.receipt.change_id == CHANGE
     elif operation_name == "clear_block":
         assert result.change_id == CHANGE
         assert result.outcome_id == "OUT-001"

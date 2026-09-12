@@ -40,6 +40,8 @@ from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
@@ -136,6 +138,9 @@ from owlbear_delivery_mcp.target_models import (
     ReviseDesignSessionRequest,
     SearchCompletedParams,
     SearchCompletedRequest,
+    SetChangeIntentParams,
+    SetChangeIntentRequest,
+    SetChangeIntentResponse,
     ShowCompletedParams,
     ShowCompletedRequest,
     SupersedePublicationParams,
@@ -170,6 +175,7 @@ DELIVERY_OPERATION_NAMES = (
     "list_work_items",
     "get_change",
     "answer",
+    "set_change_intent",
     "delivery_health",
     "repair_delivery_state_snapshot",
     "recover_out_of_band_head",
@@ -242,7 +248,7 @@ _DELIVERY_READS = frozenset(
     }
 )
 _DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
-    {"resolve_request", "clear_block", "administrative_move", "repair_change"}
+    {"resolve_request", "clear_block", "administrative_move", "repair_change", "set_change_intent"}
 )
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
@@ -390,6 +396,24 @@ class TargetMCPAdapter:
             request=result.request,
             frontier_digest=result.frontier_digest,
         )
+
+    async def set_change_intent(self, request: SetChangeIntentRequest) -> SetChangeIntentResponse:
+        """Apply one version-bound pause, resume, or abandon intent."""
+        params = self._validate(SetChangeIntentParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=params.change_id,
+                    kind=params.kind,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                    reason=params.reason,
+                )
+            ),
+            DeliveryChangeIntentResult,
+        )
+        return SetChangeIntentResponse.from_result(result)
 
     async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
         """Return bounded diagnostics for quarantined or unavailable Delivery state."""
