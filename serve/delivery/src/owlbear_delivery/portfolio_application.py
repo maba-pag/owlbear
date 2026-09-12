@@ -4892,6 +4892,23 @@ class PortfolioApplication:
                 try:
                     if _timestamp(claim.started_at) > cutoff:
                         continue
+                    if claim.worker_role is DeliveryWorkerRole.BUILDER:
+                        failures.append(
+                            DeliveryAcquisitionFailure(
+                                change_id=change_id,
+                                outcome_id=outcome_id,
+                                code=PortfolioApplicationError.code,
+                                detail=(
+                                    "Builder claim exceeded its timeout; worker termination must be "
+                                    "confirmed before worktree recovery."
+                                ),
+                                retry_condition=(
+                                    "Confirm the Builder invocation has ended before recovering its "
+                                    "managed worktree."
+                                ),
+                            )
+                        )
+                        continue
                     recovered = self._recover_claim(
                         change_id,
                         outcome_id,

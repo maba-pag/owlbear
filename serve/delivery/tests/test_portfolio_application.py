@@ -7476,7 +7476,7 @@ def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_p
     assert not (state_root / "capacity.json").exists()
 
 
-def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_path: Path) -> None:
+def test_acquisition_retains_expired_clean_builder_claim_without_relaunch(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -7490,23 +7490,18 @@ def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_pat
     attempt_commit = _git(first.worktree_path, "rev-parse", "HEAD")
 
     now[0] = "2026-08-04T01:00:00Z"
-    recovered = application.acquire_frontier_work()
+    stale = application.acquire_frontier_work()
 
-    assert recovered.failures == ()
-    assert len(recovered.recoveries) == 1
-    assert recovered.recoveries[0].preserved_commit == attempt_commit
-    assert recovered.recoveries[0].preserved_ref == (f"refs/owlbear/attempts/change-a/{first.claim.attempt_id}")
-    assert _git(first.worktree_path, "rev-parse", recovered.recoveries[0].preserved_ref) == attempt_commit
-    replacement = recovered.launch_packages[0]
-    assert replacement.claim.claim_id != first.claim.claim_id
-    assert replacement.writer is not None
-    assert replacement.writer.claim_id == replacement.claim.claim_id
-    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
-    assert coordinator.show("change-a").writer == replacement.writer
-    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
+    assert stale.launch_packages == ()
+    assert stale.recoveries == ()
+    assert len(stale.failures) == 1
+    assert stale.failures[0].claim_id is None
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
+    assert coordinator.show("change-a").writer == first.writer
+    assert _git(first.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 
-def test_acquisition_recovers_expired_dirty_builder_claim_and_relaunches(tmp_path: Path) -> None:
+def test_acquisition_retains_expired_dirty_builder_claim_without_cleanup(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, _runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -7518,21 +7513,15 @@ def test_acquisition_recovers_expired_dirty_builder_claim_and_relaunches(tmp_pat
     product.write_text("uncommitted attempt\n", encoding="utf-8")
 
     now[0] = "2026-08-04T01:00:00Z"
-    recovered = application.acquire_frontier_work()
+    stale = application.acquire_frontier_work()
 
-    assert recovered.failures == ()
-    assert len(recovered.recoveries) == 1
-    recovery = recovered.recoveries[0]
-    assert recovery.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovery.quarantine_commit is not None
-    assert recovery.quarantine_ref == f"refs/owlbear/quarantine/change-a/{first.claim.attempt_id}"
-    assert _git(first.worktree_path, "rev-parse", recovery.quarantine_ref) == recovery.quarantine_commit
-    replacement = recovered.launch_packages[0]
-    assert replacement.claim.claim_id != first.claim.claim_id
-    assert replacement.writer is not None
-    assert coordinator.show("change-a").writer == replacement.writer
-    assert _git(first.worktree_path, "status", "--porcelain") == ""
-    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
+    assert stale.launch_packages == ()
+    assert stale.recoveries == ()
+    assert len(stale.failures) == 1
+    assert stale.failures[0].claim_id is None
+    assert coordinator.show("change-a").writer == first.writer
+    assert _git(first.worktree_path, "status", "--porcelain") != ""
+    assert (first.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
 
 
 def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_path: Path) -> None:
@@ -7563,7 +7552,7 @@ def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_pa
     assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
     assert len(recovered.failures) == 1
     assert recovered.failures[0].change_id == "change-a"
-    assert recovered.failures[0].claim_id == initial_by_change["change-a"].claim.claim_id
+    assert recovered.failures[0].claim_id is None
     assert len(recovered.recoveries) == 1
     assert recovered.recoveries[0].change_id == "change-b"
     assert runtimes["change-a"].active_claims()
