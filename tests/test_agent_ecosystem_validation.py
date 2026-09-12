@@ -94,7 +94,7 @@ _TARGET_ROLE_TOOLS = {
         "recover_claim",
         "recover_integration_repair_claim",
     },
-    "repairer": {"get_change", "repair_change", "answer"},
+    "repairer": {"get_change", "repair", "answer"},
     "finalizer": {
         "show_finalization_context",
         "reconcile_finalization_head",
