@@ -5443,6 +5443,16 @@ class PortfolioApplication:
             )
             return DeliveryRepairResult(change_id=change_id, recovery=recovery)
 
+    def repair(
+        self,
+        change_id: str,
+        proposal_id: str | None = None,
+        *,
+        confirmed_lost: bool = False,
+    ) -> DeliveryRepairResult:
+        """Diagnose or apply one high-level repair proposal."""
+        return self.repair_change(change_id, proposal_id, confirmed_lost=confirmed_lost)
+
     def get_change(self, change_id: str) -> DeliveryChangeView:
         """Return one coherent Change view without requiring caller-side projection joins."""
         runtime = self._runtime(change_id)

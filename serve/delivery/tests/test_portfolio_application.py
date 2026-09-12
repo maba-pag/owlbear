@@ -8340,6 +8340,23 @@ def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Pat
     assert runtimes["change-a"].active_claims() == ()
 
 
+def test_repair_facade_matches_existing_repair_proposal_authority(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    now[0] = "2026-08-04T01:00:00Z"
+
+    diagnosed = application.repair("change-a")
+
+    assert diagnosed == application.repair_change("change-a")
+    assert diagnosed.proposal is not None
+    assert diagnosed.proposal.claim_id == package.claim.claim_id
+
+
 def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, _runtimes, _coordinator, _state_root = _portfolio(
