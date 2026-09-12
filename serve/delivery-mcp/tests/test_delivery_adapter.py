@@ -572,6 +572,7 @@ def _requests() -> dict[str, dict[str, object]]:
             "active_claim_ids": [],
         },
         "list_work_items": {},
+        "get_change": change,
         "delivery_health": {},
         "repair_delivery_state_snapshot": {
             **change,

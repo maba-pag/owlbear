@@ -163,6 +163,7 @@ DELIVERY_OPERATION_NAMES = (
     "derive_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "get_change",
     "delivery_health",
     "repair_delivery_state_snapshot",
     "recover_out_of_band_head",
@@ -217,6 +218,7 @@ _DELIVERY_READS = frozenset(
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "get_change",
         "delivery_health",
         "list_retained_change_worktrees",
         "show_work_item",
@@ -355,6 +357,11 @@ class TargetMCPAdapter:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def get_change(self, request: ChangeRequest) -> dict[str, object]:
+        """Return one coherent Change detail, health, and repair projection."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.get_change(params.change_id))
 
     async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
         """Return bounded diagnostics for quarantined or unavailable Delivery state."""
