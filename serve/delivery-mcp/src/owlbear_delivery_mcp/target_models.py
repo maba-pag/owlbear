@@ -183,18 +183,6 @@ class ResolveChangeDispositionParams(ChangeParams):
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class DeferChangeParams(ChangeParams):
-    """Validate one user-requested Change deferral."""
-
-    reason: str = Field(min_length=1)
-
-
-class AbandonChangeParams(ChangeParams):
-    """Validate one user-requested terminal Change abandonment."""
-
-    reason: str = Field(min_length=1)
-
-
 class CleanupAbandonedChangeParams(ChangeParams):
     """Validate cleanup of one terminal abandoned Change worktree."""
 
@@ -659,6 +647,7 @@ class SetChangeIntentResponse(_TargetProtocolModel):
 class SubmitResultResponse(_TargetProtocolModel):
     """Bounded response for one promoted Builder result."""
 
+    kind: Literal["submitted"] = "submitted"
     change_id: ChangeId
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
@@ -669,6 +658,7 @@ class SubmitResultResponse(_TargetProtocolModel):
     def from_result(cls, result: DeliveryResultSubmissionResult) -> SubmitResultResponse:
         """Project one core submission result into the strict MCP response."""
         return cls(
+            kind=result.kind,
             change_id=result.change_id,
             outcome_id=result.outcome_id,
             claim_id=result.claim_id,
@@ -971,14 +961,6 @@ type AdministrativeMoveRequest = Annotated[
     AdministrativeMoveParams,
     BeforeValidator(partial(_parse_json_model, AdministrativeMoveParams)),
 ]
-type DeferChangeRequest = Annotated[
-    DeferChangeParams,
-    BeforeValidator(partial(_parse_json_model, DeferChangeParams)),
-]
-type AbandonChangeRequest = Annotated[
-    AbandonChangeParams,
-    BeforeValidator(partial(_parse_json_model, AbandonChangeParams)),
-]
 type CleanupAbandonedChangeRequest = Annotated[
     CleanupAbandonedChangeParams,
     BeforeValidator(partial(_parse_json_model, CleanupAbandonedChangeParams)),
@@ -1096,8 +1078,6 @@ type WorkItemViewRequest = Annotated[
 
 
 __all__ = [
-    "AbandonChangeParams",
-    "AbandonChangeRequest",
     "AdministrativeMoveParams",
     "AdministrativeMovePreviewResponse",
     "AdministrativeMoveRequest",
@@ -1128,8 +1108,6 @@ __all__ = [
     "CompletedPageRequest",
     "CreateDesignSessionParams",
     "CreateDesignSessionRequest",
-    "DeferChangeParams",
-    "DeferChangeRequest",
     "DeliveryAnswerResponse",
     "DeliveryHealthDiagnosticResponse",
     "DeliveryHealthResponse",

@@ -47,7 +47,7 @@ and `target_sync_operation_id`; the exact target-sync evidence may qualify the r
 diagnostic for that repair route. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items get_change delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition set_change_intent cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -185,11 +185,11 @@ Use only an existing operation whose contract owns the selected result:
   reconciled publication is valid. Observe acceptance only after the reopened pull request is
   merged. An open, unmerged pull request needs no attention resolution; call
   `observe_acceptance(change_id)` only as a retry-safe waiting observation.
-- User disposition: after the user explicitly selects pause or termination, call
-  `defer_change(change_id, reason)` to retain the Change and its worktree, or
-  `abandon_change(change_id, reason)` to terminate the uncompleted Change. Call
-  `resume_change(change_id)` only for an exact currently deferred Change. Abandonment is
-  irreversible and must not be inferred from an attention diagnosis.
+- User disposition: after the user explicitly selects pause, resumption, or termination, call
+  `get_change(change_id)` and retain its `frontier_digest`, then call
+  `set_change_intent(change_id, kind, expected_frontier_digest, reason)` to retain, resume, or
+  terminate the Change. Omit `reason` only for `resume`; abandonment is irreversible and must not
+  be inferred from an attention diagnosis.
 - External Change head adoption: after the user explicitly selects adoption and the exact expected
   reviewed head and remote adopted head have been re-read, call
   `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. When the managed
