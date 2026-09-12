@@ -110,13 +110,15 @@ class TargetCockpitService:
 
     def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object:
         """Answer one exact pending Delivery request."""
-        resolution = DeliveryRequestResolution(**body.model_dump())
-        view = self._invoke(lambda: self._application.get_change(change_id))
+        resolution = DeliveryRequestResolution(
+            selected_option_id=body.selected_option_id,
+            response_text=body.response_text,
+        )
         answer = DeliveryAnswer(
             change_id=change_id,
             request_id=request_id,
             resolution=resolution,
-            expected_frontier_digest=view.frontier_digest,
+            expected_frontier_digest=body.expected_frontier_digest,
         )
         return self._invoke(lambda: self._application.answer(answer))
 

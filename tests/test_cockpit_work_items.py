@@ -836,7 +836,7 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
 
     answer = client.post(
         "/api/changes/change-a/requests/request-one/answer",
-        json={"selected_option_id": "option-a"},
+        json={"selected_option_id": "option-a", "expected_frontier_digest": "a" * 64},
     )
     clear = client.post(
         "/api/changes/change-a/outcomes/OUT-001/blocks/block-one/clear",
@@ -867,15 +867,8 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
         200,
     )
     assert rejected_recovery.status_code == 422
-    assert [name for name, _args in application.calls] == [
-        "get-change",
-        "answer",
-        "clear",
-        "recover",
-        "move-preview",
-        "move",
-    ]
-    answer_request = application.calls[1][1][0]
+    assert [name for name, _args in application.calls] == ["answer", "clear", "recover", "move-preview", "move"]
+    answer_request = application.calls[0][1][0]
     assert isinstance(answer_request, DeliveryAnswer)
     assert answer_request.expected_frontier_digest == "a" * 64
     move_request = application.calls[-1][1][1]

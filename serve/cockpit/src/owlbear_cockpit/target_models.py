@@ -320,6 +320,7 @@ class AnswerRequestBody(_TargetHTTPModel):
 
     selected_option_id: str | None = None
     response_text: str | None = None
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def _require_answer(self) -> AnswerRequestBody:
