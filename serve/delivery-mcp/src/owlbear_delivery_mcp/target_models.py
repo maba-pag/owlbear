@@ -51,6 +51,7 @@ from owlbear_delivery.design_package import DesignPackageManifest, DesignPackage
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryAnswerKind,
     DeliveryChangeIntentKind,
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
@@ -152,11 +153,40 @@ class ChangeParams(_TargetProtocolModel):
 
 
 class AnswerParams(ChangeParams):
-    """Validate one version-bound answer for a retained Delivery request."""
+    """Validate one version-bound request or requestless-block answer."""
 
-    request_id: str = Field(min_length=1)
-    resolution: DeliveryRequestResolution
+    kind: DeliveryAnswerKind = DeliveryAnswerKind.REQUEST
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_id: str | None = None
+    resolution: DeliveryRequestResolution | None = None
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    block_id: str | None = None
+    operator_note: str | None = None
+    locators: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> AnswerParams:
+        if self.kind is DeliveryAnswerKind.REQUEST:
+            if self.request_id is None or self.resolution is None:
+                message = "request answers require request identity and resolution"
+                raise ValueError(message)
+            if any((self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "request answers cannot include block evidence"
+                raise ValueError(message)
+        else:
+            if (
+                self.outcome_id is None
+                or self.block_id is None
+                or self.operator_note is None
+                or not self.operator_note.strip()
+                or not self.locators
+            ):
+                message = "block answers require outcome, block, note, and locators"
+                raise ValueError(message)
+            if self.request_id is not None or self.resolution is not None:
+                message = "block answers cannot include request resolution"
+                raise ValueError(message)
+        return self
 
 
 class PutDesignParams(ChangeParams):
@@ -630,8 +660,20 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
     """Bounded response for one version-bound request answer."""
 
     change_id: ChangeId
-    request: DeliveryRequest
+    kind: DeliveryAnswerKind
+    request: DeliveryRequest | None = None
+    binding: OutcomeAuthorityBinding | None = None
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> DeliveryAnswerResponse:
+        if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
+            message = "request answer responses require the resolved request"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
+            message = "block answer responses require the cleared binding"
+            raise ValueError(message)
+        return self
 
 
 class PutDesignResponse(_TargetProtocolModel):

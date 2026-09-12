@@ -430,16 +430,23 @@ class TargetMCPAdapter:
             lambda: self._application.answer(
                 DeliveryAnswer(
                     change_id=params.change_id,
+                    kind=params.kind,
                     request_id=params.request_id,
                     resolution=params.resolution,
                     expected_frontier_digest=params.expected_frontier_digest,
+                    outcome_id=params.outcome_id,
+                    block_id=params.block_id,
+                    operator_note=params.operator_note,
+                    locators=params.locators,
                 )
             ),
             DeliveryAnswerResult,
         )
         return DeliveryAnswerResponse(
             change_id=params.change_id,
+            kind=result.kind,
             request=result.request,
+            binding=result.binding,
             frontier_digest=result.frontier_digest,
         )
 

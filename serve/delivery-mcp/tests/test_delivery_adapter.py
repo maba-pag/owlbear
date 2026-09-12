@@ -75,6 +75,7 @@ from owlbear_delivery.draft_pull_request import (
 )
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryAnswerResult,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
@@ -402,8 +403,28 @@ class _RecordingApplication:
                     resolution=DeliveryRequestResolution(response_text="Completed."),
                 )
             elif name == "answer":
+                if args and isinstance(args[0], DeliveryAnswer) and args[0].kind is DeliveryAnswerKind.BLOCK:
+                    return DeliveryAnswerResult(
+                        change_id=CHANGE,
+                        kind=DeliveryAnswerKind.BLOCK,
+                        binding=OutcomeAuthorityBinding(
+                            outcome_id="OUT-001",
+                            plan_scope_id="SCOPE-001",
+                            block=DeliveryBlock(
+                                block_id="block",
+                                reason="Need operator evidence",
+                                unblock_condition="Evidence is recorded",
+                                expected_evidence=("operator evidence",),
+                                locators=("operator-note",),
+                                resolution_note="Verified.",
+                                resolution_locators=("operator-note",),
+                            ),
+                        ),
+                        frontier_digest=DIGEST,
+                    )
                 result = DeliveryAnswerResult(
                     change_id=CHANGE,
+                    kind=DeliveryAnswerKind.REQUEST,
                     request=DeliveryRequest(
                         request_id="request",
                         kind=DeliveryRequestKind.ACTION,
@@ -644,6 +665,15 @@ def _requests() -> dict[str, dict[str, object]]:
             "request_id": "request",
             "resolution": {"response_text": "Completed."},
             "expected_frontier_digest": DIGEST,
+        },
+        "answer_block": {
+            **change,
+            "kind": "block",
+            "expected_frontier_digest": DIGEST,
+            "outcome_id": "OUT-001",
+            "block_id": "block",
+            "operator_note": "Verified.",
+            "locators": ["operator-note"],
         },
         "set_change_intent": {
             **change,
@@ -1083,6 +1113,20 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     serialized = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
     assert "intent_bytes" not in json.dumps(serialized)
     assert "design_bytes" not in json.dumps(serialized)
+
+
+@pytest.mark.asyncio
+async def test_answer_adapter_supports_requestless_block_evidence() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    result = await adapter.answer(_requests()["answer_block"])
+
+    assert result.kind is DeliveryAnswerKind.BLOCK
+    assert result.binding is not None
+    assert result.binding.block is not None
+    assert result.binding.block.resolution_note == "Verified."
+    assert result.frontier_digest == DIGEST
 
 
 @pytest.mark.asyncio
