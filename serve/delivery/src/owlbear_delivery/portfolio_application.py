@@ -3739,6 +3739,10 @@ class PortfolioApplication:
                 update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)}
             )
 
+    def admit_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
+        """Admit one exact approved Design version as executable Delivery authority."""
+        return self.admit_delivery_change(request)
+
     def publish_delivery_plan(
         self,
         change_id: str,

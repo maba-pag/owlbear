@@ -7011,6 +7011,41 @@ def test_put_design_creates_replays_and_cas_revises_authored_package(tmp_path: P
         )
 
 
+def test_admit_change_uses_the_existing_source_bound_admission_authority(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    intent = b"""# Admission
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: facade test
+statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Admit the Change
+promise: Admit exact source authority.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("admit-change", intent, b"# Design\n")
+    request = DeliveryAdmissionRequest(
+        change_id="admit-change",
+        expected_package_id=_approved_package_id(application, "admit-change"),
+        active_claim_ids=(),
+    )
+
+    admitted = application.admit_change(request)
+
+    assert admitted.contract.change_id == "admit-change"
+    assert not admitted.replayed
+
+
 def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
