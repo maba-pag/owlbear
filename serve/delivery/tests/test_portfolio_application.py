@@ -7480,6 +7480,33 @@ def test_acquisition_reanchors_pending_publication_after_authority_revision(tmp_
     assert state_publisher.publish.call_count == 1
 
 
+def test_acquisition_reports_divergent_pending_publication_without_publisher(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    runtime = runtimes["change-a"]
+    current = runtime.frontier_bytes()
+    revised = _canonical(DeliveryFrontier.model_validate_json(current, strict=False).model_copy(update={"published_head": "a" * 40}))
+    runtime._replace_content(current, revised, base_frontier_digest=hashlib.sha256(current).hexdigest())
+    (state_root / "changes/change-a/state-publication.json").write_bytes(
+        _canonical(
+            DeliveryPendingStatePublication.pending(
+                hashlib.sha256(current).hexdigest(),
+                "0" * 64,
+            )
+        )
+    )
+    application._delivery_state_publisher = None
+
+    acquisition = application.acquire_frontier_work()
+
+    assert acquisition.launch_packages == ()
+    assert len(acquisition.failures) == 1
+    assert "publisher is unavailable" in acquisition.failures[0].detail
+    assert (state_root / "changes/change-a/state-publication.json").exists()
+
+
 def test_acquisition_acknowledges_pending_publication_when_remote_has_current_frontier(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,

@@ -5668,6 +5668,20 @@ class PortfolioApplication:
                 )
                 continue
             current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+            if self._delivery_state_publisher is None:
+                if current_digest == pending.frontier_digest:
+                    runtime.acknowledge_pending_publication(current_digest)
+                    continue
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=change_id,
+                        outcome_id="OUT-000",
+                        code=PortfolioApplicationError.code,
+                        detail="Delivery-state publication publisher is unavailable; pending publication is retained.",
+                        retry_condition="Restore the Delivery-state publisher before replaying publication.",
+                    )
+                )
+                continue
             if current_digest != pending.frontier_digest:
                 try:
                     inventory = self._delivery_state_publisher.read_snapshot_inventory()
@@ -5714,9 +5728,6 @@ class PortfolioApplication:
                         )
                     )
                     continue
-            if self._delivery_state_publisher is None:
-                runtime.acknowledge_pending_publication(current_digest)
-                continue
             try:
                 remote_head = self._pending_publication_remote_head(
                     change_id,
