@@ -914,6 +914,7 @@ class DeliveryAnswerKind(StrEnum):
 
     REQUEST = "request"
     BLOCK = "block"
+    DISPOSITION = "disposition"
 
 
 class DeliveryAnswer(_ApplicationModel):
@@ -928,6 +929,7 @@ class DeliveryAnswer(_ApplicationModel):
     block_id: str | None = None
     operator_note: str | None = None
     locators: tuple[str, ...] = ()
+    expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def _validate_target(self) -> DeliveryAnswer:
@@ -938,7 +940,7 @@ class DeliveryAnswer(_ApplicationModel):
             if any((self.outcome_id, self.block_id, self.operator_note)) or self.locators:
                 message = "request answers cannot include block evidence"
                 raise ValueError(message)
-        else:
+        elif self.kind is DeliveryAnswerKind.BLOCK:
             if (
                 self.outcome_id is None
                 or self.block_id is None
@@ -951,6 +953,13 @@ class DeliveryAnswer(_ApplicationModel):
             if self.request_id is not None or self.resolution is not None:
                 message = "block answers cannot include request resolution"
                 raise ValueError(message)
+        else:
+            if self.expected_disposition_id is None:
+                message = "disposition answers require an expected disposition identity"
+                raise ValueError(message)
+            if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "disposition answers cannot include request or block evidence"
+                raise ValueError(message)
         return self
 
 
@@ -962,6 +971,7 @@ class DeliveryAnswerResult(_ApplicationModel):
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     request: DeliveryRequest | None = None
     binding: OutcomeAuthorityBinding | None = None
+    disposition: DeliveryChangeDispositionResolution | None = None
 
     @model_validator(mode="after")
     def _validate_result(self) -> DeliveryAnswerResult:
@@ -970,6 +980,9 @@ class DeliveryAnswerResult(_ApplicationModel):
             raise ValueError(message)
         if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
             message = "block answer results require the cleared binding"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
+            message = "disposition answer results require the resolution receipt"
             raise ValueError(message)
         return self
 
@@ -5628,7 +5641,7 @@ class PortfolioApplication:
                     binding=binding,
                 )
 
-    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:
+    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:  # noqa: C901, PLR0911
         """Apply one version-bound request answer or requestless block evidence."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
@@ -5662,37 +5675,74 @@ class PortfolioApplication:
                         frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                     )
 
-                binding = runtime.show_binding(answer.outcome_id)
-                block = binding.block
+                if answer.kind is DeliveryAnswerKind.BLOCK:
+                    binding = runtime.show_binding(answer.outcome_id)
+                    block = binding.block
+                    if current_digest != answer.expected_frontier_digest:
+                        if (
+                            block is not None
+                            and block.resolved
+                            and block.resolution_note == answer.operator_note
+                            and block.resolution_locators == answer.locators
+                        ):
+                            return DeliveryAnswerResult(
+                                change_id=answer.change_id,
+                                kind=answer.kind,
+                                binding=binding,
+                                frontier_digest=current_digest,
+                            )
+                        self._fail("answer frontier changed")
+                    cleared = runtime.unblock(
+                        answer.outcome_id,
+                        answer.block_id,
+                        answer.operator_note,
+                        answer.locators,
+                    )
+                    self._publish_delivery_state(
+                        answer.change_id,
+                        runtime,
+                        _checkpoint_operation_id("block-answer", answer.change_id, answer.outcome_id, answer.block_id),
+                    )
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        binding=cleared,
+                        frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    )
+
+                disposition = runtime.change_disposition()
+                resolution = runtime.change_disposition_resolution()
                 if current_digest != answer.expected_frontier_digest:
-                    if (
-                        block is not None
-                        and block.resolved
-                        and block.resolution_note == answer.operator_note
-                        and block.resolution_locators == answer.locators
-                    ):
+                    if resolution is not None and resolution.disposition_id == answer.expected_disposition_id:
                         return DeliveryAnswerResult(
                             change_id=answer.change_id,
                             kind=answer.kind,
-                            binding=binding,
+                            disposition=resolution,
                             frontier_digest=current_digest,
                         )
                     self._fail("answer frontier changed")
-                cleared = runtime.unblock(
-                    answer.outcome_id,
-                    answer.block_id,
-                    answer.operator_note,
-                    answer.locators,
+                if disposition is None and resolution is not None:
+                    if resolution.disposition_id != answer.expected_disposition_id:
+                        self._fail("answer disposition is stale")
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        disposition=resolution,
+                        frontier_digest=current_digest,
+                    )
+                resolved = runtime.resolve_change_disposition(
+                    answer.expected_disposition_id,
+                    _timestamp(self._clock()),
                 )
                 self._publish_delivery_state(
                     answer.change_id,
                     runtime,
-                    _checkpoint_operation_id("block-answer", answer.change_id, answer.outcome_id, answer.block_id),
+                    f"attention-resolution-{resolved.resolution_id}",
                 )
                 return DeliveryAnswerResult(
                     change_id=answer.change_id,
                     kind=answer.kind,
-                    binding=cleared,
+                    disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
 

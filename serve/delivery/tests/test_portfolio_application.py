@@ -8547,3 +8547,28 @@ def test_answer_clears_and_replays_requestless_block_evidence(tmp_path: Path) ->
     assert applied.binding is not None
     assert applied.binding.block is not None
     assert applied.binding.block.resolution_note == "Verified externally."
+
+
+def test_answer_resolves_and_replays_change_disposition(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    disposition = runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 4, 1, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    view = application.get_change("change-a")
+    answer = DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.DISPOSITION,
+        expected_frontier_digest=view.frontier_digest,
+        expected_disposition_id=disposition.disposition_id,
+    )
+
+    applied = application.answer(answer)
+    replayed = application.answer(answer)
+
+    assert applied == replayed
+    assert applied.disposition is not None
+    assert applied.disposition.disposition_id == disposition.disposition_id
