@@ -8137,3 +8137,23 @@ def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Pat
     applied = application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
     assert applied.recovery is not None
     assert runtimes["change-a"].active_claims() == ()
+
+
+def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    application.acquire_frontier_work()
+    now[0] = "2026-08-04T01:00:00Z"
+
+    view = application.get_change("change-a")
+
+    assert view.change_id == "change-a"
+    assert view.detail.card.work_item_id == "OUT-001"
+    assert view.detail.promise
+    assert view.health.status is DeliveryHealthStatus.HEALTHY
+    assert view.repair is not None
+    assert view.repair.proposal is not None

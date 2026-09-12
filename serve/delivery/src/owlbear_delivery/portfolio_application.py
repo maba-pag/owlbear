@@ -807,6 +807,15 @@ class DeliveryRepairResult(_ApplicationModel):
         return self
 
 
+class DeliveryChangeView(_ApplicationModel):
+    """One coherent semantic, health, and repair view for a Delivery Change."""
+
+    change_id: str = Field(min_length=1)
+    detail: WorkItemDetailView
+    health: DeliveryHealthView
+    repair: DeliveryRepairResult | None = None
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 
@@ -5289,6 +5298,23 @@ class PortfolioApplication:
                 proposal.claim_id,
             )
             return DeliveryRepairResult(change_id=change_id, recovery=recovery)
+
+    def get_change(self, change_id: str) -> DeliveryChangeView:
+        """Return one coherent Change view without requiring caller-side projection joins."""
+        runtime = self._runtime(change_id)
+        items = self._work_item_projector(runtime).group_view().items
+        if not items:
+            self._fail(f"Change has no projected work items: {change_id}")
+        item_key = "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key
+        detail = self.show_work_item_view(change_id, item_key)
+        health = self.delivery_health()
+        repair = self.repair_change(change_id)
+        return DeliveryChangeView(
+            change_id=change_id,
+            detail=detail,
+            health=health,
+            repair=repair if repair.proposal is not None else None,
+        )
 
     def recover_claim(
         self,
