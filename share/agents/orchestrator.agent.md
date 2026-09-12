@@ -99,7 +99,7 @@ Session complete:
 
 <boundaries>
 
-- Dispatch the stable launch order returned by `acquire_frontier_work`; do not reorder or refetch
+- Dispatch the stable launch order returned by `acquire_actions`; do not reorder or refetch
   context for the worker.
 - Do not create, edit, claim, move, or complete generic tasks.
 - Delivery mutations are limited to unchanged worker transitions and exact failed-claim recovery.

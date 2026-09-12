@@ -750,7 +750,6 @@ def _requests() -> dict[str, dict[str, object]]:
             "reason": "Verified.",
             "expected_version": DIGEST,
         },
-        "acquire_frontier_work": {},
         "acquire_actions": {},
         "show_plan_context": claim,
         "show_build_context": claim,
@@ -1254,7 +1253,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         assert tool_annotations.idempotent_hint is (
             name
             not in {
-                "acquire_frontier_work",
                 "acquire_actions",
                 "administrative_move",
                 "repair",

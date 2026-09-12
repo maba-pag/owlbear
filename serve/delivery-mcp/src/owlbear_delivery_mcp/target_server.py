@@ -182,7 +182,6 @@ DELIVERY_OPERATION_NAMES = (
     "repair",
     "preview_administrative_move",
     "administrative_move",
-    "acquire_frontier_work",
     "acquire_actions",
     "show_plan_context",
     "show_build_context",
@@ -245,7 +244,7 @@ DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
-    if name in {"acquire_frontier_work", "acquire_actions"}
+    if name == "acquire_actions"
     else _CLEANUP
     if name
     in {
@@ -601,20 +600,6 @@ class TargetMCPAdapter:
             AdministrativeDeliveryMoveResult,
         )
         return AdministrativeMoveResponse.from_result(result)
-
-    async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
-        """Acquire currently available frontier work.
-
-        Cancelling a handler only cancels the transport wait; an in-flight mutation
-        may finish, so callers must reconcile durable state before retrying rather
-        than blindly replaying it.
-        """
-        params = self._validate(EmptyParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            self._application.acquire_frontier_work,
-        )
 
     async def acquire_actions(self, request: EmptyRequest) -> dict[str, object]:
         """Claim and return the next bounded Planner or Builder action batch."""

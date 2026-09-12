@@ -73,7 +73,6 @@ DELIVERY_TOOLS = {
     "repair",
     "preview_administrative_move",
     "administrative_move",
-    "acquire_frontier_work",
     "acquire_actions",
     "show_plan_context",
     "show_build_context",
@@ -222,7 +221,7 @@ class _BlockingFoundationalApplication(_RecordingApplication):
     def admit_delivery_change(self, _request: object) -> _Result:
         return self._run_foundational_operation()
 
-    def acquire_frontier_work(self) -> _Result:
+    def acquire_actions(self) -> _Result:
         return self._run_foundational_operation()
 
     def delivery_health(self) -> DeliveryHealthView:
@@ -371,7 +370,6 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations.idempotent_hint is (
             name
             not in {
-                "acquire_frontier_work",
                 "acquire_actions",
                 "resolve_request",
                 "clear_block",
@@ -598,7 +596,7 @@ async def test_acceptance_observation_yields_the_mcp_event_loop() -> None:
     ("operation_name", "payload"),
     [
         ("admit_delivery_change", {"change_id": "change-a", "active_claim_ids": []}),
-        ("acquire_frontier_work", {}),
+        ("acquire_actions", {}),
     ],
 )
 async def test_foundational_operations_yield_to_independent_health_requests(

@@ -130,7 +130,7 @@ attempt consumes its cadence slot regardless of its result.
 
 ## Step 6 - Refresh
 
-Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
+Finish the current acquired batch, discard it, and call `acquire_actions` again. Continue
 independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
 a Delivery safety diagnostic requires user/operator action. A housekeeping failure is reported but
 does not stop independent Delivery acquisition.
