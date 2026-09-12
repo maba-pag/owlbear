@@ -7180,7 +7180,11 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     pending = application.show_operator_context("change-a", "OUT-001")
     assert pending.block is not None
     assert not pending.block.resolved
-    resolution = DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in source.")
+    resolution = DeliveryRequestResolution(
+        selected_option_id="local",
+        response_text="Use the checked-in source.",
+        provenance="user-confirmed",
+    )
     with pytest.raises(DeliveryStatePublicationError, match="state unavailable"):
         application.resolve_request("change-a", request.request_id, resolution)
     resolved = application.resolve_request("change-a", request.request_id, resolution)
@@ -7253,7 +7257,7 @@ def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_pat
     resolved = application.resolve_request(
         "change-a",
         request.request_id,
-        DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+        DeliveryRequestResolution(response_text="The prerequisite is repaired.", provenance="user-confirmed"),
     )
     resumed = application.acquire_frontier_work().launch_packages
 
@@ -8501,7 +8505,14 @@ def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: P
     assert applied.request.resolution == answer.resolution
     with pytest.raises(PortfolioApplicationError, match="exactly one selected option"):
         application.answer(
-            answer.model_copy(update={"resolution": DeliveryRequestResolution(response_text="Repair it.")})
+            answer.model_copy(
+                update={
+                    "resolution": DeliveryRequestResolution(
+                        response_text="Repair it.",
+                        provenance="user-confirmed",
+                    )
+                }
+            )
         )
     different = answer.model_copy(
         update={"resolution": DeliveryRequestResolution(selected_option_id="defer")}

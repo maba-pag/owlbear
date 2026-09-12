@@ -815,11 +815,15 @@ class DeliveryRequestResolution(_DeliveryModel):
 
     selected_option_id: str | None = None
     response_text: str | None = None
+    provenance: Literal["user-confirmed"] | None = None
 
     @model_validator(mode="after")
     def _require_answer(self) -> DeliveryRequestResolution:
         if self.selected_option_id is None and (self.response_text is None or not self.response_text.strip()):
             message = "request resolution requires a selected option or response text"
+            raise ValueError(message)
+        if self.response_text is not None and self.response_text.strip() and self.provenance != "user-confirmed":
+            message = "free-text request resolution requires user-confirmed provenance"
             raise ValueError(message)
         return self
 

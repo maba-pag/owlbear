@@ -2073,6 +2073,9 @@ def test_portable_transition_retains_publication_intent_across_runtime_restart(t
 
 
 def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="user-confirmed provenance"):
+        DeliveryRequestResolution(response_text="Unattributed action evidence.")
+
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")
     request = DeliveryRequest(
@@ -2102,12 +2105,16 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     with pytest.raises(DeliveryRuntimeReferenceError, match="selected option"):
         runtime.resolve_request(
             "request-001",
-            DeliveryRequestResolution(response_text="Use the checked-in copy."),
+            DeliveryRequestResolution(response_text="Use the checked-in copy.", provenance="user-confirmed"),
         )
 
     resolved = runtime.resolve_request(
         "request-001",
-        DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in copy."),
+        DeliveryRequestResolution(
+            selected_option_id="local",
+            response_text="Use the checked-in copy.",
+            provenance="user-confirmed",
+        ),
     )
 
     assert resolved.resolution is not None
