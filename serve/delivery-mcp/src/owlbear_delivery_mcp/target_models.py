@@ -631,6 +631,7 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
 
     change_id: ChangeId
     request: DeliveryRequest
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class PutDesignResponse(_TargetProtocolModel):
