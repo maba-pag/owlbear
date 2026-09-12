@@ -49,14 +49,16 @@ Pursue interface reduction in this order:
 ### 1.2 Post-baseline implementation reading
 
 The current implementation adds a coherent `get_change` read projection, a version-bound `answer`
-path for retained request resolution, and a proposal-backed `repair_change` path. A constrained
-Repairer agent now owns only those high-level interactions, while Orchestrator may route an exact
-Change-specific repair proposal to it. This is an additive migration boundary, not evidence that
-the older low-level operations are ready for removal.
+path for bounded Decision Request resolution, and a proposal-backed `repair_change` path. A
+constrained Repairer agent now owns only those high-level interactions, while Orchestrator may
+route an exact Change-specific repair proposal to it. Action free-text resolution remains on the
+existing operator path. This is an additive migration boundary, not evidence that the older
+low-level operations are ready for removal.
 
 The three new MCP operations are intentionally absent from the historical matrix below. Refresh
-the matrix only after request, block, disposition, and repair-proposal answer parity is complete;
-otherwise the document would imply a final surface while the facade is still being shaped.
+the matrix only after bounded Decision answers, requestless-block and disposition handling, Action
+free-text provenance, and repair-proposal parity are complete; otherwise the document would imply
+a final surface while the facade is still being shaped.
 
 ## 2. Scope, Method, And Evidence Limits
 
