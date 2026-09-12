@@ -78,7 +78,7 @@ _TARGET_ROLE_TOOLS = {
         "revise_design_session",
         "publish_design_checkpoint",
         "derive_delivery_contract",
-        "admit_delivery_change",
+        "admit_change",
     },
     "planner": {"show_plan_context", "publish_delivery_plan"},
     "builder": {
