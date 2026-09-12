@@ -811,9 +811,27 @@ class DeliveryChangeView(_ApplicationModel):
     """One coherent semantic, health, and repair view for a Delivery Change."""
 
     change_id: str = Field(min_length=1)
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     detail: WorkItemDetailView
     health: DeliveryHealthView
     repair: DeliveryRepairResult | None = None
+
+
+class DeliveryAnswer(_ApplicationModel):
+    """One version-bound answer to a retained Delivery request."""
+
+    change_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+    resolution: DeliveryRequestResolution
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DeliveryAnswerResult(_ApplicationModel):
+    """The resolved request and frontier version after an accepted answer."""
+
+    change_id: str = Field(min_length=1)
+    request: DeliveryRequest
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class DeliveryAcquisitionResult(_ApplicationModel):
@@ -5302,6 +5320,7 @@ class PortfolioApplication:
     def get_change(self, change_id: str) -> DeliveryChangeView:
         """Return one coherent Change view without requiring caller-side projection joins."""
         runtime = self._runtime(change_id)
+        frontier_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
         items = self._work_item_projector(runtime).group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
@@ -5311,10 +5330,38 @@ class PortfolioApplication:
         repair = self.repair_change(change_id)
         return DeliveryChangeView(
             change_id=change_id,
+            frontier_digest=frontier_digest,
             detail=detail,
             health=health,
             repair=repair if repair.proposal is not None else None,
         )
+
+    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:
+        """Apply one request answer after revalidating the captured frontier version."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(answer.change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(answer.change_id),)):
+                current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                current = self._request(runtime, answer.request_id)
+                if current_digest != answer.expected_frontier_digest:
+                    if current.resolution == answer.resolution:
+                        return DeliveryAnswerResult(
+                            change_id=answer.change_id,
+                            request=current,
+                            frontier_digest=current_digest,
+                        )
+                    self._fail("answer frontier changed")
+                resolved = runtime.resolve_request(answer.request_id, answer.resolution)
+                self._publish_delivery_state(
+                    answer.change_id,
+                    runtime,
+                    _checkpoint_operation_id("request-answer", answer.change_id, answer.request_id),
+                )
+                return DeliveryAnswerResult(
+                    change_id=answer.change_id,
+                    request=resolved,
+                    frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                )
 
     def recover_claim(
         self,
@@ -5945,6 +5992,19 @@ class PortfolioApplication:
     @staticmethod
     def _outcome(runtime: DeliveryRuntime, outcome_id: str) -> DeliveryOutcome:
         return next(item for item in runtime.contract.outcomes if item.outcome_id == outcome_id)
+
+    @staticmethod
+    def _request(runtime: DeliveryRuntime, request_id: str) -> DeliveryRequest:
+        matches = tuple(
+            request
+            for outcome in runtime.contract.outcomes
+            for request in runtime.show_binding(outcome.outcome_id).requests
+            if request.request_id == request_id
+        )
+        if len(matches) != 1:
+            message = f"Delivery request is absent or ambiguous: {request_id}"
+            raise PortfolioApplicationError(message)
+        return matches[0]
 
     @staticmethod
     def _commitments(runtime: DeliveryRuntime, commitment_ids: tuple[str, ...]) -> tuple[DeliveryCommitment, ...]:

@@ -51,6 +51,7 @@ from owlbear_delivery import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
+    DeliveryAnswer,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
     DeliveryChangeDispositionBusyError,
@@ -8157,3 +8158,49 @@ def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -
     assert view.health.status is DeliveryHealthStatus.HEALTHY
     assert view.repair is not None
     assert view.repair.proposal is not None
+
+
+def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    request = DeliveryRequest(
+        request_id="request-answer",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Repair the external prerequisite.",
+    )
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            action="block",
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-answer",
+            reason="The prerequisite is unavailable.",
+            unblock_condition="The prerequisite is repaired.",
+            expected_evidence=("Successful repair",),
+            locators=("TASK-001",),
+            request=request,
+        ),
+    )
+    view = application.get_change("change-a")
+    answer = DeliveryAnswer(
+        change_id="change-a",
+        request_id=request.request_id,
+        resolution=DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+        expected_frontier_digest=view.frontier_digest,
+    )
+
+    applied = application.answer(answer)
+    replayed = application.answer(answer)
+
+    assert applied == replayed
+    assert applied.request.resolution == answer.resolution
+    different = answer.model_copy(
+        update={"resolution": DeliveryRequestResolution(response_text="A different answer.")}
+    )
+    with pytest.raises(PortfolioApplicationError, match="answer frontier changed"):
+        application.answer(different)
