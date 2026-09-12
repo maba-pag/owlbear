@@ -61,6 +61,7 @@ DELIVERY_TOOLS = {
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "admit_delivery_change",
+    "admit_change",
     "list_work_items",
     "list_changes",
     "get_change",

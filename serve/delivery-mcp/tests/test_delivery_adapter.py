@@ -631,6 +631,11 @@ def _requests() -> dict[str, dict[str, object]]:
             "expected_package_id": DIGEST,
             "active_claim_ids": [],
         },
+        "admit_change": {
+            "change_id": CHANGE,
+            "expected_package_id": DIGEST,
+            "active_claim_ids": [],
+        },
         "list_work_items": {},
         "list_changes": {},
         "get_change": change,

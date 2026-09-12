@@ -179,6 +179,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "admit_delivery_change",
+    "admit_change",
     "list_work_items",
     "list_changes",
     "get_change",
@@ -389,6 +390,15 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.admit_delivery_change(params),
+        )
+
+    async def admit_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
+        """Admit one exact approved Design version as executable Delivery authority."""
+        params = self._validate(DeliveryAdmissionRequest, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.admit_change(params),
         )
 
     async def list_work_items(self, request: EmptyRequest) -> list[object]:
