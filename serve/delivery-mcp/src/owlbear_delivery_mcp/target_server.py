@@ -184,7 +184,6 @@ DELIVERY_OPERATION_NAMES = (
     "show_work_item_view",
     "show_operator_context",
     "repair",
-    "repair_change",
     "preview_administrative_move",
     "administrative_move",
     "acquire_frontier_work",
@@ -245,7 +244,7 @@ _DELIVERY_READS = frozenset(
     }
 )
 _DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
-    {"administrative_move", "repair", "repair_change", "set_change_intent"}
+    {"administrative_move", "repair", "set_change_intent"}
 )
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
@@ -556,19 +555,6 @@ class TargetMCPAdapter:
             DeliveryOperatorContext,
         )
         return DeliveryOperatorContextResponse.from_context(context)
-
-    async def repair_change(self, request: RepairChangeRequest) -> dict[str, object]:
-        """Diagnose or apply one versioned high-level repair proposal."""
-        params = self._validate(RepairChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.repair_change(
-                params.change_id,
-                params.proposal_id,
-                confirmed_lost=params.confirmed_lost,
-            ),
-        )
 
     async def repair(self, request: RepairChangeRequest) -> dict[str, object]:
         """Diagnose or apply one high-level repair proposal."""

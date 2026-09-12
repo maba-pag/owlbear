@@ -76,7 +76,6 @@ DELIVERY_TOOLS = {
     "show_work_item_view",
     "show_operator_context",
     "repair",
-    "repair_change",
     "preview_administrative_move",
     "administrative_move",
     "acquire_frontier_work",
@@ -384,7 +383,6 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
                 "clear_block",
                 "administrative_move",
                 "repair",
-                "repair_change",
                 "set_change_intent",
             }
         )
