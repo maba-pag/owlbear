@@ -169,10 +169,13 @@ from owlbear_delivery.target_contract import (
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     DeliveryPortfolioSnapshot,
+    WorkItemCardView,
+    WorkItemClaimView,
     WorkItemDetailView,
     WorkItemNeed,
     WorkItemProjector,
     WorkItemPublicationPhase,
+    WorkItemRecoveryView,
     WorkItemScope,
     WorkItemTargetSyncConflictView,
     WorkItemWorktreeCleanupView,
@@ -809,6 +812,17 @@ class DeliveryRepairResult(_ApplicationModel):
         return self
 
 
+class DeliveryUnresolvedOutcome(_ApplicationModel):
+    """Bounded unresolved outcome evidence retained alongside Change detail."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    card: WorkItemCardView
+    requests: tuple[DeliveryRequest, ...] = ()
+    block: DeliveryBlock | None = None
+    active_claim: WorkItemClaimView | None = None
+    recovery_attention: WorkItemRecoveryView | None = None
+
+
 class DeliveryChangeView(_ApplicationModel):
     """One coherent semantic, health, and repair view for a Delivery Change."""
 
@@ -817,6 +831,7 @@ class DeliveryChangeView(_ApplicationModel):
     detail: WorkItemDetailView
     health: DeliveryHealthView
     repair: DeliveryRepairResult | None = None
+    unresolved_outcomes: tuple[DeliveryUnresolvedOutcome, ...] = ()
 
 
 class DeliveryResultSubmission(_ApplicationModel):
@@ -5519,7 +5534,8 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         frontier_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
         repair = self.repair_change(change_id)
-        items = self._work_item_projector(runtime).group_view().items
+        projector = self._work_item_projector(runtime)
+        items = projector.group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
         proposal_outcome_id = repair.proposal.outcome_id if repair.proposal is not None else None
@@ -5533,12 +5549,32 @@ class PortfolioApplication:
         )
         detail = self.show_work_item_view(change_id, item_key)
         health = self.delivery_health(change_id)
+        unresolved_outcomes = tuple(
+            DeliveryUnresolvedOutcome(
+                outcome_id=outcome_detail.card.work_item_id,
+                card=outcome_detail.card,
+                requests=tuple(request for request in outcome_detail.requests if request.resolution is None),
+                block=outcome_detail.block if outcome_detail.block and not outcome_detail.block.resolved else None,
+                active_claim=outcome_detail.active_claim,
+                recovery_attention=outcome_detail.recovery_attention,
+            )
+            for card in items
+            if card.scope is WorkItemScope.OUTCOME
+            for outcome_detail in (projector.show_view(card.item_key),)
+            if (
+                any(request.resolution is None for request in outcome_detail.requests)
+                or (outcome_detail.block is not None and not outcome_detail.block.resolved)
+                or outcome_detail.active_claim is not None
+                or outcome_detail.recovery_attention is not None
+            )
+        )
         return DeliveryChangeView(
             change_id=change_id,
             frontier_digest=frontier_digest,
             detail=detail,
             health=health,
             repair=repair if repair.proposal is not None else None,
+            unresolved_outcomes=unresolved_outcomes,
         )
 
     def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:

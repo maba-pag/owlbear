@@ -8403,6 +8403,45 @@ def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -
     assert view.repair.proposal.outcome_id == view.detail.card.work_item_id
 
 
+def test_get_change_retains_unresolved_outcome_evidence_with_publication_detail(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    request = DeliveryRequest(
+        request_id="request-visible",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Supply the external evidence.",
+    )
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            action="block",
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-visible",
+            reason="External evidence is unavailable.",
+            unblock_condition="The evidence is supplied.",
+            expected_evidence=("Evidence locator",),
+            locators=("TASK-001",),
+            request=request,
+        ),
+    )
+    runtimes["change-a"].queue_admitted_design_checkpoint(coordinator.show("change-a").last_reviewed_commit)
+
+    view = application.get_change("change-a")
+
+    assert view.detail.card.item_key == "publication"
+    assert len(view.unresolved_outcomes) == 1
+    unresolved = view.unresolved_outcomes[0]
+    assert unresolved.outcome_id == "OUT-001"
+    assert unresolved.requests[0].request_id == request.request_id
+    assert unresolved.block is not None
+    assert unresolved.block.block_id == "block-visible"
+
+
 def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
