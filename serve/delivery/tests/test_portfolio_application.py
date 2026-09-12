@@ -52,6 +52,7 @@ from owlbear_delivery import (
     DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
     DeliveryAnswer,
+    DeliveryAnswerKind,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
     DeliveryChangeDispositionBusyError,
@@ -8507,3 +8508,42 @@ def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: P
     )
     with pytest.raises(PortfolioApplicationError, match="answer frontier changed"):
         application.answer(different)
+
+
+def test_answer_clears_and_replays_requestless_block_evidence(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            action="block",
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-evidence",
+            reason="External evidence is missing.",
+            unblock_condition="Record the verified evidence.",
+            expected_evidence=("Evidence locator",),
+            locators=("operator",),
+        ),
+    )
+    view = application.get_change("change-a")
+    answer = DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.BLOCK,
+        expected_frontier_digest=view.frontier_digest,
+        outcome_id="OUT-001",
+        block_id="block-evidence",
+        operator_note="Verified externally.",
+        locators=("evidence:123",),
+    )
+
+    applied = application.answer(answer)
+    replayed = application.answer(answer)
+
+    assert applied == replayed
+    assert applied.binding is not None
+    assert applied.binding.block is not None
+    assert applied.binding.block.resolution_note == "Verified externally."

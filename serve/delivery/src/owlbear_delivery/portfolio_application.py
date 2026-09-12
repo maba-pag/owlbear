@@ -909,21 +909,69 @@ class DeliveryChangeIntentResult(_ApplicationModel):
         return self
 
 
+class DeliveryAnswerKind(StrEnum):
+    """High-level user answer targets currently supported by Delivery."""
+
+    REQUEST = "request"
+    BLOCK = "block"
+
+
 class DeliveryAnswer(_ApplicationModel):
-    """One version-bound answer to a retained Delivery request."""
+    """One version-bound answer to a retained request or requestless block."""
 
     change_id: str = Field(min_length=1)
-    request_id: str = Field(min_length=1)
-    resolution: DeliveryRequestResolution
+    kind: DeliveryAnswerKind = DeliveryAnswerKind.REQUEST
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_id: str | None = None
+    resolution: DeliveryRequestResolution | None = None
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    block_id: str | None = None
+    operator_note: str | None = None
+    locators: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> DeliveryAnswer:
+        if self.kind is DeliveryAnswerKind.REQUEST:
+            if self.request_id is None or self.resolution is None:
+                message = "request answers require request identity and resolution"
+                raise ValueError(message)
+            if any((self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "request answers cannot include block evidence"
+                raise ValueError(message)
+        else:
+            if (
+                self.outcome_id is None
+                or self.block_id is None
+                or self.operator_note is None
+                or not self.operator_note.strip()
+                or not self.locators
+            ):
+                message = "block answers require outcome, block, note, and locators"
+                raise ValueError(message)
+            if self.request_id is not None or self.resolution is not None:
+                message = "block answers cannot include request resolution"
+                raise ValueError(message)
+        return self
 
 
 class DeliveryAnswerResult(_ApplicationModel):
-    """The resolved request and frontier version after an accepted answer."""
+    """The answered authority and frontier version after an accepted answer."""
 
     change_id: str = Field(min_length=1)
-    request: DeliveryRequest
+    kind: DeliveryAnswerKind
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request: DeliveryRequest | None = None
+    binding: OutcomeAuthorityBinding | None = None
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> DeliveryAnswerResult:
+        if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
+            message = "request answer results require the resolved request"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
+            message = "block answer results require the cleared binding"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryAcquisitionResult(_ApplicationModel):
@@ -5581,33 +5629,70 @@ class PortfolioApplication:
                 )
 
     def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:
-        """Apply one request answer after revalidating the captured frontier version."""
+        """Apply one version-bound request answer or requestless block evidence."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(answer.change_id),)):
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-                current = self._request(runtime, answer.request_id)
-                if current.kind is DeliveryRequestKind.DECISION and (
-                    answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
-                ):
-                    self._fail("Decision answers require exactly one selected option")
+                if answer.kind is DeliveryAnswerKind.REQUEST:
+                    current = self._request(runtime, answer.request_id)
+                    if current.kind is DeliveryRequestKind.DECISION and (
+                        answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
+                    ):
+                        self._fail("Decision answers require exactly one selected option")
+                    if current_digest != answer.expected_frontier_digest:
+                        if current.resolution == answer.resolution:
+                            return DeliveryAnswerResult(
+                                change_id=answer.change_id,
+                                kind=answer.kind,
+                                request=current,
+                                frontier_digest=current_digest,
+                            )
+                        self._fail("answer frontier changed")
+                    resolved = runtime.resolve_request(answer.request_id, answer.resolution)
+                    self._publish_delivery_state(
+                        answer.change_id,
+                        runtime,
+                        _checkpoint_operation_id("request-answer", answer.change_id, answer.request_id),
+                    )
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        request=resolved,
+                        frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    )
+
+                binding = runtime.show_binding(answer.outcome_id)
+                block = binding.block
                 if current_digest != answer.expected_frontier_digest:
-                    if current.resolution == answer.resolution:
+                    if (
+                        block is not None
+                        and block.resolved
+                        and block.resolution_note == answer.operator_note
+                        and block.resolution_locators == answer.locators
+                    ):
                         return DeliveryAnswerResult(
                             change_id=answer.change_id,
-                            request=current,
+                            kind=answer.kind,
+                            binding=binding,
                             frontier_digest=current_digest,
                         )
                     self._fail("answer frontier changed")
-                resolved = runtime.resolve_request(answer.request_id, answer.resolution)
+                cleared = runtime.unblock(
+                    answer.outcome_id,
+                    answer.block_id,
+                    answer.operator_note,
+                    answer.locators,
+                )
                 self._publish_delivery_state(
                     answer.change_id,
                     runtime,
-                    _checkpoint_operation_id("request-answer", answer.change_id, answer.request_id),
+                    _checkpoint_operation_id("block-answer", answer.change_id, answer.outcome_id, answer.block_id),
                 )
                 return DeliveryAnswerResult(
                     change_id=answer.change_id,
-                    request=resolved,
+                    kind=answer.kind,
+                    binding=cleared,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
 
