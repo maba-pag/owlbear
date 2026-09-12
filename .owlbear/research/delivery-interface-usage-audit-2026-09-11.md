@@ -5,7 +5,7 @@
 > **Question:** Who uses which Delivery Python, HTTP, and MCP interfaces, when and why are they used, which surfaces are regular versus exceptional or compatibility-only, and where can the interface be reduced without weakening authority, custody, replay, or operator control?
 > **Status:** Current-state research. No Delivery state, package, claim, MCP operation, commit, or source file was mutated by this audit.
 > **Count update:** Application and MCP counts were refreshed at `eaef98036742b1d03ca7f7064c66411d0c5a50e9` after `recover_out_of_band_head` was added; the original analysis baseline remains recorded below.
-> **Post-baseline implementation delta:** The additive facade now measures **76 public `PortfolioApplication` methods**, **61 registered MCP operations**, **253 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `put_design`, `admit_change`, `get_change`, `answer`, `set_change_intent`, `list_changes`, `submit_result`, `acquire_actions`, and `repair`; the legacy aliases `defer_change`, `resume_change`, `abandon_change`, and `repair_change` remain only for migration parity where applicable, with the first three retired from MCP and the Repairer cut over to `repair`. The detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
+> **Post-baseline implementation delta:** The additive facade now measures **76 public `PortfolioApplication` methods**, **58 registered MCP operations**, **253 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `put_design`, `admit_change`, `get_change`, `answer`, `set_change_intent`, `list_changes`, `submit_result`, `acquire_actions`, and `repair`; the legacy aliases `defer_change`, `resume_change`, `abandon_change`, `repair_change`, `resolve_request`, `clear_block`, and `resolve_change_disposition` remain only where migration parity requires them, with the first three and the latter three retired from MCP and active operator guidance. The detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
 > **Implementation plan:** [Delivery Resilience Evolution Plan](delivery-resilience-evolution-plan.md) supersedes this audit's provisional implementation sequence and incorporates the later GPT-6 Astra and Claude Opus 5 challenges.
 
 ## 1. Executive Summary
@@ -61,7 +61,8 @@ migration boundary, not evidence that the older low-level operations are ready f
 The six new MCP operations are intentionally absent from the historical matrix below. Refresh the
 matrix only after bounded Decision answers, lifecycle intents, grouped listing, Builder submission,
 Action free-text provenance, and repair-proposal parity are complete; requestless-block and
-disposition handling are now covered by the unified answer facade. Otherwise the document would
+disposition handling are now covered by the unified answer facade, and the low-level answer MCP
+aliases are retired. Otherwise the document would
 imply a final surface while the facade is still being shaped.
 
 ## 2. Scope, Method, And Evidence Limits
