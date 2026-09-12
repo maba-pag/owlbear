@@ -5203,6 +5203,10 @@ class PortfolioApplication:
                 ),
             )
 
+    def acquire_actions(self) -> DeliveryAcquisitionResult:
+        """Claim and return the next bounded Planner or Builder action batch."""
+        return self.acquire_frontier_work()
+
     def _replay_pending_state_publications(self) -> tuple[DeliveryAcquisitionFailure, ...]:
         """Replay durable local state publications before exposing new claims."""
         failures = []

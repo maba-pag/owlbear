@@ -6958,6 +6958,18 @@ def test_list_changes_returns_the_grouped_portfolio_read_view(tmp_path: Path) ->
     assert listed.groups[0].change_id == "change-a"
 
 
+def test_acquire_actions_uses_the_existing_claim_authority(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+
+    acquired = application.acquire_actions()
+
+    assert len(acquired.launch_packages) == 1
+    assert acquired.launch_packages[0].change_id == "change-a"
+
+
 def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
