@@ -3914,6 +3914,7 @@ class PortfolioApplication:
                     "manifest.json": package.manifest.canonical_bytes(),
                 },
                 _checkpoint_operation_id("package", request.change_id, package.package_id),
+                request.expected_design_package_snapshot_receipt_id,
             )
             runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:

@@ -333,6 +333,67 @@ def test_snapshot_design_package_commits_managed_change_worktree_only(tmp_path: 
         ).encode() == package_files[name].rstrip(b"\n")
 
 
+def test_snapshot_design_package_revises_with_receipt_fence_and_replays(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("snapshot-revision")
+    original_files = {
+        "authority.json": b'{"authority":"old"}\n',
+        "design.md": b"# Old design\n",
+        "intent.md": b"# Old intent\n",
+        "manifest.json": b'{"manifest":"old"}\n',
+    }
+    revised_files = {
+        "authority.json": b'{"authority":"new"}\n',
+        "design.md": b"# New design\n",
+        "intent.md": b"# New intent\n",
+        "manifest.json": b'{"manifest":"new"}\n',
+    }
+
+    original = manager.snapshot_design_package(
+        coordination.change_id,
+        "a" * 64,
+        original_files,
+        "snapshot-revision-old",
+    )
+    revised = manager.snapshot_design_package(
+        coordination.change_id,
+        "b" * 64,
+        revised_files,
+        "snapshot-revision-new",
+        expected_existing_receipt_id=original.receipt_id,
+    )
+    replayed = manager.snapshot_design_package(
+        coordination.change_id,
+        "b" * 64,
+        revised_files,
+        "snapshot-revision-new",
+        expected_existing_receipt_id=original.receipt_id,
+    )
+
+    assert revised == replayed
+    assert revised.package_id == "b" * 64
+    assert revised.previous_head == original.snapshot_head
+    assert revised.snapshot_head != original.snapshot_head
+    assert _git(
+        coordination.worktree_path,
+        "merge-base",
+        "--is-ancestor",
+        original.snapshot_head,
+        revised.snapshot_head,
+    ) == ""
+    assert coordinator.show(coordination.change_id).design_package_snapshot == revised
+
+    with pytest.raises(CoordinationConflictError, match="differs from the expected receipt"):
+        manager.snapshot_design_package(
+            coordination.change_id,
+            "c" * 64,
+            revised_files,
+            "snapshot-revision-stale",
+            expected_existing_receipt_id=original.receipt_id,
+        )
+
+
 def test_snapshot_design_package_replays_after_commit_before_receipt(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

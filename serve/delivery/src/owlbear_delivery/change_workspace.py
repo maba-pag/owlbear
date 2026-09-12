@@ -1681,6 +1681,7 @@ class ChangeWorkspaceManager:
         package_id: str,
         package_files: Mapping[str, bytes],
         operation_id: str,
+        expected_existing_receipt_id: str | None = None,
     ) -> ChangeDesignPackageSnapshotReceipt:
         """Commit one verified admitted Design package on its managed Change branch."""
         if set(package_files) != set(_DESIGN_PACKAGE_NAMES):
@@ -1691,8 +1692,19 @@ class ChangeWorkspaceManager:
             coordination = self._coordinator.show(change_id)
             existing = coordination.design_package_snapshot
             if existing is not None:
-                self._validate_design_package_snapshot_replay(existing, package_id)
-                return existing
+                if existing.package_id == package_id:
+                    self._validate_design_package_snapshot_replay(existing, package_id)
+                    return existing
+                if expected_existing_receipt_id != existing.receipt_id:
+                    _coordination_conflict("Design package snapshot differs from the expected receipt")
+                return self._replace_design_package_snapshot(
+                    coordination,
+                    existing,
+                    package_id,
+                    package_files,
+                    operation_id,
+                    lock,
+                )
             intent = coordination.design_package_snapshot_intent
             branch_head = self._resolve(coordination.branch)
             if intent is None:
@@ -1732,6 +1744,58 @@ class ChangeWorkspaceManager:
             )
             self._coordinator.update(updated, lock=lock)
             return receipt
+
+    def _replace_design_package_snapshot(
+        self,
+        coordination: ChangeCoordination,
+        existing: ChangeDesignPackageSnapshotReceipt,
+        package_id: str,
+        package_files: Mapping[str, bytes],
+        operation_id: str,
+        lock: PublicationLock,
+    ) -> ChangeDesignPackageSnapshotReceipt:
+        """Replace one exact package snapshot after an admitted Design revision."""
+        if coordination.writer is not None:
+            _coordination_conflict("Design package snapshot replacement cannot overlap an active writer")
+        branch_head = self._resolve(coordination.branch)
+        if branch_head != existing.snapshot_head:
+            _workspace_failure("Design package snapshot branch moved before replacement")
+        intent = coordination.design_package_snapshot_intent
+        if intent is None:
+            intent = ChangeDesignPackageSnapshotIntent.create(
+                operation_id=operation_id,
+                change_id=coordination.change_id,
+                package_id=package_id,
+                branch=coordination.branch,
+                worktree_path=coordination.worktree_path,
+                expected_head=existing.snapshot_head,
+            )
+            coordination = self._coordinator.update(
+                coordination.model_copy(update={"design_package_snapshot_intent": intent}),
+                lock=lock,
+            )
+        elif intent.operation_id != operation_id or intent.package_id != package_id:
+            _coordination_conflict("Design package snapshot replacement intent differs from the request")
+        snapshot_head = self._commit_design_package_snapshot(coordination, intent, package_files, branch_head)
+        receipt = ChangeDesignPackageSnapshotReceipt.create(
+            operation_id=operation_id,
+            change_id=coordination.change_id,
+            package_id=package_id,
+            branch=coordination.branch,
+            worktree_path=coordination.worktree_path,
+            previous_head=intent.expected_head,
+            snapshot_head=snapshot_head,
+        )
+        current = self._coordinator.show(coordination.change_id)
+        updated = current.model_copy(
+            update={
+                "design_package_snapshot_intent": None,
+                "design_package_snapshot": receipt,
+                "last_reviewed_commit": snapshot_head,
+            }
+        )
+        self._coordinator.update(updated, lock=lock)
+        return receipt
 
     def _validate_design_package_snapshot_replay(
         self,

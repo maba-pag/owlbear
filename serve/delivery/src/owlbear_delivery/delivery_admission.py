@@ -76,6 +76,7 @@ class DeliveryAdmissionRequest(_DeliveryAdmissionModel):
     active_claim_ids: tuple[str, ...]
     recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     expected_frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    expected_design_package_snapshot_receipt_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     preserve_unresolved_outcome_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
