@@ -88,14 +88,14 @@ The original audit baseline and refreshed count baseline are:
 | --- | --- |
 | Branch | `dev` |
 | Original audit HEAD | `8ff70e38ac280da9ffd97d216fd57aed9e36f36a` |
-| Original audit counts | 53 MCP operations and 65 public `PortfolioApplication` methods |
+| Original audit counts | 53 MCP operations, 65 public `PortfolioApplication` methods, and 242 root exports |
 | Refreshed count HEAD | `eaef98036742b1d03ca7f7064c66411d0c5a50e9` |
 | Tracked worktree | Clean at the final baseline check |
 | Untracked artifacts | Three active Delivery package directories, five `.owlbear/memory` files, and one unrelated research file were present and left untouched |
 | Unique MCP operations | 54 |
 | Public `PortfolioApplication` methods | 66 |
 | Non-MCP public application methods | 12 |
-| Root `owlbear_delivery.__all__` entries | 242 |
+| Root `owlbear_delivery.__all__` entries | 244 at the refreshed count baseline |
 | Declared agent-granted Delivery tools | 19 |
 | Cockpit methods corresponding to MCP operation names | 24 |
 | Additional Cockpit-only application methods used by routes | 5, plus one bound `portfolio_read_view` reference |
@@ -220,7 +220,7 @@ The source names five constants, but the wire-level annotation values form four 
 | Wire bucket | Operations | Count | Meaning |
 | --- | --- | ---: | --- |
 | Read-only/idempotent/non-destructive | `_READ` | 17 | Reads or provider observations projected as read tools |
-| Idempotent write/non-destructive | `_WRITE` | 29 | Replay-safe state/publication/recovery operations |
+| Idempotent write/non-destructive | `_WRITE` | 30 | Replay-safe state/publication/recovery operations |
 | Non-idempotent write/non-destructive | `_OPERATOR_WRITE` and `_ACQUIRE` | 4 | `resolve_request`, `clear_block`, `administrative_move`, `acquire_frontier_work`; `_ACQUIRE` and `_OPERATOR_WRITE` have identical wire values |
 | Idempotent/destructive | `_CLEANUP` | 3 | The three explicit worktree cleanup operations |
 
@@ -233,18 +233,20 @@ The source-level distinction between acquire and operator write is useful docume
 | `PortfolioApplication` public methods | 66 | Direct application-level methods defined on the class |
 | MCP-exposed application methods | 54 | Exact same-name methods represented by strict MCP tools |
 | Public methods not MCP-exposed | 12 | Mostly Cockpit convenience/batch/projection methods, plus test/internal-only methods |
-| Root `__all__` names | 242 | Re-export declarations from the core package root, including models, errors, providers, stores, and application types |
+| Root `__all__` names | 244 | Re-export declarations from the core package root, including models, errors, providers, stores, and application types |
 | Agent frontmatter Delivery grants | 19 | Explicit `owlbear-delivery/<name>` entries in named shared agents |
 | Cockpit methods matching MCP names | 24 | Core operation names called by `TargetCockpitService` |
 | Cockpit-only application methods | 5 direct plus one bound reference | Server-resolved convenience, batch, or aggregate methods not represented in MCP |
 
-The 242 root names are not 242 production consumers. An AST census over 235 unique main-checkout Python source/test files found:
+The refreshed 244 root names are not 244 production consumers. The original AST census over 235
+unique main-checkout Python source/test files, plus the two added submodule-used recovery names,
+found:
 
 | Export class | Count | Interpretation |
 | --- | ---: | --- |
 | Root-imported by non-test production packages | 17 | Highest-confidence cross-package root API |
 | Root-imported only by tests | 144 | Test coupling; not proof of external API demand |
-| No root importer but referenced through submodule/name use | 80 | Candidates for root re-export declaration reduction; exact import migration is not needed if only `__all__` is changed |
+| No root importer but referenced through submodule/name use | 82 | Candidates for root re-export declaration reduction; exact import migration is not needed if only `__all__` is changed |
 | No AST name/reference beyond the root export declaration | 1 | `RequiredPublicationChecksFailedError`; strongest local dead-export candidate |
 
 These counts are repository-local and static. They do not prove that an external consumer does not use an explicit root import, and `__all__` reduction alone does not remove an attribute still imported into `__init__.py`.
@@ -582,7 +584,7 @@ The strongest current test-only public `PortfolioApplication` methods are:
 - `portfolio_operating_view`;
 - `show_change_checkpoint_publication`.
 
-`cleanup_change_worktree` is public but internally called by the two lifecycle-specific cleanup methods, so it is not test-only. Many of the 242 root exports are test-imported models and error types; test use proves valuable verification access, not necessarily an intended consumer API.
+`cleanup_change_worktree` is public but internally called by the two lifecycle-specific cleanup methods, so it is not test-only. Many of the 244 root exports are test-imported models and error types; test use proves valuable verification access, not necessarily an intended consumer API.
 
 Tests also preserve fake applications and adapter records. They should be classified separately from live callers because they intentionally test the transport contract at the boundary.
 
@@ -606,12 +608,12 @@ Tests also preserve fake applications and adapter records. They should be classi
 
 #### Candidate A — Root export reduction
 
-**Status quo:** 242 root names, 17 root-imported by production packages, 144 root-imported only by tests, 80 with no root importer but other name/submodule evidence, and 1 with no AST reference found.
+**Status quo:** 244 root names, 17 root-imported by production packages, 144 root-imported only by tests, 82 with no root importer but other name/submodule evidence, and 1 with no AST reference found.
 
 | Option | Pros | Cons/risks | Confidence |
 | --- | --- | --- | --- |
 | A1. Remove only the one no-reference name from `__all__` | Minimal blast radius; easy absence proof | Tiny reduction; explicit attribute remains if import line stays | High |
-| A2. Remove the 80 no-root-importer names from `__all__` but retain explicit imports | Honest declaration reduction without import migration | `__all__` is not the actual runtime attribute surface; may confuse consumers | High for local effect, medium for external contract |
+| A2. Remove the 82 no-root-importer names from `__all__` but retain explicit imports | Honest declaration reduction without import migration | `__all__` is not the actual runtime attribute surface; may confuse consumers | High for local effect, medium for external contract |
 | A3. Migrate tests to owning submodules, then remove test-only root re-exports/imports | Real root-surface reduction; clearer ownership | Broad test churn; external consumers may rely on root imports; requires package-boundary review | Medium |
 | A4. Keep root as a deliberately broad facade | No breakage; convenient tests and integrations | No reduction; perpetuates unclear ownership | High as current behavior |
 
@@ -710,7 +712,7 @@ The adapter already derives flattened argument signatures from request models. T
 | MCP count | Keep semantic 54; generate/check metadata | Preserves role clarity and exact safety semantics | Registry still appears large | High | Registry/model/agent/skill coverage test |
 | MCP count | Generic `delivery(operation, payload)` | Fewer tool names | Loses typed discovery, per-tool annotations, role separation, and clearer error authority | High risk | None recommended |
 | Root exports | Remove one unreferenced name | Small clarity improvement | External explicit import not visible locally | High local / medium external | Import absence search and `__all__` contract |
-| Root exports | Remove 80 no-root-importer declarations | Significant declared-surface reduction | `__all__` is not the full attribute surface; external consumers unknown | Medium-high | Package export snapshot and consumer compatibility decision |
+| Root exports | Remove 82 no-root-importer declarations | Significant declared-surface reduction | `__all__` is not the full attribute surface; external consumers unknown | Medium-high | Package export snapshot and consumer compatibility decision |
 | Root exports | Remove 144 test-only root imports | Real ownership clarity | Broad test migration and external breakage | Medium | Migrate tests to submodules; full Python suite |
 | Four test-only methods | Delete | Shrinks core API | Hidden external/test fixture contract | Medium-high local | No production references, replacement test boundary, full suite |
 | Four test-only methods | Make private/diagnostic | Clarifies ownership with less breakage | Still present; convention-only privacy | Medium-high | Private caller inventory and focused tests |
