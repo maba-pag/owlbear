@@ -227,6 +227,13 @@ class OperatorContextParams(ChangeParams):
     outcome_id: str = Field(min_length=1)
 
 
+class RepairChangeParams(ChangeParams):
+    """Validate one high-level repair diagnosis or proposal application."""
+
+    proposal_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    confirmed_lost: bool = False
+
+
 class ResolveRequestParams(ChangeParams):
     """Validate one user-owned answer for a retained Delivery request."""
 
@@ -846,6 +853,10 @@ type OperatorContextRequest = Annotated[
     OperatorContextParams,
     BeforeValidator(partial(_parse_json_model, OperatorContextParams)),
 ]
+type RepairChangeRequest = Annotated[
+    RepairChangeParams,
+    BeforeValidator(partial(_parse_json_model, RepairChangeParams)),
+]
 type ResolveRequestRequest = Annotated[
     ResolveRequestParams,
     BeforeValidator(partial(_parse_json_model, ResolveRequestParams)),
@@ -1057,6 +1068,8 @@ __all__ = [
     "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",
     "RecoverPublicationBaselineRequest",
+    "RepairChangeParams",
+    "RepairChangeRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
     "RepairDeliveryStateSnapshotParams",

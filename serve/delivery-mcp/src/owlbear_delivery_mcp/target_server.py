@@ -113,6 +113,8 @@ from owlbear_delivery_mcp.target_models import (
     RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
     RecoverPublicationBaselineRequest,
+    RepairChangeParams,
+    RepairChangeRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
     RepairDeliveryStateSnapshotParams,
@@ -169,6 +171,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_work_item",
     "show_work_item_view",
     "show_operator_context",
+    "repair_change",
     "resolve_request",
     "clear_block",
     "preview_administrative_move",
@@ -230,7 +233,9 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
-_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"resolve_request", "clear_block", "administrative_move"})
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
+    {"resolve_request", "clear_block", "administrative_move", "repair_change"}
+)
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
@@ -450,6 +455,19 @@ class TargetMCPAdapter:
             DeliveryOperatorContext,
         )
         return DeliveryOperatorContextResponse.from_context(context)
+
+    async def repair_change(self, request: RepairChangeRequest) -> dict[str, object]:
+        """Diagnose or apply one versioned high-level repair proposal."""
+        params = self._validate(RepairChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.repair_change(
+                params.change_id,
+                params.proposal_id,
+                confirmed_lost=params.confirmed_lost,
+            ),
+        )
 
     async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
         """Persist one user-owned answer for a retained Delivery request."""
