@@ -143,6 +143,7 @@ class TargetCockpitService:
                 outcome_id,
                 body.attempt_id,
                 body.claim_id,
+                confirmed_lost=body.confirmed_lost,
             )
         )
 
