@@ -74,6 +74,7 @@ from owlbear_delivery import (
     DeliveryHealthReason,
     DeliveryHealthResolution,
     DeliveryHealthStatus,
+    DeliveryHealthView,
     DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -8158,6 +8159,39 @@ def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -
     assert view.health.status is DeliveryHealthStatus.HEALTHY
     assert view.repair is not None
     assert view.repair.proposal is not None
+    assert view.repair.proposal.outcome_id == view.detail.card.work_item_id
+
+
+def test_get_change_scopes_health_diagnostics_to_requested_change(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    with patch.object(
+        application,
+        "delivery_health",
+        return_value=DeliveryHealthView(
+            status=DeliveryHealthStatus.ATTENTION,
+            diagnostics=(
+                DeliveryHealthDiagnostic(
+                    source="test",
+                    code="other-change",
+                    detail="Other Change requires attention.",
+                    change_id="change-b",
+                ),
+                DeliveryHealthDiagnostic(
+                    source="test",
+                    code="requested-change",
+                    detail="Requested Change requires attention.",
+                    change_id="change-a",
+                ),
+            ),
+        ),
+    ):
+        view = application.get_change("change-a")
+
+    assert view.health.status is DeliveryHealthStatus.ATTENTION
+    assert tuple(item.change_id for item in view.health.diagnostics) == ("change-a",)
 
 
 def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: Path) -> None:
@@ -8168,9 +8202,13 @@ def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: P
     launch = application.acquire_frontier_work().launch_packages[0]
     request = DeliveryRequest(
         request_id="request-answer",
-        kind=DeliveryRequestKind.ACTION,
+        kind=DeliveryRequestKind.DECISION,
         outcome_id="OUT-001",
-        summary="Repair the external prerequisite.",
+        summary="Choose the repair path.",
+        options=(
+            DeliveryRequestOption(option_id="repair", label="Repair the prerequisite"),
+            DeliveryRequestOption(option_id="defer", label="Defer the prerequisite"),
+        ),
     )
     application.transition_delivery(
         "change-a",
@@ -8190,7 +8228,7 @@ def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: P
     answer = DeliveryAnswer(
         change_id="change-a",
         request_id=request.request_id,
-        resolution=DeliveryRequestResolution(response_text="The prerequisite is repaired."),
+        resolution=DeliveryRequestResolution(selected_option_id="repair"),
         expected_frontier_digest=view.frontier_digest,
     )
 
@@ -8199,8 +8237,12 @@ def test_answer_revalidates_frontier_and_replays_same_request_answer(tmp_path: P
 
     assert applied == replayed
     assert applied.request.resolution == answer.resolution
+    with pytest.raises(PortfolioApplicationError, match="exactly one selected option"):
+        application.answer(
+            answer.model_copy(update={"resolution": DeliveryRequestResolution(response_text="Repair it.")})
+        )
     different = answer.model_copy(
-        update={"resolution": DeliveryRequestResolution(response_text="A different answer.")}
+        update={"resolution": DeliveryRequestResolution(selected_option_id="defer")}
     )
     with pytest.raises(PortfolioApplicationError, match="answer frontier changed"):
         application.answer(different)

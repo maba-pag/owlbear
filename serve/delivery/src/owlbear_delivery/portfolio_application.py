@@ -96,6 +96,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
+    DeliveryRequestKind,
     DeliveryRequestResolution,
     DeliveryResultCandidate,
     DeliveryReturnContext,
@@ -5321,13 +5322,28 @@ class PortfolioApplication:
         """Return one coherent Change view without requiring caller-side projection joins."""
         runtime = self._runtime(change_id)
         frontier_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+        repair = self.repair_change(change_id)
         items = self._work_item_projector(runtime).group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
-        item_key = "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key
+        proposal_outcome_id = repair.proposal.outcome_id if repair.proposal is not None else None
+        item_key = next(
+            (
+                item.item_key
+                for item in items
+                if proposal_outcome_id is not None and item.work_item_id == proposal_outcome_id
+            ),
+            "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key,
+        )
         detail = self.show_work_item_view(change_id, item_key)
-        health = self.delivery_health()
-        repair = self.repair_change(change_id)
+        portfolio_health = self.delivery_health()
+        diagnostics = tuple(item for item in portfolio_health.diagnostics if item.change_id == change_id)
+        health = portfolio_health.model_copy(
+            update={
+                "status": DeliveryHealthStatus.ATTENTION if diagnostics else DeliveryHealthStatus.HEALTHY,
+                "diagnostics": diagnostics,
+            }
+        )
         return DeliveryChangeView(
             change_id=change_id,
             frontier_digest=frontier_digest,
@@ -5343,6 +5359,10 @@ class PortfolioApplication:
             with locked_roots((self._checkpoint_lock_root(answer.change_id),)):
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 current = self._request(runtime, answer.request_id)
+                if current.kind is DeliveryRequestKind.DECISION and (
+                    answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
+                ):
+                    self._fail("Decision answers require exactly one selected option")
                 if current_digest != answer.expected_frontier_digest:
                     if current.resolution == answer.resolution:
                         return DeliveryAnswerResult(
