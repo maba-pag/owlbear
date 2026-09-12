@@ -75,6 +75,7 @@ DELIVERY_TOOLS = {
     "show_work_item",
     "show_work_item_view",
     "show_operator_context",
+    "repair",
     "repair_change",
     "resolve_request",
     "clear_block",
@@ -137,10 +138,8 @@ READ_TOOLS = {
     "show_completed_change",
 }
 EXCLUDED_TOOLS = {
-    "list_changes",
     "show_change",
     "validate_change",
-    "admit_change",
     "create_request",
     "unblock_delivery",
     "list_semantic_updates",
@@ -383,9 +382,11 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
             name
             not in {
                 "acquire_frontier_work",
+                "acquire_actions",
                 "resolve_request",
                 "clear_block",
                 "administrative_move",
+                "repair",
                 "repair_change",
                 "set_change_intent",
             }

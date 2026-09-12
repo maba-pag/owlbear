@@ -670,6 +670,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "show_work_item_view": {**change, "item_key": "publication"},
         "show_operator_context": {**change, "outcome_id": "OUT-001"},
         "repair_change": change,
+        "repair": change,
         "resolve_request": {
             **change,
             "request_id": "request",
