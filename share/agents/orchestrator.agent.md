@@ -46,8 +46,8 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 - **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
   use exact Integration claim recovery only when a legacy claim's identities are supplied.
 - **Route only admitted Change repair.** When `get_change` returns one exact engine-authored repair
-  proposal for a Change-specific health diagnostic, dispatch `repairer` with that view; do not route
-  Integration attention, provider waiting, or authority gaps to it.
+  proposal for a Change-specific acquisition failure or health diagnostic, dispatch `repairer` with
+  that view; do not route Integration attention, provider waiting, or authority gaps to it.
 - **Refresh until quiescent.** Stop on an empty acquisition result or a Delivery safety condition that
   requires operator/user attention.
 

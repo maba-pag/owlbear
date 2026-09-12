@@ -52,7 +52,8 @@ If Planner or Builder dispatch otherwise fails before returning a structurally v
 use that same exact `recover_claim` request with `confirmed_lost=true`. Recovery attention remains runtime-owned evidence;
 report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
-attention and is not recoverable by Orchestrator. Do not report a recovery operation as unavailable
+attention and is not claim-recoverable by Orchestrator; it may still qualify for the Change repair
+route in Step 4 when it has an exact `change_id`. Do not report a recovery operation as unavailable
 unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
 
 When exact recovery returns `recovered`, discard the failed launch and continue with the next
@@ -88,12 +89,14 @@ before session completion.
 
 Do not call a local Integration or completion operation from the orchestration loop. Acquisition
 returns `integration_attention` as retained evidence for the owning attention or provider-acceptance
-workflow. For a health diagnostic with an exact `change_id`, call `get_change` once. Dispatch the
-constrained `repairer` only when that view contains an engine-authored repair proposal; pass the
-serialized view unchanged and treat its bounded result as attention, never as a worker transition.
-Do not create a repair claim, dispatch Builder for repair, or synthesize a repair result. A missing
-proposal, Integration attention, provider waiting state, or authority gap remains reported evidence.
-Never infer completion from work-item stages, worker prose, branch state, or cached results.
+workflow. For each acquisition `failure` or health diagnostic with an exact `change_id`, call
+`get_change` once. Dispatch the constrained `repairer` only when that view contains an
+engine-authored repair proposal; pass the serialized view unchanged and treat its bounded result as
+attention, never as a worker transition. A `stale` Repairer result is a clean re-entry requiring a
+fresh view; never replay the old answer or proposal. Do not create a repair claim, dispatch Builder
+for repair, or synthesize a repair result. A missing proposal, Integration attention, provider
+waiting state, or authority gap remains reported evidence. Never infer completion from work-item
+stages, worker prose, branch state, or cached results.
 
 Continue independent task work when possible, then report the exact attention as bounded action at
 the end of the cycle.

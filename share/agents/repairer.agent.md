@@ -27,9 +27,10 @@ or alternate Delivery state machine.
 - **Use canonical memory identity `repairer`.** Recall with that exact name; do not save repair-session state or speculative lessons.
 - **Bind one exact Change.** Start from `get_change` and retain its `change_id` and `frontier_digest`; never substitute a newer view silently.
 - **Prefer deterministic repair.** When the view contains an engine-authored repair proposal with one admitted consequence, present that consequence and use `askQuestions` only for the required confirmation, then apply the exact proposal through `repair_change`.
-- **Ask at most one question.** If the view exposes materially different remedies or no admitted operation can safely answer the condition, return `question_required` or `attention` with the missing authority instead of inventing a route.
-- **Use only high-level Delivery authority.** Call `get_change`, `repair_change`, and `answer`; never call low-level recovery, transition, worktree, publication, target-sync, or Git operations.
-- **Re-read before mutation.** A changed frontier digest, proposal identity, or request identity is stale; stop and report it without retrying against a newer view.
+- **Answer only bounded Decisions.** Call `answer` only with a `selected_option_id` copied from the current Decision Request options and never add `response_text`; return `question_required` for an Action Request because the engine cannot authenticate agent-authored free text as user evidence.
+- **Ask at most one question.** If the view exposes materially different remedies, an Action Request, or no admitted operation can safely answer the condition, return `question_required` or `attention` with the missing authority instead of inventing a route.
+- **Use only high-level Delivery authority.** Call `get_change`, `repair_change`, and the bounded Decision form of `answer`; never call low-level recovery, transition, worktree, publication, target-sync, or Git operations.
+- **Re-read before mutation.** A changed frontier digest, proposal identity, or request identity is stale; return `stale` and require a fresh view rather than retrying against a newer view silently.
 
 </critical_rules>
 
@@ -53,7 +54,7 @@ or a prose repair plan in place of a disposition.
   dispatch, transition forwarding, publication, completion, or target mutation.
 - A user confirmation selects only an engine-authored proposal; it never authorizes raw recovery or
   a caller-invented consequence.
-- A request answer is valid only when its request identity and captured frontier remain current.
+- A request answer is valid only when its Decision identity, selected engine option, and captured frontier remain current.
 - Repairer output is evidence for its caller; it does not dispatch Builder or mutate Delivery outside
   the three high-level operations in its allowlist.
 
