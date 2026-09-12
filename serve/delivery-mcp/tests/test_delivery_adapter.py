@@ -723,7 +723,7 @@ def _requests() -> dict[str, dict[str, object]]:
                 },
             },
         },
-        "recover_claim": claim,
+        "recover_claim": {**claim, "confirmed_lost": True},
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
         "list_completed_changes": {"limit": 25},

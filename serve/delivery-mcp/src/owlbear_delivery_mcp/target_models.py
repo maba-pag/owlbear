@@ -258,6 +258,12 @@ class ClaimContextParams(ChangeParams):
     claim_id: str = Field(min_length=1)
 
 
+class RecoverClaimParams(ClaimContextParams):
+    """Validate explicit lost-worker confirmation for claim recovery."""
+
+    confirmed_lost: Literal[True]
+
+
 class RepairClaimContextParams(ChangeParams):
     """Validate one exact active change-level Integration repair claim."""
 
@@ -888,6 +894,10 @@ type ClaimContextRequest = Annotated[
     ClaimContextParams,
     BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
 ]
+type RecoverClaimRequest = Annotated[
+    RecoverClaimParams,
+    BeforeValidator(partial(_parse_json_model, RecoverClaimParams)),
+]
 type CompletedPageRequest = Annotated[
     CompletedPageParams,
     BeforeValidator(partial(_parse_json_model, CompletedPageParams)),
@@ -1041,6 +1051,8 @@ __all__ = [
     "PublishDeliveryResultRequest",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
+    "RecoverClaimParams",
+    "RecoverClaimRequest",
     "RecoverOutOfBandHeadParams",
     "RecoverOutOfBandHeadRequest",
     "RecoverPublicationBaselineParams",

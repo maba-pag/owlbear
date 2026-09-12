@@ -107,6 +107,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryResultRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
+    RecoverClaimParams,
+    RecoverClaimRequest,
     RecoverOutOfBandHeadParams,
     RecoverOutOfBandHeadRequest,
     RecoverPublicationBaselineParams,
@@ -881,10 +883,19 @@ class TargetMCPAdapter:
         params = self._validate(TransitionDeliveryParams, request)
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
-    async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]:
+    async def recover_claim(self, request: RecoverClaimRequest) -> dict[str, object]:
         """Recover one exact failed Delivery claim."""
-        params = self._validate(ClaimContextParams, request)
-        return self._call(params, lambda: self._application.recover_claim(**params.model_dump()))
+        params = self._validate(RecoverClaimParams, request)
+        return self._call(
+            params,
+            lambda: self._application.recover_claim(
+                params.change_id,
+                params.outcome_id,
+                params.attempt_id,
+                params.claim_id,
+                confirmed_lost=params.confirmed_lost,
+            ),
+        )
 
     async def recover_integration_repair_claim(
         self,
