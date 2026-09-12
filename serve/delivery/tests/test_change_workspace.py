@@ -394,6 +394,66 @@ def test_snapshot_design_package_revises_with_receipt_fence_and_replays(tmp_path
         )
 
 
+def test_snapshot_design_package_revises_after_commit_before_receipt(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("snapshot-revision-replay")
+    original_files = {
+        "authority.json": b'{"authority":"old"}\n',
+        "design.md": b"# Old design\n",
+        "intent.md": b"# Old intent\n",
+        "manifest.json": b'{"manifest":"old"}\n',
+    }
+    revised_files = {
+        "authority.json": b'{"authority":"new"}\n',
+        "design.md": b"# New design\n",
+        "intent.md": b"# New intent\n",
+        "manifest.json": b'{"manifest":"new"}\n',
+    }
+    original = manager.snapshot_design_package(
+        coordination.change_id,
+        "a" * 64,
+        original_files,
+        "snapshot-revision-replay-old",
+    )
+    original_update = coordinator.update
+    update_count = 0
+
+    def fail_replacement_receipt(updated: ChangeCoordination, *, lock=None) -> ChangeCoordination:
+        nonlocal update_count
+        update_count += 1
+        if update_count == 1:
+            return original_update(updated, lock=lock)
+        raise RuntimeError("simulated replacement receipt failure")
+
+    with (
+        patch.object(coordinator, "update", side_effect=fail_replacement_receipt),
+        pytest.raises(RuntimeError, match="simulated replacement receipt failure"),
+    ):
+        manager.snapshot_design_package(
+            coordination.change_id,
+            "b" * 64,
+            revised_files,
+            "snapshot-revision-replay-new",
+            expected_existing_receipt_id=original.receipt_id,
+        )
+
+    interrupted = coordinator.show(coordination.change_id)
+    assert interrupted.design_package_snapshot == original
+    assert interrupted.design_package_snapshot_intent is not None
+    recovered = manager.snapshot_design_package(
+        coordination.change_id,
+        "b" * 64,
+        revised_files,
+        "snapshot-revision-replay-new",
+        expected_existing_receipt_id=original.receipt_id,
+    )
+
+    assert recovered.package_id == "b" * 64
+    assert coordinator.show(coordination.change_id).design_package_snapshot == recovered
+    assert coordinator.show(coordination.change_id).design_package_snapshot_intent is None
+
+
 def test_snapshot_design_package_replays_after_commit_before_receipt(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

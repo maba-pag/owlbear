@@ -1758,10 +1758,10 @@ class ChangeWorkspaceManager:
         if coordination.writer is not None:
             _coordination_conflict("Design package snapshot replacement cannot overlap an active writer")
         branch_head = self._resolve(coordination.branch)
-        if branch_head != existing.snapshot_head:
-            _workspace_failure("Design package snapshot branch moved before replacement")
         intent = coordination.design_package_snapshot_intent
         if intent is None:
+            if branch_head != existing.snapshot_head:
+                _workspace_failure("Design package snapshot branch moved before replacement")
             intent = ChangeDesignPackageSnapshotIntent.create(
                 operation_id=operation_id,
                 change_id=coordination.change_id,
