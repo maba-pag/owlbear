@@ -45,11 +45,11 @@ source head.
 
 If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
 equal the launch and require non-empty `failed_operation` and `reason`. Use that same exact
-`recover_claim` request. Never forward this result to `transition_delivery` or translate it into a
-worker lifecycle action.
+`recover_claim` request with `confirmed_lost=true`. Never forward this result to
+`transition_delivery` or translate it into a worker lifecycle action.
 
 If Planner or Builder dispatch otherwise fails before returning a structurally valid worker result,
-use that same exact `recover_claim` request. Recovery attention remains runtime-owned evidence;
+use that same exact `recover_claim` request with `confirmed_lost=true`. Recovery attention remains runtime-owned evidence;
 report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
 attention and is not recoverable by Orchestrator. Do not report a recovery operation as unavailable
@@ -75,7 +75,7 @@ is forwarded normally and must not be recovered.
 
 Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool
-error, call `recover_claim` with the launch's exact change, outcome, attempt, and claim IDs, report
+error, call `recover_claim` with `confirmed_lost=true` and the launch's exact change, outcome, attempt, and claim IDs, report
 the routing failure and recovery result, and end the session after the current acquired batch. Do
 not redispatch Planner, Builder, or another agent to echo, relay, reconstruct, or apply a transition.
 
