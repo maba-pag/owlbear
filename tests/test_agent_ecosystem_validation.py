@@ -36,6 +36,7 @@ _EXPECTED_AGENTS = {
     "orchestrator",
     "planner",
     "planner-challenger",
+    "repairer",
     "test-curator",
 }
 _RETIRED_AGENTS = {
@@ -88,10 +89,12 @@ _TARGET_ROLE_TOOLS = {
         "list_work_items",
         "acquire_frontier_work",
         "delivery_health",
+        "get_change",
         "transition_delivery",
         "recover_claim",
         "recover_integration_repair_claim",
     },
+    "repairer": {"get_change", "repair_change", "answer"},
     "finalizer": {
         "show_finalization_context",
         "reconcile_finalization_head",

@@ -48,7 +48,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-6 Astra | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
+| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, repairer, memory-curator, Explore | Reports and acquires portfolio work, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, routes engine-authored Change repair proposals to Repairer, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
+| repairer | GPT-5.6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
 | builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
 | finalizer | GPT-5.6 Luna | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
@@ -115,6 +116,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `h-frontend-design` | conceptual-design-reviewer |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
+| `h-decision-requests` | repairer |
 | `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
 | `r-workspace-governance` | builder, test-curator |
@@ -131,6 +133,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | An acquired Build launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
+| repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; the failure is reported and does not stop independent Delivery acquisition |

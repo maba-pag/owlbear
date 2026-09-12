@@ -15,7 +15,7 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
 `recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
@@ -88,9 +88,12 @@ before session completion.
 
 Do not call a local Integration or completion operation from the orchestration loop. Acquisition
 returns `integration_attention` as retained evidence for the owning attention or provider-acceptance
-workflow. A legacy repair condition is visibility only: do not create a new repair claim, dispatch a
-repair worker, or synthesize a repair result. Never infer completion from work-item stages, worker
-prose, branch state, or cached results.
+workflow. For a health diagnostic with an exact `change_id`, call `get_change` once. Dispatch the
+constrained `repairer` only when that view contains an engine-authored repair proposal; pass the
+serialized view unchanged and treat its bounded result as attention, never as a worker transition.
+Do not create a repair claim, dispatch Builder for repair, or synthesize a repair result. A missing
+proposal, Integration attention, provider waiting state, or authority gap remains reported evidence.
+Never infer completion from work-item stages, worker prose, branch state, or cached results.
 
 Continue independent task work when possible, then report the exact attention as bounded action at
 the end of the cycle.
