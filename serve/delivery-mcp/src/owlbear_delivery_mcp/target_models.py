@@ -36,7 +36,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryRequest,
     DeliveryRequestResolution,
-    DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryStage,
     DeliveryTaskDefinition,
@@ -46,7 +45,6 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
-    PublishDeliveryResult,
 )
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
@@ -331,12 +329,6 @@ class PublishDeliveryPlanParams(ChangeParams):
     plan: PublishDeliveryPlan
 
 
-class PublishDeliveryResultParams(ChangeParams):
-    """Validate one Build result publication."""
-
-    result: PublishDeliveryResult
-
-
 class SubmitResultParams(ChangeParams):
     """Validate one claim-bound Builder result submission and promotion."""
 
@@ -529,21 +521,6 @@ class ChangePublicationBaselineRecoveryResponse(_TargetProtocolModel):
     ) -> ChangePublicationBaselineRecoveryResponse:
         """Convert one domain recovery receipt into transport form."""
         return cls(**receipt.model_dump())
-
-
-class DeliveryResultPublication(_TargetProtocolModel):
-    """Build publication response with its transition-ready output reference."""
-
-    candidate_id: str = Field(min_length=1)
-    claim_id: str = Field(min_length=1)
-    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    result: DeliveryTaskResult
-    output: DeliveryOutputReference
-
-    @classmethod
-    def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication:
-        """Project one domain candidate into its complete MCP response."""
-        return cls(**candidate.model_dump(), output=candidate.output)
 
 
 class DeliveryOperatorClaimResponse(_TargetProtocolModel):
@@ -1105,10 +1082,6 @@ type RepairClaimContextRequest = Annotated[
     RepairClaimContextParams,
     BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
 ]
-type PublishDeliveryResultRequest = Annotated[
-    PublishDeliveryResultParams,
-    BeforeValidator(partial(_parse_json_model, PublishDeliveryResultParams)),
-]
 type ReviseDesignSessionRequest = Annotated[
     ReviseDesignSessionParams,
     BeforeValidator(partial(_parse_json_model, ReviseDesignSessionParams)),
@@ -1169,7 +1142,6 @@ __all__ = [
     "DeliveryOperatorRecoveryAttentionResponse",
     "DeliveryPlanPublication",
     "DeliveryPublicationSupersessionResponse",
-    "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
     "DeliveryStateSnapshotRepairResponse",
@@ -1189,8 +1161,6 @@ __all__ = [
     "PreviewAdministrativeMoveRequest",
     "PublishDeliveryPlanParams",
     "PublishDeliveryPlanRequest",
-    "PublishDeliveryResultParams",
-    "PublishDeliveryResultRequest",
     "PutDesignParams",
     "PutDesignRequest",
     "PutDesignResponse",

@@ -8,7 +8,6 @@ import json
 import subprocess
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,11 +34,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
-    DeliveryObservation,
-    DeliveryObservationReceipt,
     DeliveryResultCandidate,
-    DeliveryReview,
-    DeliveryReviewReceipt,
     PublishDeliveryResult,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
@@ -84,7 +79,6 @@ DELIVERY_TOOLS = {
     "show_build_context",
     "show_finalization_context",
     "publish_delivery_plan",
-    "publish_delivery_result",
     "submit_result",
     "finalize_change",
     "mark_change_ready",
@@ -448,146 +442,6 @@ async def test_registered_review_repair_tool_invokes_strict_adapter_once() -> No
 
     assert result.structured_content == {"operation": "prepare_review_repair"}
     assert application.calls == ["prepare_review_repair"]
-
-
-def _published_result_payload() -> dict[str, object]:
-    completed_commit = "c" * 40
-    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
-    observation = DeliveryObservationReceipt.create(
-        DeliveryObservation(
-            change_id="change-a",
-            task_or_finalization_id="TASK-001",
-            exact_commit=completed_commit,
-            observation_kind="pytest",
-            command_or_procedure="live Delivery MCP contract test",
-            exit_status_or_artifact_locator="exit:0",
-            observer_or_runner_identity="pytest",
-            observed_at=observed_at,
-        )
-    )
-    review = DeliveryReviewReceipt.create(
-        DeliveryReview(
-            exact_commit=completed_commit,
-            author_id="MCP server test author",
-            reviewer_id="MCP server test reviewer",
-            evidence=("The exact fixture commit satisfies task authority.",),
-            reviewed_at=observed_at,
-        )
-    )
-    return {
-        "result_id": "result-1",
-        "change_id": "change-a",
-        "authority_digest": "a" * 64,
-        "task_id": "TASK-001",
-        "task_digest": "b" * 64,
-        "completed_commit": completed_commit,
-        "observations": [observation.model_dump(mode="json")],
-        "review": review.model_dump(mode="json"),
-    }
-
-
-@pytest.mark.asyncio
-async def test_published_result_output_forwards_unchanged_to_transition() -> None:
-    application = _PublicationApplication()
-    server = assemble_target_server(application)  # type: ignore[arg-type]
-    publication_request = {
-        "change_id": "change-a",
-        "result": {
-            "outcome_id": "OUT-001",
-            "claim_id": "claim-1",
-            "result": _published_result_payload(),
-        },
-    }
-
-    async with Client(server) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        published = await client.call_tool("publish_delivery_result", publication_request)
-        assert published.structured_content is not None
-        output = published.structured_content["output"]
-        transitioned = await client.call_tool(
-            "transition_delivery",
-            {
-                "change_id": "change-a",
-                "transition": {
-                    "action": "advance",
-                    "outcome_id": "OUT-001",
-                    "claim_id": "claim-1",
-                    "output": output,
-                },
-            },
-        )
-
-    publication_schema = tools["publish_delivery_result"].input_schema
-    publication_definitions = tools["publish_delivery_result"].input_schema["$defs"]
-    transition_definitions = tools["transition_delivery"].input_schema["$defs"]
-    result_definition = publication_definitions[
-        publication_schema["properties"]["result"]["$ref"].removeprefix("#/$defs/")
-    ]
-    task_result_definition = publication_definitions[
-        result_definition["properties"]["result"]["$ref"].removeprefix("#/$defs/")
-    ]
-    assert set(publication_schema["properties"]) == {"change_id", "result"}
-    assert publication_schema["properties"]["change_id"]["type"] == "string"
-    assert {"observations", "review"} <= set(task_result_definition["required"])
-    finalization_schema = tools["finalize_change"].input_schema
-    assert set(finalization_schema["properties"]) == {"change_id", "finalization"}
-    finalization_request = finalization_schema["$defs"]["FinalizeDeliveryChange"]
-    assert {"operation_id", "exact_head", "observations", "review"} <= set(finalization_request["required"])
-    ready_schema = tools["mark_change_ready"].input_schema
-    assert set(ready_schema["properties"]) == {"change_id", "operation_id", "finalization_id", "exact_head"}
-    assert {"change_id", "operation_id", "finalization_id", "exact_head"} == set(ready_schema["required"])
-    reconciliation_schema = tools["reconcile_finalization_head"].input_schema
-    assert set(reconciliation_schema["properties"]) == {"change_id"}
-    acceptance_schema = tools["observe_acceptance"].input_schema
-    assert set(acceptance_schema["properties"]) == {"change_id"}
-    assert set(tools["prepare_review_repair"].input_schema["properties"]) == {"change_id"}
-    supersession_schema = tools["supersede_publication"].input_schema
-    assert set(supersession_schema["properties"]) == {
-        "change_id",
-        "expected_publication_id",
-        "operation_id",
-    }
-    assert {
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "predecessor_publication_id",
-        "successor_publication_id",
-        "git_supersession",
-        "provider_supersession",
-        "publication_history",
-    } <= set(tools["supersede_publication"].output_schema["required"])
-    sync_schema = tools["sync_change_with_target"].input_schema
-    assert set(sync_schema["properties"]) == {"change_id", "expected_target", "operation_id"}
-    assert {
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "target_branch",
-        "expected_target",
-        "target_head",
-        "change_head_before",
-        "merged_head",
-        "merge_commit",
-    } <= set(tools["sync_change_with_target"].output_schema["required"])
-    assert "integration_target" not in tools["sync_change_with_target"].output_schema["properties"]
-    assert set(tools["transition_delivery"].input_schema["properties"]) == {"change_id", "transition"}
-    assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
-    assert all(
-        "action" in transition_definitions[branch["$ref"].removeprefix("#/$defs/")]["required"]
-        for branch in transition_definitions["DeliveryTransition"]["oneOf"]
-    )
-    assert "output" in tools["publish_delivery_plan"].output_schema["required"]
-    assert "output" in tools["publish_delivery_result"].output_schema["required"]
-    assert output == {
-        "output_id": "result-" + "d" * 64,
-        "claim_id": "claim-1",
-        "stage": "implementation",
-        "kind": "implementation",
-        "digest": "d" * 64,
-    }
-    assert transitioned.structured_content == {"operation": "transition_delivery"}
-    assert application.calls == ["publish_delivery_result", "transition_delivery"]
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,6 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryPlanCandidate,
-    DeliveryResultCandidate,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
@@ -87,7 +86,6 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
-    DeliveryResultPublication,
     DeliveryStateSnapshotRepairResponse,
     EmptyParams,
     EmptyRequest,
@@ -105,8 +103,6 @@ from owlbear_delivery_mcp.target_models import (
     PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
-    PublishDeliveryResultParams,
-    PublishDeliveryResultRequest,
     PutDesignParams,
     PutDesignRequest,
     PutDesignResponse,
@@ -192,7 +188,6 @@ DELIVERY_OPERATION_NAMES = (
     "show_build_context",
     "show_finalization_context",
     "publish_delivery_plan",
-    "publish_delivery_result",
     "submit_result",
     "finalize_change",
     "mark_change_ready",
@@ -654,16 +649,6 @@ class TargetMCPAdapter:
             DeliveryPlanCandidate,
         )
         return DeliveryPlanPublication.from_candidate(candidate)
-
-    async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication:
-        """Publish one claim-scoped Delivery result."""
-        params = self._validate(PublishDeliveryResultParams, request)
-        candidate = self._call_model(
-            params,
-            lambda: self._application.publish_delivery_result(params.change_id, params.result),
-            DeliveryResultCandidate,
-        )
-        return DeliveryResultPublication.from_candidate(candidate)
 
     async def submit_result(self, request: SubmitResultRequest) -> SubmitResultResponse:
         """Publish and promote one exact Builder result as one claim-bound operation."""
