@@ -1238,7 +1238,7 @@ it('answers a decision request and refetches its resolved state', async () => {
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/requests/REQ-001/answer',
     method: 'POST',
-    body: { selected_option_id: 'keep', response_text: null },
+    body: { selected_option_id: 'keep', response_text: null, expected_frontier_digest: 'a'.repeat(64) },
   }))
   expect(await screen.findByText('Keep it')).toBeInTheDocument()
 })

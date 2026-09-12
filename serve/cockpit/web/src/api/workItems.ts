@@ -673,11 +673,12 @@ export function answerWorkItemRequest(
   changeId: string,
   requestId: string,
   resolution: DeliveryRequestResolution,
+  expectedFrontierDigest: string,
 ): Promise<DeliveryRequest> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/requests/${encodeURIComponent(requestId)}/answer`,
     'ERR_WORK_ITEM_REQUEST_ANSWER',
-    resolution,
+    { ...resolution, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 

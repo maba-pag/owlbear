@@ -569,7 +569,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     actionResult,
     answerRequest: (requestId: string, resolution: DeliveryRequestResolution) => mutate(
       'answer',
-      () => answerWorkItemRequest(identity.changeId, requestId, resolution),
+      () => answerWorkItemRequest(identity.changeId, requestId, resolution, data!.item.snapshot_version),
       'Request answered.',
     ),
     clearBlock: (blockId: string, note: string, locators: string[]) => mutate(

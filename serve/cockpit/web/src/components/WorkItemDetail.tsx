@@ -130,10 +130,10 @@ function RequestControl({ request, pending, onAnswer }: {
 }) {
   const [selectedOptionId, setSelectedOptionId] = useState('')
   const [responseText, setResponseText] = useState('')
-  const canSubmit = Boolean(selectedOptionId || responseText.trim()) && !pending
+  const canSubmit = Boolean(request.kind === 'decision' ? selectedOptionId : responseText.trim()) && !pending
   const answer = () => onAnswer(request.request_id, {
     selected_option_id: selectedOptionId || null,
-    response_text: responseText.trim() || null,
+    response_text: request.kind === 'action' ? responseText.trim() || null : null,
   })
   if (request.resolution) {
     const answerText = request.resolution.response_text
@@ -158,15 +158,17 @@ function RequestControl({ request, pending, onAnswer }: {
           ))}
         </PSelect>
       ) : null}
-      <PInputText
-        compact
-        name={`request-${request.request_id}-answer`}
-        label={request.kind === 'decision' ? 'Additional response' : 'Action response'}
-        value={responseText}
-        disabled={pending}
-        onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
-        onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
-      />
+      {request.kind === 'action' ? (
+        <PInputText
+          compact
+          name={`request-${request.request_id}-answer`}
+          label="Action response"
+          value={responseText}
+          disabled={pending}
+          onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
+          onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
+        />
+      ) : null}
       <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
         {pending ? 'Submitting...' : 'Submit answer'}
       </PButton>
