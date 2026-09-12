@@ -87,7 +87,7 @@ class TargetCockpitService:
         self,
     ) -> WorkItemPortfolioResponse:
         """Return Change-grouped current Work Items from exact snapshots."""
-        view = self._invoke(self._application.portfolio_read_view)
+        view = self._invoke(self._application.list_changes)
         health = getattr(view, "health", DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY))
         return WorkItemPortfolioResponse(
             groups=view.groups,

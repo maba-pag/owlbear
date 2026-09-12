@@ -127,7 +127,7 @@ class _DeliveryApplicationFake:
         self.calls.append(("list", ()))
         return self._work_item_groups()
 
-    def portfolio_read_view(self) -> SimpleNamespace:
+    def list_changes(self) -> SimpleNamespace:
         self.calls.append(("portfolio", ()))
         return SimpleNamespace(
             groups=self._work_item_groups(),
