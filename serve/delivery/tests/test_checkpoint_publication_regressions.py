@@ -4,17 +4,20 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from serve.delivery.tests.test_delivery_state import _contract, _publish, _repository, _runtime
+from serve.delivery.tests.test_delivery_state import _admission, _contract, _publish, _repository, _runtime
 from serve.delivery.tests.test_portfolio_application import (
     _canonical,
     _draft_receipt,
     _finalization_request,
+    _git,
     _portfolio,
     _requested_branch_receipt,
+    _seed_loader_composed_completed_change,
     _set_checkpoint,
     _summary_receipt,
 )
@@ -26,9 +29,14 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryPendingCheckpoint,
     DeliveryStage,
+    DeliveryStartupConfig,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
     PublishChangeBranch,
+)
+from owlbear_delivery.delivery_application_loader import (
+    _is_unpublished_checkpoint_successor,
+    load_delivery_application,
 )
 from owlbear_delivery.portfolio_application import DeliveryRuntimeReconciliationError
 
@@ -145,6 +153,72 @@ def test_state_publisher_rejects_unacknowledged_reviewed_change_head(tmp_path: P
 
     with pytest.raises(DeliveryStatePublicationError, match="acknowledged on its branch"):
         _publish(publisher, runtime, manager, change_id, "f" * 64, "unacknowledged-head")
+
+
+def test_loader_accepts_retained_checkpoint_after_state_projection(tmp_path: Path) -> None:
+    repository, runtime_root = _seed_loader_composed_completed_change(tmp_path)
+    remote = tmp_path / "state-remote.git"
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    _git(repository, "push", "origin", "HEAD:refs/heads/main")
+    application = load_delivery_application(
+        DeliveryStartupConfig(
+            schema_version=2,
+            remote="origin",
+            target_branch="main",
+            github_repository="example/project",
+        ),
+        workspace_root=repository,
+    )
+    runtime = application._runtimes["change-a"]
+    coordination = application._workspace_manager.show("change-a")
+    head = coordination.last_reviewed_commit
+    _set_checkpoint(
+        runtime,
+        runtime_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+        published_head=head,
+    )
+    publisher = application._delivery_state_publisher
+    assert publisher is not None
+    publisher.publish(
+        change_id="change-a",
+        package_id=application._package_store.read_verified("change-a").package_id,
+        coordination=coordination,
+        runtime=runtime,
+        admission=_admission(runtime, application._workspace_manager, "change-a"),
+        operation_id="retained-checkpoint-state",
+        captured_at=datetime(2026, 8, 4, tzinfo=UTC),
+    )
+    snapshot = publisher.read_snapshot("change-a")
+    assert snapshot is not None
+    local = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    assert _is_unpublished_checkpoint_successor(snapshot.frontier, local)
+    mismatched = local.pending_checkpoint.model_copy(update={"head": "0" * 40})
+    assert not _is_unpublished_checkpoint_successor(
+        snapshot.frontier,
+        local.model_copy(update={"pending_checkpoint": mismatched}),
+    )
+
+    reloaded = load_delivery_application(
+        DeliveryStartupConfig(
+            schema_version=2,
+            remote="origin",
+            target_branch="main",
+            github_repository="example/project",
+            delivery_state_branch="owlbear/delivery-state",
+        ),
+        workspace_root=repository,
+    )
+
+    health = reloaded.delivery_health()
+    assert health.diagnostics == ()
+    pending = reloaded._runtimes["change-a"].checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert pending.head == head
 
 
 def test_checkpoint_snapshot_invalidates_finalization_before_publication(tmp_path: Path) -> None:

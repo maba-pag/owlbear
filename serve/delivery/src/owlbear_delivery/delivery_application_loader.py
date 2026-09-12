@@ -521,7 +521,10 @@ def _validate_local_snapshot(
         snapshot.frontier, frontier
     ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
     local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
-    local_recoverable_successor = local_attention_successor or local_claim_successor or local_pending_publication
+    local_checkpoint_successor = _is_unpublished_checkpoint_successor(snapshot.frontier, frontier)
+    local_recoverable_successor = (
+        local_attention_successor or local_claim_successor or local_checkpoint_successor or local_pending_publication
+    )
     if local_claim_successor:
         _require_local_snapshot_branch(snapshot, paths.repository_root)
     _fetch_snapshot_change_head(
@@ -742,6 +745,23 @@ def _is_unpublished_claim_successor(
         update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
     )
     return local_has_claim and snapshot_without_claims == local_without_claims
+
+
+def _is_unpublished_checkpoint_successor(
+    snapshot_frontier: DeliveryFrontier,
+    local_frontier: DeliveryFrontier,
+) -> bool:
+    """Recognize a local checkpoint retained until Change reconciliation."""
+    pending = local_frontier.pending_checkpoint
+    if (
+        snapshot_frontier.pending_checkpoint is not None
+        or pending is None
+        or pending.head is None
+        or local_frontier.published_head != pending.head
+        or snapshot_frontier.published_head != pending.head
+    ):
+        return False
+    return snapshot_frontier == local_frontier.model_copy(update={"pending_checkpoint": None})
 
 
 def _is_unpublished_acceptance_attention_successor(
