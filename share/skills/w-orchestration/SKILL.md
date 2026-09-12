@@ -15,16 +15,16 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_changes acquire_frontier_work delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
 
-Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
+Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
 `recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
 missing operation. If any binding remains unavailable or its focused search returns a tool error,
 report the exact missing operation and end the session without acquisition. Transition and recovery
 are required dispatch safety authority, not optional operations to discover after a claim has been
 acquired.
 
-Call `list_changes` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
+Call `list_changes` only for bounded portfolio reporting. Call `acquire_actions` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
 typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
