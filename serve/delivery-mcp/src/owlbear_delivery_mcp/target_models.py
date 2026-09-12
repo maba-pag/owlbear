@@ -26,6 +26,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationHistory,
     DeliveryChangeStage,
     DeliveryIntegrationAttentionCode,
@@ -163,6 +164,7 @@ class AnswerParams(ChangeParams):
     block_id: str | None = None
     operator_note: str | None = None
     locators: tuple[str, ...] = ()
+    expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def _validate_target(self) -> AnswerParams:
@@ -170,10 +172,10 @@ class AnswerParams(ChangeParams):
             if self.request_id is None or self.resolution is None:
                 message = "request answers require request identity and resolution"
                 raise ValueError(message)
-            if any((self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+            if any((self.outcome_id, self.block_id, self.operator_note, self.expected_disposition_id)) or self.locators:
                 message = "request answers cannot include block evidence"
                 raise ValueError(message)
-        else:
+        elif self.kind is DeliveryAnswerKind.BLOCK:
             if (
                 self.outcome_id is None
                 or self.block_id is None
@@ -183,8 +185,15 @@ class AnswerParams(ChangeParams):
             ):
                 message = "block answers require outcome, block, note, and locators"
                 raise ValueError(message)
-            if self.request_id is not None or self.resolution is not None:
+            if self.request_id is not None or self.resolution is not None or self.expected_disposition_id is not None:
                 message = "block answers cannot include request resolution"
+                raise ValueError(message)
+        else:
+            if self.expected_disposition_id is None:
+                message = "disposition answers require an expected disposition identity"
+                raise ValueError(message)
+            if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "disposition answers cannot include request or block evidence"
                 raise ValueError(message)
         return self
 
@@ -663,6 +672,7 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
     kind: DeliveryAnswerKind
     request: DeliveryRequest | None = None
     binding: OutcomeAuthorityBinding | None = None
+    disposition: DeliveryChangeDispositionResolution | None = None
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -672,6 +682,9 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
             raise ValueError(message)
         if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
             message = "block answer responses require the cleared binding"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
+            message = "disposition answer responses require the resolution receipt"
             raise ValueError(message)
         return self
 

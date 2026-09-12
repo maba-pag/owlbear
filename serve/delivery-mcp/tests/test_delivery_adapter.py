@@ -46,6 +46,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDeferral,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
+    DeliveryChangeDispositionResolution,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
@@ -422,6 +423,17 @@ class _RecordingApplication:
                         ),
                         frontier_digest=DIGEST,
                     )
+                if args and isinstance(args[0], DeliveryAnswer) and args[0].kind is DeliveryAnswerKind.DISPOSITION:
+                    return DeliveryAnswerResult(
+                        change_id=CHANGE,
+                        kind=DeliveryAnswerKind.DISPOSITION,
+                        disposition=DeliveryChangeDispositionResolution.create(
+                            change_id=CHANGE,
+                            disposition_id=DIGEST,
+                            resolved_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+                        ),
+                        frontier_digest=DIGEST,
+                    )
                 result = DeliveryAnswerResult(
                     change_id=CHANGE,
                     kind=DeliveryAnswerKind.REQUEST,
@@ -674,6 +686,12 @@ def _requests() -> dict[str, dict[str, object]]:
             "block_id": "block",
             "operator_note": "Verified.",
             "locators": ["operator-note"],
+        },
+        "answer_disposition": {
+            **change,
+            "kind": "disposition",
+            "expected_frontier_digest": DIGEST,
+            "expected_disposition_id": DIGEST,
         },
         "set_change_intent": {
             **change,
@@ -1126,6 +1144,19 @@ async def test_answer_adapter_supports_requestless_block_evidence() -> None:
     assert result.binding is not None
     assert result.binding.block is not None
     assert result.binding.block.resolution_note == "Verified."
+    assert result.frontier_digest == DIGEST
+
+
+@pytest.mark.asyncio
+async def test_answer_adapter_supports_change_disposition_resolution() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+
+    result = await adapter.answer(_requests()["answer_disposition"])
+
+    assert result.kind is DeliveryAnswerKind.DISPOSITION
+    assert result.disposition is not None
+    assert result.disposition.disposition_id == DIGEST
     assert result.frontier_digest == DIGEST
 
 

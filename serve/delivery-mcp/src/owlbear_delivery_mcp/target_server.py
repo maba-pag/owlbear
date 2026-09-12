@@ -438,6 +438,7 @@ class TargetMCPAdapter:
                     block_id=params.block_id,
                     operator_note=params.operator_note,
                     locators=params.locators,
+                    expected_disposition_id=params.expected_disposition_id,
                 )
             ),
             DeliveryAnswerResult,
@@ -447,6 +448,7 @@ class TargetMCPAdapter:
             kind=result.kind,
             request=result.request,
             binding=result.binding,
+            disposition=result.disposition,
             frontier_digest=result.frontier_digest,
         )
 
