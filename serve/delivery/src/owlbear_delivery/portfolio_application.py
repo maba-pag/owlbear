@@ -69,6 +69,7 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
@@ -816,6 +817,32 @@ class DeliveryChangeView(_ApplicationModel):
     detail: WorkItemDetailView
     health: DeliveryHealthView
     repair: DeliveryRepairResult | None = None
+
+
+class DeliveryResultSubmission(_ApplicationModel):
+    """One claim-bound Builder result submitted for publication and promotion."""
+
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result: DeliveryTaskResult
+
+
+class DeliveryResultSubmissionResult(_ApplicationModel):
+    """The promoted Builder result and its current runtime binding."""
+
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result_id: str = Field(min_length=1)
+    binding: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_binding(self) -> DeliveryResultSubmissionResult:
+        if self.binding.outcome_id != self.outcome_id:
+            message = "submitted result binding does not match its Outcome"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryChangeIntentKind(StrEnum):
@@ -5435,6 +5462,70 @@ class PortfolioApplication:
                     kind=intent.kind,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                     receipt=receipt,
+                )
+
+    def submit_result(self, submission: DeliveryResultSubmission) -> DeliveryResultSubmissionResult:
+        """Publish and promote one exact Builder result as one claim-bound operation."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(submission.change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(submission.change_id),)):
+                binding = runtime.show_binding(submission.outcome_id)
+                existing = next(
+                    (item for item in binding.results if item.task_id == submission.result.task_id),
+                    None,
+                )
+                if existing is not None:
+                    if existing != submission.result or binding.active_claim is not None:
+                        self._fail("submitted result conflicts with current Outcome authority")
+                    if runtime.pending_state_publication() is not None:
+                        self._publish_delivery_state(
+                            submission.change_id,
+                            runtime,
+                            _checkpoint_operation_id(
+                                "submit-result-replay",
+                                submission.change_id,
+                                submission.outcome_id,
+                                submission.result.result_id,
+                            ),
+                        )
+                    return DeliveryResultSubmissionResult(
+                        change_id=submission.change_id,
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        result_id=submission.result.result_id,
+                        binding=binding,
+                    )
+                candidate = runtime.publish_result(
+                    PublishDeliveryResult(
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        result=submission.result,
+                    )
+                )
+                binding = runtime.transition(
+                    AdvanceDelivery(
+                        action="advance",
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        output=candidate.output,
+                    )
+                )
+                self._publish_delivery_state(
+                    submission.change_id,
+                    runtime,
+                    _checkpoint_operation_id(
+                        "submit-result",
+                        submission.change_id,
+                        submission.outcome_id,
+                        submission.result.result_id,
+                    ),
+                )
+                return DeliveryResultSubmissionResult(
+                    change_id=submission.change_id,
+                    outcome_id=submission.outcome_id,
+                    claim_id=submission.claim_id,
+                    result_id=submission.result.result_id,
+                    binding=binding,
                 )
 
     def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:

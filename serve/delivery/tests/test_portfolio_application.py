@@ -89,6 +89,7 @@ from owlbear_delivery import (
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryRequestResolution,
+    DeliveryResultSubmission,
     DeliveryRetainedWorktreeCleanupBlockReason,
     DeliveryReview,
     DeliveryReviewReceipt,
@@ -6603,6 +6604,41 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     assert blocked.requests == (request,)
     assert blocked.block is not None
     assert blocked.block.request_id == request.request_id
+
+
+def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    runtime = runtimes["change-a"]
+    task = runtime.show_binding("OUT-001").tasks[0]
+    product = launch.worktree_path / "product.txt"
+    product.write_text("completed build\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", product.name)
+    _git(launch.worktree_path, "commit", "-m", "complete build")
+    completed_commit = _git(launch.worktree_path, "rev-parse", "HEAD")
+    submission = DeliveryResultSubmission(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=launch.claim.claim_id,
+        result=_task_result(
+            "RESULT-SUBMIT",
+            "change-a",
+            runtime.authority_digest,
+            task,
+            completed_commit,
+        ),
+    )
+
+    submitted = application.submit_result(submission)
+    replayed = application.submit_result(submission)
+
+    assert submitted == replayed
+    assert submitted.result_id == "RESULT-SUBMIT"
+    assert submitted.binding.stage is DeliveryStage.COMPLETED
+    assert submitted.binding.results == (submission.result,)
 
 
 def test_transition_publishes_change_branch_before_delivery_state(
