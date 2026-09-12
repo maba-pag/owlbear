@@ -69,6 +69,7 @@ from owlbear_delivery import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
+    DeliveryDesignPut,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
@@ -6968,6 +6969,46 @@ def test_acquire_actions_uses_the_existing_claim_authority(tmp_path: Path) -> No
 
     assert len(acquired.launch_packages) == 1
     assert acquired.launch_packages[0].change_id == "change-a"
+
+
+def test_put_design_creates_replays_and_cas_revises_authored_package(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    initial = application.put_design(
+        DeliveryDesignPut(
+            change_id="design-change",
+            intent_bytes=b"initial intent\n",
+            design_bytes=b"initial design\n",
+        )
+    )
+    replayed = application.put_design(
+        DeliveryDesignPut(
+            change_id="design-change",
+            intent_bytes=b"initial intent\n",
+            design_bytes=b"initial design\n",
+        )
+    )
+    revised = application.put_design(
+        DeliveryDesignPut(
+            change_id="design-change",
+            expected_package_id=initial.package_id,
+            intent_bytes=b"revised intent\n",
+            design_bytes=b"initial design\n",
+        )
+    )
+
+    assert replayed.replayed
+    assert replayed.package_id == initial.package_id
+    assert not revised.replayed
+    assert revised.package_id != initial.package_id
+    with pytest.raises(DesignPackageConflictError, match="changed before authored revision"):
+        application.put_design(
+            DeliveryDesignPut(
+                change_id="design-change",
+                expected_package_id=initial.package_id,
+                intent_bytes=b"stale intent\n",
+                design_bytes=b"initial design\n",
+            )
+        )
 
 
 def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Path) -> None:

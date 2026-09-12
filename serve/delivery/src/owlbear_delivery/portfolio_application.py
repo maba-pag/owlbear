@@ -118,6 +118,7 @@ from owlbear_delivery.delivery_runtime import (
     is_change_terminal,
     parse_delivery_frontier,
 )
+from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublicationHistory,
@@ -194,7 +195,6 @@ if TYPE_CHECKING:
     from owlbear_delivery.delivery_state import DeliveryStatePublicationReceipt, DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
-        DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
     )
@@ -846,6 +846,15 @@ class DeliveryResultSubmissionResult(_ApplicationModel):
         return self
 
 
+class DeliveryDesignPut(_ApplicationModel):
+    """One create-or-CAS-revise request for authored Design bytes."""
+
+    change_id: str = Field(min_length=1)
+    intent_bytes: bytes
+    design_bytes: bytes
+    expected_package_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class DeliveryChangeIntentKind(StrEnum):
     """User-directed Change lifecycle intent categories."""
 
@@ -1473,6 +1482,24 @@ class PortfolioApplication:
     ) -> DesignPackageResult:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
+
+    def put_design(self, design: DeliveryDesignPut) -> DesignPackageResult:
+        """Create or CAS-revise one exact authored Design package."""
+        if design.expected_package_id is None:
+            return self._package_store.create(design.change_id, design.intent_bytes, design.design_bytes)
+        revised = self._package_store.revise(
+            design.change_id,
+            design.expected_package_id,
+            design.intent_bytes,
+            design.design_bytes,
+        )
+        return DesignPackageResult(
+            change_id=revised.change_id,
+            package_id=revised.package_id,
+            package_root=self._package_root / design.change_id,
+            manifest=revised.manifest,
+            replayed=False,
+        )
 
     def observe_change_publication_checks(
         self,
