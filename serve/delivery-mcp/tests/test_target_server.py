@@ -62,6 +62,7 @@ DELIVERY_TOOLS = {
     "admit_delivery_change",
     "list_work_items",
     "get_change",
+    "answer",
     "delivery_health",
     "repair_delivery_state_snapshot",
     "recover_out_of_band_head",

@@ -38,6 +38,8 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.portfolio_application import (
+    DeliveryAnswer,
+    DeliveryAnswerResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
@@ -55,6 +57,8 @@ from owlbear_delivery_mcp.target_models import (
     AdministrativeMoveRequest,
     AdministrativeMoveResponse,
     AdmitDeliveryChangeRequest,
+    AnswerParams,
+    AnswerRequest,
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
@@ -81,6 +85,7 @@ from owlbear_delivery_mcp.target_models import (
     CreateDesignSessionRequest,
     DeferChangeParams,
     DeferChangeRequest,
+    DeliveryAnswerResponse,
     DeliveryHealthResponse,
     DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
@@ -164,6 +169,7 @@ DELIVERY_OPERATION_NAMES = (
     "admit_delivery_change",
     "list_work_items",
     "get_change",
+    "answer",
     "delivery_health",
     "repair_delivery_state_snapshot",
     "recover_out_of_band_head",
@@ -362,6 +368,28 @@ class TargetMCPAdapter:
         """Return one coherent Change detail, health, and repair projection."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.get_change(params.change_id))
+
+    async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
+        """Apply one version-bound answer to a retained Delivery request."""
+        params = self._validate(AnswerParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.answer(
+                DeliveryAnswer(
+                    change_id=params.change_id,
+                    request_id=params.request_id,
+                    resolution=params.resolution,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                )
+            ),
+            DeliveryAnswerResult,
+        )
+        return DeliveryAnswerResponse(
+            change_id=params.change_id,
+            request=result.request,
+            frontier_digest=result.frontier_digest,
+        )
 
     async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
         """Return bounded diagnostics for quarantined or unavailable Delivery state."""

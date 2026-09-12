@@ -72,6 +72,8 @@ from owlbear_delivery.draft_pull_request import (
     MarkChangePullRequestReady,
 )
 from owlbear_delivery.portfolio_application import (
+    DeliveryAnswer,
+    DeliveryAnswerResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryOperatorContext,
     DeliveryStateSnapshotRepairReceipt,
@@ -391,6 +393,18 @@ class _RecordingApplication:
                     summary="Complete the action",
                     resolution=DeliveryRequestResolution(response_text="Completed."),
                 )
+            elif name == "answer":
+                result = DeliveryAnswerResult(
+                    change_id=CHANGE,
+                    request=DeliveryRequest(
+                        request_id="request",
+                        kind=DeliveryRequestKind.ACTION,
+                        outcome_id="OUT-001",
+                        summary="Complete the action",
+                        resolution=DeliveryRequestResolution(response_text="Completed."),
+                    ),
+                    frontier_digest=DIGEST,
+                )
             elif name == "clear_block":
                 result = OutcomeAuthorityBinding(
                     outcome_id="OUT-001",
@@ -573,6 +587,12 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "list_work_items": {},
         "get_change": change,
+        "answer": {
+            **change,
+            "request_id": "request",
+            "resolution": {"response_text": "Completed."},
+            "expected_frontier_digest": DIGEST,
+        },
         "delivery_health": {},
         "repair_delivery_state_snapshot": {
             **change,
@@ -777,6 +797,14 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
     assert [call[0] for call in application.calls] == [operation_name]
     call_args = {
         "show_operator_context": (CHANGE, "OUT-001"),
+        "answer": (
+            DeliveryAnswer(
+                change_id=CHANGE,
+                request_id="request",
+                resolution=DeliveryRequestResolution(response_text="Completed."),
+                expected_frontier_digest=DIGEST,
+            ),
+        ),
         "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
@@ -920,6 +948,11 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.change_id == CHANGE
         assert result.request.request_id == "request"
         assert result.request.resolution.response_text == "Completed."
+    elif operation_name == "answer":
+        assert result.change_id == CHANGE
+        assert result.request.request_id == "request"
+        assert result.request.resolution.response_text == "Completed."
+        assert result.frontier_digest == DIGEST
     elif operation_name == "clear_block":
         assert result.change_id == CHANGE
         assert result.outcome_id == "OUT-001"

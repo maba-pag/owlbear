@@ -144,6 +144,14 @@ class ChangeParams(_TargetProtocolModel):
     change_id: ChangeId
 
 
+class AnswerParams(ChangeParams):
+    """Validate one version-bound answer for a retained Delivery request."""
+
+    request_id: str = Field(min_length=1)
+    resolution: DeliveryRequestResolution
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ResolveChangeDispositionParams(ChangeParams):
     """Validate one exact Change attention identity for explicit resolution."""
 
@@ -588,6 +596,14 @@ class ResolvedDeliveryRequestResponse(_TargetProtocolModel):
     request: DeliveryRequest
 
 
+class DeliveryAnswerResponse(_TargetProtocolModel):
+    """Bounded response for one version-bound request answer."""
+
+    change_id: ChangeId
+    request: DeliveryRequest
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ClearedDeliveryBlockResponse(_TargetProtocolModel):
     """Bounded response for one cleared requestless block."""
 
@@ -849,6 +865,7 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, DeliveryAdmissionRequest)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
 type OperatorContextRequest = Annotated[
     OperatorContextParams,
     BeforeValidator(partial(_parse_json_model, OperatorContextParams)),
@@ -1005,6 +1022,8 @@ __all__ = [
     "AdministrativeMoveRequest",
     "AdministrativeMoveResponse",
     "AdmitDeliveryChangeRequest",
+    "AnswerParams",
+    "AnswerRequest",
     "ChangeExternalHeadAdoptionResponse",
     "ChangeExternalHeadPromotionResponse",
     "ChangeParams",
@@ -1030,6 +1049,7 @@ __all__ = [
     "CreateDesignSessionRequest",
     "DeferChangeParams",
     "DeferChangeRequest",
+    "DeliveryAnswerResponse",
     "DeliveryHealthDiagnosticResponse",
     "DeliveryHealthResponse",
     "DeliveryOperatorClaimResponse",
