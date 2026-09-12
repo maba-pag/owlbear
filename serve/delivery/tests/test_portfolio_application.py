@@ -2115,7 +2115,7 @@ def test_target_sync_publication_repair_reconciles_quarantined_state_and_preserv
             code="remote-state-reconciliation-required",
             detail="remote Change branch differs from Delivery-state snapshot: change-a",
             change_id="change-a",
-                reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
+            reason=DeliveryHealthReason.REMOTE_CHANGE_HEAD_MISMATCH,
         ),
     )
     application._reconcile_runtimes()
@@ -6695,11 +6695,14 @@ def test_out_of_band_head_recovery_preserves_commit_and_republishes_reviewed_sta
     assert recovered.expected_remote_head == remote_head
     assert recovered.observed_branch_head == out_of_band_head
     assert recovered.preserved_head == out_of_band_head
-    assert _git(
-        application._workspace_manager.repository,
-        "rev-parse",
-        recovered.preserved_ref,
-    ) == out_of_band_head
+    assert (
+        _git(
+            application._workspace_manager.repository,
+            "rev-parse",
+            recovered.preserved_ref,
+        )
+        == out_of_band_head
+    )
     assert _git(application._workspace_manager.repository, "rev-parse", coordination.branch) == reviewed_head
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed_head
     assert runtimes["change-a"].checkpoint_publication_state().published_head == reviewed_head
@@ -7048,9 +7051,7 @@ def test_acquisition_replays_failed_portable_state_publication_before_new_claims
         DeliveryStatePublicationError("state unavailable", retry_safe=True),
         None,
     ]
-    base_frontier = DeliveryFrontier.model_validate_json(
-        runtimes["change-a"].frontier_bytes(), strict=False
-    )
+    base_frontier = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="remote-head",
         snapshots=(Mock(change_id="change-a", frontier=base_frontier),),
@@ -7105,9 +7106,7 @@ def test_acquisition_does_not_replay_pending_state_over_advanced_remote_snapshot
                 locators=("test_portfolio_application.py",),
             ),
         )
-    advanced_snapshot = DeliveryFrontier.model_validate_json(
-        runtimes["change-a"].frontier_bytes(), strict=False
-    )
+    advanced_snapshot = DeliveryFrontier.model_validate_json(runtimes["change-a"].frontier_bytes(), strict=False)
     state_publisher.read_snapshot_inventory.return_value = Mock(
         remote_head="new-remote-head",
         snapshots=(Mock(change_id="change-a", frontier=advanced_snapshot),),

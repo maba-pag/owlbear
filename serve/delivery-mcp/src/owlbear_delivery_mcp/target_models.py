@@ -129,8 +129,7 @@ class DeliveryHealthResponse(_TargetProtocolModel):
         return cls(
             status=view.status,
             diagnostics=tuple(
-                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump())
-                for diagnostic in view.diagnostics
+                DeliveryHealthDiagnosticResponse(**diagnostic.model_dump()) for diagnostic in view.diagnostics
             ),
         )
 

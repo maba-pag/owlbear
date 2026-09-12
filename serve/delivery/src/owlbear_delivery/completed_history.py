@@ -262,11 +262,7 @@ class CompletedHistoryCatalog:
             self._malformed("Delivery abandoned-history root is invalid")
         observations = []
         for change_root in sorted(changes_root.iterdir(), key=lambda path: path.name):
-            if (
-                change_root.is_symlink()
-                or not change_root.is_dir()
-                or not _SAFE_CHANGE_ID.fullmatch(change_root.name)
-            ):
+            if change_root.is_symlink() or not change_root.is_dir() or not _SAFE_CHANGE_ID.fullmatch(change_root.name):
                 continue
             path = change_root / "frontier.json"
             if path.is_symlink() or not path.is_file():

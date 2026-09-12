@@ -106,24 +106,23 @@ Apply these only when the target is the OwlBear repository or matching configura
 | --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
 | `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, invariants, and affected frontend tests |
-| `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
+| `uv run test [PATH ...]` (also `uv run tests`) | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
 | `uv run lint-cockpit` | Cockpit frontend lint aggregate |
 | `uv run megalint` | Standalone MegaLinter on the workspace; safe fixes by default, or check-only with `--no-fix` |
-| `uv run lint-full` | `lint` plus MegaLinter |
-| `uv run format-full` | Python, whitespace, and final-newline formatters |
+| `uv run format` | Python, whitespace, and final-newline formatters |
 | `uv run typecheck-cockpit` | Cockpit frontend TypeScript check |
-| `uv run quality-full` | Format, lint-full, typecheck-cockpit, then advisory TODO scan |
+| `uv run quality` | Format, lint, MegaLinter, typecheck-cockpit, then advisory TODO scan |
 
 Use these workspace entry points instead of invoking individual linters manually. `lint` and
 `megalint` may auto-fix files through their configured safe fixers; inspect the diff afterward.
 MegaLinter's repository policy is `APPLY_FIXES: all` by default, while `--no-fix` explicitly selects
 a check-only run. Agents should
 scope validation to their own work with `lint --staged`; workspace-wide `lint`, `megalint`, and
-`lint-full` are broad user workflows rather than focused agent validation commands.
+`quality` are broad user workflows rather than focused agent validation commands.
 
-`lint`, `lint-cockpit`, `megalint`, `lint-full`, and `quality-full` accept one optional fix-policy
+`lint`, `lint-cockpit`, `megalint`, and `quality` accept one optional fix-policy
 flag. `--no-fix` replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables Ruff
 unsafe fixes and Stylelint lax fixes in addition to the configured safe fixes. The two flags are
 mutually exclusive; review the resulting diff whenever unsafe fixes are enabled. Full

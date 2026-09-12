@@ -4,22 +4,23 @@
 > **Date:** 2026-09-11
 > **Question:** Who uses which Delivery Python, HTTP, and MCP interfaces, when and why are they used, which surfaces are regular versus exceptional or compatibility-only, and where can the interface be reduced without weakening authority, custody, replay, or operator control?
 > **Status:** Current-state research. No Delivery state, package, claim, MCP operation, commit, or source file was mutated by this audit.
+> **Count update:** Application and MCP counts were refreshed at `eaef98036742b1d03ca7f7064c66411d0c5a50e9` after `recover_out_of_band_head` was added; the original analysis baseline remains recorded below.
 > **Implementation plan:** [Delivery Resilience Evolution Plan](delivery-resilience-evolution-plan.md) supersedes this audit's provisional implementation sequence and incorporates the later GPT-6 Astra and Claude Opus 5 challenges.
 
 ## 1. Executive Summary
 
 Delivery has three related but distinct public boundaries:
 
-1. **Core Python application:** `PortfolioApplication` is the domain-facing application boundary. It has **65 public methods** in the current source. It coordinates package authority, runtime state, claims, worktrees, exact commits, publication, provider observations, recovery, and completed history.
-2. **Delivery MCP:** `TargetMCPAdapter` exposes **53 strict MCP operations**, registered from one data-driven operation tuple. The 53 operations map one-for-one to 53 application methods. They are not 53 arbitrary wrappers: their names, request models, error translation, annotations, and agent bindings form a transport contract.
-3. **Cockpit HTTP:** `TargetCockpitService` exposes operator-facing HTTP routes over a separate application instance. It uses **24 of the 53 MCP-equivalent operations**, plus **five additional convenience or batch application methods**, plus one bound method reference for `portfolio_read_view`. The HTTP surface is not a thin mirror of MCP; it deliberately resolves some caller context server-side.
+1. **Core Python application:** `PortfolioApplication` is the domain-facing application boundary. It has **66 public methods** in the refreshed source baseline. It coordinates package authority, runtime state, claims, worktrees, exact commits, publication, provider observations, recovery, and completed history.
+2. **Delivery MCP:** `TargetMCPAdapter` exposes **54 strict MCP operations**, registered from one data-driven operation tuple. The 54 operations map one-for-one to 54 application methods. They are not 54 arbitrary wrappers: their names, request models, error translation, annotations, and agent bindings form a transport contract.
+3. **Cockpit HTTP:** `TargetCockpitService` exposes operator-facing HTTP routes over a separate application instance. It uses **24 of the 54 MCP-equivalent operations**, plus **five additional convenience or batch application methods**, plus one bound method reference for `portfolio_read_view`. The HTTP surface is not a thin mirror of MCP; it deliberately resolves some caller context server-side.
 
-The most important result is that **MCP tool count is not currently the best reduction target**. The 53 tools are semantically named, strict, tested, and already protected by a prohibited-operation ledger. The highest-value reduction opportunities are instead:
+The most important result is that **MCP tool count is not currently the best reduction target**. The 54 tools are semantically named, strict, tested, and already protected by a prohibited-operation ledger. The highest-value reduction opportunities are instead:
 
 - reduce the declared Python root re-export surface after a staged import migration;
 - remove or privatize four `PortfolioApplication` methods with no production caller, after confirming no external consumer promise is intended;
 - decide whether the current Cockpit-only convenience methods belong in the core application or in a dedicated operator service, without collapsing exact-identity safeguards;
-- make the operator-console tool ownership explicit, because 12 MCP operations are referenced by repair skills but granted to no named agent and exposed by no Cockpit route;
+- make the operator-console tool ownership explicit, because 13 MCP operations are referenced by repair skills but granted to no named agent and exposed by no Cockpit route;
 - repair wiring and ownership defects before deleting anything, especially the finalizer's missing `promote_external_head` grant, the unsynchronized administrative config write path, and duplicate checkpoint supervisors.
 
 No static source census can establish actual production frequency. The document therefore separates:
@@ -35,12 +36,12 @@ Do not merge all MCP tools into a generic `delivery(operation=...)` dispatcher. 
 
 Pursue interface reduction in this order:
 
-1. Establish a mechanically generated inventory and ownership test for all 53 operations.
+1. Establish a mechanically generated inventory and ownership test for all 54 operations.
 2. Correct agent/skill grants and decide the owner of operator-console-only operations.
 3. Remove or privatize the four test-only `PortfolioApplication` methods, subject to a deliberate external-consumer decision.
 4. Reduce root re-exports in two stages: first names with no root importer, then test-only root imports after migrating tests to owning submodules.
 5. Reassess the 12 Cockpit-only methods with a signature and authority matrix; do not merge exact-identity APIs with server-resolved convenience APIs merely because they have similar names.
-6. Revisit MCP count only after the ownership and re-export work shows a concrete duplicated contract, not because 53 is visually large.
+6. Revisit MCP count only after the ownership and re-export work shows a concrete duplicated contract, not because 54 is visually large.
 
 **Overall confidence:** High for current counts, registrations, caller classifications, and code-defined cadence. Medium for external-consumer absence and runtime frequency because static repository evidence cannot prove consumers outside this checkout or production call volume.
 
@@ -81,21 +82,24 @@ The investigation used:
 6. three independent Claude Opus 5 challenge checkpoints: initial interface-map correction, phase-change taxonomy challenge, and final grouping/consolidation challenge;
 7. current repository status and commit identity checks before documenting the final baseline.
 
-The final documented baseline is:
+The original audit baseline and refreshed count baseline are:
 
 | Fact | Current evidence |
 | --- | --- |
 | Branch | `dev` |
-| HEAD | `8ff70e38ac280da9ffd97d216fd57aed9e36f36a` |
+| Original audit HEAD | `8ff70e38ac280da9ffd97d216fd57aed9e36f36a` |
+| Original audit counts | 53 MCP operations and 65 public `PortfolioApplication` methods |
+| Refreshed count HEAD | `eaef98036742b1d03ca7f7064c66411d0c5a50e9` |
 | Tracked worktree | Clean at the final baseline check |
 | Untracked artifacts | Three active Delivery package directories, five `.owlbear/memory` files, and one unrelated research file were present and left untouched |
-| Unique MCP operations | 53 |
-| Public `PortfolioApplication` methods | 65 |
+| Unique MCP operations | 54 |
+| Public `PortfolioApplication` methods | 66 |
 | Non-MCP public application methods | 12 |
 | Root `owlbear_delivery.__all__` entries | 242 |
 | Declared agent-granted Delivery tools | 19 |
 | Cockpit methods corresponding to MCP operation names | 24 |
 | Additional Cockpit-only application methods used by routes | 5, plus one bound `portfolio_read_view` reference |
+| Cockpit Delivery HTTP route decorators | 29 in `routes/target_work.py` |
 | Code-defined active portfolio polling | 3 seconds |
 | Code-defined active acceptance reconciliation | 30 seconds, exponential backoff to 5 minutes after provider failure |
 | Code-defined checkpoint supervisor interval | 5 seconds, batch limit 8 |
@@ -123,7 +127,7 @@ The final documented baseline is:
 | [`portfolio_application.py`](../../serve/delivery/src/owlbear_delivery/portfolio_application.py) | Owning application methods and sequencing | Large module; method-level paths were read at controlling boundaries, not every helper body |
 | [`delivery_runtime.py`](../../serve/delivery/src/owlbear_delivery/delivery_runtime.py) | Frontier state machine and exact authority invariants | Runtime internals are not automatically public caller interfaces |
 | [`change_workspace.py`](../../serve/delivery/src/owlbear_delivery/change_workspace.py) | Worktree, writer, publication lease, target-sync, recovery, and compatibility records | Core implementation, not a transport contract by itself |
-| [`target_server.py`](../../serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py) | Authoritative 53-operation registry, annotations, strict flattening, adapter delegation, and error mapping | It does not show which agents or users invoke each operation |
+| [`target_server.py`](../../serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py) | Authoritative 54-operation registry, annotations, strict flattening, adapter delegation, and error mapping | It does not show which agents or users invoke each operation |
 | [`target_models.py`](../../serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py) | Strict MCP request/response models and transport constraints | Model existence does not prove workflow use |
 | [`server.py`](../../serve/delivery-mcp/src/owlbear_delivery_mcp/server.py) | Live MCP application construction and checkpoint supervisor ownership | Separate process behavior is inferred from entry points, not host telemetry |
 | [`target_work.py`](../../serve/cockpit/src/owlbear_cockpit/routes/target_work.py) | HTTP service adapter, route groups, and direct/bound core method references | HTTP route reachability does not prove UI use |
@@ -226,8 +230,8 @@ The source-level distinction between acquire and operator write is useful docume
 
 | Surface | Count | What the count means |
 | --- | ---: | --- |
-| `PortfolioApplication` public methods | 65 | Direct application-level methods defined on the class |
-| MCP-exposed application methods | 53 | Exact same-name methods represented by strict MCP tools |
+| `PortfolioApplication` public methods | 66 | Direct application-level methods defined on the class |
+| MCP-exposed application methods | 54 | Exact same-name methods represented by strict MCP tools |
 | Public methods not MCP-exposed | 12 | Mostly Cockpit convenience/batch/projection methods, plus test/internal-only methods |
 | Root `__all__` names | 242 | Re-export declarations from the core package root, including models, errors, providers, stores, and application types |
 | Agent frontmatter Delivery grants | 19 | Explicit `owlbear-delivery/<name>` entries in named shared agents |
@@ -247,7 +251,7 @@ These counts are repository-local and static. They do not prove that an external
 
 ## 6. Full MCP Operation Inventory
 
-The following table is the current 53-operation contract. `Use class` is the usage grouping developed in this audit, not runtime telemetry.
+The following table is the refreshed 54-operation contract. `Use class` is the usage grouping developed in this audit, not runtime telemetry.
 
 ### 6.1 Design and admission
 
@@ -297,6 +301,7 @@ The following table is the current 53-operation contract. `Use class` is the usa
 | Operation | Core purpose | Primary caller | Use class | Reduction view |
 | --- | --- | --- | --- | --- |
 | `repair_delivery_state_snapshot` | Confirmed repair of one known local frontier successor | Repair skill/operator | C-prime operator console | Keep; confirmation-gated authority-gap repair |
+| `recover_out_of_band_head` | Preserve an out-of-band local head and restore the exact reviewed remote head | Repair skill/operator | C-prime operator console | Keep until high-level repair can derive and preserve all three head identities |
 | `repair_target_sync_publication` | Confirmed repair of committed target merge/publication mismatch | Repair skill/operator | C-prime operator console | Keep; binds three exact heads plus operation identity |
 | `observe_change_publication_checks` | Observe provider checks at exact published head | Cockpit, repair skill | B routine operator/provider read | Keep; provider-crossing read is not represented by `open_world_hint` |
 | `mark_change_ready` | Mark exact finalized published PR ready | Skill-only currently; Cockpit uses convenience wrapper | B routine operator publication | Keep exact request form; grant/route ownership must be corrected |
@@ -440,13 +445,19 @@ sequenceDiagram
 
 ### 9.2 Declared grants and unowned operator-console tools
 
-Only **19 of 53** operation names occur in named agent `tools:` lists. The explicitly granted operations are:
+Only **19 of 54** operation names occur in named agent `tools:` lists. The explicitly granted operations are:
 
 `acquire_frontier_work`, `admit_delivery_change`, `create_design_session`, `delivery_health`, `derive_delivery_contract`, `finalize_change`, `list_work_items`, `publish_delivery_plan`, `publish_delivery_result`, `publish_design_checkpoint`, `read_design_session`, `reconcile_finalization_head`, `recover_claim`, `recover_integration_repair_claim`, `revise_design_session`, `show_build_context`, `show_finalization_context`, `show_plan_context`, `transition_delivery`.
 
-The following **12 operations are referenced by repair/operator skills but are granted to no named shared agent and are not called by the current Cockpit service**:
+The following **13 operations are referenced by repair/operator skills, granted to no named shared agent, and have no same-named `PortfolioApplication` call in the current Cockpit service**:
 
-`adopt_external_head`, `list_retained_change_worktrees`, `mark_change_ready`, `prepare_review_repair`, `promote_external_head`, `recover_publication_baseline`, `repair_delivery_state_snapshot`, `repair_target_sync_publication`, `show_integration_attention`, `show_operator_context`, `show_work_item`, `sync_change_with_target`.
+`adopt_external_head`, `list_retained_change_worktrees`, `mark_change_ready`, `prepare_review_repair`, `promote_external_head`, `recover_out_of_band_head`, `recover_publication_baseline`, `repair_delivery_state_snapshot`, `repair_target_sync_publication`, `show_integration_attention`, `show_operator_context`, `show_work_item`, `sync_change_with_target`.
+
+This same-name classification does not mean all behavior is absent from Cockpit. Cockpit reaches
+readiness, target sync, detailed work-item lookup, and acceptance-attention adoption through
+server-resolved convenience methods and routes (`mark_current_change_ready`,
+`sync_change_with_current_target`, `show_work_item_view`, and
+`adopt_external_head_after_acceptance_attention`).
 
 This is not proof that the operations are unreachable. The universal system instruction advertises `owlbear-delivery/*`, and VS Code tool search may expose tools beyond an agent's explicit frontmatter. The repository does not contain a deterministic proof that dynamic tool search bypasses the closed allowlist. This is a decision-critical wiring gap:
 
@@ -674,7 +685,7 @@ The adapter already derives flattened argument signatures from request models. T
 
 ### F2 — Operator-console ownership is unresolved
 
-**Evidence:** 12 operations occur in repair skill prose but in no named agent grant and no Cockpit service route. **Impact:** The documented repair paths may be non-executable under a closed frontmatter allowlist, or tool search may be silently broader than the declared authority model. **Confidence:** High for the mismatch; low for actual runtime reachability. **Smallest fix:** define one operator owner/entry agent or expose tested Cockpit routes; add a deterministic availability contract.
+**Evidence:** 13 operations occur in repair skill prose but in no named agent grant and no same-named Cockpit application call; several have operator-equivalent Cockpit convenience routes. **Impact:** Prompt-only repair paths may still be non-executable under a closed frontmatter allowlist, while route-equivalent behavior needs explicit mapping before retirement. **Confidence:** High for the grant mismatch and same-name classification; low for actual runtime grant closure. **Smallest fix:** define one operator owner/entry agent, map each convenience route, and add a deterministic availability contract.
 
 ### F3 — Administrative target-config mutation has a TOCTOU boundary
 
@@ -696,7 +707,7 @@ The adapter already derives flattened argument signatures from request models. T
 
 | Decision | Option | User-visible/operational value | Main risk | Confidence | Required proof before implementation |
 | --- | --- | --- | --- | --- | --- |
-| MCP count | Keep semantic 53; generate/check metadata | Preserves role clarity and exact safety semantics | Registry still appears large | High | Registry/model/agent/skill coverage test |
+| MCP count | Keep semantic 54; generate/check metadata | Preserves role clarity and exact safety semantics | Registry still appears large | High | Registry/model/agent/skill coverage test |
 | MCP count | Generic `delivery(operation, payload)` | Fewer tool names | Loses typed discovery, per-tool annotations, role separation, and clearer error authority | High risk | None recommended |
 | Root exports | Remove one unreferenced name | Small clarity improvement | External explicit import not visible locally | High local / medium external | Import absence search and `__all__` contract |
 | Root exports | Remove 80 no-root-importer declarations | Significant declared-surface reduction | `__all__` is not the full attribute surface; external consumers unknown | Medium-high | Package export snapshot and consumer compatibility decision |
@@ -718,7 +729,7 @@ This sequence is intentionally analysis-first and can be turned into Delivery wo
 
 Add or strengthen a read-only contract test that:
 
-1. asserts 53 registered operations and no duplicates;
+1. asserts 54 registered operations and no duplicates;
 2. asserts annotation sets and exact prohibited-name absence;
 3. maps every MCP operation to one adapter method and one application method;
 4. maps every operation to at least one declared owner class: agent, Cockpit, operator skill, supervisor, history, or compatibility;
@@ -838,7 +849,7 @@ No proposed reduction should be considered complete from a green unit test alone
 
 - actual operation frequency;
 - external-consumer absence;
-- that the 12 skill-only operations are dead;
+- that the 13 skill-only operations are dead;
 - that two supervisors are a measured production incident;
 - that a generic MCP dispatcher would preserve the current safety contract.
 
@@ -859,8 +870,8 @@ These are evidence or policy questions for the next shaping step, not unresolved
 
 | Prior claim | Current disposition |
 | --- | --- |
-| 2026-09-05 audit reported 52 MCP operations | Stale count; current registry has 53 |
-| Earlier broad audit identified thin transport/UI mirroring | Still relevant; this audit adds exact ownership counts and the 12 skill-only tier |
+| 2026-09-05 audit reported 52 MCP operations | Stale count; refreshed registry has 54 |
+| Earlier broad audit identified thin transport/UI mirroring | Still relevant; this audit adds exact ownership counts and the 13 skill-only tier |
 | Earlier data/worktree lifecycle audit described checkpoint supervisor and legacy history | Current and useful; this audit adds caller classification rather than replacing lifecycle authority |
 | Capacity-consolidation research described legacy capacity ledger behavior | Current compatibility evidence remains, but historical migration-module references must be revalidated before use |
 | Historical target architecture proposed deleting broad legacy surfaces | Proposal only; current source and tests are the authority for this audit |

@@ -3888,7 +3888,7 @@ class PortfolioApplication:
         return runtime
 
     @staticmethod
-    def _is_repairable_frontier_successor(  # noqa: PLR0911 - each rejected successor shape is a distinct safety boundary.
+    def _is_repairable_frontier_successor(  # noqa: PLR0911
         snapshot: DeliveryFrontier,
         local: DeliveryFrontier,
     ) -> bool:

@@ -17,10 +17,9 @@ from owlbear_tools.quality import (
     format_eof,
     format_whitespace,
     lint,
-    lint_full,
     lint_json,
     lint_python,
-    quality_full,
+    quality,
     typecheck_cockpit,
 )
 from owlbear_tools.quality_runtime import _call
@@ -153,22 +152,23 @@ def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
 
 
-def test_lint_full_runs_local_lint_then_megalint() -> None:
+def test_quality_runs_local_lint_then_megalint() -> None:
     with (
-        patch.object(sys, "argv", ["lint-full", "--no-fix"]),
+        patch.object(sys, "argv", ["quality", "--no-fix"]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
         pytest.raises(SystemExit, match="0"),
     ):
-        lint_full()
+        quality()
 
     commands = [item.args[0] for item in call.call_args_list]
-    assert commands[0][:3] == ["pre-commit", "run", "ruff-check"]
-    assert commands[-1][-1] == _TEST_IMAGE.reference
-    assert "APPLY_FIXES=none" in commands[-1]
+    assert commands[0][:3] == ["pre-commit", "run", "ruff-format-check"]
+    assert ["pre-commit", "run", "ruff-check"] in [command[:3] for command in commands]
+    megalint_command = next(command for command in commands if _TEST_IMAGE.reference in command)
+    assert "APPLY_FIXES=none" in megalint_command
 
 
-def test_quality_full_executes_todo_last() -> None:
+def test_quality_executes_todo_last() -> None:
     executed: list[str] = []
 
     def record(name: str, **_: object) -> int:
@@ -176,7 +176,7 @@ def test_quality_full_executes_todo_last() -> None:
         return 0
 
     with patch("owlbear_tools.quality._run_leaf", side_effect=record):
-        assert _run_named("quality-full", staged=False, fix_mode=FixMode.SAFE) == 0
+        assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
 
     assert executed[-1] == "todo"
     assert executed == [
@@ -392,7 +392,7 @@ def test_text_check_reports_malformed_precommit_config(capsys: pytest.CaptureFix
     assert "Error: invalid YAML" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", [lint, megalint, lint_full, quality_full])
+@pytest.mark.parametrize("command", [lint, megalint, quality])
 def test_unsafe_and_no_fix_are_mutually_exclusive(command: object) -> None:
     with (
         patch.object(sys, "argv", ["command", "--no-fix", "--unsafe-fix"]),

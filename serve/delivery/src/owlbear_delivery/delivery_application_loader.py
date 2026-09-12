@@ -341,9 +341,7 @@ def _bootstrap_remote_state(
                 retry_safe=exc.retry_safe,
                 reason=DeliveryHealthReason.REMOTE_STATE_UNAVAILABLE,
                 resolution=(
-                    DeliveryHealthResolution.RETRY
-                    if exc.retry_safe
-                    else DeliveryHealthResolution.AUTHORITY_GAP
+                    DeliveryHealthResolution.RETRY if exc.retry_safe else DeliveryHealthResolution.AUTHORITY_GAP
                 ),
             ),
         )

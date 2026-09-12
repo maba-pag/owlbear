@@ -58,9 +58,8 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-cockpit",
     ),
     "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
-    "lint-full": ("lint", "megalint"),
-    "format-full": ("format-python", "format-whitespace", "format-eof"),
-    "quality-full": ("format-full", "lint-full", "typecheck-cockpit", "todo"),
+    "format": ("format-python", "format-whitespace", "format-eof"),
+    "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
 }
 
 
@@ -381,13 +380,6 @@ def lint_cockpit_html() -> None:
     _run_public_leaf("lint-cockpit-html", fixes=False, allow_unsafe=False, staged=True)
 
 
-def lint_full() -> None:
-    """Run every configured lint engine, including MegaLinter."""
-    args = _parse_options("lint-full", staged=False, fixes=True, allow_unsafe=True)
-    _require_development("lint-full")
-    _finish(_run_named_checked("lint-full", staged=False, fix_mode=args.fix_mode))
-
-
 def format_python() -> None:
     """Format Python with Ruff."""
     _run_public_leaf("format-python", fixes=True, allow_unsafe=False, staged=True)
@@ -403,11 +395,11 @@ def format_eof() -> None:
     _run_public_leaf("format-eof", fixes=True, allow_unsafe=False, staged=True)
 
 
-def format_full() -> None:
+def format_commands() -> None:
     """Run all dedicated formatters and text normalizers."""
-    args = _parse_options("format-full", staged=True, fixes=True, allow_unsafe=False)
-    _require_development("format-full")
-    _finish(_run_named_checked("format-full", staged=args.staged, fix_mode=args.fix_mode))
+    args = _parse_options("format", staged=True, fixes=True, allow_unsafe=False)
+    _require_development("format")
+    _finish(_run_named_checked("format", staged=args.staged, fix_mode=args.fix_mode))
 
 
 def typecheck_cockpit() -> None:
@@ -418,8 +410,8 @@ def typecheck_cockpit() -> None:
     _finish(_run_named_checked("typecheck-cockpit", staged=False, fix_mode=FixMode.NONE))
 
 
-def quality_full() -> None:
+def quality() -> None:
     """Run format, lint, typecheck, and advisory checks."""
-    args = _parse_options("quality-full", staged=False, fixes=True, allow_unsafe=True)
-    _require_development("quality-full")
-    _finish(_run_named_checked("quality-full", staged=False, fix_mode=args.fix_mode))
+    args = _parse_options("quality", staged=False, fixes=True, allow_unsafe=True)
+    _require_development("quality")
+    _finish(_run_named_checked("quality", staged=False, fix_mode=args.fix_mode))

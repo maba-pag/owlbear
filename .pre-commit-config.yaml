@@ -8,9 +8,9 @@
 #                     Cockpit frontend lint aggregate
 #   uv run megalint [--no-fix | --unsafe-fix]
 #                     MegaLinter only
-#   uv run lint-full [--no-fix | --unsafe-fix]
-#                     All local and full-project lint checks
-#   uv run quality-full [--no-fix | --unsafe-fix]
+#   uv run format [--staged] [--no-fix]
+#                     Python, whitespace, and final-newline formatters
+#   uv run quality [--no-fix | --unsafe-fix]
 #                     Full format, lint, typecheck, and advisory checks
 #
 # Auto-fix on commit: Ruff, frontend lint hooks, trailing-whitespace,

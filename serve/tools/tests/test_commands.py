@@ -16,25 +16,24 @@ class _TerminalBuffer(io.StringIO):
 
 
 _QUALITY_TREE = (
-    "  quality-full",
-    "    format-full",
+    "  quality",
+    "    format",
     "      format-python",
     "      format-whitespace",
     "      format-eof",
-    "    lint-full",
-    "      lint",
-    "        lint-python",
-    "        lint-markdown",
-    "        lint-json",
-    "        lint-yaml",
-    "        lint-shell",
-    "        lint-actions",
-    "        lint-editorconfig",
-    "        lint-cockpit",
-    "          lint-cockpit-code",
-    "          lint-cockpit-style",
-    "          lint-cockpit-html",
-    "      megalint",
+    "    lint",
+    "      lint-python",
+    "      lint-markdown",
+    "      lint-json",
+    "      lint-yaml",
+    "      lint-shell",
+    "      lint-actions",
+    "      lint-editorconfig",
+    "      lint-cockpit",
+    "        lint-cockpit-code",
+    "        lint-cockpit-style",
+    "        lint-cockpit-html",
+    "    megalint",
     "    typecheck-cockpit",
     "    todo",
 )
@@ -55,6 +54,7 @@ def test_default_help_renders_the_quality_tree(monkeypatch: object, capsys: obje
     assert "Workspace:" in output
     assert "Quality:" in output
     assert "Tests:" in output
+    assert "  tests [OPTIONS] [PATH ...]" not in output
     _assert_rows_in_order(output, _QUALITY_TREE)
     assert "Setup:" not in output
     assert "Maintenance:" not in output
@@ -90,7 +90,17 @@ def test_internal_help_renders_indexes_aggregate(monkeypatch: object, capsys: ob
     assert "    ts-index [PATH]" in output
 
 
-@pytest.mark.parametrize(("topic", "heading"), [("s", "Setup:"), ("m", "Maintenance:"), ("i", "Internal:")])
+@pytest.mark.parametrize(
+    ("topic", "heading"),
+    [
+        ("w", "Workspace:"),
+        ("q", "Quality:"),
+        ("t", "Tests:"),
+        ("s", "Setup:"),
+        ("m", "Maintenance:"),
+        ("i", "Internal:"),
+    ],
+)
 def test_help_accepts_topic_shorthands(topic: str, heading: str, monkeypatch: object, capsys: object) -> None:
     monkeypatch.setattr(sys, "argv", ["help", topic])
 
@@ -108,11 +118,11 @@ def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch:
     output = capsys.readouterr().out
     assert "  lint [OPTIONS]" not in output
     assert any(line.startswith("  lint ") for line in output.splitlines())
-    assert "lint-full" not in output
-    assert "quality-full" not in output
+    assert "format" not in output
+    assert not any(line.startswith("  quality") for line in output.splitlines())
     assert "megalint" not in output
     assert "Tests:" not in output
-    assert "Topics: s." in output
+    assert "Topics: w (workspace), q (quality)." in output
     assert "maintenance (m)" not in output
     assert "internal (i)" not in output
 
@@ -127,7 +137,7 @@ def test_help_styles_semantic_anchors_and_capability_symbols(monkeypatch: object
     help_main()
 
     rendered = output.getvalue()
-    assert "\033[1m\033[35m\N{INFORMATION SOURCE} OwlBear commands\033[0m" in rendered
+    assert "\033[1m\033[35m\N{INFORMATION SOURCE} OwlBear workspace helpers\033[0m" in rendered
     assert "\033[1m\033[32mQuality:\033[0m" in rendered
     assert "\033[32mlint" in rendered
     assert "\033[32mˢ\033[0m" in rendered
@@ -147,9 +157,9 @@ def test_help_aligns_capabilities_without_iconless_rows(monkeypatch: object, cap
     options_index = next(index for index, line in enumerate(lines) if line.startswith("  Available options:"))
     tree_lines = lines[:options_index]
     capability_lines = [line for line in tree_lines if any(symbol in line for symbol in ("ˢ", "✚", "⚠"))]
-    assert {line.find("ˢ") for line in capability_lines if "ˢ" in line} == {60}
-    assert {line.find("✚") for line in capability_lines if "✚" in line} == {62}
-    assert {line.find("⚠") for line in capability_lines if "⚠" in line} == {64}
+    assert {line.find("ˢ") for line in capability_lines if "ˢ" in line} == {58}
+    assert {line.find("✚") for line in capability_lines if "✚" in line} == {60}
+    assert {line.find("⚠") for line in capability_lines if "⚠" in line} == {62}
     assert len(next(line for line in lines if line.startswith("    todo"))) > 60
     assert lines[options_index : options_index + 4] == [
         "  Available options:",
@@ -202,6 +212,6 @@ def test_help_preserves_tree_on_narrow_terminals(monkeypatch: object) -> None:
     help_main()
 
     assert "        lint" in output.getvalue()
-    assert "    lint-full" in output.getvalue()
+    assert "    lint" in output.getvalue()
     assert "      lint" in output.getvalue()
-    assert "        lint-python" in output.getvalue()
+    assert "      lint-python" in output.getvalue()
