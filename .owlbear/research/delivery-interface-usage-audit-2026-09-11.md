@@ -5,7 +5,7 @@
 > **Question:** Who uses which Delivery Python, HTTP, and MCP interfaces, when and why are they used, which surfaces are regular versus exceptional or compatibility-only, and where can the interface be reduced without weakening authority, custody, replay, or operator control?
 > **Status:** Current-state research. No Delivery state, package, claim, MCP operation, commit, or source file was mutated by this audit.
 > **Count update:** Application and MCP counts were refreshed at `eaef98036742b1d03ca7f7064c66411d0c5a50e9` after `recover_out_of_band_head` was added; the original analysis baseline remains recorded below.
-> **Post-baseline implementation delta:** The additive facade now measures **69 public `PortfolioApplication` methods**, **57 registered MCP operations**, **247 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `get_change`, `answer`, and `repair_change`; the detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
+> **Post-baseline implementation delta:** The additive facade now measures **70 public `PortfolioApplication` methods**, **58 registered MCP operations**, **250 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `get_change`, `answer`, `set_change_intent`, and `repair_change`; the detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
 > **Implementation plan:** [Delivery Resilience Evolution Plan](delivery-resilience-evolution-plan.md) supersedes this audit's provisional implementation sequence and incorporates the later GPT-6 Astra and Claude Opus 5 challenges.
 
 ## 1. Executive Summary
@@ -49,16 +49,17 @@ Pursue interface reduction in this order:
 ### 1.2 Post-baseline implementation reading
 
 The current implementation adds a coherent `get_change` read projection, a version-bound `answer`
-path for bounded Decision Request resolution, and a proposal-backed `repair_change` path. A
-constrained Repairer agent now owns only those high-level interactions, while Orchestrator may
-route an exact Change-specific repair proposal to it. Action free-text resolution remains on the
-existing operator path. This is an additive migration boundary, not evidence that the older
-low-level operations are ready for removal.
+path for bounded Decision Request resolution, a version-bound `set_change_intent` path for pause,
+resume, and abandonment, and a proposal-backed `repair_change` path. A constrained Repairer agent
+now owns only the answer and repair interactions, while Orchestrator may route an exact
+Change-specific repair proposal to it. Action free-text resolution remains on the existing
+operator path. This is an additive migration boundary, not evidence that the older low-level
+operations are ready for removal.
 
-The three new MCP operations are intentionally absent from the historical matrix below. Refresh
-the matrix only after bounded Decision answers, requestless-block and disposition handling, Action
-free-text provenance, and repair-proposal parity are complete; otherwise the document would imply
-a final surface while the facade is still being shaped.
+The four new MCP operations are intentionally absent from the historical matrix below. Refresh
+the matrix only after bounded Decision answers, lifecycle intents, requestless-block and
+disposition handling, Action free-text provenance, and repair-proposal parity are complete;
+otherwise the document would imply a final surface while the facade is still being shaped.
 
 ## 2. Scope, Method, And Evidence Limits
 
