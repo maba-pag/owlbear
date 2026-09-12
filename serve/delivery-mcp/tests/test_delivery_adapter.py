@@ -401,7 +401,10 @@ class _RecordingApplication:
                     kind=DeliveryRequestKind.ACTION,
                     outcome_id="OUT-001",
                     summary="Complete the action",
-                    resolution=DeliveryRequestResolution(response_text="Completed."),
+                    resolution=DeliveryRequestResolution(
+                        response_text="Completed.",
+                        provenance="user-confirmed",
+                    ),
                 )
             elif name == "answer":
                 if args and isinstance(args[0], DeliveryAnswer) and args[0].kind is DeliveryAnswerKind.BLOCK:
@@ -442,7 +445,10 @@ class _RecordingApplication:
                         kind=DeliveryRequestKind.ACTION,
                         outcome_id="OUT-001",
                         summary="Complete the action",
-                        resolution=DeliveryRequestResolution(response_text="Completed."),
+                        resolution=DeliveryRequestResolution(
+                            response_text="Completed.",
+                            provenance="user-confirmed",
+                        ),
                     ),
                     frontier_digest=DIGEST,
                 )
@@ -675,7 +681,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "answer": {
             **change,
             "request_id": "request",
-            "resolution": {"response_text": "Completed."},
+            "resolution": {"response_text": "Completed.", "provenance": "user-confirmed"},
             "expected_frontier_digest": DIGEST,
         },
         "answer_block": {
@@ -722,7 +728,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "resolve_request": {
             **change,
             "request_id": "request",
-            "resolution": {"response_text": "Completed."},
+            "resolution": {"response_text": "Completed.", "provenance": "user-confirmed"},
         },
         "clear_block": {
             **change,
@@ -915,7 +921,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
             DeliveryAnswer(
                 change_id=CHANGE,
                 request_id="request",
-                resolution=DeliveryRequestResolution(response_text="Completed."),
+                resolution=DeliveryRequestResolution(
+                    response_text="Completed.",
+                    provenance="user-confirmed",
+                ),
                 expected_frontier_digest=DIGEST,
             ),
         ),
@@ -927,7 +936,11 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
                 reason="Wait for user review",
             ),
         ),
-        "resolve_request": (CHANGE, "request", DeliveryRequestResolution(response_text="Completed.")),
+        "resolve_request": (
+            CHANGE,
+            "request",
+            DeliveryRequestResolution(response_text="Completed.", provenance="user-confirmed"),
+        ),
         "clear_block": (CHANGE, "OUT-001", "block", "Verified.", ("operator-note",)),
         "preview_administrative_move": (CHANGE, "OUT-001", DeliveryStage.PLANNING),
         "administrative_move": (

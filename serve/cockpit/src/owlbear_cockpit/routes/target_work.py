@@ -116,6 +116,7 @@ class TargetCockpitService:
         resolution = DeliveryRequestResolution(
             selected_option_id=body.selected_option_id,
             response_text=body.response_text,
+            provenance=body.provenance if body.response_text else None,
         )
         answer = DeliveryAnswer(
             change_id=change_id,
