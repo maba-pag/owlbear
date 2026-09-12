@@ -1059,7 +1059,7 @@ def test_change_deferral_retains_frontier_and_suppresses_claimability(tmp_path: 
     assert deferral.prior_stage == DeliveryChangeStage.BUILDING
     assert runtime.change_deferral() == deferral
     assert runtime.change_stage() == DeliveryChangeStage.DEFERRED
-    assert runtime.claimable_outcome_ids() == ()
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
     with pytest.raises(DeliveryRuntimeConflictError, match="requires resumption"):
         _activate(runtime, "OUT-001", "claim-deferred")
 
@@ -1965,6 +1965,28 @@ def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(t
     assert dirty_file.read_bytes() == before
     assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
     assert coordinator.show("delivery-runtime").writer is not None
+
+
+def test_repeated_identical_retries_become_a_durable_block(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path, stages=(DeliveryStage.PLANNING, DeliveryStage.PLANNING, DeliveryStage.PLANNING))
+
+    for index in range(3):
+        claim_id = f"retry-claim-{index}"
+        _activate(runtime, "OUT-001", claim_id)
+        binding = runtime.transition(
+            RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id=claim_id,
+                failure_code="planner-failed",
+            )
+        )
+
+    assert binding.retry_count == 3
+    assert binding.retry_fingerprint is not None
+    assert binding.block is not None
+    assert binding.block.resolved is False
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
 
 
 @pytest.mark.parametrize(

@@ -40,6 +40,9 @@ if TYPE_CHECKING:
     from owlbear_delivery.target_contract import DeliveryContract
 
 
+_MAX_WORKER_RETRIES = 3
+
+
 class DeliveryStage(StrEnum):
     """Canonical outcome progress stages."""
 
@@ -974,6 +977,8 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
+    retry_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    retry_count: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _validate_state(self) -> OutcomeAuthorityBinding:
@@ -1291,6 +1296,7 @@ class RetryDelivery(_DeliveryModel):
     claim_id: str = Field(min_length=1)
     abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     attempt_id: str | None = None
+    failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 
 class ReturnDelivery(_DeliveryModel):
@@ -3180,7 +3186,7 @@ class DeliveryRuntime:
                 return binding
             _conflict("requestless block is not clearable")
         cleared = block.model_copy(update={"resolution_note": operator_note, "resolution_locators": locators})
-        updated = binding.model_copy(update={"block": cleared})
+        updated = binding.model_copy(update={"block": cleared, "retry_fingerprint": None, "retry_count": 0})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
 
@@ -3263,6 +3269,8 @@ class DeliveryRuntime:
                     "recovery_attention": None,
                     "block": None,
                     "requests": (),
+                    "retry_fingerprint": None,
+                    "retry_count": 0,
                 }
             )
         if binding.stage == DeliveryStage.IMPLEMENTATION:
@@ -3291,6 +3299,8 @@ class DeliveryRuntime:
                     "recovery_attention": None,
                     "block": None,
                     "requests": (),
+                    "retry_fingerprint": None,
+                    "retry_count": 0,
                 }
             )
         return _conflict("current stage cannot advance")
@@ -3300,6 +3310,29 @@ class DeliveryRuntime:
         binding: OutcomeAuthorityBinding,
         request: RetryDelivery,
     ) -> OutcomeAuthorityBinding:
+        claim = binding.active_claim
+        if claim is None:
+            _conflict("retry requires an active claim")
+        retry_fingerprint = _retry_fingerprint(
+            self._contract.change_id,
+            binding.outcome_id,
+            claim.worker_role,
+            request.failure_code,
+        )
+        retry_count = (
+            binding.retry_count + 1
+            if binding.retry_fingerprint == retry_fingerprint
+            else 1
+        )
+        retry_block = None
+        if retry_count >= _MAX_WORKER_RETRIES:
+            retry_block = DeliveryBlock(
+                block_id=f"retry-budget-{retry_fingerprint[:24]}",
+                reason="Repeated identical worker failures exhausted the automatic retry budget.",
+                unblock_condition="Provide evidence that the failure cause has changed or been repaired.",
+                expected_evidence=(f"retry-fingerprint:{retry_fingerprint}",),
+                locators=(f"outcome:{binding.outcome_id}",),
+            )
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.abandoned_commit is None or request.attempt_id is None:
                 _conflict("Implementation retry requires attempt and abandoned-commit identity")
@@ -3328,6 +3361,9 @@ class DeliveryRuntime:
                 "result_candidate": None,
                 "return_context": None,
                 "recovery_attention": None,
+                "block": retry_block,
+                "retry_fingerprint": retry_fingerprint,
+                "retry_count": retry_count,
             }
         )
 
@@ -3414,6 +3450,8 @@ class DeliveryRuntime:
                     "return_context": context,
                     "recovery_attention": None,
                     "block": None,
+                    "retry_fingerprint": None,
+                    "retry_count": 0,
                 }
             )
         if binding.stage == DeliveryStage.PLANNING and request.source_boundary is None:
@@ -3469,6 +3507,8 @@ class DeliveryRuntime:
                 "recovery_attention": None,
                 "block": block,
                 "requests": requests,
+                "retry_fingerprint": None,
+                "retry_count": 0,
             }
         )
 
@@ -3790,6 +3830,17 @@ def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:
         _conflict("transition does not match the active claim")
 
 
+def _retry_fingerprint(
+    change_id: str,
+    outcome_id: str,
+    worker_role: DeliveryWorkerRole,
+    failure_code: str,
+) -> str:
+    """Return a stable fingerprint for one repeated worker failure class."""
+    payload = f"{change_id}\0{outcome_id}\0{worker_role.value}\0{failure_code.casefold()}"
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
 def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> OutcomeAuthorityBinding:
     return binding.model_copy(
         update={
@@ -3804,6 +3855,8 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
             "recovery_attention": None,
             "block": None,
             "requests": (),
+            "retry_fingerprint": None,
+            "retry_count": 0,
         }
     )
 
