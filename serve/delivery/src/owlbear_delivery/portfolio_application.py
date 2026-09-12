@@ -1548,7 +1548,7 @@ class PortfolioApplication:
         """Create or CAS-revise one exact authored Design package."""
         if design.expected_package_id is None:
             return self._package_store.create(design.change_id, design.intent_bytes, design.design_bytes)
-        revised = self._package_store.revise(
+        revised = self.revise_design_session(
             design.change_id,
             design.expected_package_id,
             design.intent_bytes,

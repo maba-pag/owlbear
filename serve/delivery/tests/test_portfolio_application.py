@@ -7012,6 +7012,26 @@ def test_put_design_creates_replays_and_cas_revises_authored_package(tmp_path: P
         )
 
 
+def test_put_design_rejects_revision_of_admitted_change(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    current = application.read_design_session("change-a")
+
+    with pytest.raises(PortfolioApplicationError, match="admitted Delivery Changes cannot revise"):
+        application.put_design(
+            DeliveryDesignPut(
+                change_id="change-a",
+                expected_package_id=current.package_id,
+                intent_bytes=b"changed intent\n",
+                design_bytes=current.design_bytes,
+            )
+        )
+
+    assert application.read_design_session("change-a") == current
+
+
 def test_admit_change_uses_the_existing_source_bound_admission_authority(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
     intent = b"""# Admission
