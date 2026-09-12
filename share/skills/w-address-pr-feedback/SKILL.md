@@ -116,7 +116,8 @@ ready PR to draft through the configured provider, invalidates the old finalizat
 authority, and publishes the repair-ready state. It is replay-safe when the PR is already draft or
 the repair preparation already completed.
 
-Do not manually change the PR draft flag. Do not use `resolve_change_disposition` as a substitute.
+Do not manually change the PR draft flag. Do not use the high-level `answer` facade as a substitute
+for the provider-owned draft transition.
 If preparation reports a closed PR, merged PR, head mismatch, missing publication, or provider
 failure, stop and report the exact authority gap. A merged PR requires a fresh Change or an
 explicitly designed merged-history recovery; this workflow never rewrites accepted history.

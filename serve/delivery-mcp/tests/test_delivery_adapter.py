@@ -1253,7 +1253,14 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         assert tool_annotations.read_only_hint is (name in reads)
         assert tool_annotations.idempotent_hint is (
             name
-            not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move", "repair_change"}
+            not in {
+                "acquire_frontier_work",
+                "acquire_actions",
+                "administrative_move",
+                "repair",
+                "repair_change",
+                "set_change_intent",
+            }
         )
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 

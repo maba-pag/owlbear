@@ -225,12 +225,6 @@ class SetChangeIntentParams(ChangeParams):
         return self
 
 
-class ResolveChangeDispositionParams(ChangeParams):
-    """Validate one exact Change attention identity for explicit resolution."""
-
-    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
 class CleanupAbandonedChangeParams(ChangeParams):
     """Validate cleanup of one terminal abandoned Change worktree."""
 
@@ -301,22 +295,6 @@ class RepairChangeParams(ChangeParams):
 
     proposal_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     confirmed_lost: bool = False
-
-
-class ResolveRequestParams(ChangeParams):
-    """Validate one user-owned answer for a retained Delivery request."""
-
-    request_id: str = Field(min_length=1)
-    resolution: DeliveryRequestResolution
-
-
-class ClearBlockParams(ChangeParams):
-    """Validate operator evidence for one requestless same-stage block."""
-
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    block_id: str = Field(min_length=1)
-    operator_note: str = Field(min_length=1)
-    locators: tuple[str, ...] = Field(min_length=1)
 
 
 class PreviewAdministrativeMoveParams(ChangeParams):
@@ -1034,14 +1012,6 @@ type RepairChangeRequest = Annotated[
     RepairChangeParams,
     BeforeValidator(partial(_parse_json_model, RepairChangeParams)),
 ]
-type ResolveRequestRequest = Annotated[
-    ResolveRequestParams,
-    BeforeValidator(partial(_parse_json_model, ResolveRequestParams)),
-]
-type ClearBlockRequest = Annotated[
-    ClearBlockParams,
-    BeforeValidator(partial(_parse_json_model, ClearBlockParams)),
-]
 type PreviewAdministrativeMoveRequest = Annotated[
     PreviewAdministrativeMoveParams,
     BeforeValidator(partial(_parse_json_model, PreviewAdministrativeMoveParams)),
@@ -1143,10 +1113,6 @@ type ReviseDesignSessionRequest = Annotated[
     ReviseDesignSessionParams,
     BeforeValidator(partial(_parse_json_model, ReviseDesignSessionParams)),
 ]
-type ResolveChangeDispositionRequest = Annotated[
-    ResolveChangeDispositionParams,
-    BeforeValidator(partial(_parse_json_model, ResolveChangeDispositionParams)),
-]
 type SearchCompletedRequest = Annotated[
     SearchCompletedParams,
     BeforeValidator(partial(_parse_json_model, SearchCompletedParams)),
@@ -1190,9 +1156,6 @@ __all__ = [
     "CleanupAbandonedTargetSyncRequest",
     "CleanupCompletedChangeParams",
     "CleanupCompletedChangeRequest",
-    "ClearBlockParams",
-    "ClearBlockRequest",
-    "ClearedDeliveryBlockResponse",
     "CompletedPageParams",
     "CompletedPageRequest",
     "CreateDesignSessionParams",
@@ -1247,11 +1210,6 @@ __all__ = [
     "RepairDeliveryStateSnapshotRequest",
     "RepairTargetSyncPublicationParams",
     "RepairTargetSyncPublicationRequest",
-    "ResolveChangeDispositionParams",
-    "ResolveChangeDispositionRequest",
-    "ResolveRequestParams",
-    "ResolveRequestRequest",
-    "ResolvedDeliveryRequestResponse",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",

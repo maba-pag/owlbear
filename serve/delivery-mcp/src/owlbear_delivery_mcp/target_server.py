@@ -31,9 +31,7 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryPlanCandidate,
-    DeliveryRequest,
     DeliveryResultCandidate,
-    OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
@@ -80,9 +78,6 @@ from owlbear_delivery_mcp.target_models import (
     CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
-    ClearBlockParams,
-    ClearBlockRequest,
-    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
@@ -131,11 +126,6 @@ from owlbear_delivery_mcp.target_models import (
     RepairDeliveryStateSnapshotRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
-    ResolveChangeDispositionParams,
-    ResolveChangeDispositionRequest,
-    ResolvedDeliveryRequestResponse,
-    ResolveRequestParams,
-    ResolveRequestRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -195,8 +185,6 @@ DELIVERY_OPERATION_NAMES = (
     "show_operator_context",
     "repair",
     "repair_change",
-    "resolve_request",
-    "clear_block",
     "preview_administrative_move",
     "administrative_move",
     "acquire_frontier_work",
@@ -220,7 +208,6 @@ DELIVERY_OPERATION_NAMES = (
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
-    "resolve_change_disposition",
     "cleanup_abandoned_change_worktree",
     "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
@@ -258,7 +245,7 @@ _DELIVERY_READS = frozenset(
     }
 )
 _DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
-    {"resolve_request", "clear_block", "administrative_move", "repair", "repair_change", "set_change_intent"}
+    {"administrative_move", "repair", "repair_change", "set_change_intent"}
 )
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
@@ -596,45 +583,6 @@ class TargetMCPAdapter:
             ),
         )
 
-    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
-        """Persist one user-owned answer for a retained Delivery request."""
-        params = self._validate(ResolveRequestParams, request)
-        resolved = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.resolve_request(
-                params.change_id,
-                params.request_id,
-                params.resolution,
-            ),
-            DeliveryRequest,
-        )
-        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
-
-    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
-        """Clear one requestless block with explicit operator evidence."""
-        params = self._validate(ClearBlockParams, request)
-        binding = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.clear_block(
-                params.change_id,
-                params.outcome_id,
-                params.block_id,
-                params.operator_note,
-                params.locators,
-            ),
-            OutcomeAuthorityBinding,
-        )
-        if binding.block is None:
-            message = "unsupported cleared block output: missing block"
-            raise TypeError(message)
-        return ClearedDeliveryBlockResponse(
-            change_id=params.change_id,
-            outcome_id=binding.outcome_id,
-            block=binding.block,
-        )
-
     async def preview_administrative_move(
         self,
         request: PreviewAdministrativeMoveRequest,
@@ -921,18 +869,6 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.observe_acceptance(params.change_id),
-        )
-
-    async def resolve_change_disposition(self, request: ResolveChangeDispositionRequest) -> dict[str, object]:
-        """Resolve one exact Change attention record without restoring provider authority."""
-        params = self._validate(ResolveChangeDispositionParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.resolve_change_disposition(
-                params.change_id,
-                params.expected_disposition_id,
-            ),
         )
 
     async def cleanup_abandoned_change_worktree(

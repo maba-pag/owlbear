@@ -47,7 +47,7 @@ and `target_sync_operation_id`; the exact target-sync evidence may qualify the r
 diagnostic for that repair route. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items get_change delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context resolve_request clear_block preview_administrative_move administrative_move show_integration_attention resolve_change_disposition set_change_intent cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items get_change answer delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context preview_administrative_move administrative_move show_integration_attention set_change_intent cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head abort_target_sync_conflict resolve_target_sync_conflict recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -62,13 +62,13 @@ as permission to edit a worktree or target.
 
 For an `OUT-nnn` identity, call `show_operator_context(change_id, outcome_id)` and require the
 returned context to retain the supplied outcome identity. If the context contains a current block
-and that block contains a pending request, present exactly one user decision and, after the answer, call
-`resolve_request(change_id, request_id, resolution)` with a selected option for a Decision Request
-or response text for an Action Request. If
-the context contains a requestless block, present the evidence requirement and, after explicit user
-confirmation, call `clear_block(change_id, outcome_id, block_id, operator_note, locators)`. Re-read
-the exact operator context before either mutation; neither operation restores later-stage authority
-or selects a Delivery transition.
+with a pending request, present exactly one user decision, call `get_change(change_id)`, and then
+call `answer(change_id, kind=request, request_id, resolution, expected_frontier_digest)`. Decision
+requests use a selected option; Action Requests use free text with `provenance=user-confirmed`. If
+the context contains a requestless block, present the evidence requirement, call `get_change`, and
+after explicit confirmation call `answer(change_id, kind=block, outcome_id, block_id, operator_note,
+locators, expected_frontier_digest)`. Re-read the exact operator context before either mutation;
+neither operation restores later-stage authority or selects a Delivery transition.
 
 For an operator-directed backward movement, call `preview_administrative_move(change_id, outcome_id,
 target)` and retain its `snapshot_version` and `invalidated_outcome_ids`. Present the invalidation
@@ -149,7 +149,8 @@ Use only an existing operation whose contract owns the selected result:
   `observe_change_publication_checks(change_id)`. If a provider-marked required check still has a
   terminal non-success conclusion, retain the exact attention and stop without resolution; Delivery
   never selects, dispatches, reruns, or classifies workflows. When the re-observation no longer
-  reports a required failure, call `resolve_change_disposition(change_id, expected_disposition_id)`
+  reports a required failure, call `get_change(change_id)` and then answer with `kind=disposition`,
+  the exact disposition identity, and the captured frontier digest
   and re-read finalization and checkpoint authority before retrying `mark_change_ready(change_id)`.
   If the exact head changed, reconcile finalization first and hand the Change back to its owning
   finalization/review workflow; do not supersede the publication solely because a check failed.
@@ -176,9 +177,9 @@ Use only an existing operation whose contract owns the selected result:
   `cleanup_abandoned_change_worktree_after_target_sync_discard(change_id,
   expected_target_head, expected_operation_id, confirmed_discard=true)`. A changed conflict identity,
   missing worktree, or non-abandoned Change remains blocked; never discard the merge with raw Git.
-- Change attention: use the exact disposition identity and call
-  `resolve_change_disposition(change_id, expected_disposition_id)`. This clears the current Change
-  attention and retained provider identity; it does not restore ready authority. For a closed,
+- Change attention: call `get_change(change_id)` and answer with `kind=disposition`, the exact
+  disposition identity, and the captured frontier digest. This clears the current Change attention
+  and retained provider identity; it does not restore ready authority. For a closed,
   unmerged provider pull request, first reopen that exact pull request in GitHub, then resolve the
   attention, reconcile the current finalization/publication checkpoint with
   `reconcile_change_checkpoint(change_id)`, and call `mark_change_ready(change_id)` only after the

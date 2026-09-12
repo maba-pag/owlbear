@@ -77,8 +77,6 @@ DELIVERY_TOOLS = {
     "show_operator_context",
     "repair",
     "repair_change",
-    "resolve_request",
-    "clear_block",
     "preview_administrative_move",
     "administrative_move",
     "acquire_frontier_work",
@@ -102,7 +100,6 @@ DELIVERY_TOOLS = {
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
-    "resolve_change_disposition",
     "cleanup_abandoned_change_worktree",
     "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
@@ -545,8 +542,6 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     assert set(reconciliation_schema["properties"]) == {"change_id"}
     acceptance_schema = tools["observe_acceptance"].input_schema
     assert set(acceptance_schema["properties"]) == {"change_id"}
-    resolution_schema = tools["resolve_change_disposition"].input_schema
-    assert set(resolution_schema["properties"]) == {"change_id", "expected_disposition_id"}
     assert set(tools["prepare_review_repair"].input_schema["properties"]) == {"change_id"}
     supersession_schema = tools["supersede_publication"].input_schema
     assert set(supersession_schema["properties"]) == {
