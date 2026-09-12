@@ -381,12 +381,16 @@ class TargetMCPAdapter:
     async def list_changes(self, request: EmptyRequest) -> dict[str, object]:
         """Return grouped Change state and operating guidance."""
         params = self._validate(EmptyParams, request)
-        return self._call(params, self._application.list_changes)
+        return await asyncio.to_thread(self._call, params, self._application.list_changes)
 
     async def get_change(self, request: ChangeRequest) -> dict[str, object]:
         """Return one coherent Change detail, health, and repair projection."""
         params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.get_change(params.change_id))
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.get_change(params.change_id),
+        )
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""

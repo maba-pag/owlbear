@@ -6636,9 +6636,70 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path)
     replayed = application.submit_result(submission)
 
     assert submitted == replayed
+    assert submitted.kind == "submitted"
     assert submitted.result_id == "RESULT-SUBMIT"
     assert submitted.binding.stage is DeliveryStage.COMPLETED
     assert submitted.binding.results == (submission.result,)
+
+
+def test_submit_result_replays_when_another_task_holds_the_claim(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    plan_launch = application.acquire_frontier_work().launch_packages[0]
+    second_task = _task().model_copy(
+        update={
+            "task_id": "TASK-002",
+            "title": "Implement the second acquisition step",
+        }
+    )
+    plan = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(
+            outcome_id="OUT-001",
+            claim_id=plan_launch.claim.claim_id,
+            tasks=(_task(), second_task),
+        ),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id=plan_launch.claim.claim_id,
+            output=plan.output,
+        ),
+    )
+    build_launch = application.acquire_frontier_work().launch_packages[0]
+    runtime = runtimes["change-a"]
+    first_task = runtime.show_binding("OUT-001").tasks[0]
+    product = build_launch.worktree_path / "product.txt"
+    product.write_text("completed first build\n", encoding="utf-8")
+    _git(build_launch.worktree_path, "add", product.name)
+    _git(build_launch.worktree_path, "commit", "-m", "complete first build")
+    completed_commit = _git(build_launch.worktree_path, "rev-parse", "HEAD")
+    submission = DeliveryResultSubmission(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=build_launch.claim.claim_id,
+        result=_task_result(
+            "RESULT-FIRST",
+            "change-a",
+            runtime.authority_digest,
+            first_task,
+            completed_commit,
+        ),
+    )
+
+    application.submit_result(submission)
+    second_launch = application.acquire_frontier_work().launch_packages[0]
+    replayed = application.submit_result(submission)
+
+    assert second_launch.claim.task_id == "TASK-002"
+    assert replayed.result_id == "RESULT-FIRST"
+    assert replayed.binding.active_claim is not None
+    assert replayed.binding.active_claim.task_id == "TASK-002"
 
 
 def test_transition_publishes_change_branch_before_delivery_state(

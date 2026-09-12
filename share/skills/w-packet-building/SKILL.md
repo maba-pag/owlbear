@@ -178,18 +178,10 @@ digest, exact task ID, `DeliveryBuildContext.task_digest`, reviewed commit, the 
 canonical observation receipts, and the canonical review receipt. Require every receipt to bind the
 same Change, Task, and exact commit represented by the result. Require the context digest to be
 present and use it unchanged; never reconstruct `DeliveryTaskDefinition` from MCP JSON or
-reimplement task or receipt hashing. Call `publish_delivery_result` with the unchanged change ID and
-a `PublishDeliveryResult` containing the outcome ID, claim ID, and result.
-
-Require the returned `DeliveryResultCandidate` to preserve the claim and exact result. Return its
-output directly in `AdvanceDelivery`:
-
-```yaml
-action: advance
-outcome_id: <context outcome ID>
-claim_id: <launch claim ID>
-output: <published DeliveryResultCandidate.output unchanged>
-```
+reimplement task or receipt hashing. Call `submit_result` with the unchanged Change, Outcome, claim,
+and exact result. Require the returned `kind: submitted` result to preserve those identities and the
+exact result ID. Return that applied result directly; Orchestrator must not forward it to
+`transition_delivery` a second time.
 
 On a finding or safe local failure, publish nothing. Builder chooses one schema-valid transition:
 

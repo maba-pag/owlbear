@@ -43,7 +43,7 @@ without behavior change).
   containment reason instead of describing the whole task-owned diff as mixed.
 - Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
   another broad directory. The task's maintained surfaces bound eligible implementation paths.
-- Builder calls `publish_delivery_result` only after the scoped commit exists, its path set equals
+- Builder calls `submit_result` only after the scoped commit exists, its path set equals
   the task-owned set, no task-owned change remains outside it, and fresh read-only review passes
   that exact commit.
 - If the scoped commit cannot be created or verified, publish no result and report fail-closed

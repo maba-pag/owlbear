@@ -831,6 +831,7 @@ class DeliveryResultSubmission(_ApplicationModel):
 class DeliveryResultSubmissionResult(_ApplicationModel):
     """The promoted Builder result and its current runtime binding."""
 
+    kind: Literal["submitted"] = "submitted"
     change_id: str = Field(min_length=1)
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
@@ -5475,14 +5476,20 @@ class PortfolioApplication:
                     None,
                 )
                 if existing is not None:
-                    if existing != submission.result or binding.active_claim is not None:
+                    if (
+                        existing != submission.result
+                        or (
+                            binding.active_claim is not None
+                            and binding.active_claim.task_id == submission.result.task_id
+                        )
+                    ):
                         self._fail("submitted result conflicts with current Outcome authority")
                     if runtime.pending_state_publication() is not None:
                         self._publish_delivery_state(
                             submission.change_id,
                             runtime,
                             _checkpoint_operation_id(
-                                "submit-result-replay",
+                                "submit-result",
                                 submission.change_id,
                                 submission.outcome_id,
                                 submission.result.result_id,
