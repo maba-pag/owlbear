@@ -364,6 +364,13 @@ class ChangeDispositionReasonBody(_TargetHTTPModel):
     """User reason for deferring or abandoning one Change."""
 
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ResumeChangeBody(_TargetHTTPModel):
+    """Expected frontier version for resuming one deferred Change."""
+
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AbandonChangeBody(_TargetHTTPModel):
@@ -371,6 +378,7 @@ class AbandonChangeBody(_TargetHTTPModel):
 
     confirmed_abandonment: Literal[True]
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CleanupCompletedChangeBody(_TargetHTTPModel):
@@ -596,6 +604,7 @@ __all__ = [
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
     "ResolveChangeAttentionBody",
+    "ResumeChangeBody",
     "TargetSyncAbortResponse",
     "TargetSyncConflictBody",
     "TargetSyncResponse",

@@ -21,6 +21,8 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
     DeliveryAnswer,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointReconciliationResult,
     DeliveryRuntime,
@@ -477,6 +479,10 @@ class _DeliveryApplicationFake:
         self.calls.append(("abandon", args))
         return {"change_id": args[0], "state": "abandoned", "reason": args[1]}
 
+    def set_change_intent(self, intent: DeliveryChangeIntent) -> dict[str, object]:
+        self.calls.append(("intent", (intent,)))
+        return {"change_id": intent.change_id, "state": intent.kind.value}
+
     @staticmethod
     def _cleanup_receipt() -> SimpleNamespace:
         return SimpleNamespace(
@@ -903,12 +909,16 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ),
         client.post(
             "/api/changes/change-a/defer",
-            json={"reason": "Wait for user review"},
+            json={"reason": "Wait for user review", "expected_frontier_digest": "a" * 64},
         ),
-        client.post("/api/changes/change-a/resume"),
+        client.post("/api/changes/change-a/resume", json={"expected_frontier_digest": "a" * 64}),
         client.post(
             "/api/changes/change-a/abandon",
-            json={"confirmed_abandonment": True, "reason": "User stopped the Change"},
+            json={
+                "confirmed_abandonment": True,
+                "reason": "User stopped the Change",
+                "expected_frontier_digest": "a" * 64,
+            },
         ),
         client.post("/api/changes/change-a/worktree/cleanup/abandoned"),
         client.post(
@@ -966,9 +976,38 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
         ("attention-resolve", ("change-a", "a" * 64)),
-        ("defer", ("change-a", "Wait for user review")),
-        ("resume", ("change-a",)),
-        ("abandon", ("change-a", "User stopped the Change")),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    expected_frontier_digest="a" * 64,
+                    reason="Wait for user review",
+                ),
+            ),
+        ),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.RESUME,
+                    expected_frontier_digest="a" * 64,
+                ),
+            ),
+        ),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.ABANDON,
+                    expected_frontier_digest="a" * 64,
+                    reason="User stopped the Change",
+                ),
+            ),
+        ),
         ("cleanup-abandoned", ("change-a",)),
         ("cleanup-completed", ("change-a", "e" * 64)),
         ("completed-list", (None, 25)),

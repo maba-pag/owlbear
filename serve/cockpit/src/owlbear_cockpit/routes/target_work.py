@@ -37,6 +37,7 @@ from owlbear_cockpit.target_models import (
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
     ResolveChangeAttentionBody,
+    ResumeChangeBody,
     SupersedePublicationBody,
     TargetSyncAbortResponse,
     TargetSyncBody,
@@ -59,6 +60,8 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
@@ -277,15 +280,41 @@ class TargetCockpitService:
 
     def defer_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
         """Retain one Change while pausing its claimable frontier."""
-        return self._invoke(lambda: self._application.defer_change(change_id, body.reason))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    reason=body.reason,
+                )
+            )
+        )
 
-    def resume_change(self, change_id: str) -> object:
+    def resume_change(self, change_id: str, body: ResumeChangeBody) -> object:
         """Resume one exact deferred Change."""
-        return self._invoke(lambda: self._application.resume_change(change_id))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.RESUME,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                )
+            )
+        )
 
     def abandon_change(self, change_id: str, body: AbandonChangeBody) -> object:
         """Terminate one uncompleted Change by explicit user disposition."""
-        return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
+        return self._invoke(
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=change_id,
+                    kind=DeliveryChangeIntentKind.ABANDON,
+                    expected_frontier_digest=body.expected_frontier_digest,
+                    reason=body.reason,
+                )
+            )
+        )
 
     def cleanup_abandoned_change_worktree(self, change_id: str) -> ChangeWorktreeCleanupResponse:
         """Clean one abandoned Change worktree without reopening its terminal state."""
@@ -566,8 +595,12 @@ def _register_publication_controls(router: APIRouter) -> None:  # noqa: C901
         return service.defer_change(change_id, body)
 
     @router.post("/changes/{change_id}/resume")
-    def resume_change(change_id: str, service: _TargetService) -> object:
-        return service.resume_change(change_id)
+    def resume_change(
+        change_id: str,
+        body: ResumeChangeBody,
+        service: _TargetService,
+    ) -> object:
+        return service.resume_change(change_id, body)
 
 
 def _register_target_controls(router: APIRouter) -> None:
