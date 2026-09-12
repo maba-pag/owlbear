@@ -55,6 +55,7 @@ from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target
 
 DELIVERY_TOOLS = {
     "create_design_session",
+    "put_design",
     "read_design_session",
     "revise_design_session",
     "publish_design_checkpoint",

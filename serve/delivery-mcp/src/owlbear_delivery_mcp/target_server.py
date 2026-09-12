@@ -35,6 +35,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     OutcomeAuthorityBinding,
 )
+from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.portfolio_application import (
@@ -45,6 +46,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryDesignPut,
     DeliveryOperatorContext,
     DeliveryResultSubmission,
     DeliveryResultSubmissionResult,
@@ -110,6 +112,9 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
+    PutDesignParams,
+    PutDesignRequest,
+    PutDesignResponse,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverClaimParams,
@@ -168,6 +173,7 @@ _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destruct
 
 DELIVERY_OPERATION_NAMES = (
     "create_design_session",
+    "put_design",
     "read_design_session",
     "revise_design_session",
     "publish_design_checkpoint",
@@ -324,6 +330,24 @@ class TargetMCPAdapter:
                 params.design_bytes,
             ),
         )
+
+    async def put_design(self, request: PutDesignRequest) -> PutDesignResponse:
+        """Create or CAS-revise one authored Design package."""
+        params = self._validate(PutDesignParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.put_design(
+                DeliveryDesignPut(
+                    change_id=params.change_id,
+                    intent_bytes=params.intent_bytes,
+                    design_bytes=params.design_bytes,
+                    expected_package_id=params.expected_package_id,
+                )
+            ),
+            DesignPackageResult,
+        )
+        return PutDesignResponse.from_result(result)
 
     async def read_design_session(self, request: ChangeRequest) -> dict[str, object]:
         """Read one verified authored Design session and its current identity."""

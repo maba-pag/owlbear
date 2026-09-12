@@ -67,7 +67,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
-from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.design_package import DesignPackageConflictError, DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestSupersessionReceipt,
@@ -80,6 +80,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeIntentKind,
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
+    DeliveryDesignPut,
     DeliveryOperatorContext,
     DeliveryResultSubmission,
     DeliveryResultSubmissionResult,
@@ -412,6 +413,14 @@ class _RecordingApplication:
                     ),
                     frontier_digest=DIGEST,
                 )
+            elif name == "put_design":
+                result = DesignPackageResult(
+                    change_id=CHANGE,
+                    package_id=DIGEST,
+                    package_root=WORKTREE_PATH,
+                    manifest=DesignPackageManifest.from_content(CHANGE, b"intent", b"design"),
+                    replayed=False,
+                )
             elif name == "set_change_intent":
                 result = DeliveryChangeIntentResult(
                     change_id=CHANGE,
@@ -602,6 +611,12 @@ def _requests() -> dict[str, dict[str, object]]:
     repair_claim = {**change, "attempt_id": "repair-attempt", "claim_id": "repair-claim"}
     return {
         "create_design_session": {**change, "intent_bytes": "intent", "design_bytes": "design"},
+        "put_design": {
+            **change,
+            "intent_bytes": "intent",
+            "design_bytes": "design",
+            "expected_package_id": DIGEST,
+        },
         "read_design_session": change,
         "revise_design_session": {
             **change,
@@ -908,6 +923,15 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert submission.outcome_id == "OUT-001"
         assert submission.claim_id == "claim"
         assert submission.result.result_id == "result-one"
+    if operation_name == "put_design":
+        assert application.calls[0][1] == (
+            DeliveryDesignPut(
+                change_id=CHANGE,
+                intent_bytes=b"intent",
+                design_bytes=b"design",
+                expected_package_id=DIGEST,
+            ),
+        )
     if operation_name == "recover_change_worktree":
         assert application.calls[0][1] == (CHANGE, COMMIT)
         assert application.calls[0][2] == {"confirmed_recovery": True}
@@ -1019,6 +1043,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.claim_id == "claim"
         assert result.result_id == "result-one"
         assert result.binding.stage is DeliveryStage.COMPLETED
+    elif operation_name == "put_design":
+        assert result.change_id == CHANGE
+        assert result.package_id == DIGEST
+        assert result.replayed is False
     elif operation_name == "set_change_intent":
         assert result.change_id == CHANGE
         assert result.kind is DeliveryChangeIntentKind.DEFER

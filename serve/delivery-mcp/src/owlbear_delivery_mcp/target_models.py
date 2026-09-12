@@ -47,6 +47,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
+from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
@@ -156,6 +157,14 @@ class AnswerParams(ChangeParams):
     request_id: str = Field(min_length=1)
     resolution: DeliveryRequestResolution
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PutDesignParams(ChangeParams):
+    """Validate one create-or-CAS-revise authored Design request."""
+
+    intent_bytes: bytes
+    design_bytes: bytes
+    expected_package_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class SetChangeIntentParams(ChangeParams):
@@ -622,7 +631,27 @@ class DeliveryAnswerResponse(_TargetProtocolModel):
 
     change_id: ChangeId
     request: DeliveryRequest
-    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PutDesignResponse(_TargetProtocolModel):
+    """Bounded response for one authored Design package write or replay."""
+
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    package_root: str = Field(min_length=1)
+    manifest: DesignPackageManifest
+    replayed: bool
+
+    @classmethod
+    def from_result(cls, result: DesignPackageResult) -> PutDesignResponse:
+        """Project one core Design package result into the strict MCP response."""
+        return cls(
+            change_id=result.change_id,
+            package_id=result.package_id,
+            package_root=str(result.package_root),
+            manifest=result.manifest,
+            replayed=result.replayed,
+        )
 
 
 class SetChangeIntentResponse(_TargetProtocolModel):
@@ -929,6 +958,10 @@ type AdmitDeliveryChangeRequest = Annotated[
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
 type AnswerRequest = Annotated[AnswerParams, BeforeValidator(partial(_parse_json_model, AnswerParams))]
+type PutDesignRequest = Annotated[
+    PutDesignParams,
+    BeforeValidator(partial(_parse_json_model, PutDesignParams)),
+]
 type SetChangeIntentRequest = Annotated[
     SetChangeIntentParams,
     BeforeValidator(partial(_parse_json_model, SetChangeIntentParams)),
@@ -1139,6 +1172,9 @@ __all__ = [
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
     "PublishDeliveryResultRequest",
+    "PutDesignParams",
+    "PutDesignRequest",
+    "PutDesignResponse",
     "RecoverChangeWorktreeParams",
     "RecoverChangeWorktreeRequest",
     "RecoverClaimParams",
