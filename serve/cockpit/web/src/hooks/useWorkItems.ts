@@ -574,7 +574,14 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     ),
     clearBlock: (blockId: string, note: string, locators: string[]) => mutate(
       'clear',
-      () => clearWorkItemBlock(identity.changeId, data!.item.card.work_item_id, blockId, note, locators),
+      () => clearWorkItemBlock(
+        identity.changeId,
+        data!.item.card.work_item_id,
+        blockId,
+        note,
+        locators,
+        data!.item.snapshot_version,
+      ),
       'Block cleared.',
     ),
     recoverClaim: (attemptId: string, claimId: string) => mutate(
@@ -677,7 +684,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     }),
     resolveAttention: (expectedDispositionId: string) => mutate(
       'attention-resolve',
-      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
+      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId, data!.item.snapshot_version),
       'Change attention resolved.',
     ),
     supersedePublication: () => mutate(

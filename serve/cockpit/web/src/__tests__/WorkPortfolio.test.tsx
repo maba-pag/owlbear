@@ -2370,7 +2370,7 @@ it('shows Change attention diagnostics and resolves the selected disposition', a
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/attention/resolve',
     method: 'POST',
-    body: { expected_disposition_id: attentionId },
+    body: { expected_disposition_id: attentionId, expected_frontier_digest: 'a'.repeat(64) },
   }))
   expect(await screen.findByText('Change attention resolved.')).toBeInTheDocument()
 })

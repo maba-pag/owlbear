@@ -688,11 +688,12 @@ export function clearWorkItemBlock(
   blockId: string,
   operatorNote: string,
   locators: string[],
+  expectedFrontierDigest: string,
 ): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/blocks/${encodeURIComponent(blockId)}/clear`,
     'ERR_WORK_ITEM_BLOCK_CLEAR',
-    { operator_note: operatorNote, locators },
+    { operator_note: operatorNote, locators, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
@@ -794,11 +795,15 @@ export function reconcileWorkItemAcceptance(
   )
 }
 
-export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown> {
+export function resolveWorkItemAttention(
+  changeId: string,
+  expectedDispositionId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
-    { expected_disposition_id: expectedDispositionId },
+    { expected_disposition_id: expectedDispositionId, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
