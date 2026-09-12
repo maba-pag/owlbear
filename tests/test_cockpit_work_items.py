@@ -20,6 +20,7 @@ from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryAnswer,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointReconciliationResult,
     DeliveryRuntime,
@@ -292,12 +293,21 @@ class _DeliveryApplicationFake:
         self.calls.append(("answer", args))
         return {"request_id": args[1], "resolved": True}
 
+    def get_change(self, change_id: str) -> SimpleNamespace:
+        self.calls.append(("get-change", (change_id,)))
+        return SimpleNamespace(frontier_digest="a" * 64)
+
+    def answer(self, answer: DeliveryAnswer) -> dict[str, object]:
+        self.calls.append(("answer", (answer,)))
+        return {"request_id": answer.request_id, "resolved": True}
+
     def clear_block(self, *args: object) -> dict[str, object]:
         self.calls.append(("clear", args))
         return {"block_id": args[2], "resolved": True}
 
-    def recover_claim(self, *args: object) -> dict[str, object]:
+    def recover_claim(self, *args: object, confirmed_lost: bool = False) -> dict[str, object]:
         self.calls.append(("recover", args))
+        assert confirmed_lost
         return {"status": "recovered", "attempt_id": args[2], "claim_id": args[3]}
 
     def administrative_move(self, *args: object) -> dict[str, object]:
@@ -857,7 +867,17 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
         200,
     )
     assert rejected_recovery.status_code == 422
-    assert [name for name, _args in application.calls] == ["answer", "clear", "recover", "move-preview", "move"]
+    assert [name for name, _args in application.calls] == [
+        "get-change",
+        "answer",
+        "clear",
+        "recover",
+        "move-preview",
+        "move",
+    ]
+    answer_request = application.calls[1][1][0]
+    assert isinstance(answer_request, DeliveryAnswer)
+    assert answer_request.expected_frontier_digest == "a" * 64
     move_request = application.calls[-1][1][1]
     assert uuid.UUID(move_request.move_id).version == 4  # type: ignore[attr-defined]
     assert move_request.outcome_id == "OUT-001"  # type: ignore[attr-defined]

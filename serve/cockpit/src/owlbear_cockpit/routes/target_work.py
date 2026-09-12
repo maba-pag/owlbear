@@ -58,7 +58,8 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.diagnostics import DeliveryFailureCategory, classify_delivery_failure
 from owlbear_delivery.portfolio_application import (
-    PortfolioApplication,  # noqa: TC001 - FastAPI evaluates this annotation.
+    DeliveryAnswer,
+    PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.work_items import (
@@ -110,7 +111,14 @@ class TargetCockpitService:
     def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object:
         """Answer one exact pending Delivery request."""
         resolution = DeliveryRequestResolution(**body.model_dump())
-        return self._invoke(lambda: self._application.resolve_request(change_id, request_id, resolution))
+        view = self._invoke(lambda: self._application.get_change(change_id))
+        answer = DeliveryAnswer(
+            change_id=change_id,
+            request_id=request_id,
+            resolution=resolution,
+            expected_frontier_digest=view.frontier_digest,
+        )
+        return self._invoke(lambda: self._application.answer(answer))
 
     def clear_block(
         self,
