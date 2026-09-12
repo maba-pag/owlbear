@@ -190,7 +190,35 @@ class DeliveryAuthorityRegistry:
                 raise DeliveryAdmissionConflictError(message)
             current = self._read_current(request.change_id)
             self._validate_current(request, current)
+            self._validate_expected_frontier(request, current, compiled.contract)
             checkpoint_commit = self._publish_package_contract(request.change_id, compiled)
+            if current is not None and not current.is_partial and current.contract == compiled.contract:
+                if request.preserve_unresolved_outcome_ids:
+                    self._validate_state_preserving_replay(current, compiled.contract, request)
+                if request.expected_frontier_digest is not None:
+                    observed = hashlib.sha256(current.frontier_bytes or b"").hexdigest()
+                    if observed != request.expected_frontier_digest and not (
+                        request.preserve_unresolved_outcome_ids
+                        and self._state_preserving_frontier_matches(current, compiled.contract, request)
+                    ):
+                        raise DeliveryAdmissionConflictError(
+                            f"Delivery frontier changed before authority replay: {request.change_id}"
+                        )
+                return _delivery_result(
+                    compiled,
+                    current.frontier,
+                    current.receipt,
+                    RevisionCarryForward(
+                        preserved_outcome_ids=tuple(
+                            outcome.outcome_id for outcome in compiled.contract.outcomes
+                        ),
+                        invalidated_outcome_ids=(),
+                        carried_forward_outcome_ids=request.preserve_unresolved_outcome_ids,
+                    )
+                    if request.preserve_unresolved_outcome_ids
+                    else None,
+                    replayed=True,
+                )
             frontier, carry_forward = _delivery_frontier(
                 compiled.contract,
                 current,
@@ -224,6 +252,31 @@ class DeliveryAuthorityRegistry:
                 message = f"Delivery authority is already admitted differently: {request.change_id}"
                 raise DeliveryAdmissionConflictError(message) from exc
             return _delivery_result(compiled, frontier, receipt, carry_forward, replayed=resumed)
+
+    @staticmethod
+    def _validate_state_preserving_replay(
+        current: _CurrentDelivery,
+        contract: DeliveryContract,
+        request: DeliveryAdmissionRequest,
+    ) -> None:
+        if current.frontier is None:
+            raise DeliveryAdmissionConflictError("state-preserving admission requires a current frontier")
+        bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
+        outcomes = {outcome.outcome_id: outcome for outcome in contract.outcomes}
+        for outcome_id in request.preserve_unresolved_outcome_ids:
+            binding = bindings.get(outcome_id)
+            outcome = outcomes.get(outcome_id)
+            if binding is None or outcome is None or binding.block is None or binding.block.resolved:
+                raise DeliveryAdmissionConflictError(
+                    f"state-preserving admission replay lost unresolved Outcome evidence: {outcome_id}"
+                )
+            matching_requests = tuple(
+                item for item in binding.requests if item.request_id == binding.block.request_id
+            )
+            if len(matching_requests) != 1 or matching_requests[0].resolution is not None:
+                raise DeliveryAdmissionConflictError(
+                    f"state-preserving admission replay has unexpected request state: {outcome_id}"
+                )
 
     def _compile_package(self, change_id: str) -> _CompiledDelivery:
         package = self._package_store.read_verified(change_id)
@@ -264,14 +317,49 @@ class DeliveryAuthorityRegistry:
         ):
             message = f"Delivery authority names another integration target: {request.change_id}"
             raise DeliveryAdmissionConflictError(message)
-        if request.expected_frontier_digest is not None:
-            if current is None or current.is_partial or current.frontier_bytes is None:
-                message = f"expected frontier is unavailable for Delivery authority revision: {request.change_id}"
-                raise DeliveryAdmissionConflictError(message)
-            observed = hashlib.sha256(current.frontier_bytes).hexdigest()
-            if observed != request.expected_frontier_digest:
-                message = f"Delivery frontier changed before authority revision: {request.change_id}"
-                raise DeliveryAdmissionConflictError(message)
+
+    def _validate_expected_frontier(
+        self,
+        request: DeliveryAdmissionRequest,
+        current: _CurrentDelivery | None,
+        compiled_contract: DeliveryContract,
+    ) -> None:
+        if request.expected_frontier_digest is None:
+            return
+        if current is None or current.is_partial or current.frontier_bytes is None or current.contract is None:
+            raise DeliveryAdmissionConflictError(
+                f"expected frontier is unavailable for Delivery authority revision: {request.change_id}"
+            )
+        observed = hashlib.sha256(current.frontier_bytes).hexdigest()
+        if observed == request.expected_frontier_digest:
+            return
+        if (
+            request.preserve_unresolved_outcome_ids
+            and current.contract == compiled_contract
+            and self._state_preserving_frontier_matches(current, compiled_contract, request)
+        ):
+            return
+        raise DeliveryAdmissionConflictError(f"Delivery frontier changed before authority revision: {request.change_id}")
+
+    @staticmethod
+    def _state_preserving_frontier_matches(
+        current: _CurrentDelivery,
+        contract: DeliveryContract,
+        request: DeliveryAdmissionRequest,
+    ) -> bool:
+        if current.frontier is None:
+            return False
+        bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
+        outcomes = {outcome.outcome_id: outcome for outcome in contract.outcomes}
+        for outcome_id in request.preserve_unresolved_outcome_ids:
+            binding = bindings.get(outcome_id)
+            outcome = outcomes.get(outcome_id)
+            if binding is None or outcome is None or binding.block is None or binding.block.resolved:
+                return False
+            matching = tuple(item for item in binding.requests if item.request_id == binding.block.request_id)
+            if len(matching) != 1 or matching[0].resolution is not None:
+                return False
+        return True
 
     def _publish_package_contract(self, change_id: str, compiled: _CompiledDelivery) -> str:
         def validate_sources(intent_bytes: bytes, design_bytes: bytes, contract_bytes: bytes) -> None:
@@ -483,7 +571,7 @@ def _carry_forward_unresolved_binding(
         plan_scope_id=plan_scope_id,
         stage=DeliveryStage.PLANNING,
         block=revised_block,
-        requests=(*requests, fresh_request),
+        requests=(*previous.requests, fresh_request),
     )
 
 

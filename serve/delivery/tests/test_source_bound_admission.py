@@ -465,6 +465,16 @@ def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Pa
             provenance="user-confirmed",
         ),
     )
+    sibling_request = DeliveryRequest(
+        request_id="REQ-SIBLING",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Retain sibling evidence.",
+        resolution=DeliveryRequestResolution(
+            response_text="Sibling evidence was reviewed.",
+            provenance="user-confirmed",
+        ),
+    )
     blocked = first.frontier.bindings[0].model_copy(
         update={
             "stage": DeliveryStage.IMPLEMENTATION,
@@ -478,11 +488,15 @@ def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Pa
                 resolution_note="Revise the acceptance contract.",
                 resolution_locators=("REQ-001",),
             ),
-            "requests": (request,),
+            "requests": (request, sibling_request),
         }
     )
     frontier = first.frontier.model_copy(update={"bindings": (blocked, *first.frontier.bindings[1:])})
     frontier_bytes = _canonical(frontier)
+    frontier_digest = hashlib.sha256(frontier_bytes).hexdigest()
+    history_path = delivery_root / "revisions" / frontier_digest / "frontier.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_bytes(frontier_bytes)
     (delivery_root / "frontier.json").write_bytes(frontier_bytes)
 
     revised_intent, revised_design = _sources(first_statement="Change the first result behavior.")
@@ -503,8 +517,11 @@ def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Pa
     )
 
     revised = registry.admit(revised_request)
+    replayed = registry.admit(revised_request)
 
     carried = {binding.outcome_id: binding for binding in revised.frontier.bindings}["OUT-001"]
+    assert replayed.replayed is True
+    assert replayed.frontier == revised.frontier
     assert revised.carry_forward is not None
     assert revised.carry_forward.carried_forward_outcome_ids == ("OUT-001",)
     assert carried.stage is DeliveryStage.PLANNING
@@ -514,6 +531,7 @@ def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Pa
     assert "Jira" not in carried.block.unblock_condition
     assert carried.requests[0].resolution is not None
     assert carried.requests[0].resolution.provenance == "user-confirmed"
+    assert carried.requests[1].request_id == "REQ-SIBLING"
     fresh_request = carried.requests[-1]
     assert fresh_request.request_id == carried.block.request_id
     assert fresh_request.resolution is None
