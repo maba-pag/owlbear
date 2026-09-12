@@ -5,6 +5,7 @@
 > **Question:** Who uses which Delivery Python, HTTP, and MCP interfaces, when and why are they used, which surfaces are regular versus exceptional or compatibility-only, and where can the interface be reduced without weakening authority, custody, replay, or operator control?
 > **Status:** Current-state research. No Delivery state, package, claim, MCP operation, commit, or source file was mutated by this audit.
 > **Count update:** Application and MCP counts were refreshed at `eaef98036742b1d03ca7f7064c66411d0c5a50e9` after `recover_out_of_band_head` was added; the original analysis baseline remains recorded below.
+> **Post-baseline implementation delta:** The additive facade now measures **69 public `PortfolioApplication` methods**, **57 registered MCP operations**, **247 root exports**, **22 unique explicit agent-granted Delivery operation names**, and **29 Cockpit Delivery routes**. The new live operation names are `get_change`, `answer`, and `repair_change`; the detailed 54-operation inventory and ownership tables below remain the `eaef980` historical baseline until the facade contract is finalized.
 > **Implementation plan:** [Delivery Resilience Evolution Plan](delivery-resilience-evolution-plan.md) supersedes this audit's provisional implementation sequence and incorporates the later GPT-6 Astra and Claude Opus 5 challenges.
 
 ## 1. Executive Summary
@@ -44,6 +45,18 @@ Pursue interface reduction in this order:
 6. Revisit MCP count only after the ownership and re-export work shows a concrete duplicated contract, not because 54 is visually large.
 
 **Overall confidence:** High for current counts, registrations, caller classifications, and code-defined cadence. Medium for external-consumer absence and runtime frequency because static repository evidence cannot prove consumers outside this checkout or production call volume.
+
+### 1.2 Post-baseline implementation reading
+
+The current implementation adds a coherent `get_change` read projection, a version-bound `answer`
+path for retained request resolution, and a proposal-backed `repair_change` path. A constrained
+Repairer agent now owns only those high-level interactions, while Orchestrator may route an exact
+Change-specific repair proposal to it. This is an additive migration boundary, not evidence that
+the older low-level operations are ready for removal.
+
+The three new MCP operations are intentionally absent from the historical matrix below. Refresh
+the matrix only after request, block, disposition, and repair-proposal answer parity is complete;
+otherwise the document would imply a final surface while the facade is still being shaped.
 
 ## 2. Scope, Method, And Evidence Limits
 
@@ -253,7 +266,10 @@ These counts are repository-local and static. They do not prove that an external
 
 ## 6. Full MCP Operation Inventory
 
-The following table is the refreshed 54-operation contract. `Use class` is the usage grouping developed in this audit, not runtime telemetry.
+The following table is the historical refreshed 54-operation contract at `eaef980`. `Use class` is
+the usage grouping developed in this audit, not runtime telemetry. The post-baseline additive
+operations are `get_change`, `answer`, and `repair_change`; see section 1.2 for their current
+ownership and migration status.
 
 ### 6.1 Design and admission
 
@@ -447,7 +463,10 @@ sequenceDiagram
 
 ### 9.2 Declared grants and unowned operator-console tools
 
-Only **19 of 54** operation names occur in named agent `tools:` lists. The explicitly granted operations are:
+At the historical baseline, only **19 of 54** operation names occurred in named agent `tools:` lists.
+The current post-baseline census has **22 unique explicitly granted operation names** because
+`get_change` is granted to Orchestrator and Repairer, while `answer` and `repair_change` are granted
+to Repairer. The historical explicitly granted operations were:
 
 `acquire_frontier_work`, `admit_delivery_change`, `create_design_session`, `delivery_health`, `derive_delivery_contract`, `finalize_change`, `list_work_items`, `publish_delivery_plan`, `publish_delivery_result`, `publish_design_checkpoint`, `read_design_session`, `reconcile_finalization_head`, `recover_claim`, `recover_integration_repair_claim`, `revise_design_session`, `show_build_context`, `show_finalization_context`, `show_plan_context`, `transition_delivery`.
 

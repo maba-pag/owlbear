@@ -4,6 +4,7 @@
 > **Status:** Standalone implementation plan; not Delivery runtime authority
 > **Source evidence:** [Delivery Interface Usage Audit](delivery-interface-usage-audit-2026-09-11.md)
 > **Recommendation:** Targeted hardening first, then an additive intention facade over the proven core
+> **Implementation snapshot:** `get_change`, version-bound request `answer`, and proposal-backed `repair_change` are implemented additively through core and MCP. The live **Post-baseline** census is **69 public core methods**, **57 registered MCP operations**, **247 root exports**, and **29 Cockpit Delivery routes**. The constrained Repairer route is wired to Change-specific proposals; block/disposition answer parity and low-level retirement remain future gates.
 
 ## 1. Decision
 
