@@ -4653,6 +4653,10 @@ def test_background_checkpoint_failure_persists_error_and_waits_before_retry(tmp
     assert recorded.last_attempted_at == current[0]
     assert recorded.last_error_detail == "Provider unavailable while publishing the Change branch."
     assert application.reconcile_pending_checkpoints() == ()
+    manual = application.reconcile_change_checkpoint("change-a")
+    assert manual.reconciled is False
+    assert manual.error_code == PublicationProviderFailureCode.UNAVAILABLE
+    assert branch_publisher.publish.call_count == 1
 
     current[0] += timedelta(seconds=5)
     second = application.reconcile_pending_checkpoints()

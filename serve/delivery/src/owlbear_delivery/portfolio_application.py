@@ -3073,6 +3073,18 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            current = runtime.checkpoint_publication_state()
+            pending = current.pending_checkpoint
+            if pending is not None and not _checkpoint_retry_ready(pending, _timestamp(self._clock())):
+                return DeliveryCheckpointReconciliationResult(
+                    change_id=change_id,
+                    attempted_head=pending.head,
+                    state=current,
+                    reconciled=False,
+                    error_code=pending.last_error_code,
+                    error_detail=pending.last_error_detail
+                    or "Checkpoint retry is waiting for its next eligible time.",
+                )
             return self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
 
     def _reconcile_change_checkpoint_with_failure_recording(
@@ -3137,6 +3149,10 @@ class PortfolioApplication:
                 continue
             try:
                 with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                    current = runtime.checkpoint_publication_state()
+                    pending = current.pending_checkpoint
+                    if pending is None or not _checkpoint_retry_ready(pending, now):
+                        continue
                     results.append(self._reconcile_change_checkpoint(change_id, runtime))
             except BlockingIOError:
                 state = runtime.checkpoint_publication_state()
