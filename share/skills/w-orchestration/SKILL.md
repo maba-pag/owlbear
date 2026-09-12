@@ -63,16 +63,23 @@ choose which dirty files to keep, discard, adopt, or commit.
 
 ## Step 3 - Forward One Worker Transition
 
-Require the worker result to be one `DeliveryTransition` mapping. Validate only identity binding:
+Require the worker result to be one `DeliveryTransition` mapping or one `kind: submitted`
+`DeliveryResultSubmissionResult` mapping. Validate only identity binding:
 
 - `outcome_id` and `claim_id` equal the launch values;
 - any transition `attempt_id` equals `launch.claim.attempt_id`;
 - any nested output uses the launch claim ID.
 
+For `kind: submitted`, require `change_id`, `outcome_id`, `claim_id`, and `result_id` to be present,
+and require the returned binding to name the launch outcome. The Builder already called
+`submit_result`, so record the submission and do not call `transition_delivery` again.
+
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
-commit fields. Call `transition_delivery` with outer `change_id=launch.change_id` and the returned
-transition as `transition` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
-is forwarded normally and must not be recovered.
+commit fields. For a `DeliveryTransition`, call `transition_delivery` with outer
+`change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
+A worker-owned `block`, `retry`, or `return` is forwarded normally and must not be recovered. A
+malformed submission result or identity mismatch follows the existing dispatch-failure recovery
+route.
 
 Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool

@@ -5,7 +5,7 @@ argument-hint: "Build Delivery Launch: {serialized DeliveryLaunchPackage}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-5.6 Luna (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-delivery/show_build_context, owlbear-delivery/publish_delivery_result, owlbear-memory/assess_memories, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-delivery/show_build_context, owlbear-delivery/submit_result, owlbear-memory/assess_memories, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   SessionStart:
@@ -44,8 +44,8 @@ invoke only the operation owned by that entry route.
   review; Builder alone selects `advance | retry | return | block`.
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
-- **Publish only after pass.** Bind the reviewed commit to the exact task and authority through
-  `publish_delivery_result`; never publish reviewer findings or unreviewed work.
+- **Submit only after pass.** Bind the reviewed commit to the exact task and authority through
+  `submit_result`; never submit reviewer findings or unreviewed work.
 
 </critical_rules>
 
@@ -60,9 +60,10 @@ invoke only the operation owned by that entry route.
 <output_format>
 
 For an acquired Build launch, return exactly one result defined by `w-packet-building`: a
-schema-valid `DeliveryTransition` (`advance`, `retry`, `return`, or `block`) or a claim-bound
-`dispatch_failure` when fresh Build context or custody cannot be established. Preserve supplied
-identity and do not apply it.
+schema-valid `DeliveryResultSubmissionResult` with `kind: submitted`, a schema-valid
+`DeliveryTransition` (`retry`, `return`, or `block`), or a claim-bound `dispatch_failure` when fresh
+Build context or custody cannot be established. Preserve supplied identity and do not apply a
+worker transition yourself.
 
 </output_format>
 

@@ -244,9 +244,14 @@ required `unblock_condition` and `expected_evidence` fields. Every Build block i
 `request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
 `dispatch_failure`, not `block`.
 
-Return the selected `DeliveryTransition` or pre-execution `dispatch_failure` directly. Do not call
-`transition_delivery` or `recover_claim`; orchestration validates the launch identity and applies the
-matching route. Do not call job, receipt, request, or other lifecycle operations.
+On a passing Build result, call `submit_result` with the unchanged `change_id`, `outcome_id`,
+`claim_id`, and exact `DeliveryTaskResult`. Require the returned `kind: submitted` result to preserve
+those identities and the exact `result_id`; return that result directly. The operation publishes and
+promotes the result, so do not also construct or return an `advance` transition. On a finding or safe
+local failure, return the selected `DeliveryTransition` (`retry`, `return`, or `block`) unchanged.
+For either route, do not call `transition_delivery` or `recover_claim`; orchestration validates the
+launch identity and applies only worker transitions. Do not call job, receipt, request, or other
+lifecycle operations.
 
 ## Memory assessment policy
 
@@ -272,4 +277,4 @@ note for an ordinary successful task with no material process signal.
 - **History rewrite:** reviewed and rejected commits are immutable evidence.
 - **Pre-commit proof:** rerun required observations after commit so every receipt binds the candidate.
 - **Reviewer action:** findings name an owning boundary; Builder selects the transition.
-- **Premature publication:** only exact-commit advisory pass permits `publish_delivery_result`.
+- **Premature publication:** only exact-commit advisory pass permits `submit_result`.

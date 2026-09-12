@@ -83,7 +83,7 @@ _TARGET_ROLE_TOOLS = {
     "planner": {"show_plan_context", "publish_delivery_plan"},
     "builder": {
         "show_build_context",
-        "publish_delivery_result",
+        "submit_result",
     },
     "orchestrator": {
         "list_changes",

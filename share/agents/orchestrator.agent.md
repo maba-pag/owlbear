@@ -42,7 +42,8 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
   claim-bound dispatch failures to the matching exact recovery operation.
 - **Forward worker authority unchanged.** Pass each launch-bound transition to
-  `transition_delivery`; route claim-bound dispatch failures only to recovery.
+  `transition_delivery`; accept an already-applied `kind: submitted` Builder result without
+  forwarding it again; route claim-bound dispatch failures only to recovery.
 - **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
   use exact Integration claim recovery only when a legacy claim's identities are supplied.
 - **Route only admitted Change repair.** When `get_change` returns one exact engine-authored repair
