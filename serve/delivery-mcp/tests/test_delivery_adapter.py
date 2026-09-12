@@ -603,6 +603,7 @@ def _requests() -> dict[str, dict[str, object]]:
             "active_claim_ids": [],
         },
         "list_work_items": {},
+        "list_changes": {},
         "get_change": change,
         "answer": {
             **change,

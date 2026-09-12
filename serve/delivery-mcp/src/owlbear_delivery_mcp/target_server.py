@@ -173,6 +173,7 @@ DELIVERY_OPERATION_NAMES = (
     "derive_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "list_changes",
     "get_change",
     "answer",
     "set_change_intent",
@@ -230,6 +231,7 @@ _DELIVERY_READS = frozenset(
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "list_changes",
         "get_change",
         "delivery_health",
         "list_retained_change_worktrees",
@@ -369,6 +371,11 @@ class TargetMCPAdapter:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def list_changes(self, request: EmptyRequest) -> dict[str, object]:
+        """Return grouped Change state and operating guidance."""
+        params = self._validate(EmptyParams, request)
+        return self._call(params, self._application.list_changes)
 
     async def get_change(self, request: ChangeRequest) -> dict[str, object]:
         """Return one coherent Change detail, health, and repair projection."""
