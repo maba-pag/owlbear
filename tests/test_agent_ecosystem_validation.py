@@ -86,7 +86,7 @@ _TARGET_ROLE_TOOLS = {
         "publish_delivery_result",
     },
     "orchestrator": {
-        "list_work_items",
+        "list_changes",
         "acquire_frontier_work",
         "delivery_health",
         "get_change",

@@ -15,7 +15,7 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_changes acquire_frontier_work delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
 `recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
@@ -24,7 +24,7 @@ report the exact missing operation and end the session without acquisition. Tran
 are required dispatch safety authority, not optional operations to discover after a claim has been
 acquired.
 
-Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
+Call `list_changes` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
 typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
@@ -129,7 +129,7 @@ a Delivery safety diagnostic requires user/operator action. A housekeeping failu
 does not stop independent Delivery acquisition.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
-Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
+Before reporting portfolio quiescence after an empty acquisition, call `list_changes`. Quiescence
 requires that projection to be empty as well. If work items remain, report their identities and
 stages as bounded acquisition attention and stop; do not infer a launch or mutate their state.
 
