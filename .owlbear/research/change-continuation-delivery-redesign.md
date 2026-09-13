@@ -6,7 +6,7 @@
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is implemented at `3cc965eb6` (first-review corrections on top of `e67f99a68`) and awaits independent different-family review; it is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
+**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 is next; P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
@@ -64,6 +64,12 @@ Existing approved product meaning stands; ask only for a genuinely new product, 
 privacy or permission decision. A local coding defect is fixed locally, not returned through a graph.
 No blanket test exclusions or acceptance waivers are introduced by direct development.
 
+The user authorized sequential delegated D01-D08 implementation on 2026-09-13. Dispatch one writer
+at a time with the selected tier/model: Astra for critical contracts, Opus for bounded implementation,
+Luna for settled low-risk work. Complete each package's proof and independent review before the next.
+Do not silently substitute expensive lead-model implementation if model dispatch is unavailable.
+Stop before live activation and report readiness; no automatic live cutover is authorized.
+
 ### Live State Safety
 
 Delivery MCP and Cockpit launched from this checkout are stopped. The local Delivery entry in
@@ -86,7 +92,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | Package | Result | Prior scope | Tier / dependency |
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
-| D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | T2 lead; implemented at `3cc965eb6`, awaiting review |
+| D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
 | D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | T3 contracts, T2 wiring; after D01 |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
@@ -99,12 +105,14 @@ No product scope is removed by grouping packets. P20's required safe upgrade beh
 in D07/D08, but the deleted custom bootstrap is not the mandated implementation. Prefer existing
 Git/uv/process capabilities and one tested procedure unless evidence requires more.
 
-### Next: D01
+### D01 Closeout
 
-D01 is implemented pending review. Commits: `8e82d071e` (replay regression), `41e07003c`
+D01 is complete. Commits: `8e82d071e` (replay regression), `41e07003c`
 (E2E fixture), `e67f99a68` (readiness UI and tests), `a6213e1fd` (fixture cleanup containment) and
-`3cc965eb6` (first-review corrections). Independent different-family review of `3cc965eb6` has not
-happened; neither D01 nor WP1 may be declared complete before it.
+`3cc965eb6` (first-review corrections), followed by `dcee688c654` (coherent state fixtures and
+awaited inspector roundtrip). Independent read-only review passed cumulative candidate
+`dcee688c654b1627cd9f8bbca5c241d02733447f`. Implementation used the requested Opus route and review
+the requested Astra route; this records dispatch choices, not hidden serving-model attestation.
 
 Delivered: [workItems.ts](../../serve/cockpit/web/src/api/workItems.ts) now types the engine
 `DeliveryReadiness` DTO, the `unavailable_changes` list and the discriminated Work Item detail
@@ -141,16 +149,21 @@ suites (220 passed, plus 50 passed on the Cockpit/package boundary suites after 
 `npm test` (311 passed, 25 files); `npm run build`; `npm run test:e2e:work` (22 of 22 passed).
 Python and frontend lint pass on the changed files.
 
+### Next: D02
+
+Establish and implement the critical P06 single-Change continuation/custody contract with T3;
+then hand the settled adapter and P07 prompt/role/skill wiring to T2. Reuse existing action,
+finalization and typed result owners. Review the exact assembled candidate before D03.
+
 ```text
-Implement D01 directly on dev using section 0 of
+Continue D02-D08 sequentially on dev using section 0 of
 .owlbear/research/change-continuation-delivery-redesign.md.
-Do not create or acquire Delivery work. Keep the live Delivery MCP and Cockpit
-stopped; use disposable state. Preserve unrelated changes and the merged P01-P03
-implementation. Resolve the known checkpoint replay baseline without weakening
-backoff, finish the readiness UI from engine DTOs, and run the scoped assembled
-tests, frontend build and maintained work-portfolio E2E. Obtain independent
-different-family code review. Commit owned changes and update the plan with
-actual results. Stop before D02 and before live activation.
+Delegate bounded implementation with the selected models; use the expensive lead
+only for critical work. Do not create or acquire Delivery work. Keep live Delivery
+MCP and Cockpit stopped; use disposable state. Preserve unrelated changes and
+completed implementation. Complete each package's tests, independent review,
+scoped commits and plan update before proceeding. Pause for genuine blockers or
+new user decisions, not ordinary local defects. Stop before live activation.
 ```
 
 ## 1. Recommendation and Product Boundary
