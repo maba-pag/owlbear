@@ -34,13 +34,16 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    ChangeContinuationAction,
     ChangeCoordination,
+    ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeFinalizationAttempt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
+    ChangeTargetSyncStaleError,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
@@ -730,7 +733,7 @@ class DeliveryContinuationRequest(_ApplicationModel):
 
     change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     expected_basis: DeliveryReadinessBasis
-    capabilities: tuple[Literal["planner", "builder", "finalizer"], ...]
+    capabilities: tuple[Literal["planner", "builder", "finalizer", "engine"], ...]
     host_id: str = Field(min_length=1, max_length=128)
     session_id: str = Field(min_length=1, max_length=128)
 
@@ -759,6 +762,12 @@ DeliveryContinuationReason = (
         "readiness-changed",
         "source-unavailable",
         "repair-required",
+        "engine-action-completed",
+        "engine-action-incomplete",
+        "engine-action-failed",
+        "engine-action-interrupted",
+        "engine-owner-unavailable",
+        "merge-approval-required",
     ]
 )
 
@@ -775,10 +784,12 @@ class DeliveryContinuationResult(_ApplicationModel):
     failure: DeliveryAcquisitionFailure | None = None
     launch: DeliveryLaunchPackage | None = None
     finalization: DeliveryFinalizationLaunch | None = None
+    engine_action: ChangeContinuationAction | None = None
+    engine_result: DeliveryEngineActionResult | None = None
 
     @model_validator(mode="after")
     def _validate_launch(self) -> DeliveryContinuationResult:
-        launches = sum(item is not None for item in (self.launch, self.finalization))
+        launches = sum(item is not None for item in (self.launch, self.finalization, self.engine_action))
         if launches != (1 if self.kind == "acquired" else 0):
             message = "only acquired continuation results carry a launch"
             raise ValueError(message)
@@ -791,6 +802,25 @@ class DeliveryContinuationResult(_ApplicationModel):
         if self.failure is not None and (self.kind != "unavailable" or self.failure.change_id != self.change_id):
             message = "continuation failure requires an unavailable result for the selected Change"
             raise ValueError(message)
+        if self.engine_action is not None and (
+            self.engine_action.change_id != self.change_id or self.engine_action.finished_at is not None
+        ):
+            message = "engine action must belong to the selected Change"
+            raise ValueError(message)
+        if self.engine_result is not None and (
+            self.engine_result.action.change_id != self.change_id or self.kind == "acquired"
+        ):
+            message = "engine result must belong to a non-acquired selected Change response"
+            raise ValueError(message)
+        if self.engine_result is not None:
+            kinds = {"completed": "reconciled", "waiting": "human", "stale": "stale", "blocked": "unavailable"}
+            if (
+                self.kind != kinds[self.engine_result.kind]
+                or self.reason_code != self.engine_result.reason_code
+                or self.failure != self.engine_result.failure
+            ):
+                message = "continuation must preserve the exact engine disposition and failure"
+                raise ValueError(message)
         return self
 
 
@@ -946,6 +976,7 @@ class DeliveryChangeView(_ApplicationModel):
     kind: Literal["available"] = "available"
     readiness: DeliveryReadiness
     finalization_attempt: ChangeFinalizationAttempt | None = None
+    continuation_action: ChangeContinuationAction | None = None
 
 
 class DeliveryUnavailableChangeView(_ApplicationModel):
@@ -955,6 +986,7 @@ class DeliveryUnavailableChangeView(_ApplicationModel):
     change_id: str = Field(min_length=1)
     title: str | None = None
     diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
+    coordination_status: Literal["missing", "unreadable"] | None = None
     readiness: DeliveryReadiness
 
 
@@ -1562,6 +1594,149 @@ class DeliveryCheckpointReconciliationResult(_ApplicationModel):
     error_detail: str | None = Field(default=None, min_length=1)
 
 
+class ExecuteDeliveryChangeAction(_ApplicationModel):
+    """Invoke only the engine-owned operation already selected for this Change."""
+
+    change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    operation_id: str = Field(pattern=r"^continue-[0-9a-f]{64}$")
+
+
+class DeliveryEngineActionResult(_ApplicationModel):
+    """Exact retained owner result; blocked effects never release custody."""
+
+    action: ChangeContinuationAction
+    kind: Literal["completed", "waiting", "stale", "blocked"]
+    reason_code: Literal[
+        "engine-action-completed",
+        "engine-action-incomplete",
+        "engine-action-failed",
+        "engine-action-interrupted",
+        "readiness-changed",
+        "merge-approval-required",
+    ]
+    failure: DeliveryAcquisitionFailure | None = None
+    checkpoint: DeliveryCheckpointReconciliationResult | None = None
+    checkpoint_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
+    target_sync: ChangeTargetSyncReceipt | None = None
+    ready: PullRequestReadyReceipt | None = None
+    acceptance: CompletionReceipt | None = None
+
+    @model_validator(mode="after")
+    def _validate_owner_result(self) -> DeliveryEngineActionResult:
+        if self.action.finished_at is not None:
+            message = "engine result must bind the original acquired action"
+            raise ValueError(message)
+        kinds = {
+            "engine-action-completed": "completed",
+            "engine-action-incomplete": "blocked",
+            "engine-action-failed": "blocked",
+            "engine-action-interrupted": "blocked",
+            "readiness-changed": "stale",
+            "merge-approval-required": "waiting",
+        }
+        if self.kind != kinds[self.reason_code]:
+            message = "engine disposition must match its reason"
+            raise ValueError(message)
+        receipts = {
+            "reconcile-checkpoint": self.checkpoint,
+            "sync-target": self.target_sync,
+            "mark-ready": self.ready,
+            "observe-acceptance": self.acceptance,
+        }
+        if any(value is not None and key != self.action.kind for key, value in receipts.items()):
+            message = "engine result must match its fixed owner"
+            raise ValueError(message)
+        receipt = receipts[self.action.kind]
+        if self.kind == "completed" and (receipt is None or (self.checkpoint and not self.checkpoint.reconciled)):
+            message = "completed engine action requires a successful exact owner receipt"
+            raise ValueError(message)
+        if receipt is not None and receipt.change_id != self.action.change_id:
+            message = "engine receipt must match the selected Change"
+            raise ValueError(message)
+        if self.kind == "waiting" and self.action.kind != "observe-acceptance":
+            message = "only acceptance observation can wait for merge approval"
+            raise ValueError(message)
+        if self.kind in {"waiting", "stale"} and receipt is not None:
+            message = "unexecuted engine action cannot carry a successful receipt"
+            raise ValueError(message)
+        if self.reason_code == "engine-action-incomplete" and (self.checkpoint is None or self.checkpoint.reconciled):
+            message = "incomplete engine action requires its pending checkpoint evidence"
+            raise ValueError(message)
+        self._validate_failure()
+        self._validate_exact_receipts()
+        return self
+
+    def _validate_failure(self) -> None:
+        if self.failure is not None and (
+            self.kind != "blocked"
+            or self.failure.change_id != self.action.change_id
+            or self.failure.attempt_id != self.action.operation_id
+        ):
+            message = "engine failure must retain the blocked Change identity"
+            raise ValueError(message)
+        if self.reason_code in {"engine-action-failed", "engine-action-interrupted"} and self.failure is None:
+            message = "failed engine action requires its retained failure"
+            raise ValueError(message)
+
+    def _validate_exact_receipts(self) -> None:
+        self._validate_checkpoint_receipt()
+        if self.target_sync is not None and (
+            self.target_sync.operation_id != self.action.operation_id
+            or self.target_sync.expected_target != self.action.target_head
+            or self.target_sync.change_head_before != self.action.exact_head
+        ):
+            message = "target sync result differs from the exact action"
+            raise ValueError(message)
+        if self.ready is not None and (
+            self.ready.operation_id != self.action.operation_id
+            or self.ready.head_sha != self.action.exact_head
+            or self.ready.finalization_id != self.action.finalization_id
+        ):
+            message = "ready result differs from the exact action"
+            raise ValueError(message)
+        if self.acceptance is not None and (
+            self.acceptance.finalized_change_head != self.action.exact_head
+            or self.acceptance.finalization_receipt_id != self.action.finalization_id
+        ):
+            message = "acceptance result differs from the exact action"
+            raise ValueError(message)
+
+    def _validate_checkpoint_receipt(self) -> None:
+        head = self.action.exact_head
+        snapshot = self.checkpoint_snapshot
+        if snapshot is not None:
+            if self.checkpoint is None or snapshot.change_id != self.action.change_id or snapshot.previous_head != head:
+                message = "checkpoint snapshot differs from the exact action"
+                raise ValueError(message)
+            head = snapshot.snapshot_head
+        checkpoint = self.checkpoint
+        if checkpoint is None:
+            return
+        if checkpoint.attempted_head not in {None, head}:
+            message = "checkpoint result differs from the exact action"
+            raise ValueError(message)
+        if self.kind == "completed" and (
+            checkpoint.state.published_head != head
+            or checkpoint.state.change_id != self.action.change_id
+            or checkpoint.state.pending_checkpoint is not None
+            or checkpoint.branch_publication is None
+            or checkpoint.generated_summary is None
+            or checkpoint.branch_publication.published_head != head
+            or checkpoint.generated_summary.head_sha != head
+            or checkpoint.branch_publication.change_id != self.action.change_id
+            or checkpoint.generated_summary.change_id != self.action.change_id
+            or (
+                checkpoint.draft_pull_request is not None
+                and (
+                    checkpoint.draft_pull_request.head_sha != head
+                    or checkpoint.draft_pull_request.change_id != self.action.change_id
+                )
+            )
+        ):
+            message = "checkpoint result differs from the exact action or lacks observed publication receipts"
+            raise ValueError(message)
+
+
 class DeliveryAcceptanceReconciliationStatus(StrEnum):
     """Bounded outcome of one provider acceptance reconciliation attempt."""
 
@@ -1860,7 +2035,7 @@ class PortfolioApplication:
             expected_target=expected_target,
             operation_id=operation_id,
         )
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with self._engine_checkpoint_lock(change_id):
             self._require_target_sync_change_mutable(runtime)
             self._require_no_review_repair(runtime, "target synchronization")
             if runtime.change_disposition() is not None:
@@ -1876,6 +2051,8 @@ class PortfolioApplication:
                         operation_id,
                     ),
                 )
+            except ChangeTargetSyncStaleError:
+                raise
             except ChangeTargetSyncConflictError as exc:
                 history = runtime.publication_history()
                 runtime.capture_target_sync_conflict(
@@ -2817,7 +2994,7 @@ class PortfolioApplication:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with self._engine_checkpoint_lock(change_id):
             if runtime.change_disposition() is not None:
                 message = "pull-request readiness requires current Change attention resolution"
                 raise PortfolioApplicationError(message)
@@ -3462,7 +3639,7 @@ class PortfolioApplication:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with self._engine_checkpoint_lock(change_id):
             existing = runtime.completion_receipt()
             if existing is not None:
                 self._publish_delivery_state(change_id, runtime, f"acceptance-{existing.completion_id}")
@@ -3702,7 +3879,7 @@ class PortfolioApplication:
             message = "checkpoint publication is not configured"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id, for_mutation=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        with self._engine_checkpoint_lock(change_id):
             current = runtime.checkpoint_publication_state()
             pending = current.pending_checkpoint
             if pending is not None and not _checkpoint_retry_ready(pending, _timestamp(self._clock())):
@@ -5350,11 +5527,35 @@ class PortfolioApplication:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
         except (OSError, RuntimeError, ValueError):
             return basis, "coordination-unavailable"
+        action = coordination.continuation_action
+        basis = basis.model_copy(update={"continuation_id": action.operation_id if action else None})
+        if action is not None and action.finished_at is None:
+            result_path = self._coordinator.continuation_record_path(action.change_id, action.operation_id, result=True)
+            return basis, "engine-action-blocked" if result_path.exists() else "engine-action-pending"
         needs_workspace = self._supports_finalization(snapshot.frontier) or any(
-            card.action.kind is WorkItemActionKind.FINALIZE for card in cards
+            card.action.kind
+            in {
+                WorkItemActionKind.FINALIZE,
+                WorkItemActionKind.RECONCILE_CHECKPOINT,
+                WorkItemActionKind.MARK_READY,
+                WorkItemActionKind.OBSERVE_ACCEPTANCE,
+            }
+            for card in cards
         )
         if needs_workspace and not self._snapshot_has_active_claims(snapshot):
-            return self._capture_readiness_workspace(snapshot, basis)
+            basis, reason = self._capture_readiness_workspace(snapshot, basis)
+            sync = snapshot.frontier.target_sync_receipt
+            pending = snapshot.frontier.pending_checkpoint
+            if (
+                reason is None
+                and self._supports_finalization(snapshot.frontier)
+                and self._change_branch_publisher is not None
+            ):
+                if pending is not None and pending.head is not None and snapshot.frontier.published_head is None:
+                    reason = "checkpoint-pending"
+                elif sync is None or sync.target_head != basis.target_head:
+                    reason = "target-sync-required"
+            return basis, reason
         if any(
             self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
             for card in cards
@@ -5412,7 +5613,12 @@ class PortfolioApplication:
     ) -> tuple[DeliveryReadinessBasis, str | None]:
         try:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
-            basis = basis.model_copy(update={"reviewed_head": coordination.last_reviewed_commit})
+            basis = basis.model_copy(
+                update={
+                    "reviewed_head": coordination.last_reviewed_commit,
+                    "target_head": self._workspace_manager.observed_target_head(),
+                }
+            )
             if (coordination.writer is not None and coordination.writer.kind != "finalize") or (
                 coordination.publication_lease is not None
             ):
@@ -5474,7 +5680,13 @@ class PortfolioApplication:
 
     @staticmethod
     def _action_prerequisites(operation: WorkItemActionKind | None, workspace_reason: str | None) -> tuple[str, str]:
-        if operation is WorkItemActionKind.FINALIZE and workspace_reason:
+        if operation in {
+            WorkItemActionKind.FINALIZE,
+            WorkItemActionKind.RECONCILE_CHECKPOINT,
+            WorkItemActionKind.SYNC_TARGET,
+            WorkItemActionKind.MARK_READY,
+            WorkItemActionKind.OBSERVE_ACCEPTANCE,
+        } and workspace_reason not in {None, "target-sync-required", "checkpoint-pending"}:
             return ("unavailable" if workspace_reason == "workspace-inspection-failed" else "blocked"), workspace_reason
         if operation is None:
             return "waiting", "publication-wait"
@@ -5491,9 +5703,19 @@ class PortfolioApplication:
         frontier = snapshot.frontier
         finalization = card.scope is WorkItemScope.CHANGE_PUBLICATION and cls._supports_finalization(frontier)
         action = cls._captured_action(frontier, card)
+        prerequisites = {
+            "target-sync-required": WorkItemAction(kind=WorkItemActionKind.SYNC_TARGET, label="Synchronize target"),
+            "checkpoint-pending": WorkItemAction(
+                kind=WorkItemActionKind.RECONCILE_CHECKPOINT, label="Publish checkpoint"
+            ),
+        }
+        action = prerequisites.get(workspace_reason, action) if finalization else action
         operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
         status, reason = "ready", "ready"
-        if workspace_reason == "coordination-unavailable":
+        if workspace_reason in {"engine-action-pending", "engine-action-blocked"}:
+            status = "running" if workspace_reason == "engine-action-pending" else "blocked"
+            reason = workspace_reason
+        elif workspace_reason == "coordination-unavailable":
             status, reason = "unavailable", workspace_reason
         elif workspace_reason == "claim-custody-unreconciled":
             status, reason = "blocked", workspace_reason
@@ -5789,7 +6011,9 @@ class PortfolioApplication:
         except (OSError, RuntimeError, ValueError) as exc:
             raise DeliveryRuntimeReconciliationError(None, f"execution custody is unknown: {exc}") from exc
         for coordination in registered:
-            if coordination.writer is not None:
+            if coordination.writer is not None or (
+                coordination.continuation_action is not None and coordination.continuation_action.finished_at is None
+            ):
                 occupancy[coordination.change_id] = max(occupancy.get(coordination.change_id, 0), 1)
         return sum(occupancy.values())
 
@@ -5802,13 +6026,19 @@ class PortfolioApplication:
             raise DeliveryRuntimeReconciliationError(change_id, "execution occupancy is unreadable") from exc
         return sum(binding.active_claim is not None for binding in frontier.bindings)
 
-    def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
+    def _delivery_snapshot(
+        self, runtime: DeliveryRuntime, *, observe_publication: bool = True
+    ) -> DeliveryPortfolioSnapshot:
         frontier_bytes = runtime.frontier_bytes()
         frontier = parse_delivery_frontier(frontier_bytes)[0]
+        cached = self._publication_observation_cache.get(runtime.contract.change_id)
+        observation = cached[2] if cached is not None and cached[1] == frontier.published_head else None
+        if observe_publication:
+            observation = self._publication_observation(runtime.contract.change_id, frontier)
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
             frontier_bytes,
-            publication_observation=self._publication_observation(runtime.contract.change_id, frontier),
+            publication_observation=observation,
         )
 
     def _publication_observation(
@@ -6044,6 +6274,23 @@ class PortfolioApplication:
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
+            try:
+                self._execution_occupancy()
+            except DeliveryRuntimeReconciliationError as exc:
+                return DeliveryAcquisitionResult(
+                    launch_packages=(),
+                    failures=(
+                        DeliveryAcquisitionFailure(
+                            change_id=exc.change_id or "portfolio",
+                            outcome_id="OUT-000",
+                            code=exc.code,
+                            detail=str(exc),
+                            retry_condition=(
+                                "Restore readable custody before batch acquisition; preserve unknown writers."
+                            ),
+                        ),
+                    ),
+                )
             self._coordinator.recover_pending_transactions()
             self._reconcile_runtimes()
             pre_claim_snapshots = self._capture_portfolio_snapshots()
@@ -6103,16 +6350,18 @@ class PortfolioApplication:
                 self._coordinator.acquisition_lock(),
                 self._selected_action_checkpoint_lock(request.change_id),
             ):
-                return self._acquire_change_action_locked(request)
+                return self._acquire_change_action_locked(request, view.readiness)
         except DeliveryRuntimeReconciliationError as exc:
+            action = view.continuation_action if exc.change_id == request.change_id else None
+            reason = "engine-action-blocked" if action is not None else "execution-occupancy-unavailable"
             return DeliveryContinuationResult(
                 change_id=request.change_id,
                 kind="unavailable",
-                reason_code="execution-occupancy-unavailable",
+                reason_code=reason,
                 readiness=view.readiness.model_copy(
                     update={
                         "status": "unavailable",
-                        "reason_code": "coordination-unavailable",
+                        "reason_code": reason,
                         "executable": False,
                         "action": None,
                     }
@@ -6120,10 +6369,13 @@ class PortfolioApplication:
                 failure=DeliveryAcquisitionFailure(
                     change_id=request.change_id,
                     outcome_id="OUT-000",
+                    attempt_id=action.operation_id if action is not None else None,
                     code=exc.code,
                     detail=str(exc),
                     retry_condition=(
-                        "Restore readable custody through maintenance diagnosis; do not release unknown writers."
+                        "Preserve original action journals for D03 reconciliation; do not reconstruct or retry effects."
+                        if action is not None
+                        else "Restore readable custody through maintenance diagnosis; do not release unknown writers."
                     ),
                 ),
             )
@@ -6135,9 +6387,15 @@ class PortfolioApplication:
                 readiness=self.get_change(request.change_id).readiness,
             )
 
-    def _acquire_change_action_locked(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
+    def _acquire_change_action_locked(
+        self, request: DeliveryContinuationRequest, observed: DeliveryReadiness
+    ) -> DeliveryContinuationResult:
+        self._coordinator.recover_pending_transactions()
+        replay = self._replay_continuation_action(request, observed)
+        if replay is not None:
+            return replay
         runtime = self._runtime(request.change_id, for_mutation=True, allow_finalizer=True)
-        snapshot = self._delivery_snapshot(runtime)
+        snapshot = self._delivery_snapshot(runtime, observe_publication=False)
         cards = self._read_projector(snapshot).group_view().items
         card = self._selected_change_card(snapshot, cards)
         readiness = card.readiness
@@ -6147,6 +6405,18 @@ class PortfolioApplication:
         stop = self._continuation_stop(request, runtime, readiness, repair=self._repair_proposal(snapshot))
         if stop is not None:
             return stop
+        if readiness.executable and readiness.operation in {
+            WorkItemActionKind.RECONCILE_CHECKPOINT,
+            WorkItemActionKind.SYNC_TARGET,
+            WorkItemActionKind.MARK_READY,
+            WorkItemActionKind.OBSERVE_ACCEPTANCE,
+        }:
+            return self._acquire_engine_action(request, runtime, readiness)
+        return self._acquire_continuation_worker(request, cards, readiness)
+
+    def _acquire_continuation_worker(
+        self, request: DeliveryContinuationRequest, cards: tuple[WorkItemCardView, ...], readiness: DeliveryReadiness
+    ) -> DeliveryContinuationResult:
         candidate = self._continuation_candidate(request.change_id, cards)
         finalizer = readiness.executable and readiness.operation is WorkItemActionKind.FINALIZE
         role = "finalizer" if finalizer else candidate.role.value if candidate else None
@@ -6176,6 +6446,253 @@ class PortfolioApplication:
             return None
         selected = next(item for item in cards if item.work_item_id == candidate.binding.outcome_id)
         return candidate if selected.readiness is not None and selected.readiness.executable else None
+
+    @staticmethod
+    def _continuation_operation_id(request: DeliveryContinuationRequest) -> str:
+        payload = json.dumps(
+            {"change_id": request.change_id, "basis": request.expected_basis.model_dump(mode="json")},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return f"continue-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+    def _replay_continuation_action(
+        self, request: DeliveryContinuationRequest, readiness: DeliveryReadiness
+    ) -> DeliveryContinuationResult | None:
+        operation_id = self._continuation_operation_id(request)
+        path = self._coordinator.continuation_record_path(request.change_id, operation_id)
+        execution = ExecuteDeliveryChangeAction(change_id=request.change_id, operation_id=operation_id)
+        action = self._read_engine_intent(execution) if path.exists() else None
+        retained = self._coordinator.show(request.change_id).continuation_action
+        if retained is not None:
+            retained_request = ExecuteDeliveryChangeAction(
+                change_id=request.change_id, operation_id=retained.operation_id
+            )
+            original = self._read_engine_intent(retained_request)
+            if original != retained.model_copy(update={"finished_at": None}):
+                raise DeliveryRuntimeReconciliationError(request.change_id, "retained continuation intent differs")
+            if retained.finished_at is not None:
+                result = self._read_engine_result(retained_request)
+                if result is None or result.kind == "blocked":
+                    raise DeliveryRuntimeReconciliationError(
+                        request.change_id, "finished continuation result is missing or blocked"
+                    )
+        if action is None and retained is not None and retained.finished_at is None:
+            action = original
+        if action is None:
+            return None
+        result = self._read_engine_result(
+            ExecuteDeliveryChangeAction(change_id=request.change_id, operation_id=action.operation_id)
+        )
+        if result is not None:
+            kinds = {"completed": "reconciled", "waiting": "human", "stale": "stale", "blocked": "unavailable"}
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind=kinds[result.kind],
+                reason_code=result.reason_code,
+                readiness=readiness,
+                engine_result=result,
+                failure=result.failure,
+            )
+        if retained != action:
+            raise DeliveryRuntimeReconciliationError(request.change_id, "original continuation result is missing")
+        return DeliveryContinuationResult(
+            change_id=request.change_id,
+            kind="acquired" if "engine" in request.capabilities else "waiting",
+            reason_code="engine-action-pending" if "engine" in request.capabilities else "host-capability-unavailable",
+            readiness=readiness,
+            engine_action=action if "engine" in request.capabilities else None,
+        )
+
+    def _acquire_engine_action(
+        self, request: DeliveryContinuationRequest, runtime: DeliveryRuntime, readiness: DeliveryReadiness
+    ) -> DeliveryContinuationResult:
+        reason = None
+        pending = runtime.checkpoint_publication_state().pending_checkpoint
+        if "engine" not in request.capabilities:
+            reason = "host-capability-unavailable"
+        elif self._draft_pull_request_publisher is None or (
+            readiness.operation in {WorkItemActionKind.RECONCILE_CHECKPOINT, WorkItemActionKind.SYNC_TARGET}
+            and self._change_branch_publisher is None
+        ):
+            reason = "engine-owner-unavailable"
+        elif (
+            readiness.operation is WorkItemActionKind.RECONCILE_CHECKPOINT
+            and pending is not None
+            and (pending.head is None or not _checkpoint_retry_ready(pending, _timestamp(self._clock())))
+        ):
+            reason = "checkpoint-pending"
+        elif self._execution_occupancy() >= self._execution_capacity:
+            reason = "execution-capacity"
+        if reason is not None:
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind="waiting", reason_code=reason, readiness=readiness
+            )
+        finalization = runtime.finalization()
+        action = ChangeContinuationAction(
+            operation_id=self._continuation_operation_id(request),
+            change_id=request.change_id,
+            kind=readiness.operation.value,
+            contract_digest=readiness.basis.contract_digest,
+            frontier_digest=readiness.basis.frontier_digest,
+            exact_head=readiness.basis.candidate_head,
+            target_head=readiness.basis.target_head,
+            finalization_id=finalization.finalization_id if finalization else None,
+            host_id=request.host_id,
+            session_id=request.session_id,
+            acquired_at=self._clock(),
+        )
+        self._coordinator.acquire_continuation_action(action)
+        return DeliveryContinuationResult(
+            change_id=request.change_id, kind="acquired", reason_code="ready", readiness=readiness, engine_action=action
+        )
+
+    def _read_engine_intent(self, request: ExecuteDeliveryChangeAction) -> ChangeContinuationAction:
+        path = self._coordinator.continuation_record_path(request.change_id, request.operation_id)
+        try:
+            action = ChangeContinuationAction.model_validate_json(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(
+                request.change_id, "original continuation intent is unavailable"
+            ) from exc
+        if (
+            action.change_id != request.change_id
+            or action.operation_id != request.operation_id
+            or action.finished_at is not None
+        ):
+            raise DeliveryRuntimeReconciliationError(request.change_id, "original continuation intent identity differs")
+        return action
+
+    def _read_engine_result(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult | None:
+        path = self._coordinator.continuation_record_path(request.change_id, request.operation_id, result=True)
+        if not path.exists():
+            return None
+        try:
+            result = DeliveryEngineActionResult.model_validate_json(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result is unreadable") from exc
+        if result.action.operation_id != request.operation_id or result.action.change_id != request.change_id:
+            raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result identity differs")
+        if self._read_engine_intent(request) != result.action:
+            raise DeliveryRuntimeReconciliationError(request.change_id, "continuation result lacks its original intent")
+        return result
+
+    def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
+        """Execute the fixed retained owner once, or return its exact durable result."""
+        with self._selected_action_checkpoint_lock(request.change_id):
+            self._coordinator.recover_pending_transactions()
+            existing = self._read_engine_result(request)
+            if existing is not None:
+                return existing
+            action = self._read_engine_intent(request)
+            with self._coordinator.continuation_execution(action):
+                result = self._execute_engine_action(action)
+                self._coordinator.finish_continuation_action(
+                    action, (result.model_dump_json() + "\n").encode(), self._clock(), release=result.kind != "blocked"
+                )
+                return result
+
+    def _execute_engine_action(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
+        try:
+            runtime = self._runtime(action.change_id, for_mutation=True)
+            if not self._coordinator.start_continuation_action(action):
+                return self._engine_action_failure(
+                    action, "engine-action-interrupted", "Original owner result is unknown."
+                )
+            return self._engine_action_preflight(action, runtime) or self._invoke_engine_owner(action)
+        except ChangeTargetSyncStaleError:
+            return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+        except DeliveryAcceptanceWaitingError:
+            return DeliveryEngineActionResult(action=action, kind="waiting", reason_code="merge-approval-required")
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            return self._engine_action_failure(action, "engine-action-failed", str(exc), getattr(exc, "code", None))
+
+    def _engine_action_preflight(
+        self, action: ChangeContinuationAction, runtime: DeliveryRuntime
+    ) -> DeliveryEngineActionResult | None:
+        if (
+            contract_fingerprint(runtime.contract) != action.contract_digest
+            or hashlib.sha256(runtime.frontier_bytes()).hexdigest() != action.frontier_digest
+            or self._workspace_manager.observed_change_head(action.change_id) != action.exact_head
+            or self._workspace_manager.observed_target_head() != action.target_head
+        ):
+            return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+        if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+            return self._engine_action_failure(action, "engine-action-failed", "An existing claim retains custody.")
+        _coordination, _head, _fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
+            action.change_id,
+            tuple(
+                result.completed_commit
+                for binding in parse_delivery_frontier(runtime.frontier_bytes())[0].bindings
+                for result in binding.results
+            ),
+        )
+        return self._engine_action_failure(action, "engine-action-failed", reason) if reason is not None else None
+
+    @staticmethod
+    def _engine_action_failure(
+        action: ChangeContinuationAction, reason: str, detail: str, code: str | None = None
+    ) -> DeliveryEngineActionResult:
+        return DeliveryEngineActionResult(
+            action=action,
+            kind="blocked",
+            reason_code=reason,
+            failure=DeliveryAcquisitionFailure(
+                change_id=action.change_id,
+                outcome_id="OUT-000",
+                attempt_id=action.operation_id,
+                code=code or "ERR_DELIVERY_ENGINE_ACTION_BLOCKED",
+                detail=_checkpoint_error_detail(detail, "Engine operation did not complete."),
+                retry_condition=(
+                    "Preserve exact operation custody and owner journals. D03 repair/reconciliation is required; "
+                    "do not release custody, infer worker termination, or start a replacement operation."
+                ),
+            ),
+        )
+
+    def _invoke_engine_owner(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
+        values = {}
+        if action.kind == "reconcile-checkpoint":
+            checkpoint = self.reconcile_change_checkpoint(action.change_id)
+            snapshot = self._coordinator.show(action.change_id).design_package_snapshot
+            if snapshot is not None and snapshot.previous_head == action.exact_head:
+                values["checkpoint_snapshot"] = snapshot
+            if not checkpoint.reconciled:
+                return DeliveryEngineActionResult(
+                    action=action,
+                    kind="blocked",
+                    reason_code="engine-action-incomplete",
+                    checkpoint=checkpoint,
+                    **values,
+                )
+            values["checkpoint"] = checkpoint
+        elif action.kind == "sync-target":
+            values["target_sync"] = self.sync_change_with_target(
+                action.change_id, action.target_head, action.operation_id
+            )
+        elif action.kind == "mark-ready":
+            values["ready"] = self.mark_change_ready(
+                action.change_id,
+                MarkChangePullRequestReady(
+                    change_id=action.change_id,
+                    operation_id=action.operation_id,
+                    finalization_id=action.finalization_id,
+                    exact_head=action.exact_head,
+                ),
+            )
+        else:
+            values["acceptance"] = self.observe_acceptance(action.change_id)
+        return DeliveryEngineActionResult(
+            action=action, kind="completed", reason_code="engine-action-completed", **values
+        )
+
+    @contextmanager
+    def _engine_checkpoint_lock(self, change_id: str) -> Iterator[None]:
+        if self._coordinator.executing_continuation(change_id):
+            yield
+        else:
+            with locked_roots((self._checkpoint_lock_root(change_id),)):
+                yield
 
     def _continuation_stop(
         self,
@@ -6694,10 +7211,18 @@ class PortfolioApplication:
         contract = (
             observation.contract if observation is not None else runtime.contract if runtime is not None else None
         )
+        coordination_status = None
+        if reason == "coordination-unavailable":
+            try:
+                if self._coordinator.find_registered(change_id) is None:
+                    coordination_status = "missing"
+            except (OSError, RuntimeError, ValueError):
+                coordination_status = "unreadable"
         return DeliveryUnavailableChangeView(
             change_id=change_id,
             title=contract.title if contract is not None else None,
             diagnostics=(reason,),
+            coordination_status=coordination_status,
             readiness=DeliveryReadiness(
                 status="unavailable",
                 next_actor=WorkItemNextActor.NONE,
@@ -6750,6 +7275,7 @@ class PortfolioApplication:
         return DeliveryChangeView(
             change_id=change_id,
             finalization_attempt=coordination.finalization_attempt,
+            continuation_action=coordination.continuation_action,
             frontier_digest=frontier_digest,
             detail=detail,
             health=health,
@@ -7602,6 +8128,7 @@ class PortfolioApplication:
                 raise DeliveryRuntimeReconciliationError(change_id, detail)
             try:
                 writer = self._workspace_manager.show(change_id).writer
+                self._coordinator.require_continuation_access(change_id)
             except (OSError, RuntimeError, ValueError) as exc:
                 raise DeliveryRuntimeReconciliationError(change_id, str(exc)) from exc
             if not allow_finalizer and writer is not None and writer.kind == "finalize":

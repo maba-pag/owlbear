@@ -9,6 +9,7 @@ import re
 import subprocess
 import tempfile
 from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -92,6 +93,30 @@ class ChangeFinalizationAttempt(_WorkspaceModel):
     def _validate_writer(self) -> Self:
         if self.writer.kind != "finalize":
             message = "finalization attempts require finalizer custody"
+            raise ValueError(message)
+        return self
+
+
+class ChangeContinuationAction(_WorkspaceModel):
+    """Exact engine operation retained independently of a host response."""
+
+    operation_id: str = Field(pattern=r"^continue-[0-9a-f]{64}$")
+    change_id: ChangeId
+    kind: Literal["reconcile-checkpoint", "sync-target", "mark-ready", "observe-acceptance"]
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    host_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=128)
+    acquired_at: str = Field(min_length=1)
+    finished_at: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_finalization(self) -> Self:
+        if self.kind in {"mark-ready", "observe-acceptance"} and self.finalization_id is None:
+            message = "provider continuation requires exact finalization identity"
             raise ValueError(message)
         return self
 
@@ -749,6 +774,7 @@ class ChangeCoordination(_WorkspaceModel):
     design_package_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
     writer: ChangeWriter | None = None
     finalization_attempt: ChangeFinalizationAttempt | None = None
+    continuation_action: ChangeContinuationAction | None = None
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
     target_sync_conflict: ChangeTargetSyncConflictState | None = None
@@ -806,6 +832,12 @@ class ChangeCoordination(_WorkspaceModel):
 
     @model_validator(mode="after")
     def _validate_finalization_custody(self) -> Self:
+        action = self.continuation_action
+        if action is not None and (
+            action.change_id != self.change_id or (action.finished_at is None and self.writer is not None)
+        ):
+            message = "continuation action requires its exact exclusive Change custody"
+            raise ValueError(message)
         attempt = self.finalization_attempt
         if attempt is not None and attempt.finished_at is None:
             if self.writer != attempt.writer or self.publication_lease is not None:
@@ -1075,12 +1107,17 @@ class CoordinationConflictError(RuntimeError):
     code = "ERR_TARGET_COORDINATION_CONFLICT"
 
 
+class ChangeTargetSyncStaleError(CoordinationConflictError):
+    """The target fetch changed its expected head before any Change mutation."""
+
+
 class PortfolioCoordinator:
     """Atomically coordinate independent per-change writers."""
 
     def __init__(self, state_root: Path) -> None:
         self._state_root = state_root
         self._coordination_root = state_root / "coordination" / "changes"
+        self._continuation_owner: ContextVar[str | None] = ContextVar("continuation_owner", default=None)
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
 
@@ -1109,6 +1146,7 @@ class PortfolioCoordinator:
                 child_locks.enter_context(locked_roots((lock_root,), blocking=blocking))
             lock = PublicationLock(self, change_id)
             try:
+                self.require_continuation_access(change_id)
                 yield lock
             finally:
                 lock.close()
@@ -1131,6 +1169,112 @@ class PortfolioCoordinator:
     def show(self, change_id: str) -> ChangeCoordination:
         """Return one current per-change coordination record."""
         return self._read_coordination(change_id)[0]
+
+    def require_continuation_access(self, change_id: str) -> None:
+        """Refuse mutations outside the fixed executor while an action retains custody."""
+        self._require_continuation_coordination(self.show(change_id))
+
+    def _require_continuation_coordination(self, coordination: ChangeCoordination) -> None:
+        action = coordination.continuation_action
+        if action is not None and action.finished_at is None and self._continuation_owner.get() != action.operation_id:
+            _coordination_conflict(f"Change retains continuation action custody: {action.operation_id}")
+
+    def executing_continuation(self, change_id: str) -> bool:
+        """Report whether this call context owns the retained fixed operation."""
+        action = self.show(change_id).continuation_action
+        return (
+            action is not None and action.finished_at is None and self._continuation_owner.get() == action.operation_id
+        )
+
+    @contextmanager
+    def continuation_execution(self, action: ChangeContinuationAction) -> Iterator[None]:
+        """Authorize only this call context to run one retained deterministic owner."""
+        if self.show(action.change_id).continuation_action != action or action.finished_at is not None:
+            _coordination_conflict("continuation execution does not match retained custody")
+        token = self._continuation_owner.set(action.operation_id)
+        try:
+            yield
+        finally:
+            self._continuation_owner.reset(token)
+
+    def continuation_record_path(self, change_id: str, operation_id: str, *, result: bool = False) -> Path:
+        """Locate an immutable action intent or exact result in existing Change state."""
+        self._coordination_path(change_id)
+        if re.fullmatch(r"continue-[0-9a-f]{64}", operation_id) is None:
+            _coordination_conflict("invalid continuation operation identity")
+        return (
+            self._state_root
+            / "changes"
+            / change_id
+            / "action-receipts"
+            / operation_id
+            / ("result.json" if result else "intent.json")
+        )
+
+    def acquire_continuation_action(self, action: ChangeContinuationAction) -> None:
+        """CAS-bind exact frontier custody and immutable intent in one transaction."""
+        with self.publication_lock(action.change_id):
+            coordination, previous = self._read_coordination(action.change_id)
+            self.require_continuation_access(action.change_id)
+            if coordination.writer is not None or coordination.publication_lease is not None:
+                _coordination_conflict("continuation cannot overlap active ownership")
+            if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
+                _coordination_conflict("continuation cannot overlap worktree cleanup")
+            frontier_path = self._state_root / "changes" / action.change_id / "frontier.json"
+            frontier = frontier_path.read_bytes()
+            if hashlib.sha256(frontier).hexdigest() != action.frontier_digest:
+                _coordination_conflict("continuation frontier changed before acquisition")
+            retained = coordination.model_copy(update={"continuation_action": action})
+            intent_path = self.continuation_record_path(action.change_id, action.operation_id)
+            self._commit(
+                action.operation_id,
+                (
+                    _replacement(self._state_root, self._coordination_path(action.change_id), previous, retained),
+                    ReplacementTransactionParticipant(
+                        self._state_root, frontier_path.relative_to(self._state_root), frontier, frontier
+                    ),
+                    TransactionParticipant(
+                        self._state_root, intent_path.relative_to(self._state_root), _model_content(action)
+                    ),
+                ),
+            )
+
+    def start_continuation_action(self, action: ChangeContinuationAction) -> bool:
+        """Record effect entry; an interrupted call is not permission for another effect."""
+        self.require_continuation_access(action.change_id)
+        path = self.continuation_record_path(action.change_id, action.operation_id).with_name("started.json")
+        if path.exists():
+            if path.read_bytes() != _model_content(action):
+                _coordination_conflict("continuation start identity differs from retained custody")
+            return False
+        self._commit(
+            f"start-{action.operation_id}",
+            (TransactionParticipant(self._state_root, path.relative_to(self._state_root), _model_content(action)),),
+        )
+        return True
+
+    def finish_continuation_action(
+        self, action: ChangeContinuationAction, result: bytes, finished_at: str, *, release: bool
+    ) -> None:
+        """Persist exact result with custody release, or retain custody on a blocked effect."""
+        self.require_continuation_access(action.change_id)
+        coordination, previous = self._read_coordination(action.change_id)
+        if coordination.continuation_action != action:
+            _coordination_conflict("continuation result does not match retained custody")
+        retained = action.model_copy(update={"finished_at": finished_at}) if release else action
+        result_path = self.continuation_record_path(action.change_id, action.operation_id, result=True)
+        self._commit(
+            f"result-{action.operation_id}",
+            (
+                _replacement(
+                    self._state_root,
+                    self._coordination_path(action.change_id),
+                    previous,
+                    coordination.model_copy(update={"continuation_action": retained}),
+                ),
+                TransactionParticipant(self._state_root, result_path.relative_to(self._state_root), result),
+            ),
+        )
 
     def find_registered(self, change_id: str) -> ChangeCoordination | None:
         """Distinguish genuine absence from unreadable or invalid coordination."""
@@ -1202,6 +1346,7 @@ class PortfolioCoordinator:
             and (finalization_attempt.writer != writer or finalization_attempt.finished_at is not None)
         ):
             _coordination_conflict("finalizer acquisition requires its exact unfinished attempt")
+        self.require_continuation_access(change_id)
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
@@ -1283,10 +1428,15 @@ class PortfolioCoordinator:
             return self._update(coordination)
 
     def _update(self, coordination: ChangeCoordination) -> ChangeCoordination:
+        self.require_continuation_access(coordination.change_id)
         path = self._coordination_path(coordination.change_id)
         previous = path.read_bytes()
         existing = ChangeCoordination.model_validate_json(previous)
-        if existing.writer != coordination.writer or existing.publication_lease != coordination.publication_lease:
+        if (
+            existing.writer != coordination.writer
+            or existing.publication_lease != coordination.publication_lease
+            or existing.continuation_action != coordination.continuation_action
+        ):
             _coordination_conflict("workspace update cannot change ownership")
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
@@ -1381,8 +1531,10 @@ class PortfolioCoordinator:
 
     def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
         """Fence a runtime mutation against concurrent finalizer acquisition."""
+        self.require_continuation_access(change_id)
         path = self._coordination_path(change_id)
         coordination, previous = self._read_coordination(change_id)
+        self._require_continuation_coordination(coordination)
         if coordination.writer is not None and coordination.writer.kind == "finalize":
             _coordination_conflict("mutation cannot overlap active finalizer custody")
         return ReplacementTransactionParticipant(
@@ -1399,6 +1551,7 @@ class PortfolioCoordinator:
     ) -> ChangeCoordination:
         """Reserve one idle Change for an exact replayable publication operation."""
         self._require_publication_lock(lock, change_id)
+        self.require_continuation_access(change_id)
         now_value = self._publication_timestamp(now)
         expires_value = self._publication_timestamp(lease.expires_at)
         if expires_value <= now_value:
@@ -2469,7 +2622,10 @@ class ChangeWorkspaceManager:
         before_head_change: Callable[[], None] | None = None,
     ) -> ChangeTargetSyncReceipt:
         """Fetch one exact target head and merge it only in the managed Change worktree."""
-        with self._coordinator.publication_lock(request.change_id) as lock:
+        with (
+            locked_roots((self._coordinator.runtime_root / "coordination" / "target-sync-lock",)),
+            self._coordinator.publication_lock(request.change_id) as lock,
+        ):
             coordination = self._coordinator.show(request.change_id)
             previous_receipt = self._replay_target_sync_receipt(request, coordination)
             if previous_receipt is not None:
@@ -2496,7 +2652,7 @@ class ChangeWorkspaceManager:
                 cwd=coordination.worktree_path,
             ):
                 _workspace_failure("target synchronization requires a clean Change worktree")
-            source_ref, target_ref, target_branch = self._target_refs()
+            source_ref, _target_ref, target_branch = self._target_refs()
             target_head = self._fetch_target(source_ref, target_branch, request.expected_target)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
@@ -2514,7 +2670,7 @@ class ChangeWorkspaceManager:
                 "merge",
                 "--no-edit",
                 "--",
-                target_ref,
+                target_head,
                 cwd=coordination.worktree_path,
                 check=False,
             )
@@ -3083,7 +3239,8 @@ class ChangeWorkspaceManager:
         if target_head is None:
             _workspace_failure("fetched target remote-tracking ref is unavailable")
         if target_head != expected_target:
-            _coordination_conflict("target changed while it was fetched")
+            message = "target changed while it was fetched"
+            raise ChangeTargetSyncStaleError(message)
         return target_head
 
     def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:

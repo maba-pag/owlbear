@@ -20,7 +20,9 @@ from typing import Literal
 from unittest.mock import Mock, patch, sentinel
 
 import pytest
+from pydantic import ValidationError
 from serve.delivery.tests.test_delivery_state import _commit_corrupt_snapshot
+from serve.delivery.tests.test_draft_pull_request import _Provider
 
 from owlbear_delivery import (
     ActivateDeliveryClaim,
@@ -73,6 +75,7 @@ from owlbear_delivery import (
     DeliveryCommitmentClass,
     DeliveryContract,
     DeliveryDesignPut,
+    DeliveryEngineActionResult,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
@@ -114,6 +117,7 @@ from owlbear_delivery import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
     DraftPullRequestSupersessionReceipt,
+    ExecuteDeliveryChangeAction,
     FinalizeDeliveryChange,
     GeneratedPullRequestSummaryReceipt,
     MarkChangePullRequestReady,
@@ -144,6 +148,7 @@ from owlbear_delivery import (
     classify_publication_check,
     load_delivery_application,
 )
+from owlbear_delivery.change_workspace import ChangeContinuationAction
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     contract_fingerprint,
@@ -972,7 +977,7 @@ def _continuation_request(application, change_id="change-a", **updates):
     return DeliveryContinuationRequest(
         change_id=change_id,
         expected_basis=application.get_change(change_id).readiness.basis,
-        capabilities=("planner", "builder", "finalizer"),
+        capabilities=("planner", "builder", "finalizer", "engine"),
         host_id="test-host",
         session_id="test-session",
     ).model_copy(update=updates)
@@ -987,6 +992,389 @@ def test_runtime_rejects_mismatched_coordination_recovery_root(tmp_path: Path) -
         )
     assert runtimes["change-a"].frontier_bytes() == before
     assert not (state_root / "other").exists()
+
+
+def test_engine_action_custody_survives_restart_and_fences_runtime(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    basis = application.get_change("change-a").readiness.basis
+    action = ChangeContinuationAction(
+        operation_id="continue-" + "a" * 64,
+        change_id="change-a",
+        kind="reconcile-checkpoint",
+        contract_digest=basis.contract_digest,
+        frontier_digest=basis.frontier_digest,
+        exact_head=basis.candidate_head,
+        target_head=application._workspace_manager.observed_target_head(),
+        host_id="host",
+        session_id="session",
+        acquired_at="2026-09-13T00:00:00Z",
+    )
+    coordinator.acquire_continuation_action(action)
+    reopened, other_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    assert other_coordinator.show("change-a").continuation_action == action
+    with pytest.raises(CoordinationConflictError, match="continuation action custody"):
+        reopened._runtimes["change-a"].queue_explicit_checkpoint(action.exact_head)
+    with coordinator.continuation_execution(action):
+        runtimes["change-a"].queue_explicit_checkpoint(action.exact_head)
+        coordinator.finish_continuation_action(action, b"{}\n", "2026-09-13T00:00:01Z", release=True)
+    assert other_coordinator.show("change-a").continuation_action.finished_at is not None
+    assert coordinator.continuation_record_path("change-a", action.operation_id, result=True).read_bytes() == b"{}\n"
+
+
+def _engine_action(application: PortfolioApplication) -> ChangeContinuationAction:
+    acquired = application.acquire_change_action(_continuation_request(application))
+    if acquired.kind == "reconciled":
+        acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired", acquired
+    assert acquired.engine_action is not None, acquired
+    return acquired.engine_action
+
+
+def _execute_engine(application: PortfolioApplication, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
+    return application.execute_change_action(
+        ExecuteDeliveryChangeAction(change_id=action.change_id, operation_id=action.operation_id)
+    )
+
+
+def _attach_local_target(application: PortfolioApplication, tmp_path: Path) -> Path:
+    repository = application._workspace_manager.repository
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
+    operation = "set-url" if "origin" in _git(repository, "remote").splitlines() else "add"
+    _git(repository, "remote", operation, "origin", str(remote))
+    _git(repository, "push", "origin", "HEAD:refs/heads/main")
+    return remote
+
+
+def _attach_engine_publication(application: PortfolioApplication, tmp_path: Path) -> tuple[_Provider, Path]:
+    repository = application._workspace_manager.repository
+    remote = _attach_local_target(application, tmp_path)
+    provider = _Provider(lose_create_response=True, lose_update_response=True, lose_draft_state_response=True)
+    application._change_branch_publisher = ChangeBranchPublisher(
+        repository,
+        application._coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "branch-operations",
+    )
+    application._draft_pull_request_publisher = DraftPullRequestPublisher(
+        provider,
+        repository="example/project",
+        target_branch="main",
+        state_root=tmp_path / "pull-requests",
+    )
+    application._delivery_state_publisher = DeliveryStatePublisher(
+        repository,
+        remote="origin",
+        state_branch="owlbear/delivery-state",
+    )
+    return provider, remote
+
+
+def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    head = coordinator.show("change-a").last_reviewed_commit
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    checkpoint_action = _engine_action(application)
+    assert checkpoint_action.kind == "reconcile-checkpoint"
+    checkpoint = _execute_engine(application, checkpoint_action)
+    assert checkpoint.kind == "completed", checkpoint
+    assert checkpoint.checkpoint.reconciled
+    assert _execute_engine(application, checkpoint_action) == checkpoint
+    for field in ("attempted_head", "published_head"):
+        malformed = checkpoint.model_dump(mode="json")
+        target = malformed["checkpoint"] if field == "attempted_head" else malformed["checkpoint"]["state"]
+        target[field] = "f" * 40
+        with pytest.raises(ValidationError, match="checkpoint result differs"):
+            DeliveryEngineActionResult.model_validate_json(json.dumps(malformed))
+    assert provider.create_calls == 1
+    sync_action = _engine_action(application)
+    assert sync_action.kind == "sync-target"
+    synchronized = _execute_engine(application, sync_action)
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.operation_id == sync_action.operation_id
+    assert _execute_engine(application, sync_action) == synchronized
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired", acquired
+    finalizer = acquired.finalization
+    assert finalizer is not None
+    proof = _finalization_request("change-a", finalizer.attempt.exact_head, finalizer.attempt.writer.attempt_id)
+    application.finalize_change("change-a", proof)
+    published = _execute_engine(application, _engine_action(application))
+    assert published.kind == "completed", published
+    ready_action = _engine_action(application)
+    assert ready_action.kind == "mark-ready"
+    ready = _execute_engine(application, ready_action)
+    assert ready.kind == "completed", ready
+    assert provider.draft_state_calls == 1
+    waiting = _execute_engine(application, _engine_action(application))
+    assert waiting.kind == "waiting", waiting
+    assert runtime.completion_receipt() is None
+    assert _git(remote, "rev-parse", "refs/heads/main") == head
+    provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": finalizer.attempt.exact_head,
+            "merged_at": datetime(2026, 8, 3, tzinfo=UTC),
+        }
+    )
+    acceptance_action = _engine_action(application)
+    accepted = _execute_engine(application, acceptance_action)
+    assert accepted.kind == "completed", accepted
+    assert accepted.acceptance == runtime.completion_receipt()
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    assert _execute_engine(reopened, acceptance_action) == accepted
+    assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "terminal"
+
+
+def test_engine_mark_ready_replays_lost_response_and_acceptance_waits_without_merge(tmp_path: Path) -> None:
+    application, runtime, provider, state, head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    assert action.kind == "mark-ready"
+    original = provider.set_pull_request_draft_state.side_effect
+
+    def lose_response(request):
+        original(request)
+        raise PublicationProviderError(
+            PublicationProviderFailureCode.RESPONSE_UNKNOWN, action.operation_id, "lost response", retry_safe=False
+        )
+
+    provider.set_pull_request_draft_state.side_effect = lose_response
+    result = _execute_engine(application, action)
+    assert result.kind == "completed", result
+    assert result.ready.head_sha == head
+    assert result.ready.operation_id == action.operation_id
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    assert _execute_engine(reopened, action) == result
+    assert provider.set_pull_request_draft_state.call_count == 1
+    assert coordinator.show("change-a").continuation_action.finished_at is not None
+    waiting_action = _engine_action(application)
+    assert waiting_action.kind == "observe-acceptance"
+    waiting = _execute_engine(application, waiting_action)
+    assert waiting.kind == "waiting", waiting
+    assert waiting.reason_code == "merge-approval-required"
+    assert not state["pull_request"].merged
+    assert runtime.completion_receipt() is None
+    assert _execute_engine(application, waiting_action) == waiting
+
+
+@pytest.mark.parametrize("drift", ["head", "target", "dirty"])
+def test_engine_action_rechecks_head_target_and_workspace_before_provider(tmp_path: Path, drift: str) -> None:
+    application, runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    coordination = application._coordinator.show("change-a")
+    if drift == "head":
+        _commit_local_descendant(coordination)
+    elif drift == "target":
+        moved = _commit_local_descendant(coordination)
+        _git(coordination.worktree_path, "update-ref", "refs/remotes/origin/main", moved)
+        _git(coordination.worktree_path, "reset", "--hard", action.exact_head)
+    else:
+        (coordination.worktree_path / "product.txt").write_text("foreign changes\n")
+    result = _execute_engine(application, action)
+    assert result.kind == ("blocked" if drift == "dirty" else "stale"), result
+    assert provider.set_pull_request_draft_state.call_count == 0
+    assert runtime.ready_receipt() is None
+    assert _execute_engine(application, action) == result
+
+
+def test_engine_action_lost_dispatch_preserves_identity_and_strict_public_result(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    request = _continuation_request(application)
+    acquired = application.acquire_change_action(request)
+    if acquired.kind == "reconciled":
+        request = _continuation_request(application)
+        acquired = application.acquire_change_action(request)
+    action = acquired.engine_action
+    assert action is not None
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    replayed = reopened.acquire_change_action(request.model_copy(update={"session_id": "other-session"}))
+    assert replayed.engine_action == action
+    assert replayed.engine_action.session_id == "test-session"
+    result = _execute_engine(application, action)
+    assert DeliveryEngineActionResult.model_validate_json(result.model_dump_json()) == result
+    for update in ({"reason_code": "ERR_FAKE"}, {"kind": "blocked"}, {"ready": None}, {"extra": True}):
+        with pytest.raises(ValidationError):
+            DeliveryEngineActionResult.model_validate_json(json.dumps(result.model_dump(mode="json") | update))
+    replayed = reopened.acquire_change_action(request)
+    assert replayed.kind == "reconciled"
+    assert replayed.engine_result == result
+    for update in ({"kind": "terminal"}, {"reason_code": "ready"}):
+        with pytest.raises(ValidationError, match="exact engine disposition"):
+            DeliveryContinuationResult.model_validate_json(json.dumps(replayed.model_dump(mode="json") | update))
+    intent = application._coordinator.continuation_record_path(action.change_id, action.operation_id)
+    intent.unlink()
+    with pytest.raises(DeliveryRuntimeReconciliationError, match="original continuation intent"):
+        _execute_engine(reopened, action)
+
+
+@pytest.mark.parametrize("damage", ["missing-intent", "corrupt-intent", "missing-result", "corrupt-result"])
+def test_engine_finished_action_requires_original_journal_before_advancing(tmp_path: Path, damage: str) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    assert _execute_engine(application, action).kind == "completed"
+    path = application._coordinator.continuation_record_path(
+        action.change_id, action.operation_id, result=damage.endswith("result")
+    )
+    if damage.startswith("missing"):
+        path.unlink()
+    else:
+        path.write_bytes(b"{")
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    request = _continuation_request(reopened)
+    result = reopened.acquire_change_action(request)
+    assert result.kind == "unavailable"
+    assert result.reason_code == "engine-action-blocked"
+    assert result.failure.attempt_id == action.operation_id
+    assert result.failure.code == DeliveryRuntimeReconciliationError.code
+    assert coordinator.show("change-a").continuation_action.operation_id == action.operation_id
+    assert not coordinator.continuation_record_path("change-a", reopened._continuation_operation_id(request)).exists()
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: Path, *, interrupted: bool) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    if interrupted:
+        with application._coordinator.continuation_execution(action):
+            application._coordinator.start_continuation_action(action)
+    else:
+        provider.observe_checks.side_effect = PublicationProviderError(
+            PublicationProviderFailureCode.UNAVAILABLE, action.operation_id, "provider unavailable", retry_safe=True
+        )
+    result = _execute_engine(application, action)
+    assert result.kind == "blocked"
+    assert result.reason_code == ("engine-action-interrupted" if interrupted else "engine-action-failed")
+    assert result.failure.attempt_id == action.operation_id
+    assert "D03" in result.failure.retry_condition
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    assert _execute_engine(reopened, action) == result
+    stopped = reopened.acquire_change_action(_continuation_request(reopened))
+    assert stopped.kind == "unavailable"
+    assert stopped.engine_result == result
+    assert stopped.failure == result.failure
+    assert coordinator.show("change-a").continuation_action == action
+    with pytest.raises(CoordinationConflictError, match="continuation action custody"):
+        runtime.queue_explicit_checkpoint("f" * 40)
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("restart", [False, True])
+def test_engine_result_transaction_recovers_without_repeating_provider(tmp_path: Path, *, restart: bool) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(stage):
+            if stage == "after-first-publication":
+                message = "injected engine result interruption"
+                raise RuntimeError(message)
+
+        original_commit(
+            transaction,
+            failure=fail if transaction._transaction_id == f"portfolio-result-{action.operation_id}" else None,
+        )
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
+        _execute_engine(application, action)
+    reopened, coordinator = application, application._coordinator
+    if restart:
+        reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    result = _execute_engine(reopened, action)
+    assert result.kind == "completed"
+    assert result.ready == runtime.ready_receipt()
+    assert provider.set_pull_request_draft_state.call_count == 1
+    assert coordinator.show("change-a").continuation_action.finished_at is not None
+
+
+def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    entered, release = Event(), Event()
+    original = provider.set_pull_request_draft_state.side_effect
+
+    def blocked(request):
+        entered.set()
+        assert release.wait(timeout=5)
+        return original(request)
+
+    provider.set_pull_request_draft_state.side_effect = blocked
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        running = executor.submit(_execute_engine, application, action)
+        try:
+            assert entered.wait(timeout=5)
+            with (
+                locked_roots((state_root / "claims/acquisition-lock",), blocking=False),
+                pytest.raises(DeliveryActionBusyError),
+            ):
+                _execute_engine(reopened, action)
+            with pytest.raises(CoordinationConflictError, match="continuation action custody"):
+                runtime.queue_explicit_checkpoint("f" * 40)
+        finally:
+            release.set()
+        assert running.result(timeout=5).kind == "completed"
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+@pytest.mark.parametrize("conflict", [False, True])
+def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Path, *, conflict: bool) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    runtime = runtimes["change-a"]
+    head = coordinator.show("change-a").last_reviewed_commit
+    if conflict:
+        head = _commit_reviewed_head(
+            application, coordinator.show("change-a"), "product.txt", "Change implementation\n", "Change edit"
+        )
+    _set_checkpoint(
+        runtime,
+        state_root,
+        DeliveryPendingCheckpoint(
+            head=head,
+            triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+        ),
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    assert _execute_engine(application, _engine_action(application)).kind == "completed"
+    action = _engine_action(application)
+    target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n" if conflict else None)
+    stale = _execute_engine(application, action)
+    assert stale.kind == "stale", stale
+    assert coordinator.show("change-a").last_reviewed_commit == action.exact_head
+    fresh = _engine_action(application)
+    assert fresh.operation_id != action.operation_id
+    assert fresh.target_head == target
+    synchronized = _execute_engine(application, fresh)
+    if conflict:
+        assert synchronized.kind == "blocked", synchronized
+        assert synchronized.failure.code == "ERR_TARGET_SYNC_CONFLICT"
+        coordination = coordinator.show("change-a")
+        assert coordination.continuation_action == fresh
+        assert coordination.target_sync_conflict.operation_id == fresh.operation_id
+        assert _git(coordination.worktree_path, "rev-parse", "MERGE_HEAD") == target
+        assert _execute_engine(application, fresh) == synchronized
+        assert application.acquire_change_action(_continuation_request(application)).kind == "unavailable"
+        return
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.target_head == target
+    assert synchronized.target_sync.merged_head != action.exact_head
+    assert _execute_engine(application, fresh) == synchronized
 
 
 def test_continuation_finalizer_survives_restart_and_completes_exactly_once(tmp_path: Path) -> None:
@@ -1355,7 +1743,8 @@ def test_continuation_plans_builds_and_finalizes_via_existing_result_routes(tmp_
     assert finalization.exact_head == submission.result.completed_commit
     assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
     unsupported = application.acquire_change_action(_continuation_request(application))
-    assert unsupported.kind == "unsupported"
+    assert unsupported.kind == "waiting"
+    assert unsupported.reason_code == "engine-owner-unavailable"
     assert unsupported.readiness.operation.value == "reconcile-checkpoint"
 
 
@@ -3282,6 +3671,7 @@ def test_coordination_damage_isolates_reads_and_preserves_unknown_capacity(tmp_p
         damaged = application.get_change("change-a")
         assert damaged.kind == "unavailable"
         assert damaged.readiness.reason_code == "coordination-unavailable"
+        assert damaged.coordination_status == ("missing" if damage == "missing" else "unreadable")
         with pytest.raises(DeliveryRuntimeReconciliationError):
             application.set_change_intent(
                 DeliveryChangeIntent(
@@ -3294,8 +3684,12 @@ def test_coordination_damage_isolates_reads_and_preserves_unknown_capacity(tmp_p
     stopped = application.acquire_change_action(request)
     assert stopped.kind == "unavailable"
     assert stopped.reason_code == "execution-occupancy-unavailable"
+    assert stopped.readiness.reason_code == "execution-occupancy-unavailable"
     assert stopped.failure.code == DeliveryRuntimeReconciliationError.code
     assert not stopped.readiness.executable
+    batch = application.acquire_frontier_work()
+    assert not batch.launch_packages
+    assert batch.failures[0].code == DeliveryRuntimeReconciliationError.code
     if damage == "frontier":
         assert (state_root / "changes/change-a/frontier.json").read_bytes() == b"{"
     else:
@@ -4279,6 +4673,8 @@ def test_review_repair_fences_external_head_mutations_before_workspace_side_effe
 
 def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
     application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    _attach_local_target(application, tmp_path)
+    application.sync_change_with_current_target("change-a", "before-review-repair")
     invalidation = application.prepare_review_repair("change-a")
     stopped = application.acquire_change_action(_continuation_request(application))
     assert stopped.kind == "reconciled"
@@ -6749,6 +7145,8 @@ def test_loader_composed_finalization_admits_descendant_and_replays_after_reload
         workspace_root=repository,
         publication_provider=GitHubCliPublicationProvider(),
     )
+    _attach_local_target(application, tmp_path)
+    application.sync_change_with_current_target("change-a", "before-descendant")
     coordination = PortfolioCoordinator(runtime_root).show("change-a")
     exact_head = _commit_local_descendant(coordination, "loader-finalization.txt")
 
@@ -6761,6 +7159,8 @@ def test_loader_composed_finalization_admits_descendant_and_replays_after_reload
     assert finalization.exact_head == exact_head
     assert PortfolioCoordinator(runtime_root).show("change-a").last_reviewed_commit == exact_head
 
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{tmp_path / 'remote.git'}.insteadOf", "https://github.com/example/project.git")
     reloaded = load_delivery_application(
         _startup_config(),
         workspace_root=repository,
@@ -7597,6 +7997,8 @@ def test_checkpoint_summary_scopes_finalization_status_to_its_checkpoint(tmp_pat
     first_summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
     assert "Delivery finalization: recorded" not in first_summary
 
+    _attach_local_target(application, tmp_path)
+    application.sync_change_with_current_target("change-a", "before-summary-finalization")
     finalized_head = coordinator.show("change-a").last_reviewed_commit
     application.finalize_change("change-a", _finalization_request("change-a", finalized_head))
     application.reconcile_change_checkpoint("change-a")

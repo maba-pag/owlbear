@@ -88,6 +88,7 @@ class WorkItemActionKind(StrEnum):
     RECOVER_CLAIM = "recover-claim"
     FINALIZE = "finalize"
     RECONCILE_CHECKPOINT = "reconcile-checkpoint"
+    SYNC_TARGET = "sync-target"
     MARK_READY = "mark-ready"
     OBSERVE_ACCEPTANCE = "observe-acceptance"
     RESOLVE_ATTENTION = "resolve-attention"
@@ -259,6 +260,8 @@ class DeliveryReadinessBasis(_ProjectionModel):
     contract_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     source_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    continuation_id: str | None = Field(default=None, pattern=r"^continue-[0-9a-f]{64}$")
     candidate_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     workspace_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -271,6 +274,10 @@ DeliveryReadinessReason = Literal[
     "finalization-failed",
     "claim-activation-failed",
     "coordination-unavailable",
+    "execution-occupancy-unavailable",
+    "engine-action-pending",
+    "engine-action-blocked",
+    "target-sync-required",
     "claim-custody-unreconciled",
     "runtime-unavailable",
     "dependency-wait",

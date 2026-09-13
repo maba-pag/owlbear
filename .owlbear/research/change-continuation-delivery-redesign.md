@@ -6,7 +6,7 @@
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 is next; P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
+**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 critical engine companion is implemented pending independent parent review and T2 consumer wiring; D02 is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
@@ -93,7 +93,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
 | D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
-| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Critical review repairs implemented; parent re-review and required P06 companion precede T2 wiring |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Core repair approved; engine companion implemented, awaiting parent review before T2 wiring |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
 | D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
@@ -149,11 +149,12 @@ suites (220 passed, plus 50 passed on the Cockpit/package boundary suites after 
 `npm test` (311 passed, 25 files); `npm run build`; `npm run test:e2e:work` (22 of 22 passed).
 Python and frontend lint pass on the changed files.
 
-### D02 Critical Core: Review Repair and Blocked T2 Handoff
+### D02 Critical Core: Historical Repair Baseline
 
-The P06 reference path and critical review repairs are implemented on primary `dev`; D02 is
-**not complete**. The parent owns independent different-family re-review of the repair commit.
-The reviewed repair baseline is `8741e048fd8960b1e36048c77e8a9642bcdc70a3`. No adapter, HTTP, UI, agent or
+The following records the pre-companion repair and its then-blocked handoff. Different-family
+Opus re-review approved repair `0d8a025c69a2591792788e780a42b01263eacaa6`, based on
+`8741e048fd8960b1e36048c77e8a9642bcdc70a3`. The engine companion below supersedes this subsection's
+pending companion/re-review statements; D02 remains **not complete**. No adapter, HTTP, UI, agent or
 shared-workflow wiring was implemented in this substep. The contract follows sections 5.2-5.4,
 6/6.1 and WP2/P06: one selected Change, existing readiness/candidate owners, durable exclusive
 custody, exact receipts, no timeout-as-termination and no second scheduler or state store.
@@ -307,6 +308,99 @@ affected tests passed**. Final Ruff comparison found nine baseline findings and 
 findings across the expanded touched-file set; editor diagnostics and whitespace checks are clear.
 No full-suite pass or consumer readiness is claimed. Parent re-review
 must assess the exact scoped repair head before authorizing further implementation.
+
+### D02 Engine Companion: Recovered Candidate and T2 Handoff
+
+Recovered in place from `662c02a47eebbb11d3933cbab7f627ab909b7c9f`: the interrupted five-file
+candidate was read in full, adopted, tested, and repaired without discarding its work. Source owners
+are [portfolio_application.py](../../serve/delivery/src/owlbear_delivery/portfolio_application.py),
+[change_workspace.py](../../serve/delivery/src/owlbear_delivery/change_workspace.py),
+[work_items.py](../../serve/delivery/src/owlbear_delivery/work_items.py), the core exports and
+[owning tests](../../serve/delivery/tests/test_portfolio_application.py). No new scheduler, provider,
+runtime state root, host worker, or merge operation was introduced. Parent independently reviews the
+exact scoped candidate before authorizing the previously listed T2 surfaces.
+
+`DeliveryContinuationRequest.capabilities` adds `engine`. An `acquired` response contains exactly
+one of `launch`, `finalization`, or `engine_action: ChangeContinuationAction`. The fixed executor is
+`execute_change_action(ExecuteDeliveryChangeAction(change_id, operation_id)) -> DeliveryEngineActionResult`.
+It accepts no caller-authored effect, target, receipt, success, or recovery acknowledgement. Core
+exports also add `ChangeTargetSyncStaleError`. `WorkItemActionKind` adds `sync-target`.
+
+The engine hashes the selected Change and full observed readiness basis into `continue-<sha256>`.
+The intent binds action kind, contract/frontier digests, exact Change and observed target heads,
+optional exact finalization identity, and original host/session/start. Host/session are provenance,
+not authentication or liveness. The basis adds `target_head` and `continuation_id`, distinct from
+`source_head` and `candidate_head`; the retained prior action differentiates a subsequent observation.
+Acquisition atomically joins immutable intent, coordination custody and a frontier CAS. Existing
+Change state holds `action-receipts/<operation_id>/{intent,started,result}.json`. An execution marker
+precedes effect entry; result publication and custody release share a runtime transaction. Recovery
+works on restart and same-host exact replay. Missing/corrupt original journals stop advancement.
+
+| Fixed action | Effect, successful evidence, and stop condition |
+| --- | --- |
+| `reconcile-checkpoint` | Existing checkpoint owner publishes branch, draft PR/summary and state. Completed result requires exact observed publication receipts and cleared pending checkpoint. An initial Design snapshot is bound through its existing content-addressed receipt (`checkpoint_snapshot`) from acquired to published head. Incomplete publication retains custody and its checkpoint evidence. |
+| `sync-target` | Existing workspace owner fetches the expected target and merges its exact SHA only into the managed Change branch, then publishes through existing owners. Shared target-sync lock serializes fetch/merge. Fetch drift returns `stale` before Change mutation; conflicts retain operation, merge evidence and custody. Head-changing sync requires fresh finalization/review. |
+| `mark-ready` | Existing owner rechecks finalization and provider checks, then observes the ready receipt for the exact action/head/finalization. Lost provider responses use existing readback. This is not merge approval. |
+| `observe-acceptance` | Existing owner records completion only after observing accepted provider evidence. Unmerged PR yields `waiting` / `merge-approval-required`; no merge or completion is fabricated. |
+
+Engine result kinds are `completed`, `waiting`, `stale`, and `blocked`, with strict reason/receipt
+validation. Replayed acquisition maps these to `reconciled`, `human`, `stale`, and `unavailable`
+respectively, preserving the complete `engine_result` and failure envelope. Exact result replay never
+repeats an effect. Completed/waiting/stale results release action custody; blocked, interrupted, or
+unknown effects retain it and forbid replacement operations. No timeout, model/request identity,
+diagnostic retirement, or caller `confirmed_lost` can release it. D03 must supply exclusion/recovery.
+Preflight checks contract/frontier, Change/target heads and clean workspace. The fixed executor uses
+the existing per-Change checkpoint lock and context-scoped custody; no portfolio lock spans provider
+execution. Other mutations and capacity acquisition see retained custody, including across reloads.
+
+**T2 requirements after parent approval:** expose acquisition and fixed execution with core schemas,
+not a four-way controller fallback to raw operations. Preserve `engine_action`, `engine_result`,
+`checkpoint_snapshot`, strict reason unions, `continuation_action` on available Change detail, and
+`coordination_status` (`missing`/`unreadable`) on unavailable detail. Propagate the two new basis fields
+and `sync-target` in HTTP/frontend types; do not infer eligibility. HTTP's
+`test_list_and_detail_preserve_known_unavailable_change_projection` now needs
+`target_head: null` and `continuation_id: null` in its static basis; the prior `source_head` expectation
+was already repaired at recovery HEAD. Current HTTP proof is **35 passed, 1 failed**, not a gate pass.
+T2 must preserve failure evidence, yield on busy/wait/human, refresh once on stale, and never loop
+acceptance observations without a changed condition. Replayed `acquired` engine intent invokes only
+the fixed executor; it does not authorize worker redispatch. Missing capability/owner returns waiting.
+
+Fresh focused proofs: initial recovery **39 passed**; strengthened continuation/readiness/custody
+**48 passed**; formatted engine slice **18 passed**; final failure/lock repair **4 passed**.
+Added cases cover journal damage, exact checkpoint/snapshot evidence, lost responses, same-host and
+restart transaction recovery, second-executor exclusion, target fetch drift, and retained conflicts.
+The first broad run was **910 passed, 5 failed**: three owning fixtures needed real target-sync
+prerequisites (repaired and rechecked), the HTTP expectation above, and one 30-second journey timeout
+under six-worker contention (passed with fewer workers). A subsequent terminal-interrupted run is
+not a gate. Editor diagnostics and whitespace checks pass; structured Ruff comparison shows seven
+baseline findings and no introduced findings, and no new formatter deltas. No whole-file lint pass
+is claimed. Fixtures use disposable state and local remotes; the 19 unrelated untracked entries remain
+preserved. No live services, registration, live records or historical branches/worktrees were changed;
+no nested agents or push were used. Final core regression: **885 passed**, zero failures/skips,
+in 323.54 seconds. This covers core, publication, registered MCP and package boundaries, not the
+unfinished HTTP/frontend/host gates. Command:
+
+```shell
+uv run --locked pytest \
+  serve/delivery/tests/test_portfolio_application.py \
+  serve/delivery/tests/test_delivery_runtime.py \
+  serve/delivery/tests/test_change_workspace.py \
+  serve/delivery/tests/test_delivery_state.py \
+  serve/delivery/tests/test_work_items.py \
+  serve/delivery/tests/test_change_publication.py \
+  serve/delivery/tests/test_draft_pull_request.py \
+  serve/delivery-mcp/tests/test_delivery_adapter.py \
+  serve/delivery-mcp/tests/test_target_server.py tests/test_package_boundary.py \
+  -q --tb=short -m 'not api and not model and not e2e' -n 4 --dist worksteal -p no:cacheprovider
+```
+
+HTTP proof uses `uv run --locked pytest tests/test_cockpit_work_items.py -q --tb=short
+-m 'not api and not model and not e2e' -n 0 -p no:cacheprovider`.
+
+D02 still requires parent review, registered MCP/HTTP execution wiring, P07 host/workflow handoff,
+frontend/build/E2E and assembled independent review. D03 owns closed-worker recovery/exclusion;
+D05 owns exact-head merge approval. D07/D08 still require copy-based compatibility rehearsal,
+including new action journals/custody and pre-D02 Builder claims. No new product decision arose.
 
 ```text
 Continue D02-D08 sequentially on dev using section 0 of
