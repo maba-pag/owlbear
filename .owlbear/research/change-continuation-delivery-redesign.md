@@ -6,7 +6,7 @@
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. P04 UI and P05 offline diagnosis are not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
+**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is implemented at `e67f99a68` and awaits independent different-family review; it is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
@@ -86,7 +86,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | Package | Result | Prior scope | Tier / dependency |
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
-| D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | T2 lead; first implementation |
+| D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | T2 lead; implemented at `e67f99a68`, awaiting review |
 | D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | T3 contracts, T2 wiring; after D01 |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
@@ -101,24 +101,29 @@ Git/uv/process capabilities and one tested procedure unless evidence requires mo
 
 ### Next: D01
 
-Start at [workItems.ts](../../serve/cockpit/web/src/api/workItems.ts), the existing WorkItem
-presentation/detail components and their tests. Consume the merged readiness DTO and unavailable
-variants; do not calculate eligibility in the client. Preserve dense existing Cockpit styling,
-accessible controls, six readiness states, explicit checks-not-run status and honest copy labels.
+D01 is implemented pending review. Commits: `8e82d071e` (replay regression), `41e07003c`
+(E2E fixture), `e67f99a68` (readiness UI and tests). Independent different-family review of
+`e67f99a68` has not happened; neither D01 nor WP1 may be declared complete before it.
 
-Before UI edits, reproduce the retained failure in
-[test_checkpoint_publication_regressions.py](../../serve/delivery/tests/test_checkpoint_publication_regressions.py):
-`test_checkpoint_snapshot_replays_after_publication_failure`. Inspect the fake clock and current
-retry/backoff owner. Fix the fixture only if it assumes immediate retry contrary to the contract;
-otherwise repair the actual regression. Do not delete or skip the test. It predates this merge and
-is not permission to call the full suite green.
+Delivered: [workItems.ts](../../serve/cockpit/web/src/api/workItems.ts) now types the engine
+`DeliveryReadiness` DTO, the `unavailable_changes` list and the discriminated Work Item detail
+response. The detail panel renders the six readiness states, the truthful `checks-not-run` label,
+the engine reason and basis identities, and the retained finalization attempt. An unavailable Change
+renders read-only inspection evidence with no operation control. Eligibility is not recomputed in
+the client; `action.kind` still comes from engine readiness.
 
-Resolve proof commands from current manifests. Expected D01 gates: focused core/registered MCP/HTTP
-tests; `npm test`, `npm run build`, and the maintained `npm run test:e2e:work` in
-`serve/cockpit/web` against disposable state. Include truthful malformed/unknown Change, dirty/clean
-candidate, restart report, and read-only inspection control cases. Reuse existing suites and test
-helpers. Review the exact candidate before declaring WP1 done; do not turn that declaration into
-live Delivery completion.
+The retained checkpoint replay failure was a stale fixture, not a product defect. `1678cba73`
+added the bounded retry window to `reconcile_change_checkpoint`, but the older test retried under a
+frozen clock. The fixture now advances its fake clock past the 5-second window and asserts the
+deferral first; the backoff guard is unchanged.
+
+Proof run: `pytest` on the replay regression, registered MCP adapter/server and Cockpit HTTP/boundary
+suites (220 passed); `npm test` (302 passed, 25 files); `npm run build`; `npm run test:e2e:work`
+(21 of 22 passed). Python and frontend lint pass on the changed files.
+
+Open finding, not owned by D01: `work-portfolio.spec.ts:87` still fails at `returnToPortfolio`
+focus restoration after answering a request. It reproduces with the D01 source changes reverted and
+was previously masked by a fixture defect, so it is pre-existing and needs a separate decision.
 
 ```text
 Implement D01 directly on dev using section 0 of
