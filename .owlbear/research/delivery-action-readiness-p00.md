@@ -3,7 +3,7 @@
 > **Owning request:** Work on wave 00 of the Change-Scoped Continuation redesign.
 > **Date:** 2026-09-12
 > **Inspected baseline:** `5f978744ad356456ff9d198893690b508b6aa1be`, branch `dev`.
-> **Status:** P00 released; WP1 approved, admitted, and natively planned. Reload did not fix Builder discovery. Disabling experimental host tool deferral plus clarifying direct binding resolution passed claim-free custody probes; P01 is being resumed after synchronizing that repair. See section 12.
+> **Status:** P00 and direct-tool workaround released and synchronized. A real P01 Builder reached fresh context and passed custody checks, then returned to Planning because its task omitted prerequisite/dispatch evidence. No product edits occurred. See section 13.
 > **Scope:** P00 design/context plus explicitly approved baseline and selected-launch prerequisite maintenance. No WP1/P01 implementation, task acquisition, repair of live B1/D1, or admission was performed.
 
 ## Current Handoff Summary
@@ -20,7 +20,7 @@ The host accepted explicit model overrides for each chosen name in read-only pro
 
 The user explicitly authorized the bounded release steps: scoped prerequisite commit, exact-commit review, local Design checkpoint, and safe live schema activation. No push, WP1 admission, or P01 launch was authorized by that decision. The live `acquire_actions` schema now includes `selection` with Change/outcome, stage/task, frontier digest, and source head fields; `delivery_health` returned healthy with no diagnostics. No restart was needed and no acquisition call was made.
 
-**Current gate:** synchronize the tested host/workflow repair and verify directly callable Builder context/submission tools before reacquiring P01. WP1 approval/admission and independently reviewed native planning are complete. No agent may manufacture a task/claim from packet label P01 or substitute an unrestricted worker.
+**Current gate:** repair the returned Planning evidence handoff, independently review and publish the corrected chain, then reacquire only P01. WP1 approval/admission is unchanged. The direct context/submission tool route is verified. No agent may manufacture a task/claim from packet label P01 or substitute an unrestricted worker.
 
 ## 1. Result and Source Authority
 
@@ -348,3 +348,46 @@ Focused validation: `uv run --locked pytest tests/test_agent_ecosystem_validatio
 -q --tb=short -n 0` passed all 30 tests; edited settings and workflow have no editor
 diagnostics. Actual P01 execution remains a separate gate and must use a fresh
 engine-acquired claim after the repair reaches the managed source.
+
+## 13. Released Workaround and Dispatch Evidence Handoff
+
+The workaround is commit `4ef59274098ed036c1cdc3f837a9746b1acbb6bc`, independently
+reviewed by Opus with `pass`, and all 30 ecosystem tests rerun on that commit passed.
+It was pushed normally to `origin/dev`. Delivery target sync
+`p01-direct-tools-sync-4ef592740` returned receipt
+`9441387c279f3eb8e10eba0aeddd4df443b44569716824167e48e0bd2f78dd15` and managed reviewed
+head `f41ae7c4897a54ea48e3cfb5ff5c23d737a0cc05`, with `review_required=false`.
+The original tested prerequisite `ffd71b158` is an ancestor of that source.
+
+The current installed versions are VS Code 1.137.0 and bundled Copilot 0.65.0. No
+version or rollout history establishes the exact cause/date of discovery disappearance.
+Keep `chat.agentHost.copilot.toolSearch.enabled=false` temporarily in this workspace;
+its cost is more upfront schemas, not wider permissions. Do not change seed defaults
+or remove the agent's discovery grant based on this workspace-specific observation.
+
+Caller-observed evidence available to the next Planner:
+
+- The named Builder was invoked using `runSubagent(agentName="builder",
+	model="GPT-6 Astra (copilot)")`. The host accepted that invocation and returned a
+	role-bound result. This records the explicit requested route, not hidden model identity.
+- A fresh claim-free Builder directly called `show_build_context` on recovered claim
+	`33a71b47-16b9-483e-a250-e9e4dd0a1f0f`; Delivery returned the expected inactive-identity
+	error. Builder also reported the directly callable `submit_result` schema without
+	invoking it. No discovery was needed. Earlier named Builder-to-`build-reviewer`
+	dispatch with explicit Opus override succeeded with read-only Git access.
+- Selected acquisition returned only TASK-001, with attempt
+	`d9237edb-bc48-4ed3-b487-b137eb9ba1de`, claim
+	`bf088c78-a48b-4a99-96b7-a6b708c0669b`, and source `f41ae7c4` above. The actual Builder
+	obtained fresh context and reported passed custody checks, with no file changes.
+- Builder returned to Planning on `TASK-001.constraints[0]` / `COM-005`: its fresh Build
+	context did not contain prerequisite or effective-model evidence, and the default
+	Builder frontmatter names Luna. The caller forwarded that return unchanged. Delivery
+	accepted it, released the claim, and cleared the old plan while retaining return context.
+
+The default `model:` value is not evidence that an explicit host override was ignored.
+Conversely, accepted dispatch arguments are not hidden model attestation. The approved
+Design already distinguishes these. Planning owns a concrete, source-grounded evidence
+handoff that preserves the approved Astra/Opus route and independent review without
+demanding an unavailable hidden identity. This document supplies observations, not
+permission to rewrite task authority or bypass direct Build custody. Validate these
+sources and incorporate needed evidence in the corrected native task before review.
