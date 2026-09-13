@@ -27,7 +27,7 @@
     ".owlbear/agents": true,
     "share/agents": true
   },
-  "chat.agentHost.copilot.toolSearch.enabled": true,
+  "chat.agentHost.copilot.toolSearch.enabled": false,
   "chat.agentSkillsLocations": {
     ".owlbear/skills": true,
     "share/skills": true
