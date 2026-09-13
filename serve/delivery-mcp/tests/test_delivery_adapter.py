@@ -26,6 +26,7 @@ from owlbear_delivery import (
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
+    ChangeContinuationAction,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
@@ -79,6 +80,7 @@ from owlbear_delivery.draft_pull_request import (
 )
 from owlbear_delivery.finalization_reports import FinalizationFailureCode
 from owlbear_delivery.portfolio_application import (
+    DeliveryAcquisitionFailure,
     DeliveryActionSelection,
     DeliveryAnswer,
     DeliveryAnswerKind,
@@ -87,7 +89,9 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeIntentKind,
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
+    DeliveryContinuationResult,
     DeliveryDesignPut,
+    DeliveryEngineActionResult,
     DeliveryFinalizationContext,
     DeliveryOperatorContext,
     DeliveryReadiness,
@@ -117,6 +121,7 @@ from owlbear_delivery_mcp.target_server import (
 CHANGE = "change-a"
 DIGEST = "a" * 64
 COMMIT = "b" * 40
+CONTINUATION_ID = f"continue-{'c' * 64}"
 WORKTREE_PATH = Path(__file__).resolve().parent / "fixture-worktree" / CHANGE
 
 
@@ -293,6 +298,36 @@ class _Result(BaseModel):
     operation: str
 
 
+def _continuation_action() -> ChangeContinuationAction:
+    return ChangeContinuationAction(
+        operation_id=CONTINUATION_ID,
+        change_id=CHANGE,
+        kind="sync-target",
+        contract_digest=DIGEST,
+        frontier_digest=DIGEST,
+        exact_head=COMMIT,
+        target_head="c" * 40,
+        host_id="host",
+        session_id="session",
+        acquired_at="2026-09-13T00:00:00Z",
+    )
+
+
+def _continuation_readiness() -> DeliveryReadiness:
+    return DeliveryReadiness(
+        status="ready",
+        next_actor=WorkItemNextActor.AGENT,
+        reason_code="target-sync-required",
+        basis=DeliveryReadinessBasis(
+            contract_digest=DIGEST,
+            frontier_digest=DIGEST,
+            source_head=COMMIT,
+            target_head="c" * 40,
+            continuation_id=CONTINUATION_ID,
+        ),
+    )
+
+
 class _RecordingApplication:
     def __init__(self, failures: dict[str, Exception] | None = None) -> None:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
@@ -335,6 +370,28 @@ class _RecordingApplication:
                 )
             elif name == "show_finalization_context":
                 result = DeliveryFinalizationContext.model_construct(change_id=CHANGE)
+            elif name == "acquire_change_action":
+                result = DeliveryContinuationResult(
+                    change_id=CHANGE,
+                    kind="acquired",
+                    reason_code="ready",
+                    readiness=_continuation_readiness(),
+                    engine_action=_continuation_action(),
+                )
+            elif name == "execute_change_action":
+                result = DeliveryEngineActionResult(
+                    action=_continuation_action(),
+                    kind="blocked",
+                    reason_code="engine-action-interrupted",
+                    failure=DeliveryAcquisitionFailure(
+                        change_id=CHANGE,
+                        outcome_id="OUT-001",
+                        attempt_id=CONTINUATION_ID,
+                        code="ERR_DELIVERY_ACTION_INTERRUPTED",
+                        detail="The engine action did not report an outcome.",
+                        retry_condition="Recover the retained engine action custody.",
+                    ),
+                )
             elif name == "report_finalization_failure":
                 result = DeliveryReadiness(
                     status="unavailable",
@@ -846,6 +903,20 @@ def _requests() -> dict[str, dict[str, object]]:
             "expected_version": DIGEST,
         },
         "acquire_actions": {},
+        "acquire_change_action": {
+            **change,
+            "expected_basis": {
+                "contract_digest": DIGEST,
+                "frontier_digest": DIGEST,
+                "source_head": COMMIT,
+                "target_head": None,
+                "continuation_id": None,
+            },
+            "capabilities": ["engine"],
+            "host_id": "host",
+            "session_id": "session",
+        },
+        "execute_change_action": {**change, "operation_id": CONTINUATION_ID},
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
@@ -1287,6 +1358,16 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result["change_id"] == CHANGE
     elif operation_name == "report_finalization_failure":
         assert result["reason_code"] == "runtime-unavailable"
+    elif operation_name == "acquire_change_action":
+        assert result["kind"] == "acquired"
+        assert result["engine_action"]["operation_id"] == CONTINUATION_ID
+        assert result["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+        assert result["readiness"]["basis"]["target_head"] == "c" * 40
+    elif operation_name == "execute_change_action":
+        assert result["kind"] == "blocked"
+        assert result["reason_code"] == "engine-action-interrupted"
+        assert result["action"]["operation_id"] == CONTINUATION_ID
+        assert result["failure"]["code"] == "ERR_DELIVERY_ACTION_INTERRUPTED"
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
@@ -1432,6 +1513,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
             name
             not in {
                 "acquire_actions",
+                "acquire_change_action",
                 "administrative_move",
                 "repair",
                 "repair_change",

@@ -18,26 +18,35 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
+    ChangeContinuationAction,
     ChangeCoordination,
     DeliveryAdmissionReceipt,
     DeliveryCommitment,
     DeliveryCommitmentClass,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
     DeliveryContract,
+    DeliveryEngineActionResult,
     DeliveryFrontier,
     DeliveryOutcome,
     DeliveryPlanScope,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
     DeliverySourceBinding,
     DeliveryStage,
     DesignPackageStore,
+    ExecuteDeliveryChangeAction,
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
+from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     PublishDeliveryResult,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
+from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
     app_lifespan,
@@ -77,6 +86,8 @@ DELIVERY_TOOLS = {
     "preview_administrative_move",
     "administrative_move",
     "acquire_actions",
+    "acquire_change_action",
+    "execute_change_action",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
@@ -170,6 +181,71 @@ class _RecordingApplication:
             return () if name == "list_work_items" else _Result(operation=name)
 
         return operation
+
+
+CONTINUATION_ID = f"continue-{'c' * 64}"
+
+
+def _continuation_action() -> ChangeContinuationAction:
+    return ChangeContinuationAction(
+        operation_id=CONTINUATION_ID,
+        change_id="change-a",
+        kind="sync-target",
+        contract_digest="a" * 64,
+        frontier_digest="a" * 64,
+        exact_head="b" * 40,
+        target_head="c" * 40,
+        host_id="host",
+        session_id="session",
+        acquired_at="2026-09-13T00:00:00Z",
+    )
+
+
+class _ContinuationApplication(_RecordingApplication):
+    def __init__(self) -> None:
+        super().__init__()
+        self.requests: list[object] = []
+
+    def acquire_change_action(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
+        self.calls.append("acquire_change_action")
+        self.requests.append(request)
+        return DeliveryContinuationResult(
+            change_id=request.change_id,
+            kind="acquired",
+            reason_code="ready",
+            readiness=DeliveryReadiness(
+                status="ready",
+                next_actor=WorkItemNextActor.AGENT,
+                reason_code="target-sync-required",
+                basis=DeliveryReadinessBasis(
+                    contract_digest="a" * 64,
+                    frontier_digest="a" * 64,
+                    source_head="b" * 40,
+                    target_head="c" * 40,
+                    continuation_id=CONTINUATION_ID,
+                ),
+            ),
+            engine_action=_continuation_action(),
+        )
+
+    def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
+        self.calls.append("execute_change_action")
+        self.requests.append(request)
+        return DeliveryEngineActionResult(
+            action=_continuation_action(),
+            kind="completed",
+            reason_code="engine-action-completed",
+            target_sync=ChangeTargetSyncReceipt.create(
+                operation_id=CONTINUATION_ID,
+                change_id=request.change_id,
+                integration_target="main",
+                expected_target="c" * 40,
+                target_head="c" * 40,
+                change_head_before="b" * 40,
+                merged_head="d" * 40,
+                merge_commit=True,
+            ),
+        )
 
 
 class _PublicationApplication(_RecordingApplication):
@@ -376,6 +452,7 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
             name
             not in {
                 "acquire_actions",
+                "acquire_change_action",
                 "resolve_request",
                 "clear_block",
                 "administrative_move",
@@ -415,6 +492,90 @@ async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> N
 
     async with Client(server) as client:
         result = await client.call_tool("list_work_items", {"unexpected": True})
+
+    assert result.is_error
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_registered_continuation_forwards_exact_change_and_engine_operation() -> None:
+    application = _ContinuationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    basis = {
+        "contract_digest": "a" * 64,
+        "frontier_digest": "a" * 64,
+        "source_head": "b" * 40,
+        "target_head": None,
+        "continuation_id": None,
+    }
+
+    async with Client(server) as client:
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "host",
+                "session_id": "session",
+            },
+        )
+        executed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID},
+        )
+
+    assert not acquired.is_error
+    assert not executed.is_error
+    assert acquired.structured_content is not None
+    assert acquired.structured_content["kind"] == "acquired"
+    assert acquired.structured_content["engine_action"]["operation_id"] == CONTINUATION_ID
+    assert acquired.structured_content["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+    assert executed.structured_content is not None
+    assert executed.structured_content["kind"] == "completed"
+    assert executed.structured_content["action"]["operation_id"] == CONTINUATION_ID
+    assert application.calls == ["acquire_change_action", "execute_change_action"]
+    request, execution = application.requests
+    assert isinstance(request, DeliveryContinuationRequest)
+    assert request.change_id == "change-a"
+    assert request.capabilities == ("engine",)
+    assert request.expected_basis.target_head is None
+    assert request.expected_basis.continuation_id is None
+    assert isinstance(execution, ExecuteDeliveryChangeAction)
+    assert execution.operation_id == CONTINUATION_ID
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("acquire_change_action", {"change_id": "change-a", "capabilities": ["engine"]}),
+        (
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": {"contract_digest": "a" * 64},
+                "capabilities": [],
+                "host_id": "host",
+                "session_id": "session",
+            },
+        ),
+        ("execute_change_action", {"change_id": "change-a", "operation_id": "not-a-continuation"}),
+        (
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID, "confirmed_success": True},
+        ),
+    ],
+)
+async def test_registered_continuation_rejects_invalid_or_caller_authored_effects(
+    tool_name: str,
+    arguments: dict[str, object],
+) -> None:
+    application = _ContinuationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(tool_name, arguments)
 
     assert result.is_error
     assert application.calls == []

@@ -45,7 +45,10 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeView,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
     DeliveryDesignPut,
+    DeliveryEngineActionResult,
     DeliveryFinalizationContext,
     DeliveryOperatorContext,
     DeliveryQuarantinedSnapshotRepairProposal,
@@ -57,12 +60,14 @@ from owlbear_delivery.portfolio_application import (
     DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
     DeliveryUnavailableChangeView,
+    ExecuteDeliveryChangeAction,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
     AcquireActionsParams,
     AcquireActionsRequest,
+    AcquireChangeActionRequest,
     AdministrativeMoveParams,
     AdministrativeMovePreviewResponse,
     AdministrativeMoveRequest,
@@ -99,6 +104,7 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryStateSnapshotRepairResponse,
     EmptyParams,
     EmptyRequest,
+    ExecuteChangeActionRequest,
     ExternalHeadAdoptionParams,
     ExternalHeadAdoptionRequest,
     ExternalHeadPromotionParams,
@@ -204,6 +210,8 @@ DELIVERY_OPERATION_NAMES = (
     "preview_administrative_move",
     "administrative_move",
     "acquire_actions",
+    "acquire_change_action",
+    "execute_change_action",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
@@ -265,7 +273,7 @@ DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
-    if name == "acquire_actions"
+    if name in {"acquire_actions", "acquire_change_action"}
     else _CLEANUP
     if name
     in {
@@ -691,6 +699,28 @@ class TargetMCPAdapter:
                 else lambda: self._application.acquire_actions(params.selection)
             ),
         )
+
+    async def acquire_change_action(self, request: AcquireChangeActionRequest) -> dict[str, object]:
+        """Acquire at most one supported action for the exact selected Change."""
+        params = self._validate(DeliveryContinuationRequest, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.acquire_change_action(params),
+            DeliveryContinuationResult,
+        )
+        return self._serialize(result)
+
+    async def execute_change_action(self, request: ExecuteChangeActionRequest) -> dict[str, object]:
+        """Invoke only the engine-owned operation already acquired for this Change."""
+        params = self._validate(ExecuteDeliveryChangeAction, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.execute_change_action(params),
+            DeliveryEngineActionResult,
+        )
+        return self._serialize(result)
 
     async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Planning context for one claim."""
