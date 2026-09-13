@@ -1,0 +1,1037 @@
+# Change-Scoped Continuation and Recoverable Delivery
+
+> **Owning request:** User-requested Delivery usability and architecture rethink; WP1 is now admitted separately as `delivery-action-readiness`.
+> **Date:** 2026-09-12
+> **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
+> **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
+> **Status:** Research and implementation blueprint, not approved Design authority. Proposed tool names, prompts, schemas, defaults, and actions are not current callable interfaces.
+
+**Execution status:** [P00 and wave 01 handoff](delivery-action-readiness-p00.md) owns current release evidence and gates. P00 prerequisites are published and synchronized; WP1 has an approved admitted Design and reviewed native task plan. P01 is paused before editing on a named Builder host tool-discovery failure, with its claim recovered and worktree clean. This research remains advisory for later work packages.
+
+**Reading route:** Sections 1-4 explain the proposal and user journey. Sections 5-11 specify runtime contracts and failure handling. Section 12 is the implementation sequence; sections 12.1-12.7 add model tiers, bounded implementation packets, and model handoffs. **Section 12.8 is the user launch schedule and contains the starting prompts.** Section 13 supplies proof scenarios, and section 14 governs migration and handoff. An implementing agent must read the relevant contract section before starting its packet; the work-package summary alone is insufficient.
+
+## 1. Recommendation and Product Boundary
+
+Replace portfolio-wide orchestration as the normal user workflow with one Change-scoped continuation controller. Keep shared deterministic coordination inside Delivery. The user-facing path becomes:
+
+```text
+/ideate <idea> OR /design <change>
+  -> understand and approve the proposal
+  -> /continue-change <change>
+  -> agent-owned planning, building, triage, repair, verification, publication
+  -> explicit user merge approval
+  -> observed completion and safe owned-resource cleanup
+```
+
+The controller resumes the same Change from its persisted state. It does not start sibling Changes, infer approval from a chat restart, or ask the user to choose an internal lifecycle operation. Multiple users or chat sessions may continue different Changes concurrently. Shared capacity, dependency checks, per-Change custody, and target/provider concurrency still belong to Delivery: separate worktrees do not isolate shared branches, remote state, resource limits, or browser profiles.
+
+Do not replace this with one unrestricted agent that designs, edits state, rewrites Git history, reviews itself, and merges. Reuse the existing specialized roles, exact-head evidence, transactions, and provider checks behind a smaller interaction contract.
+
+### 1.1 Requirements from the user
+
+- U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
+- U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.
+- U3: Agents prepare checks and environments. Human-only steps are meaningful decisions, permission, direct authentication/consent, and outcome confirmation.
+- U4: Interrupted work resumes from persisted evidence rather than reconstructed chat memory.
+- U5: Failures have a responsible handler and a bounded path to recovery or an intelligible user decision.
+- U6: Repeated evidence collection requires a specific uncovered or invalidated claim, not merely a new request ID.
+- U7: Approval of a proposal is not certification of technical completeness; existing product and safety requirements cannot be dropped to make the workflow pass.
+- U8: Implementation should support three model-capability tiers: strongest for difficult design/context and critical implementation, balanced for bounded engineering, and economical for routine implementation from explicit contracts.
+
+### 1.2 Recommendations, not yet approved decisions
+
+- R1: Retire `/orchestrate` from normal user entry; retain portfolio monitoring and engine coordination.
+- R2: Expand continuation to finalization, recovery, target synchronization, and publication, preserving independent review.
+- R3: Make one exact-head merge approval available in Cockpit; agents never infer it from proposal approval.
+- R4: Add a separately runnable maintenance prompt for a broken Delivery controller, without requiring a healthy Change runtime.
+- R5: Use preserved evidence and narrowly scoped repair instead of requiring users to resolve dirty worktrees.
+
+## 2. Status Quo and Sources
+
+The following files were inspected directly in this conversation. Historical reports are evidence and orientation, not current authority. No new external source or third-party code is adopted here.
+
+| ID | Source | Observed contribution and limits |
+| --- | --- | --- |
+| S01 | [Design workflow](../../share/skills/w-design-session/SKILL.md) | Owns manifest-bound intent/design, derivation, challenge, approval, and admission. Its blanket admitted-revision prohibition conflicts with guarded same-Change revision support in source. |
+| S02 | [Orchestration workflow](../../share/skills/w-orchestration/SKILL.md) | Portfolio acquisition dispatches Planner/Builder; repair dispatch is conditional on an engine proposal; finalization remains a separate workflow. |
+| S03 | [Finalization workflow](../../share/skills/w-change-finalization/SKILL.md) | Requires clean exact-head proof and independent review; dirty work or failed proof stops with a bounded mapping, without completing recovery. |
+| S04 | [Application](../../serve/delivery/src/owlbear_delivery/portfolio_application.py) | `acquire_actions` delegates to Planner/Builder acquisition; `get_change`, `repair`, `submit_result`, and readiness enrichment already provide useful facade foundations. |
+| S05 | [Work-item projection](../../serve/delivery/src/owlbear_delivery/work_items.py) | Chooses user actions from lifecycle state; detailed readiness is enriched separately by the application. A phase and actual executability can therefore diverge. |
+| S06 | [Admission](../../serve/delivery/src/owlbear_delivery/delivery_admission.py) | `_carry_forward_unresolved_binding` creates a fresh generic request, assigns the entire revised outcome acceptance list as expected evidence, and returns a blocked Planning binding. |
+| S07 | [Repairer](../../share/agents/repairer.agent.md) | Already exists, but is constrained to engine-authored proposals and selected-option answers; cannot code or supply human action evidence. |
+| S08 | [Request handbook](../../share/skills/h-decision-requests/SKILL.md) | Requires an explanation of why the role cannot proceed, evidence, and a resume condition. Requests are not intended for ordinary implementation defects. |
+| S09 | [Cockpit request/detail UI](../../serve/cockpit/web/src/components/WorkItemDetail.tsx), [command copy control](../../serve/cockpit/web/src/components/CopyCommand.tsx) | Action Requests render a summary and generic response input. Copying a prompt does not launch an agent. |
+| S10 | [Runtime transactions](../../serve/delivery/src/owlbear_delivery/runtime_transaction.py), [checkpoint supervisor](../../serve/delivery/src/owlbear_delivery/checkpoint_supervisor.py) | Durable replay and bounded background publication already exist; do not add a competing execution database or assume the host can dispatch Copilot. |
+| S11 | [MCP adapter](../../serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py), [HTTP routes](../../serve/cockpit/src/owlbear_cockpit/routes/target_work.py) | Existing engine operations have transport adapters; new behavior must stay engine-owned. |
+| S12 | [Workspace manager](../../serve/delivery/src/owlbear_delivery/change_workspace.py), [runtime](../../serve/delivery/src/owlbear_delivery/delivery_runtime.py) | Worktree custody, state models, exact evidence, and validation remain the implementation owners. |
+| S13 | [Current journey research](user-delivery-cockpit-flow.md) | Earlier end-to-end map explicitly records command failures leaving Cockpit on the same finalization instruction. Reuse the scenarios, not its old tool inventory. |
+| S14 | [Planning root-cause research](planning-workflow-root-cause-and-redesign.md) | Historical lesson: approval and passing leaf tests do not establish executable integration. Preserve proof ownership and intent; supersede old Kanban/OpenSpec mechanics. |
+| S15 | [Authority repair research](delivery-authority-repair-workflow-plan.md) | Untracked local incident report describes B1 split revision/publication identities. It is not proof that its proposed repairs are current or complete. |
+| S16 | [B1 intent](../delivery/packages/macos-managed-browser-authentication/intent.md), [B1 design](../delivery/packages/macos-managed-browser-authentication/design.md) | Local package records prior pilot evidence and revised SharePoint/Confluence obligations. These inputs must not be overwritten or silently weakened by this proposal. |
+| S17 | [Acceptance quality](../../share/skills/h-ac-quality/SKILL.md), [module design](../../share/skills/h-module-design/SKILL.md) | Tests cross the maintained boundary; ownership concentrates behind deep modules; source determines literal contracts. |
+| S18 | [Builder role](../../share/agents/builder.agent.md), [planning workflow](../../share/skills/w-frontier-planning/SKILL.md) | Builder currently pins a model and receives exact task/custody context; Planner supplies task boundaries and proof. Tier recommendations below are not implemented per-task model routing. |
+
+### 2.1 Concrete problems
+
+1. The normal path is a sequence of internal jobs that the user must manually connect. Build completion does not automatically dispatch finalization or complete publication.
+2. Readiness and suggested actions are computed at different layers. A card can suggest finalization while detailed readiness reports an unclean worktree.
+3. A machine failure can terminate a session without becoming persisted repair work. A fresh agent or the UI can recommend the same failing action again.
+4. The high-level repair proposal currently models lost-worker confirmation, not a general end-to-end recovery path. Renaming it to a fixer would not solve the missing operations.
+5. Revised acceptance can turn automated-test and documentation obligations into a generic human Action Request before the instructions or harness exist.
+6. Revision spans package files, admission/runtime state, managed-branch package snapshots, and remote publication. Independent local success is not a coherent activated revision.
+7. Controller code, tool registrations, persisted schemas, and worktrees evolve concurrently. Exactness checks are valuable, but partial upgrades and missing recovery routes become user-facing dead ends.
+
+### 2.2 Incident evidence and corrections
+
+**D1:** an earlier read-only worktree diff in this conversation showed only an added end-of-file newline/blank line in a research document, with `HEAD` equal to the reviewed commit. Finalization had not run tests or review. This is a recovery fixture, not permission to discard current bytes: its present state must be re-read before repair. The author of the drift was not established.
+
+**B1:** the user reports three real-site authentication exercises. The local package records an earlier SharePoint/Jira exercise and a later SharePoint/Confluence requirement. Not all three exercises were independently reconstructed. Existing evidence must be indexed and assessed before another check is requested. Historical browser/profile observations do not automatically prove a later candidate or Confluence-specific acceptance.
+
+Earlier advice in this conversation overreached in both directions: claiming a runnable pilot without checking its input surface, and proposing to remove its acceptance gate without a user-approved scope decision. This document does neither.
+
+## 3. Analysis and Chosen Direction
+
+| Alternative | Benefit | Cost | Recommendation |
+| --- | --- | --- | --- |
+| Improve wording around existing multi-prompt orchestration | Smallest edit | Still requires users to connect lifecycle operations and recover broken handoffs | Insufficient |
+| Change-scoped continuation using shared Delivery coordination | One mental model, isolated context, independent Changes can run in parallel | Requires full action routing and durable recovery | Recommended |
+| Unrestricted autonomous fixer | Appears flexible | Can discard work, invent state, or approve its own changes | Reject |
+| New always-on agent runtime or database rewrite | Potential future execution independence | New availability, migration, and ownership problems unrelated to the immediate journey | Not required; do not introduce by default |
+
+One worktree per Change is a useful ownership boundary, not a reason to eliminate shared coordination. The continuation session chooses the Change; the engine chooses the next eligible action within it. The session never obtains portfolio-wide claims and then filters out unwanted work.
+
+## 4. Detailed User Journey
+
+### 4.1 User-facing sequence
+
+| Step | What the user sees and does | System responsibility | Successful continuation |
+| --- | --- | --- | --- |
+| J01 Discover | `/ideate <idea>` or `/design <named change>`; answer one meaningful question at a time | Investigate facts, preserve choices, identify prerequisites and required proof infrastructure | Explain the proposal and its remaining decisions |
+| J02 Approve | Review promise, exclusions, risks, and requested permissions; approve in the design chat | Validate technical completeness and bind approval to the proposal version; perform admission | Return the complete `/continue-change <change-id>` prompt, not a list of internal jobs |
+| J03 Start/resume | Run that prompt once in Copilot Chat | Resolve the current Change; acquire only its next eligible action; run planning, implementation, tests, and review | Cockpit shows current activity and last completed result |
+| J04 Assist | Only when needed: select **Help with this step** and use a prepared local form or visible browser | Reuse applicable evidence, prepare the environment, run machine checks, pause at the actual human-only operation | Record separate machine observations and human confirmation, then resume |
+| J05 Verify/publish | Normally nothing | Resolve target drift, run whole-Change proof and independent review, publish the reviewed PR, observe required checks | Show a concise result and **Approve merge** when executable |
+| J06 Accept | Approve the displayed Change head and target through Cockpit or the continuation chat | Re-read exact provider identity/head, perform permitted merge, reconcile uncertain responses, observe completion | Show **Completed** with outcome summary and evidence links |
+| J07 Cleanup | Normally nothing; intentional loss always needs a specific confirmation | Clean only terminal, owned, verified resources; preserve unexpected contents and branch history | Cleanup status is distinct from product completion |
+| J08 Interrupt | Close the chat, pause, or lose connectivity | Preserve completed work and durable attempts; do not pretend a worker stopped merely because a session disappeared | The same continuation prompt resumes; no request/claim IDs supplied by the user |
+
+Proposal approval and merge approval are different. Approval to work permits bounded admitted implementation, testing, review, and the existing publication mechanism; it does not authorize scope reduction, arbitrary network access, destruction of foreign work, or target merge.
+
+### 4.2 A truthful entry surface
+
+The initial release needs no browser-to-Copilot bridge. Cockpit's action labels must distinguish:
+
+- **Copy continuation prompt:** copies a complete prompt; explicitly says to run it in Copilot Chat. Never label clipboard copying **Start** or report that an agent launched.
+- **Help with this step:** opens a working local interaction form after agent preparation. If preparation needs a running agent, show **Copy continuation prompt** instead.
+- **Change requirements:** opens an explanatory view and provides `/design <change-id>` with the existing proposal and delta loaded by the Designer. The user does not move an outcome backward.
+- **Approve merge:** acts through the provider adapter only after confirmation of repository, PR, head, target, and consequence. If the integration lacks merge capability, explain that limitation during setup, not at the last step. A verified prompt-based provider operation may implement the same guarded interaction.
+- **Pause/Resume:** policy state, not a request to terminate an unknown live process. Pause prevents new work and safely drains or cancels existing work according to ownership.
+- **Repair Delivery:** supplies `/repair-delivery` for controller failures, with diagnostics discovered automatically.
+
+An optional future **Open in Copilot** button is allowed only after an actual supported host API is demonstrated and tested. Do not add a new VS Code extension merely to avoid copying one prompt in the first release.
+
+Cockpit must be reachable even when one Change cannot parse. Its startup shell and diagnostic read path must not require a healthy `PortfolioApplication` to display the maintenance prompt. Browser input helpers for assisted checks must likewise have an explicit launch/close owner.
+
+### 4.3 What an ordinary card says
+
+Show a friendly Change title rather than making shorthand such as B1 the primary identity. Display:
+
+1. Completed work: "Implementation reviewed; browser check not yet completed."
+2. Current action: "Preparing an isolated Edge window."
+3. Actor: agent, user, provider, or no actor until a retry/dependency is ready.
+4. Next action and its reason: one primary executable control or complete prompt.
+5. Optional details: exact heads, diagnostic codes, preserved paths, proof, and prior attempts.
+
+Use distinct progress descriptions: **Preparing**, **Working**, **Checking**, **Repairing**, **Needs your decision**, **Needs your sign-in**, **Waiting for service**, **Waiting for another Change**, **Ready to merge**, **Completed**, and **Paused**. These are projections, not a second editable lifecycle stored in Cockpit.
+
+Do not say **Working** without evidence of a current dispatch. When no host is running, say **Waiting for chat to resume**. A future retry time does not imply that a Copilot agent can be started by the Python checkpoint supervisor.
+
+## 5. Target Architecture and Ownership
+
+### 5.1 Keep the architecture; deepen the action boundary
+
+```mermaid
+flowchart TB
+  User[User: proposal decisions, permissions, sign-in, merge approval]
+  Chat[Copilot: ideate/design or continue-change]
+  Cockpit[Cockpit: status, prepared forms, confirmations]
+  Adapter[Delivery MCP and Cockpit HTTP adapters]
+  Engine[Delivery: select action, bind custody, validate result, persist continuation]
+  Worker[Planner / Builder / Finalizer / Repairer / assisted-check handler]
+  Review[Independent reviewer]
+  IO[Workspace, runtime transaction, provider, publication owners]
+  User --> Chat
+  User --> Cockpit
+  Chat --> Adapter
+  Cockpit --> Adapter
+  Adapter --> Engine
+  Engine --> IO
+  Engine -. bounded launch .-> Chat
+  Chat --> Worker
+  Worker --> Review
+  Worker --> Adapter
+```
+
+The engine does not execute arbitrary agent-generated code or host an LLM runtime. Copilot dispatches workers using engine-selected policy. Engine actions such as snapshot replay use existing deterministic Python owners. Arbitrary code repair remains a reviewed Builder task, never an engine callback supplied by a model.
+
+| Owner | Required change | Must not own |
+| --- | --- | --- |
+| `serve/delivery` | One selected-Change next-action decision, durable attempt/failure state, action fences, repair/revision/proof rules | Chat rendering, credentials, MCP-server imports, LLM dispatch |
+| `serve/delivery-mcp` | Strict schemas and adapters for the same actions exposed to agents | Alternative readiness logic or caller-authored recovery recipes |
+| `serve/cockpit` | Fault-tolerant status view, real forms, confirmations, evidence summaries, prompt handoff | Independent scheduling or direct edits to Delivery files |
+| `serve/delivery-github` | Exact-head merge request/readback and bounded provider calls if approved | Deciding that a user wants to merge |
+| Existing orchestrator role, revised as continuation controller | One Change per session; dispatch, translate outcomes for the user, resume safely | Product implementation, self-review, raw Git repair, cross-Change acquisition |
+| Planner / Builder / Finalizer | Existing specialized work plus bounded repair/proof work under exact custody | Caller-invented claims, acceptance waiver, loss of foreign work |
+| Existing Repairer | Diagnose and apply engine-authored bounded repair proposals; route code defects to Builder | Unrestricted terminal access or inventing human confirmations |
+| `serve/tools` maintenance entry and maintenance prompt | Offline/bootstrap diagnosis, registered migrations, controlled host restart/upgrade | Arbitrary frontier rewrite or fake completion receipts |
+
+Reuse `work_items`, `portfolio_operating`, the runtime, workspace manager, and transaction participants. Extract private action-selection or diagnostic responsibilities only where they eliminate duplicated decisions in the large application module. Do not introduce a new event bus, general workflow DSL, or second portfolio store.
+
+### 5.2 Global coordination survives single-Change continuation
+
+- `change_id` is mandatory before acquisition. Never acquire all Changes and filter the resulting claims.
+- One active mutation owner per Change includes Builder, Finalizer, assisted-check runtime preparation, conflict repair, and revision activation, not just ordinary Builder claims.
+- Engine capacity accounts for concurrent sessions. Capacity waiting names the condition; it is not user attention and cannot cause busy-loop acquisition.
+- Target synchronization and merge approval are checked against the actual target/provider head. Per-Change worktrees cannot make two stale target assumptions safe.
+- Existing dependencies remain authoritative. A continuation must not run a sibling merely because that would unblock its own Change.
+- Shared resources such as the fixed Edge profile need resource-specific ownership. Waiting on that profile must not ask the user to delete a profile or kill arbitrary processes.
+- Do not hold a portfolio-wide lock through an LLM call, external sign-in, provider outage, or test suite. Hold short selection/commit locks and explicit per-action custody.
+
+### 5.3 Action selection and persistence contract
+
+The names below are a proposed interface sketch. Implementers must reconcile the existing public schema and update the MCP/HTTP/agent contract together. Do not create aliases just to preserve old prompting errors.
+
+| Operation | Inputs | Required behavior/output |
+| --- | --- | --- |
+| `get_change` | Change identity | Return a coherent read-only view with actual executable next action, current failure/wait, active host, and permitted user controls; degraded view must work without parsing an invalid frontier |
+| `acquire_actions` | Required Change identity, observed version, supported action capabilities, host/session identity | Atomically acquire at most one eligible action for that Change, or return a typed wait, human interaction, stale view, maintenance need, or terminal result |
+| Existing `submit_result` | Claim-bound Builder result | Preserve current atomic result submission; replay returns the original result rather than performing promotion again |
+| `complete_action` (new boundary if existing submission cannot carry it) | Engine-issued action/attempt identity, observed version, typed success/failure/cancellation evidence | Atomically validate the worker result, retain the observation/failure, release or preserve custody as appropriate, and select the next state; never accept a free-form "mark complete" |
+| `repair` | Exact engine proposal and version plus required confirmation | Apply only its enumerated repair with byte/head fences; return resulting evidence and continuation or a stale result |
+| Existing `answer`, extended with typed interaction outcomes | Exact interaction/version, authorized answer/input references | Record decision or human-only acknowledgement separately from agent proof; stale submissions cause no effect |
+| Existing design/revision boundaries, coordinated | Prior approved identity, candidate identity, approval, impact assessment | Prepare then activate one reviewed revision replayably, retaining previous evidence and publishing the new version through its owning operations |
+
+Every selected action carries an engine-issued action identity, Change/version binding, action kind, assigned owner, prerequisite evidence, and a result contract. Mutating actions additionally bind attempt/custody, expected branch/head and resource ownership when relevant. Human actions bind the exact question and consequence; read actions do not reserve writers.
+
+Reuse existing receipts for successful work. A completion result may reference an already-applied `submit_result` or finalization receipt; the controller must not apply its transition again. Engine storage, not agent-generated JSON hashes, creates identities.
+
+Persist a minimal attempt record beside existing Change state: phase/action kind, relevant authority and exact candidate, start/end, outcome, failure classification, selected next owner, failure fingerprint, retry count, and next-eligible time. Keep bounded diagnostic excerpts and managed log locators, not entire transcripts or secrets. Define atomic persistence with the affected runtime records using `RuntimeTransaction`. This is durable continuation state, not a new parallel task board.
+
+### 5.4 Selection order
+
+Implement a single decision function used by both read projections and acquisition. Reads predict eligibility; acquisition rechecks current state under locks. Use the following precedence:
+
+1. Incompatible/unreadable authority: return maintenance/containment view without mutating it.
+2. Existing effect with uncertain result: reconcile it before starting another effect.
+3. Active custody or resource owner: return busy/wait or an already-owned resumable action; never mint a second writer.
+4. Paused/abandoned/completed: respect lifecycle; terminal cleanup is separately guarded.
+5. Pending approved revision: finish activation/reconciliation before new implementation.
+6. Required semantic decision: expose the exact bounded question or resume the Designer; do not turn it into a test request.
+7. Retained failure: choose an authorized repair, bounded retry, Builder repair, or maintenance diagnosis.
+8. Missing proof infrastructure or setup: assign build-capable preparation work, not human attention.
+9. Ready human-only interaction: expose its runnable form/browser step; unrelated proof within the same Change may proceed only when its dependencies permit.
+10. Eligible planning/implementation: acquire normal worker action.
+11. Implemented outcome: synchronize target if needed, then final proof and independent review at the resulting exact head.
+12. Publish and observe required checks; present exact-head merge approval only when current conditions allow it.
+13. Reconcile approved merge, observe completion, then terminal cleanup.
+
+If a failure or stale view returns the same state without a new observation, do not loop indefinitely. A configured backoff is a wait, not proof of progress.
+
+## 6. Continuation Session Algorithm
+
+Replace the normal `/orchestrate` entry with `/continue-change <change-id>`. The existing role may be renamed once and its references updated; do not maintain two independent continuation implementations. `/ideate` and `/design` continue to own semantic approval.
+
+```text
+resolve the selected Change and available runtime/tool capabilities
+read the coherent Change view
+while this host can execute authorized work:
+  obtain one action for this Change, binding the current view
+  on stale: refresh once; on repeated stale: report contention and yield
+  on busy/dependency/backoff: display condition and resume mechanism; yield
+  on human action: prepare or display that interaction; wait only for its answer
+  on design decision: invoke the design conversation, preserve context, do not alter intent
+  on engine action: invoke its fixed operation with engine-issued identity
+  on worker action: dispatch the assigned worker with its bounded context
+  persist successful receipts or typed failure, including a lost dispatch when established
+  refresh the view and show the next meaningful result
+on terminal result: report accepted outcome and remaining cleanup, if any
+```
+
+The session may dispatch independent specialists only through configured host policy. If subagent nesting prevents a worker from obtaining its reviewer, use a supported flat dispatch/handoff sequence without weakening reviewer independence. Prove this with the actual Copilot setup before declaring automatic finalization usable.
+
+No live host means no autonomous LLM execution. Existing Python supervision may reconcile known deterministic publication work while its host is alive. On a closed chat or unavailable agent capability, persist **waiting for chat** and the complete continuation prompt. Do not promise an always-on agent without implementing one.
+
+### 6.1 Routing rules for failures
+
+| Class | Owner and route | Confirmation policy |
+| --- | --- | --- |
+| Transient read/service failure | Existing adapter, bounded backoff, read-only retry | None |
+| Unknown write outcome | Owning engine/provider operation reads back exact operation identity before retry | None for readback; original effect authorization must still apply |
+| Test/lint/build failure inside admitted scope | Builder repair action, new exact commit when needed, fresh proof/review | None for bounded repair; no weakened tests or scope |
+| Independent review finding | Builder for local implementation defect; Designer for semantic gap | User only for a material semantic decision |
+| Known mechanical state/worktree inconsistency | Engine-authored preservation-first proposal | Automatic only under already-approved no-loss policy and exact fences |
+| Missing harness/instructions | Build-capable preparation action | None; never ask the user to construct it |
+| Auth, MFA, consent, approved destination | Prepared assisted interaction | User supplies permission/secret directly, not through agent transcript |
+| Foreign/ambiguous files or active unknown writer | Preserve and contain; bounded diagnosis | User chooses meaningful preservation/inclusion consequences, not Git commands |
+| Controller/schema bug | Independent maintenance entry and reviewed platform repair | Explicit restart/upgrade or migration approval where consequential |
+
+For each failure fingerprint, persist the attempt budget across sessions. Proposed initial policy: at most two automatic equivalent repairs and three transient service attempts per action/version; use a short bounded backoff and one human-readable stop reason. These are configurable defaults requiring review, not measured optimal values. Renaming a task, restarting chat, or changing an error's wording must not reset the budget. Genuine accepted progress or an approved new approach can reset the relevant budget, not all Change history.
+
+Worker liveness must be proved by a supported host termination acknowledgement or enforced writer exclusion. A wall-clock timeout, heartbeat absence, tool-response failure, or a caller-written `confirmed_lost=true` alone does not prove termination. When unknown, leave custody intact and surface a safe cancellation/containment prompt that performs the actual stop protocol. Never instruct the user to kill processes manually.
+
+### 6.2 Human-readable result contract
+
+Keep typed mappings for agent/tool consumers. The top-level continuation produces a short explanation with:
+
+- What completed and which step did not run.
+- What failed and the evidence supporting that conclusion.
+- What was preserved; whether any files, publication, or approval changed.
+- Who will act next and what automatic repair is underway or exhausted.
+- One executable control or complete prompt if user interaction is needed.
+
+A raw `proof_failed` is not a complete user response. Example for a D1-like fixture:
+
+```text
+Verification has not started. The reviewed commit is intact.
+A research note changed after review; the difference is end-of-file formatting.
+Delivery is preserving those bytes and checking that no other writer owns them.
+If the repair is authorized, it will restore the reviewed checkout and resume verification.
+No tests or merge approval have been recorded by this attempt.
+```
+
+Report automatic recovery as completed only after a successful receipt. If ownership is unclear, replace the fourth line with a concrete choice that preserves the file; do not imply safe restoration from formatting alone.
+
+## 7. Preservation-First Worktree and Code Recovery
+
+### 7.1 Worktree recovery is an engine action, not a finalizer privilege
+
+Extend the workspace owner's existing quarantine and exact-custody mechanisms to nonterminal Changes with no active Builder claim. The repair proposal must bind the observed Change version, branch/HEAD, reviewed head, index state, changed-path set, content digests, and current ownership. A generic `restore all` operation is forbidden.
+
+The algorithm for a dirty preflight is:
+
+1. Acquire exclusive operation custody using the same mechanism as other managed-Change mutations. Reject active or unknown writers. Check that the real path and Git registration match the managed worktree.
+2. Read tracked/staged/untracked changes, including binary files, deletions, renames, modes, and symlinks. Paths must stay inside the permitted root. A pre-existing staged change is not silently treated as agent-owned.
+3. Preserve changed bytes and relevant index/worktree metadata using an existing quarantine representation extended only where necessary. Preservation must survive process restart and be independently verifiable before any restoration occurs. Do not blindly include ignored secrets, credential stores, virtual environments, or browser profiles in a Git commit.
+4. Classify with evidence from the task's maintained surfaces, last known write action, and exact diff. Whitespace-only differences are a fact about bytes, not proof of authorship or irrelevance.
+5. Known post-proof disposable drift may be restored through an engine-authored, exact-path proposal under the approved preservation policy. Useful admitted changes are handed to a Builder repair action and reviewed. Foreign/ambiguous changes remain untouched until a meaningful no-loss handling choice is made.
+6. Recheck the same byte and head fences immediately before applying the proposal. A changed file invalidates the proposal; it is not overwritten using a fresh hash without review.
+7. Verify clean managed state and unchanged reviewed authority, retain the preservation reference, complete the repair attempt, and resume preflight. A new commit instead invalidates old finalization proof and requires fresh cumulative review.
+
+Preservation failure means no cleanup. Exceeding configured snapshot size/type limits produces a specific containment result, not silent omission. Recovery must never touch the main checkout's user staging or an unrelated worktree. Captured data inherits repository privacy constraints and is not automatically published to a remote.
+
+### 7.2 Prevent formatting-induced rework
+
+Builder performs mutating formatting and generated-file updates before its final commit. Finalizer uses non-mutating commands. Managed research/proof documentation required for acceptance is committed before review; logs and screenshots go to an owned ignored evidence location, not tracked source files.
+
+Take before/after worktree fingerprints around proof commands. If a supposedly read-only command modifies tracked files, persist `proof-mutated-worktree`, name the command and paths, and route a Builder repair for the proof procedure or the intended generated output. Do not alternate forever between restoring formatting and rerunning a formatter that changes it again.
+
+Exact-commit review remains meaningful. The proposed flow does not exempt Markdown, end-of-file edits, or generated files from review merely because they seem harmless.
+
+### 7.3 Code repair and review findings
+
+A failed automated check within admitted scope creates a bounded repair action with the reproduced failure, exact candidate, maintained surfaces, constraints, and cumulative diff baseline. Reuse Builder and the existing independent review role. The controller does not write implementation code.
+
+Local implementation findings permit repair within the existing promise. Missing or contradictory requirements route to a Designer decision. Missing proof infrastructure is implementation work unless it changes the promised outcome or needs new permission. No proof request can silently redefine the acceptance contract.
+
+Repair of Delivery's own controller is special: use the independent maintenance route in section 11, not a Builder modifying the loaded engine beneath its own claim. Existing specialized conflict/PR-feedback workflows may remain internal handlers, with results returned to continuation rather than requiring another public prompt.
+
+## 8. Requirement Revision and Evidence Reuse
+
+### 8.1 Separate candidate from active authority
+
+The current admitted package cannot be both a mutable draft and the authority of a running worker. Reuse package storage/versioned history to hold:
+
+- the active approved package identity and its immutable bytes;
+- one current candidate revision and its base approved identity;
+- the approval and impact assessment for that exact candidate;
+- one durable activation operation that binds local state, managed package snapshot, and publication intent.
+
+These are versions of one package, not two competing definitions of truth. Research and draft edits do not change active implementation authority. The precise storage layout belongs to the package/transaction owner; select it before coding and test migration from the current single-active-package layout.
+
+### 8.2 Concrete user route for changing a requirement
+
+1. The user selects **Change requirements** or runs `/design <change-id>` and states the change in ordinary language.
+2. Designer loads the active proposal, prior decisions, task/evidence history, and current block. It explains the proposed delta and its consequences. It does not ask the user to choose a graph stage or invalidation IDs.
+3. Engine stops new incompatible work; current actions finish safely or follow an explicit cancellation protocol. No revision activates while old writable custody remains.
+4. Designer researches and challenges the candidate. Engine constructs an impact view; independent review checks semantic evidence applicability. The user approves behavior/risk changes, not hashes or transaction mechanics.
+5. Engine activates the approved version replayably. The same continuation prompt picks up the next required plan/build/proof action.
+
+Same-Change revision is allowed for a nonterminal quiescent Change under this proposed policy. Completed Changes remain immutable history; further product work is a successor. This resolves the current source/workflow contradiction explicitly rather than silently choosing one side. An admitted package edit may invalidate approval but must never lose the prior approved version.
+
+### 8.3 Activation protocol
+
+Do not claim atomic Git/provider transactions across the filesystem and remote services. Use local transactions plus a durable, replayable multi-step operation:
+
+1. Validate candidate, exact approval, base package, current frontier, branch head, and writer absence; record an activation intent with deterministic operation identity.
+2. Prepare the revised managed-branch package snapshot through the workspace owner. Record the expected prior receipt/head and resulting child commit; interrupted replay recognizes the already-created child rather than making another.
+3. Locally commit the active package pointer/version, admitted contract, remapped frontier, snapshot receipt, and pending publication obligation coherently. Until this commit is complete, acquisition sees revision activation, not a half-ready Change.
+4. Publish through bounded provider operations using remote readback and compare-and-swap. Offline publication stays pending with its owning operation; it is not ordinary state corruption.
+5. Reconcile and release new action eligibility only when its actual publication/custody prerequisites are satisfied. Resume old approved work only through an explicit cancellation of the candidate/activation that preserves evidence; never silently fall back mid-operation.
+
+Reuse `RuntimeTransaction`, package snapshots, and pending publication records. Extend the existing owners to cover the whole transition; do not introduce a generic distributed transaction framework. Failure injection must cover each durable boundary, not only normal re-admission.
+
+### 8.4 Evidence applicability, not repetition by default
+
+Maintain stable acceptance identities with revisions in semantic authority. Extend existing observations only with the minimum coverage metadata required: covered claim IDs/versions, exact code/artifact/procedure version, target class, environment constraints, observation time, human confirmation provenance where needed, and retained non-sensitive locator.
+
+For an approved revision, assess each affected obligation as:
+
+| Disposition | Meaning | Follow-up |
+| --- | --- | --- |
+| Reusable | Original observation still proves the unchanged claim under relevant code/environment assumptions | Retain reference and applicability rationale; never rewrite original receipt/commit |
+| Partial | Evidence establishes some mechanics or targets but not the full revised claim | Schedule only the missing work, plus required regression checks |
+| Invalidated | Changed implementation, procedure, target, or condition defeats applicability | Name the exact changed assumption and schedule fresh proof |
+| Unknown | Evidence is missing or cannot be reliably attributed | Search existing history first; explain the residual gap if new observation is needed |
+
+Semantic equivalence is not inferred from matching strings alone; a reviewer assesses changed claims. Mechanical matching and dependency checks prevent unsafe reuse, while the reviewer justifies applicability. A human's recollection is a lead, not an exact-commit test receipt, and it must not be relabelled as machine proof.
+
+For B1, retain earlier browser/session observations even if the target list changed. Investigate the three reported exercises through permitted local evidence before scheduling a fourth. Show a table of claim, evidence, and missing fact. A later Confluence-specific requirement may still need a new observation; obtain explicit agreement to change that requirement rather than silently accepting Jira evidence. Do not rerun unrelated launcher unit tests as user chores.
+
+Replace `_carry_forward_unresolved_binding`'s blanket human request with agent-owned reassessment/replanning work. Preserve old resolved requests as history; the new human request, if needed, names only the remaining human-only step and links to its ready handler.
+
+## 9. Prepared Human Assistance
+
+### 9.1 Readiness gate for asking the user
+
+Introduce a typed prepared-interaction contract, not a free-form task summary. Minimum fields:
+
+| Field | Required meaning |
+| --- | --- |
+| Identity/version | Exact Change, acceptance obligation, candidate, and interaction version |
+| Purpose | Plain-language reason the outcome needs this step |
+| Why human | The specific permission, knowledge, direct sign-in, or confirmation unavailable to the agent |
+| Handler | A registered, tested procedure/action identity; not arbitrary shell text from a request |
+| Preparation | Verified candidate/environment, tool availability, owned resources, and completed machine checks |
+| Input descriptors | Label, type, validation, approved target limits, required/optional, and sensitivity/retention policy |
+| User step | One concrete instruction that can be performed in a local form or already-visible browser |
+| Evidence split | Machine observations versus explicitly user-confirmed statements |
+| Alternatives | Retry, not now, explain, or change requirement when applicable; declining never means success |
+| Resume | Engine-selected continuation after the observation is accepted |
+
+Missing preparation, inaccessible documentation, invalid input control, or absent runner produces agent work. Do not persist **Needs you** until the step is actionable. Raw outcome acceptance paragraphs may appear in technical details, never as the user's instruction.
+
+An authorization question can precede preparation when preparation itself has an external effect. It must say exactly what the agent wants to launch or access and must not imply the test was run. Starting an assisted check binds its candidate and resource ownership; an unrelated code change makes the result stale rather than silently attaching it to the new candidate.
+
+### 9.2 B1 example interaction
+
+Proposed text after evidence reassessment establishes a genuine remaining need:
+
+```text
+Check access in OwlBear's Edge window
+
+We have evidence for profile isolation and restart behavior. We still need to
+check the approved Confluence target with this candidate. This does not change
+your normal Edge profile.
+
+Agent does: start the isolated candidate, open the approved target, check restart
+and owned cleanup, and record only bounded results.
+You do: enter the approved address in the local form; complete sign-in or consent
+in the Edge window if prompted; confirm whether the expected page appeared.
+
+[Start check] [Not now] [Explain existing evidence]
+```
+
+Only display this exact claim split when supported by reviewed evidence; it is not a conclusion about today's B1 records. The UI explains which browser window to use, and the agent waits at that step instead of navigating a pending sign-in away.
+
+### 9.3 Concrete input and data path
+
+1. Agent launches an owned check session from the reviewed candidate and obtains an expiring local interaction ID. If Cockpit cannot host a candidate helper, a bounded loopback form under the check runner is allowed; launching and closing it are agent-owned.
+2. Cockpit **Help with this step** opens that form with the specific approved input fields, for example an internal target URL. Protect the loopback form with origin checks and a one-time/session-bound token; do not expose credentials or target values in URLs, analytics, access logs, or tool results.
+3. User enters permitted target information locally. A URL containing credentials or session tokens is rejected; login secrets and MFA go only into the actual browser/site. The backend validates scheme and the admitted destination policy; an arbitrary form entry cannot expand allowed destinations.
+4. Agent receives an opaque input reference and readiness, not secret values. The fixed handler consumes validated values in memory, opens the owned browser, and pauses only for the human step.
+5. The check records target class and bounded status, exact candidate/procedure identity, environment limitations, and separate human confirmation. It never records cookies, tokens, passwords, raw target URLs, hostname, or page content when the B1 policy excludes those.
+6. Restart/cleanup is performed by the agent's handler. Inputs expire and are discarded. A restart can require re-entry of expired private input; the UI explains that this is privacy expiry, not another acceptance exercise.
+7. Persist the result and re-evaluate the obligation. A user click alone cannot assert machine-test success; a machine cannot fabricate a user confirmation.
+
+This uses no generic browser interaction tool for password entry. B1's owned visible sign-in boundary remains separate from B5's public interactive-tool policy.
+
+### 9.4 Missing capability and inaccessible environments
+
+If an approved device, target, or permission is unavailable, report **Check not available here** with the exact reason. The user can choose **Not now** or discuss a changed requirement; neither path fakes completion. A manual copied terminal script is not the fallback. A preparation bug is an agent repair, not a request for more user evidence.
+
+## 10. Verification, Publication, Merge, and Completion
+
+### 10.1 Whole-Change proof is continuation work
+
+Once task results are reviewed, continuation acquires finalization work with the admitted promise, acceptance coverage, preserved behavior, result references, and an explicit cumulative diff baseline. The finalizer remains read-only for product code and cannot repair its own findings. Failing proof is submitted as durable failure, routed to Builder, and independently reviewed after repair.
+
+Ensure the target synchronization boundary is handled before final proof when it changes the candidate. If the target moves again, re-observe and apply repository policy: do not merge unreviewed conflict resolutions or misrepresent old proof as verification of a later commit. A mergeability error is not ordinary waiting and cannot be hidden behind a merge button.
+
+### 10.2 Merge approval is a bounded user action
+
+Recommended new Cockpit/prompt action: show repository, PR title/number, exact reviewed source head, target branch, proof summary, required check state, and requested merge method. User approval authorizes only this merge attempt.
+
+The provider adapter re-reads open/merged state, source head, target, and protections immediately before mutation. Changed source head invalidates approval. A changed target requires synchronization/revalidation if the proof contract depended on it. Where the provider cannot atomically fence the target, rely on enforced branch protections/merge queue and verified provider semantics; do not claim a stronger atomic guarantee than it offers. Capability feasibility must be researched before implementation of the mutation.
+
+Read back unknown merge responses before another mutation. A successful provider call is not a completion receipt; the existing acceptance observer verifies the actual merged evidence, then records completion exactly once. A merge performed manually in GitHub must be recognized too, although the preferred journey does not require leaving Cockpit/chat.
+
+There is a current instruction conflict to resolve deliberately: governance says the user pushes manually while Delivery already owns publication. The cutover must specify that authorized engine/provider publication is system work and agents do not run arbitrary pushes. Do not leave contradictory instructions for the implementing model.
+
+### 10.3 Cleanup and waiting
+
+Completion means accepted merge, not deployment, successful cleanup, or universal production behavior. Keep branch/receipt history. Cleanup of an eligible owned worktree is automatic after completion; unexpected files remain preserved and become a separate maintenance action without reversing completion.
+
+Required CI running, a provider outage, or pending user merge are distinct waits. Background Python supervision may observe/retry deterministic operations with durable budgets and fair scheduling. If no host is running, show the last observation time and **Waiting for chat to resume** rather than promising polling continues indefinitely.
+
+## 11. Controller Repair and Upgrade Without a Circular Dependency
+
+### 11.1 `/repair-delivery` is a proposed maintenance entry
+
+This prompt must be runnable in an ordinary Copilot session even if the Delivery MCP server or a Change parser will not start. Its initial read-only diagnostic runner lives under the repository tools/bootstrap boundary, takes no user-supplied digest, and inspects installed version, configuration, supported persisted schemas, pending transactions, and bounded log records.
+
+The runner cannot import the complete invalid application just to explain its failure. It uses fixed, versioned maintenance operations and raw-file structural inspection below that boundary. No model-authored shell fragment or arbitrary JSON replacement is an approved repair operation.
+
+For known migrations or exact recoverable publication states, it produces a fenced proposal and applies it only with the appropriate policy/confirmation. For unknown corruption, retain raw evidence and last verified snapshots; do not recompute hashes to bless altered content or manufacture missing user provenance. An answer is human-confirmed only with actual supporting confirmation evidence.
+
+### 11.2 Platform code defects
+
+When controller code must change, the agent prepares an isolated maintenance workspace using tooling that does not depend on the broken runtime. This is a bounded alternative implementation route, not a second live task scheduler:
+
+- explicitly authorized issue and maintained surfaces;
+- preserved old executable/configuration/state;
+- regression reproduction and focused tests with disposable data;
+- independent exact-commit review;
+- user-approved controller upgrade/restart when required;
+- verified startup/schema/continuation smoke before resuming live work.
+
+The user supplies no test commands or file edits. If the maintenance toolchain cannot initialize, explain that concrete prerequisite and offer the supported setup/reinstall prompt. Do not promise automatic recovery from arbitrary filesystem loss or missing credentials.
+
+### 11.3 Stable host version and schema gate
+
+Pin one controller executable and schema capability set for an active session. Changes in the development checkout must not hot-replace that loaded controller during work. Use the existing clone/uv setup model to resolve a tested controller release or immutable revision, rather than inventing a new always-on service.
+
+On upgrade, stop new actions, drain or fence writers, preserve migration inputs, run registered schema migration/replay, restart the host, and verify health plus one read/action round-trip. Reject unsupported downgrade before it reads new state. Runtime backwards-compatibility paths are not the default: keep explicit versioned migrations and recovery evidence instead.
+
+An engine-offline inspection and approved migration can work with MCP unavailable. Copilot itself still needs to be available to run a prompt; a total host outage cannot be solved by promising a nonexistent autonomous agent.
+
+## 12. Implementation Work Packages
+
+This is a staged programme with independently reviewable work, not one giant implementation commit. Formal Design may choose several Changes, but each work package below is complete only when its behavior is reachable and tested. Domain-specific tasks follow the architecture rules; cross-domain acceptance has one named owning work package.
+
+The WP1-WP7 groups describe outcomes. The P00-P24 catalogue in section 12.4 describes bounded model handoffs inside those groups. These are planning packets, not new Python/npm packages, new Delivery Changes by default, or independently maintained task records. Formal planning maps approved packets into the existing task/context mechanism.
+
+### WP1 - Coherent action and readiness contract
+
+**Owners:** Delivery runtime/application/work-item projection; Delivery MCP; Cockpit adapter and UI.
+
+**Sequence:**
+
+1. Build disposable fixtures for current D1 dirty preflight, B1 generic request, normal build completion, active worker, provider wait, and invalid runtime. No live record migration yet.
+2. Define versioned action/result/diagnostic projections with the fields in section 5.3. Keep successful task and finalization receipts as the evidence owners.
+3. Refactor readiness selection into one application-owned decision used by `get_change`, list views, and acquisition. Update detail and card together; do not enrich only hidden detail readiness.
+4. Persist finalization/dispatch failures and next-owner routing so a fresh session sees the same result.
+5. Expose strict MCP/HTTP schemas and render one truthful executable next step or explicit wait in Cockpit.
+
+**Proof:** V01, V02, V03, V07, V18 below. Existing unit scopes: `test_work_items.py`, `test_portfolio_application.py`, `test_delivery_runtime.py`, Delivery MCP adapter tests, Cockpit route/component tests.
+
+**Risk:** UI and acquisition independently recomputing readiness. Make their shared decision identity and stale recheck observable in tests. No repair occurs merely by reading status.
+
+### WP2 - Single-Change end-to-end continuation
+
+**Depends on:** WP1; failure persistence and bounded routing must exist before automatic loops.
+
+**Owners:** Delivery acquisition/custody, agent configuration, finalization/workflow owners, provider/HTTP merge action.
+
+**Sequence:**
+
+1. Require Change-scoped acquisition and one action per call; add shared-capacity and same-Change concurrency tests.
+2. Define custody/result policy for finalizer, deterministic publication/sync operations, and prepared-check actions. Existing Builder submissions remain exactly-once.
+3. Replace normal orchestration prompting with `continue-change`, allowing scoped specialist dispatch and finalization while preserving reviewer independence.
+4. Bring target synchronization, proof, checkpoint publication, required checks, and acceptance observation into that continuation loop. Reuse existing handlers instead of allowing raw Git from the controller.
+5. Add exact-head merge approval through Cockpit or a verified prompt path; inspect actual provider merge capabilities before implementing the adapter.
+6. Verify the actual VS Code role/subagent topology; if nested review is unsupported, flatten dispatch through bounded engine handoffs. Clipboard controls remain honestly named.
+
+**Proof:** V01, V04, V05, V10, V11, V12, V17, V19. Tests must exercise the public selector/adapter, not inject a fabricated successful completed workflow.
+
+**Risk:** automating a previously user-invoked finalizer/merge weakens approval boundaries. Preserve independent proof review and separate exact-head merge consent; start no sibling Change.
+
+### WP3 - Bounded failure-to-repair loop
+
+**Depends on:** WP1 and WP2 action/custody substrate. Can develop deterministic workspace primitives before enabling automatic dispatch.
+
+**Owners:** Workspace manager, runtime attempt records, Repairer routing, Builder repair and conflict workflows.
+
+**Sequence:**
+
+1. Add durable failure fingerprints, action-specific budgets, backoff, and explicit exhausted state.
+2. Implement preservation-first nonterminal dirty-worktree repair with exact path/index/head fences and replay.
+3. Route failed proof and local reviewer findings into bounded Builder repair tasks; preserve cumulative review and artifact ownership.
+4. Add explicit host termination/exclusion semantics for lost workers; test ambiguous live workers separately from confirmed stopped ones.
+5. Resume the original action after verified recovery; same failure without new evidence exhausts rather than restarting forever.
+
+**Proof:** V06, V07, V08, V09, V10, V13, V20. Use existing workspace, runtime-transaction, runtime, and source-bound admission suites where appropriate.
+
+**Risk:** a no-loss quarantine becoming an excuse to discard foreign edits or archive secrets. Validate contents/policy before preservation and refuse unsafe cleanup.
+
+### WP4 - Coherent revision activation and evidence assessment
+
+**Depends on:** WP1 versioning and WP3 interruption/custody rules. Run before translating existing B1 requests.
+
+**Owners:** Package store, admission, runtime transactions, workspace package snapshots, publication state; Designer workflow.
+
+**Sequence:**
+
+1. Choose the concrete draft/approved package layout and map existing package/admission/frontier/snapshot identities read-only.
+2. Implement prepare/activate/reconcile using one durable operation across the owning components; add restart tests at each boundary.
+3. Add stable acceptance identity/revision coverage and an independently reviewed applicability report. Preserve original receipts; do not relabel old evidence.
+4. Replace blanket request carry-forward with agent-owned reassessment/planning and the minimum remaining human step.
+5. Expose **Change requirements** and same-Change `/design` resume without user-selected stage mutation. Align contradictory workflow prose and instruction contracts.
+
+**Proof:** V14, V15, V16, V18, V21. Include source-bound admission, design package, Delivery state, workspace snapshot, and checkpoint replay tests.
+
+**Risk:** local runtime activation succeeds while branch/package/publication remains old. Acquisition must block on the activation operation until its required participants are coherent, and recovery must replay exact effects.
+
+### WP5 - Prepared assisted checks
+
+**Depends on:** WP1, WP2, and WP4 evidence/revision model; use B1 as the first adapter, not a hard-coded browser exception in Delivery core.
+
+**Owners:** Generic interaction contract in Delivery; Cockpit forms; candidate-specific Browser/B1 check runner; agent workflow.
+
+**Sequence:**
+
+1. Specify the handler registry, input descriptors, privacy constraints, cancellation, candidate/resource custody, and result provenance.
+2. Implement preparation as agent work. Validate that the form, runner, instructions, and required capability exist before projecting human attention.
+3. Build B1's local URL-entry and owned-browser handoff using the actual candidate. Test it with synthetic sites first; never exercise company credentials in CI.
+4. Bind human confirmations separately from agent-observed launch/restart/cleanup. Avoid generic free text containing secret values.
+5. Assess existing pilot evidence before scheduling a real remaining check; present the exact gap and preserve **Not now** without fake success.
+
+**Proof:** V15, V16, V17, V22, V23. Keep Browser tests below real acquisition/interaction boundaries; use Cockpit E2E for the user handoff and a controlled user session only for actual company authentication.
+
+**Risk:** leaking internal URLs or creating another prompt that says to run a script. Test privacy, expired input, denied permissions, and unavailable runner explicitly.
+
+### WP6 - Independent controller maintenance and upgrade
+
+**Depends on:** WP1 diagnostic contract; the minimal read-only maintenance entry should be available before the first live state migration. Full upgrade automation can follow WP3/WP4.
+
+**Owners:** Repository tools/setup, Delivery storage migrations and diagnostics, maintenance prompt and review policy.
+
+**Sequence:**
+
+1. Create the minimal offline diagnostic path without constructing a Change runtime; verify missing-MCP and malformed-frontier fixtures.
+2. Add versioned, fenced repair proposals for supported state/schema failures; distinguish recoverable known input from untrusted corruption.
+3. Pin controller code/capabilities per host session and implement a controlled drain/migrate/restart route.
+4. Define the isolated reviewed platform-code repair route, including how a failed upgrade restores the previous executable only when state is compatible.
+5. Exercise normal continuation after restart and ensure unsupported downgrade is refused before mutation.
+
+**Proof:** V18, V20, V21, V24. Tools may import Delivery components below application composition; Delivery core must not depend on tools.
+
+**Risk:** recovery requires the broken component to start, or a migration blesses an altered digest/provenance. Test both negative cases; never add `skip_validation` as a recovery route.
+
+### WP7 - Cutover, documentation, and operational proof
+
+**Depends on:** WP1-WP6 demonstrated for their supported categories. Documentation changes accompany each earlier behavior-owning task; this is the final audit, not delayed wiring.
+
+**Sequence:**
+
+1. Update prompts/skills/agent allowlists and `share/WIRING.md`; remove normal `/orchestrate` and manual finalization/attention instructions only once continuation covers their cases.
+2. Internal specialist workflows remain if useful, but their output routes to continuation. Do not leave old public aliases as an alternative unsafe path after cutover.
+3. Reconcile setup/configuration/generated inventories, immutable controller selection, and candidate worktree tooling. Update lockfiles only when dependency inputs change.
+4. Migrate existing Changes through the registered route, preserving prior versions, pending checks, approvals, and evidence. Produce before/after state and dry-run diagnostics for agent inspection.
+5. Run a representative start-to-completion journey and the D1/B1 interruption fixtures through prompts/Cockpit without manual Git, test commands, or JSON edits by the user.
+6. Demonstrate a fresh-session resume at each stopping point and review remaining unsupported failure categories before calling the product usable.
+
+**Proof:** complete V01-V24 set plus actual Copilot dispatch smoke. Preserve test outcomes and command versions; do not count mock-only tests as real host or managed SSO proof.
+
+**Risk:** retiring a prompt before its exceptional recovery capabilities are reachable leaves another dead end. Keep a capability inventory and retire by demonstrated replacement, not by filename cleanup.
+
+### 12.1 Three model tiers
+
+Use capability labels rather than hard-coded commercial model names. The user chooses one currently available model for each tier; choices can change without rewriting Design or altering a packet's acceptance. Higher numbers mean stronger reasoning requirements.
+
+| Tier | Intended work | Required boundary | Default independent review |
+| --- | --- | --- | --- |
+| T3 - Lead / critical | Source/context synthesis, architecture, unresolved contracts, concurrency, recovery, migrations, privacy/authorization, provider effects, evidence validity, final assembled judgment | May investigate and propose decisions; must still obtain product approval where required. Implements critical code itself rather than handing risk to a lighter model after writing prose | Independent T3 review for critical implementation and Design; no self-certification |
+| T2 - Engineer | Bounded multi-function implementation, adapter wiring, orchestration behavior from an explicit state table, integration fixtures, lifecycle-aware components | Contract and ownership settled; can make local implementation choices but cannot change semantics, safety fences, or scope | T2 normally; T3 for safety-relevant behavior and assembled release gates |
+| T1 - Routine | Presentation of already-computed state, mechanical field propagation, approved copy/docs, bounded simple tests from supplied scenarios | Exact source anchors, stable interfaces, explicit success/failure cases, no unresolved decisions about behavior or ownership | T2 minimum; T3 when the change unexpectedly affects a critical boundary |
+
+Tiers are resource-allocation guidance, not permission levels or guarantees that a model is correct. Code still needs the same tests and review. Do not downgrade a ten-line authorization check to T1 because it is short, and do not assign a whole frontend or test suite to T1 by file extension. Test-oracle design, secret-bearing forms, cancellation, and stale approval handling can be T3 work.
+
+Assess each packet on two separate axes: **difficulty/uncertainty** and **impact if wrong**. Either an unresolved cross-boundary decision or a serious integrity/security consequence makes it T3. Use T2 for known contracts with meaningful local logic. T1 is allowed only when both axes are low and the readiness gate below passes. The catalogue records starting recommendations; source inspection can raise a tier.
+
+The main economy is to pay T3 once to establish the next coherent contract, use T2/T1 for its well-specified consumers, and bring T3 back for consequential findings and assembly. Do not produce a speculative low-level design for the entire programme before testing the first slice.
+
+### 12.2 Lead-model handoff and packet readiness
+
+P00 is a short, T3-owned shared-contract pass. It settles only the action/attempt vocabulary, ownership boundaries, risk classification, and dependency plan needed to begin WP1. Before each later WP, T3 deepens that WP's open contracts using current source and predecessor results; this design activity belongs to the WP's existing Design workflow, not another research-only outcome.
+
+A packet becomes **ready for implementation** only when its preparing owner supplies:
+
+1. One concrete result, named WP/outcome, and current approved authority link/version. Research-only recommendations cannot authorize runtime changes.
+2. A bounded context bundle: the relevant document sections, exact source head, owning functions/files, a nearby implementation pattern, consumers, and relevant tests. Do not make a T1 worker rediscover the whole programme.
+3. Settled public schemas/signatures, state transitions, error mapping, and side-effect rules. Include example inputs/outputs and negative cases, not only class names.
+4. Explicit editable paths, preserved behavior, exclusions, and dependency commit/contract identities. The actual acquired launch supplies worktree, claim, and custody; a packet never fabricates them.
+5. Acceptance observations and runnable commands resolved for the implementation checkout, with expected outcomes and relevant baseline failures distinguished from new regressions.
+6. A permitted-discretion list and escalation conditions. If the specification still says "decide a locking policy" or "work out privacy behavior," it is not ready for T1/T2 implementation.
+7. Implementation tier, reason for that tier, review tier, and a named assembly owner. Receiving a passing leaf result is not evidence that the whole WP works.
+
+T3 should implement a narrow reference path in the first critical packet when it materially removes ambiguity for dependent workers. Do not introduce generic abstractions merely to manufacture a reusable example. Keep tests and generated artifacts required for a runnable boundary with the implementation packet that owns them.
+
+No handoff requires the user to write specifications, assemble context files, or translate tests. The planning/design agents prepare the packet; the user only assigns models and approves material decisions.
+
+### 12.3 Packet shape and result handoff
+
+This is a template for planning/context, not a proposed parallel storage format. Map `result`, `maintained_surfaces`, `constraints`, `exclusions`, `acceptance_observations`, and `proof_boundaries` to existing task definitions. Keep design meaning in the owning package. Implement tier metadata through the smallest supported task/launch policy extension, only if runtime routing requires it.
+
+```yaml
+packet_id: P04
+work_package: WP1
+implementation_tier: T1
+tier_reason: Presentation only; eligibility is supplied by the engine.
+review_tier: T2
+result: A Change card displays the engine-selected action or wait without local routing logic.
+authority: <approved Change/outcome and contract version>
+source_head: <verified implementation baseline>
+depends_on: <P03 reviewed commit and response contract version>
+context: <section 4.3, exact component/API/test anchors, analogous component>
+maintained_surfaces: <explicit component and test paths resolved by Planner>
+inputs: <engine response fixtures for ready, busy, failed, paused, and terminal states>
+outputs: <expected text, control state, and callback for each fixture>
+constraints: <engine owns eligibility; no new polling or state-transition policy>
+exclusions: <backend, acquisition, permissions, merge mutation>
+permitted_discretion: <local component decomposition within existing design conventions>
+acceptance_observations: <scenario IDs and concrete visible outcomes>
+proof_boundaries: <actual component with the API dependency replaced below it>
+commands: <resolved focused test, typecheck, and lint commands>
+escalate_when: <missing contract case or required decision not represented in engine output>
+```
+
+The implementation result contains the exact reviewed commit, owned paths, completed observations, actual commands/results, exported contract version, and unresolved findings. The receiver checks the current dependency bytes before coding. A stale interface pauses affected packets for Lead refresh; it does not cause each consumer to invent its own adjustment.
+
+Existing Delivery result submission and independent review remain mandatory. Do not create a separate success ledger for packets, and do not duplicate task status in this research document.
+
+### 12.4 Concrete packet catalogue
+
+Each implementation row owns tests for its behavior. "Requires" lists local prerequisite packets or decisions; the WP dependencies above also apply. P00 and the WP-specific Design gate precede implementation. P24 is the acceptance/cutover activity, not a substitute for earlier integration tests. Packet IDs are advisory stable labels, not fabricated task or claim IDs.
+
+| Packet | WP / domain | Tier | Owned result and delegation boundary | Requires | Proof / review emphasis |
+| --- | --- | --- | --- | --- | --- |
+| P00 | Shared Design / context | T3 | Resolve the initial action/result/custody contract; prepare the launch schedule, model choices, native task mapping, and exact first handoff. Name owners for later WP Design gates | Current source and approved product decisions | Sections 5-6 and 12.8; independent Design challenge; no production edits in this design activity |
+| P01 | WP1 / delivery | T3 | Shared readiness selector, versioned action/failure projection, durable failure routing; critical state semantics remain here | P00 and WP1 Design | V02, V03, V18; T3 review |
+| P02 | WP1 / delivery-mcp | T2 | Strict MCP models, registration, and adapter mapping for P01; no independent readiness decisions | P01 contract and reviewed reference behavior | Registered positive/negative envelopes; T2 review |
+| P03 | WP1 / cockpit HTTP | T2 | HTTP adaptation and degraded read response from the same P01 contract; no scheduler in routes | P01 contract and reviewed reference behavior | V02, V18 via actual routes; T2 review |
+| P04 | WP1 / cockpit UI | T1 | Render already-computed progress/action/wait, prompt copying, and supplied fixtures; not assisted inputs or merge policy | P03 and approved state/copy table | V02, V03, V17 component checks; T2 review |
+| P05 | WP6 early / tools | T2 | Read-only offline diagnostics using approved malformed-state fixtures; no repair writes or schema reinterpretation | P01 diagnostic contract and WP6 read-only Design | V18, V20; T3 review of offline boundary |
+| P06 | WP2 / delivery | T3 | Single-Change action acquisition, per-action custody, exact submission/replay and finalization handoffs | P01 and WP2 Design | V04, V05, V10, V11; T3 review |
+| P07 | WP2 / agent-config | T2 | Continuation controller prompt/role/skill from settled action table, including typed failure forwarding and host handoffs | P02, P06; approved dispatch/model policy | Actual host smoke; V01, V03, V17; T3 review |
+| P08 | WP2 / delivery-github | T3 | Provider capability investigation and exact-head merge/readback implementation without bypassing protections | P06 and explicit merge-policy approval | V12, V19; T3 review |
+| P09 | WP2 / cockpit | T2 | Merge confirmation and result flow consuming approved adapter contracts; no client-owned authorization | P03, P08 and existing Delivery mutation adaptation | V19 including stale confirmations; T3 review |
+| P10 | WP3 / delivery | T3 | Preservation-first nonterminal recovery and writer-exclusion rules; no-loss semantics implemented and fault-tested together | P06 and WP3 preservation Design | V06, V07, V10, V13; T3 review |
+| P11 | WP3 / delivery | T2 | Persist and enforce the Lead-defined failure fingerprint, retry budget, and backoff policy; no new failure taxonomy | P01, P06, P10 contract and WP3 policy table | V08, V09; T3 review of bounded convergence |
+| P12 | WP4 / delivery | T3 | Candidate/active authority versions and restartable activation across package, runtime, and publication owners | P06, P10, WP4 concrete storage/activation Design | V14, V18, V21; T3 review |
+| P13 | WP4 / delivery | T3 | Evidence coverage/applicability and precise request carry-forward; preserve immutable receipt meaning | P12 and approved acceptance identity/coverage contract | V15, V16; T3 review |
+| P14 | WP4 / agent-config | T2 | Designer revision/resume workflow and context handoff using P12/P13; remove contradictory procedural rules | P12, P13; approved same-Change revision policy | V14-V16 workflow/host proof; T3 review |
+| P15 | WP5 / delivery | T3 | Prepared-interaction lifecycle, candidate/resource binding, input-reference and separate confirmation contracts | P06, P13, WP5 privacy/provenance Design | V16, V17, V22 contract cases; T3 review |
+| P16 | WP5 / cockpit | T3 | Secure local input handoff, expiry, origin protections, and opaque references; implement sensitive boundary at strong tier | P03, P15 and explicit retention policy | V22 privacy, stale, cancel, and log checks; T3 review |
+| P17 | WP5 / browser | T2 | B1-specific check runner from approved procedure, consuming opaque inputs and controlling only owned resources | P15, P16, verified current B1 candidate and runner contract | Synthetic V22 and prepared V23; T3 review |
+| P18 | WP5 / cockpit UI | T1 | Approved assistance descriptions, preparation/wait state, evidence summary, and Not now control; no secret fields or authorization logic | P04, P16, P17 and approved view contract | V15-V17 presentation; T2 review; escalate any privacy/lifecycle change |
+| P19 | WP6 / delivery | T3 | Versioned fenced recovery/migration operations and negative validation below broken application composition | P10, P12, P13, WP6 migration Design | V18, V20, V21, V24; T3 review |
+| P20 | WP6 / tools | T3 | Offline application of approved maintenance proposals, immutable controller selection, drain/migrate/restart/recovery | P05, P19 and host upgrade contract | V20, V21, V24; T3 review |
+| P21 | WP6-7 / setup | T2 | Setup configuration and executable selection wiring from P20's tested contract, with distribution proof | P20, approved installation/upgrade UX | Setup and unavailable-capability cases; T3 review for activation behavior |
+| P22 | WP7 / docs | T1 | Reconcile operator examples and supported entry labels against shipped behavior; do not author policy or remove capabilities | Relevant reviewed predecessor behavior and approved cutover inventory | Links, exact commands, documented limitations; T2 review |
+| P23 | WP7 / cross-workflow tests | T2 | Run and complete the cumulative V01-V24 test matrix using predecessor fixtures and approved oracles; verify restart/resume across WP boundaries, not invent omitted production behavior | P18, P21, P22 and earlier packet proof; T3-owned assembled test oracles | One launch after implementation; automated fixture evidence separated from the real host/pilot evidence reserved for P24; T3 review |
+| P24 | WP7 / integration and cutover | T3 | Review cumulative behavior and remaining risks, rehearse migration, run assisted/live host acceptance, and authorize technical readiness | WP1-WP6 complete; P22/P23 evidence | Full matrix and user-only interaction rehearsal; independent T3 review, explicit user rollout approval |
+
+Each implementation packet owns its focused and applicable assembled tests before handoff. P23 has one later launch for cumulative cross-workflow coverage; it is not permission to defer tests, discover missing production wiring at the end, or require the user to launch the same package repeatedly. P24 owns the separate actual host/assisted check and final independent readiness assessment.
+
+A packet row that touches more than one actual ownership domain is split into dependency-linked native tasks by Planner, with its interface and assembled proof still assigned once. One packet session may oversee those tasks sequentially through authorized workers; it is not one unrestricted cross-domain Builder claim. P24 does not make one Builder task span the whole repository.
+
+P00 must allocate companion MCP/HTTP schema, grant, generated-output, and instruction updates for later contracts as they arise; P02/P03 are the first contract implementation, not permission to leave later operations unwired. Such companion tasks are normally T2 and ship before that contract's user journey is enabled. The catalogue is a concrete starting decomposition, not a claim that a fixed packet count eliminates source-grounded planning.
+
+### 12.5 Sequence, parallelism, and checkpoints
+
+Use the numbered waves in section 12.8 rather than packet-number order. Each packet has one implementation-session launch; an interrupted session resumes its same packet, not a new work item. P00 does not become a permanently running portfolio orchestrator.
+
+The schedule distinguishes design readiness, reviewed implementation, and integration into the next packet's baseline. A green test result in an isolated branch is not sufficient for a dependent packet to start. The responsible outgoing agent prepares the next handoff and verifies the predecessor code is reachable in the assigned baseline through supported integration operations.
+
+P10, P12, P13, P15, P16, P19, and P20 deliberately retain T3 implementation because they own irreversible, authority, concurrency, or privacy behavior. Assigning all implementation to smaller models would defeat the risk classification.
+
+Packet dependencies describe semantic readiness, not permission to write in parallel. Research or read-only review may proceed concurrently; mutation remains one authorized writer per Change worktree. Implement sibling packets serially within the same Change. Parallel implementation requires genuinely separate Change worktrees and compatible interfaces/ownership; do not create worktrees per packet or split a coherent Change just to occupy more models.
+
+At each WP checkpoint, T3 reviews the assembled outcome and unanticipated interactions, while the independent reviewer verifies the exact candidate. T1/T2 leaf passes alone cannot mark the WP complete. Shared design documents carry the reasons; packet contexts carry only the necessary version-bound subset.
+
+### 12.6 Escalation and independent review
+
+- Escalate before further implementation when a public contract is ambiguous, the needed path is outside maintained surfaces, a prerequisite is stale, or a change affects locking, migration, evidence validity, permissions, secret handling, merge approval, or destructive side effects unexpectedly.
+- For a local coding defect, permit one focused correction and rerun the same discriminating check. If the failure remains unexplained or requires a contract change, stop that packet and route it upward. Do not spend repeated low-tier attempts rediscovering the design.
+- T1 normally escalates to T2 for bounded implementation diagnosis and directly to T3 for semantic/safety findings. T2 escalates to T3 for those findings. Escalation does not automatically become a user question: T3 investigates repository facts first.
+- Preserve the exact candidate/diff, command output, and failure location using the current task's custody rules before handoff. A model switch never releases a live writer, erases WIP, starts a second claim, or resets the durable repair budget.
+- Independent T2 review is the minimum for T1 work. Critical packets require independent T3 review even when implementation was delegated to T2. The original Lead must not approve its own code by reviewing a summary it authored.
+- A higher-tier reviewer cannot compensate for an under-specified implementation packet by silently rewriting acceptance. Findings return to the appropriate Design/implementation owner with evidence.
+- A stronger model can execute a lower-tier packet when convenient. A weaker model cannot inherit a critical packet merely because the chosen T3 model is unavailable; expose the unavailable capability and allow an explicit stronger substitution or pause.
+
+### 12.7 Model selection and practical handoff
+
+This section governs how to implement this programme; it does not require building a general model router before P00. Initially the user can choose the model for a **fresh bounded session**, while the agent supplies a complete context/continuation prompt. For acquired Delivery work, use the configured worker policy: manually changing the top-level chat model does not prove that its Builder subagent changed models.
+
+The current Builder frontmatter pins a model. To support automatic per-packet routing, extend the existing worker policy with a three-entry capability-to-model mapping and carry the resolved choice in the bounded launch/audit context. Verify the actual VS Code dispatch behavior. Prefer an existing supported model override; if unavailable, use minimal model-specific worker bindings that share one Builder workflow and identical tool/custody rules. Do not duplicate full role procedures or silently route through the default model. Treat model routing as host policy, not a change to approved product meaning.
+
+The user should choose the three concrete model names once, not classify every task. Planner/Lead recommends the packet tier; the runtime/host enforces the chosen profile and records the requested and, where observable, actual dispatched model. If the host cannot confirm actual model identity, report that limit rather than claiming enforcement. No benchmark or cost/quality superiority for a named model is established by this plan.
+
+Example instructions for future sessions, after packet preparation (these are ordinary prompts, not new slash commands):
+
+```text
+Lead session (T3): Prepare P01 from section 12 of the continuation research.
+Read the current owning source and relevant Design. Resolve its action/failure
+contract, define positive and negative proof, and produce the bounded handoff.
+Do not admit work or change product requirements without the required approval.
+
+Implementation session (assigned tier): Implement the prepared P04 using the
+current authorized Delivery task and handoff. Verify predecessor contract/head,
+edit only maintained paths, run its scoped proof, and obtain independent review.
+Escalate missing contract cases; do not invent routing in the UI.
+```
+
+Agents prepare these instructions with actual Change/task identities, approved package, paths, and commands when they exist. The placeholders here are not executable authority. No user copies source context manually, builds a packet directory, or runs proof commands.
+
+Calibrate profiles using a small completed low-risk packet and its independent review results. Record meaningful rework, escalation rate, test/review outcomes, elapsed time, and cost when available. Do not optimize token cost by weakening review or assigning critical code to a model that fails the packet readiness/proof bar.
+
+### 12.8 Exact agent launch schedule
+
+This schedule is the operational reading of the catalogue. It deliberately limits parallelism while the shared engine contracts are changing. It does not authorize code work before the owning Design/custody gates or instruct the user to create branches and worktrees.
+
+#### 12.8.1 What the user does
+
+1. Select the T3 model and start **P00 only**, using the prompt below. Supply the chosen T3/T2/T1 model names in chat if not already configured. There is no need to prepare files or run commands.
+2. When the completed wave returns a verified **NEXT START** block, start one new packet session per listed packet with the specified tier and complete prompt. The wave table gives the fixed default order; do not launch a later wave early.
+3. For a wave with two lanes, start both only when its **NEXT START** block explicitly says `parallel: permitted` and names distinct authorized worktrees. Otherwise run lane A first, then lane B. The agents determine this; the user does not inspect paths, commits, or claims.
+4. Wait until both lanes have passed independent review and the agent-owned wave closeout has made the next baseline ready. **BLOCKED**, **review pending**, and **awaiting integration** are not completion.
+5. If an agent stops, resume that same packet/session. If it identifies a material product decision, answer the explained question. Do not start dependents to work around an unresolved predecessor.
+
+There is one primary session per packet, not one model process for the entire programme. Independent reviewers and authorized domain workers may still be dispatched by that session. The selected top-level model must not be mistaken for the configured subagent model; P00 verifies the actual dispatch route before claiming tier enforcement.
+
+#### 12.8.2 Launch waves
+
+Every wave waits for the preceding wave's closeout. Within a serial lane, arrows mean finish, review, and prepare the next baseline before starting the next agent. Parallel lanes are candidates, not unconditional write permission; the mandatory isolation gate follows the table.
+
+| Wave | Lane A: start in this order | Lane B: may overlap lane A only after isolation gate | Purpose / barrier before next wave |
+| --- | --- | --- | --- |
+| W00 | P00 (T3) | None | Approved initial contracts, model bindings, actual task/worktree mapping, initial source baseline, and P01 handoff ready |
+| W01 | P01 (T3) | None | Shared readiness/failure contract and core reference behavior reviewed; P02/P03/P05 inputs explicit |
+| W02 | P02 (T2) -> P03 (T2) | P05 (T2) | MCP/HTTP contract adapters plus independent read-only maintenance diagnostic entry; lane A stays serial |
+| W03 | P04 (T1) | None | First complete readiness-to-Cockpit slice tested; P06 design/custody contract ready |
+| W04 | P06 (T3) | None | Single-Change action/custody contract and necessary companion adapters/grants reviewed |
+| W05 | P07 (T2) -> P08 (T3) -> P09 (T2) | None | Continuation workflow, guarded provider merge, and confirmation UI tested end to end in fixtures |
+| W06 | P10 (T3) | None | Preservation and writer-exclusion behavior reviewed before broader automated recovery |
+| W07 | P11 (T2) | None | Durable bounded retry behavior and WP2/WP3 integration proven; no unbounded live loop enabled |
+| W08 | P12 (T3) | None | Revision storage/activation protocol and interruption proof complete |
+| W09 | P13 (T3) | None | Evidence applicability and request carry-forward complete; P14/P15/P19 contracts ready |
+| W10 | P14 (T2) | None | Designer revision route uses the reviewed protocol; no user-selected graph-stage repair required |
+| W11 | P15 (T3) | None | Prepared-interaction lifecycle and privacy/provenance contract complete |
+| W12 | P19 (T3) | None | Maintenance/migration core complete; deliberately serial with P15 because both can touch shared Delivery state |
+| W13 | P16 (T3) | P20 (T3) | Secure local input service and independent offline maintenance executor may progress on separate owners/baselines |
+| W14 | P17 (T2) -> P18 (T1) | P21 (T2) | Assisted browser runner/UI and controller setup wiring complete; shared setup/manifest edits remain reserved to P21 |
+| W15 | P22 (T1) | None | Documentation and public entry inventory reconciled against the actual implementation, not proposed commands |
+| W16 | P23 (T2) | None | Cumulative automated acceptance/resume matrix passed; real-host and human-only observations are explicitly outstanding for P24 |
+| W17 | P24 (T3) | None | Actual Copilot handoff, assisted check, migration/cutover rehearsal, independent final review, and explicit user rollout/merge approval |
+
+The safe fully serial fallback is:
+
+```text
+P00 -> P01 -> P02 -> P03 -> P05 -> P04 -> P06 -> P07 -> P08 -> P09
+  -> P10 -> P11 -> P12 -> P13 -> P14 -> P15 -> P19 -> P16 -> P20
+  -> P17 -> P18 -> P21 -> P22 -> P23 -> P24
+```
+
+This is intentionally not maximum theoretical parallelism. P01/P06/P10/P11/P12/P13/P15/P19 alter shared engine semantics or storage. P04/P09/P16/P18 can touch the same Cockpit detail/action files. P07/P14 and cutover touch common workflow definitions. Serializing these responsibilities is cheaper and safer than resolving concurrent authority changes across experimental contracts.
+
+Do not read W02 as permission to run P02 and P03 together in the same WP1 worktree. They are serial. P05 may overlap only because a separately authorized read-only maintenance outcome can be developed without changing that WP1 contract. The same principle applies to the maintenance lane in W13/W14.
+
+#### 12.8.3 Mandatory isolation and integration gate
+
+Before announcing parallel starts, the outgoing T3 lead or the wave closeout owner must verify:
+
+- The lanes are assigned to distinct authorized Change/maintenance workspaces for coherent outcomes, not per-packet proof worktrees. If both map to one Change, run serially even when file lists appear disjoint.
+- Native task-maintained paths and hunks do not overlap. Shared runtime models, operation registries, root manifests/lockfiles, setup/seed, fixtures, generated inventories, and instruction files have one named writer for the wave.
+- Each lane's required predecessor contract and commit are present in its baseline. No lane depends on an unreviewed change being made concurrently by the other.
+- The controller version stays pinned. Candidate tests use disposable state and do not replace the live Delivery MCP process, edit its configuration, or run migrations against live Changes in parallel.
+- Worktree custody, engine capacity, browser profile ownership, and isolated test ports/data permit the two sessions. A global resource conflict switches the wave to serial without changing product scope.
+- One lane is designated closeout owner before dispatch. After both results are reviewed, it integrates them through their owning operations, obtains any needed merge approval, runs the relevant assembled checks, and supplies the next exact baseline.
+
+For W02, P05 owns the offline diagnostic implementation; it cannot patch P01's core to make a failed diagnostic test pass. For W13, P16 owns local private-input behavior and P20 owns offline execution; shared host configuration is deferred to its named setup owner. For W14, P17/P18 consume the approved setup contract; P21 owns setup/seed/executable selection. An unexpected boundary change is an escalation, not permission to continue both writers.
+
+Integration is agent work. If separate Changes require acceptance before the successor can consume them, the wave closeout includes publication and the specific user merge approval; user approval is the only user task. A green packet on an unintegrated branch must be reported as **reviewed, awaiting integration**, not **NEXT START**.
+
+#### 12.8.4 Design preparation and packet closeout owners
+
+Avoid a hidden requirement to launch P00 again before every WP. P00 assigns these explicit design-readiness handoffs:
+
+| Upcoming gate | Preparing packet session | Required output before the lighter model starts |
+| --- | --- | --- |
+| P01 and initial adapters | P00, refined by P01 against its implemented contract | WP1 approved semantics, typed examples, exact editable paths, fixture cases, and proof commands |
+| P05 offline inspection | P01 with independent T3 review of the offline boundary | Read-only diagnostic contract and malformed-input fixtures; no mutation privileges |
+| P06 and P07 continuation | P06 begins with its T3 WP2 design gate, then prepares P07; P00 names the gate owner in advance | Explicit host topology, supported action/result schemas, reviewer route, and model binding |
+| P08/P09 merge interaction | P08 begins with its T3 provider/permission Design and feasibility check | Proven provider contract, separate user merge approval, stale/unknown-response cases, and UI examples |
+| P10/P11 recovery and retries | P10 begins with its T3 WP3 design gate and prepares P11 | Preservation/writer-exclusion policy plus concrete budget, fingerprint, reset, and backoff table |
+| P12/P13/P14 revision | P12 begins with its T3 WP4 design gate; P13 prepares P14 from implemented revision/evidence semantics | Concrete storage/activation protocol, reviewed applicability rules, and Designer workflow handoff |
+| P15/P16/P17/P18 assistance | P15 begins with its T3 WP5 design gate; P16 finalizes the secure service contract for P17; P17 supplies approved view fixtures for P18 | Registered handler, private-input lifetime, cancellation, actual browser procedure, and user-step descriptions |
+| P19/P20/P21 maintenance | P19 begins with its T3 full WP6 design gate; P20 prepares P21 | Migration/executable/upgrade contract and setup parity fixtures |
+| P22/P23/P24 cutover | P20 incorporates reviewed predecessor handoffs and prepares the cutover checklist/oracles; later packet agents update factual locators only | Exact public entry inventory, existing acceptance cases, negative oracles, missing live evidence, and release gates |
+
+A T3 packet with an unresolved material decision performs its Design work first and seeks only the required product approval; it cannot implement from this research alone. A lighter packet starts only after those decisions are complete. Design preparation does not grant an agent a new runtime-write boundary: use current approved workflows and obtain a fresh authorized task before implementing.
+
+The outgoing packet or preassigned wave closeout owner returns:
+
+```text
+Packet: <Pnn>
+State: reviewed and integrated | reviewed, awaiting integration | blocked
+Evidence: <exact result/review references and tests actually run>
+Next baseline: <verified ref/commit and contract version, or why unavailable>
+NEXT START: <next wave's exact packet IDs and model tiers, only when ready>
+Parallel: permitted | serial required
+Prepared prompts: <complete prompt for each next packet, with actual locators>
+```
+
+This is a user handoff summary over existing authority/results, not a new mutable status database. An independent reviewer still verifies the candidate. If a closeout owner lacks the expertise to settle a new contract issue, it dispatches an authorized T3 review or reports that specific blocker instead of fabricating readiness. The user is never asked to assemble the handoff themselves.
+
+#### 12.8.5 Exact first prompt and reusable packet instruction
+
+**Start now: select T3 and paste this into one new agent session.** This is an ordinary prompt for preparation; it does not require `/continue-change` to exist already.
+
+```text
+Prepare P00 for the Change-Scoped Continuation redesign.
+Read .owlbear/research/change-continuation-delivery-redesign.md, particularly
+sections 1-6, 12.1-12.8, and 14. Inspect current instructions, source, and
+existing Delivery work; do not overwrite or recreate another Change.
+
+Own the initial Design/context pass, not product implementation. Resolve the
+WP1 action/readiness/failure contract, identify the actual approved authority
+and supported execution route, and map packets to native tasks and worktrees
+without inventing claims or making one Change per packet. Plan for serial
+execution unless section 12.8's parallel isolation gate can actually pass.
+
+Use the three model choices I supply for T3/T2/T1. Verify how the chosen model
+will reach the real implementation worker; a pinned default subagent is not
+an implicit override. Ask only necessary product decisions, not repository
+facts or instructions for me to run tests or edit files.
+
+Obtain the required independent Design review and approval. Return the P00
+closeout with a complete prepared P01 prompt, its model tier, authority/context
+locators, exact baseline, and start condition. Do not start P01 or any sibling
+packet automatically. If the current tooling cannot dispatch that bounded
+task, identify the precise missing capability and a supported preparation
+route rather than pretending this research file grants runtime authority.
+```
+
+For later packages, use the complete prepared prompt from the predecessor, not a guessed command. The following fallback request lets an agent retrieve the handoff without the user collecting files or writing commands; replace only `Pnn` with the next packet ID in the schedule:
+
+```text
+Execute packet Pnn from section 12.8 of
+.owlbear/research/change-continuation-delivery-redesign.md.
+Use its prepared handoff and the current approved Design/task context. Verify
+the predecessor baseline, assigned model, editable paths, and exclusive custody
+before editing. If the handoff is missing, locate the predecessor result and
+have its owning Lead prepare the missing contract; do not invent semantics.
+
+Own this packet only, including its focused tests and independent review.
+Use the supported native task/worktree route; do not acquire unrelated work or
+edit live authority. Respect the wave's parallel/serial decision and shared-file
+reservations. Stop and report a concrete blocker when permission or semantics
+are missing; do not ask me to run tests, edit worktrees, or fix Git.
+
+Finish with the packet/wave closeout from section 12.8, complete prepared
+next-start prompts, and whether parallel launch is actually permitted. Do not
+start the next primary packet session yourself.
+```
+
+The table is a dependency-correct initial schedule, not a promise that unbuilt interfaces are ready today. If fresh evidence invalidates a dependency or tier, the owner updates the affected prepared handoff and gives the user a revised **NEXT START** list before another launch. It must explain the exact new dependency rather than silently expanding this into more packages.
+
+## 13. Acceptance and Fault-Injection Matrix
+
+Tests below are required scenarios for the proposed programme, not claims that current code passes them. Use deterministic disposable repositories and lower-boundary provider/browser fakes. Use real maintained UI/API/engine wiring for assembled claims. No scenario uses live Delivery state or real credentials in CI.
+
+| ID | Input/interrupt | Required observable result | Preferred proof |
+| --- | --- | --- | --- |
+| V01 | New concrete Change approved and continued | Plan/build/review/finalize/publish/approve-merge/observe-completion succeeds with only prompt/form/approval user actions | Full engine/MCP/HTTP fixture plus Cockpit journey and separate actual Copilot smoke |
+| V02 | Dirty completed-task worktree with no finalization | Card and acquisition agree on recovery/preflight, not executable finalization | Work-item/application/adapter test |
+| V03 | Finalizer fails before tests | Persisted failure says checks not run; next session obtains a repair action, not identical finalization | Finalization result and fresh-session integration |
+| V04 | Two sessions continue the same Change | One mutation owner; second returns busy and cannot change branch or frontier | Barrier-controlled concurrent acquisition |
+| V05 | Two different Changes, limited capacity/shared target | No cross-Change claim leakage; capacity is respected; each target update rechecks current evidence | Multi-application integration with provider fake |
+| V06 | D1-like formatting drift with proven ownership | Exact bytes preserved before scoped restoration; reviewed head unchanged; verification resumes | Workspace integration and failure injection |
+| V07 | Drift changes after proposal, or file is foreign/staged/secret-like | No overwrite or secret publication; stale proposal/containment and explanatory action | Workspace negative cases |
+| V08 | Formatting command mutates files during proof | Command and paths retained; repair fixes output/procedure before new exact-head proof | Managed proof command integration |
+| V09 | Repeated same check failure across fresh sessions | Durable budget exhausts; no more automatic equivalent attempts; other Changes remain runnable | Runtime restart/clock fixture |
+| V10 | Worker exceeds lease but may still write | No cleanup/reuse until supported termination or exclusion evidence; old writer cannot contaminate replacement | Controlled live-worker fixture, not only timestamp tests |
+| V11 | Target advances/conflict during final verification | Old proof not attributed to new candidate; bounded repair/review and fresh approval where necessary | Workspace/provider interleaving |
+| V12 | Push or merge succeeds remotely but response is lost | Readback identifies original effect; no duplicate mutation/completion | Provider adapter fault fixture |
+| V13 | Quarantine/restoration fails midway or disk write fails | No false cleanup success; preserved evidence and original error remain; replay does not discard foreign work | Runtime/workspace failure injection |
+| V14 | Requirement changes with old code/proof present | Prior authority retained; candidate delta reviewed; activation coherent; only affected work invalidated | Source-bound admission integration |
+| V15 | B1-style repeated request IDs with unchanged proven claim | Evidence reused by covered claim/version; no new human exercise just because request ID changed | Evidence applicability and UI fixture |
+| V16 | Revised target not covered by old evidence | Exact missing claim shown; no silent acceptance waiver; runnable new step only after preparation | Revision/assistance integration |
+| V17 | Assisted check with unavailable handler/tool or no agent host | Agent preparation/host-needed state, not **Needs your evidence**; no fake launch | Capability and Cockpit E2E |
+| V18 | Invalid frontier or pending snapshot while UI loads | Degraded Change remains visible; maintenance entry works without loading invalid runtime | Startup/API/maintenance integration |
+| V19 | Approve merge, then head changes or protection fails | No merge of unapproved head; reason and actionable review/retry presented | Provider and UI confirmation test |
+| V20 | Unknown corruption or missing user-confirmation provenance | No auto-blessing/rehashed state; preserve and diagnose; no fabricated approval | Maintenance negative fixture |
+| V21 | Crash after each revision/migration durable step | Restart reaches old approved version or replayed new coherent version; no duplicate child commit or lost block | Parameterized transaction/remote snapshot replay |
+| V22 | Private URL/credential-like input, expired session, cancelled sign-in | Validate/reject safely; no secrets in transcript/log/receipt; cleanup only owned resources; cancel is not pass | Local helper/browser/privacy fixtures |
+| V23 | Real managed-device assisted check | User only inputs approved address locally and signs in/confirms; agent runs remaining procedure and stores bounded evidence | Controlled user session, explicitly not replaceable by synthetic CI |
+| V24 | Controller upgrade with active work or unsupported downgrade | Actions drain/fence; invalid upgrade refused or safely reverted; existing records resume under supported schema | Versioned startup/migration rehearsal |
+
+Repository checks should reuse current suites and helpers. Find owning test roots before execution; use focused public-function tests for local logic, registered MCP/HTTP tests for contracts, and maintained Cockpit E2E for interactions. Relevant gates include `uv run test` routing, `npm test`/frontend build, package-boundary tests, and agent/skill/prompt validators. Select exact commands from the implementation checkout; do not copy old test counts as evidence.
+
+Track action retries, repair duration, repeated human prompts, and time waiting for agent versus user/provider. These metrics explain failure cost; they are not required to create a new dashboard. Acceptance is that the defined scenarios complete without manual technical intervention, not an unsupported claim of zero possible failures.
+
+## 14. Existing Work, Rollout, and Handoff Rules
+
+### 14.1 Avoid competing repairs
+
+- D1/frontier serialization is an existing candidate with earlier completed-task evidence, not a new implementation task for this programme. Re-read current custody and publication before touching it. Its dirty-worktree incident becomes WP3's disposable fixture and a later controlled recovery case.
+- B1 is existing authored/admitted work with revised requirements and historical proof. WP4/WP5 must preserve its choices and locate missing evidence; do not restart design from scratch or narrow acceptance to save time.
+- B5 remains a separate public interactive-browser surface. Continuation/assistance does not grant its tools or broaden destination policy as a shortcut to sign-in.
+- Proposed backlog work on fencing (#216), retry convergence (#221), remote bounds (#220), finalization assurance (#222/#219), Design re-entry (#213), and PR-feedback continuity (#225) overlaps this programme. Check current issue/Change status before formal planning; allocate each responsibility once, reuse merged fixes, and link dependencies rather than recreate work.
+- Completed capacity, acceptance evidence, and static/Knowledge/Memory work from the earlier planning pass remain their own baseline. This is not authorization to reopen unrelated Changes.
+
+### 14.2 Safe delivery order
+
+1. Build WP1 and the minimal offline diagnostic portion of WP6 first. Establish fixtures and the shared action contract before changing live flow.
+2. Deliver WP2 normal continuation and WP3 bounded recovery in closely sequenced independently tested Changes. Do not enable an unbounded automation loop while repair results remain chat-only.
+3. Deliver WP4 revision/evidence coherence, then WP5 assistance. Candidate-specific harness work may proceed after its generic contract is agreed, but B1 live state changes wait for safe revision handling.
+4. Complete WP6 controlled upgrades, then WP7 cutover and a no-manual-repair acceptance rehearsal.
+
+Design these as related but independently reviewable outcomes. The programme is not an admitted mega-Change. Shared action schemas are a dependency contract; group tasks only when they have one coherent acceptance story and rollback unit.
+
+### 14.3 Rules for the implementing agent
+
+1. Read this document, current owning source, existing relevant Changes, and fresh local instructions. The source baseline here is not permission to overwrite newer work.
+2. For the selected WP, produce an approved Design if it changes public semantics, custody, merge permissions, or persisted schema. Research recommendations are not generated Delivery authority.
+3. Resolve the WP's concrete data layout/schema and state transitions before editing multiple consumers. Add positive and negative fixtures at the real public boundary.
+  Apply section 12's tier assignment and packet-readiness gate; model capability does not replace exact authority or independent review.
+4. Implement in domain-local tasks. Keep a cross-domain normal-boundary proof owner; do not add a final vague "wire everything together" task.
+5. Preserve user staging, active worktrees, prior immutable receipts, and private inputs. No broad reset, profile deletion, or direct state edits.
+6. Use existing libraries/helpers and transaction/provider owners. Do not create a universal task engine, unrestricted fixer, test-only framework, or new database for this programme.
+7. Report exact scope, commands/results, changed contracts, remaining risks, and user-visible behavior. An API that exists but has no prompt or Cockpit path is not feature-complete.
+8. Stop for a material product/permission choice with a specific recommendation. Do not ask the user to supply tests, edit a worktree, translate acceptance into proof, or choose internal transaction operations.
+
+### 14.4 Decision register for formal Design
+
+| Decision | Recommended direction | Must be settled before |
+| --- | --- | --- |
+| Normal entry and orchestration retirement | Single-Change continuation; global engine coordination retained | WP2 public contract |
+| Automatic no-loss worktree repair policy | Allow exact-owned preserved drift recovery, never unknown writers or foreign loss | WP3 enablement |
+| Same-Change revision | Versioned candidate plus replayable activation for quiescent nonterminal work | WP4 schema/transaction implementation |
+| Evidence reuse | Claim/version applicability review, preserve original receipt identity | WP4 carry-forward |
+| Merge capability and approval | Explicit exact-head approval; bounded provider adapter; no implicit target mutation | WP2 publication rollout |
+| Copilot host integration | Copy a complete prompt initially; prove any one-click dispatch before advertising it | WP2 UI rollout |
+| Retry budgets | Small persistent budgets by failure class; measured tuning later | WP3 loop enablement |
+| Controller isolation/upgrade | Immutable tested controller revision plus registered migrations | WP6 rollout |
+| Sensitive local interaction inputs | Local ephemeral form and opaque reference; login secrets only in browser | WP5 check runner |
+
+These decisions are recorded here so the next implementer knows where judgment is still required. They do not require asking the user a large questionnaire now or inventing alternatives where one adequate implementation exists.
+
+### 14.5 Programme completion and deliberate non-goals
+
+The programme is usable when the user can start a Change, resume it after interruption, answer a genuine prepared question, approve the result, and see accepted completion without running tests or editing files. Every supported failure fixture must either resume automatically or expose one working prompt/control with a concrete consequence. An unexplained `attention`, `proof_failed`, or `authority-gap` is not a completed handoff.
+
+This does not promise zero implementation defects, unattended operation with Copilot closed, access to unavailable company systems, automatic destruction of ambiguous files, or arbitrary corruption repair. It does not add deployment/production verification to merge-based completion. It does not grant generic interactive-browser tools access to credentials. It does not require a custom VS Code extension, database migration, new workflow language, or autonomous agent server.
+
+If an implementation reveals one of those mechanisms is actually necessary, stop at the owning Design decision and explain why the smaller existing capability is insufficient. Do not silently widen the programme, weaken acceptance, or create another hidden manual prerequisite.
+
+## 15. Evidence and Verification Limits
+
+- Research only: product code, live Delivery records, GitHub, browser profiles, and existing untracked artifacts remain untouched.
+- The declared research-instruction stub is absent in this checkout; the available `w-research` workflow governs this artifact.
+- Source observations above use the recorded baseline. Runtime incidents are explicitly earlier observations, not freshly executed proof.
+- Document checks cover local links, balanced fences, unique P00-P24 catalogue/tier assignments, V01-V24 acceptance rows, and ASCII content. The launch schedule additionally requires one launch per packet, matching tiers, and no later-wave prerequisites. These structural checks do not validate model quality, actual worktree isolation, or implementation readiness. The catalogue is a proposed handoff plan, not 25 admitted tasks or runtime packages.
+- Markdownlint was not available in the checked executable locations. Research is also excluded by the repository's Markdownlint CLI2 configuration; no lint pass is claimed and no dependency was installed for this documentation task.
+- No product tests, fault-injection campaign, browser pilot, provider mutation, or actual Copilot continuation dispatch were executed for this research artifact. The 24 proposed scenarios are future acceptance requirements, not observed results.
+- Other sessions changed the workspace during authoring. This file is the only artifact authored by this session; the baseline is an evidence locator, not a claim that current `dev` is still at that revision.
+- Confidence is high in the identified incomplete handoffs and source-level ownership gaps; medium in the proposed action/revision contract until exercised through assembled fixtures. Host dispatch topology, provider merge guarantees, concrete versioned storage layout, and private-input handling require the focused feasibility work specified in their owning work packages.
