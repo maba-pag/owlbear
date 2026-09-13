@@ -5113,10 +5113,13 @@ class PortfolioApplication:
                     "readiness_diagnostics": () if ready else (view.readiness.reason_code,),
                 }
             )
-        if publication.phase in {
-            WorkItemPublicationPhase.ABANDONED,
-            WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
-        } or not coordination.worktree_path.exists():
+        if coordination.worktree_cleanup is None and (
+            publication.phase in {
+                WorkItemPublicationPhase.ABANDONED,
+                WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
+            }
+            or not coordination.worktree_path.exists()
+        ):
             retained = self._workspace_manager.inspect_retained(change_id, coordination)
             publication = publication.model_copy(
                 update={

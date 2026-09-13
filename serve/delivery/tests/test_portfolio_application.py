@@ -4317,6 +4317,9 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert detail.publication.worktree_cleanup == change.detail.publication.worktree_cleanup
     assert detail.publication.worktree_cleanup.eligible is True
     assert detail.publication.worktree_cleanup.completion_id == receipt.completion_id
+    application.cleanup_change_worktree("change-a", receipt.completion_id)
+    assert application.show_work_item_view("change-a", "publication").publication.worktree_cleanup is None
+    assert application.get_change("change-a").detail.publication.worktree_recovery is None
     user_checkout_before.assert_unchanged(repository)
 
 
@@ -4373,6 +4376,8 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
     assert application.cleanup_abandoned_change_worktree("change-a") == receipt
     assert application.list_retained_change_worktrees() == ()
+    assert application.show_work_item_view("change-a", "publication").publication.worktree_cleanup is None
+    assert application.get_change("change-a").detail.publication.worktree_recovery is None
     before.assert_unchanged(repository)
 
 
