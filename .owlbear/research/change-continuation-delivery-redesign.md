@@ -1,14 +1,136 @@
 # Change-Scoped Continuation and Recoverable Delivery
 
-> **Owning request:** User-requested Delivery usability and architecture rethink; WP1 is now admitted separately as `delivery-action-readiness`.
-> **Date:** 2026-09-12
+> **Owning request:** User-authorized direct implementation of the Delivery redesign on `dev`.
+> **Updated:** 2026-09-13
 > **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
-> **Status:** Research and implementation blueprint, not approved Design authority. Proposed tool names, prompts, schemas, defaults, and actions are not current callable interfaces.
+> **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** [P00 and wave 01 handoff](delivery-action-readiness-p00.md) owns current release evidence and gates. P00 prerequisites are published and synchronized; P01/TASK-001 is implemented, independently reviewed, and submitted at `4bf2365180c2851723fa09d91fa48a209220eb33`. Its 465 core tests passed; the broader run retains one verified pre-existing checkpoint test failure. P02 has not started. This research remains advisory for later work packages.
+**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. P04 UI and P05 offline diagnosis are not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
 
-**Reading route:** Sections 1-4 explain the proposal and user journey. Sections 5-11 specify runtime contracts and failure handling. Section 12 is the implementation sequence; sections 12.1-12.7 add model tiers, bounded implementation packets, and model handoffs. **Section 12.8 is the user launch schedule and contains the starting prompts.** Section 13 supplies proof scenarios, and section 14 governs migration and handoff. An implementing agent must read the relevant contract section before starting its packet; the work-package summary alone is insufficient.
+**Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
+
+## 0. Direct Implementation Decision
+
+The user explicitly authorized consolidation into `dev`, removal of unnecessary bootstrap work,
+and direct implementation. This changes how the redesign is built, not its promised behavior.
+No admission, task plan, claim acquisition, result submission, per-packet worktree, host model
+attestation, or automatic Delivery transition is a prerequisite for programme development.
+This section replaces all earlier wave-launch and native-execution instructions, including those
+in historical Design packages and the P00 handoff. Product runtime claims/receipts remain required
+features where the design specifies them; they are tested with disposable data, not used to govern
+their own implementation.
+
+### Consolidation and Boundaries
+
+- Retain selected acquisition, the direct-tool workaround, readiness/report storage, registered MCP
+  contracts, restricted inspection/finalizer wiring, HTTP adapters and their tests. They provide
+  product behavior, not just programme administration.
+- Merge the complete reviewed readiness branch, preserving its commit history and package snapshot.
+  Reconcile the four overlapping primary-checkout edits; do not overwrite them with an older copy.
+- Remove the unused controller-switch bootstrap, its dedicated tests, ignore rule and setup guide
+  section. Its old commits remain recoverable. Do not build a release manager to unblock this work.
+- Preserve D1, B1, B5, offline-diagnostics drafts, private state, memory candidates and unrelated issue
+  worktrees. Existing readiness records are a historical snapshot; do not manufacture completion,
+  abandon records, or edit their JSON to match the new process.
+- Keep the merged readiness worktree/branch as a recovery reference for now. No further writer is
+  assigned there. Physical deletion is not worth making retained coordination point at missing files.
+- P00 is closed as preparation. Completed code is not reimplemented. WP1 as a user-facing feature is
+  not complete until its UI and assembled checks pass.
+
+Consolidation verification: **739 tests passed** across Delivery core/report storage/workspaces,
+MCP adapters and registration, Cockpit HTTP, package boundaries, agent ecosystem and normal setup.
+The product files match reviewed readiness head `7580a8caa`; the only merge conflict was the tool
+inventory, resolved by retaining both finalization context and report operations. This is a scoped
+regression result, not full V01-V24 acceptance or live activation. The previously documented
+checkpoint replay test remains D01 work and was not included in this scope. Document links/fences,
+D00-D08 uniqueness and retained V01-V24 rows were checked; no Markdownlint pass is claimed.
+
+### Development and Review
+
+Use one primary coding session and one writer on `dev`. Work in small domain-local commits; a work
+package may contain sequential core, adapter, UI and documentation substeps without becoming several
+Delivery Changes. Read-only reviewers can run independently. Do not run parallel source writers on
+this shared checkout. Update this section at package closeout with commits, tests and the next step.
+
+Keep the selected model preferences: T3 Astra for consequential contracts, T2 Opus for bounded
+implementation, T1 Luna only for settled low-risk presentation. Different-family independent review
+is required for implementation commits. Use an ordinary read-only code-review invocation, not a
+native build-reviewer receipt that requires a Delivery claim. Model selection guides staffing; it
+must not create a new routing engine or require proof of hidden serving weights.
+
+The agent owns dependency setup, focused tests, scoped commits, independent review and handoff.
+Existing approved product meaning stands; ask only for a genuinely new product, destructive-action,
+privacy or permission decision. A local coding defect is fixed locally, not returned through a graph.
+No blanket test exclusions or acceptance waivers are introduced by direct development.
+
+### Live State Safety
+
+Delivery MCP and Cockpit launched from this checkout are stopped. The local Delivery entry in
+[MCP configuration](../../.vscode/mcp.json) is intentionally removed; the other servers and seed
+configuration are unchanged. Do not restore it or launch Cockpit against live state as an inner-loop
+check. Run the actual server/UI against temporary fixture repositories and isolated ports.
+
+Before live activation, the agent checks for active work and pending effects, preserves current
+configuration/state, rehearses any schema transition on a copy, and verifies the tested revision
+can start and perform a read against that copy. Restore the standard MCP entry only at the explicit
+activation checkpoint. Never restore old state over new evidence to make a rollback start. If live
+operation is needed during development, arrange a separate known-good checkout without introducing
+another scheduler or controller-switch framework. The user performs no manual tests or Git repair.
+
+### Recut Work Packages
+
+These nine packages replace the seventeen-wave launch sequence. D01-D08 run serially; numbers are
+checklist labels, not runtime tasks. The old P identifiers remain only to show requirement coverage.
+
+| Package | Result | Prior scope | Tier / dependency |
+| --- | --- | --- | --- |
+| D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
+| D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | T2 lead; first implementation |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | T3 contracts, T2 wiring; after D01 |
+| D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
+| D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
+| D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
+| D06 | Prepared local assistance, private-input handling, B1 runner and evidence UI | P15/P16/P17/P18 | T3 privacy/core, T2 runner, T1 presentation; after D04/D05 |
+| D07 | Supported offline repair/migration and minimum release/restart procedure with setup parity | P19/P20/P21 | T3; after D03/D04, before any live state migration |
+| D08 | Reconcile public docs, run cumulative fault matrix, rehearse actual host flow and activate deliberately | P22/P23/P24 | T3 owns acceptance; after D01-D07 |
+
+No product scope is removed by grouping packets. P20's required safe upgrade behavior is retained
+in D07/D08, but the deleted custom bootstrap is not the mandated implementation. Prefer existing
+Git/uv/process capabilities and one tested procedure unless evidence requires more.
+
+### Next: D01
+
+Start at [workItems.ts](../../serve/cockpit/web/src/api/workItems.ts), the existing WorkItem
+presentation/detail components and their tests. Consume the merged readiness DTO and unavailable
+variants; do not calculate eligibility in the client. Preserve dense existing Cockpit styling,
+accessible controls, six readiness states, explicit checks-not-run status and honest copy labels.
+
+Before UI edits, reproduce the retained failure in
+[test_checkpoint_publication_regressions.py](../../serve/delivery/tests/test_checkpoint_publication_regressions.py):
+`test_checkpoint_snapshot_replays_after_publication_failure`. Inspect the fake clock and current
+retry/backoff owner. Fix the fixture only if it assumes immediate retry contrary to the contract;
+otherwise repair the actual regression. Do not delete or skip the test. It predates this merge and
+is not permission to call the full suite green.
+
+Resolve proof commands from current manifests. Expected D01 gates: focused core/registered MCP/HTTP
+tests; `npm test`, `npm run build`, and the maintained `npm run test:e2e:work` in
+`serve/cockpit/web` against disposable state. Include truthful malformed/unknown Change, dirty/clean
+candidate, restart report, and read-only inspection control cases. Reuse existing suites and test
+helpers. Review the exact candidate before declaring WP1 done; do not turn that declaration into
+live Delivery completion.
+
+```text
+Implement D01 directly on dev using section 0 of
+.owlbear/research/change-continuation-delivery-redesign.md.
+Do not create or acquire Delivery work. Keep the live Delivery MCP and Cockpit
+stopped; use disposable state. Preserve unrelated changes and the merged P01-P03
+implementation. Resolve the known checkpoint replay baseline without weakening
+backoff, finish the readiness UI from engine DTOs, and run the scoped assembled
+tests, frontend build and maintained work-portfolio E2E. Obtain independent
+different-family code review. Commit owned changes and update the plan with
+actual results. Stop before D02 and before live activation.
+```
 
 ## 1. Recommendation and Product Boundary
 
@@ -498,15 +620,21 @@ The user supplies no test commands or file edits. If the maintenance toolchain c
 
 ### 11.3 Stable host version and schema gate
 
+This section specifies eventual product activation behavior, not a prerequisite to build the
+redesign. Direct development uses the stopped live consumers and disposable-state policy in
+section 0. The removed P00 controller-switch script is not a required mechanism.
+
 Pin one controller executable and schema capability set for an active session. Changes in the development checkout must not hot-replace that loaded controller during work. Use the existing clone/uv setup model to resolve a tested controller release or immutable revision, rather than inventing a new always-on service.
 
 On upgrade, stop new actions, drain or fence writers, preserve migration inputs, run registered schema migration/replay, restart the host, and verify health plus one read/action round-trip. Reject unsupported downgrade before it reads new state. Runtime backwards-compatibility paths are not the default: keep explicit versioned migrations and recovery evidence instead.
 
 An engine-offline inspection and approved migration can work with MCP unavailable. Copilot itself still needs to be available to run a prompt; a total host outage cannot be solved by promising a nonexistent autonomous agent.
 
-## 12. Implementation Work Packages
+## 12. Product Work Packages and Original Scope Map
 
-This is a staged programme with independently reviewable work, not one giant implementation commit. Formal Design may choose several Changes, but each work package below is complete only when its behavior is reachable and tested. Domain-specific tasks follow the architecture rules; cross-domain acceptance has one named owning work package.
+These product groupings retain the design rationale and requirement coverage. The active execution
+schedule is D00-D08 in section 0, using direct `dev` commits and independent review. A grouping is
+complete only when its behavior is reachable and tested, not because a Delivery record says so.
 
 The WP1-WP7 groups describe outcomes. The P00-P24 catalogue in section 12.4 describes bounded model handoffs inside those groups. These are planning packets, not new Python/npm packages, new Delivery Changes by default, or independently maintained task records. Formal planning maps approved packets into the existing task/context mechanism.
 
@@ -652,14 +780,16 @@ The main economy is to pay T3 once to establish the next coherent contract, use 
 
 ### 12.2 Lead-model handoff and packet readiness
 
-P00 is a short, T3-owned shared-contract pass. It settles only the action/attempt vocabulary, ownership boundaries, risk classification, and dependency plan needed to begin WP1. Before each later WP, T3 deepens that WP's open contracts using current source and predecessor results; this design activity belongs to the WP's existing Design workflow, not another research-only outcome.
+P00's shared-contract preparation is closed. Before each remaining direct work package, the lead
+resolves its local contract and proof from current source and predecessor results. This is work
+inside the coding session, not a new Design admission or research-only outcome.
 
 A packet becomes **ready for implementation** only when its preparing owner supplies:
 
-1. One concrete result, named WP/outcome, and current approved authority link/version. Research-only recommendations cannot authorize runtime changes.
+1. One concrete result, named direct work package and relevant approved product requirements. Live runtime changes remain separately gated.
 2. A bounded context bundle: the relevant document sections, exact source head, owning functions/files, a nearby implementation pattern, consumers, and relevant tests. Do not make a T1 worker rediscover the whole programme.
 3. Settled public schemas/signatures, state transitions, error mapping, and side-effect rules. Include example inputs/outputs and negative cases, not only class names.
-4. Explicit editable paths, preserved behavior, exclusions, and dependency commit/contract identities. The actual acquired launch supplies worktree, claim, and custody; a packet never fabricates them.
+4. Explicit editable paths, preserved behavior, exclusions, and dependency commits already on `dev`. No worktree or claim is acquired for this programme.
 5. Acceptance observations and runnable commands resolved for the implementation checkout, with expected outcomes and relevant baseline failures distinguished from new regressions.
 6. A permitted-discretion list and escalation conditions. If the specification still says "decide a locking policy" or "work out privacy behavior," it is not ready for T1/T2 implementation.
 7. Implementation tier, reason for that tier, review tier, and a named assembly owner. Receiving a passing leaf result is not evidence that the whole WP works.
@@ -670,20 +800,22 @@ No handoff requires the user to write specifications, assemble context files, or
 
 ### 12.3 Packet shape and result handoff
 
-This is a template for planning/context, not a proposed parallel storage format. Map `result`, `maintained_surfaces`, `constraints`, `exclusions`, `acceptance_observations`, and `proof_boundaries` to existing task definitions. Keep design meaning in the owning package. Implement tier metadata through the smallest supported task/launch policy extension, only if runtime routing requires it.
+This is a coding-session handoff, not a task schema or another database. Record the smallest useful
+subset in this plan or the session's closeout. Do not implement model routing or publish task records
+to carry programme context.
 
 ```yaml
-packet_id: P04
+packet_id: D01
 work_package: WP1
 implementation_tier: T1
 tier_reason: Presentation only; eligibility is supplied by the engine.
 review_tier: T2
 result: A Change card displays the engine-selected action or wait without local routing logic.
-authority: <approved Change/outcome and contract version>
+authority: <user-approved product requirements and relevant plan sections>
 source_head: <verified implementation baseline>
 depends_on: <P03 reviewed commit and response contract version>
 context: <section 4.3, exact component/API/test anchors, analogous component>
-maintained_surfaces: <explicit component and test paths resolved by Planner>
+maintained_surfaces: <explicit component and test paths resolved by the coding session>
 inputs: <engine response fixtures for ready, busy, failed, paused, and terminal states>
 outputs: <expected text, control state, and callback for each fixture>
 constraints: <engine owns eligibility; no new polling or state-transition policy>
@@ -697,11 +829,14 @@ escalate_when: <missing contract case or required decision not represented in en
 
 The implementation result contains the exact reviewed commit, owned paths, completed observations, actual commands/results, exported contract version, and unresolved findings. The receiver checks the current dependency bytes before coding. A stale interface pauses affected packets for Lead refresh; it does not cause each consumer to invent its own adjustment.
 
-Existing Delivery result submission and independent review remain mandatory. Do not create a separate success ledger for packets, and do not duplicate task status in this research document.
+Independent exact-commit review remains required. Delivery result submission is not used for this
+programme. Section 0 owns the concise progress record; Git and executed checks provide evidence.
 
-### 12.4 Concrete packet catalogue
+### 12.4 Original Packet Coverage Reference
 
-Each implementation row owns tests for its behavior. "Requires" lists local prerequisite packets or decisions; the WP dependencies above also apply. P00 and the WP-specific Design gate precede implementation. P24 is the acceptance/cutover activity, not a substitute for earlier integration tests. Packet IDs are advisory stable labels, not fabricated task or claim IDs.
+The following P00-P24 identifiers are retained only to map earlier specifications and proof to the
+active D00-D08 schedule. Do not start them through Delivery or reproduce their old launch gates.
+Each behavior still owns its tests, and final cutover is not a substitute for earlier integration.
 
 | Packet | WP / domain | Tier | Owned result and delegation boundary | Requires | Proof / review emphasis |
 | --- | --- | --- | --- | --- | --- |
@@ -733,207 +868,42 @@ Each implementation row owns tests for its behavior. "Requires" lists local prer
 
 Each implementation packet owns its focused and applicable assembled tests before handoff. P23 has one later launch for cumulative cross-workflow coverage; it is not permission to defer tests, discover missing production wiring at the end, or require the user to launch the same package repeatedly. P24 owns the separate actual host/assisted check and final independent readiness assessment.
 
-A packet row that touches more than one actual ownership domain is split into dependency-linked native tasks by Planner, with its interface and assembled proof still assigned once. One packet session may oversee those tasks sequentially through authorized workers; it is not one unrestricted cross-domain Builder claim. P24 does not make one Builder task span the whole repository.
+A work package that touches several domains uses small sequential domain-local commits, with its
+assembled proof owned by the lead coding session. No native Planner or Builder claim is involved.
 
 P00 must allocate companion MCP/HTTP schema, grant, generated-output, and instruction updates for later contracts as they arise; P02/P03 are the first contract implementation, not permission to leave later operations unwired. Such companion tasks are normally T2 and ship before that contract's user journey is enabled. The catalogue is a concrete starting decomposition, not a claim that a fixed packet count eliminates source-grounded planning.
 
-### 12.5 Sequence, parallelism, and checkpoints
+### 12.5 Sequence and Checkpoints
 
-Use the numbered waves in section 12.8 rather than packet-number order. Each packet has one implementation-session launch; an interrupted session resumes its same packet, not a new work item. P00 does not become a permanently running portfolio orchestrator.
-
-The schedule distinguishes design readiness, reviewed implementation, and integration into the next packet's baseline. A green test result in an isolated branch is not sufficient for a dependent packet to start. The responsible outgoing agent prepares the next handoff and verifies the predecessor code is reachable in the assigned baseline through supported integration operations.
-
-P10, P12, P13, P15, P16, P19, and P20 deliberately retain T3 implementation because they own irreversible, authority, concurrency, or privacy behavior. Assigning all implementation to smaller models would defeat the risk classification.
-
-Packet dependencies describe semantic readiness, not permission to write in parallel. Research or read-only review may proceed concurrently; mutation remains one authorized writer per Change worktree. Implement sibling packets serially within the same Change. Parallel implementation requires genuinely separate Change worktrees and compatible interfaces/ownership; do not create worktrees per packet or split a coherent Change just to occupy more models.
-
-At each WP checkpoint, T3 reviews the assembled outcome and unanticipated interactions, while the independent reviewer verifies the exact candidate. T1/T2 leaf passes alone cannot mark the WP complete. Shared design documents carry the reasons; packet contexts carry only the necessary version-bound subset.
+Use D00-D08 in section 0, serially on `dev`. Resume an interrupted coding session from its saved
+diff/commits and this plan; do not create a Delivery job. A predecessor must be committed, tested
+and independently reviewed before dependent implementation uses it. Concurrency, migration,
+privacy and evidence semantics retain T3-level attention. Read-only review may run independently;
+source writing remains serialized. Assembled proof is required at each product boundary.
 
 ### 12.6 Escalation and independent review
 
 - Escalate before further implementation when a public contract is ambiguous, the needed path is outside maintained surfaces, a prerequisite is stale, or a change affects locking, migration, evidence validity, permissions, secret handling, merge approval, or destructive side effects unexpectedly.
 - For a local coding defect, permit one focused correction and rerun the same discriminating check. If the failure remains unexplained or requires a contract change, stop that packet and route it upward. Do not spend repeated low-tier attempts rediscovering the design.
 - T1 normally escalates to T2 for bounded implementation diagnosis and directly to T3 for semantic/safety findings. T2 escalates to T3 for those findings. Escalation does not automatically become a user question: T3 investigates repository facts first.
-- Preserve the exact candidate/diff, command output, and failure location using the current task's custody rules before handoff. A model switch never releases a live writer, erases WIP, starts a second claim, or resets the durable repair budget.
+- Preserve the exact candidate/diff, command output and failure location before handoff. A model switch never discards WIP or authorizes a second source writer. Product retry budgets are tested requirements, not limits to bypass during live operation.
 - Independent T2 review is the minimum for T1 work. Critical packets require independent T3 review even when implementation was delegated to T2. The original Lead must not approve its own code by reviewing a summary it authored.
 - A higher-tier reviewer cannot compensate for an under-specified implementation packet by silently rewriting acceptance. Findings return to the appropriate Design/implementation owner with evidence.
 - A stronger model can execute a lower-tier packet when convenient. A weaker model cannot inherit a critical packet merely because the chosen T3 model is unavailable; expose the unavailable capability and allow an explicit stronger substitution or pause.
 
 ### 12.7 Model selection and practical handoff
 
-This section governs how to implement this programme; it does not require building a general model router before P00. Initially the user can choose the model for a **fresh bounded session**, while the agent supplies a complete context/continuation prompt. For acquired Delivery work, use the configured worker policy: manually changing the top-level chat model does not prove that its Builder subagent changed models.
+The user already selected Astra/Opus/Luna for T3/T2/T1. The current coding session implements
+directly, with a different-family read-only reviewer; neither uses a claim-dependent role for this
+programme. State requested model selection and any observability limit honestly. Do not build a
+model router, demand hidden identity attestation, or send the user through repeated dispatch probes
+as a condition of ordinary source development. Keep review quality and explicit risk-based staffing.
 
-The current Builder frontmatter pins a model. To support automatic per-packet routing, extend the existing worker policy with a three-entry capability-to-model mapping and carry the resolved choice in the bounded launch/audit context. Verify the actual VS Code dispatch behavior. Prefer an existing supported model override; if unavailable, use minimal model-specific worker bindings that share one Builder workflow and identical tool/custody rules. Do not duplicate full role procedures or silently route through the default model. Treat model routing as host policy, not a change to approved product meaning.
+### 12.8 Retired Wave Schedule
 
-The user should choose the three concrete model names once, not classify every task. Planner/Lead recommends the packet tier; the runtime/host enforces the chosen profile and records the requested and, where observable, actual dispatched model. If the host cannot confirm actual model identity, report that limit rather than claiming enforcement. No benchmark or cost/quality superiority for a named model is established by this plan.
-
-Example instructions for future sessions, after packet preparation (these are ordinary prompts, not new slash commands):
-
-```text
-Lead session (T3): Prepare P01 from section 12 of the continuation research.
-Read the current owning source and relevant Design. Resolve its action/failure
-contract, define positive and negative proof, and produce the bounded handoff.
-Do not admit work or change product requirements without the required approval.
-
-Implementation session (assigned tier): Implement the prepared P04 using the
-current authorized Delivery task and handoff. Verify predecessor contract/head,
-edit only maintained paths, run its scoped proof, and obtain independent review.
-Escalate missing contract cases; do not invent routing in the UI.
-```
-
-Agents prepare these instructions with actual Change/task identities, approved package, paths, and commands when they exist. The placeholders here are not executable authority. No user copies source context manually, builds a packet directory, or runs proof commands.
-
-Calibrate profiles using a small completed low-risk packet and its independent review results. Record meaningful rework, escalation rate, test/review outcomes, elapsed time, and cost when available. Do not optimize token cost by weakening review or assigning critical code to a model that fails the packet readiness/proof bar.
-
-### 12.8 Exact agent launch schedule
-
-This schedule is the operational reading of the catalogue. It deliberately limits parallelism while the shared engine contracts are changing. It does not authorize code work before the owning Design/custody gates or instruct the user to create branches and worktrees.
-
-#### 12.8.1 What the user does
-
-1. Select the T3 model and start **P00 only**, using the prompt below. Supply the chosen T3/T2/T1 model names in chat if not already configured. There is no need to prepare files or run commands.
-2. When the completed wave returns a verified **NEXT START** block, start one new packet session per listed packet with the specified tier and complete prompt. The wave table gives the fixed default order; do not launch a later wave early.
-3. For a wave with two lanes, start both only when its **NEXT START** block explicitly says `parallel: permitted` and names distinct authorized worktrees. Otherwise run lane A first, then lane B. The agents determine this; the user does not inspect paths, commits, or claims.
-4. Wait until both lanes have passed independent review and the agent-owned wave closeout has made the next baseline ready. **BLOCKED**, **review pending**, and **awaiting integration** are not completion.
-5. If an agent stops, resume that same packet/session. If it identifies a material product decision, answer the explained question. Do not start dependents to work around an unresolved predecessor.
-
-There is one primary session per packet, not one model process for the entire programme. Independent reviewers and authorized domain workers may still be dispatched by that session. The selected top-level model must not be mistaken for the configured subagent model; P00 verifies the actual dispatch route before claiming tier enforcement.
-
-#### 12.8.2 Launch waves
-
-Every wave waits for the preceding wave's closeout. Within a serial lane, arrows mean finish, review, and prepare the next baseline before starting the next agent. Parallel lanes are candidates, not unconditional write permission; the mandatory isolation gate follows the table.
-
-| Wave | Lane A: start in this order | Lane B: may overlap lane A only after isolation gate | Purpose / barrier before next wave |
-| --- | --- | --- | --- |
-| W00 | P00 (T3) | None | Approved initial contracts, model bindings, actual task/worktree mapping, initial source baseline, and P01 handoff ready |
-| W01 | P01 (T3) | None | Shared readiness/failure contract and core reference behavior reviewed; P02/P03/P05 inputs explicit |
-| W02 | P02 (T2) -> P03 (T2) | P05 (T2) | MCP/HTTP contract adapters plus independent read-only maintenance diagnostic entry; lane A stays serial |
-| W03 | P04 (T1) | None | First complete readiness-to-Cockpit slice tested; P06 design/custody contract ready |
-| W04 | P06 (T3) | None | Single-Change action/custody contract and necessary companion adapters/grants reviewed |
-| W05 | P07 (T2) -> P08 (T3) -> P09 (T2) | None | Continuation workflow, guarded provider merge, and confirmation UI tested end to end in fixtures |
-| W06 | P10 (T3) | None | Preservation and writer-exclusion behavior reviewed before broader automated recovery |
-| W07 | P11 (T2) | None | Durable bounded retry behavior and WP2/WP3 integration proven; no unbounded live loop enabled |
-| W08 | P12 (T3) | None | Revision storage/activation protocol and interruption proof complete |
-| W09 | P13 (T3) | None | Evidence applicability and request carry-forward complete; P14/P15/P19 contracts ready |
-| W10 | P14 (T2) | None | Designer revision route uses the reviewed protocol; no user-selected graph-stage repair required |
-| W11 | P15 (T3) | None | Prepared-interaction lifecycle and privacy/provenance contract complete |
-| W12 | P19 (T3) | None | Maintenance/migration core complete; deliberately serial with P15 because both can touch shared Delivery state |
-| W13 | P16 (T3) | P20 (T3) | Secure local input service and independent offline maintenance executor may progress on separate owners/baselines |
-| W14 | P17 (T2) -> P18 (T1) | P21 (T2) | Assisted browser runner/UI and controller setup wiring complete; shared setup/manifest edits remain reserved to P21 |
-| W15 | P22 (T1) | None | Documentation and public entry inventory reconciled against the actual implementation, not proposed commands |
-| W16 | P23 (T2) | None | Cumulative automated acceptance/resume matrix passed; real-host and human-only observations are explicitly outstanding for P24 |
-| W17 | P24 (T3) | None | Actual Copilot handoff, assisted check, migration/cutover rehearsal, independent final review, and explicit user rollout/merge approval |
-
-The safe fully serial fallback is:
-
-```text
-P00 -> P01 -> P02 -> P03 -> P05 -> P04 -> P06 -> P07 -> P08 -> P09
-  -> P10 -> P11 -> P12 -> P13 -> P14 -> P15 -> P19 -> P16 -> P20
-  -> P17 -> P18 -> P21 -> P22 -> P23 -> P24
-```
-
-This is intentionally not maximum theoretical parallelism. P01/P06/P10/P11/P12/P13/P15/P19 alter shared engine semantics or storage. P04/P09/P16/P18 can touch the same Cockpit detail/action files. P07/P14 and cutover touch common workflow definitions. Serializing these responsibilities is cheaper and safer than resolving concurrent authority changes across experimental contracts.
-
-Do not read W02 as permission to run P02 and P03 together in the same WP1 worktree. They are serial. P05 may overlap only because a separately authorized read-only maintenance outcome can be developed without changing that WP1 contract. The same principle applies to the maintenance lane in W13/W14.
-
-#### 12.8.3 Mandatory isolation and integration gate
-
-Before announcing parallel starts, the outgoing T3 lead or the wave closeout owner must verify:
-
-- The lanes are assigned to distinct authorized Change/maintenance workspaces for coherent outcomes, not per-packet proof worktrees. If both map to one Change, run serially even when file lists appear disjoint.
-- Native task-maintained paths and hunks do not overlap. Shared runtime models, operation registries, root manifests/lockfiles, setup/seed, fixtures, generated inventories, and instruction files have one named writer for the wave.
-- Each lane's required predecessor contract and commit are present in its baseline. No lane depends on an unreviewed change being made concurrently by the other.
-- The controller version stays pinned. Candidate tests use disposable state and do not replace the live Delivery MCP process, edit its configuration, or run migrations against live Changes in parallel.
-- Worktree custody, engine capacity, browser profile ownership, and isolated test ports/data permit the two sessions. A global resource conflict switches the wave to serial without changing product scope.
-- One lane is designated closeout owner before dispatch. After both results are reviewed, it integrates them through their owning operations, obtains any needed merge approval, runs the relevant assembled checks, and supplies the next exact baseline.
-
-For W02, P05 owns the offline diagnostic implementation; it cannot patch P01's core to make a failed diagnostic test pass. For W13, P16 owns local private-input behavior and P20 owns offline execution; shared host configuration is deferred to its named setup owner. For W14, P17/P18 consume the approved setup contract; P21 owns setup/seed/executable selection. An unexpected boundary change is an escalation, not permission to continue both writers.
-
-Integration is agent work. If separate Changes require acceptance before the successor can consume them, the wave closeout includes publication and the specific user merge approval; user approval is the only user task. A green packet on an unintegrated branch must be reported as **reviewed, awaiting integration**, not **NEXT START**.
-
-#### 12.8.4 Design preparation and packet closeout owners
-
-Avoid a hidden requirement to launch P00 again before every WP. P00 assigns these explicit design-readiness handoffs:
-
-| Upcoming gate | Preparing packet session | Required output before the lighter model starts |
-| --- | --- | --- |
-| P01 and initial adapters | P00, refined by P01 against its implemented contract | WP1 approved semantics, typed examples, exact editable paths, fixture cases, and proof commands |
-| P05 offline inspection | P01 with independent T3 review of the offline boundary | Read-only diagnostic contract and malformed-input fixtures; no mutation privileges |
-| P06 and P07 continuation | P06 begins with its T3 WP2 design gate, then prepares P07; P00 names the gate owner in advance | Explicit host topology, supported action/result schemas, reviewer route, and model binding |
-| P08/P09 merge interaction | P08 begins with its T3 provider/permission Design and feasibility check | Proven provider contract, separate user merge approval, stale/unknown-response cases, and UI examples |
-| P10/P11 recovery and retries | P10 begins with its T3 WP3 design gate and prepares P11 | Preservation/writer-exclusion policy plus concrete budget, fingerprint, reset, and backoff table |
-| P12/P13/P14 revision | P12 begins with its T3 WP4 design gate; P13 prepares P14 from implemented revision/evidence semantics | Concrete storage/activation protocol, reviewed applicability rules, and Designer workflow handoff |
-| P15/P16/P17/P18 assistance | P15 begins with its T3 WP5 design gate; P16 finalizes the secure service contract for P17; P17 supplies approved view fixtures for P18 | Registered handler, private-input lifetime, cancellation, actual browser procedure, and user-step descriptions |
-| P19/P20/P21 maintenance | P19 begins with its T3 full WP6 design gate; P20 prepares P21 | Migration/executable/upgrade contract and setup parity fixtures |
-| P22/P23/P24 cutover | P20 incorporates reviewed predecessor handoffs and prepares the cutover checklist/oracles; later packet agents update factual locators only | Exact public entry inventory, existing acceptance cases, negative oracles, missing live evidence, and release gates |
-
-A T3 packet with an unresolved material decision performs its Design work first and seeks only the required product approval; it cannot implement from this research alone. A lighter packet starts only after those decisions are complete. Design preparation does not grant an agent a new runtime-write boundary: use current approved workflows and obtain a fresh authorized task before implementing.
-
-The outgoing packet or preassigned wave closeout owner returns:
-
-```text
-Packet: <Pnn>
-State: reviewed and integrated | reviewed, awaiting integration | blocked
-Evidence: <exact result/review references and tests actually run>
-Next baseline: <verified ref/commit and contract version, or why unavailable>
-NEXT START: <next wave's exact packet IDs and model tiers, only when ready>
-Parallel: permitted | serial required
-Prepared prompts: <complete prompt for each next packet, with actual locators>
-```
-
-This is a user handoff summary over existing authority/results, not a new mutable status database. An independent reviewer still verifies the candidate. If a closeout owner lacks the expertise to settle a new contract issue, it dispatches an authorized T3 review or reports that specific blocker instead of fabricating readiness. The user is never asked to assemble the handoff themselves.
-
-#### 12.8.5 Exact first prompt and reusable packet instruction
-
-**Start now: select T3 and paste this into one new agent session.** This is an ordinary prompt for preparation; it does not require `/continue-change` to exist already.
-
-```text
-Prepare P00 for the Change-Scoped Continuation redesign.
-Read .owlbear/research/change-continuation-delivery-redesign.md, particularly
-sections 1-6, 12.1-12.8, and 14. Inspect current instructions, source, and
-existing Delivery work; do not overwrite or recreate another Change.
-
-Own the initial Design/context pass, not product implementation. Resolve the
-WP1 action/readiness/failure contract, identify the actual approved authority
-and supported execution route, and map packets to native tasks and worktrees
-without inventing claims or making one Change per packet. Plan for serial
-execution unless section 12.8's parallel isolation gate can actually pass.
-
-Use the three model choices I supply for T3/T2/T1. Verify how the chosen model
-will reach the real implementation worker; a pinned default subagent is not
-an implicit override. Ask only necessary product decisions, not repository
-facts or instructions for me to run tests or edit files.
-
-Obtain the required independent Design review and approval. Return the P00
-closeout with a complete prepared P01 prompt, its model tier, authority/context
-locators, exact baseline, and start condition. Do not start P01 or any sibling
-packet automatically. If the current tooling cannot dispatch that bounded
-task, identify the precise missing capability and a supported preparation
-route rather than pretending this research file grants runtime authority.
-```
-
-For later packages, use the complete prepared prompt from the predecessor, not a guessed command. The following fallback request lets an agent retrieve the handoff without the user collecting files or writing commands; replace only `Pnn` with the next packet ID in the schedule:
-
-```text
-Execute packet Pnn from section 12.8 of
-.owlbear/research/change-continuation-delivery-redesign.md.
-Use its prepared handoff and the current approved Design/task context. Verify
-the predecessor baseline, assigned model, editable paths, and exclusive custody
-before editing. If the handoff is missing, locate the predecessor result and
-have its owning Lead prepare the missing contract; do not invent semantics.
-
-Own this packet only, including its focused tests and independent review.
-Use the supported native task/worktree route; do not acquire unrelated work or
-edit live authority. Respect the wave's parallel/serial decision and shared-file
-reservations. Stop and report a concrete blocker when permission or semantics
-are missing; do not ask me to run tests, edit worktrees, or fix Git.
-
-Finish with the packet/wave closeout from section 12.8, complete prepared
-next-start prompts, and whether parallel launch is actually permitted. Do not
-start the next primary packet session yourself.
-```
-
-The table is a dependency-correct initial schedule, not a promise that unbuilt interfaces are ready today. If fresh evidence invalidates a dependency or tier, the owner updates the affected prepared handoff and gives the user a revised **NEXT START** list before another launch. It must explain the exact new dependency rather than silently expanding this into more packages.
+The W00-W17 schedule, native launch prompts and parallel-worktree gates are retired.
+Use section 0's D00-D08 sequence and D01 prompt. Git history preserves the earlier
+schedule; it must not be used to reconstruct new Delivery records or restart P00.
 
 ## 13. Acceptance and Fault-Injection Matrix
 
@@ -982,20 +952,21 @@ Track action retries, repair duration, repeated human prompts, and time waiting 
 
 ### 14.2 Safe delivery order
 
-1. Build WP1 and the minimal offline diagnostic portion of WP6 first. Establish fixtures and the shared action contract before changing live flow.
-2. Deliver WP2 normal continuation and WP3 bounded recovery in closely sequenced independently tested Changes. Do not enable an unbounded automation loop while repair results remain chat-only.
-3. Deliver WP4 revision/evidence coherence, then WP5 assistance. Candidate-specific harness work may proceed after its generic contract is agreed, but B1 live state changes wait for safe revision handling.
-4. Complete WP6 controlled upgrades, then WP7 cutover and a no-manual-repair acceptance rehearsal.
+1. Finish WP1 through D01, then continuation in D02 and bounded recovery/offline diagnosis in D03.
+2. Implement revision/evidence coherence in D04, guarded merge flow in D05, and assistance in D06.
+3. Complete minimum supported maintenance/migration in D07 before changing any live records.
+4. Run D08's cumulative and actual-host rehearsal, then deliberately activate the tested successor.
 
-Design these as related but independently reviewable outcomes. The programme is not an admitted mega-Change. Shared action schemas are a dependency contract; group tasks only when they have one coherent acceptance story and rollback unit.
+These are related, independently reviewable direct-development outcomes, not new Delivery Changes.
+Shared action schemas remain dependency contracts and each coherent boundary needs its own proof.
 
 ### 14.3 Rules for the implementing agent
 
 1. Read this document, current owning source, existing relevant Changes, and fresh local instructions. The source baseline here is not permission to overwrite newer work.
-2. For the selected WP, produce an approved Design if it changes public semantics, custody, merge permissions, or persisted schema. Research recommendations are not generated Delivery authority.
+2. Resolve concrete design before changing public semantics, custody, merge permissions or persisted schema. Preserve approved meaning and ask for material new choices; do not create Design sessions or admissions to implement this programme.
 3. Resolve the WP's concrete data layout/schema and state transitions before editing multiple consumers. Add positive and negative fixtures at the real public boundary.
   Apply section 12's tier assignment and packet-readiness gate; model capability does not replace exact authority or independent review.
-4. Implement in domain-local tasks. Keep a cross-domain normal-boundary proof owner; do not add a final vague "wire everything together" task.
+4. Implement in domain-local commits on `dev`, with one coding session owning assembled proof. Do not add a final vague "wire everything together" package.
 5. Preserve user staging, active worktrees, prior immutable receipts, and private inputs. No broad reset, profile deletion, or direct state edits.
 6. Use existing libraries/helpers and transaction/provider owners. Do not create a universal task engine, unrestricted fixer, test-only framework, or new database for this programme.
 7. Report exact scope, commands/results, changed contracts, remaining risks, and user-visible behavior. An API that exists but has no prompt or Cockpit path is not feature-complete.
@@ -1027,11 +998,11 @@ If an implementation reveals one of those mechanisms is actually necessary, stop
 
 ## 15. Evidence and Verification Limits
 
-- Research only: product code, live Delivery records, GitHub, browser profiles, and existing untracked artifacts remain untouched.
+- Original sections describe researched product behavior, not blanket implementation proof. Section 0 records the current direct-development decision; the P00 document preserves historical observations.
 - The declared research-instruction stub is absent in this checkout; the available `w-research` workflow governs this artifact.
 - Source observations above use the recorded baseline. Runtime incidents are explicitly earlier observations, not freshly executed proof.
-- Document checks cover local links, balanced fences, unique P00-P24 catalogue/tier assignments, V01-V24 acceptance rows, and ASCII content. The launch schedule additionally requires one launch per packet, matching tiers, and no later-wave prerequisites. These structural checks do not validate model quality, actual worktree isolation, or implementation readiness. The catalogue is a proposed handoff plan, not 25 admitted tasks or runtime packages.
+- Document checks cover local links, balanced fences, D00-D08 coverage, and V01-V24 acceptance rows. They do not prove product correctness. P00-P24 is a historical requirements mapping, not a live launch schedule or 25 runtime tasks.
 - Markdownlint was not available in the checked executable locations. Research is also excluded by the repository's Markdownlint CLI2 configuration; no lint pass is claimed and no dependency was installed for this documentation task.
-- No product tests, fault-injection campaign, browser pilot, provider mutation, or actual Copilot continuation dispatch were executed for this research artifact. The 24 proposed scenarios are future acceptance requirements, not observed results.
-- Other sessions changed the workspace during authoring. This file is the only artifact authored by this session; the baseline is an evidence locator, not a claim that current `dev` is still at that revision.
+- Implemented behavior has the exact commit/test evidence recorded at closeout; the full V01-V24 matrix and live cutover have not passed. No real browser pilot or live state migration was performed by the direct-dev consolidation.
+- Other sessions changed the workspace during authoring. Baselines are evidence locators, not permission to overwrite newer edits. Preserve unrelated worktrees, state and research.
 - Confidence is high in the identified incomplete handoffs and source-level ownership gaps; medium in the proposed action/revision contract until exercised through assembled fixtures. Host dispatch topology, provider merge guarantees, concrete versioned storage layout, and private-input handling require the focused feasibility work specified in their owning work packages.

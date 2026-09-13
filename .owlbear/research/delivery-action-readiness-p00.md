@@ -1,12 +1,41 @@
-# P00: Delivery Action Readiness Preparation
+# P00/P01 Historical Evidence and Consolidation
 
 > **Owning request:** Work on wave 00 of the Change-Scoped Continuation redesign.
 > **Date:** 2026-09-12
 > **Inspected baseline:** `5f978744ad356456ff9d198893690b508b6aa1be`, branch `dev`.
-> **Status:** P00 released; P01 implemented, independently reviewed, and submitted at `4bf2365180c2851723fa09d91fa48a209220eb33`. The managed worktree is clean, custody released, and Delivery healthy. P02 has not started. See section 14 for current evidence and the broader-suite caveat.
-> **Scope:** P00 preparation and authorized launch maintenance, followed by approved WP1 admission/planning and P01 implementation. No live B1/D1 repair, P02 implementation, or whole-Change merge/finalization.
+> **Status:** Historical record. The user replaced Delivery-managed programme execution with direct development on `dev` on 2026-09-13. P01/P02/P02-W/P03 code is consolidated; P04 UI is next. Earlier status and launch instructions below describe past events, not current authority.
+> **Current plan:** [Direct implementation decision and D00-D08 schedule](change-continuation-delivery-redesign.md#0-direct-implementation-decision).
 
-## Current Handoff Summary
+## Direct-Dev Consolidation
+
+Readiness Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` was merged into `dev`
+at `364daf61c`. This preserves the reviewed core, MCP, finalizer/inspection and HTTP work
+without rewriting the original commits. The four overlapping local edits and all four
+local package files were accounted for; the temporary preservation stash was removed only
+after comparison. Product source matches the reviewed Change head.
+
+Unused controller bootstrap additions from `89b6912fa` and `54e43e9c3` were removed in
+`c6bf0d82b`: script, dedicated tests, setup guide section and ignore rule. Their Git history
+remains available. Selected acquisition and direct-tool fixes remain because they are useful
+product/host behavior; direct development does not need to invoke them.
+
+Live Delivery MCP and Cockpit were stopped after verifying no active claims. The local
+Delivery MCP registration is intentionally removed for development; other MCP servers,
+seed configuration and live state are unchanged. Do not restart against live state as a
+test. Existing Delivery records and the merged worktree are retained recovery history,
+not an active task board. D1/B1/B5 and unrelated issue worktrees were not merged or deleted.
+
+The next step is **D01 in the active plan**, not a new admission, task acquisition, P00
+restart or the historical P02 prompt below. Full WP1 completion still requires readiness
+UI and assembled proof. The pre-existing checkpoint replay test remains explicitly open;
+no full-suite pass is claimed by consolidation.
+
+Consolidated regression verification: **739 passed** across the core, workspace, report store,
+MCP/HTTP, package-boundary, ecosystem and setup selection. Earlier 38- and 234-test runs
+overlap this selection and must not be added. No live state migration or product activation
+was performed; the known baseline replay failure remains outside this passing selection.
+
+## Historical Handoff Summary
 
 The user approved bringing launch prerequisites forward on 2026-09-12 and selected T3 `GPT-6 Astra (copilot)`, T2 `Claude Opus 5 (copilot)`, and T1 `GPT-5.6 Luna (copilot)`.
 
@@ -20,7 +49,7 @@ The host accepted explicit model overrides for each chosen name in read-only pro
 
 The user explicitly authorized the bounded release steps: scoped prerequisite commit, exact-commit review, local Design checkpoint, and safe live schema activation. No push, WP1 admission, or P01 launch was authorized by that decision. The live `acquire_actions` schema now includes `selection` with Change/outcome, stage/task, frontier digest, and source head fields; `delivery_health` returned healthy with no diagnostics. No restart was needed and no acquisition call was made.
 
-**Current handoff:** P01 is complete; TASK-002/P02 is the next native task for a separately started wave 02 session. Reuse current approved authority, resolved prerequisite evidence and reviewed P01 result. Do not repeat admission or planning. The direct-tool workaround remains enabled by disabling host deferral; no agent may substitute an unrestricted worker.
+**Superseded handoff:** the native P02 start below was used before consolidation. Do not execute it now; the active plan starts D01 directly on `dev` and retains the completed backend/wiring implementation.
 
 ## 1. Result and Source Authority
 
@@ -446,22 +475,11 @@ review and submission, not only a claim-free probe. It loads permitted schemas u
 without changing tool grants or hooks. The cause of the earlier menu disappearance
 and its exact version/rollout timing remain unverified. No further reload is requested.
 
-### Next Packet
+### Superseded Next Packet
 
-```text
-Work on wave 02 for delivery-action-readiness. P01/TASK-001 is submitted at
-4bf2365180c2851723fa09d91fa48a209220eb33. Read section 14 of
-.owlbear/research/delivery-action-readiness-p00.md and current engine context.
-Do not repeat admission, Planning, or completed P01 work. Preserve the resolved
-AR-OUT-001-LAUNCH-PREREQUISITE evidence and directly callable tool path.
-Acquire TASK-002 only through selected acquire_actions using fresh engine fences.
-Use named Builder with Claude Opus 5 (copilot) and independent Astra review;
-preserve role grants/hooks and verify that reviewer override is supported.
-Implement P02 MCP adaptation and registration, then its separate TASK-003/P02-W
-domain task serially in the same primary packet session if TASK-002 is reviewed
-and submitted. Stop before TASK-004/P03. Preserve the documented pre-existing
-checkpoint test failure; do not silently waive gates or turn it into P02 cleanup.
-```
+The original P02 prompt is retired. P02, P02-W and P03 have since been implemented
+and merged into `dev`. Use D01 from the active plan for the remaining UI and assembled
+proof; do not acquire another Delivery claim for this programme.
 
 P05 remains a separate unadmitted offline-diagnostics outcome. No P05 launch or parallel
 work is authorized by the current WP1 task plan. Core DTOs and report-store behavior
