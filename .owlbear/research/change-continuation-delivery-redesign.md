@@ -12,6 +12,24 @@
 
 ## 0. Direct Implementation Decision
 
+### Paused Checkpoint: 2026-09-13
+
+Paused at the user's request. Do not dispatch further work until the user resumes.
+D01 is complete; D02's critical engine companion is committed at
+`25fd31325a2165b058d906337b5248e94e86c6e6` on `dev` but has not received independent review.
+The tracked working tree was clean at pause; all 19 unrelated untracked entries remain preserved.
+No delegate is running. Live Delivery MCP and Cockpit stay stopped; nothing was pushed.
+
+Resume by verifying the current checkout, then dispatching an independent read-only Opus review of
+that exact candidate against `662c02a47eebbb11d3933cbab7f627ab909b7c9f`. Use the D02 Engine Companion
+handoff below. Its core/publication/MCP/boundary gate passed 885 tests; HTTP remains 35 passed,
+1 failed because its static basis expectation lacks `target_head: null` and
+`continuation_id: null`. This is not a full D02 pass.
+
+After review and any critical repairs, delegate the settled MCP/HTTP/frontend and P07 host/workflow
+wiring to Opus, including that expectation update. Complete assembled proof and independent review
+before D03. D03-D08 have not started. Preserve the selected model tiers and stop before live activation.
+
 The user explicitly authorized consolidation into `dev`, removal of unnecessary bootstrap work,
 and direct implementation. This changes how the redesign is built, not its promised behavior.
 No admission, task plan, claim acquisition, result submission, per-packet worktree, host model
