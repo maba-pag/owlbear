@@ -328,10 +328,10 @@ def _seed_repository(repository: Path) -> str:
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
     _git(repository, "remote", "add", "origin", _REMOTE_URL)
-    # Delivery startup requires a GitHub-shaped remote URL; rewrite it to a local
-    # bare repository so offline state publication pushes stay in the fixture.
-    mirror = repository.parent / f"{repository.name}-origin.git"
-    _git(repository.parent, "init", "--bare", str(mirror))
+    # Delivery startup requires a GitHub-shaped remote URL; rewrite it to a local bare repository
+    # inside the fixture's own .git directory so the harness cleanup owns every created path.
+    mirror = repository / ".git" / "e2e-origin.git"
+    _git(repository, "init", "--bare", str(mirror))
     _git(repository, "config", f"url.{mirror}.insteadOf", _REMOTE_URL)
     head = _git(repository, "rev-parse", "HEAD")
     _git(repository, "push", "origin", "main")
