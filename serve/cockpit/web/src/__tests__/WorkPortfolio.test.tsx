@@ -93,6 +93,9 @@ function readiness(overrides: Partial<DeliveryReadiness> = {}): DeliveryReadines
     basis: {
       contract_digest: 'c'.repeat(64),
       frontier_digest: 'd'.repeat(64),
+      source_head: null,
+      target_head: null,
+      continuation_id: null,
       candidate_head: '1'.repeat(40),
       reviewed_head: '2'.repeat(40),
       workspace_fingerprint: null,
@@ -118,6 +121,9 @@ function unavailableChange(changeId: string, title: string | null = null): Deliv
       basis: {
         contract_digest: 'c'.repeat(64),
         frontier_digest: null,
+        source_head: null,
+        target_head: null,
+        continuation_id: null,
         candidate_head: null,
         reviewed_head: null,
         workspace_fingerprint: null,

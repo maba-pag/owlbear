@@ -509,6 +509,9 @@ function IdentityRow({ label, value }: { label: string; value: string | number |
 function ReadinessBasisRows({ basis }: { basis: DeliveryReadiness['basis'] }) {
   return (
     <>
+      <IdentityRow label="Source head" value={basis.source_head} />
+      <IdentityRow label="Target branch head" value={basis.target_head} />
+      <IdentityRow label="Engine operation" value={basis.continuation_id} />
       <IdentityRow label="Candidate head" value={basis.candidate_head} />
       <IdentityRow label="Reviewed head" value={basis.reviewed_head} />
       <IdentityRow label="Contract digest" value={basis.contract_digest} />

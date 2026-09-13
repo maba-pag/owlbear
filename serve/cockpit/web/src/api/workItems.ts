@@ -84,6 +84,9 @@ export type FinalizationFailureCategory = 'custody-preflight' | 'maintained-chec
 export interface DeliveryReadinessBasis {
   contract_digest: string | null
   frontier_digest: string | null
+  source_head: string | null
+  target_head: string | null
+  continuation_id: string | null
   candidate_head: string | null
   reviewed_head: string | null
   workspace_fingerprint: string | null
