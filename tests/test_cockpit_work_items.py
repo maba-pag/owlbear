@@ -819,6 +819,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                 "basis": {
                     "contract_digest": "a" * 64,
                     "frontier_digest": None,
+                    "source_head": None,
                     "candidate_head": None,
                     "reviewed_head": None,
                     "workspace_fingerprint": None,
