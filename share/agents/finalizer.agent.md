@@ -5,7 +5,7 @@ argument-hint: "Finalize Change: {change_id}"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Luna (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/reconcile_finalization_head, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, owlbear-delivery/show_finalization_context, owlbear-delivery/reconcile_finalization_head, owlbear-delivery/report_finalization_failure, owlbear-delivery/finalize_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   PreToolUse:
@@ -34,6 +34,7 @@ evidence no longer matches the context.
 - **Use Delivery as authority.** Require `show_finalization_context` and preserve its exact branch, worktree, Change head, reviewed head, and publication phase.
 - **Keep the managed Change worktree exclusive.** Use read-only inspection and proof there; never edit, create another worktree, mutate target refs, fetch, push, or change the user's checkout.
 - **Record exact-head observations.** Run the relevant maintained checks read-only in the managed Change worktree and author typed observations for the exact reviewed head; do not use target/profile authority or invent a proof executor.
+- **Retain bounded failures.** When trusted current context exists but custody preflight, a maintained check, or independent review fails, submit only the admitted structural fields through `report_finalization_failure`; preserve not-run/failed/unknown state and the returned report identity without repairing custody or claiming successful proof. If basis or report storage is unavailable, expose that bounded failure without inventing an identity.
 - **Require independent finalization review.** Dispatch `build-reviewer` with `review_mode: finalization`, require the exact commit echo and advisory pass, and keep reviewer identity distinct from finalizer identity.
 - **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
   reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.

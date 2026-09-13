@@ -63,6 +63,18 @@ types; there is no target-bound profile or required step list. A failed check, d
 changed head produces no finalization request. Do not mutate target refs, create another worktree, or
 author evidence for a different commit.
 
+## Step 2a - Retain A Trusted Failure
+
+When a trusted current context reaches a failed custody preflight, maintained check, or independent
+review, call `report_finalization_failure` with only its registered structural fields: the current
+contract and frontier digests, candidate and reviewed heads, observed diagnostic sequence, stable
+attempt key, category, registered code, checks state, and any category-allowed workspace fingerprint
+or dirty paths. Do not include commands, logs, URLs, summaries, exit details, observer identities, or
+repair instructions. Preserve the returned report identity and checks state in the bounded failure
+result; a report is diagnostic history, not proof, a custody repair, a claim transition, or a
+successful finalization. If context is untrusted or the report store rejects the basis, return the
+bounded failure without inventing a report identity or calling `finalize_change`.
+
 ## Step 3 - Obtain Independent Exact-Commit Review
 
 Dispatch `build-reviewer` with `review_mode: finalization`, the complete fresh context, the exact
@@ -77,6 +89,9 @@ independently resolve and inspect the exact commit with read-only Git. Accept on
 - reviewer identity different from the finalizer identity.
 
 A finding, stale head, malformed response, or unavailable reviewer produces no finalization request.
+For a trusted independent-review failure, retain the registered `independent-review` diagnostic
+before returning the review failure; unavailable context or report storage remains a bounded failure
+without a fabricated report identity.
 Do not repair reviewer findings inside this workflow and do not turn reviewer prose into a lifecycle
 transition.
 

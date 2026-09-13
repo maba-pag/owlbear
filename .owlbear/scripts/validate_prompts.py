@@ -18,6 +18,7 @@ _PROMPT_ROOTS = (_REPO_ROOT / "share" / "prompts", _REPO_ROOT / ".owlbear" / "pr
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _BUILTIN_AGENTS = frozenset({"agent", "Explore", "General Purpose"})
+_INSPECT_CHANGE_TOOLS = ("owlbear-delivery/get_change", "owlbear-delivery/delivery_health")
 _BARE_SKILL_REFERENCE = re.compile(r"`([hwr]-[a-z0-9-]+)`")
 _RELATIVE_SKILL_REFERENCE = re.compile(r"((?:\.\./)+skills/[a-z0-9-]+/SKILL\.md)")
 
@@ -109,6 +110,12 @@ def validate_prompt(prompt_file: Path) -> list[str]:
         not isinstance(tools, list) or any(not isinstance(tool, str) or not tool.strip() for tool in tools)
     ):
         errors.append(f"{prompt_file}: tools must be a list of non-empty strings when declared")
+
+    if prompt_file.name == "inspect-change.prompt.md":
+        if metadata.get("mode") != "ask":
+            errors.append(f"{prompt_file}: inspect-change must use built-in ask mode")
+        if tools != list(_INSPECT_CHANGE_TOOLS):
+            errors.append(f"{prompt_file}: inspect-change tools must be exactly the read-only allowlist")
 
     errors.extend(_check_skill_references(prompt_file, body))
     return errors
