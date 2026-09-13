@@ -413,15 +413,16 @@ class TargetMCPAdapter:
         params = self._validate(EmptyParams, request)
         return await asyncio.to_thread(self._call, params, self._application.list_changes)
 
-    async def get_change(self, request: ChangeRequest) -> DeliveryChangeView | DeliveryUnavailableChangeView:
+    async def get_change(self, request: ChangeRequest) -> dict[str, object]:
         """Return one coherent Change detail, health, and repair projection."""
         params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
+        view = await asyncio.to_thread(
             self._call_adapter,
             params,
             lambda: self._application.get_change(params.change_id),
             TypeAdapter(DeliveryChangeView | DeliveryUnavailableChangeView),
         )
+        return self._serialize(view)
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""
@@ -701,22 +702,20 @@ class TargetMCPAdapter:
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
 
-    async def show_finalization_context(self, request: ChangeRequest) -> DeliveryFinalizationContext:
+    async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
         """Show engine-resolved context for one exact Change finalization."""
         params = self._validate(ChangeParams, request)
-        return self._call_model(
+        context = self._call_model(
             params,
             lambda: self._application.show_finalization_context(params.change_id),
             DeliveryFinalizationContext,
         )
+        return self._serialize(context)
 
-    async def report_finalization_failure(
-        self,
-        request: ReportFinalizationFailureParams,
-    ) -> FinalizationReport | DeliveryReadiness:
+    async def report_finalization_failure(self, request: ReportFinalizationFailureParams) -> dict[str, object]:
         """Persist one bounded finalization diagnostic without granting proof authority."""
         params = self._validate(ReportFinalizationFailureParams, request)
-        return await asyncio.to_thread(
+        result = await asyncio.to_thread(
             self._call_adapter,
             params,
             lambda: self._application.report_finalization_failure(
@@ -724,6 +723,7 @@ class TargetMCPAdapter:
             ),
             TypeAdapter(FinalizationReport | DeliveryReadiness),
         )
+        return self._serialize(result)
 
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""

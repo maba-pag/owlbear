@@ -88,11 +88,15 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryDesignPut,
+    DeliveryFinalizationContext,
     DeliveryOperatorContext,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
     DeliveryResultSubmission,
     DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    DeliveryUnavailableChangeView,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
@@ -102,6 +106,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
+from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -318,6 +323,25 @@ class _RecordingApplication:
                 raise failure
             if name == "list_work_items":
                 result: object = (_Result(operation=name),)
+            elif name == "get_change":
+                result = DeliveryUnavailableChangeView(
+                    change_id=CHANGE,
+                    readiness=DeliveryReadiness(
+                        status="unavailable",
+                        next_actor=WorkItemNextActor.NONE,
+                        reason_code="runtime-unavailable",
+                        basis=DeliveryReadinessBasis(),
+                    ),
+                )
+            elif name == "show_finalization_context":
+                result = DeliveryFinalizationContext.model_construct(change_id=CHANGE)
+            elif name == "report_finalization_failure":
+                result = DeliveryReadiness(
+                    status="unavailable",
+                    next_actor=WorkItemNextActor.NONE,
+                    reason_code="runtime-unavailable",
+                    basis=DeliveryReadinessBasis(),
+                )
             elif name == "list_retained_change_worktrees":
                 result = (
                     DeliveryRetainedChangeWorktree(
@@ -825,6 +849,20 @@ def _requests() -> dict[str, dict[str, object]]:
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
+        "report_finalization_failure": {
+            **change,
+            "expected_contract_digest": DIGEST,
+            "expected_frontier_digest": DIGEST,
+            "expected_change_head": COMMIT,
+            "expected_reviewed_head": COMMIT,
+            "expected_diagnostic_sequence": 0,
+            "attempt_key": "attempt-1",
+            "category": "maintained-check",
+            "code": "maintained-check-failed",
+            "checks_state": "failed",
+            "check_id": "check-1",
+            "exit_status": 1,
+        },
         "publish_delivery_plan": {
             **change,
             "plan": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
@@ -975,14 +1013,7 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "operation_name",
-    tuple(
-        name
-        for name in DELIVERY_OPERATION_NAMES
-        if name not in {"get_change", "show_finalization_context", "report_finalization_failure"}
-    ),
-)
+@pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
 async def test_each_delivery_operation_validates_delegates_once_and_serializes(  # noqa: C901, PLR0912, PLR0915
     operation_name: str,
 ) -> None:
@@ -1249,6 +1280,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         assert result.status is DeliveryHealthStatus.ATTENTION
         assert result.diagnostics[0].change_id == CHANGE
         assert result.diagnostics[0].retry_safe is True
+    elif operation_name == "get_change":
+        assert result["kind"] == "unavailable"
+        assert result["change_id"] == CHANGE
+    elif operation_name == "show_finalization_context":
+        assert result["change_id"] == CHANGE
+    elif operation_name == "report_finalization_failure":
+        assert result["reason_code"] == "runtime-unavailable"
     else:
         assert result == (
             [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
