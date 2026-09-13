@@ -37,6 +37,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangeFinalizationAttempt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -723,6 +724,53 @@ class DeliveryLaunchPackage(_ApplicationModel):
         return self
 
 
+class DeliveryContinuationRequest(_ApplicationModel):
+    """Acquire at most one supported action from an observed Change view."""
+
+    change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    expected_basis: DeliveryReadinessBasis
+    capabilities: tuple[Literal["planner", "builder", "finalizer"], ...]
+    host_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _validate_basis(self) -> DeliveryContinuationRequest:
+        if self.expected_basis.contract_digest is None or self.expected_basis.frontier_digest is None:
+            message = "continuation requires an observed contract and frontier"
+            raise ValueError(message)
+        if len(set(self.capabilities)) != len(self.capabilities):
+            message = "continuation capabilities must be unique"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryContinuationResult(_ApplicationModel):
+    """One launch or a non-dispatching disposition; never a portfolio batch."""
+
+    change_id: str = Field(min_length=1)
+    kind: Literal[
+        "acquired", "reconciled", "busy", "stale", "waiting", "human", "unsupported", "unavailable", "terminal"
+    ]
+    reason_code: str = Field(min_length=1)
+    readiness: DeliveryReadiness
+    launch: DeliveryLaunchPackage | None = None
+    finalization: DeliveryFinalizationLaunch | None = None
+
+    @model_validator(mode="after")
+    def _validate_launch(self) -> DeliveryContinuationResult:
+        launches = sum(item is not None for item in (self.launch, self.finalization))
+        if launches != (1 if self.kind == "acquired" else 0):
+            message = "only acquired continuation results carry a launch"
+            raise ValueError(message)
+        if self.launch is not None and self.launch.change_id != self.change_id:
+            message = "continuation launch must belong to the selected Change"
+            raise ValueError(message)
+        if self.finalization is not None and self.finalization.context.change_id != self.change_id:
+            message = "finalization launch must belong to the selected Change"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionFailure(_ApplicationModel):
     """Bounded fail-closed preparation result, optionally tied to a started claim."""
 
@@ -874,6 +922,7 @@ class DeliveryChangeView(_ApplicationModel):
     unresolved_outcomes: tuple[DeliveryUnresolvedOutcome, ...] = ()
     kind: Literal["available"] = "available"
     readiness: DeliveryReadiness
+    finalization_attempt: ChangeFinalizationAttempt | None = None
 
 
 class DeliveryUnavailableChangeView(_ApplicationModel):
@@ -1104,6 +1153,13 @@ class DeliveryFinalizationContext(_ApplicationModel):
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     finalization_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     readiness: DeliveryReadiness
+
+
+class DeliveryFinalizationLaunch(_ApplicationModel):
+    """Finalizer handoff; use the attempt identity as the finalization operation ID."""
+
+    attempt: ChangeFinalizationAttempt
+    context: DeliveryFinalizationContext
 
 
 class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
@@ -2412,7 +2468,7 @@ class PortfolioApplication:
         """Recreate one missing Change worktree from explicit reviewed authority."""
         if confirmed_recovery is not True:
             self._fail("Change worktree recovery requires explicit confirmation")
-        self._runtime(change_id, for_mutation=True)
+        self._runtime(change_id, for_mutation=True, allow_finalizer=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             try:
                 coordination = self._workspace_manager.recover(change_id, recovery_reviewed_head)
@@ -2586,7 +2642,13 @@ class PortfolioApplication:
         request: FinalizeDeliveryChange,
     ) -> DeliveryFinalizationReceipt:
         """Finalize one exact clean reviewed Change head and queue its checkpoint."""
-        runtime = self._runtime(change_id, for_mutation=True)
+        runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return self._finalize_change_locked(change_id, runtime, request)
+
+    def _finalize_change_locked(
+        self, change_id: str, runtime: DeliveryRuntime, request: FinalizeDeliveryChange
+    ) -> DeliveryFinalizationReceipt:
         existing = runtime.finalization()
         if existing is not None:
             if (
@@ -2595,8 +2657,7 @@ class PortfolioApplication:
                 and existing.observations == request.observations
                 and existing.review == request.review
             ):
-                with locked_roots((self._checkpoint_lock_root(change_id),)):
-                    self._promote_finalized_external_head(change_id, existing.exact_head)
+                self._promote_finalized_external_head(change_id, existing.exact_head)
                 self._retire_finalization_report(runtime, existing.exact_head)
                 return existing
             self._fail(
@@ -2605,8 +2666,12 @@ class PortfolioApplication:
             )
         if runtime.change_disposition() is not None:
             self._fail("finalization requires current Change attention resolution")
+        attempt = self._workspace_manager.show(change_id).finalization_attempt
+        active = attempt is not None and attempt.finished_at is None
+        if active:
+            self._require_finalization_attempt(runtime, request, attempt)
         context = self.show_finalization_context(change_id)
-        if not context.ready_for_finalization:
+        if not active and not context.ready_for_finalization:
             self._fail(
                 "finalization requires a ready exact Change context",
                 ValueError("; ".join(context.readiness_diagnostics)),
@@ -2616,24 +2681,40 @@ class PortfolioApplication:
                 "finalization request does not match the current Change head",
                 ValueError("Change head changed"),
             )
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
-            results = tuple(result for binding in runtime.bindings() for result in binding.results)
-            with self._coordinator.publication_lock(change_id) as publication_lock:
-                boundary_participant = self._workspace_manager.prepare_finalization_boundary(
-                    change_id,
-                    request.exact_head,
-                    tuple(result.completed_commit for result in results),
-                    publication_lock,
-                )
-                additional_participants = () if boundary_participant is None else (boundary_participant,)
-                finalization = runtime.finalize_change(
-                    request,
-                    _timestamp(self._clock()),
-                    additional_participants=additional_participants,
-                )
-            self._promote_finalized_external_head(change_id, finalization.exact_head)
-            self._retire_finalization_report(runtime, finalization.exact_head)
-            return finalization
+        results = tuple(result for binding in runtime.bindings() for result in binding.results)
+        with self._coordinator.publication_lock(change_id) as publication_lock:
+            boundary_participant = self._workspace_manager.prepare_finalization_boundary(
+                change_id,
+                request.exact_head,
+                tuple(result.completed_commit for result in results),
+                publication_lock,
+                completion=(request.operation_id, self._clock()),
+            )
+            additional_participants = () if boundary_participant is None else (boundary_participant,)
+            finalization = runtime.finalize_change(
+                request,
+                _timestamp(self._clock()),
+                additional_participants=additional_participants,
+            )
+        self._promote_finalized_external_head(change_id, finalization.exact_head)
+        self._retire_finalization_report(runtime, finalization.exact_head)
+        return finalization
+
+    def _require_finalization_attempt(
+        self, runtime: DeliveryRuntime, request: FinalizeDeliveryChange, attempt: ChangeFinalizationAttempt
+    ) -> None:
+        if (
+            request.operation_id != attempt.writer.attempt_id
+            or request.exact_head != attempt.exact_head
+            or hashlib.sha256(runtime.frontier_bytes()).hexdigest() != attempt.frontier_digest
+            or contract_fingerprint(runtime.contract) != attempt.contract_digest
+        ):
+            message = "finalization attempt does not match current authority"
+            raise DeliveryActionSelectionConflictError(message)
+        reports = FinalizationReportStore(self._target_root, runtime.contract.change_id).read()
+        if any(report.request.attempt_key == request.operation_id for report in reports.reports):
+            message = "failed finalization retains custody pending supported recovery"
+            raise DeliveryActionBusyError(message)
 
     def _retire_finalization_report(self, runtime: DeliveryRuntime, exact_head: str) -> None:
         try:
@@ -2648,14 +2729,15 @@ class PortfolioApplication:
         request: ReportFinalizationFailure,
     ) -> FinalizationReport | DeliveryReadiness:
         """Persist structural diagnostics without granting lifecycle or proof authority."""
-        try:
-            return FinalizationReportStore(self._target_root, request.change_id).record(
-                request,
-                _timestamp(self._clock()),
-                lambda: self._validate_finalization_report_basis(request),
-            )
-        except _FinalizationReadUnavailableError as exc:
-            return exc.readiness
+        with locked_roots((self._checkpoint_lock_root(request.change_id),)):
+            try:
+                return FinalizationReportStore(self._target_root, request.change_id).record(
+                    request,
+                    _timestamp(self._clock()),
+                    lambda: self._validate_finalization_report_basis(request),
+                )
+            except _FinalizationReadUnavailableError as exc:
+                return exc.readiness
 
     def _validate_finalization_report_basis(self, request: ReportFinalizationFailure) -> None:
         self._reconcile_runtimes()
@@ -2663,6 +2745,10 @@ class PortfolioApplication:
         if observation is not None and not observation.actionable_runtime:
             raise _FinalizationReadUnavailableError(self._unavailable_change(request.change_id).readiness)
         runtime = self._runtime(request.change_id)
+        attempt = self._workspace_manager.show(request.change_id).finalization_attempt
+        if attempt is not None and attempt.finished_at is None and request.attempt_key != attempt.writer.attempt_id:
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
         snapshot = self._delivery_snapshot(runtime)
         basis = DeliveryReadinessBasis(
             contract_digest=contract_fingerprint(snapshot.contract), frontier_digest=snapshot.version
@@ -5224,6 +5310,12 @@ class PortfolioApplication:
         )
         if needs_workspace and not self._snapshot_has_active_claims(snapshot):
             basis, workspace_reason = self._capture_readiness_workspace(snapshot, basis)
+        elif any(
+            self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
+            for card in cards
+        ):
+            coordination = self._workspace_manager.show(snapshot.contract.change_id)
+            basis = basis.model_copy(update={"candidate_head": coordination.last_reviewed_commit})
         try:
             reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
         except FinalizationReportError:
@@ -5274,7 +5366,9 @@ class PortfolioApplication:
         try:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
             basis = basis.model_copy(update={"reviewed_head": coordination.last_reviewed_commit})
-            if coordination.writer is not None or coordination.publication_lease is not None:
+            if (coordination.writer is not None and coordination.writer.kind != "finalize") or (
+                coordination.publication_lease is not None
+            ):
                 return basis, "active-custody"
             coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
                 snapshot.contract.change_id,
@@ -5631,6 +5725,9 @@ class PortfolioApplication:
             except (OSError, RuntimeError, ValueError):
                 continue
             occupancy[change_id] = max(occupancy.get(change_id, 0), active_count)
+        for coordination in self._coordinator.list_registered():
+            if coordination.writer is not None:
+                occupancy[coordination.change_id] = max(occupancy.get(coordination.change_id, 0), 1)
         return sum(occupancy.values())
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
@@ -5817,7 +5914,7 @@ class PortfolioApplication:
                 continue
             for outcome_id, claim in active_claims:
                 try:
-                    if _timestamp(claim.started_at) > cutoff:
+                    if claim.continuation or _timestamp(claim.started_at) > cutoff:
                         continue
                     if claim.worker_role is DeliveryWorkerRole.BUILDER:
                         failures.append(
@@ -5918,6 +6015,162 @@ class PortfolioApplication:
                     else None
                 ),
             )
+
+    def acquire_change_action(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
+        """Continue one Change without recovering, dispatching, or claiming sibling work."""
+        view = self.get_change(request.change_id)
+        if view.kind == "unavailable":
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="unavailable",
+                reason_code=view.readiness.reason_code,
+                readiness=view.readiness,
+            )
+        try:
+            with (
+                self._coordinator.acquisition_lock(),
+                self._selected_action_checkpoint_lock(request.change_id),
+            ):
+                return self._acquire_change_action_locked(request)
+        except DeliveryActionBusyError:
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="busy",
+                reason_code="operation-in-progress",
+                readiness=self.get_change(request.change_id).readiness,
+            )
+
+    def _acquire_change_action_locked(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
+        runtime = self._runtime(request.change_id, for_mutation=True, allow_finalizer=True)
+        cards = self._read_projector(self._delivery_snapshot(runtime)).group_view().items
+        card = next((item for item in cards if item.item_key == "publication"), cards[0])
+        readiness = card.readiness
+        if readiness is None:
+            self._fail("continuation readiness was not captured")
+
+        stop = self._continuation_stop(request, runtime, readiness)
+        if stop is not None:
+            return stop
+        candidate = self._continuation_candidate(request.change_id, cards)
+        finalizer = readiness.executable and readiness.operation is WorkItemActionKind.FINALIZE
+        role = "finalizer" if finalizer else candidate.role.value if candidate else None
+        if role is None:
+            kind = "human" if readiness.next_actor is WorkItemNextActor.YOU else "unsupported"
+            if readiness.status in {"waiting", "running"}:
+                kind = "waiting"
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind=kind, reason_code=readiness.reason_code, readiness=readiness
+            )
+        reason = None
+        if role not in request.capabilities:
+            reason = "host-capability-unavailable"
+        elif self._execution_occupancy() >= self._execution_capacity:
+            reason = "execution-capacity"
+        if reason is not None:
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind="waiting", reason_code=reason, readiness=readiness
+            )
+        if finalizer:
+            return self._launch_continuation_finalizer(request, readiness)
+        return self._launch_continuation_candidate(request, readiness, candidate)
+
+    def _continuation_candidate(self, change_id: str, cards: tuple[WorkItemCardView, ...]) -> _Candidate | None:
+        candidate = next(iter(self._candidates(change_id)), None)
+        if candidate is None:
+            return None
+        selected = next(item for item in cards if item.work_item_id == candidate.binding.outcome_id)
+        return candidate if selected.readiness is not None and selected.readiness.executable else None
+
+    def _continuation_stop(
+        self, request: DeliveryContinuationRequest, runtime: DeliveryRuntime, readiness: DeliveryReadiness
+    ) -> DeliveryContinuationResult | None:
+        coordination = self._workspace_manager.show(request.change_id)
+        if runtime.active_claims() or runtime.integration_repair_claim() or coordination.writer:
+            kind, reason = "busy", "active-custody"
+        elif coordination.publication_lease is not None:
+            kind, reason = "unsupported", "publication-reconciliation-required"
+        elif readiness.basis != request.expected_basis:
+            kind, reason = "stale", "readiness-changed"
+        elif runtime.change_stage() in {DeliveryChangeStage.COMPLETED, DeliveryChangeStage.ABANDONED}:
+            kind, reason = "terminal", "change-terminal"
+        elif runtime.change_stage() is DeliveryChangeStage.DEFERRED:
+            kind, reason = "waiting", "change-paused"
+        elif runtime.pending_state_publication() is not None:
+            failures = self._replay_pending_state_publications(request.change_id)
+            kind = "unavailable" if failures else "reconciled"
+            reason = failures[0].code if failures else "state-publication-reconciled"
+        else:
+            return None
+        return DeliveryContinuationResult(
+            change_id=request.change_id, kind=kind, reason_code=reason, readiness=readiness
+        )
+
+    def _launch_continuation_finalizer(
+        self, request: DeliveryContinuationRequest, readiness: DeliveryReadiness
+    ) -> DeliveryContinuationResult:
+        context = self.show_finalization_context(request.change_id)
+        if context.readiness.basis != readiness.basis or not context.ready_for_finalization:
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="stale",
+                reason_code="readiness-changed",
+                readiness=context.readiness,
+            )
+        attempt = ChangeFinalizationAttempt(
+            writer=ChangeWriter(
+                attempt_id=self._identity_factory(),
+                claim_id=self._identity_factory(),
+                actor_id=request.host_id,
+                process_id=request.session_id,
+                claimed_at=self._clock(),
+                job_id=1,
+                kind="finalize",
+            ),
+            contract_digest=readiness.basis.contract_digest,
+            frontier_digest=readiness.basis.frontier_digest,
+            exact_head=context.change_head,
+            target_head=self._workspace_manager.observed_target_head(),
+        )
+        self._coordinator.acquire(request.change_id, attempt.writer, finalization_attempt=attempt)
+        return DeliveryContinuationResult(
+            change_id=request.change_id,
+            kind="acquired",
+            reason_code="ready",
+            readiness=readiness,
+            finalization=DeliveryFinalizationLaunch(attempt=attempt, context=context),
+        )
+
+    def _launch_continuation_candidate(
+        self, request: DeliveryContinuationRequest, readiness: DeliveryReadiness, candidate: _Candidate
+    ) -> DeliveryContinuationResult:
+        source = self._prepare_source(
+            candidate.change_id,
+            candidate.runtime,
+            candidate.binding.outcome_id,
+            candidate.role,
+            allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
+        )
+        if isinstance(source, DeliveryAcquisitionFailure):
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind="unavailable", reason_code=source.code, readiness=readiness
+            )
+        if source.source_head != request.expected_basis.candidate_head:
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind="stale", reason_code="source-head-changed", readiness=readiness
+            )
+        launch = self._activate_candidate(
+            candidate,
+            source,
+            expected_frontier_digest=request.expected_basis.frontier_digest,
+            host_identity=(request.host_id, request.session_id),
+        )
+        if isinstance(launch, DeliveryAcquisitionFailure):
+            return DeliveryContinuationResult(
+                change_id=request.change_id, kind="busy", reason_code=launch.code, readiness=readiness
+            )
+        return DeliveryContinuationResult(
+            change_id=request.change_id, kind="acquired", reason_code="ready", readiness=readiness, launch=launch
+        )
 
     def acquire_actions(self, selection: DeliveryActionSelection | None = None) -> DeliveryAcquisitionResult:
         """Acquire a fenced selected action, or the explicitly requested portfolio batch."""
@@ -6340,6 +6593,7 @@ class PortfolioApplication:
         )
         return DeliveryChangeView(
             change_id=change_id,
+            finalization_attempt=self._workspace_manager.show(change_id).finalization_attempt,
             frontier_digest=frontier_digest,
             detail=detail,
             health=health,
@@ -6411,6 +6665,7 @@ class PortfolioApplication:
                         binding.active_claim is not None and binding.active_claim.task_id == submission.result.task_id
                     ):
                         self._fail("submitted result conflicts with current Outcome authority")
+                    runtime.require_result_replay(submission.outcome_id, submission.claim_id, submission.result)
                     if runtime.pending_state_publication() is not None:
                         self._publish_delivery_state(
                             submission.change_id,
@@ -6631,8 +6886,9 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
         claim = binding.active_claim
-        if claim is None:
-            self._fail("outcome has no active claim")
+        if claim is None or claim.continuation:
+            message = "continuation custody requires supported worker exclusion; caller confirmation is insufficient"
+            raise DeliveryActionBusyError(message)
         if claim.worker_role != DeliveryWorkerRole.BUILDER:
             runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
             return self._recovered(change_id, outcome_id, attempt_id, claim_id)
@@ -6720,7 +6976,11 @@ class PortfolioApplication:
                 continue
             if pending_publication is not None:
                 continue
-            if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
+            if (
+                runtime.active_claims()
+                or runtime.change_stage() != DeliveryChangeStage.BUILDING
+                or self._workspace_manager.show(change_id).writer is not None
+            ):
                 continue
             pending = runtime.checkpoint_publication_state().pending_checkpoint
             if pending is not None and any(
@@ -6916,8 +7176,13 @@ class PortfolioApplication:
         source: _PreparedSource,
         *,
         expected_frontier_digest: str | None = None,
+        host_identity: tuple[str, str] | None = None,
     ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
         claim = self._new_claim(candidate.role, candidate.task_id)
+        if host_identity is not None:
+            claim = claim.model_copy(
+                update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
+            )
         candidate.runtime.activate_claim(
             ActivateDeliveryClaim(
                 outcome_id=candidate.binding.outcome_id,
@@ -7162,7 +7427,7 @@ class PortfolioApplication:
 
         return depth(outcome_id)
 
-    def _runtime(self, change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
+    def _runtime(self, change_id: str, *, for_mutation: bool = False, allow_finalizer: bool = False) -> DeliveryRuntime:
         self._reconcile_runtimes()
         try:
             runtime = self._runtimes[change_id]
@@ -7175,6 +7440,11 @@ class PortfolioApplication:
             detail = self._runtime_reconciliation_errors.get(change_id)
             if detail is not None:
                 raise DeliveryRuntimeReconciliationError(change_id, detail)
+            if not allow_finalizer:
+                writer = self._workspace_manager.show(change_id).writer
+                if writer is not None and writer.kind == "finalize":
+                    message = "selected Change retains active finalizer custody"
+                    raise DeliveryActionBusyError(message)
         return runtime
 
     def _require_target_sync_change_mutable(self, runtime: DeliveryRuntime) -> None:

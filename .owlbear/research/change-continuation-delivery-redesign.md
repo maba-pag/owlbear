@@ -93,7 +93,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
 | D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
-| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | T3 contracts, T2 wiring; after D01 |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Critical core candidate implemented; T2 wiring, remaining P06 companion and review pending |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
 | D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
@@ -149,11 +149,106 @@ suites (220 passed, plus 50 passed on the Cockpit/package boundary suites after 
 `npm test` (311 passed, 25 files); `npm run build`; `npm run test:e2e:work` (22 of 22 passed).
 Python and frontend lint pass on the changed files.
 
-### Next: D02
+### D02 Critical Core: T2 Handoff Pending Review
 
-Establish and implement the critical P06 single-Change continuation/custody contract with T3;
-then hand the settled adapter and P07 prompt/role/skill wiring to T2. Reuse existing action,
-finalization and typed result owners. Review the exact assembled candidate before D03.
+The requested P06 reference-path substep is implemented on primary `dev`; D02 is **not complete**.
+Independent different-family review is pending with the parent. No adapter, HTTP, UI, agent or
+shared-workflow wiring was implemented in this substep. The contract follows sections 5.2-5.4,
+6/6.1 and WP2/P06: one selected Change, existing readiness/candidate owners, durable exclusive
+custody, exact receipts, no timeout-as-termination and no second scheduler or state store.
+
+Public core entry: `PortfolioApplication.acquire_change_action(DeliveryContinuationRequest) ->
+DeliveryContinuationResult`. Request fields are `change_id`, `expected_basis` (the unmodified
+`get_change().readiness.basis`, requiring contract/frontier digests), unique `capabilities`
+(`planner`, `builder`, `finalizer`), `host_id`, and `session_id`. An acquired response contains
+exactly one `launch` (existing `DeliveryLaunchPackage`) or `finalization`
+(`DeliveryFinalizationLaunch`: `attempt` plus pre-acquisition `context`). Non-acquired responses
+carry neither. Every response includes Change identity, reason code and engine readiness.
+
+| Result / selected work | Consumer behavior and result owner |
+| --- | --- |
+| `acquired` / Planner | Dispatch `launch.policy`; use existing plan publication and typed transition routes. |
+| `acquired` / Builder | Dispatch `launch.policy`; `submit_result(DeliveryResultSubmission)` owns promotion. A submitted receipt must not be transitioned again. |
+| `acquired` / Finalizer | Dispatch existing finalizer and independent build-reviewer. Use `attempt.writer.attempt_id` as both proof `operation_id` and diagnostic `attempt_key`. Submit through `finalize_change(change_id, FinalizeDeliveryChange)`. |
+| `reconciled` | Selected pending state publication was replayed by its existing owner. Refresh before requesting another action; no worker was launched. |
+| `busy` | Existing claim/finalizer or in-progress operation owns the Change. Yield, including on same-session replay; never redispatch or infer termination. |
+| `stale` | Observed readiness/source changed. Refresh once, then yield on repeated contention. |
+| `waiting` | Capacity, missing host capability, pause or dependency condition. Yield; no acquisition loop without a changed condition. |
+| `human` | Show existing bounded request/semantic action; no automatic answer or invented assisted-check readiness. |
+| `unsupported` | Stop with `readiness.operation` and reason. No adapter/controller fallback to raw Git or another mutation. |
+| `unavailable` | Retain runtime/source/publication failure evidence and stop; no reconstructed authority. |
+| `terminal` | Report existing terminal state; no cleanup or merge authorization is implied. |
+
+Finalization uses existing `ChangeCoordination.writer` with `kind=finalize` and a retained
+`ChangeFinalizationAttempt`, also exposed by `get_change().finalization_attempt`. The attempt
+binds host/session, start, contract/frontier, Change head and locally observed target ref. Its
+frontier CAS joins custody acquisition; writer release and finish time join the existing runtime
+finalization transaction. Runtime mutations join an unchanged coordination participant to their
+transaction, fencing mutations prepared before finalizer acquisition. Submission rechecks
+authority, head, target and clean workspace. A
+matching failure report preserves custody and blocks success; no supported automatic recovery or
+cancellation is claimed. The acquired context is ready **before** custody: later reads correctly
+show running, so the consumer must compare its exact retained attempt rather than require idle
+readiness. Host/session strings are routing provenance, not authenticated liveness evidence.
+
+Builder claims set `continuation=true`; legacy timeout acquisition and caller-written
+`confirmed_lost=true` cannot recover them. Worker-owned typed transitions remain supported.
+Original result-candidate receipts are persisted with promotion under
+`changes/<change>/result-receipts/<outcome>/<digest>.json`; exact replay verifies the original claim
+and never promotes again. Missing historical provenance fails closed, not reconstructed. The
+frontier version is unchanged; added local custody fields/receipts still require D07/D08 copy-based
+compatibility rehearsal before any live activation.
+
+Exception mapping remains the existing adapter mapping: `DeliveryActionBusyError`
+(`ERR_DELIVERY_ACTION_BUSY`), `DeliveryActionSelectionConflictError`
+(`ERR_DELIVERY_ACTION_SELECTION_STALE`), `CoordinationConflictError`
+(`ERR_TARGET_COORDINATION_CONFLICT`) for workspace/target CAS,
+runtime conflict/reference errors for invalid/missing original result custody, and
+`FinalizationReportError("diagnostic-conflict")` for mismatched reports. Exceptions cause no
+consumer-authored replacement result. Unknown dispatch or submission outcomes retain custody;
+retry only the identical submission or fixed owning operation, never acquire a replacement worker.
+
+**T2 Opus editable scope:** `serve/delivery-mcp/src/owlbear_delivery_mcp/{target_models,target_server}.py`
+and `serve/delivery-mcp/tests/{test_delivery_adapter,test_target_server}.py`;
+`serve/cockpit/src/owlbear_cockpit/target_models.py`, its `routes/target_work.py` and
+`tests/test_cockpit_work_items.py`; existing orchestrator/finalizer agents, orchestration/finalization
+skills, the continuation prompt replacing normal orchestration entry, design prompt handoff, and
+required ecosystem inventory references/tests. These P07 sources are
+`share/agents/{orchestrator,finalizer}.agent.md`,
+`share/prompts/{orchestrate,finalize-change,design}.prompt.md`,
+`share/skills/{w-orchestration,w-change-finalization,w-design-session}/SKILL.md` and
+`share/WIRING.md`; validate with `tests/test_agent_ecosystem_validation.py`.
+Use MCP `_validate` / `_call_model` /
+`asyncio.to_thread`, HTTP `TargetCockpitService._invoke`, and core-exported strict schemas. Expose
+the core entry without portfolio defaults; keep acquisition annotations non-idempotent. T2 must
+not change engine custody, provider safety, retries, recovery or acceptance to make wiring pass.
+Do not dispatch a finalizer that cannot obtain independent review; prove the actual flat/nested
+host handoff before claiming automatic operation. Clipboard controls remain copy-only.
+
+**Remaining acceptance:** this reference path reaches finalization and selected state-publication
+replay, then returns `unsupported` for checkpoint/provider continuation. Acquisition of checkpoint,
+target-sync, mark-ready and acceptance-observation actions is not implemented here; existing
+operations remain intact, but finishing their continuation custody/handoff is a remaining P06
+engine companion, not authority for T2 to invent fallback routing. V04 and the capacity/isolation
+part of V05 have concurrent application proof. V10 proves containment with a still-writing worker,
+not termination/replacement (D03). V11 proves rejection of target-ref drift, not conflict recovery
+and fresh review (D03); provider freshness/merge approval remain D05. V01/V03/V12/V17/V19 cannot
+be fully accepted before the corresponding D03/D05/D06 work and actual host smoke. No scope,
+permission, privacy or destructive-action decision was newly required.
+
+Proof: `uv run --locked pytest` on core `test_portfolio_application.py`, `test_delivery_runtime.py`,
+`test_change_workspace.py`, `test_delivery_state.py`; MCP `test_delivery_adapter.py`,
+`test_target_server.py`; root `test_cockpit_work_items.py`, `test_package_boundary.py`, with
+`-q --tb=short -m 'not api and not model and not e2e' -n 6 --dist worksteal`: **687 passed**, no
+failures/skips (six existing Starlette deprecation warnings). Focused continuation/result/report
+run: **30 passed**; final atomic-custody/finalizer regression: **5 passed**. Editor diagnostics
+and `git diff --check` pass. Structured
+Ruff comparison with baseline finds zero introduced findings; seven existing lint findings and
+three existing formatting regions are unchanged, so no whole-file lint/format pass is claimed.
+Fixtures use disposable state and local-only remotes. No live process, registration, record,
+historical worktree or unrelated untracked entry was changed. No frontend/E2E or independent
+review pass is claimed for this substep. T2 must run registered adapter/HTTP tests, ecosystem
+validation, affected frontend/build/E2E gates, then obtain exact assembled review before D02 closes.
 
 ```text
 Continue D02-D08 sequentially on dev using section 0 of

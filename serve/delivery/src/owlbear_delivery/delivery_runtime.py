@@ -963,6 +963,7 @@ class DeliveryActiveClaim(_DeliveryModel):
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
+    continuation: bool = False
 
 
 class OutcomeAuthorityBinding(_DeliveryModel):
@@ -3132,11 +3133,6 @@ class DeliveryRuntime:
             or request.result.task_digest != task.digest
         ):
             _conflict("compact result does not match promoted task authority")
-        self._require_workspace().validate_writer_head(
-            self._contract.change_id,
-            request.claim_id,
-            request.result.completed_commit,
-        )
         digest = hashlib.sha256(_model_content(request.result)).hexdigest()
         candidate = DeliveryResultCandidate(
             candidate_id=f"result-{digest}",
@@ -3148,6 +3144,11 @@ class DeliveryRuntime:
             return candidate
         if binding.result_candidate is not None:
             _conflict("active claim already published another result candidate")
+        self._require_workspace().validate_writer_head(
+            self._contract.change_id,
+            request.claim_id,
+            request.result.completed_commit,
+        )
         updated = binding.model_copy(update={"result_candidate": candidate, "output": candidate.output})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return candidate
@@ -3175,10 +3176,47 @@ class DeliveryRuntime:
         else:
             updated = self._block(binding, request)
         replacement = _replace_binding(frontier, binding, updated)
+        result_participants = ()
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
             replacement = _queue_promoted_result_checkpoint(replacement, frontier, binding, updated)
-        self._replace(previous, replacement, transition_request_digest=request_digest)
+            candidate = binding.result_candidate
+            if candidate is None:
+                _conflict("result promotion requires original claim custody")
+            result_participants = (
+                TransactionParticipant(
+                    self._target_root,
+                    self._result_receipt_path(binding.outcome_id, candidate.digest),
+                    _model_content(candidate),
+                ),
+            )
+        self._replace(
+            previous, replacement, transition_request_digest=request_digest, additional_participants=result_participants
+        )
         return _find_binding(replacement, request.outcome_id)
+
+    def require_result_replay(self, outcome_id: str, claim_id: str, result: DeliveryTaskResult) -> None:
+        """Require immutable original claim provenance before replaying a promoted result."""
+        binding = self.show_binding(outcome_id)
+        if result not in binding.results:
+            _conflict("result replay requires current promoted authority")
+        digest = hashlib.sha256(_model_content(result)).hexdigest()
+        path = self._target_root / self._result_receipt_path(binding.outcome_id, digest)
+        try:
+            receipt = DeliveryResultCandidate.model_validate_json(path.read_bytes())
+        except (OSError, ValueError) as exc:
+            _reference("original result claim receipt is unavailable", exc)
+        if receipt != DeliveryResultCandidate(
+            candidate_id=f"result-{digest}", claim_id=claim_id, digest=digest, result=result
+        ):
+            _conflict("submitted result replay does not match original claim custody")
+
+    def _result_receipt_path(self, outcome_id: str, digest: str) -> Path:
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "result-receipts"
+            / outcome_id
+            / f"{digest}.json"
+        )
 
     def resolve_request(
         self,
@@ -3580,7 +3618,11 @@ class DeliveryRuntime:
         frontier: DeliveryFrontier,
         *,
         transition_request_digest: str | None = None,
+        additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
     ) -> None:
+        if self._workspace_manager is not None:
+            guard = self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
+            additional_participants = (*additional_participants, guard)
         portable = not any(binding.active_claim is not None for binding in frontier.bindings)
         portable = portable and frontier.integration_repair_claim is None
         self._replace_content(
@@ -3588,9 +3630,10 @@ class DeliveryRuntime:
             _model_content(frontier),
             transition_request_digest=transition_request_digest if portable else None,
             record_pending_publication=portable,
+            additional_participants=additional_participants,
         )
 
-    def _replace_content(
+    def _replace_content(  # noqa: PLR0913 - one transaction binds state, publication intent, and immutable receipts.
         self,
         previous: bytes,
         replacement: bytes,
@@ -3598,6 +3641,7 @@ class DeliveryRuntime:
         record_pending_publication: bool = True,
         transition_request_digest: str | None = None,
         base_frontier_digest: str | None = None,
+        additional_participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...] = (),
     ) -> None:
         """Transactionally replace frontier bytes and its local publication intent."""
         participant = ReplacementTransactionParticipant(
@@ -3606,7 +3650,10 @@ class DeliveryRuntime:
             previous,
             replacement,
         )
-        participants: list[TransactionParticipant | ReplacementTransactionParticipant] = [participant]
+        participants: list[TransactionParticipant | ReplacementTransactionParticipant] = [
+            participant,
+            *additional_participants,
+        ]
         if record_pending_publication:
             participants.append(
                 self._pending_publication_participant(

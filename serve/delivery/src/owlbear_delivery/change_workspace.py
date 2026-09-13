@@ -75,7 +75,25 @@ class ChangeWriter(WriterIdentity):
     """One active writer bound to a target transformation."""
 
     job_id: int = Field(gt=0)
-    kind: Literal["plan", "build", "repair"]
+    kind: Literal["plan", "build", "repair", "finalize"]
+
+
+class ChangeFinalizationAttempt(_WorkspaceModel):
+    """Durable finalizer custody and exact inputs, completed by its owning receipt."""
+
+    writer: ChangeWriter
+    contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    finished_at: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_writer(self) -> Self:
+        if self.writer.kind != "finalize":
+            message = "finalization attempts require finalizer custody"
+            raise ValueError(message)
+        return self
 
 
 class _ChangeWorktreeCleanupRecord(_WorkspaceModel):
@@ -730,6 +748,7 @@ class ChangeCoordination(_WorkspaceModel):
     design_package_snapshot_intent: ChangeDesignPackageSnapshotIntent | None = None
     design_package_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
     writer: ChangeWriter | None = None
+    finalization_attempt: ChangeFinalizationAttempt | None = None
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
     target_sync_conflict: ChangeTargetSyncConflictState | None = None
@@ -784,6 +803,18 @@ class ChangeCoordination(_WorkspaceModel):
         if self.publication_lease is None:
             return None
         return _publication_timestamp(self.publication_lease.expires_at)
+
+    @model_validator(mode="after")
+    def _validate_finalization_custody(self) -> Self:
+        attempt = self.finalization_attempt
+        if attempt is not None and attempt.finished_at is None:
+            if self.writer != attempt.writer or self.publication_lease is not None:
+                message = "unfinished finalization must retain its exact exclusive writer"
+                raise ValueError(message)
+        elif self.writer is not None and self.writer.kind == "finalize":
+            message = "finalizer custody requires an unfinished attempt"
+            raise ValueError(message)
+        return self
 
     @model_validator(mode="after")
     def _validate_target_sync_receipt(self) -> Self:
@@ -1120,16 +1151,33 @@ class PortfolioCoordinator:
             records.append(coordination)
         return tuple(sorted(records, key=lambda item: item.change_id))
 
-    def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
+    def acquire(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        *,
+        finalization_attempt: ChangeFinalizationAttempt | None = None,
+    ) -> ChangeCoordination:
         """Atomically bind one writer to a Change."""
         coordination = self.show(change_id)
         publication_expiry = coordination.publication_expiry
         if publication_expiry is not None and publication_expiry > datetime.now(UTC):
             _coordination_conflict("change already has an active writer")
         with self.publication_lock(change_id):
-            return self._acquire(change_id, writer)
+            return self._acquire(change_id, writer, finalization_attempt=finalization_attempt)
 
-    def _acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
+    def _acquire(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        *,
+        finalization_attempt: ChangeFinalizationAttempt | None = None,
+    ) -> ChangeCoordination:
+        if (writer.kind == "finalize") != (finalization_attempt is not None) or (
+            finalization_attempt is not None
+            and (finalization_attempt.writer != writer or finalization_attempt.finished_at is not None)
+        ):
+            _coordination_conflict("finalizer acquisition requires its exact unfinished attempt")
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
@@ -1145,14 +1193,26 @@ class PortfolioCoordinator:
         claimed = coordination.model_copy(
             update={
                 "writer": writer,
+                "finalization_attempt": finalization_attempt or coordination.finalization_attempt,
                 "publication_lease": None,
                 "dirty_worktree_quarantine": None,
             }
         )
+        participants = [_replacement(self._state_root, coordination_path, coordination_bytes, claimed)]
+        if finalization_attempt is not None:
+            frontier_path = self._state_root / "changes" / change_id / "frontier.json"
+            frontier_bytes = frontier_path.read_bytes()
+            if hashlib.sha256(frontier_bytes).hexdigest() != finalization_attempt.frontier_digest:
+                _coordination_conflict("finalization frontier changed before acquisition")
+            participants.append(
+                ReplacementTransactionParticipant(
+                    self._state_root, frontier_path.relative_to(self._state_root), frontier_bytes, frontier_bytes
+                )
+            )
         try:
             self._commit(
                 f"acquire-{change_id}-{writer.claim_id}",
-                (_replacement(self._state_root, coordination_path, coordination_bytes, claimed),),
+                tuple(participants),
             )
         except TransactionConflictError as exc:
             msg = "writer coordination changed concurrently"
@@ -1169,6 +1229,8 @@ class PortfolioCoordinator:
                 return coordination
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
                 _coordination_conflict("writer claim does not own the change workspace")
+            if coordination.writer.kind == "finalize":
+                _coordination_conflict("finalizer custody requires atomic finalization completion")
             released = coordination.model_copy(update={"writer": None})
             try:
                 self._commit(
@@ -1268,6 +1330,41 @@ class PortfolioCoordinator:
             return None
         updated = existing.model_copy(update={"last_reviewed_commit": reviewed_head})
         return _replacement(self._state_root, path, previous, updated)
+
+    def prepare_finalization_completion(
+        self,
+        coordination: ChangeCoordination,
+        reviewed_head: str,
+        finished_at: str,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant:
+        """Join custody release and reviewed-boundary advancement to the receipt transaction."""
+        self._require_publication_lock(lock, coordination.change_id)
+        path = self._coordination_path(coordination.change_id)
+        previous = path.read_bytes()
+        existing = ChangeCoordination.model_validate_json(previous)
+        attempt = existing.finalization_attempt
+        if existing != coordination or attempt is None or attempt.finished_at is not None:
+            _coordination_conflict("finalization custody changed during completion")
+        updated = existing.model_copy(
+            update={
+                "writer": None,
+                "last_reviewed_commit": reviewed_head,
+                "finalization_attempt": attempt.model_copy(update={"finished_at": finished_at}),
+            }
+        )
+        return _replacement(self._state_root, path, previous, updated)
+
+    def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
+        """Fence a runtime mutation against concurrent finalizer acquisition."""
+        path = self._coordination_path(change_id)
+        previous = path.read_bytes()
+        coordination = ChangeCoordination.model_validate_json(previous)
+        if coordination.writer is not None and coordination.writer.kind == "finalize":
+            _coordination_conflict("mutation cannot overlap active finalizer custody")
+        return ReplacementTransactionParticipant(
+            self._state_root, path.relative_to(self._state_root), previous, previous
+        )
 
     def reserve_publication(
         self,
@@ -1403,6 +1500,14 @@ class ChangeWorkspaceManager:
         if self._integration_target.startswith("refs/remotes/"):
             return self._integration_target
         return f"refs/remotes/{self._remote}/{self._integration_target}"
+
+    def observed_target_head(self) -> str:
+        """Read the current engine target ref without fetching or changing it."""
+        return self._resolve(self._target_ref())
+
+    def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
+        """Join current workspace custody to the caller's runtime transaction."""
+        return self._coordinator.prepare_runtime_custody_guard(change_id)
 
     def ensure(
         self,
@@ -1665,10 +1770,31 @@ class ChangeWorkspaceManager:
         exact_head: str,
         promoted_commits: tuple[str, ...],
         lock: PublicationLock,
+        *,
+        completion: tuple[str, str] | None = None,
     ) -> ReplacementTransactionParticipant | None:
         """Prepare a reviewed-boundary advance for one clean finalization head."""
-        coordination = self.validate_finalization_head(change_id, exact_head, promoted_commits)
+        current = self._coordinator.show(change_id)
+        attempt = current.finalization_attempt
+        active = attempt is not None and attempt.finished_at is None
+        if active and (
+            completion is None
+            or attempt.writer.attempt_id != completion[0]
+            or attempt.exact_head != exact_head
+            or attempt.target_head != self.observed_target_head()
+        ):
+            _coordination_conflict("finalization attempt or target head changed")
+        coordination = self.validate_finalization_head(
+            change_id, exact_head, promoted_commits, expected_writer=attempt.writer if active else None
+        )
         adoption = coordination.external_head_adoption_receipt
+        if active:
+            reviewed_head = (
+                coordination.last_reviewed_commit
+                if adoption is not None and adoption.adopted_head == exact_head
+                else exact_head
+            )
+            return self._coordinator.prepare_finalization_completion(coordination, reviewed_head, completion[1], lock)
         if coordination.last_reviewed_commit == exact_head or (
             adoption is not None and adoption.adopted_head == exact_head
         ):
@@ -3132,10 +3258,12 @@ class ChangeWorkspaceManager:
         change_id: str,
         exact_head: str,
         promoted_commits: tuple[str, ...],
+        *,
+        expected_writer: ChangeWriter | None = None,
     ) -> ChangeCoordination:
         """Require one unclaimed clean reviewed head containing every promoted Task commit."""
         coordination = self._coordinator.show(change_id)
-        if coordination.writer is not None:
+        if coordination.writer != expected_writer:
             _workspace_failure("Delivery finalization cannot overlap an active Change writer")
         if coordination.publication_lease is not None:
             _workspace_failure("Delivery finalization cannot overlap a publication lease")
