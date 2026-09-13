@@ -1,10 +1,78 @@
-import type { DeliveryWorkerRole, WorkItemCardView, WorkItemPublicationPhase, WorkItemStage } from '../api/workItems'
+import type {
+  DeliveryReadinessChecksState,
+  DeliveryReadinessReasonCode,
+  DeliveryReadinessStatus,
+  DeliveryWorkerRole,
+  WorkItemCardView,
+  WorkItemNextActor,
+  WorkItemPublicationPhase,
+  WorkItemStage,
+} from '../api/workItems'
 
 export const PROGRESS_STAGE_LABELS: Record<WorkItemStage, string> = {
   design: 'Design',
   planning: 'Planning',
   implementation: 'Implementation',
   completed: 'Completed',
+}
+
+export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> = {
+  ready: 'Ready',
+  running: 'Running',
+  waiting: 'Waiting',
+  blocked: 'Blocked',
+  unavailable: 'Unavailable',
+  complete: 'Complete',
+}
+
+export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string> = {
+  ready: 'Delivery reports this operation is eligible now.',
+  'active-custody': 'An active operation retains Change custody.',
+  'runtime-unavailable': 'Delivery could not compose this Change runtime.',
+  'dependency-wait': 'A dependency has not completed yet.',
+  'request-action': 'An open request needs an answer first.',
+  'change-paused': 'This Change is paused.',
+  'change-terminal': 'This Change reached a terminal state.',
+  'task-incomplete': 'Planned tasks are not complete yet.',
+  'workspace-inspection-failed': 'Managed workspace readiness could not be observed.',
+  'workspace-dirty': 'Managed workspace preflight is blocked by local changes.',
+  'workspace-preflight-failed': 'Managed workspace preflight did not pass.',
+  'review-repair': 'Review repair requires a new Change commit before verification.',
+  'publication-wait': 'Publication is waiting on an external result.',
+  'checkpoint-pending': 'A durable checkpoint is still pending.',
+  'report-store-unavailable': 'Finalization diagnostics could not be read.',
+}
+
+/** Truthful check labels: absence of a run is never reported as a pass. */
+export const READINESS_CHECKS_LABELS: Record<DeliveryReadinessChecksState, string> = {
+  'not-run': 'Not run',
+  failed: 'Failed',
+  passed: 'Passed',
+  unknown: 'Unknown',
+}
+
+export const NEXT_ACTOR_LABELS: Record<WorkItemNextActor, string> = {
+  you: 'You',
+  agent: 'Agent',
+  dependency: 'Dependency',
+  none: 'Nobody',
+}
+
+export function readinessTone(status: DeliveryReadinessStatus): WorkItemStatusTone {
+  switch (status) {
+    case 'ready':
+      return 'ready'
+    case 'running':
+      return 'active'
+    case 'waiting':
+      return 'neutral'
+    case 'blocked':
+      return 'blocked'
+    case 'unavailable':
+      return 'attention'
+    case 'complete':
+      return 'complete'
+  }
 }
 
 const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string> = {

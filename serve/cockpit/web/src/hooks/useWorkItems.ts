@@ -26,12 +26,15 @@ import {
   syncWorkItemTarget,
   showCompletedChange,
   workItemDetailUrl,
+  isUnavailableDetail,
   type CompletedChangePage,
   type CompletedChangeRecord,
   completedChangeRecordId,
   type DeliveryRequestResolution,
   type DesignWorkDetailResponse,
   type WorkItemDetailResponse,
+  type WorkItemAvailableDetailResponse,
+  type WorkItemUnavailableDetailResponse,
   type WorkItemPortfolioResponse,
   type WorkItemCardView,
   type PublicationChecksObservationResponse,
@@ -416,7 +419,8 @@ export function useCompletedChange(identity: { changeId: string; recordId: strin
 }
 
 export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void) {
-  const [data, setData] = useState<WorkItemDetailResponse | null>(null)
+  const [data, setData] = useState<WorkItemAvailableDetailResponse | null>(null)
+  const [unavailable, setUnavailable] = useState<WorkItemUnavailableDetailResponse | null>(null)
   const [detailError, setDetailError] = useState<Error | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actionError, setActionError] = useState<Error | null>(null)
@@ -430,7 +434,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
   const supersedePublicationOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const identityKey = `${identity.changeId}:${identity.itemKey}`
   const publicationIdentityRef = useRef(identityKey)
-  const publicationDetailRef = useRef<WorkItemDetailResponse | null>(null)
+  const publicationDetailRef = useRef<WorkItemAvailableDetailResponse | null>(null)
   const publicationHeadRef = useRef<string | null>(null)
   const publicationChecksRef = useRef<PublicationChecksObservationResponse | null>(null)
   const publicationObservationGenerationRef = useRef(0)
@@ -450,6 +454,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     setPublicationChecksStale(false)
     setIsObservingPublicationChecks(false)
     setData(null)
+    setUnavailable(null)
     setDetailError(null)
     setPendingAction(null)
     setActionError(null)
@@ -461,6 +466,15 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     {
       intervalMs: 3_000,
       onSuccess: (next) => {
+        if (isUnavailableDetail(next)) {
+          if (next.change_id !== identity.changeId) return
+          publicationHeadRef.current = null
+          publicationDetailRef.current = null
+          setData(null)
+          setUnavailable(next)
+          setDetailError(null)
+          return
+        }
         if (next.item.card.change_id !== identity.changeId || next.item.card.item_key !== identity.itemKey) return
         const nextPublishedHead = next.item.publication?.published_head ?? null
         const previousPublishedHead = publicationHeadRef.current
@@ -478,6 +492,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
         publicationHeadRef.current = nextPublishedHead
         publicationDetailRef.current = next
         setData(next)
+        setUnavailable(null)
         setDetailError(null)
       },
       onError: setDetailError,
@@ -559,9 +574,9 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
 
   return {
     detail: {
-      data,
+      data: (unavailable ?? data) as WorkItemDetailResponse | null,
       error: detailError,
-      isLoading: polling.isFetching && data === null,
+      isLoading: polling.isFetching && data === null && unavailable === null,
       isRefreshing: polling.isFetching,
     },
     pendingAction,

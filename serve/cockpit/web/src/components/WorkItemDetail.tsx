@@ -11,10 +11,14 @@ import {
 } from '@porsche-design-system/components-react'
 import {
   WorkItemApiError,
+  isUnavailableDetail,
   type BackwardMovePreview,
+  type DeliveryReadiness,
   type DeliveryRequest,
   type DeliveryRequestResolution,
+  type WorkItemAvailableDetailResponse,
   type WorkItemDetailResponse,
+  type WorkItemUnavailableDetailResponse,
   type PublicationCheckBlockingState,
   type PublicationChecksObservationResponse,
   type WorkItemPublicationPhase,
@@ -22,7 +26,12 @@ import {
   type DeliveryWorkerRole,
 } from '../api/workItems'
 import {
+  NEXT_ACTOR_LABELS,
   PROGRESS_STAGE_LABELS,
+  READINESS_CHECKS_LABELS,
+  READINESS_REASON_LABELS,
+  READINESS_STATUS_LABELS,
+  readinessTone,
   workItemStatus,
   workItemStatusLabel,
 } from './workItemPresentation'
@@ -52,7 +61,7 @@ function ConfirmationContent({ children, onClose }: { children: ReactNode; onClo
 }
 
 interface WorkItemDetailProps {
-  detail: WorkItemDetailResponse
+  detail: WorkItemAvailableDetailResponse
   pendingAction: string | null
   actionError: Error | null
   actionResult: string | null
@@ -98,7 +107,7 @@ const REQUEST_KIND_LABELS: Record<DeliveryRequest['kind'], string> = {
   action: 'Action',
 }
 
-const TASK_STATUS_LABELS: Record<WorkItemDetailResponse['item']['tasks'][number]['status'], string> = {
+const TASK_STATUS_LABELS: Record<WorkItemAvailableDetailResponse['item']['tasks'][number]['status'], string> = {
   pending: 'Pending',
   active: 'Active',
   reviewed: 'Reviewed',
@@ -495,6 +504,104 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
 function IdentityRow({ label, value }: { label: string; value: string | number | null }) {
   if (value === null) return null
   return <><dt className="text-contrast-medium">{label}</dt><dd className="min-w-0 break-all font-mono text-xs">{value}</dd></>
+}
+
+function ReadinessBasisRows({ basis }: { basis: DeliveryReadiness['basis'] }) {
+  return (
+    <>
+      <IdentityRow label="Candidate head" value={basis.candidate_head} />
+      <IdentityRow label="Reviewed head" value={basis.reviewed_head} />
+      <IdentityRow label="Contract digest" value={basis.contract_digest} />
+      <IdentityRow label="Frontier digest" value={basis.frontier_digest} />
+      <IdentityRow label="Workspace fingerprint" value={basis.workspace_fingerprint} />
+      <IdentityRow label="Diagnostic sequence" value={basis.diagnostic_sequence} />
+    </>
+  )
+}
+
+function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness['last_attempt']> }) {
+  return (
+    <div className="mt-static-sm border-t border-contrast-low pt-static-sm" data-testid="readiness-last-attempt">
+      <p className="flex flex-wrap items-center gap-static-xs text-sm">
+        <strong>Last finalization attempt</strong>
+        <StatusChip
+          label={attempt.applicability === 'current' ? 'Applies to this candidate' : 'Historical'}
+          tone={attempt.applicability === 'current' ? 'attention' : 'neutral'}
+          testId="readiness-attempt-applicability"
+        />
+      </p>
+      <p className="mt-1 text-sm leading-relaxed">{attempt.report.summary}</p>
+      <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <dt className="text-contrast-medium">Category</dt><dd>{attempt.report.request.category}</dd>
+        <dt className="text-contrast-medium">Code</dt><dd><code>{attempt.report.request.code}</code></dd>
+        <dt className="text-contrast-medium">Checks</dt><dd>{READINESS_CHECKS_LABELS[attempt.report.request.checks_state]}</dd>
+        <IdentityRow label="Report" value={attempt.report.report_id} />
+        <IdentityRow label="Observed at" value={attempt.report.observed_at} />
+      </dl>
+    </div>
+  )
+}
+
+/** Render engine-computed readiness. Eligibility is never recomputed here. */
+function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null | undefined }) {
+  if (!readiness) return null
+  return (
+    <SectionCard dataTestId="delivery-readiness" ariaLabel="Delivery readiness" className="p-static-sm">
+      <div className="flex flex-wrap items-center gap-static-xs">
+        <StatusChip
+          label={READINESS_STATUS_LABELS[readiness.status]}
+          tone={readinessTone(readiness.status)}
+          testId="readiness-status"
+        />
+        <span className="text-xs text-contrast-medium" data-testid="readiness-checks-state">
+          Checks: {READINESS_CHECKS_LABELS[readiness.checks_state]}
+        </span>
+        <span className="text-xs text-contrast-medium" data-readiness-actor={readiness.next_actor}>
+          Next: {NEXT_ACTOR_LABELS[readiness.next_actor]}
+        </span>
+      </div>
+      <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
+        {READINESS_REASON_LABELS[readiness.reason_code]}
+      </p>
+      {!readiness.executable ? (
+        <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
+          Delivery offers no runnable operation for this Work Item right now.
+        </p>
+      ) : null}
+      <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <ReadinessBasisRows basis={readiness.basis} />
+      </dl>
+      {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}
+    </SectionCard>
+  )
+}
+
+function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetailResponse }) {
+  return (
+    <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+      <div className="grid gap-static-lg">
+        <div>
+          <span className="text-xs text-contrast-medium">
+            <strong className="text-primary">{detail.title ?? `Change ${detail.change_id}`}</strong>
+            {' / '}
+            <code>{detail.change_id}</code>
+          </span>
+          <PHeading id="work-detail-heading" size="medium" tag="h2" className="mt-static-xs">Runtime unavailable</PHeading>
+          <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">
+            Delivery could not compose the canonical runtime for this Change, so no Work Item detail is available.
+            This view is read-only inspection evidence; no Change operation is offered here.
+          </p>
+        </div>
+        <SectionCard tone="warning" dataTestId="unavailable-change-diagnostics" ariaLabel="Runtime diagnostics" className="p-static-sm">
+          <p className="text-sm font-semibold">Diagnostics</p>
+          <ul className="mt-static-xs grid gap-1 text-sm">
+            {detail.diagnostics.map((diagnostic) => <li key={diagnostic}><code>{diagnostic}</code></li>)}
+          </ul>
+        </SectionCard>
+        <ReadinessSection readiness={detail.readiness} />
+      </div>
+    </div>
+  )
 }
 
 function pullRequestUrl(repository: string, number: number): string {
@@ -1113,7 +1220,9 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
   return result ? <p className="border-l-4 border-success bg-surface p-static-sm text-sm" role="status">{result}</p> : null
 }
 
-export default function WorkItemDetail(props: WorkItemDetailProps) {
+export default function WorkItemDetail(props: Omit<WorkItemDetailProps, 'detail'> & { detail: WorkItemDetailResponse }) {
+  if (isUnavailableDetail(props.detail)) return <UnavailableChangeDetail detail={props.detail} />
+  const available = { ...props, detail: props.detail }
   const { card } = props.detail.item
   return (
     <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
@@ -1126,15 +1235,16 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <BlockSection {...props} />
-        <RequestsSection {...props} />
-        <PublicationSection {...props} />
+        <ReadinessSection readiness={props.detail.item.readiness} />
+        <BlockSection {...available} />
+        <RequestsSection {...available} />
+        <PublicationSection {...available} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />
-        <ClaimSection {...props} />
+        <ClaimSection {...available} />
         <ExceptionalStateSection detail={props.detail} />
-        <BackwardMoveSection {...props} />
-        <ChangeDispositionSection {...props} />
+        <BackwardMoveSection {...available} />
+        <ChangeDispositionSection {...available} />
       </div>
     </div>
   )

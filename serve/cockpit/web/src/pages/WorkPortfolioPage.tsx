@@ -1,11 +1,12 @@
 import { Fragment, useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChangeGroupView, DeliveryHealthDiagnostic, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
+import type { ChangeGroupView, DeliveryHealthDiagnostic, DeliveryUnavailableChangeResponse, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
 import DesignWorkSection from '../components/DesignWorkSection'
 import { designCommand, designWorkTitle } from '../components/designWorkPresentation'
+import { READINESS_CHECKS_LABELS, READINESS_REASON_LABELS } from '../components/workItemPresentation'
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
 import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
@@ -364,11 +365,15 @@ function HealthDiagnosticDetails({ diagnostic }: { diagnostic: DeliveryHealthDia
 function DeliveryIssuesSection({
   diagnostics,
   statuses,
+  unavailable,
 }: {
   diagnostics: DeliveryHealthDiagnostic[]
   statuses: PortfolioChangeLifecycleStatus[]
+  unavailable: DeliveryUnavailableChangeResponse[]
 }) {
   const statusChangeIds = new Set(statuses.map((status) => status.change_id))
+  const uncoveredUnavailable = unavailable.filter((change) => !statusChangeIds.has(change.change_id))
+  const unavailableCount = statuses.length + uncoveredUnavailable.length
   const additionalDiagnostics = diagnostics.filter((diagnostic) => diagnostic.change_id === null || !statusChangeIds.has(diagnostic.change_id))
   const diagnosticByChangeId = new Map<string, DeliveryHealthDiagnostic>()
   for (const diagnostic of diagnostics) {
@@ -376,7 +381,7 @@ function DeliveryIssuesSection({
       diagnosticByChangeId.set(diagnostic.change_id, diagnostic)
     }
   }
-  const issueCount = statuses.length + additionalDiagnostics.length
+  const issueCount = statuses.length + uncoveredUnavailable.length + additionalDiagnostics.length
   if (issueCount === 0) return null
   return (
     <section className="min-w-0 rounded-lg border border-warning bg-warning-low" data-testid="delivery-issues-section" aria-labelledby="delivery-issues-heading">
@@ -384,7 +389,7 @@ function DeliveryIssuesSection({
         <PIcon name="warning" size="small" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h2 id="delivery-issues-heading" className="m-0 text-sm font-semibold text-primary">Delivery issues</h2>
-          <p className="mt-1 text-xs text-contrast-medium">{statuses.length > 0 ? `${statuses.length} Change${statuses.length === 1 ? '' : 's'} unavailable to Delivery.` : `${issueCount} Delivery issue${issueCount === 1 ? '' : 's'} need review.`}</p>
+          <p className="mt-1 text-xs text-contrast-medium">{unavailableCount > 0 ? `${unavailableCount} Change${unavailableCount === 1 ? '' : 's'} unavailable to Delivery.` : `${issueCount} Delivery issue${issueCount === 1 ? '' : 's'} need review.`}</p>
         </div>
         <span className="ml-auto rounded-full border border-warning px-static-xs py-1 text-xs tabular-nums">{issueCount}</span>
       </div>
@@ -405,6 +410,17 @@ function DeliveryIssuesSection({
                 <HealthDiagnosticDetails diagnostic={diagnosticByChangeId.get(status.change_id) as DeliveryHealthDiagnostic} />
               </>
             ) : null}
+          </article>
+        ))}
+        {uncoveredUnavailable.map((change) => (
+          <article key={change.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-unavailable={change.change_id} role="listitem">
+            <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
+              <strong className="font-semibold text-primary">{change.title ?? change.change_id}</strong>
+              <span className="text-xs text-contrast-medium">Delivery</span>
+            </div>
+            <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
+            <p className="mt-1 text-xs text-contrast-medium">Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.</p>
+            <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{change.change_id}</code><span aria-hidden="true"> / </span><code>{change.diagnostics.join(', ')}</code></p>
           </article>
         ))}
         {additionalDiagnostics.map((diagnostic, index) => (
@@ -520,6 +536,10 @@ export default function WorkPortfolioPage() {
     : []
   const visibleHealthDiagnostics = designMatchesAttention && portfolio.health.status === 'attention'
     ? portfolio.health.diagnostics.filter((diagnostic) => !deferredChange || diagnostic.change_id === deferredChange)
+    : []
+  const unavailableChanges = portfolio.unavailable_changes ?? []
+  const visibleUnavailableChanges = designMatchesAttention
+    ? unavailableChanges.filter((change) => !deferredChange || change.change_id === deferredChange)
     : []
   const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length
   const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length
@@ -697,6 +717,7 @@ export default function WorkPortfolioPage() {
                 <DeliveryIssuesSection
                   diagnostics={visibleHealthDiagnostics}
                   statuses={visibleUnavailableStatuses}
+                  unavailable={visibleUnavailableChanges}
                 />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace

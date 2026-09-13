@@ -54,6 +54,78 @@ export interface WorkItemProgress {
   total: number | null
 }
 
+export type DeliveryReadinessStatus = 'ready' | 'running' | 'waiting' | 'blocked' | 'unavailable' | 'complete'
+export type DeliveryReadinessChecksState = 'not-run' | 'failed' | 'passed' | 'unknown'
+export type DeliveryReadinessReasonCode =
+  | 'ready'
+  | 'active-custody'
+  | 'runtime-unavailable'
+  | 'dependency-wait'
+  | 'request-action'
+  | 'change-paused'
+  | 'change-terminal'
+  | 'task-incomplete'
+  | 'workspace-inspection-failed'
+  | 'workspace-dirty'
+  | 'workspace-preflight-failed'
+  | 'review-repair'
+  | 'publication-wait'
+  | 'checkpoint-pending'
+  | 'report-store-unavailable'
+export type FinalizationFailureCode =
+  | 'workspace-dirty'
+  | 'workspace-preflight-failed'
+  | 'maintained-check-failed'
+  | 'maintained-check-unavailable'
+  | 'independent-review-failed'
+  | 'independent-review-unavailable'
+export type FinalizationFailureCategory = 'custody-preflight' | 'maintained-check' | 'independent-review'
+
+export interface DeliveryReadinessBasis {
+  contract_digest: string | null
+  frontier_digest: string | null
+  candidate_head: string | null
+  reviewed_head: string | null
+  workspace_fingerprint: string | null
+  diagnostic_sequence: number | null
+}
+
+export interface FinalizationReport {
+  report_id: string
+  sequence: number
+  observed_at: string
+  summary: string
+  producer: 'finalization-diagnostic'
+  request: {
+    change_id: string
+    attempt_key: string
+    category: FinalizationFailureCategory
+    code: FinalizationFailureCode
+    checks_state: 'not-run' | 'failed' | 'unknown'
+    check_id: string | null
+    exit_status: number | null
+    paths: string[]
+  }
+}
+
+export interface FinalizationAttempt {
+  report: FinalizationReport
+  applicability: 'current' | 'historical'
+}
+
+/** Engine-computed eligibility for one supported action at a captured basis. */
+export interface DeliveryReadiness {
+  status: DeliveryReadinessStatus
+  operation: WorkItemActionKind | null
+  executable: boolean
+  next_actor: WorkItemNextActor
+  reason_code: DeliveryReadinessReasonCode
+  checks_state: DeliveryReadinessChecksState
+  basis: DeliveryReadinessBasis
+  action: WorkItemAction | null
+  last_attempt: FinalizationAttempt | null
+}
+
 export interface WorkItemCardView {
   item_key: string
   work_item_id: string
@@ -69,6 +141,7 @@ export interface WorkItemCardView {
   activity: WorkItemActivity
   progress: WorkItemProgress
   action: WorkItemAction
+  readiness?: DeliveryReadiness | null
 }
 
 export interface ChangeGroupView {
@@ -191,8 +264,17 @@ export interface DeliveryHealthResponse {
   diagnostics: DeliveryHealthDiagnostic[]
 }
 
+export interface DeliveryUnavailableChangeResponse {
+  kind: 'unavailable'
+  change_id: string
+  title: string | null
+  diagnostics: Array<'runtime-unavailable'>
+  readiness: DeliveryReadiness
+}
+
 export interface WorkItemPortfolioResponse {
   groups: ChangeGroupView[]
+  unavailable_changes?: DeliveryUnavailableChangeResponse[]
   totals: WorkItemPortfolioTotals
   operating: PortfolioOperatingView
   health: DeliveryHealthResponse
@@ -490,10 +572,26 @@ export interface WorkItemDetailView {
     retry_condition: string
   } | null
   publication: WorkItemPublicationView | null
+  readiness?: DeliveryReadiness | null
 }
 
-export interface WorkItemDetailResponse {
+export interface WorkItemAvailableDetailResponse {
+  kind?: 'available'
   item: WorkItemDetailView
+}
+
+export interface WorkItemUnavailableDetailResponse {
+  kind: 'unavailable'
+  change_id: string
+  title: string | null
+  diagnostics: Array<'runtime-unavailable'>
+  readiness: DeliveryReadiness
+}
+
+export type WorkItemDetailResponse = WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse
+
+export function isUnavailableDetail(detail: WorkItemDetailResponse): detail is WorkItemUnavailableDetailResponse {
+  return detail.kind === 'unavailable'
 }
 
 export interface BackwardMoveResult {

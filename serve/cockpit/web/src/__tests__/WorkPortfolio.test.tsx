@@ -7,9 +7,12 @@ import type {
   ChangeGroupView,
   CompletedChangeRecord,
   DeliveryHealthResponse,
+  DeliveryReadiness,
+  DeliveryUnavailableChangeResponse,
   DesignWorkDetailResponse,
   PortfolioChangeLifecycleStatus,
   PortfolioOperatingView,
+  WorkItemAvailableDetailResponse,
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
@@ -79,6 +82,51 @@ function changeStatus(changeId: string, overrides: Partial<PortfolioChangeLifecy
   }
 }
 
+function readiness(overrides: Partial<DeliveryReadiness> = {}): DeliveryReadiness {
+  return {
+    status: 'waiting',
+    operation: null,
+    executable: false,
+    next_actor: 'agent',
+    reason_code: 'task-incomplete',
+    checks_state: 'not-run',
+    basis: {
+      contract_digest: 'c'.repeat(64),
+      frontier_digest: 'd'.repeat(64),
+      candidate_head: '1'.repeat(40),
+      reviewed_head: '2'.repeat(40),
+      workspace_fingerprint: null,
+      diagnostic_sequence: 0,
+    },
+    action: null,
+    last_attempt: null,
+    ...overrides,
+  }
+}
+
+function unavailableChange(changeId: string, title: string | null = null): DeliveryUnavailableChangeResponse {
+  return {
+    kind: 'unavailable',
+    change_id: changeId,
+    title,
+    diagnostics: ['runtime-unavailable'],
+    readiness: readiness({
+      status: 'unavailable',
+      next_actor: 'none',
+      reason_code: 'runtime-unavailable',
+      checks_state: 'unknown',
+      basis: {
+        contract_digest: 'c'.repeat(64),
+        frontier_digest: null,
+        candidate_head: null,
+        reviewed_head: null,
+        workspace_fingerprint: null,
+        diagnostic_sequence: null,
+      },
+    }),
+  }
+}
+
 function portfolio(
   groups: ChangeGroupView[] = [group()],
   health: DeliveryHealthResponse = { status: 'healthy', diagnostics: [] },
@@ -145,7 +193,7 @@ function withUnadmittedDesign(data: WorkItemPortfolioResponse, changeId = 'desig
   }
 }
 
-function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkItemDetailResponse {
+function detail(overrides: Partial<WorkItemAvailableDetailResponse['item']> = {}): WorkItemAvailableDetailResponse {
   const publication = overrides.publication && {
     publication_generations: [],
     ...overrides.publication,
@@ -185,7 +233,7 @@ function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkIt
   }
 }
 
-type PublicationView = NonNullable<WorkItemDetailResponse['item']['publication']>
+type PublicationView = NonNullable<WorkItemAvailableDetailResponse['item']['publication']>
 
 function publicationForChecks(
   phase: 'pull-request-draft' | 'awaiting-merge' | 'ready-for-finalization',
@@ -300,7 +348,8 @@ function abandonedRecord(overrides: Partial<AbandonedChangeRecord> = {}): Abando
 }
 
 let currentPortfolio: WorkItemPortfolioResponse
-let currentDetail: WorkItemDetailResponse
+let currentDetail: WorkItemAvailableDetailResponse
+let currentUnavailableDetail: WorkItemDetailResponse | null
 let currentDesignWork: DesignWorkDetailResponse
 let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
@@ -363,7 +412,7 @@ function installFetch() {
       if (pendingDetailItemKey !== null && url.endsWith(pendingDetailItemKey)) {
         await new Promise<void>((resolve) => { pendingDetailRelease = resolve })
       }
-      return detailFailure ? response({ detail: 'Delivery runtime is absent: change-alpha' }, 409) : response(currentDetail)
+      return detailFailure ? response({ detail: 'Delivery runtime is absent: change-alpha' }, 409) : response(currentUnavailableDetail ?? currentDetail)
     }
     if (method === 'GET' && url === '/api/design-work/design-draft') {
       return designFailure ? response({ detail: 'Design source temporarily unavailable' }, 503) : response(currentDesignWork)
@@ -635,6 +684,7 @@ function LocationProbe() {
 beforeEach(() => {
   currentPortfolio = portfolio()
   currentDetail = detail()
+  currentUnavailableDetail = null
   currentDesignWork = {
     change_id: 'design-draft',
     package_id: 'd'.repeat(64),
@@ -3811,4 +3861,125 @@ it('keeps current delivery open when only the selected publication card disappea
 
   expect(await screen.findByTestId('work-portfolio-table')).toHaveTextContent('Returned outcome')
   expect(screen.queryByTestId('completed-history-workspace')).not.toBeInTheDocument()
+})
+
+it('renders engine readiness without recomputing eligibility', async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: 'blocked',
+      reason_code: 'workspace-dirty',
+      next_actor: 'you',
+      checks_state: 'not-run',
+    }),
+  })
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const readinessPanel = within(inspector).getByTestId('delivery-readiness')
+  expect(within(readinessPanel).getByTestId('readiness-status')).toHaveTextContent('Blocked')
+  expect(within(readinessPanel).getByTestId('readiness-checks-state')).toHaveTextContent('Checks: Not run')
+  expect(readinessPanel).toHaveTextContent('Managed workspace preflight is blocked by local changes.')
+  expect(within(readinessPanel).getByTestId('readiness-not-executable')).toBeInTheDocument()
+  expect(readinessPanel).toHaveTextContent('1'.repeat(40))
+})
+
+it('reports checks that have not run without implying a pass', async () => {
+  currentDetail = detail({ readiness: readiness({ status: 'ready', reason_code: 'ready', checks_state: 'not-run' }) })
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
+
+  const readinessPanel = within(await screen.findByTestId('work-item-detail')).getByTestId('delivery-readiness')
+  expect(within(readinessPanel).getByTestId('readiness-checks-state')).toHaveTextContent('Not run')
+  expect(readinessPanel).not.toHaveTextContent('Passed')
+})
+
+it('shows the applicable finalization attempt retained by readiness', async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: 'blocked',
+      reason_code: 'workspace-preflight-failed',
+      checks_state: 'failed',
+      last_attempt: {
+        applicability: 'current',
+        report: {
+          report_id: 'e'.repeat(64),
+          sequence: 3,
+          observed_at: '2026-08-12T09:00:00Z',
+          summary: 'Managed workspace preflight did not pass.',
+          producer: 'finalization-diagnostic',
+          request: {
+            change_id: 'change-alpha',
+            attempt_key: 'attempt-3',
+            category: 'custody-preflight',
+            code: 'workspace-preflight-failed',
+            checks_state: 'not-run',
+            check_id: null,
+            exit_status: null,
+            paths: [],
+          },
+        },
+      },
+    }),
+  })
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
+
+  const attempt = within(await screen.findByTestId('work-item-detail')).getByTestId('readiness-last-attempt')
+  expect(within(attempt).getByTestId('readiness-attempt-applicability')).toHaveTextContent('Applies to this candidate')
+  expect(attempt).toHaveTextContent('Managed workspace preflight did not pass.')
+  expect(attempt).toHaveTextContent('workspace-preflight-failed')
+  expect(attempt).toHaveTextContent('Not run')
+})
+
+it('offers read-only inspection for an unavailable Change without controls', async () => {
+  currentUnavailableDetail = unavailableChange('change-alpha', 'Portfolio redesign')
+  renderPage('/delivery/change-alpha/outcome:OUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Runtime unavailable')
+  expect(inspector).toHaveTextContent('This view is read-only inspection evidence; no Change operation is offered here.')
+  expect(within(inspector).getByTestId('unavailable-change-diagnostics')).toHaveTextContent('runtime-unavailable')
+  expect(within(inspector).getByTestId('readiness-status')).toHaveTextContent('Unavailable')
+  expect(within(inspector).getByTestId('readiness-checks-state')).toHaveTextContent('Unknown')
+  expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
+})
+
+it('lists engine-reported unavailable Changes that no operating status covers', async () => {
+  currentPortfolio = {
+    ...portfolio(),
+    unavailable_changes: [unavailableChange('quarantined-change', 'Quarantined work')],
+  }
+  renderPage()
+
+  const issues = await screen.findByTestId('delivery-issues-section')
+  expect(issues).toHaveTextContent('1 Change unavailable to Delivery.')
+  const row = issues.querySelector('[data-delivery-unavailable="quarantined-change"]') as HTMLElement
+  expect(row).toHaveTextContent('Quarantined work')
+  expect(row).toHaveTextContent('Delivery could not compose this Change runtime.')
+  expect(row).toHaveTextContent('Read-only inspection only. Checks: Unknown.')
+})
+
+it('does not duplicate an unavailable Change already carried by an operating status', async () => {
+  const base = portfolio()
+  currentPortfolio = {
+    ...base,
+    unavailable_changes: [unavailableChange('unavailable-change')],
+    operating: {
+      ...base.operating,
+      statuses: [
+        ...base.operating.statuses,
+        changeStatus('unavailable-change', { actionable_runtime: false, diagnostic_code: 'runtime_unavailable', diagnostic_detail: 'Runtime composition is unavailable.' }),
+      ],
+    },
+  }
+  renderPage()
+
+  const issues = await screen.findByTestId('delivery-issues-section')
+  expect(issues.querySelectorAll('[data-delivery-unavailable="unavailable-change"]')).toHaveLength(0)
+  expect(issues.querySelectorAll('[data-delivery-status="unavailable-change"]')).toHaveLength(1)
+  expect(issues).toHaveTextContent('1 Change unavailable to Delivery.')
 })
