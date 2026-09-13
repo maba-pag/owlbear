@@ -9,9 +9,6 @@ skills/pds-knowledge-*
 # Archify release cache
 cache/
 
-# Pinned controller installations and private activation snapshots
-controllers/
-
 # Knowledge and memory databases
 knowledge/*.db
 knowledge/vectors/
