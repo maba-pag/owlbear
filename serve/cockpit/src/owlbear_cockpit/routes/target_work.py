@@ -28,6 +28,8 @@ from owlbear_cockpit.target_models import (
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
+    ContinuationAcquisitionBody,
+    ContinuationExecutionBody,
     DeliveryHealthResponse,
     DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
@@ -66,7 +68,11 @@ from owlbear_delivery.portfolio_application import (
     DeliveryAnswerKind,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
+    DeliveryEngineActionResult,
     DeliveryUnavailableChangeView,
+    ExecuteDeliveryChangeAction,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
@@ -206,6 +212,36 @@ class TargetCockpitService:
         """Reconcile the current engine-derived Change checkpoint."""
         result = self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
         return WorkItemPublicationReconciliationResponse.from_result(result)
+
+    def acquire_change_action(
+        self,
+        change_id: str,
+        body: ContinuationAcquisitionBody,
+    ) -> DeliveryContinuationResult:
+        """Acquire at most one supported action for the exact selected Change."""
+        return self._invoke(
+            lambda: self._application.acquire_change_action(
+                DeliveryContinuationRequest(
+                    change_id=change_id,
+                    expected_basis=body.expected_basis,
+                    capabilities=tuple(body.capabilities),
+                    host_id=body.host_id,
+                    session_id=body.session_id,
+                )
+            )
+        )
+
+    def execute_change_action(
+        self,
+        change_id: str,
+        body: ContinuationExecutionBody,
+    ) -> DeliveryEngineActionResult:
+        """Invoke only the engine-owned operation already acquired for this Change."""
+        return self._invoke(
+            lambda: self._application.execute_change_action(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=body.operation_id)
+            )
+        )
 
     def mark_ready(self, change_id: str) -> object:
         """Mark the current exact finalized pull request ready."""
@@ -482,9 +518,28 @@ def _register_queries(router: APIRouter) -> None:
 def _register_controls(router: APIRouter) -> None:
     _register_request_controls(router)
     _register_outcome_controls(router)
+    _register_continuation_controls(router)
     _register_publication_controls(router)
     _register_target_controls(router)
     _register_worktree_controls(router)
+
+
+def _register_continuation_controls(router: APIRouter) -> None:
+    @router.post("/changes/{change_id}/continuation/acquire", response_model=DeliveryContinuationResult)
+    def acquire_change_action(
+        change_id: str,
+        body: ContinuationAcquisitionBody,
+        service: _TargetService,
+    ) -> DeliveryContinuationResult:
+        return service.acquire_change_action(change_id, body)
+
+    @router.post("/changes/{change_id}/continuation/execute", response_model=DeliveryEngineActionResult)
+    def execute_change_action(
+        change_id: str,
+        body: ContinuationExecutionBody,
+        service: _TargetService,
+    ) -> DeliveryEngineActionResult:
+        return service.execute_change_action(change_id, body)
 
 
 def _register_request_controls(router: APIRouter) -> None:

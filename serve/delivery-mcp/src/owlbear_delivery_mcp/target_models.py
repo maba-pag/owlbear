@@ -60,6 +60,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryContinuationRequest,
     DeliveryOperatorContext,
     DeliveryQuarantinedSnapshotRepairProposal,
     DeliveryQuarantinedSnapshotRepairReceipt,
@@ -69,6 +70,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryStateSnapshotRepairReceipt,
     DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    ExecuteDeliveryChangeAction,
 )
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthHeadRelation,
@@ -1136,6 +1138,14 @@ type AcquireActionsRequest = Annotated[
     AcquireActionsParams,
     BeforeValidator(partial(_parse_json_model, AcquireActionsParams)),
 ]
+type AcquireChangeActionRequest = Annotated[
+    DeliveryContinuationRequest,
+    BeforeValidator(partial(_parse_json_model, DeliveryContinuationRequest)),
+]
+type ExecuteChangeActionRequest = Annotated[
+    ExecuteDeliveryChangeAction,
+    BeforeValidator(partial(_parse_json_model, ExecuteDeliveryChangeAction)),
+]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -1218,6 +1228,7 @@ type WorkItemViewRequest = Annotated[
 __all__ = [
     "AcquireActionsParams",
     "AcquireActionsRequest",
+    "AcquireChangeActionRequest",
     "AdministrativeMoveParams",
     "AdministrativeMovePreviewResponse",
     "AdministrativeMoveRequest",
@@ -1259,6 +1270,7 @@ __all__ = [
     "DeliveryStateSnapshotRepairResponse",
     "EmptyParams",
     "EmptyRequest",
+    "ExecuteChangeActionRequest",
     "ExternalHeadAdoptionParams",
     "ExternalHeadAdoptionRequest",
     "ExternalHeadPromotionParams",

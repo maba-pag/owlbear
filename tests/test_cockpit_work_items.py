@@ -18,18 +18,25 @@ from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
 from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
+    ChangeContinuationAction,
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryAcquisitionFailure,
+    DeliveryActionBusyError,
     DeliveryAnswer,
     DeliveryAnswerKind,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointReconciliationResult,
+    DeliveryContinuationRequest,
+    DeliveryContinuationResult,
+    DeliveryEngineActionResult,
     DeliveryReadiness,
     DeliveryReadinessBasis,
     DeliveryRuntime,
     DeliveryUnavailableChangeView,
+    ExecuteDeliveryChangeAction,
     PortfolioApplication,
     PortfolioCoordinator,
     PublicationCheckKind,
@@ -71,6 +78,7 @@ from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
+    WorkItemActionKind,
     WorkItemActivity,
     WorkItemActivityState,
     WorkItemCardView,
@@ -116,6 +124,73 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
         activity=WorkItemActivity(state=WorkItemActivityState.READY),
         progress=WorkItemProgress(kind=WorkItemProgressKind.PLAN, label="Task plan not published"),
         action=WorkItemAction(),
+    )
+
+
+CONTINUATION_ID = f"continue-{'c' * 64}"
+
+
+def _continuation_action(change_id: str) -> ChangeContinuationAction:
+    return ChangeContinuationAction(
+        operation_id=CONTINUATION_ID,
+        change_id=change_id,
+        kind="sync-target",
+        contract_digest="a" * 64,
+        frontier_digest="b" * 64,
+        exact_head="d" * 40,
+        target_head="e" * 40,
+        host_id="cockpit-host",
+        session_id="cockpit-session",
+        acquired_at="2026-09-13T00:00:00Z",
+    )
+
+
+def _continuation_readiness() -> DeliveryReadiness:
+    return DeliveryReadiness(
+        status="ready",
+        operation=WorkItemActionKind.SYNC_TARGET,
+        next_actor=WorkItemNextActor.AGENT,
+        reason_code="target-sync-required",
+        basis=DeliveryReadinessBasis(
+            contract_digest="a" * 64,
+            frontier_digest="b" * 64,
+            source_head="d" * 40,
+            target_head="e" * 40,
+            continuation_id=CONTINUATION_ID,
+        ),
+    )
+
+
+def _engine_action_result(change_id: str, *, kind: str) -> DeliveryEngineActionResult:
+    action = _continuation_action(change_id)
+    if kind == "blocked":
+        return DeliveryEngineActionResult(
+            action=action,
+            kind="blocked",
+            reason_code="engine-action-interrupted",
+            failure=DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-001",
+                attempt_id=CONTINUATION_ID,
+                code="ERR_DELIVERY_ACTION_INTERRUPTED",
+                detail="The engine action did not report an outcome.",
+                retry_condition="Recover the retained engine action custody.",
+            ),
+        )
+    return DeliveryEngineActionResult(
+        action=action,
+        kind="completed",
+        reason_code="engine-action-completed",
+        target_sync=ChangeTargetSyncReceipt.create(
+            operation_id=CONTINUATION_ID,
+            change_id=change_id,
+            integration_target="main",
+            expected_target="e" * 40,
+            target_head="e" * 40,
+            change_head_before="d" * 40,
+            merged_head="f" * 40,
+            merge_commit=True,
+        ),
     )
 
 
@@ -503,6 +578,36 @@ class _DeliveryApplicationFake:
         self.calls.append(("intent", (intent,)))
         return {"change_id": intent.change_id, "state": intent.kind.value}
 
+    def acquire_change_action(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
+        self.calls.append(("continuation-acquire", (request,)))
+        failure = self.failures.get("acquire_change_action")
+        if failure is not None:
+            raise failure
+        if request.change_id == "blocked-change":
+            engine_result = _engine_action_result(request.change_id, kind="blocked")
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="unavailable",
+                reason_code=engine_result.reason_code,
+                readiness=_continuation_readiness(),
+                failure=engine_result.failure,
+                engine_result=engine_result,
+            )
+        return DeliveryContinuationResult(
+            change_id=request.change_id,
+            kind="acquired",
+            reason_code="ready",
+            readiness=_continuation_readiness(),
+            engine_action=_continuation_action(request.change_id),
+        )
+
+    def execute_change_action(self, request: ExecuteDeliveryChangeAction) -> DeliveryEngineActionResult:
+        self.calls.append(("continuation-execute", (request,)))
+        failure = self.failures.get("execute_change_action")
+        if failure is not None:
+            raise failure
+        return _engine_action_result(request.change_id, kind="completed")
+
     @staticmethod
     def _cleanup_receipt() -> SimpleNamespace:
         return SimpleNamespace(
@@ -809,6 +914,7 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
             "change_id": "unavailable-change",
             "title": "Unreadable Change",
             "diagnostics": ["runtime-unavailable"],
+            "coordination_status": None,
             "readiness": {
                 "status": "unavailable",
                 "operation": None,
@@ -820,6 +926,8 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
                     "contract_digest": "a" * 64,
                     "frontier_digest": None,
                     "source_head": None,
+                    "target_head": None,
+                    "continuation_id": None,
                     "candidate_head": None,
                     "reviewed_head": None,
                     "workspace_fingerprint": None,
@@ -836,6 +944,170 @@ def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
         ("portfolio", ()),
         ("show", ("unavailable-change", "outcome:OUT-001")),
     ]
+
+
+def test_unavailable_projection_preserves_coordination_evidence() -> None:
+    unavailable = DeliveryUnavailableChangeView(
+        change_id="unavailable-change",
+        title="Unreadable Change",
+        diagnostics=("runtime-unavailable", "coordination-unavailable"),
+        coordination_status="unreadable",
+        readiness=DeliveryReadiness(
+            status="unavailable",
+            next_actor=WorkItemNextActor.NONE,
+            reason_code="coordination-unavailable",
+            checks_state="unknown",
+            basis=DeliveryReadinessBasis(),
+        ),
+    )
+    client, _application = _client(unavailable_changes=(unavailable,))
+
+    portfolio = client.get("/api/work-items").json()["unavailable_changes"][0]
+    detail = client.get("/api/changes/unavailable-change/work-items/outcome:OUT-001").json()
+
+    assert portfolio["diagnostics"] == ["runtime-unavailable", "coordination-unavailable"]
+    assert portfolio["coordination_status"] == "unreadable"
+    assert portfolio["readiness"]["reason_code"] == "coordination-unavailable"
+    assert detail == portfolio
+
+
+def _acquisition_body() -> dict[str, object]:
+    return {
+        "expected_basis": {
+            "contract_digest": "a" * 64,
+            "frontier_digest": "b" * 64,
+            "source_head": "d" * 40,
+            "target_head": "e" * 40,
+        },
+        "capabilities": ["builder", "engine"],
+        "host_id": "cockpit-host",
+        "session_id": "cockpit-session",
+    }
+
+
+def test_continuation_acquisition_forwards_selected_change_and_preserves_launch() -> None:
+    client, application = _client()
+
+    response = client.post("/api/changes/change-a/continuation/acquire", json=_acquisition_body())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "acquired"
+    assert payload["reason_code"] == "ready"
+    assert payload["launch"] is None
+    assert payload["finalization"] is None
+    assert payload["engine_action"] == {
+        "operation_id": CONTINUATION_ID,
+        "change_id": "change-a",
+        "kind": "sync-target",
+        "contract_digest": "a" * 64,
+        "frontier_digest": "b" * 64,
+        "exact_head": "d" * 40,
+        "target_head": "e" * 40,
+        "finalization_id": None,
+        "host_id": "cockpit-host",
+        "session_id": "cockpit-session",
+        "acquired_at": "2026-09-13T00:00:00Z",
+        "finished_at": None,
+    }
+    assert payload["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+    assert payload["readiness"]["basis"]["target_head"] == "e" * 40
+    request = application.calls[0][1][0]
+    assert isinstance(request, DeliveryContinuationRequest)
+    assert request.change_id == "change-a"
+    assert request.capabilities == ("builder", "engine")
+    assert request.host_id == "cockpit-host"
+    assert request.expected_basis.target_head == "e" * 40
+
+
+def test_continuation_acquisition_preserves_blocked_engine_evidence() -> None:
+    client, _application = _client()
+
+    response = client.post("/api/changes/blocked-change/continuation/acquire", json=_acquisition_body())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "unavailable"
+    assert payload["reason_code"] == "engine-action-interrupted"
+    assert payload["engine_result"]["kind"] == "blocked"
+    assert payload["engine_result"]["action"]["operation_id"] == CONTINUATION_ID
+    assert payload["failure"] == payload["engine_result"]["failure"]
+    assert payload["failure"]["retry_condition"] == "Recover the retained engine action custody."
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {**_acquisition_body(), "change_id": "change-b"},
+        {**_acquisition_body(), "kind": "acquired"},
+        {**_acquisition_body(), "engine_action": {"operation_id": CONTINUATION_ID}},
+        {**_acquisition_body(), "capabilities": ["merger"]},
+        {key: value for key, value in _acquisition_body().items() if key != "host_id"},
+    ],
+)
+def test_continuation_acquisition_rejects_caller_authored_effects(body: dict[str, object]) -> None:
+    client, application = _client()
+
+    response = client.post("/api/changes/change-a/continuation/acquire", json=body)
+
+    assert response.status_code == 422
+    assert application.calls == []
+
+
+def test_continuation_execution_forwards_only_the_retained_operation() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/continuation/execute",
+        json={"operation_id": CONTINUATION_ID},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["kind"] == "completed"
+    assert payload["reason_code"] == "engine-action-completed"
+    assert payload["failure"] is None
+    assert payload["target_sync"]["merged_head"] == "f" * 40
+    assert payload["checkpoint"] is None
+    assert payload["checkpoint_snapshot"] is None
+    request = application.calls[0][1][0]
+    assert isinstance(request, ExecuteDeliveryChangeAction)
+    assert request.change_id == "change-a"
+    assert request.operation_id == CONTINUATION_ID
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"operation_id": CONTINUATION_ID, "change_id": "change-b"},
+        {"operation_id": CONTINUATION_ID, "confirmed_lost": True},
+        {"operation_id": CONTINUATION_ID, "kind": "completed"},
+        {"operation_id": "sync-change-a"},
+        {},
+    ],
+)
+def test_continuation_execution_rejects_caller_authored_effects(body: dict[str, object]) -> None:
+    client, application = _client()
+
+    response = client.post("/api/changes/change-a/continuation/execute", json=body)
+
+    assert response.status_code == 422
+    assert application.calls == []
+
+
+def test_continuation_execution_preserves_typed_busy_failure() -> None:
+    client, _application = _client(
+        failures={"execute_change_action": DeliveryActionBusyError("change-a is locked by another operation")},
+    )
+
+    response = client.post(
+        "/api/changes/change-a/continuation/execute",
+        json={"operation_id": CONTINUATION_ID},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "ERR_DELIVERY_ACTION_BUSY"
+    assert response.json()["retry_safe"] is True
 
 
 def test_list_exposes_bounded_delivery_health_diagnostics() -> None:

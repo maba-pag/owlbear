@@ -25,7 +25,12 @@ from owlbear_delivery.publication_provider import (
     PublicationCheckKind,
     classify_publication_check,
 )
-from owlbear_delivery.work_items import ChangeGroupView, DeliveryReadiness, WorkItemDetailView
+from owlbear_delivery.work_items import (
+    ChangeGroupView,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    WorkItemDetailView,
+)
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import (
@@ -170,7 +175,8 @@ class DeliveryUnavailableChangeResponse(_TargetHTTPModel):
     kind: Literal["unavailable"] = "unavailable"
     change_id: str = Field(min_length=1)
     title: str | None = None
-    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
+    coordination_status: Literal["missing", "unreadable"] | None = None
     readiness: DeliveryReadiness
 
     @classmethod
@@ -180,6 +186,7 @@ class DeliveryUnavailableChangeResponse(_TargetHTTPModel):
             change_id=view.change_id,
             title=view.title,
             diagnostics=view.diagnostics,
+            coordination_status=view.coordination_status,
             readiness=view.readiness,
         )
 
@@ -197,7 +204,8 @@ class WorkItemUnavailableDetailResponse(_TargetHTTPModel):
     kind: Literal["unavailable"] = "unavailable"
     change_id: str = Field(min_length=1)
     title: str | None = None
-    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
+    coordination_status: Literal["missing", "unreadable"] | None = None
     readiness: DeliveryReadiness
 
     @classmethod
@@ -207,6 +215,7 @@ class WorkItemUnavailableDetailResponse(_TargetHTTPModel):
             change_id=view.change_id,
             title=view.title,
             diagnostics=view.diagnostics,
+            coordination_status=view.coordination_status,
             readiness=view.readiness,
         )
 
@@ -472,6 +481,28 @@ class SupersedePublicationBody(_TargetHTTPModel):
     """Stable operation identity used to reconcile a publication successor retry."""
 
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class ContinuationAcquisitionBody(_TargetHTTPModel):
+    """Observed basis, host capabilities, and provenance for one continuation attempt."""
+
+    expected_basis: DeliveryReadinessBasis
+    capabilities: list[Literal["planner", "builder", "finalizer", "engine"]] = Field(min_length=1, max_length=4)
+    host_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _validate_capabilities(self) -> ContinuationAcquisitionBody:
+        if len(set(self.capabilities)) != len(self.capabilities):
+            message = "continuation capabilities must be unique"
+            raise ValueError(message)
+        return self
+
+
+class ContinuationExecutionBody(_TargetHTTPModel):
+    """Exact engine operation already acquired for the selected Change."""
+
+    operation_id: str = Field(pattern=r"^continue-[0-9a-f]{64}$")
 
 
 class TargetSyncResponse(_TargetHTTPModel):
