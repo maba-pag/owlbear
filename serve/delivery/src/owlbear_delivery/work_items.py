@@ -258,10 +258,34 @@ class DeliveryReadinessBasis(_ProjectionModel):
 
     contract_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    source_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     candidate_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     workspace_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     diagnostic_sequence: int | None = Field(default=None, ge=0)
+
+
+DeliveryReadinessReason = Literal[
+    "ready",
+    "active-custody",
+    "finalization-failed",
+    "claim-activation-failed",
+    "coordination-unavailable",
+    "claim-custody-unreconciled",
+    "runtime-unavailable",
+    "dependency-wait",
+    "request-action",
+    "change-paused",
+    "change-terminal",
+    "task-incomplete",
+    "workspace-inspection-failed",
+    "workspace-dirty",
+    "workspace-preflight-failed",
+    "review-repair",
+    "publication-wait",
+    "checkpoint-pending",
+    "report-store-unavailable",
+]
 
 
 class DeliveryReadiness(_ProjectionModel):
@@ -271,23 +295,7 @@ class DeliveryReadiness(_ProjectionModel):
     operation: WorkItemActionKind | None = None
     executable: bool = False
     next_actor: WorkItemNextActor
-    reason_code: Literal[
-        "ready",
-        "active-custody",
-        "runtime-unavailable",
-        "dependency-wait",
-        "request-action",
-        "change-paused",
-        "change-terminal",
-        "task-incomplete",
-        "workspace-inspection-failed",
-        "workspace-dirty",
-        "workspace-preflight-failed",
-        "review-repair",
-        "publication-wait",
-        "checkpoint-pending",
-        "report-store-unavailable",
-    ]
+    reason_code: DeliveryReadinessReason
     checks_state: Literal["not-run", "failed", "passed", "unknown"] = "not-run"
     basis: DeliveryReadinessBasis
     action: WorkItemAction | None = None
@@ -351,10 +359,13 @@ class ChangeGroupView(_ProjectionModel):
 
 
 class WorkItemClaimView(_ProjectionModel):
-    """Bounded active-claim identity without process or owner internals."""
+    """Exact claim identity and routing provenance, not authentication or liveness."""
 
     attempt_id: str = Field(min_length=1)
     claim_id: str = Field(min_length=1)
+    owner_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    continuation: bool
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
@@ -517,6 +528,15 @@ class WorkItemProjector:
                             "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
                             "workspace-preflight-failed": "Managed workspace preflight did not pass.",
                             "active-custody": "An active operation retains Change custody.",
+                            "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
+                            "claim-custody-unreconciled": (
+                                "The exact Build claim has unreconciled writer custody. Preserve it; "
+                                "D03 closed-worker recovery is required before replacement."
+                            ),
+                            "finalization-failed": (
+                                "Finalization failed with custody retained. D03 closed-worker recovery is required; "
+                                "diagnostic retirement cannot release custody or authorize retry."
+                            ),
                             "review-repair": "Review repair requires a new Change commit before verification.",
                         }.get(decision.reason_code, card.next_step),
                     }
@@ -1229,6 +1249,9 @@ class WorkItemProjector:
         return WorkItemClaimView(
             attempt_id=claim.attempt_id,
             claim_id=claim.claim_id,
+            owner_id=claim.owner_id,
+            process_id=claim.process_id,
+            continuation=claim.continuation,
             started_at=claim.started_at,
             worker_role=claim.worker_role,
             task_id=claim.task_id,

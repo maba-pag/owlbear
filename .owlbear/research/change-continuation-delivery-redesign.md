@@ -93,7 +93,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
 | D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
-| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Critical core candidate implemented; T2 wiring, remaining P06 companion and review pending |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Critical review repairs implemented; parent re-review and required P06 companion precede T2 wiring |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
 | D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
@@ -149,10 +149,11 @@ suites (220 passed, plus 50 passed on the Cockpit/package boundary suites after 
 `npm test` (311 passed, 25 files); `npm run build`; `npm run test:e2e:work` (22 of 22 passed).
 Python and frontend lint pass on the changed files.
 
-### D02 Critical Core: T2 Handoff Pending Review
+### D02 Critical Core: Review Repair and Blocked T2 Handoff
 
-The requested P06 reference-path substep is implemented on primary `dev`; D02 is **not complete**.
-Independent different-family review is pending with the parent. No adapter, HTTP, UI, agent or
+The P06 reference path and critical review repairs are implemented on primary `dev`; D02 is
+**not complete**. The parent owns independent different-family re-review of the repair commit.
+The reviewed repair baseline is `8741e048fd8960b1e36048c77e8a9642bcdc70a3`. No adapter, HTTP, UI, agent or
 shared-workflow wiring was implemented in this substep. The contract follows sections 5.2-5.4,
 6/6.1 and WP2/P06: one selected Change, existing readiness/candidate owners, durable exclusive
 custody, exact receipts, no timeout-as-termination and no second scheduler or state store.
@@ -163,7 +164,17 @@ DeliveryContinuationResult`. Request fields are `change_id`, `expected_basis` (t
 (`planner`, `builder`, `finalizer`), `host_id`, and `session_id`. An acquired response contains
 exactly one `launch` (existing `DeliveryLaunchPackage`) or `finalization`
 (`DeliveryFinalizationLaunch`: `attempt` plus pre-acquisition `context`). Non-acquired responses
-carry neither. Every response includes Change identity, reason code and engine readiness.
+carry neither. Every response includes Change identity, a strict `DeliveryContinuationReason`
+and engine readiness. `DeliveryReadinessReason` is also exported from the core. Reasons never
+contain `ERR_*`: the optional `failure: DeliveryAcquisitionFailure` retains `code`, `detail`,
+`retry_condition`, Change/outcome and any activated `attempt_id`/`claim_id`. It is allowed only
+on an `unavailable` result for that Change; consumers must preserve the whole failure envelope.
+
+`DeliveryReadinessBasis.source_head` is the orchestration source boundary;
+`candidate_head` remains the finalization candidate/receipt head. They are not aliases.
+`WorkItemClaimView` now exposes `owner_id`, `process_id`, and `continuation` alongside the
+exact attempt/claim/task identity. These are routing provenance, never authentication or liveness.
+Read and acquisition selection share the same card selector, including the repair-proposal card.
 
 | Result / selected work | Consumer behavior and result owner |
 | --- | --- |
@@ -171,12 +182,12 @@ carry neither. Every response includes Change identity, reason code and engine r
 | `acquired` / Builder | Dispatch `launch.policy`; `submit_result(DeliveryResultSubmission)` owns promotion. A submitted receipt must not be transitioned again. |
 | `acquired` / Finalizer | Dispatch existing finalizer and independent build-reviewer. Use `attempt.writer.attempt_id` as both proof `operation_id` and diagnostic `attempt_key`. Submit through `finalize_change(change_id, FinalizeDeliveryChange)`. |
 | `reconciled` | Selected pending state publication was replayed by its existing owner. Refresh before requesting another action; no worker was launched. |
-| `busy` | Existing claim/finalizer or in-progress operation owns the Change. Yield, including on same-session replay; never redispatch or infer termination. |
+| `busy` | Existing claim/finalizer or in-progress operation owns the Change. Yield, including on same-session replay; custody is not proof of active worker progress. Never redispatch or infer termination. |
 | `stale` | Observed readiness/source changed. Refresh once, then yield on repeated contention. |
 | `waiting` | Capacity, missing host capability, pause or dependency condition. Yield; no acquisition loop without a changed condition. |
 | `human` | Show existing bounded request/semantic action; no automatic answer or invented assisted-check readiness. |
-| `unsupported` | Stop with `readiness.operation` and reason. No adapter/controller fallback to raw Git or another mutation. |
-| `unavailable` | Retain runtime/source/publication failure evidence and stop; no reconstructed authority. |
+| `unsupported` | Stop with `readiness.operation` and reason. `repair-required` names an unsupported continuation repair route, not a user approval question. No adapter/controller fallback to raw Git or another mutation. |
+| `unavailable` | Retain runtime/source/publication/activation failure evidence and exact custody identities; stop without reconstructed authority or a replacement worker. |
 | `terminal` | Report existing terminal state; no cleanup or merge authorization is implied. |
 
 Finalization uses existing `ChangeCoordination.writer` with `kind=finalize` and a retained
@@ -186,18 +197,38 @@ frontier CAS joins custody acquisition; writer release and finish time join the 
 finalization transaction. Runtime mutations join an unchanged coordination participant to their
 transaction, fencing mutations prepared before finalizer acquisition. Submission rechecks
 authority, head, target and clean workspace. A
-matching failure report preserves custody and blocks success; no supported automatic recovery or
-cancellation is claimed. The acquired context is ready **before** custody: later reads correctly
-show running, so the consumer must compare its exact retained attempt rather than require idle
-readiness. Host/session strings are routing provenance, not authenticated liveness evidence.
+matching failure report preserves custody and blocks success. Its readiness is `blocked` with
+`finalization-failed`, and continuation returns `unavailable`, not `running` or terminal completion.
+Retiring the diagnostic pointer does not remove history, end the worker, authorize success, or
+release custody. There is no supported same-attempt retry, cancellation, or lifecycle mutation
+around this retained failure in D02. D03 must supply closed-worker/exclusion proof and an exact
+recovery contract before safe retry, defer, or abandon can proceed. No raw-state workaround is
+authorized. The acquired context is ready **before** custody: subsequent healthy custody reads
+may show running, so compare the retained attempt instead of requiring idle readiness.
 
 Builder claims set `continuation=true`; legacy timeout acquisition and caller-written
 `confirmed_lost=true` cannot recover them. Worker-owned typed transitions remain supported.
+An activation failure returns `unavailable`/`claim-activation-failed`, the complete typed failure,
+and non-executable readiness. The claim and any uncertain writer remain retained even if writer
+acquisition or launch preparation failed. A fresh read of a Build claim without matching writer
+custody is blocked as `claim-custody-unreconciled`; matching retained custody is not proof of
+dispatch or termination. Failure details are returned in the envelope; claim identities remain
+durable. Continuation claims receive no unsupported caller-confirmation recovery proposal.
+Their retry condition explicitly requires D03 worker exclusion, not today's `recover_claim`.
 Original result-candidate receipts are persisted with promotion under
 `changes/<change>/result-receipts/<outcome>/<digest>.json`; exact replay verifies the original claim
 and never promotes again. Missing historical provenance fails closed, not reconstructed. The
 frontier version is unchanged; added local custody fields/receipts still require D07/D08 copy-based
 compatibility rehearsal before any live activation.
+
+Damaged coordination yields typed unavailable reads/mutations without hiding healthy Changes.
+Capacity counts freshly parseable persisted claims even when admitted runtime composition fails,
+and retains orphan writers. Unreadable frontier/registry ownership stops acquisition; idle orphan
+records alone do not consume capacity. Missing or malformed custody is not reconstruction authority:
+even `confirmed_recovery=true` cannot rebuild it through the application before D03's exclusion
+contract. Malformed records are not treated as absent by workspace fallbacks. Runtime construction
+requires the workspace coordinator's shared transaction root; guard reads use typed errors and
+interrupted completion recovery is tested at that root.
 
 Exception mapping remains the existing adapter mapping: `DeliveryActionBusyError`
 (`ERR_DELIVERY_ACTION_BUSY`), `DeliveryActionSelectionConflictError`
@@ -208,7 +239,10 @@ runtime conflict/reference errors for invalid/missing original result custody, a
 consumer-authored replacement result. Unknown dispatch or submission outcomes retain custody;
 retry only the identical submission or fixed owning operation, never acquire a replacement worker.
 
-**T2 Opus editable scope:** `serve/delivery-mcp/src/owlbear_delivery_mcp/{target_models,target_server}.py`
+**T2 Opus handoff is blocked** until parent re-review and the required remaining P06 engine companion
+settle their action/result contracts. The schema above is the repair candidate, not permission to
+wire an incomplete normal continuation journey. After those gates, editable scope is
+`serve/delivery-mcp/src/owlbear_delivery_mcp/{target_models,target_server}.py`
 and `serve/delivery-mcp/tests/{test_delivery_adapter,test_target_server}.py`;
 `serve/cockpit/src/owlbear_cockpit/target_models.py`, its `routes/target_work.py` and
 `tests/test_cockpit_work_items.py`; existing orchestrator/finalizer agents, orchestration/finalization
@@ -222,14 +256,25 @@ Use MCP `_validate` / `_call_model` /
 `asyncio.to_thread`, HTTP `TargetCockpitService._invoke`, and core-exported strict schemas. Expose
 the core entry without portfolio defaults; keep acquisition annotations non-idempotent. T2 must
 not change engine custody, provider safety, retries, recovery or acceptance to make wiring pass.
+Mechanically propagate `source_head` separately from `candidate_head`, the strict reason aliases,
+unavailable coordination diagnostics, the complete failure envelope and active-host provenance.
+Update the D01 frontend readiness basis/claim types and labels without inferring eligibility.
+The HTTP test `test_list_and_detail_preserve_known_unavailable_change_projection` currently fails
+only because its static expected basis omits `source_head: null`; its expectation is T2 work.
+No consumer source or test was edited during this critical repair.
 Do not dispatch a finalizer that cannot obtain independent review; prove the actual flat/nested
 host handoff before claiming automatic operation. Clipboard controls remain copy-only.
 
 **Remaining acceptance:** this reference path reaches finalization and selected state-publication
 replay, then returns `unsupported` for checkpoint/provider continuation. Acquisition of checkpoint,
 target-sync, mark-ready and acceptance-observation actions is not implemented here; existing
-operations remain intact, but finishing their continuation custody/handoff is a remaining P06
-engine companion, not authority for T2 to invent fallback routing. V04 and the capacity/isolation
+operations remain intact, but finishing their continuation custody/handoff is a **required D02/P06
+engine companion before wiring**, not an optional D03-D08 deferral or authority for T2 to invent
+fallback routing. The companion must bind deterministic action identity, custody, exact result/replay
+and stop conditions for checkpoint publication, target synchronization, mark-ready and acceptance
+observation. Unsupported repair routing is also explicit remaining scope: D03 owns closed-worker
+recovery/exclusion and bounded repair; D02 must not label that route as completed continuation.
+V04 and the capacity/isolation
 part of V05 have concurrent application proof. V10 proves containment with a still-writing worker,
 not termination/replacement (D03). V11 proves rejection of target-ref drift, not conflict recovery
 and fresh review (D03); provider freshness/merge approval remain D05. V01/V03/V12/V17/V19 cannot
@@ -249,6 +294,19 @@ Fixtures use disposable state and local-only remotes. No live process, registrat
 historical worktree or unrelated untracked entry was changed. No frontend/E2E or independent
 review pass is claimed for this substep. T2 must run registered adapter/HTTP tests, ecosystem
 validation, affected frontend/build/E2E gates, then obtain exact assembled review before D02 closes.
+
+Critical review-repair proof: the fresh core/runtime/workspace/state/projection, registered MCP,
+Cockpit HTTP and package-boundary run completed with **729 passed, 2 failed**. One failure was the
+old unsafe missing-coordination reconstruction expectation; it now asserts typed containment and
+preserved bytes. The remaining failure is the static HTTP `source_head` expectation described above,
+not a waived gate. The final affected custody/repair/receipt suite passed **52 tests**, including
+real interrupted result-receipt recovery, missing original receipt refusal, mismatched finalizer
+attempts, second-attempt invalidation re-entry, diagnostic retirement, non-acquired dispositions,
+and unknown/orphan capacity. After factoring typed absence and persisted occupancy reads, **20
+affected tests passed**. Final Ruff comparison found nine baseline findings and zero introduced
+findings across the expanded touched-file set; editor diagnostics and whitespace checks are clear.
+No full-suite pass or consumer readiness is claimed. Parent re-review
+must assess the exact scoped repair head before authorizing further implementation.
 
 ```text
 Continue D02-D08 sequentially on dev using section 0 of

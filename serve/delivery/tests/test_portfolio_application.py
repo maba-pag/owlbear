@@ -149,11 +149,12 @@ from owlbear_delivery.delivery_contract_discovery import (
     contract_fingerprint,
     discover_persisted_changes,
 )
-from owlbear_delivery.delivery_runtime import parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import DeliveryRuntimeReferenceError, parse_delivery_frontier
 from owlbear_delivery.delivery_state import DeliveryStateSnapshotDiagnostic, DeliveryStateSnapshotInventory
 from owlbear_delivery.finalization_reports import (
     FinalizationFailureCode,
     FinalizationReportError,
+    FinalizationReportStore,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.portfolio_application import (
@@ -161,6 +162,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryActionSelection,
     DeliveryCapacityWaitingError,
     DeliveryContinuationRequest,
+    DeliveryContinuationResult,
     DeliveryRuntimeReconciliationError,
     _required_check_diagnostics,
 )
@@ -953,6 +955,13 @@ def test_continuation_acquires_only_selected_change_and_never_redispatches(tmp_p
     assert acquired.launch.change_id == "change-a"
     assert acquired.launch.claim.owner_id == request.host_id
     assert acquired.launch.claim.process_id == request.session_id
+    active = application.get_change("change-a").unresolved_outcomes[0].active_claim
+    assert active.owner_id == request.host_id
+    assert active.process_id == request.session_id
+    assert active.continuation
+    assert active.claim_id == acquired.launch.claim.claim_id
+    assert view.readiness.basis.source_head == acquired.launch.source_head
+    assert view.readiness.basis.candidate_head is None
     assert repeated.kind == "busy"
     assert repeated.launch is None
     assert runtimes["change-b"].frontier_bytes() == sibling
@@ -967,6 +976,17 @@ def _continuation_request(application, change_id="change-a", **updates):
         host_id="test-host",
         session_id="test-session",
     ).model_copy(update=updates)
+
+
+def test_runtime_rejects_mismatched_coordination_recovery_root(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="share one transaction root"):
+        DeliveryRuntime(
+            state_root / "other", runtimes["change-a"].contract, workspace_manager=application._workspace_manager
+        )
+    assert runtimes["change-a"].frontier_bytes() == before
+    assert not (state_root / "other").exists()
 
 
 def test_continuation_finalizer_survives_restart_and_completes_exactly_once(tmp_path: Path) -> None:
@@ -995,6 +1015,35 @@ def test_continuation_finalizer_survives_restart_and_completes_exactly_once(tmp_
     assert coordinator.show("change-a").finalization_attempt.finished_at is not None
     assert runtimes["change-a"].finalization() == receipt
     assert runtimes["change-b"].active_claims() == ()
+
+
+def test_continuation_reenters_finalization_with_new_exact_attempt_after_invalidation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    first = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    application.finalize_change(
+        "change-a", _finalization_request("change-a", first.exact_head, first.writer.attempt_id)
+    )
+    repaired_head = _commit_reviewed_head(
+        application, coordinator.show("change-a"), "review-fix.txt", "review fix\n", "repair review"
+    )
+    runtimes["change-a"].reconcile_finalization_head(repaired_head, datetime.now(UTC))
+    acquired = application.acquire_change_action(_continuation_request(application))
+    if acquired.kind == "reconciled":
+        acquired = application.acquire_change_action(_continuation_request(application))
+    second = acquired.finalization.attempt
+    assert second.writer.attempt_id != first.writer.attempt_id
+    assert second.exact_head == repaired_head
+    with pytest.raises(DeliveryActionSelectionConflictError):
+        application.finalize_change(
+            "change-a", _finalization_request("change-a", repaired_head, first.writer.attempt_id)
+        )
+    assert coordinator.show("change-a").writer == second.writer
+    receipt = application.finalize_change(
+        "change-a", _finalization_request("change-a", repaired_head, second.writer.attempt_id)
+    )
+    assert runtimes["change-a"].finalization() == receipt
+    assert coordinator.show("change-a").finalization_attempt.writer == second.writer
+    assert coordinator.show("change-a").writer is None
 
 
 def test_continuation_finalizer_counts_capacity_and_never_expires_custody(tmp_path: Path) -> None:
@@ -1128,6 +1177,8 @@ def test_continuation_failure_retains_custody_and_blocks_success_and_mutations(t
     failure = _failure_request(application, attempt_key=attempt.writer.attempt_id)
     report = application.report_finalization_failure(failure)
     assert application.report_finalization_failure(failure) == report
+    FinalizationReportStore(state_root, "change-a").retire(attempt.exact_head, attempt.contract_digest)
+    assert FinalizationReportStore(state_root, "change-a").read().current_report_id is None
     with pytest.raises(DeliveryActionBusyError):
         application.finalize_change(
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
@@ -1142,9 +1193,47 @@ def test_continuation_failure_retains_custody_and_blocks_success_and_mutations(t
             )
         )
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
-    assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
+    view = reopened.get_change("change-a")
+    assert view.readiness.status == "blocked"
+    assert view.readiness.reason_code == "finalization-failed"
+    assert not view.readiness.executable
+    assert view.finalization_attempt == attempt
+    assert view.readiness.last_attempt.report == report
+    stopped = reopened.acquire_change_action(_continuation_request(reopened))
+    assert stopped.kind == "unavailable"
+    assert stopped.reason_code == "finalization-failed"
     assert coordinator.show("change-a").writer == attempt.writer
     assert runtimes["change-a"].finalization() is None
+
+
+@pytest.mark.parametrize("writer_recorded", [False, True])
+def test_continuation_preserves_failed_activation_identity(tmp_path: Path, *, writer_recorded: bool) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    acquire = coordinator.acquire
+
+    def fail(change_id, writer, **kwargs):
+        if writer_recorded:
+            acquire(change_id, writer, **kwargs)
+        message = "injected writer persistence failure"
+        raise OSError(message)
+
+    with patch.object(coordinator, "acquire", fail):
+        stopped = application.acquire_change_action(_continuation_request(application))
+    claim = runtimes["change-a"].show_binding("OUT-001").active_claim
+    assert stopped.kind == "unavailable"
+    assert stopped.reason_code == "claim-activation-failed"
+    assert stopped.failure.claim_id == claim.claim_id
+    assert stopped.failure.attempt_id == claim.attempt_id
+    assert "injected writer persistence failure" in stopped.failure.detail
+    assert "D03" in stopped.failure.retry_condition
+    assert not stopped.readiness.executable
+    with pytest.raises(ValueError, match="reason_code"):
+        DeliveryContinuationResult.model_validate(stopped.model_dump() | {"reason_code": stopped.failure.code})
+    assert stopped.launch is None
+    assert (coordinator.show("change-a").writer is not None) == writer_recorded
+    with pytest.raises(DeliveryActionBusyError, match="supported worker exclusion"):
+        application.recover_claim("change-a", "OUT-001", claim.attempt_id, claim.claim_id, confirmed_lost=True)
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim == claim
 
 
 def test_continuation_stale_and_unavailable_capability_do_not_acquire(tmp_path: Path) -> None:
@@ -1160,6 +1249,24 @@ def test_continuation_stale_and_unavailable_capability_do_not_acquire(tmp_path: 
     )
     assert stale.kind == "stale"
     assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+
+
+@pytest.mark.parametrize("kind", ["human", "terminal", "unavailable"])
+def test_continuation_nonworker_dispositions_preserve_state(tmp_path: Path, kind: str) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.DESIGN})
+    if kind == "terminal":
+        runtimes["change-a"].abandon_change("stop this Change", datetime.now(UTC))
+    request = _continuation_request(application)
+    frontier = state_root / "changes/change-a/frontier.json"
+    if kind == "unavailable":
+        frontier.write_bytes(b"{")
+    before = frontier.read_bytes()
+    result = application.acquire_change_action(request)
+    assert result.kind == kind
+    assert result.launch is None
+    assert result.finalization is None
+    assert frontier.read_bytes() == before
     assert coordinator.show("change-a").writer is None
 
 
@@ -3153,6 +3260,79 @@ def test_custody_reporting_rejects_stale_fingerprint_and_unobserved_paths(tmp_pa
     assert path.read_text() == "different dirt\n"
 
 
+@pytest.mark.parametrize("damage", ["missing", "malformed", "frontier", "unknown"])
+def test_coordination_damage_isolates_reads_and_preserves_unknown_capacity(tmp_path: Path, damage: str) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}, execution_capacity=1
+    )
+    request = _continuation_request(application, "change-b")
+    before = {change: runtime.frontier_bytes() for change, runtime in runtimes.items()}
+    root = state_root / "coordination/changes"
+    if damage == "missing":
+        (root / "change-a.json").unlink()
+    elif damage == "malformed":
+        (root / "change-a.json").write_bytes(b"{")
+    elif damage == "frontier":
+        (state_root / "changes/change-a/frontier.json").write_bytes(b"{")
+    elif damage == "unknown":
+        (root / "unknown.json").write_bytes(b"{")
+    assert application.get_change("change-b").kind == "available"
+    assert len(application.list_changes().groups) == (1 if damage == "frontier" else 2)
+    if damage in {"missing", "malformed"}:
+        damaged = application.get_change("change-a")
+        assert damaged.kind == "unavailable"
+        assert damaged.readiness.reason_code == "coordination-unavailable"
+        with pytest.raises(DeliveryRuntimeReconciliationError):
+            application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    expected_frontier_digest=hashlib.sha256(before["change-a"]).hexdigest(),
+                    reason="pause",
+                )
+            )
+    stopped = application.acquire_change_action(request)
+    assert stopped.kind == "unavailable"
+    assert stopped.reason_code == "execution-occupancy-unavailable"
+    assert stopped.failure.code == DeliveryRuntimeReconciliationError.code
+    assert not stopped.readiness.executable
+    if damage == "frontier":
+        assert (state_root / "changes/change-a/frontier.json").read_bytes() == b"{"
+    else:
+        assert runtimes["change-a"].frontier_bytes() == before["change-a"]
+    assert runtimes["change-b"].frontier_bytes() == before["change-b"]
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_orphan_coordination_charges_only_retained_writers(tmp_path: Path, *, active: bool) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, execution_capacity=1
+    )
+    orphan = coordinator.show("change-a").model_copy(update={"change_id": "orphan-change"})
+    coordinator.register(orphan)
+    if active:
+        coordinator.acquire(
+            "orphan-change",
+            ChangeWriter(
+                attempt_id="unknown-attempt",
+                claim_id="unknown-claim",
+                actor_id="unknown-owner",
+                process_id="unknown-process",
+                claimed_at="2026-08-02T00:01:00Z",
+                job_id=1,
+                kind="build",
+            ),
+        )
+    custody = coordinator.show("orphan-change")
+    before = runtimes["change-a"].frontier_bytes()
+    result = application.acquire_change_action(_continuation_request(application))
+    assert result.kind == ("waiting" if active else "acquired")
+    if active:
+        assert result.reason_code == "execution-capacity"
+        assert runtimes["change-a"].frontier_bytes() == before
+    assert coordinator.show("orphan-change") == custody
+
+
 def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(
         tmp_path, {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.DESIGN}
@@ -4100,6 +4280,11 @@ def test_review_repair_fences_external_head_mutations_before_workspace_side_effe
 def test_review_repair_commit_can_be_refinalized_published_and_marked_ready(tmp_path: Path) -> None:
     application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
     invalidation = application.prepare_review_repair("change-a")
+    stopped = application.acquire_change_action(_continuation_request(application))
+    assert stopped.kind == "reconciled"
+    stopped = application.acquire_change_action(_continuation_request(application))
+    assert stopped.kind == "unsupported"
+    assert stopped.reason_code == "repair-required"
     coordination = application._workspace_manager.show("change-a")
     repaired_head = _commit_reviewed_head(
         application,
@@ -4782,24 +4967,32 @@ def test_change_worktree_recovery_requires_exact_reviewed_head(tmp_path: Path) -
     assert not coordination.worktree_path.exists()
 
 
-def test_change_worktree_recovery_rebuilds_missing_coordination_without_target_mutation(tmp_path: Path) -> None:
+@pytest.mark.parametrize("malformed", [False, True])
+def test_change_worktree_recovery_contains_unknown_custody_without_target_mutation(
+    tmp_path: Path, *, malformed: bool
+) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
     coordination = application._workspace_manager.show("change-a")
     target_head = _git(application._workspace_manager.repository, "rev-parse", "HEAD")
-    (state_root / "coordination/changes/change-a.json").unlink()
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    if malformed:
+        coordination_path.write_bytes(b"{")
+    else:
+        coordination_path.unlink()
     shutil.rmtree(coordination.worktree_path)
 
-    receipt = application.recover_change_worktree(
-        "change-a",
-        coordination.last_reviewed_commit,
-        confirmed_recovery=True,
-    )
+    with pytest.raises(DeliveryRuntimeReconciliationError):
+        application.recover_change_worktree(
+            "change-a",
+            coordination.last_reviewed_commit,
+            confirmed_recovery=True,
+        )
 
-    assert receipt.recovery_reviewed_head == coordination.last_reviewed_commit
-    assert application._workspace_manager.show("change-a").last_reviewed_commit == coordination.last_reviewed_commit
+    assert not coordination.worktree_path.exists()
+    assert (coordination_path.read_bytes() if coordination_path.exists() else None) == (b"{" if malformed else None)
     assert _git(application._workspace_manager.repository, "rev-parse", "HEAD") == target_head
 
 
@@ -7494,7 +7687,7 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
 
 @pytest.mark.parametrize("interrupted", [False, True])
 def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path, *, interrupted: bool) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
+    application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -7525,8 +7718,18 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
                 outcome_id=submission.outcome_id, claim_id=submission.claim_id, result=submission.result
             )
         )
+        original_commit = RuntimeTransaction.commit
+
+        def interrupted_commit(transaction):
+            def fail(stage):
+                if stage == "after-first-publication":
+                    message = "injected result persistence interruption"
+                    raise OSError(message)
+
+            original_commit(transaction, failure=fail)
+
         with (
-            patch.object(runtime, "_replace", side_effect=OSError("injected result persistence interruption")),
+            patch.object(RuntimeTransaction, "commit", interrupted_commit),
             pytest.raises(OSError, match="injected result persistence"),
         ):
             application.submit_result(submission)
@@ -7541,6 +7744,16 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
     assert submitted.result_id == "RESULT-SUBMIT"
     assert submitted.binding.stage is DeliveryStage.COMPLETED
     assert submitted.binding.results == (submission.result,)
+    (receipt_path,) = (state_root / "changes/change-a/result-receipts/OUT-001").glob("*.json")
+    assert json.loads(receipt_path.read_bytes())["claim_id"] == launch.claim.claim_id
+    before = runtime.frontier_bytes()
+    custody = coordinator.show("change-a")
+    receipt_path.unlink()
+    with pytest.raises(DeliveryRuntimeReferenceError, match="original result claim receipt is unavailable"):
+        application.submit_result(submission)
+    assert runtime.frontier_bytes() == before
+    assert coordinator.show("change-a") == custody
+    assert not receipt_path.exists()
 
 
 def test_submit_result_replays_when_another_task_holds_the_claim(tmp_path: Path) -> None:
@@ -9384,17 +9597,29 @@ def test_repair_facade_matches_existing_repair_proposal_authority(tmp_path: Path
     assert diagnosed.proposal.claim_id == package.claim.claim_id
 
 
-def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path) -> None:
+@pytest.mark.parametrize("continuation", [False, True])
+def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path, *, continuation: bool) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
         clock=lambda: now[0],
     )
-    application.acquire_frontier_work()
+    if continuation:
+        application.acquire_change_action(_continuation_request(application))
+    else:
+        application.acquire_frontier_work()
     now[0] = "2026-08-04T01:00:00Z"
 
     view = application.get_change("change-a")
+    stopped = application.acquire_change_action(_continuation_request(application))
+    assert stopped.readiness == view.readiness
+    if continuation:
+        assert stopped.kind == "busy"
+        assert view.repair is None
+        return
+    assert stopped.kind == "unsupported"
+    assert stopped.reason_code == "repair-required"
 
     assert view.change_id == "change-a"
     assert view.detail.card.work_item_id == "OUT-001"

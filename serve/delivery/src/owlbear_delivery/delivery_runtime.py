@@ -1497,6 +1497,8 @@ class DeliveryRuntime:
         workspace_manager: ChangeWorkspaceManager | None = None,
     ) -> None:
         self._target_root = runtime_root.resolve()
+        if workspace_manager is not None and workspace_manager.runtime_root != self._target_root:
+            _conflict("runtime and workspace coordination must share one transaction root")
         self._contract = contract
         self._workspace_manager = workspace_manager
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
@@ -17,6 +18,7 @@ from owlbear_delivery.change_workspace import (
     ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangeFinalizationAttempt,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
@@ -74,6 +76,47 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
             "change-a",
             ChangeWriter(**_identity("change-a").model_dump(), job_id=3, kind="build"),
         )
+
+
+@pytest.mark.parametrize("damage", ["missing", "malformed", "identity"])
+def test_runtime_custody_guard_rejects_unreadable_coordination(tmp_path: Path, damage: str) -> None:
+    coordinator = PortfolioCoordinator(tmp_path)
+    path = tmp_path / "coordination/changes/change-a.json"
+    coordinator.register(_coordination(tmp_path, "change-a"))
+    if damage == "missing":
+        path.unlink()
+    else:
+        path.write_text(
+            "{" if damage == "malformed" else _coordination(tmp_path, "change-b").model_dump_json(), encoding="utf-8"
+        )
+    before = path.read_bytes() if path.exists() else None
+    for operation in (coordinator.show, coordinator.prepare_runtime_custody_guard):
+        with pytest.raises(CoordinationConflictError) as failure:
+            operation("change-a")
+        assert failure.value.code == "ERR_TARGET_COORDINATION_CONFLICT"
+    assert (path.read_bytes() if path.exists() else None) == before
+
+
+@pytest.mark.parametrize("damage", ["missing-attempt", "wrong-writer", "finished-attempt"])
+def test_finalizer_requires_exact_unfinished_attempt(tmp_path: Path, damage: str) -> None:
+    coordinator = PortfolioCoordinator(tmp_path)
+    original = coordinator.register(_coordination(tmp_path, "change-a"))
+    writer = ChangeWriter(**_identity("change-a").model_dump(), job_id=1, kind="finalize")
+    attempt = ChangeFinalizationAttempt(
+        writer=writer, contract_digest="a" * 64, frontier_digest="b" * 64, exact_head="a" * 40, target_head="b" * 40
+    )
+    invalid = {
+        "missing-attempt": None,
+        "wrong-writer": attempt.model_copy(
+            update={"writer": writer.model_copy(update={"claim_id": "different-claim"})}
+        ),
+        "finished-attempt": attempt.model_copy(update={"finished_at": "2026-08-02T00:02:00Z"}),
+    }[damage]
+    with pytest.raises(ValidationError):
+        ChangeCoordination.model_validate(original.model_dump() | {"writer": writer, "finalization_attempt": invalid})
+    with pytest.raises(CoordinationConflictError, match="exact unfinished attempt"):
+        coordinator.acquire("change-a", writer, finalization_attempt=invalid)
+    assert coordinator.show("change-a") == original
 
 
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
@@ -265,6 +308,21 @@ def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remot
     coordinator = PortfolioCoordinator(tmp_path / "state")
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target, remote=remote)
     return coordinator, manager
+
+
+@pytest.mark.parametrize("operation", ["ensure", "recover", "validate_recovery"])
+def test_malformed_coordination_is_not_treated_as_missing_authority(tmp_path: Path, operation: str) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("change-a")
+    path = tmp_path / "state/coordination/changes/change-a.json"
+    path.write_bytes(b"{")
+    shutil.rmtree(coordination.worktree_path)
+    with pytest.raises(CoordinationConflictError, match="unreadable or invalid"):
+        getattr(manager, operation)("change-a", recovery_reviewed_head=initial)
+    assert path.read_bytes() == b"{"
+    assert not coordination.worktree_path.exists()
+    assert _git(repository, "rev-parse", "HEAD") == initial
 
 
 def _workspace_bytes(repository: Path, state_root: Path) -> tuple[str, str, tuple[tuple[str, bytes], ...]]:

@@ -187,6 +187,7 @@ from owlbear_delivery.work_items import (
     DeliveryPortfolioSnapshot,
     DeliveryReadiness,
     DeliveryReadinessBasis,
+    DeliveryReadinessReason,
     WorkItemAction,
     WorkItemActionKind,
     WorkItemActivityState,
@@ -744,6 +745,24 @@ class DeliveryContinuationRequest(_ApplicationModel):
         return self
 
 
+DeliveryContinuationReason = (
+    DeliveryReadinessReason
+    | Literal[
+        "host-capability-unavailable",
+        "execution-capacity",
+        "execution-occupancy-unavailable",
+        "source-head-changed",
+        "state-publication-reconciled",
+        "state-publication-failed",
+        "operation-in-progress",
+        "publication-reconciliation-required",
+        "readiness-changed",
+        "source-unavailable",
+        "repair-required",
+    ]
+)
+
+
 class DeliveryContinuationResult(_ApplicationModel):
     """One launch or a non-dispatching disposition; never a portfolio batch."""
 
@@ -751,8 +770,9 @@ class DeliveryContinuationResult(_ApplicationModel):
     kind: Literal[
         "acquired", "reconciled", "busy", "stale", "waiting", "human", "unsupported", "unavailable", "terminal"
     ]
-    reason_code: str = Field(min_length=1)
+    reason_code: DeliveryContinuationReason
     readiness: DeliveryReadiness
+    failure: DeliveryAcquisitionFailure | None = None
     launch: DeliveryLaunchPackage | None = None
     finalization: DeliveryFinalizationLaunch | None = None
 
@@ -767,6 +787,9 @@ class DeliveryContinuationResult(_ApplicationModel):
             raise ValueError(message)
         if self.finalization is not None and self.finalization.context.change_id != self.change_id:
             message = "finalization launch must belong to the selected Change"
+            raise ValueError(message)
+        if self.failure is not None and (self.kind != "unavailable" or self.failure.change_id != self.change_id):
+            message = "continuation failure requires an unavailable result for the selected Change"
             raise ValueError(message)
         return self
 
@@ -931,7 +954,7 @@ class DeliveryUnavailableChangeView(_ApplicationModel):
     kind: Literal["unavailable"] = "unavailable"
     change_id: str = Field(min_length=1)
     title: str | None = None
-    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    diagnostics: tuple[Literal["runtime-unavailable", "coordination-unavailable"], ...] = ("runtime-unavailable",)
     readiness: DeliveryReadiness
 
 
@@ -5177,7 +5200,11 @@ class PortfolioApplication:
             self._fail(f"work item is absent: {item_key}", exc)
         if view.publication is None:
             return view
-        coordination = self._workspace_manager.show(change_id)
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except (OSError, RuntimeError, ValueError):
+            unavailable = self._unavailable_change(change_id, "coordination-unavailable")
+            return view.model_copy(update={"readiness": unavailable.readiness})
         conflict = coordination.target_sync_conflict
         conflict_view = (
             WorkItemTargetSyncConflictView(
@@ -5304,18 +5331,7 @@ class PortfolioApplication:
             frontier_digest=snapshot.version,
             candidate_head=snapshot.frontier.finalization.exact_head if snapshot.frontier.finalization else None,
         )
-        workspace_reason = None
-        needs_workspace = self._supports_finalization(snapshot.frontier) or any(
-            card.action.kind is WorkItemActionKind.FINALIZE for card in cards
-        )
-        if needs_workspace and not self._snapshot_has_active_claims(snapshot):
-            basis, workspace_reason = self._capture_readiness_workspace(snapshot, basis)
-        elif any(
-            self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
-            for card in cards
-        ):
-            coordination = self._workspace_manager.show(snapshot.contract.change_id)
-            basis = basis.model_copy(update={"candidate_head": coordination.last_reviewed_commit})
+        basis, workspace_reason = self._capture_action_basis(snapshot, cards, basis)
         try:
             reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
         except FinalizationReportError:
@@ -5326,6 +5342,37 @@ class PortfolioApplication:
             for card in cards
         )
         return WorkItemProjector(snapshot, decisions)
+
+    def _capture_action_basis(
+        self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...], basis: DeliveryReadinessBasis
+    ) -> tuple[DeliveryReadinessBasis, str | None]:
+        try:
+            coordination = self._workspace_manager.show(snapshot.contract.change_id)
+        except (OSError, RuntimeError, ValueError):
+            return basis, "coordination-unavailable"
+        needs_workspace = self._supports_finalization(snapshot.frontier) or any(
+            card.action.kind is WorkItemActionKind.FINALIZE for card in cards
+        )
+        if needs_workspace and not self._snapshot_has_active_claims(snapshot):
+            return self._capture_readiness_workspace(snapshot, basis)
+        if any(
+            self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
+            for card in cards
+        ):
+            basis = basis.model_copy(update={"source_head": coordination.last_reviewed_commit})
+        if any(
+            binding.active_claim is not None
+            and binding.active_claim.worker_role is DeliveryWorkerRole.BUILDER
+            and (
+                coordination.writer is None
+                or coordination.writer.kind != "build"
+                or coordination.writer.claim_id != binding.active_claim.claim_id
+                or coordination.writer.attempt_id != binding.active_claim.attempt_id
+            )
+            for binding in snapshot.frontier.bindings
+        ):
+            return basis, "claim-custody-unreconciled"
+        return basis, None
 
     @staticmethod
     def _with_finalization_report(
@@ -5375,6 +5422,10 @@ class PortfolioApplication:
                 tuple(result.completed_commit for binding in snapshot.frontier.bindings for result in binding.results),
             )
             basis = basis.model_copy(update={"candidate_head": head, "workspace_fingerprint": fingerprint})
+            if coordination.writer is not None and coordination.writer.kind == "finalize":
+                reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
+                if any(report.request.attempt_key == coordination.writer.attempt_id for report in reports.reports):
+                    return basis, "finalization-failed"
             invalidation = snapshot.frontier.finalization_invalidation
             if invalidation and invalidation.reason == "review-repair" and head == invalidation.expected_head:
                 reason = "review-repair"
@@ -5442,7 +5493,11 @@ class PortfolioApplication:
         action = cls._captured_action(frontier, card)
         operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
         status, reason = "ready", "ready"
-        if (
+        if workspace_reason == "coordination-unavailable":
+            status, reason = "unavailable", workspace_reason
+        elif workspace_reason == "claim-custody-unreconciled":
+            status, reason = "blocked", workspace_reason
+        elif (
             card.activity.state is WorkItemActivityState.WORKING
             or (
                 card.scope is WorkItemScope.CHANGE_PUBLICATION
@@ -5717,18 +5772,35 @@ class PortfolioApplication:
         occupancy: dict[str, int] = {}
         for change_id, observation in self._discovered_changes.items():
             frontier = observation.frontier
+            if frontier is None and change_id not in self._runtimes:
+                raise DeliveryRuntimeReconciliationError(change_id, "execution occupancy is unknown")
             if frontier is not None:
                 occupancy[change_id] = sum(binding.active_claim is not None for binding in frontier.bindings)
         for change_id, runtime in self._runtimes.items():
             try:
                 active_count = len(runtime.active_claims())
             except (OSError, RuntimeError, ValueError):
-                continue
+                active_count = self._persisted_claim_occupancy(change_id)
             occupancy[change_id] = max(occupancy.get(change_id, 0), active_count)
-        for coordination in self._coordinator.list_registered():
+        try:
+            registered = self._coordinator.list_registered()
+            for change_id in self._runtimes.keys() | self._discovered_changes.keys():
+                self._coordinator.show(change_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(None, f"execution custody is unknown: {exc}") from exc
+        for coordination in registered:
             if coordination.writer is not None:
                 occupancy[coordination.change_id] = max(occupancy.get(coordination.change_id, 0), 1)
         return sum(occupancy.values())
+
+    def _persisted_claim_occupancy(self, change_id: str) -> int:
+        """Count structurally valid custody without admitting incompatible runtime authority."""
+        try:
+            path = self._target_root / "changes" / change_id / "frontier.json"
+            frontier = parse_delivery_frontier(path.read_bytes())[0]
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(change_id, "execution occupancy is unreadable") from exc
+        return sum(binding.active_claim is not None for binding in frontier.bindings)
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
         frontier_bytes = runtime.frontier_bytes()
@@ -6032,6 +6104,29 @@ class PortfolioApplication:
                 self._selected_action_checkpoint_lock(request.change_id),
             ):
                 return self._acquire_change_action_locked(request)
+        except DeliveryRuntimeReconciliationError as exc:
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="unavailable",
+                reason_code="execution-occupancy-unavailable",
+                readiness=view.readiness.model_copy(
+                    update={
+                        "status": "unavailable",
+                        "reason_code": "coordination-unavailable",
+                        "executable": False,
+                        "action": None,
+                    }
+                ),
+                failure=DeliveryAcquisitionFailure(
+                    change_id=request.change_id,
+                    outcome_id="OUT-000",
+                    code=exc.code,
+                    detail=str(exc),
+                    retry_condition=(
+                        "Restore readable custody through maintenance diagnosis; do not release unknown writers."
+                    ),
+                ),
+            )
         except DeliveryActionBusyError:
             return DeliveryContinuationResult(
                 change_id=request.change_id,
@@ -6042,13 +6137,14 @@ class PortfolioApplication:
 
     def _acquire_change_action_locked(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
         runtime = self._runtime(request.change_id, for_mutation=True, allow_finalizer=True)
-        cards = self._read_projector(self._delivery_snapshot(runtime)).group_view().items
-        card = next((item for item in cards if item.item_key == "publication"), cards[0])
+        snapshot = self._delivery_snapshot(runtime)
+        cards = self._read_projector(snapshot).group_view().items
+        card = self._selected_change_card(snapshot, cards)
         readiness = card.readiness
         if readiness is None:
             self._fail("continuation readiness was not captured")
 
-        stop = self._continuation_stop(request, runtime, readiness)
+        stop = self._continuation_stop(request, runtime, readiness, repair=self._repair_proposal(snapshot))
         if stop is not None:
             return stop
         candidate = self._continuation_candidate(request.change_id, cards)
@@ -6082,11 +6178,22 @@ class PortfolioApplication:
         return candidate if selected.readiness is not None and selected.readiness.executable else None
 
     def _continuation_stop(
-        self, request: DeliveryContinuationRequest, runtime: DeliveryRuntime, readiness: DeliveryReadiness
+        self,
+        request: DeliveryContinuationRequest,
+        runtime: DeliveryRuntime,
+        readiness: DeliveryReadiness,
+        *,
+        repair: DeliveryRepairProposal | None,
     ) -> DeliveryContinuationResult | None:
+        failure = None
         coordination = self._workspace_manager.show(request.change_id)
-        if runtime.active_claims() or runtime.integration_repair_claim() or coordination.writer:
-            kind, reason = "busy", "active-custody"
+        if readiness.status == "unavailable" or readiness.reason_code in {
+            "finalization-failed",
+            "claim-custody-unreconciled",
+        }:
+            kind, reason = "unavailable", readiness.reason_code
+        elif runtime.active_claims() or runtime.integration_repair_claim() or coordination.writer:
+            kind, reason = ("unsupported", "repair-required") if repair is not None else ("busy", "active-custody")
         elif coordination.publication_lease is not None:
             kind, reason = "unsupported", "publication-reconciliation-required"
         elif readiness.basis != request.expected_basis:
@@ -6098,11 +6205,17 @@ class PortfolioApplication:
         elif runtime.pending_state_publication() is not None:
             failures = self._replay_pending_state_publications(request.change_id)
             kind = "unavailable" if failures else "reconciled"
-            reason = failures[0].code if failures else "state-publication-reconciled"
+            failure = failures[0] if failures else None
+            reason = "state-publication-failed" if failure else "state-publication-reconciled"
+        elif readiness.reason_code == "review-repair" or readiness.operation in {
+            WorkItemActionKind.RECOVER_CLAIM,
+            WorkItemActionKind.RESOLVE_ATTENTION,
+        }:
+            kind, reason = "unsupported", "repair-required"
         else:
             return None
         return DeliveryContinuationResult(
-            change_id=request.change_id, kind=kind, reason_code=reason, readiness=readiness
+            change_id=request.change_id, kind=kind, reason_code=reason, readiness=readiness, failure=failure
         )
 
     def _launch_continuation_finalizer(
@@ -6152,9 +6265,13 @@ class PortfolioApplication:
         )
         if isinstance(source, DeliveryAcquisitionFailure):
             return DeliveryContinuationResult(
-                change_id=request.change_id, kind="unavailable", reason_code=source.code, readiness=readiness
+                change_id=request.change_id,
+                kind="unavailable",
+                reason_code="source-unavailable",
+                readiness=readiness,
+                failure=source,
             )
-        if source.source_head != request.expected_basis.candidate_head:
+        if source.source_head != request.expected_basis.source_head:
             return DeliveryContinuationResult(
                 change_id=request.change_id, kind="stale", reason_code="source-head-changed", readiness=readiness
             )
@@ -6165,11 +6282,33 @@ class PortfolioApplication:
             host_identity=(request.host_id, request.session_id),
         )
         if isinstance(launch, DeliveryAcquisitionFailure):
-            return DeliveryContinuationResult(
-                change_id=request.change_id, kind="busy", reason_code=launch.code, readiness=readiness
-            )
+            return self._continuation_launch_failure(candidate, readiness, launch)
         return DeliveryContinuationResult(
             change_id=request.change_id, kind="acquired", reason_code="ready", readiness=readiness, launch=launch
+        )
+
+    def _continuation_launch_failure(
+        self, candidate: _Candidate, readiness: DeliveryReadiness, failure: DeliveryAcquisitionFailure
+    ) -> DeliveryContinuationResult:
+        try:
+            snapshot = self._delivery_snapshot(candidate.runtime)
+            cards = self._read_projector(snapshot).group_view().items
+            current = self._selected_change_card(snapshot, cards).readiness
+        except (OSError, RuntimeError, ValueError):
+            current = readiness
+        return DeliveryContinuationResult(
+            change_id=candidate.change_id,
+            kind="unavailable",
+            reason_code="claim-activation-failed",
+            readiness=current.model_copy(
+                update={
+                    "status": "blocked",
+                    "reason_code": "claim-activation-failed",
+                    "executable": False,
+                    "action": None,
+                }
+            ),
+            failure=failure,
         )
 
     def acquire_actions(self, selection: DeliveryActionSelection | None = None) -> DeliveryAcquisitionResult:
@@ -6473,6 +6612,39 @@ class PortfolioApplication:
             recovery_attention=binding.recovery_attention,
         )
 
+    def _repair_proposal(self, snapshot: DeliveryPortfolioSnapshot) -> DeliveryRepairProposal | None:
+        cutoff = _timestamp(self._clock()) - self._claim_timeout
+        return next(
+            (
+                DeliveryRepairProposal.create(
+                    kind=DeliveryRepairKind.CONFIRM_LOST_WORKER,
+                    change_id=snapshot.contract.change_id,
+                    outcome_id=binding.outcome_id,
+                    attempt_id=claim.attempt_id,
+                    claim_id=claim.claim_id,
+                    expected_frontier_digest=snapshot.version,
+                    summary="Confirm that the stale Builder invocation has ended before recovery.",
+                    consequence=(
+                        "Delivery will preserve dirty bytes, restore the reviewed worktree, and release custody."
+                    ),
+                )
+                for binding in snapshot.frontier.bindings
+                if (claim := binding.active_claim) is not None
+                and not claim.continuation
+                and claim.worker_role is DeliveryWorkerRole.BUILDER
+                and _timestamp(claim.started_at) <= cutoff
+            ),
+            None,
+        )
+
+    def _selected_change_card(
+        self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...]
+    ) -> WorkItemCardView:
+        proposal = self._repair_proposal(snapshot)
+        if proposal is not None:
+            return next(card for card in cards if card.work_item_id == proposal.outcome_id)
+        return next((card for card in cards if card.item_key == "publication"), cards[0])
+
     def repair_change(
         self,
         change_id: str,
@@ -6485,26 +6657,7 @@ class PortfolioApplication:
             runtime = self._runtime(change_id, for_mutation=proposal_id is not None)
             frontier_bytes = runtime.frontier_bytes()
             digest = hashlib.sha256(frontier_bytes).hexdigest()
-            cutoff = _timestamp(self._clock()) - self._claim_timeout
-            proposal = next(
-                (
-                    DeliveryRepairProposal.create(
-                        kind=DeliveryRepairKind.CONFIRM_LOST_WORKER,
-                        change_id=change_id,
-                        outcome_id=outcome_id,
-                        attempt_id=claim.attempt_id,
-                        claim_id=claim.claim_id,
-                        expected_frontier_digest=digest,
-                        summary="Confirm that the stale Builder invocation has ended before recovery.",
-                        consequence=(
-                            "Delivery will preserve dirty bytes, restore the reviewed worktree, and release custody."
-                        ),
-                    )
-                    for outcome_id, claim in runtime.active_claims()
-                    if claim.worker_role is DeliveryWorkerRole.BUILDER and _timestamp(claim.started_at) <= cutoff
-                ),
-                None,
-            )
+            proposal = self._repair_proposal(DeliveryPortfolioSnapshot.capture(runtime.contract, frontier_bytes))
             if proposal_id is None:
                 return DeliveryRepairResult(change_id=change_id, proposal=proposal)
             if proposal is None or proposal.proposal_id != proposal_id:
@@ -6533,17 +6686,24 @@ class PortfolioApplication:
         """Diagnose or apply one high-level repair proposal."""
         return self.repair_change(change_id, proposal_id, confirmed_lost=confirmed_lost)
 
-    def _unavailable_change(self, change_id: str) -> DeliveryUnavailableChangeView:
-        observation = self._discovered_changes[change_id]
+    def _unavailable_change(
+        self, change_id: str, reason: Literal["runtime-unavailable", "coordination-unavailable"] = "runtime-unavailable"
+    ) -> DeliveryUnavailableChangeView:
+        observation = self._discovered_changes.get(change_id)
+        runtime = self._runtimes.get(change_id)
+        contract = (
+            observation.contract if observation is not None else runtime.contract if runtime is not None else None
+        )
         return DeliveryUnavailableChangeView(
             change_id=change_id,
-            title=observation.contract.title if observation.contract else None,
+            title=contract.title if contract is not None else None,
+            diagnostics=(reason,),
             readiness=DeliveryReadiness(
                 status="unavailable",
                 next_actor=WorkItemNextActor.NONE,
-                reason_code="runtime-unavailable",
+                reason_code=reason,
                 checks_state="unknown",
-                basis=DeliveryReadinessBasis(contract_digest=observation.contract_fingerprint),
+                basis=DeliveryReadinessBasis(contract_digest=contract_fingerprint(contract) if contract else None),
             ),
         )
 
@@ -6554,22 +6714,18 @@ class PortfolioApplication:
         if observation is not None and (not observation.actionable_runtime or change_id not in self._runtimes):
             return self._unavailable_change(change_id)
         runtime = self._runtime(change_id)
-        repair = self.repair_change(change_id)
+        try:
+            coordination = self._workspace_manager.show(change_id)
+        except (OSError, RuntimeError, ValueError):
+            return self._unavailable_change(change_id, "coordination-unavailable")
         snapshot = self._delivery_snapshot(runtime)
+        proposal = self._repair_proposal(snapshot)
         projector = self._read_projector(snapshot)
         frontier_digest = snapshot.version
         items = projector.group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
-        proposal_outcome_id = repair.proposal.outcome_id if repair.proposal is not None else None
-        item_key = next(
-            (
-                item.item_key
-                for item in items
-                if proposal_outcome_id is not None and item.work_item_id == proposal_outcome_id
-            ),
-            "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key,
-        )
+        item_key = self._selected_change_card(snapshot, items).item_key
         detail = self._captured_detail(runtime, projector, item_key)
         health = self._delivery_health_view(scoped_change_id=change_id, inspect_workspaces=False)
         unresolved_outcomes = tuple(
@@ -6593,11 +6749,11 @@ class PortfolioApplication:
         )
         return DeliveryChangeView(
             change_id=change_id,
-            finalization_attempt=self._workspace_manager.show(change_id).finalization_attempt,
+            finalization_attempt=coordination.finalization_attempt,
             frontier_digest=frontier_digest,
             detail=detail,
             health=health,
-            repair=repair if repair.proposal is not None else None,
+            repair=DeliveryRepairResult(change_id=change_id, proposal=proposal) if proposal is not None else None,
             unresolved_outcomes=unresolved_outcomes,
             readiness=detail.readiness,
         )
@@ -6972,15 +7128,14 @@ class PortfolioApplication:
                 continue
             try:
                 pending_publication = runtime.pending_state_publication()
+                occupied = (
+                    runtime.active_claims()
+                    or runtime.change_stage() != DeliveryChangeStage.BUILDING
+                    or self._workspace_manager.show(change_id).writer is not None
+                )
             except (OSError, RuntimeError, ValueError):
                 continue
-            if pending_publication is not None:
-                continue
-            if (
-                runtime.active_claims()
-                or runtime.change_stage() != DeliveryChangeStage.BUILDING
-                or self._workspace_manager.show(change_id).writer is not None
-            ):
+            if pending_publication is not None or occupied:
                 continue
             pending = runtime.checkpoint_publication_state().pending_checkpoint
             if pending is not None and any(
@@ -7215,7 +7370,12 @@ class PortfolioApplication:
                 claim_id=claim.claim_id,
                 code=getattr(exc, "code", PortfolioApplicationError.code),
                 detail=str(exc) or "worker launch preparation failed after claim activation",
-                retry_condition="Recover the exact failed claim after reconciling writer custody.",
+                retry_condition=(
+                    "Retain the exact claim and any writer custody. D03 closed-worker recovery is required; "
+                    "do not redispatch, infer termination, or use confirmed_lost recovery."
+                    if claim.continuation
+                    else "Recover the exact failed claim after reconciling writer custody."
+                ),
             )
 
     def _current_launch(
@@ -7440,11 +7600,13 @@ class PortfolioApplication:
             detail = self._runtime_reconciliation_errors.get(change_id)
             if detail is not None:
                 raise DeliveryRuntimeReconciliationError(change_id, detail)
-            if not allow_finalizer:
+            try:
                 writer = self._workspace_manager.show(change_id).writer
-                if writer is not None and writer.kind == "finalize":
-                    message = "selected Change retains active finalizer custody"
-                    raise DeliveryActionBusyError(message)
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise DeliveryRuntimeReconciliationError(change_id, str(exc)) from exc
+            if not allow_finalizer and writer is not None and writer.kind == "finalize":
+                message = "selected Change retains active finalizer custody"
+                raise DeliveryActionBusyError(message)
         return runtime
 
     def _require_target_sync_change_mutable(self, runtime: DeliveryRuntime) -> None:

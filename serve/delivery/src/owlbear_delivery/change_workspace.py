@@ -1088,6 +1088,11 @@ class PortfolioCoordinator:
         """Complete pending coordinator transactions before reading ownership state."""
         RuntimeTransaction.recover_all(self._state_root)
 
+    @property
+    def runtime_root(self) -> Path:
+        """Return the shared transaction and recovery root."""
+        return self._state_root.resolve()
+
     def acquisition_lock(self) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""
         lock_root = self._state_root / "claims" / "acquisition-lock"
@@ -1125,12 +1130,31 @@ class PortfolioCoordinator:
 
     def show(self, change_id: str) -> ChangeCoordination:
         """Return one current per-change coordination record."""
+        return self._read_coordination(change_id)[0]
+
+    def find_registered(self, change_id: str) -> ChangeCoordination | None:
+        """Distinguish genuine absence from unreadable or invalid coordination."""
+        try:
+            return self.show(change_id)
+        except CoordinationConflictError as exc:
+            if not isinstance(exc.__cause__, FileNotFoundError):
+                raise
+            return None
+
+    def _read_coordination(self, change_id: str) -> tuple[ChangeCoordination, bytes]:
         path = self._coordination_path(change_id)
         try:
-            return ChangeCoordination.model_validate_json(path.read_bytes())
+            content = path.read_bytes()
+            coordination = ChangeCoordination.model_validate_json(content)
         except FileNotFoundError as exc:
             msg = f"change workspace is not registered: {change_id}"
             raise CoordinationConflictError(msg) from exc
+        except (OSError, ValidationError) as exc:
+            msg = f"change coordination record is unreadable or invalid: {change_id}"
+            raise CoordinationConflictError(msg) from exc
+        if coordination.change_id != change_id:
+            _coordination_conflict(f"change coordination record identity is invalid: {change_id}")
+        return coordination, content
 
     def list_registered(self) -> tuple[ChangeCoordination, ...]:
         """Return all registered Change coordination records in stable order."""
@@ -1358,8 +1382,7 @@ class PortfolioCoordinator:
     def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
         """Fence a runtime mutation against concurrent finalizer acquisition."""
         path = self._coordination_path(change_id)
-        previous = path.read_bytes()
-        coordination = ChangeCoordination.model_validate_json(previous)
+        coordination, previous = self._read_coordination(change_id)
         if coordination.writer is not None and coordination.writer.kind == "finalize":
             _coordination_conflict("mutation cannot overlap active finalizer custody")
         return ReplacementTransactionParticipant(
@@ -1496,6 +1519,11 @@ class ChangeWorkspaceManager:
         """Return the engine-owned repository used for managed Change reads."""
         return self._repository
 
+    @property
+    def runtime_root(self) -> Path:
+        """Return the coordinator's transaction root for runtime assembly validation."""
+        return self._coordinator.runtime_root
+
     def _target_ref(self) -> str:
         if self._integration_target.startswith("refs/remotes/"):
             return self._integration_target
@@ -1519,10 +1547,7 @@ class ChangeWorkspaceManager:
         if not _is_change_id(change_id):
             msg = "change identity is not a safe worktree identity"
             raise ValueError(msg)
-        try:
-            existing = self._coordinator.show(change_id)
-        except CoordinationConflictError:
-            existing = None
+        existing = self._coordinator.find_registered(change_id)
         if existing is not None:
             self._validate_existing_coordination(existing, recovery_reviewed_head)
             self._validate_existing_worktree(existing)
@@ -1574,10 +1599,7 @@ class ChangeWorkspaceManager:
         if re.fullmatch(r"[0-9a-f]{40}", recovery_reviewed_head) is None:
             msg = "recovery reviewed head is not a valid commit identity"
             raise ValueError(msg)
-        try:
-            existing = self._coordinator.show(change_id)
-        except CoordinationConflictError:
-            existing = None
+        existing = self._coordinator.find_registered(change_id)
         expected_branch = f"owlbear/change/{change_id}"
         expected_path = self._worktree_root / change_id
         branch = expected_branch
@@ -1629,10 +1651,7 @@ class ChangeWorkspaceManager:
         if not _is_change_id(change_id):
             msg = "change identity is not a safe worktree identity"
             raise ValueError(msg)
-        try:
-            existing = self._coordinator.show(change_id)
-        except CoordinationConflictError:
-            existing = None
+        existing = self._coordinator.find_registered(change_id)
         if existing is not None:
             if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
                 _coordination_conflict("recovery reviewed head differs from registered workspace authority")
