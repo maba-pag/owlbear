@@ -4,8 +4,6 @@
             "type": "stdio",
             "command": "uv",
             "args": [
-                "--project",
-                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
@@ -16,8 +14,6 @@
             "type": "stdio",
             "command": "uv",
             "args": [
-                "--project",
-                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
@@ -28,8 +24,6 @@
             "type": "stdio",
             "command": "uv",
             "args": [
-                "--project",
-                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
@@ -40,8 +34,6 @@
             "type": "stdio",
             "command": "uv",
             "args": [
-                "--project",
-                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
