@@ -805,9 +805,9 @@ subset in this plan or the session's closeout. Do not implement model routing or
 to carry programme context.
 
 ```yaml
-packet_id: D01
+packet_id: D01 (UI substep; formerly P04)
 work_package: WP1
-implementation_tier: T1
+implementation_tier: T2
 tier_reason: Presentation only; eligibility is supplied by the engine.
 review_tier: T2
 result: A Change card displays the engine-selected action or wait without local routing logic.
@@ -827,6 +827,9 @@ commands: <resolved focused test, typecheck, and lint commands>
 escalate_when: <missing contract case or required decision not represented in engine output>
 ```
 
+The checkpoint-replay repair is a separate T2 substep of D01; this UI example's backend
+exclusion does not exclude that repair from the package.
+
 The implementation result contains the exact reviewed commit, owned paths, completed observations, actual commands/results, exported contract version, and unresolved findings. The receiver checks the current dependency bytes before coding. A stale interface pauses affected packets for Lead refresh; it does not cause each consumer to invent its own adjustment.
 
 Independent exact-commit review remains required. Delivery result submission is not used for this
@@ -840,7 +843,7 @@ Each behavior still owns its tests, and final cutover is not a substitute for ea
 
 | Packet | WP / domain | Tier | Owned result and delegation boundary | Requires | Proof / review emphasis |
 | --- | --- | --- | --- | --- | --- |
-| P00 | Shared Design / context | T3 | Resolve the initial action/result/custody contract; prepare the launch schedule, model choices, native task mapping, and exact first handoff. Name owners for later WP Design gates | Current source and approved product decisions | Sections 5-6 and 12.8; independent Design challenge; no production edits in this design activity |
+| P00 | Shared Design / context | T3 | Resolve the initial action/result/custody contract; prepare the launch schedule, model choices, native task mapping, and exact first handoff. Name owners for later WP Design gates | Current source and approved product decisions | Sections 5-6 and 12.8 (retired); independent Design challenge; no production edits in this design activity |
 | P01 | WP1 / delivery | T3 | Shared readiness selector, versioned action/failure projection, durable failure routing; critical state semantics remain here | P00 and WP1 Design | V02, V03, V18; T3 review |
 | P02 | WP1 / delivery-mcp | T2 | Strict MCP models, registration, and adapter mapping for P01; no independent readiness decisions | P01 contract and reviewed reference behavior | Registered positive/negative envelopes; T2 review |
 | P03 | WP1 / cockpit HTTP | T2 | HTTP adaptation and degraded read response from the same P01 contract; no scheduler in routes | P01 contract and reviewed reference behavior | V02, V18 via actual routes; T2 review |

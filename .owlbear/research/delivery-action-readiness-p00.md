@@ -228,7 +228,7 @@ The first four primary sessions use the same future WP1 Change worktree, seriall
 
 Parallel is **not authorized now**. P05 may overlap P02/P03 only after distinct coherent Change custody, source inputs, file reservations, and capacity are verified by the outgoing owner. No new P05 package was created in this pass.
 
-Later Design preparation owners remain those in programme section 12.8.4: P06 for continuation, P08 for provider/merge, P10 for recovery/retry, P12/P13 for revision/evidence, P15/P16 for assistance, and P19/P20 for maintenance/cutover. They are future gates, not completed designs.
+The original Design preparation owners are retained in programme section 12.4: P06 for continuation, P08 for provider/merge, P10 for recovery/retry, P12/P13 for revision/evidence, P15/P16 for assistance, and P19/P20 for maintenance/cutover. This is historical scope mapping, not the active schedule or evidence of completed designs.
 
 ## 7. Conditional P01 Handoff
 
@@ -333,7 +333,9 @@ P01 acquisition bound TASK-001 to claim `5242e241-0035-485c-bf3a-8df0d04855bf`, 
 
 **Safe retained state:** outcome Implementation, all five tasks retained, zero results, no active claim or writer, clean managed worktree at the reviewed head above. P01 product implementation and P02 have not started. Do not repeat admission or Planning merely because the host session is new.
 
-**Superseded recovery advice:** the user reloaded and retried; Builder still reported missing discovery. Do not repeat the reload-only advice. Section 12 records the tested repair and the prompt below now accepts either directly bound tools or successful discovery.
+**Superseded recovery advice:** the user reloaded and retried; Builder still reported missing discovery. Do not repeat the reload-only advice. Section 12 records the tested repair; the historical prompt below was revised to accept either directly bound tools or successful discovery.
+
+**Retired launch prompt: do not execute.** Use D01 in the active plan instead.
 
 ```text
 Resume wave 01 for delivery-action-readiness only. Read section 11 of
@@ -463,7 +465,7 @@ the relevant checkpoint/backoff implementation unchanged. The parent also reprod
 that exact failure on the primary checkout without P01, confirming it is pre-existing.
 The broader suite is not green; no test was skipped or weakened to accept P01.
 
-**Current state:** one submitted task result; four later tasks retained; no active claim
+**State at P01 submission:** one submitted task result; four later tasks retained; no active claim
 or writer; clean managed worktree and reviewed head `4bf2365180c2851723fa09d91fa48a209220eb33`;
 Delivery health returned `healthy` with no diagnostics. P02, HTTP/UI integration,
 finalizer wiring and whole-Change acceptance remain unimplemented. These are later
@@ -482,5 +484,5 @@ and merged into `dev`. Use D01 from the active plan for the remaining UI and ass
 proof; do not acquire another Delivery claim for this programme.
 
 P05 remains a separate unadmitted offline-diagnostics outcome. No P05 launch or parallel
-work is authorized by the current WP1 task plan. Core DTOs and report-store behavior
+work is authorized by the retired WP1 task plan. Core DTOs and report-store behavior
 at the reviewed P01 commit are its future source inputs, not admission authority.
