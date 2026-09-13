@@ -201,6 +201,30 @@ def _continuation_action() -> ChangeContinuationAction:
     )
 
 
+def _continuation_readiness(reason: str) -> DeliveryReadiness:
+    return DeliveryReadiness(
+        status="ready",
+        next_actor=WorkItemNextActor.AGENT,
+        reason_code=reason,  # type: ignore[arg-type]
+        basis=DeliveryReadinessBasis(
+            contract_digest="a" * 64,
+            frontier_digest="a" * 64,
+            source_head="b" * 40,
+            target_head="c" * 40,
+            continuation_id=CONTINUATION_ID,
+        ),
+    )
+
+
+# Non-acquired dispositions the transport must forward unchanged, keyed by selected Change.
+_CONTINUATION_DISPOSITIONS = {
+    "change-waiting": ("waiting", "host-capability-unavailable", "ready"),
+    "change-stale": ("stale", "readiness-changed", "target-sync-required"),
+    "change-human": ("human", "merge-approval-required", "publication-wait"),
+    "change-busy": ("busy", "operation-in-progress", "active-custody"),
+}
+
+
 class _ContinuationApplication(_RecordingApplication):
     def __init__(self) -> None:
         super().__init__()
@@ -209,22 +233,20 @@ class _ContinuationApplication(_RecordingApplication):
     def acquire_change_action(self, request: DeliveryContinuationRequest) -> DeliveryContinuationResult:
         self.calls.append("acquire_change_action")
         self.requests.append(request)
+        disposition = _CONTINUATION_DISPOSITIONS.get(request.change_id)
+        if disposition is not None:
+            kind, reason, readiness_reason = disposition
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind=kind,  # type: ignore[arg-type]
+                reason_code=reason,  # type: ignore[arg-type]
+                readiness=_continuation_readiness(readiness_reason),
+            )
         return DeliveryContinuationResult(
             change_id=request.change_id,
             kind="acquired",
             reason_code="ready",
-            readiness=DeliveryReadiness(
-                status="ready",
-                next_actor=WorkItemNextActor.AGENT,
-                reason_code="target-sync-required",
-                basis=DeliveryReadinessBasis(
-                    contract_digest="a" * 64,
-                    frontier_digest="a" * 64,
-                    source_head="b" * 40,
-                    target_head="c" * 40,
-                    continuation_id=CONTINUATION_ID,
-                ),
-            ),
+            readiness=_continuation_readiness("target-sync-required"),
             engine_action=_continuation_action(),
         )
 
@@ -543,6 +565,51 @@ async def test_registered_continuation_forwards_exact_change_and_engine_operatio
     assert request.expected_basis.continuation_id is None
     assert isinstance(execution, ExecuteDeliveryChangeAction)
     assert execution.operation_id == CONTINUATION_ID
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("change_id", "kind", "reason_code"),
+    [
+        ("change-waiting", "waiting", "host-capability-unavailable"),
+        ("change-stale", "stale", "readiness-changed"),
+        ("change-human", "human", "merge-approval-required"),
+        ("change-busy", "busy", "operation-in-progress"),
+    ],
+)
+async def test_registered_continuation_forwards_non_acquired_envelopes_without_a_retry_loop(
+    change_id: str,
+    kind: str,
+    reason_code: str,
+) -> None:
+    application = _ContinuationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    basis = {"contract_digest": "a" * 64, "frontier_digest": "a" * 64}
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": change_id,
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "host",
+                "session_id": "session",
+            },
+        )
+
+    assert not result.is_error
+    payload = result.structured_content
+    assert payload is not None
+    assert payload["kind"] == kind
+    assert payload["reason_code"] == reason_code
+    assert payload["launch"] is None
+    assert payload["finalization"] is None
+    assert payload["engine_action"] is None
+    assert payload["engine_result"] is None
+    assert payload["failure"] is None
+    assert payload["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+    assert application.calls == ["acquire_change_action"]
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ import type {
   CompletedChangeRecord,
   DeliveryHealthResponse,
   DeliveryReadiness,
+  DeliveryReadinessReasonCode,
   DeliveryUnavailableChangeResponse,
   DesignWorkDetailResponse,
   PortfolioChangeLifecycleStatus,
@@ -20,6 +21,7 @@ import type {
   PublicationChecksObservationResponse,
 } from '../api/workItems'
 import { completedChangeRecordId } from '../api/workItems'
+import { READINESS_REASON_LABELS } from '../components/workItemPresentation'
 import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import WorkPortfolioPage from '../pages/WorkPortfolioPage'
 
@@ -113,6 +115,7 @@ function unavailableChange(changeId: string, title: string | null = null): Deliv
     change_id: changeId,
     title,
     diagnostics: ['runtime-unavailable'],
+    coordination_status: null,
     readiness: readiness({
       status: 'unavailable',
       next_actor: 'none',
@@ -1486,6 +1489,9 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
     active_claim: {
       attempt_id: 'attempt-one',
       claim_id: 'claim-one',
+      owner_id: 'host-one',
+      process_id: 'session-one',
+      continuation: false,
       started_at: '2026-08-08T10:00:00Z',
       worker_role: 'builder',
       task_id: 'TASK-001',
@@ -1527,6 +1533,9 @@ it('keeps claim recovery confirmation open when recovery fails', async () => {
     active_claim: {
       attempt_id: 'attempt-one',
       claim_id: 'claim-one',
+      owner_id: 'host-one',
+      process_id: 'session-one',
+      continuation: false,
       started_at: '2026-08-08T10:00:00Z',
       worker_role: 'builder',
       task_id: 'TASK-001',
@@ -4258,6 +4267,84 @@ it('offers read-only inspection for an unavailable Change without controls', asy
   expect(within(inspector).getByTestId('unavailable-change-diagnostics')).toHaveTextContent('runtime-unavailable')
   expect(within(inspector).getByTestId('readiness-status')).toHaveTextContent('Unavailable')
   expect(within(inspector).getByTestId('readiness-checks-state')).toHaveTextContent('Unknown')
+  expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
+})
+
+it('labels every continuation readiness reason without blanking a new engine state', async () => {
+  const continuationReasons: DeliveryReadinessReasonCode[] = [
+    'finalization-failed',
+    'claim-activation-failed',
+    'coordination-unavailable',
+    'execution-occupancy-unavailable',
+    'engine-action-pending',
+    'engine-action-blocked',
+    'target-sync-required',
+    'claim-custody-unreconciled',
+  ]
+  expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(continuationReasons.length)
+
+  for (const reason of continuationReasons) {
+    const state = readiness({ status: 'waiting', next_actor: 'agent', reason_code: reason })
+    currentDetail = detail({ readiness: state })
+    const { unmount } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+    const inspector = await screen.findByTestId('work-item-detail')
+    const rendered = inspector.querySelector(`[data-readiness-reason="${reason}"]`)
+    expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason])
+    expect(rendered?.textContent?.trim()).not.toBe('')
+    expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready)
+    unmount()
+  }
+})
+
+it('reports engine continuation custody as provenance without offering caller-confirmed recovery', async () => {
+  currentDetail = detail({
+    card: card({ stage: 'implementation' }),
+    active_claim: {
+      attempt_id: 'attempt-continuation',
+      claim_id: 'claim-continuation',
+      owner_id: 'cockpit-host',
+      process_id: 'cockpit-session',
+      continuation: true,
+      started_at: '2026-09-13T10:00:00Z',
+      worker_role: 'builder',
+      task_id: null,
+    },
+  })
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByTestId('claim-continuation-custody'))
+    .toHaveTextContent('Caller-confirmed recovery is not supported for it.')
+  expect(inspector).toHaveTextContent('Engine continuation')
+  expect(inspector).toHaveTextContent('cockpit-host')
+  expect(inspector).toHaveTextContent('cockpit-session')
+  expect(inspector).toHaveTextContent('not evidence that the worker is still running')
+  expect(within(inspector).queryByText('Recover confirmed-lost claim')).not.toBeInTheDocument()
+  expect(requests.filter((request) => request.method !== 'GET')).toEqual([])
+})
+
+it('exposes the coordination status behind an unreadable Change record', async () => {
+  currentUnavailableDetail = {
+    ...unavailableChange('change-alpha', 'Portfolio redesign'),
+    diagnostics: ['runtime-unavailable', 'coordination-unavailable'],
+    coordination_status: 'unreadable',
+    readiness: readiness({
+      status: 'unavailable',
+      next_actor: 'none',
+      reason_code: 'coordination-unavailable',
+      checks_state: 'unknown',
+    }),
+  }
+  renderPage('/delivery/change-alpha/outcome:OUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const diagnostics = within(inspector).getByTestId('unavailable-change-diagnostics')
+  expect(diagnostics).toHaveTextContent('runtime-unavailable')
+  expect(diagnostics).toHaveTextContent('coordination-unavailable')
+  expect(diagnostics).toHaveTextContent('Coordination record: unreadable')
+  expect(inspector.querySelector('[data-readiness-reason="coordination-unavailable"]'))
+    .toHaveTextContent('This Change has no readable coordination record.')
   expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
 })
 

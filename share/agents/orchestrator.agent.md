@@ -9,6 +9,7 @@ tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, 
 agents:
   - planner
   - builder
+  - finalizer
   - repairer
   - memory-curator
   - Explore
@@ -53,6 +54,13 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   recovery operation only for a failed or orphaned claim after dispatch failure.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
   claim-bound dispatch failures to the matching exact recovery operation.
+- **Hand off one issued finalization intact.** Declare the `finalizer` capability only when this host
+  can actually dispatch that agent; dispatch it with only the serialized `DeliveryFinalizationLaunch`,
+  record its returned finalization mapping without forwarding it to `transition_delivery`, and
+  otherwise report the engine-authored `/finalize-change <change_id>` command instead.
+- **Stop bounded on a failed continuation dispatch.** Engine-held continuation and finalization
+  custody is never released by `recover_claim`; report the original identities and diagnostics and
+  acquire no replacement action.
 - **Forward worker authority unchanged.** Pass each launch-bound transition to
   `transition_delivery`; accept an already-applied `kind: submitted` Builder result without
   forwarding it again; route claim-bound dispatch failures only to recovery.
@@ -72,6 +80,7 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 | --- | --- | --- |
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
 | builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
+| finalizer | Continuation acquisition that carries an issued `finalization` launch | Serialized `DeliveryFinalizationLaunch` |
 | repairer | Change-specific acquisition failure or health diagnostic with an engine-authored repair proposal | Serialized `DeliveryChangeView` |
 | memory-curator | Cycle 3, then every tenth completed acquisition cycle thereafter — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |

@@ -161,6 +161,14 @@ def _continuation_readiness() -> DeliveryReadiness:
     )
 
 
+# Non-acquired dispositions the HTTP boundary must forward unchanged, keyed by selected Change.
+CONTINUATION_DISPOSITIONS = {
+    "waiting-change": ("waiting", "host-capability-unavailable"),
+    "stale-change": ("stale", "readiness-changed"),
+    "human-change": ("human", "merge-approval-required"),
+}
+
+
 def _engine_action_result(change_id: str, *, kind: str) -> DeliveryEngineActionResult:
     action = _continuation_action(change_id)
     if kind == "blocked":
@@ -583,6 +591,15 @@ class _DeliveryApplicationFake:
         failure = self.failures.get("acquire_change_action")
         if failure is not None:
             raise failure
+        disposition = CONTINUATION_DISPOSITIONS.get(request.change_id)
+        if disposition is not None:
+            kind, reason = disposition
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind=kind,  # type: ignore[arg-type]
+                reason_code=reason,  # type: ignore[arg-type]
+                readiness=_continuation_readiness(),
+            )
         if request.change_id == "blocked-change":
             engine_result = _engine_action_result(request.change_id, kind="blocked")
             return DeliveryContinuationResult(
@@ -1033,6 +1050,37 @@ def test_continuation_acquisition_preserves_blocked_engine_evidence() -> None:
     assert payload["engine_result"]["action"]["operation_id"] == CONTINUATION_ID
     assert payload["failure"] == payload["engine_result"]["failure"]
     assert payload["failure"]["retry_condition"] == "Recover the retained engine action custody."
+
+
+@pytest.mark.parametrize(
+    ("change_id", "kind", "reason_code"),
+    [
+        ("waiting-change", "waiting", "host-capability-unavailable"),
+        ("stale-change", "stale", "readiness-changed"),
+        ("human-change", "human", "merge-approval-required"),
+    ],
+)
+def test_continuation_acquisition_forwards_non_acquired_envelopes_exactly(
+    change_id: str,
+    kind: str,
+    reason_code: str,
+) -> None:
+    client, application = _client()
+
+    response = client.post(f"/api/changes/{change_id}/continuation/acquire", json=_acquisition_body())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["change_id"] == change_id
+    assert payload["kind"] == kind
+    assert payload["reason_code"] == reason_code
+    assert payload["launch"] is None
+    assert payload["finalization"] is None
+    assert payload["engine_action"] is None
+    assert payload["engine_result"] is None
+    assert payload["failure"] is None
+    assert payload["readiness"]["basis"]["continuation_id"] == CONTINUATION_ID
+    assert [call[0] for call in application.calls] == ["continuation-acquire"]
 
 
 @pytest.mark.parametrize(
@@ -1731,9 +1779,7 @@ def test_publication_supersession_route_delegates_current_identity_exactly_once(
 
 
 def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
-    client, application = _client(
-        {"answer": DeliveryChangeDispositionConflictError("attention identity is stale")}
-    )
+    client, application = _client({"answer": DeliveryChangeDispositionConflictError("attention identity is stale")})
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",
@@ -1763,9 +1809,7 @@ def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
 
 
 def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
-    client, application = _client(
-        {"answer": DeliveryChangeDispositionBusyError("attention is already in progress")}
-    )
+    client, application = _client({"answer": DeliveryChangeDispositionBusyError("attention is already in progress")})
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",

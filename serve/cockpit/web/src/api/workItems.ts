@@ -59,6 +59,14 @@ export type DeliveryReadinessChecksState = 'not-run' | 'failed' | 'passed' | 'un
 export type DeliveryReadinessReasonCode =
   | 'ready'
   | 'active-custody'
+  | 'finalization-failed'
+  | 'claim-activation-failed'
+  | 'coordination-unavailable'
+  | 'execution-occupancy-unavailable'
+  | 'engine-action-pending'
+  | 'engine-action-blocked'
+  | 'target-sync-required'
+  | 'claim-custody-unreconciled'
   | 'runtime-unavailable'
   | 'dependency-wait'
   | 'request-action'
@@ -267,11 +275,15 @@ export interface DeliveryHealthResponse {
   diagnostics: DeliveryHealthDiagnostic[]
 }
 
+export type DeliveryUnavailableDiagnostic = 'runtime-unavailable' | 'coordination-unavailable'
+export type DeliveryCoordinationStatus = 'missing' | 'unreadable'
+
 export interface DeliveryUnavailableChangeResponse {
   kind: 'unavailable'
   change_id: string
   title: string | null
-  diagnostics: Array<'runtime-unavailable'>
+  diagnostics: DeliveryUnavailableDiagnostic[]
+  coordination_status: DeliveryCoordinationStatus | null
   readiness: DeliveryReadiness
 }
 
@@ -549,6 +561,9 @@ export interface WorkItemDetailView {
   active_claim: {
     attempt_id: string
     claim_id: string
+    owner_id: string
+    process_id: string
+    continuation: boolean
     started_at: string
     worker_role: DeliveryWorkerRole
     task_id: string | null
@@ -587,7 +602,8 @@ export interface WorkItemUnavailableDetailResponse {
   kind: 'unavailable'
   change_id: string
   title: string | null
-  diagnostics: Array<'runtime-unavailable'>
+  diagnostics: DeliveryUnavailableDiagnostic[]
+  coordination_status: DeliveryCoordinationStatus | null
   readiness: DeliveryReadiness
 }
 

@@ -42,8 +42,9 @@ Declare `capabilities` truthfully for this session only:
 - `planner` and `builder` only while their dispatch bindings are callable here;
 - `engine` only while `execute_change_action` is callable here;
 - `finalizer` only when this host can actually dispatch the `finalizer` agent and that dispatch can
-  obtain its own independent review. The shared `orchestrator` agent does not list `finalizer` among
-  its delegates, so omit that capability unless the running host actually exposes that dispatch.
+  obtain its own independent review. The shared `orchestrator` agent lists `finalizer` among its
+  delegates, so the nested route exists; a host that cannot actually perform that dispatch still omits
+  the capability.
 
 Never declare a capability to unlock an action. An undeclared capability returns `waiting` /
 `host-capability-unavailable` with no custody consumed; for the finalization case report the exact
@@ -60,7 +61,7 @@ strictly what it carries and nothing else:
 | Acquired field | The only permitted action |
 | --- | --- |
 | `launch` | Dispatch `launch.policy.worker_agent` with only the serialized `DeliveryLaunchPackage`, then apply Steps 2 and 3 unchanged |
-| `finalization` | Dispatch `finalizer` with the serialized `DeliveryFinalizationLaunch`; its `attempt` is the issued finalization identity and its `context` is the retained pre-acquisition context |
+| `finalization` | Dispatch `finalizer` with only the serialized `DeliveryFinalizationLaunch`; its `attempt` is the issued finalization identity and its `context` is the retained pre-acquisition context |
 | `engine_action` | Call `execute_change_action` once with exactly `change_id` and `engine_action.operation_id` |
 
 `execute_change_action` is the fixed executor for every engine action kind. Do not call the
@@ -70,8 +71,23 @@ perform it, and do not author effect, target, receipt, success, or recovery argu
 action, while `blocked` retains custody and forbids a replacement operation.
 
 A dispatched Builder that already called `submit_result` returns `kind: submitted`; record it and do
-not call `transition_delivery` again for that result. Worker transitions, malformed worker results,
-and dispatch failures follow Steps 2 and 3 unchanged.
+not call `transition_delivery` again for that result. A structurally valid, launch-bound
+`DeliveryTransition` is validated and forwarded through Step 3 unchanged.
+
+A dispatched `finalizer` returns one `w-change-finalization` mapping, not a worker transition.
+Require its `change_id` to equal the selected Change and any returned `operation_id` to equal
+`finalization.attempt.writer.attempt_id`. Record `finalized`, `already_finalized`, `proof_failed`, or
+`review_failed` as the outcome of that issued attempt and re-observe with `get_change`; never forward
+any of them to `transition_delivery` and never run a second attempt beside it.
+
+Step 2's `recover_claim` route does not apply to a continuation dispatch. Continuation and
+finalization custody is engine-held, and `recover_claim` rejects it because caller confirmation is
+insufficient for that custody. When a continuation dispatch fails before returning a structurally
+valid result, or returns an unknown, malformed, or identity-mismatched result, stop this continuation
+session bounded: report the launch's original `change_id`, `outcome_id`, `attempt_id`, and `claim_id`
+or the issued `attempt.writer.attempt_id`, together with the exact failure diagnostics. Do not call
+`recover_claim`, do not infer that the worker terminated, do not acquire a replacement action, and do
+not dispatch a substitute worker for that same custody.
 
 ### Continuation Dispositions
 

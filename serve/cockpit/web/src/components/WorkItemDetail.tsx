@@ -313,11 +313,21 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
       <dl className="mt-static-sm grid gap-static-xs text-sm">
         <div className="flex justify-between gap-static-sm"><dt>Role</dt><dd>{WORKER_ROLE_LABELS[claim.worker_role]}</dd></div>
         <div className="flex justify-between gap-static-sm"><dt>Started</dt><dd>{elapsedAge(claim.started_at)} ago</dd></div>
+        <div className="flex justify-between gap-static-sm"><dt>Routing</dt><dd>{claim.continuation ? 'Engine continuation' : 'Dispatched worker'}</dd></div>
+        <div className="flex justify-between gap-static-sm break-all"><dt>Recorded host</dt><dd>{claim.owner_id}</dd></div>
+        <div className="flex justify-between gap-static-sm break-all"><dt>Recorded process</dt><dd>{claim.process_id}</dd></div>
         {claim.task_id ? <div className="flex justify-between gap-static-sm"><dt>Task</dt><dd>{claim.task_id}</dd></div> : null}
       </dl>
+      <p className="mt-static-xs text-sm leading-relaxed">Host and process are the routing provenance recorded when custody was granted, not evidence that the worker is still running.</p>
+      {claim.continuation ? (
+        <p className="mt-static-md text-sm leading-relaxed" data-testid="claim-continuation-custody">
+          Delivery holds this custody as an engine continuation. Caller-confirmed recovery is not supported for it.
+        </p>
+      ) : (
       <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
         Recover confirmed-lost claim
       </PButton>
+      )}
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm lost claim' }}>
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
@@ -600,6 +610,9 @@ function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetail
           <ul className="mt-static-xs grid gap-1 text-sm">
             {detail.diagnostics.map((diagnostic) => <li key={diagnostic}><code>{diagnostic}</code></li>)}
           </ul>
+          {detail.coordination_status ? (
+            <p className="mt-static-xs text-sm">Coordination record: {detail.coordination_status}</p>
+          ) : null}
         </SectionCard>
         <ReadinessSection readiness={detail.readiness} />
       </div>

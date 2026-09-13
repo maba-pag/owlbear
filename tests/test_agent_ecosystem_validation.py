@@ -708,6 +708,39 @@ def test_continuation_dispositions_yield_refresh_and_retain_custody() -> None:
     assert "Never merge, clean up, remove a worktree, or transition anything implicitly" in entry
 
 
+def test_continuation_dispatch_failure_stops_bounded_without_claim_recovery() -> None:
+    """Engine-held continuation custody is never routed to the legacy confirmed-lost recovery."""
+    entry = _continuation_entry()
+
+    assert "Step 2's `recover_claim` route does not apply to a continuation dispatch" in entry
+    assert "`recover_claim` rejects it because caller confirmation is insufficient for that custody" in entry
+    assert "stop this continuation session bounded" in entry
+    assert "report the launch's original `change_id`, `outcome_id`, `attempt_id`, and `claim_id`" in entry
+    assert "Do not call `recover_claim`, do not infer that the worker terminated" in entry
+    assert "do not acquire a replacement action" in entry
+    assert "Worker transitions, malformed worker results, and dispatch failures follow Steps 2 and 3" not in entry
+    assert "A structurally valid, launch-bound `DeliveryTransition` is validated and forwarded through Step 3" in entry
+    assert "do not call `transition_delivery` again for that result" in entry
+
+
+def test_continuation_finalization_handoff_is_permitted_and_result_bound() -> None:
+    """The issued finalization route is an actually permitted delegate with a non-transition result."""
+    entry = _continuation_entry()
+    orchestrator = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
+    delegates = _frontmatter(_AGENTS_ROOT / "orchestrator.agent.md")
+
+    assert "finalizer" in delegates["agents"]
+    assert "| finalizer | Continuation acquisition that carries an issued `finalization` launch |" in orchestrator
+    assert "Hand off one issued finalization intact" in orchestrator
+    assert "lists `finalizer` among its delegates, so the nested route exists" in entry
+    assert "a host that cannot actually perform that dispatch still omits the capability" in entry
+    assert "Never declare a capability to unlock an action" in entry
+    assert "report the exact `/finalize-change <change_id>` command as the user's next step" in entry
+    assert "returns one `w-change-finalization` mapping, not a worker transition" in entry
+    assert "any returned `operation_id` to equal `finalization.attempt.writer.attempt_id`" in entry
+    assert "never forward any of them to `transition_delivery` and never run a second attempt beside it" in entry
+
+
 def test_continuation_design_handoff_stays_on_the_same_change() -> None:
     """A `resume-design` handoff reuses the same Change identity and carries no authority."""
     entry = _continuation_entry()
@@ -734,12 +767,33 @@ def test_finalizer_binds_one_issued_continuation_attempt() -> None:
     assert "`attempt_key` in Step 2a" in step
     assert "Never mint, derive, or substitute either value" in step
     assert "Retain the launch `context` as the pre-acquisition observation" in step
-    assert "still call `show_finalization_context` yourself" in step
-    assert "Independent review in Step 3 remains required for an issued attempt" in step
+    assert "Still call `show_finalization_context` yourself" in step
+    assert "independent review in Step 3, and evidence construction in Step 4 remain required" in step
     assert "the stable attempt key is exactly `attempt.writer.attempt_id`" in normalized
     assert "retains that attempt's custody" in normalized
     assert "never submit a result, forward a transition, or release custody beside it" in normalized
     assert "Bind an issued finalization attempt exactly" in agent
+
+
+def test_finalization_readiness_gate_precedes_and_excludes_issued_custody() -> None:
+    """An issued attempt is bound before the idle gate and is not failed by its own custody."""
+    content = (_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8")
+    resolve = content.index("## Step 0 - Resolve Current Authority")
+    bind = content.index("## Step 0a - Bind One Issued Finalization Attempt")
+    step_zero = " ".join(content[resolve:bind].split())
+    step_zero_a = " ".join(content[bind : content.index("## Step 1 - Establish Exact Managed Custody")].split())
+
+    assert "apply Step 0a before this step's readiness gate" in step_zero
+    assert "the idle-readiness gate below describes a user-invoked attempt only" in step_zero
+    assert "For a user-invoked attempt, proceed only when the phase is" in step_zero
+    assert "The context must be ready." not in step_zero
+
+    assert "Do not apply Step 0's idle-readiness gate to that fresh read" in step_zero_a
+    assert "reports `ready_for_finalization: false` with an `active-custody` diagnostic" in step_zero_a
+    assert "treat exactly that self-owned state as expected and never as a stale attempt" in step_zero_a
+    assert "Any other blocking phase or readiness diagnostic is still a bounded failure" in step_zero_a
+    assert "`readiness.basis` contract and frontier digests to equal" in step_zero_a
+    assert "reports `attempt.writer.attempt_id` as its attempt key" in step_zero_a
 
 
 @pytest.mark.asyncio

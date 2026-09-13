@@ -129,6 +129,35 @@ Still required before D02 closes: a claim-free host probe of actual `/continue-c
 capability truthfulness and flat finalizer handoff; HTTP/MCP coverage of the yielding paths; and
 assembled independent review of the cumulative T2 and P07 result. None of this is deferred to D08.
 
+### D02 P07 Review Repair: 2026-09-13
+
+Single-writer review-repair slice on `dev` from `668a82ab6`, no MCP, Delivery, live state, worktree
+or branch use. Repairs four review findings against the T2 and P07 slices. Unreviewed;
+**D02 remains not complete** and the user stopped before D03.
+
+| Finding | Repair |
+| --- | --- |
+| Finalization gate ordering | `w-change-finalization` Step 0 now defers to Step 0a for an issued launch and scopes its idle-readiness gate to user-invoked attempts. Step 0a treats the retained pre-acquisition context as the ready-phase evidence, verifies Change identity, branch, worktree, `attempt.exact_head` and the `readiness.basis` digests against the attempt, and states that the fresh read's self-owned `ready_for_finalization: false` / `active-custody` state is expected. Proof, observations, review and Step 4 evidence stay required; bounded failures use `attempt.writer.attempt_id`. |
+| Legacy claim recovery on continuation dispatch | `w-orchestration`'s continuation entry no longer routes to Steps 2-3 wholesale. A valid launch-bound transition and `kind: submitted` receipt keep their existing ownership; a failed, unknown, malformed or identity-mismatched continuation dispatch is a bounded stop retaining the original identities and diagnostics, with no `recover_claim`, no inferred termination and no replacement action. Core rejects continuation custody in `_recover_claim` with `DeliveryActionBusyError`. |
+| Unissued finalizer handoff | The nested route is now actually permitted: `orchestrator` lists `finalizer` in frontmatter `agents` and its `<agents>` table, and `finalizer.agent.md` already permits `build-reviewer`. The dispatch carries only the serialized `DeliveryFinalizationLaunch`; the returned `w-change-finalization` mapping is recorded and never forwarded to `transition_delivery`. The flat route is unchanged: a host that cannot dispatch omits the `finalizer` capability and reports `/finalize-change <change_id>`. |
+| Frontend DTO drift | `workItems.ts` now carries the complete core reason-code union (eight added engine states), `coordination-unavailable` plus `coordination_status` on both unavailable responses, and claim `owner_id`/`process_id`/`continuation`. `READINESS_REASON_LABELS` gained distinct truthful labels; claim provenance renders as recorded routing, explicitly not liveness, and engine continuation custody no longer offers caller-confirmed recovery. `continuation_action` and `finalization_attempt` are not exported over the Change detail HTTP surface, so no speculative client type was added. |
+
+Transport proof added for the previously missing yielding paths: `waiting`, `stale`, `human` and
+`busy` envelopes forwarded exactly through the registered MCP tool and the HTTP route, asserting no
+launch, engine action, engine result or failure is invented. Existing caller-unknown-argument and
+typed-busy cases are unchanged.
+
+Proof: **40** ecosystem-validation tests, **48** delivery-mcp `test_target_server.py` tests, **54**
+Cockpit HTTP `test_cockpit_work_items.py` tests, **314** frontend unit tests, `tsc --noEmit`,
+`npm run build`, and **22** `test:e2e:work` cases on the disposable temp-workspace stack at port
+4175. Scoped Ruff check/format and scoped ESLint are clean on the edited files. No full-suite rerun,
+no MegaLinter, no whole-file reformat. Static prose tests remain configuration proof, not host
+dispatch proof.
+
+Still required before D02 closes: the claim-free host probe of actual `/continue-change` dispatch,
+capability truthfulness and both finalizer routes; and assembled independent review of the cumulative
+T2, P07 and review-repair result. None of this is deferred to D08, and no D08 host waiver exists.
+
 ### Resume Checkpoint: 2026-09-13
 
 The user resumed on 2026-09-13. Continue the authorized sequential delegation from this checkpoint.

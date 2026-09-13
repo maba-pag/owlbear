@@ -13,6 +13,10 @@ call only the finalization operation.
 
 ## Step 0 - Resolve Current Authority
 
+When the entry supplies a serialized `DeliveryFinalizationLaunch`, apply Step 0a before this step's
+readiness gate. An issued attempt already holds durable finalizer custody, so the idle-readiness gate
+below describes a user-invoked attempt only.
+
 Require one `change_id` from the prompt and call `show_finalization_context` before inspecting or
 running proof. Require the returned context to contain the supplied Change identity and retain its
 exact values for the attempt:
@@ -21,8 +25,9 @@ exact values for the attempt:
 - current `change_head` and `reviewed_change_head`;
 - `publication_phase`.
 
-Proceed only when the phase is `ready-for-finalization` or `finalization-invalidated`. The context
-must be ready. Normally its Change head equals its reviewed head. The engine may also admit a clean
+For a user-invoked attempt, proceed only when the phase is `ready-for-finalization` or
+`finalization-invalidated` and the context reports `ready_for_finalization`. Normally its Change head
+equals its reviewed head. The engine may also admit a clean
 local descendant for finalization; the Change head is the exact head that observations and review
 must bind. After an engine-validated external head adoption, the Change head may differ and remains
 the exact head that observations and review must bind. Adoption is provenance only; Builder
@@ -50,14 +55,26 @@ Bind its `attempt` as the identity of this attempt:
 - `attempt.contract_digest` and `attempt.frontier_digest` must still match current authority; the
   engine rejects a mismatched attempt as a stale action selection rather than finalizing it.
 
-Retain the launch `context` as the pre-acquisition observation and still call
-`show_finalization_context` yourself. Require the fresh context to preserve the launch context's
-Change identity, branch, worktree, and `attempt.exact_head`. Any difference is a bounded failure, not
-a reason to re-bind the attempt to a newer head. Independent review in Step 3 remains required for an
-issued attempt exactly as for a user-invoked one.
+Retain the launch `context` as the pre-acquisition observation. It is the ready-phase evidence for
+this attempt, because the engine required a ready context before issuing the attempt and acquiring
+custody. Still call `show_finalization_context` yourself and require the fresh context to preserve the
+launch context's Change identity, branch, and worktree, its `change_head` to equal
+`attempt.exact_head`, and its `readiness.basis` contract and frontier digests to equal
+`attempt.contract_digest` and `attempt.frontier_digest`. Any difference in those exact values is a
+bounded failure, not a reason to re-bind the attempt to a newer head.
+
+Do not apply Step 0's idle-readiness gate to that fresh read. Under acquired custody the fresh context
+reports `ready_for_finalization: false` with an `active-custody` diagnostic because this attempt holds
+the custody; treat exactly that self-owned state as expected and never as a stale attempt. Any other
+blocking phase or readiness diagnostic is still a bounded failure.
+
+An issued attempt bypasses nothing else. Custody proof in Step 1, exact-head observations in Step 2,
+independent review in Step 3, and evidence construction in Step 4 remain required exactly as for a
+user-invoked attempt, and a bounded failure reports `attempt.writer.attempt_id` as its attempt key -
+never a minted or derived one.
 
 Without an issued launch, the entry is a user-invoked attempt: keep using the supplied Change ID, its
-fresh context, and this workflow's own operation ID.
+fresh context, Step 0's readiness gate, and this workflow's own operation ID.
 
 ## Step 1 - Establish Exact Managed Custody
 
