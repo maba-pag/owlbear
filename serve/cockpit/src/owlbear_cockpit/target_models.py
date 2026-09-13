@@ -25,7 +25,6 @@ from owlbear_delivery.publication_provider import (
     PublicationCheckKind,
     classify_publication_check,
 )
-from owlbear_delivery.portfolio_application import DeliveryUnavailableChangeView
 from owlbear_delivery.work_items import ChangeGroupView, DeliveryReadiness, WorkItemDetailView
 
 if TYPE_CHECKING:
@@ -41,6 +40,7 @@ if TYPE_CHECKING:
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
         DeliveryCheckpointReconciliationResult,
+        DeliveryUnavailableChangeView,
     )
 
 

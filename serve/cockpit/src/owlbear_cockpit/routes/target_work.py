@@ -29,6 +29,7 @@ from owlbear_cockpit.target_models import (
     ClearBlockBody,
     ConfirmLostClaimBody,
     DeliveryHealthResponse,
+    DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
     NeedsCounts,
@@ -43,13 +44,12 @@ from owlbear_cockpit.target_models import (
     TargetSyncBody,
     TargetSyncConflictBody,
     TargetSyncResponse,
-    WorkItemDetailResponse,
     WorkItemAvailableDetailResponse,
-    WorkItemUnavailableDetailResponse,
-    DeliveryUnavailableChangeResponse,
+    WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
     WorkItemPublicationReconciliationResponse,
+    WorkItemUnavailableDetailResponse,
 )
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
@@ -98,7 +98,7 @@ class TargetCockpitService:
             groups=view.groups,
             unavailable_changes=tuple(
                 DeliveryUnavailableChangeResponse.from_view(item)
-                for item in getattr(view, "unavailable_changes", ())
+                for item in view.unavailable_changes
             ),
             totals=_portfolio_totals(view.groups),
             operating=PortfolioOperatingResponse.from_view(view.operating),
