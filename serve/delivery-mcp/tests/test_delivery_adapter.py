@@ -77,6 +77,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
+from owlbear_delivery.finalization_reports import FinalizationFailureCode
 from owlbear_delivery.portfolio_application import (
     DeliveryActionSelection,
     DeliveryAnswer,
@@ -101,6 +102,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
+from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
     DELIVERY_OPERATION_NAMES,
@@ -973,7 +975,14 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
+@pytest.mark.parametrize(
+    "operation_name",
+    tuple(
+        name
+        for name in DELIVERY_OPERATION_NAMES
+        if name not in {"get_change", "show_finalization_context", "report_finalization_failure"}
+    ),
+)
 async def test_each_delivery_operation_validates_delegates_once_and_serializes(  # noqa: C901, PLR0912, PLR0915
     operation_name: str,
 ) -> None:
@@ -1303,6 +1312,30 @@ async def test_publication_baseline_recovery_requires_literal_confirmation_befor
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
     assert application.calls == []
+
+
+def test_report_finalization_failure_request_reuses_core_structural_validation() -> None:
+    request = ReportFinalizationFailureParams(
+        change_id=CHANGE,
+        expected_contract_digest=DIGEST,
+        expected_frontier_digest=DIGEST,
+        expected_change_head=COMMIT,
+        expected_reviewed_head=COMMIT,
+        expected_diagnostic_sequence=0,
+        attempt_key="attempt-1",
+        category="maintained-check",
+        code=FinalizationFailureCode.MAINTAINED_CHECK_FAILED,
+        checks_state="failed",
+        check_id="check-1",
+        exit_status=1,
+    )
+
+    assert request.code is FinalizationFailureCode.MAINTAINED_CHECK_FAILED
+    with pytest.raises(ValueError, match="dirty paths belong only to custody diagnostics"):
+        ReportFinalizationFailureParams(
+            **request.model_dump(exclude={"paths"}),
+            paths=("product.txt",),
+        )
 
 
 def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact() -> None:

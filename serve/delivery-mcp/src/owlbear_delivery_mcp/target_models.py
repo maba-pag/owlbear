@@ -48,6 +48,9 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
+from owlbear_delivery.finalization_reports import (
+    ReportFinalizationFailure,
+)
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
     DeliveryActionSelection,
@@ -159,6 +162,10 @@ class ChangeParams(_TargetProtocolModel):
     """Validate one exact Delivery change identity."""
 
     change_id: ChangeId
+
+
+class ReportFinalizationFailureParams(ReportFinalizationFailure):
+    """Validate one bounded finalization diagnostic through MCP."""
 
 
 class AnswerParams(ChangeParams):
@@ -1289,6 +1296,7 @@ __all__ = [
     "RepairStrandedFrontierParams",
     "RepairTargetSyncPublicationParams",
     "RepairTargetSyncPublicationRequest",
+    "ReportFinalizationFailureParams",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",

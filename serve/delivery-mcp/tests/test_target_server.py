@@ -80,6 +80,7 @@ DELIVERY_TOOLS = {
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "report_finalization_failure",
     "publish_delivery_plan",
     "submit_result",
     "finalize_change",
