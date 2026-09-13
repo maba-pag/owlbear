@@ -70,8 +70,8 @@ responsible for its own checks. Do not disable checks or edit their policy to ma
 
 Resolve commands from current manifests and nearby tests, not assumptions about installed binaries.
 Use `uv run --locked` for Python and locked npm dependencies for the frontend. Start with one pytest
-worker in constrained runners. Install only needed locked tooling; no full-suite or heavy-tool gate
-before making the first edit. Do not run workspace initialization to set up a cloud test environment.
+worker in constrained runners. Install only needed locked tooling. Do not run workspace initialization
+to set up a cloud test environment.
 
 | Changed behavior | Available proof route | What it cannot prove |
 | --- | --- | --- |
@@ -83,10 +83,32 @@ before making the first edit. Do not run workspace initialization to set up a cl
 | Agent/prompt contracts | [Ecosystem tests](../../tests/test_agent_ecosystem_validation.py) plus actual schema/adapter tests. | Real host dispatch and independently selected model execution. |
 | Static validity | Explicit owned paths with `uv run --locked ruff check`, `ruff format --check`, frontend build/direct linters, and document link checks. | All checks included in external CI/MegaLinter. |
 
-Classify proof in the package plan as **cloud-required**, **external CI**, or **host-only**.
-Run meaningful focused behavior tests immediately after the first substantive edit, before widening
-scope. Scale later proof to the changed contracts and consumers. Real test/build/lint failures need
-repair or an explicit unresolved defect; do not add skips, weaken assertions or relabel them as missing tools.
+### Execution Budget
+
+Classify proof as **cloud-required**, **external CI**, or **host-only** and minimize execution cost
+without weakening its assertions. These rules apply to every phase, including D08 integration:
+
+- **Never run the whole OwlBear test suite in an agent session**, directly or through an aggregate.
+   Select explicit tests; no bare repository-wide pytest or full-workspace test command.
+- Inner loop: run the smallest test/node/filter covering the changed behavior immediately after
+   the first substantive edit. Add neighboring tests or direct-consumer cases only for a concrete
+   regression risk. A whole file or module is not the default after each edit.
+- Closeout: if broader regression is justified, run it once near the end, limited to affected
+   modules and necessary consumer checks. A module-wide run is a ceiling, not a mandatory gate.
+   After a repair, rerun failed and impacted checks; repeat broader proof only if that repair invalidates it.
+- Apply the same discipline to builds, typechecks, lint, browser runs and dependency setup. Prefer
+   scoped/incremental commands; reserve an indivisible package build for changes that need it and avoid
+   repeating successful expensive steps on unchanged inputs. Do not reinstall unchanged dependencies.
+- Before a costly command, check its scope and likely duration against the remaining session budget.
+   Use prior measured duration when available. Split necessary proof into bounded selections or record
+   it for external verification rather than launching a command unlikely to finish with handoff time left.
+- Reuse recorded proof only when relevant source, dependencies, fixtures and configuration remain valid;
+   label it as prior evidence, not a fresh run. Never rerun suites merely for reassurance or a new session.
+
+"Cumulative package proof" means coverage of the package's affected contracts across phases, not
+the entire repository. Track which evidence remains valid and run the missing affected checks.
+External CI retains its required broad gates. Real test/build/lint failures need repair or an explicit
+unresolved defect; do not add skips, weaken assertions or relabel them as resource limitations.
 
 Missing MCP/editor/MegaLinter is expected. If another needed capability is unavailable, perform one
 bounded diagnosis, record the affected check, reason, available proof and follow-up environment/owner,
@@ -106,7 +128,8 @@ The plan must contain:
 1. **Contract:** concrete result, relevant programme requirements, invariants, interfaces/error cases,
    existing owners to reuse, explicit exclusions and unresolved decisions.
 2. **Phases:** exact IDs, dependency order, editable paths, required exports/consumer companions,
-   positive/negative scenarios and runnable proof commands. Keep tests with the behavior they prove.
+   positive/negative scenarios and runnable proof commands. Separate narrow inner-loop checks from
+   justified closeout checks, with expected runtime where known. Keep tests with the behavior they prove.
 3. **Progress:** for each phase, implementation revision, actual proof, review reference and remaining
    work. Keep specification approval separate from worker-written progress.
 4. **Verification gaps:** check/claim, reason unrun, evidence available, responsible environment and
@@ -180,7 +203,8 @@ stop for a genuinely new product/safety decision. Apply Common Rules' focused ve
 
 Publish the result to the existing package PR, update its plan's progress/gaps, and request review
 of this phase. Even when another phase is ready, stop until explicitly instructed to start it.
-On the final implementation phase, run cumulative package proof and request cumulative review.
+On the final implementation phase, cover missing affected contracts within the Execution Budget
+and request cumulative review; do not interpret cumulative proof as a whole-project suite run.
 
 ### Review
 
