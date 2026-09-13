@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +45,7 @@ from owlbear_delivery import (
     DeliveryStateConflictError,
     DeliveryStatePublicationError,
     DeliveryStatePublisher,
+    DeliveryStateQuarantineError,
     DeliveryStateResponseUnknownError,
     DeliveryStateSnapshot,
     DeliveryTaskDefinition,
@@ -75,6 +77,7 @@ from owlbear_delivery.delivery_application_loader import (
     _require_local_snapshot_branch,
     load_delivery_application,
 )
+from owlbear_delivery.delivery_state import parse_delivery_state_snapshot
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.target_contract import DeliverySourceBinding
@@ -254,6 +257,65 @@ def _commit_descendant(worktree: Path, filename: str, message: str) -> str:
     _git(worktree, "add", filename)
     _git(worktree, "commit", "-m", message)
     return _git(worktree, "rev-parse", "HEAD")
+
+
+def _commit_corrupt_snapshot(repository: Path, base: str, change_id: str, raw: bytes) -> str:
+    index_path = repository.parent / f"{change_id}-state-index"
+    environment = {**os.environ, "GIT_INDEX_FILE": str(index_path)}
+    try:
+        subprocess.run(  # noqa: S603
+            (_GIT, "-C", str(repository), "read-tree", base), check=True, env=environment
+        )
+        blob = (
+            subprocess.run(  # noqa: S603
+                (_GIT, "-C", str(repository), "hash-object", "-w", "--stdin"),
+                check=True,
+                capture_output=True,
+                input=raw,
+                env=environment,
+            )
+            .stdout.decode()
+            .strip()
+        )
+        subprocess.run(  # noqa: S603
+            (
+                _GIT,
+                "-C",
+                str(repository),
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"100644,{blob},.owlbear/delivery/state/{change_id}/snapshot.json",
+            ),
+            check=True,
+            env=environment,
+        )
+        tree = subprocess.run(  # noqa: S603
+            (_GIT, "-C", str(repository), "write-tree"),
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        ).stdout.strip()
+        return subprocess.run(  # noqa: S603
+            (
+                _GIT,
+                "-C",
+                str(repository),
+                "commit-tree",
+                tree,
+                "-p",
+                base,
+                "-m",
+                f"corrupt Delivery state ({change_id})",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        ).stdout.strip()
+    finally:
+        index_path.unlink(missing_ok=True)
 
 
 def test_loader_defers_active_remote_descendant_drift(tmp_path: Path) -> None:
@@ -619,6 +681,138 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
+
+
+def test_state_publisher_repairs_quarantined_snapshot_with_exact_fences(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-repair")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-repair", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    first = _publish(publisher, runtime, manager, "state-repair", "a" * 64, "state-repair-one")
+    snapshot_path = ".owlbear/delivery/state/state-repair/snapshot.json"
+    original = publisher._git_blob(first.published_head, snapshot_path)  # noqa: SLF001
+    corrupted_payload = json.loads(original)
+    corrupted_payload["snapshot_id"] = "0" * 64
+    corrupted = (json.dumps(corrupted_payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    corrupted_head = _commit_corrupt_snapshot(repository, first.published_head, "state-repair", corrupted)
+    _git(repository, "push", "origin", f"{corrupted_head}:refs/heads/owlbear/delivery-state", "--force")
+    corrupted_digest = hashlib.sha256(corrupted).hexdigest()
+
+    inventory = publisher.read_snapshot_inventory()
+    diagnostic = next(item for item in inventory.diagnostics if item.change_id == "state-repair")
+    assert inventory.remote_head == corrupted_head
+    assert diagnostic.code == "snapshot-identity-invalid"
+    assert diagnostic.raw_digest == corrupted_digest
+    with pytest.raises(DeliveryStateQuarantineError, match="quarantined") as conflict:
+        _publish(publisher, runtime, manager, "state-repair", "b" * 64, "state-repair-two")
+    assert conflict.value.retry_safe is False
+    assert conflict.value.diagnostic_code == "snapshot-identity-invalid"
+
+    with pytest.raises(DeliveryStateConflictError, match="diagnostic changed"):
+        publisher.repair_quarantined_snapshot(
+            change_id="state-repair",
+            package_id="b" * 64,
+            coordination=manager.show("state-repair"),
+            runtime=runtime,
+            admission=_admission(runtime, manager, "state-repair"),
+            operation_id="state-repair-two",
+            captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+            expected_remote_head=corrupted_head,
+            expected_snapshot_digest=corrupted_digest,
+            expected_diagnostic_code="snapshot-invalid",
+        )
+
+    repaired = publisher.repair_quarantined_snapshot(
+        change_id="state-repair",
+        package_id="b" * 64,
+        coordination=manager.show("state-repair"),
+        runtime=runtime,
+        admission=_admission(runtime, manager, "state-repair"),
+        operation_id="state-repair-two",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+        expected_remote_head=corrupted_head,
+        expected_snapshot_digest=corrupted_digest,
+        expected_diagnostic_code="snapshot-identity-invalid",
+    )
+
+    snapshot = publisher.read_snapshot("state-repair")
+    assert snapshot is not None
+    assert snapshot.repaired_predecessor_digest == corrupted_digest
+    assert snapshot.base_head == corrupted_head
+    assert repaired.snapshot_id == snapshot.snapshot_id
+    assert (
+        publisher.repair_quarantined_snapshot(
+            change_id="state-repair",
+            package_id="b" * 64,
+            coordination=manager.show("state-repair"),
+            runtime=runtime,
+            admission=_admission(runtime, manager, "state-repair"),
+            operation_id="state-repair-two",
+            captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+            expected_remote_head=corrupted_head,
+            expected_snapshot_digest=corrupted_digest,
+            expected_diagnostic_code="snapshot-identity-invalid",
+        )
+        == repaired
+    )
+    assert publisher._git_blob(corrupted_head, snapshot_path) == corrupted  # noqa: SLF001
+
+
+def test_state_snapshot_migrates_schema_1_and_retains_predecessor_identity(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("legacy-state")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "legacy-state", contract)
+    current = _snapshot(runtime, manager, "legacy-state").model_dump(mode="json")
+    current.pop("migrated_from_snapshot_id")
+    current.pop("repaired_predecessor_digest")
+    current["schema_version"] = 1
+    current["frontier"]["schema_version"] = 17
+    for binding in current["frontier"]["bindings"]:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
+    current["snapshot_id"] = ""
+    legacy_snapshot_id = hashlib.sha256(_canonical_payload(current)).hexdigest()
+    current["snapshot_id"] = legacy_snapshot_id
+    raw = _canonical_payload(current)
+
+    migrated = parse_delivery_state_snapshot(raw)
+
+    assert migrated.schema_version == 2
+    assert migrated.migrated_from_snapshot_id == legacy_snapshot_id
+    assert migrated.frontier.schema_version == 18
+    assert migrated.frontier.bindings[0].retry_count == 0
+
+
+def test_state_publisher_rewrites_migrated_snapshot_to_current_schema(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("legacy-publish")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "legacy-publish", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    first = _publish(publisher, runtime, manager, "legacy-publish", "a" * 64, "legacy-publish-one")
+    snapshot_path = ".owlbear/delivery/state/legacy-publish/snapshot.json"
+    legacy_payload = json.loads(publisher._git_blob(first.published_head, snapshot_path))  # noqa: SLF001
+    legacy_payload.pop("migrated_from_snapshot_id")
+    legacy_payload.pop("repaired_predecessor_digest")
+    legacy_payload["schema_version"] = 1
+    legacy_payload["frontier"]["schema_version"] = 17
+    for binding in legacy_payload["frontier"]["bindings"]:
+        binding.pop("retry_count")
+        binding.pop("retry_fingerprint")
+    legacy_payload["snapshot_id"] = ""
+    legacy_payload["snapshot_id"] = hashlib.sha256(_canonical_payload(legacy_payload)).hexdigest()
+    legacy_raw = _canonical_payload(legacy_payload)
+    legacy_head = _commit_corrupt_snapshot(repository, first.published_head, "legacy-publish", legacy_raw)
+    _git(repository, "push", "origin", f"{legacy_head}:refs/heads/owlbear/delivery-state", "--force")
+
+    rewritten = _publish(publisher, runtime, manager, "legacy-publish", "b" * 64, "legacy-publish-two")
+
+    assert rewritten.published_head != legacy_head
+    current = publisher.read_snapshot("legacy-publish")
+    assert current is not None
+    assert current.schema_version == 2
+    assert current.migrated_from_snapshot_id is None
+    assert current.parent_snapshot_id is not None
+    assert publisher._git_blob(legacy_head, snapshot_path) == legacy_raw  # noqa: SLF001
 
 
 def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -> None:

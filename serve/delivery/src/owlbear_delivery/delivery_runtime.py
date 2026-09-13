@@ -815,11 +815,15 @@ class DeliveryRequestResolution(_DeliveryModel):
 
     selected_option_id: str | None = None
     response_text: str | None = None
+    provenance: Literal["user-confirmed"] | None = None
 
     @model_validator(mode="after")
     def _require_answer(self) -> DeliveryRequestResolution:
         if self.selected_option_id is None and (self.response_text is None or not self.response_text.strip()):
             message = "request resolution requires a selected option or response text"
+            raise ValueError(message)
+        if self.response_text is not None and self.response_text.strip() and self.provenance != "user-confirmed":
+            message = "free-text request resolution requires user-confirmed provenance"
             raise ValueError(message)
         return self
 
@@ -1054,7 +1058,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[17] = 17
+    schema_version: Literal[18] = 18
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1217,6 +1221,7 @@ class ActivateDeliveryClaim(_DeliveryModel):
 
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim: DeliveryActiveClaim
+    expected_frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @property
     def claim_id(self) -> str:
@@ -1367,6 +1372,12 @@ class DeliveryRuntimeConflictError(RuntimeError):
     code = "ERR_DELIVERY_RUNTIME_CONFLICT"
 
 
+class DeliveryActionSelectionConflictError(DeliveryRuntimeConflictError):
+    """A selected action needs fresh authority before another acquisition attempt."""
+
+    code = "ERR_DELIVERY_ACTION_SELECTION_STALE"
+
+
 class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
     """An exact Change attention identity is stale or no longer active."""
 
@@ -1397,7 +1408,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_FRONTIER_SCHEMA_VERSION = 17
+_LEGACY_FRONTIER_SCHEMA_VERSION = 17
+_FRONTIER_SCHEMA_VERSION = 18
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1553,6 +1565,35 @@ class DeliveryRuntime:
         RuntimeTransaction(
             self._target_root,
             f"delivery-state-ack-{frontier_digest}",
+            (participant,),
+        ).commit()
+
+    def reanchor_pending_publication(self, base_frontier_digest: str) -> None:
+        """Re-anchor a pending publication after a validated authority revision."""
+        if not self._pending_publication_path.is_file():
+            return
+        current_content = self._pending_publication_path.read_bytes()
+        current = DeliveryPendingStatePublication.model_validate_json(current_content, strict=False)
+        frontier_content = self.frontier_bytes()
+        frontier_digest = hashlib.sha256(frontier_content).hexdigest()
+        if current.status != "pending" or current.frontier_digest == frontier_digest:
+            return
+        replacement = _model_content(
+            DeliveryPendingStatePublication.pending(
+                base_frontier_digest,
+                frontier_digest,
+                current.transition_request_digest,
+            )
+        )
+        participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._pending_publication_path.relative_to(self._target_root),
+            current_content,
+            replacement,
+        )
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-state-reanchor-{frontier_digest}",
             (participant,),
         ).commit()
 
@@ -1937,17 +1978,20 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         _require_change_mutable(frontier, "record_design_package_snapshot")
         current = frontier.pending_checkpoint
+        if current is not None and current.head == receipt.snapshot_head:
+            return self.checkpoint_publication_state()
         if (
             expected.change_id != self._contract.change_id
             or expected.pending_checkpoint is None
             or current != expected.pending_checkpoint
             or frontier.published_head != expected.published_head
             or receipt.change_id != self._contract.change_id
-            or receipt.previous_head != expected.pending_checkpoint.head
+            or (
+                expected.pending_checkpoint.head is not None
+                and receipt.previous_head != expected.pending_checkpoint.head
+            )
         ):
             _conflict("Design package snapshot no longer matches the checkpoint queue")
-        if current.head == receipt.snapshot_head:
-            return self.checkpoint_publication_state()
         updated = frontier.model_copy(
             update={"pending_checkpoint": _checkpoint_with_head(current, receipt.snapshot_head)}
         )
@@ -2994,6 +3038,12 @@ class DeliveryRuntime:
     def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
+        if (
+            request.expected_frontier_digest is not None
+            and hashlib.sha256(previous).hexdigest() != request.expected_frontier_digest
+        ):
+            message = "selected action frontier changed before claim activation"
+            raise DeliveryActionSelectionConflictError(message)
         _require_change_mutable(frontier, "activate_claim")
         binding = _find_binding(frontier, request.outcome_id)
         if frontier.integration_repair_claim is not None:
@@ -3321,11 +3371,7 @@ class DeliveryRuntime:
             claim.worker_role,
             request.failure_code,
         )
-        retry_count = (
-            binding.retry_count + 1
-            if binding.retry_fingerprint == retry_fingerprint
-            else 1
-        )
+        retry_count = binding.retry_count + 1 if binding.retry_fingerprint == retry_fingerprint else 1
         retry_block = None
         if retry_count >= _MAX_WORKER_RETRIES:
             retry_block = DeliveryBlock(
@@ -3688,14 +3734,51 @@ def is_acceptance_waiting_observation(
 def parse_delivery_frontier(
     content: bytes,
 ) -> tuple[DeliveryFrontier, bytes]:
-    """Parse one canonical current-schema frontier."""
+    """Parse one frontier and canonicalize the immediately prior persisted schema."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
-    if payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION:
+    schema_version = payload.get("schema_version")
+    if schema_version == _LEGACY_FRONTIER_SCHEMA_VERSION:
+        payload = {**payload, "schema_version": _FRONTIER_SCHEMA_VERSION}
+    elif schema_version != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
-    frontier = DeliveryFrontier.model_validate_json(content, strict=False)
+    frontier = DeliveryFrontier.model_validate(payload, strict=False)
     return frontier, _model_content(frontier)
+
+
+def repair_missing_request_provenance(  # noqa: C901 - narrow structural migration validates each legacy layer.
+    content: bytes,
+    request_id: str,
+) -> tuple[DeliveryFrontier, bytes]:
+    """Repair only one legacy free-text request lacking explicit confirmation."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, list):
+        _reference("Delivery frontier bindings are invalid")
+    missing: list[tuple[dict[str, object], dict[str, object]]] = []
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            _reference("Delivery frontier binding is invalid")
+        requests = binding.get("requests")
+        if not isinstance(requests, list):
+            _reference("Delivery frontier requests are invalid")
+        for request in requests:
+            if not isinstance(request, dict):
+                _reference("Delivery frontier request is invalid")
+            resolution = request.get("resolution")
+            if not isinstance(resolution, dict):
+                continue
+            response_text = resolution.get("response_text")
+            if isinstance(response_text, str) and response_text.strip() and resolution.get("provenance") is None:
+                missing.append((request, resolution))
+    if len(missing) != 1 or missing[0][0].get("request_id") != request_id:
+        _reference("frontier contains an unsupported request-provenance defect")
+    missing[0][1]["provenance"] = "user-confirmed"
+    repaired_payload = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return parse_delivery_frontier(repaired_payload)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -4029,4 +4112,6 @@ __all__ = [
     "invalidate_checkpoint_publication",
     "is_acceptance_waiting_observation",
     "is_change_terminal",
+    "parse_delivery_frontier",
+    "repair_missing_request_provenance",
 ]

@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from owlbear_delivery.acceptance import CompletionReceiptBundle
 from owlbear_delivery.delivery_admission import DeliveryAdmissionReceipt
-from owlbear_delivery.delivery_runtime import DeliveryFrontier
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, parse_delivery_frontier
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.target_contract import DeliveryContract
@@ -29,6 +29,8 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/+:-]*$")
 _STATE_ROOT = ".owlbear/delivery/state"
 _REMOTE_REF_MISSING = 2
+_LEGACY_SNAPSHOT_SCHEMA_VERSION = 1
+_SNAPSHOT_SCHEMA_VERSION = 2
 
 
 class DeliveryStatePublicationError(RuntimeError):
@@ -47,6 +49,16 @@ class DeliveryStateConflictError(DeliveryStatePublicationError):
     code = "ERR_DELIVERY_STATE_CONFLICT"
 
 
+class DeliveryStateQuarantineError(DeliveryStateConflictError):
+    """A remote snapshot is quarantined and requires the repair operation."""
+
+    code = "ERR_DELIVERY_STATE_QUARANTINED"
+
+    def __init__(self, detail: str, *, diagnostic_code: str) -> None:
+        super().__init__(detail, retry_safe=False)
+        self.diagnostic_code = diagnostic_code
+
+
 class DeliveryStateResponseUnknownError(DeliveryStatePublicationError):
     """A state push completed without verifiable remote confirmation."""
 
@@ -60,7 +72,7 @@ class _StateModel(BaseModel):
 class DeliveryStateSnapshot(_StateModel):
     """Sanitized resumable state for one Change at one semantic checkpoint."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     snapshot_id: Digest = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
@@ -78,6 +90,8 @@ class DeliveryStateSnapshot(_StateModel):
     completion: CompletionReceiptBundle | None = None
     sequence: int = Field(gt=0)
     parent_snapshot_id: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    migrated_from_snapshot_id: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    repaired_predecessor_digest: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     base_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     captured_at: datetime
 
@@ -95,6 +109,8 @@ class DeliveryStateSnapshot(_StateModel):
         parent_snapshot_id: str | None,
         base_head: str | None,
         captured_at: datetime,
+        migrated_from_snapshot_id: str | None = None,
+        repaired_predecessor_digest: str | None = None,
     ) -> DeliveryStateSnapshot:
         """Create one sanitized snapshot from current runtime and workspace authority."""
         frontier = _portable_frontier(runtime)
@@ -123,6 +139,8 @@ class DeliveryStateSnapshot(_StateModel):
             "completion": completion,
             "sequence": sequence,
             "parent_snapshot_id": parent_snapshot_id,
+            "migrated_from_snapshot_id": migrated_from_snapshot_id,
+            "repaired_predecessor_digest": repaired_predecessor_digest,
             "base_head": base_head,
             "captured_at": captured_at,
         }
@@ -151,6 +169,7 @@ class DeliveryStateSnapshotDiagnostic(_StateModel):
     path: str = Field(min_length=1)
     code: str = Field(min_length=1)
     detail: str = Field(min_length=1, max_length=240)
+    raw_digest: Digest | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class DeliveryStateSnapshotInventory(_StateModel):
@@ -290,9 +309,16 @@ class DeliveryStatePublisher:
         """Publish or replay one exact sparse Change state snapshot."""
         _validate_change_id(change_id)
         remote_head = self._refresh_remote_head()
-        current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
         if expected_remote_head != remote_head and expected_remote_head is not None:
             _raise_state_conflict("Delivery-state branch changed before snapshot publication")
+        try:
+            current = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
+        except (TypeError, ValueError, ValidationError) as exc:
+            message = f"remote Delivery snapshot is quarantined; use repair-only publication: {exc}"
+            raise DeliveryStateQuarantineError(
+                message,
+                diagnostic_code=_snapshot_validation_code(exc),
+            ) from exc
         _require_change_branch_reachability(self._repository, coordination, runtime)
         if current is not None and _same_snapshot_inputs(current, package_id, coordination, runtime, admission):
             return DeliveryStatePublicationReceipt.create(
@@ -337,7 +363,7 @@ class DeliveryStatePublisher:
         for path in paths:
             if not path.endswith("/snapshot.json"):
                 continue
-            snapshots.append(DeliveryStateSnapshot.model_validate_json(self._git_blob(remote_head, path), strict=False))
+            snapshots.append(parse_delivery_state_snapshot(self._git_blob(remote_head, path)))
         return tuple(sorted(snapshots, key=lambda item: item.change_id))
 
     def read_snapshot_inventory(self) -> DeliveryStateSnapshotInventory:
@@ -363,7 +389,7 @@ class DeliveryStatePublisher:
                 continue
             try:
                 raw = self._git_blob(remote_head, path)
-                snapshot = DeliveryStateSnapshot.model_validate_json(raw, strict=False)
+                snapshot = parse_delivery_state_snapshot(raw)
             except (OSError, RuntimeError, subprocess.SubprocessError):
                 diagnostics.append(
                     DeliveryStateSnapshotDiagnostic(
@@ -381,6 +407,7 @@ class DeliveryStatePublisher:
                         path=path,
                         code=_snapshot_validation_code(exc),
                         detail=_snapshot_validation_detail(exc),
+                        raw_digest=hashlib.sha256(raw).hexdigest(),
                     )
                 )
                 continue
@@ -391,6 +418,7 @@ class DeliveryStatePublisher:
                         path=path,
                         code="snapshot-path-identity-mismatch",
                         detail="Remote Delivery snapshot Change identity does not match its state path.",
+                        raw_digest=hashlib.sha256(raw).hexdigest(),
                     )
                 )
                 continue
@@ -406,6 +434,88 @@ class DeliveryStatePublisher:
         _validate_change_id(change_id)
         remote_head = self._refresh_remote_head()
         return None if remote_head is None else self._read_snapshot(remote_head, change_id)
+
+    def repair_quarantined_snapshot(  # noqa: PLR0913 - repair binds each exact authority fence.
+        self,
+        *,
+        change_id: str,
+        package_id: str,
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime,
+        admission: DeliveryAdmissionReceipt,
+        operation_id: str,
+        captured_at: datetime,
+        expected_remote_head: str,
+        expected_snapshot_digest: str,
+        expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryStatePublicationReceipt:
+        """Replace one known quarantined predecessor from validated local authority."""
+        _validate_change_id(change_id)
+        remote_head = self._refresh_remote_head()
+        if remote_head != expected_remote_head:
+            try:
+                replayed = self._read_snapshot(remote_head, change_id) if remote_head is not None else None
+            except (TypeError, ValueError, ValidationError):
+                replayed = None
+            if (
+                replayed is not None
+                and replayed.operation_id == operation_id
+                and replayed.base_head == expected_remote_head
+                and replayed.repaired_predecessor_digest == expected_snapshot_digest
+            ):
+                return DeliveryStatePublicationReceipt.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    state_branch=self._state_branch,
+                    snapshot_id=replayed.snapshot_id,
+                    expected_remote_head=expected_remote_head,
+                    published_head=remote_head,
+                )
+            _raise_state_conflict("remote Delivery-state branch changed before snapshot repair")
+        raw = self._read_snapshot_bytes(remote_head, change_id)
+        if raw is None:
+            _raise_state_conflict("quarantined remote Delivery snapshot is absent")
+        if hashlib.sha256(raw).hexdigest() != expected_snapshot_digest:
+            _raise_state_conflict("quarantined remote Delivery snapshot bytes changed before repair")
+        try:
+            parse_delivery_state_snapshot(raw)
+        except (TypeError, ValueError, ValidationError) as exc:
+            if _snapshot_validation_code(exc) != expected_diagnostic_code:
+                _raise_state_conflict("quarantined remote Delivery snapshot diagnostic changed before repair")
+        else:
+            _raise_state_conflict("remote Delivery snapshot is valid and cannot use quarantine repair")
+        try:
+            payload = json.loads(raw)
+        except (TypeError, ValueError):
+            payload = {}
+        sequence = payload.get("sequence") if isinstance(payload, dict) else None
+        next_sequence = (
+            sequence + 1 if isinstance(sequence, int) and not isinstance(sequence, bool) and sequence > 0 else 1
+        )
+        _require_change_branch_reachability(self._repository, coordination, runtime)
+        snapshot = DeliveryStateSnapshot.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            package_id=package_id,
+            coordination=coordination,
+            runtime=runtime,
+            admission=admission,
+            sequence=next_sequence,
+            parent_snapshot_id=None,
+            base_head=remote_head,
+            repaired_predecessor_digest=expected_snapshot_digest,
+            captured_at=captured_at,
+        )
+        commit = self._commit_snapshot(remote_head, snapshot)
+        self._push_snapshot(commit, remote_head)
+        return DeliveryStatePublicationReceipt.create(
+            operation_id=operation_id,
+            change_id=change_id,
+            state_branch=self._state_branch,
+            snapshot_id=snapshot.snapshot_id,
+            expected_remote_head=remote_head,
+            published_head=commit,
+        )
 
     def _refresh_remote_head(self) -> str | None:
         before = self._remote_head()
@@ -447,7 +557,7 @@ class DeliveryStatePublisher:
 
     def _read_snapshot(self, commit: str, change_id: str) -> DeliveryStateSnapshot | None:
         raw = self._read_snapshot_bytes(commit, change_id)
-        return None if raw is None else DeliveryStateSnapshot.model_validate_json(raw, strict=False)
+        return None if raw is None else parse_delivery_state_snapshot(raw)
 
     def _read_snapshot_bytes(self, commit: str, change_id: str) -> bytes | None:
         path = _snapshot_path(change_id)
@@ -643,7 +753,9 @@ def _same_snapshot_authority(
     admission: DeliveryAdmissionReceipt,
 ) -> bool:
     return (
-        current.change_id == coordination.change_id
+        current.migrated_from_snapshot_id is None
+        and current.repaired_predecessor_digest is None
+        and current.change_id == coordination.change_id
         and current.package_id == package_id
         and current.authority_digest == runtime.authority_digest
         and current.branch == coordination.branch
@@ -720,6 +832,38 @@ def _snapshot_digest(snapshot: DeliveryStateSnapshot) -> str:
     return hashlib.sha256(_canonical_bytes(snapshot.model_copy(update={"snapshot_id": ""}))).hexdigest()
 
 
+def parse_delivery_state_snapshot(content: bytes) -> DeliveryStateSnapshot:
+    """Parse one current snapshot or migrate one valid schema-1 snapshot."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    schema_version = payload.get("schema_version")
+    if schema_version == _LEGACY_SNAPSHOT_SCHEMA_VERSION:
+        legacy_snapshot_id = payload.get("snapshot_id")
+        if not isinstance(legacy_snapshot_id, str):
+            _raise_state_value_error("Delivery-state snapshot identity is invalid")
+        legacy_candidate = {**payload, "snapshot_id": ""}
+        expected_legacy_id = hashlib.sha256(_canonical_payload(legacy_candidate)).hexdigest()
+        if legacy_snapshot_id != expected_legacy_id:
+            _raise_state_value_error("Delivery-state snapshot identity is invalid")
+        frontier_payload = payload.get("frontier")
+        if not isinstance(frontier_payload, dict):
+            raise TypeError
+        frontier, _canonical = parse_delivery_frontier(_canonical_payload(frontier_payload))
+        payload = {
+            **payload,
+            "schema_version": _SNAPSHOT_SCHEMA_VERSION,
+            "snapshot_id": "",
+            "frontier": frontier.model_dump(mode="json"),
+            "migrated_from_snapshot_id": legacy_snapshot_id,
+            "repaired_predecessor_digest": None,
+        }
+        payload["snapshot_id"] = hashlib.sha256(_canonical_payload(payload)).hexdigest()
+    elif schema_version != _SNAPSHOT_SCHEMA_VERSION:
+        raise ValueError
+    return DeliveryStateSnapshot.model_validate(payload, strict=False)
+
+
 def _publication_digest(receipt: DeliveryStatePublicationReceipt) -> str:
     return hashlib.sha256(_canonical_bytes(receipt.model_copy(update={"publication_id": ""}))).hexdigest()
 
@@ -741,10 +885,12 @@ __all__ = [
     "DeliveryStatePublicationError",
     "DeliveryStatePublicationReceipt",
     "DeliveryStatePublisher",
+    "DeliveryStateQuarantineError",
     "DeliveryStateResponseUnknownError",
     "DeliveryStateSnapshot",
     "DeliveryStateSnapshotDiagnostic",
     "DeliveryStateSnapshotInventory",
+    "parse_delivery_state_snapshot",
 ]
 
 

@@ -31,27 +31,33 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryPlanCandidate,
-    DeliveryRequest,
-    DeliveryResultCandidate,
-    OutcomeAuthorityBinding,
 )
+from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
+    DeliveryDesignPut,
     DeliveryOperatorContext,
+    DeliveryQuarantinedSnapshotRepairProposal,
+    DeliveryQuarantinedSnapshotRepairReceipt,
+    DeliveryResultSubmission,
+    DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
+    DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
-    AbandonChangeParams,
-    AbandonChangeRequest,
+    AcquireActionsParams,
+    AcquireActionsRequest,
     AdministrativeMoveParams,
     AdministrativeMovePreviewResponse,
     AdministrativeMoveRequest,
@@ -76,21 +82,15 @@ from owlbear_delivery_mcp.target_models import (
     CleanupAbandonedTargetSyncRequest,
     CleanupCompletedChangeParams,
     CleanupCompletedChangeRequest,
-    ClearBlockParams,
-    ClearBlockRequest,
-    ClearedDeliveryBlockResponse,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
-    DeferChangeParams,
-    DeferChangeRequest,
     DeliveryAnswerResponse,
     DeliveryHealthResponse,
     DeliveryOperatorContextResponse,
     DeliveryPlanPublication,
     DeliveryPublicationSupersessionResponse,
-    DeliveryResultPublication,
     DeliveryStateSnapshotRepairResponse,
     EmptyParams,
     EmptyRequest,
@@ -108,8 +108,11 @@ from owlbear_delivery_mcp.target_models import (
     PreviewAdministrativeMoveRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
-    PublishDeliveryResultParams,
-    PublishDeliveryResultRequest,
+    PutDesignParams,
+    PutDesignRequest,
+    PutDesignResponse,
+    QuarantinedSnapshotRepairProposalResponse,
+    QuarantinedSnapshotRepairResponse,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
     RecoverClaimParams,
@@ -124,20 +127,26 @@ from owlbear_delivery_mcp.target_models import (
     RepairClaimContextRequest,
     RepairDeliveryStateSnapshotParams,
     RepairDeliveryStateSnapshotRequest,
+    RepairQuarantinedDeliveryStateSnapshotParams,
+    RepairQuarantinedDeliveryStateSnapshotRequest,
+    RepairStrandedFrontierParams,
+    RepairStrandedFrontierRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
-    ResolveChangeDispositionParams,
-    ResolveChangeDispositionRequest,
-    ResolvedDeliveryRequestResponse,
-    ResolveRequestParams,
-    ResolveRequestRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
     SearchCompletedParams,
     SearchCompletedRequest,
+    SetChangeIntentParams,
+    SetChangeIntentRequest,
+    SetChangeIntentResponse,
     ShowCompletedParams,
     ShowCompletedRequest,
+    StrandedFrontierRepairResponse,
+    SubmitResultParams,
+    SubmitResultRequest,
+    SubmitResultResponse,
     SupersedePublicationParams,
     SupersedePublicationRequest,
     TargetDiagnostic,
@@ -162,33 +171,38 @@ _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destruct
 
 DELIVERY_OPERATION_NAMES = (
     "create_design_session",
+    "put_design",
     "read_design_session",
     "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "admit_delivery_change",
+    "admit_change",
     "list_work_items",
+    "list_changes",
     "get_change",
     "answer",
+    "set_change_intent",
     "delivery_health",
+    "propose_quarantined_delivery_state_snapshot_repair",
     "repair_delivery_state_snapshot",
+    "repair_quarantined_delivery_state_snapshot",
+    "repair_stranded_frontier",
     "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
     "show_operator_context",
-    "repair_change",
-    "resolve_request",
-    "clear_block",
+    "repair",
     "preview_administrative_move",
     "administrative_move",
-    "acquire_frontier_work",
+    "acquire_actions",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
     "publish_delivery_plan",
-    "publish_delivery_result",
+    "submit_result",
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
@@ -202,10 +216,6 @@ DELIVERY_OPERATION_NAMES = (
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
-    "resolve_change_disposition",
-    "defer_change",
-    "resume_change",
-    "abandon_change",
     "cleanup_abandoned_change_worktree",
     "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
@@ -224,8 +234,10 @@ _DELIVERY_READS = frozenset(
         "read_design_session",
         "derive_delivery_contract",
         "list_work_items",
+        "list_changes",
         "get_change",
         "delivery_health",
+        "propose_quarantined_delivery_state_snapshot_repair",
         "list_retained_change_worktrees",
         "show_work_item",
         "show_work_item_view",
@@ -241,14 +253,12 @@ _DELIVERY_READS = frozenset(
         "show_completed_change",
     }
 )
-_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset(
-    {"resolve_request", "clear_block", "administrative_move", "repair_change"}
-)
+_DELIVERY_NON_IDEMPOTENT_WRITES = frozenset({"administrative_move", "repair", "set_change_intent"})
 DELIVERY_OPERATION_ANNOTATIONS = {
     name: _READ
     if name in _DELIVERY_READS
     else _ACQUIRE
-    if name == "acquire_frontier_work"
+    if name == "acquire_actions"
     else _CLEANUP
     if name
     in {
@@ -317,6 +327,24 @@ class TargetMCPAdapter:
             ),
         )
 
+    async def put_design(self, request: PutDesignRequest) -> PutDesignResponse:
+        """Create or CAS-revise one authored Design package."""
+        params = self._validate(PutDesignParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.put_design(
+                DeliveryDesignPut(
+                    change_id=params.change_id,
+                    intent_bytes=params.intent_bytes,
+                    design_bytes=params.design_bytes,
+                    expected_package_id=params.expected_package_id,
+                )
+            ),
+            DesignPackageResult,
+        )
+        return PutDesignResponse.from_result(result)
+
     async def read_design_session(self, request: ChangeRequest) -> dict[str, object]:
         """Read one verified authored Design session and its current identity."""
         params = self._validate(ChangeParams, request)
@@ -359,15 +387,33 @@ class TargetMCPAdapter:
             lambda: self._application.admit_delivery_change(params),
         )
 
+    async def admit_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
+        """Admit one exact approved Design version as executable Delivery authority."""
+        params = self._validate(DeliveryAdmissionRequest, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.admit_change(params),
+        )
+
     async def list_work_items(self, request: EmptyRequest) -> list[object]:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
 
+    async def list_changes(self, request: EmptyRequest) -> dict[str, object]:
+        """Return grouped Change state and operating guidance."""
+        params = self._validate(EmptyParams, request)
+        return await asyncio.to_thread(self._call, params, self._application.list_changes)
+
     async def get_change(self, request: ChangeRequest) -> dict[str, object]:
         """Return one coherent Change detail, health, and repair projection."""
         params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.get_change(params.change_id))
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.get_change(params.change_id),
+        )
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""
@@ -378,24 +424,65 @@ class TargetMCPAdapter:
             lambda: self._application.answer(
                 DeliveryAnswer(
                     change_id=params.change_id,
+                    kind=params.kind,
                     request_id=params.request_id,
                     resolution=params.resolution,
                     expected_frontier_digest=params.expected_frontier_digest,
+                    outcome_id=params.outcome_id,
+                    block_id=params.block_id,
+                    operator_note=params.operator_note,
+                    locators=params.locators,
+                    expected_disposition_id=params.expected_disposition_id,
                 )
             ),
             DeliveryAnswerResult,
         )
         return DeliveryAnswerResponse(
             change_id=params.change_id,
+            kind=result.kind,
             request=result.request,
+            binding=result.binding,
+            disposition=result.disposition,
             frontier_digest=result.frontier_digest,
         )
+
+    async def set_change_intent(self, request: SetChangeIntentRequest) -> SetChangeIntentResponse:
+        """Apply one version-bound pause, resume, or abandon intent."""
+        params = self._validate(SetChangeIntentParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.set_change_intent(
+                DeliveryChangeIntent(
+                    change_id=params.change_id,
+                    kind=params.kind,
+                    expected_frontier_digest=params.expected_frontier_digest,
+                    reason=params.reason,
+                )
+            ),
+            DeliveryChangeIntentResult,
+        )
+        return SetChangeIntentResponse.from_result(result)
 
     async def delivery_health(self, request: EmptyRequest) -> DeliveryHealthResponse:
         """Return bounded diagnostics for quarantined or unavailable Delivery state."""
         params = self._validate(EmptyParams, request)
         health = self._call_model(params, self._application.delivery_health, DeliveryHealthView)
         return DeliveryHealthResponse.from_view(health)
+
+    async def propose_quarantined_delivery_state_snapshot_repair(
+        self,
+        request: ChangeRequest,
+    ) -> QuarantinedSnapshotRepairProposalResponse:
+        """Return exact fences for one known quarantined remote snapshot."""
+        params = self._validate(ChangeParams, request)
+        proposal = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.propose_quarantined_delivery_state_snapshot_repair(params.change_id),
+            DeliveryQuarantinedSnapshotRepairProposal,
+        )
+        return QuarantinedSnapshotRepairProposalResponse.from_proposal(proposal)
 
     async def repair_delivery_state_snapshot(
         self,
@@ -414,6 +501,47 @@ class TargetMCPAdapter:
             DeliveryStateSnapshotRepairReceipt,
         )
         return DeliveryStateSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_quarantined_delivery_state_snapshot(
+        self,
+        request: RepairQuarantinedDeliveryStateSnapshotRequest,
+    ) -> QuarantinedSnapshotRepairResponse:
+        """Repair one exact confirmed quarantined remote Delivery snapshot."""
+        params = self._validate(RepairQuarantinedDeliveryStateSnapshotParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_quarantined_delivery_state_snapshot(
+                params.change_id,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+                expected_remote_head=params.expected_remote_head,
+                expected_snapshot_digest=params.expected_snapshot_digest,
+                expected_diagnostic_code=params.expected_diagnostic_code,
+            ),
+            DeliveryQuarantinedSnapshotRepairReceipt,
+        )
+        return QuarantinedSnapshotRepairResponse.from_receipt(receipt)
+
+    async def repair_stranded_frontier(
+        self,
+        request: RepairStrandedFrontierRequest,
+    ) -> StrandedFrontierRepairResponse:
+        """Repair one exact confirmed missing request-provenance defect."""
+        params = self._validate(RepairStrandedFrontierParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.repair_stranded_frontier(
+                params.change_id,
+                params.request_id,
+                params.expected_frontier_digest,
+                params.operation_id,
+                confirmed_repair=params.confirmed_repair,
+            ),
+            DeliveryStrandedFrontierRepairReceipt,
+        )
+        return StrandedFrontierRepairResponse.from_receipt(receipt)
 
     async def recover_out_of_band_head(
         self,
@@ -491,56 +619,17 @@ class TargetMCPAdapter:
         )
         return DeliveryOperatorContextResponse.from_context(context)
 
-    async def repair_change(self, request: RepairChangeRequest) -> dict[str, object]:
-        """Diagnose or apply one versioned high-level repair proposal."""
+    async def repair(self, request: RepairChangeRequest) -> dict[str, object]:
+        """Diagnose or apply one high-level repair proposal."""
         params = self._validate(RepairChangeParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            lambda: self._application.repair_change(
+            lambda: self._application.repair(
                 params.change_id,
                 params.proposal_id,
                 confirmed_lost=params.confirmed_lost,
             ),
-        )
-
-    async def resolve_request(self, request: ResolveRequestRequest) -> ResolvedDeliveryRequestResponse:
-        """Persist one user-owned answer for a retained Delivery request."""
-        params = self._validate(ResolveRequestParams, request)
-        resolved = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.resolve_request(
-                params.change_id,
-                params.request_id,
-                params.resolution,
-            ),
-            DeliveryRequest,
-        )
-        return ResolvedDeliveryRequestResponse(change_id=params.change_id, request=resolved)
-
-    async def clear_block(self, request: ClearBlockRequest) -> ClearedDeliveryBlockResponse:
-        """Clear one requestless block with explicit operator evidence."""
-        params = self._validate(ClearBlockParams, request)
-        binding = await asyncio.to_thread(
-            self._call_model,
-            params,
-            lambda: self._application.clear_block(
-                params.change_id,
-                params.outcome_id,
-                params.block_id,
-                params.operator_note,
-                params.locators,
-            ),
-            OutcomeAuthorityBinding,
-        )
-        if binding.block is None:
-            message = "unsupported cleared block output: missing block"
-            raise TypeError(message)
-        return ClearedDeliveryBlockResponse(
-            change_id=params.change_id,
-            outcome_id=binding.outcome_id,
-            block=binding.block,
         )
 
     async def preview_administrative_move(
@@ -581,18 +670,17 @@ class TargetMCPAdapter:
         )
         return AdministrativeMoveResponse.from_result(result)
 
-    async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
-        """Acquire currently available frontier work.
-
-        Cancelling a handler only cancels the transport wait; an in-flight mutation
-        may finish, so callers must reconcile durable state before retrying rather
-        than blindly replaying it.
-        """
-        params = self._validate(EmptyParams, request)
+    async def acquire_actions(self, request: AcquireActionsRequest) -> dict[str, object]:
+        """Acquire one fenced action when selection is supplied, otherwise a portfolio batch."""
+        params = self._validate(AcquireActionsParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            self._application.acquire_frontier_work,
+            (
+                self._application.acquire_actions
+                if params.selection is None
+                else lambda: self._application.acquire_actions(params.selection)
+            ),
         )
 
     async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:
@@ -620,15 +708,23 @@ class TargetMCPAdapter:
         )
         return DeliveryPlanPublication.from_candidate(candidate)
 
-    async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication:
-        """Publish one claim-scoped Delivery result."""
-        params = self._validate(PublishDeliveryResultParams, request)
-        candidate = self._call_model(
+    async def submit_result(self, request: SubmitResultRequest) -> SubmitResultResponse:
+        """Publish and promote one exact Builder result as one claim-bound operation."""
+        params = self._validate(SubmitResultParams, request)
+        result = await asyncio.to_thread(
+            self._call_model,
             params,
-            lambda: self._application.publish_delivery_result(params.change_id, params.result),
-            DeliveryResultCandidate,
+            lambda: self._application.submit_result(
+                DeliveryResultSubmission(
+                    change_id=params.change_id,
+                    outcome_id=params.outcome_id,
+                    claim_id=params.claim_id,
+                    result=params.result,
+                )
+            ),
+            DeliveryResultSubmissionResult,
         )
-        return DeliveryResultPublication.from_candidate(candidate)
+        return SubmitResultResponse.from_result(result)
 
     async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]:
         """Finalize one exact clean reviewed Change head with persisted evidence."""
@@ -802,45 +898,6 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.observe_acceptance(params.change_id),
-        )
-
-    async def resolve_change_disposition(self, request: ResolveChangeDispositionRequest) -> dict[str, object]:
-        """Resolve one exact Change attention record without restoring provider authority."""
-        params = self._validate(ResolveChangeDispositionParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.resolve_change_disposition(
-                params.change_id,
-                params.expected_disposition_id,
-            ),
-        )
-
-    async def defer_change(self, request: DeferChangeRequest) -> dict[str, object]:
-        """Retain one Change while pausing its claimable frontier."""
-        params = self._validate(DeferChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.defer_change(params.change_id, params.reason),
-        )
-
-    async def resume_change(self, request: ChangeRequest) -> dict[str, object]:
-        """Resume one deferred Change from its retained prior state."""
-        params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.resume_change(params.change_id),
-        )
-
-    async def abandon_change(self, request: AbandonChangeRequest) -> dict[str, object]:
-        """Terminate one uncompleted Change by explicit user disposition."""
-        params = self._validate(AbandonChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.abandon_change(params.change_id, params.reason),
         )
 
     async def cleanup_abandoned_change_worktree(

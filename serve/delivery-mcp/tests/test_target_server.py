@@ -8,7 +8,6 @@ import json
 import subprocess
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,11 +34,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
-    DeliveryObservation,
-    DeliveryObservationReceipt,
     DeliveryResultCandidate,
-    DeliveryReview,
-    DeliveryReviewReceipt,
     PublishDeliveryResult,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
@@ -55,33 +50,38 @@ from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target
 
 DELIVERY_TOOLS = {
     "create_design_session",
+    "put_design",
     "read_design_session",
     "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "admit_delivery_change",
+    "admit_change",
     "list_work_items",
+    "list_changes",
     "get_change",
     "answer",
+    "set_change_intent",
     "delivery_health",
+    "propose_quarantined_delivery_state_snapshot_repair",
     "repair_delivery_state_snapshot",
+    "repair_quarantined_delivery_state_snapshot",
+    "repair_stranded_frontier",
     "recover_out_of_band_head",
     "repair_target_sync_publication",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
     "show_operator_context",
-    "repair_change",
-    "resolve_request",
-    "clear_block",
+    "repair",
     "preview_administrative_move",
     "administrative_move",
-    "acquire_frontier_work",
+    "acquire_actions",
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
     "publish_delivery_plan",
-    "publish_delivery_result",
+    "submit_result",
     "finalize_change",
     "mark_change_ready",
     "prepare_review_repair",
@@ -95,10 +95,6 @@ DELIVERY_TOOLS = {
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
-    "resolve_change_disposition",
-    "defer_change",
-    "resume_change",
-    "abandon_change",
     "cleanup_abandoned_change_worktree",
     "cleanup_abandoned_change_worktree_after_target_sync_discard",
     "cleanup_completed_change_worktree",
@@ -116,8 +112,10 @@ READ_TOOLS = {
     "read_design_session",
     "derive_delivery_contract",
     "list_work_items",
+    "list_changes",
     "get_change",
     "delivery_health",
+    "propose_quarantined_delivery_state_snapshot_repair",
     "list_retained_change_worktrees",
     "show_work_item",
     "show_work_item_view",
@@ -133,10 +131,8 @@ READ_TOOLS = {
     "show_completed_change",
 }
 EXCLUDED_TOOLS = {
-    "list_changes",
     "show_change",
     "validate_change",
-    "admit_change",
     "create_request",
     "unblock_delivery",
     "list_semantic_updates",
@@ -229,7 +225,7 @@ class _BlockingFoundationalApplication(_RecordingApplication):
     def admit_delivery_change(self, _request: object) -> _Result:
         return self._run_foundational_operation()
 
-    def acquire_frontier_work(self) -> _Result:
+    def acquire_actions(self) -> _Result:
         return self._run_foundational_operation()
 
     def delivery_health(self) -> DeliveryHealthView:
@@ -377,7 +373,14 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
         assert tool.annotations.idempotent_hint is (
             name
-            not in {"acquire_frontier_work", "resolve_request", "clear_block", "administrative_move", "repair_change"}
+            not in {
+                "acquire_actions",
+                "resolve_request",
+                "clear_block",
+                "administrative_move",
+                "repair",
+                "set_change_intent",
+            }
         )
         assert tool.annotations.destructive_hint is (
             name
@@ -417,6 +420,96 @@ async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> N
 
 
 @pytest.mark.asyncio
+async def test_registered_acquisition_rejects_incomplete_selection_without_delegation() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool("acquire_actions", {"selection": {"change_id": "change-a"}})
+
+    assert result.is_error
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_registered_acquisition_accepts_selected_planning_request() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "planning",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                },
+            },
+        )
+
+    assert not result.is_error
+    assert result.structured_content == {"operation": "acquire_actions"}
+    assert application.calls == ["acquire_actions"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"expected_stage": "completed"},
+        {"expected_stage": "implementation"},
+        {"expected_task_id": "TASK-001"},
+        {"unknown": "value"},
+        {"expected_frontier_digest": "wrong"},
+    ],
+)
+async def test_registered_acquisition_rejects_invalid_selection(changes: dict[str, object]) -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    selection = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "expected_stage": "planning",
+        "expected_frontier_digest": "a" * 64,
+        "expected_source_head": "b" * 40,
+        **changes,
+    }
+
+    async with Client(server) as client:
+        result = await client.call_tool("acquire_actions", {"selection": selection})
+
+    assert result.is_error
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_registered_acquisition_accepts_selected_builder_request() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "implementation",
+                    "expected_task_id": "TASK-001",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                },
+            },
+        )
+
+    assert not result.is_error
+    assert application.calls == ["acquire_actions"]
+
+
+@pytest.mark.asyncio
 async def test_work_item_view_tool_delegates_exact_publication_key() -> None:
     application = _RecordingApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
@@ -441,148 +534,6 @@ async def test_registered_review_repair_tool_invokes_strict_adapter_once() -> No
 
     assert result.structured_content == {"operation": "prepare_review_repair"}
     assert application.calls == ["prepare_review_repair"]
-
-
-def _published_result_payload() -> dict[str, object]:
-    completed_commit = "c" * 40
-    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
-    observation = DeliveryObservationReceipt.create(
-        DeliveryObservation(
-            change_id="change-a",
-            task_or_finalization_id="TASK-001",
-            exact_commit=completed_commit,
-            observation_kind="pytest",
-            command_or_procedure="live Delivery MCP contract test",
-            exit_status_or_artifact_locator="exit:0",
-            observer_or_runner_identity="pytest",
-            observed_at=observed_at,
-        )
-    )
-    review = DeliveryReviewReceipt.create(
-        DeliveryReview(
-            exact_commit=completed_commit,
-            author_id="MCP server test author",
-            reviewer_id="MCP server test reviewer",
-            evidence=("The exact fixture commit satisfies task authority.",),
-            reviewed_at=observed_at,
-        )
-    )
-    return {
-        "result_id": "result-1",
-        "change_id": "change-a",
-        "authority_digest": "a" * 64,
-        "task_id": "TASK-001",
-        "task_digest": "b" * 64,
-        "completed_commit": completed_commit,
-        "observations": [observation.model_dump(mode="json")],
-        "review": review.model_dump(mode="json"),
-    }
-
-
-@pytest.mark.asyncio
-async def test_published_result_output_forwards_unchanged_to_transition() -> None:
-    application = _PublicationApplication()
-    server = assemble_target_server(application)  # type: ignore[arg-type]
-    publication_request = {
-        "change_id": "change-a",
-        "result": {
-            "outcome_id": "OUT-001",
-            "claim_id": "claim-1",
-            "result": _published_result_payload(),
-        },
-    }
-
-    async with Client(server) as client:
-        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        published = await client.call_tool("publish_delivery_result", publication_request)
-        assert published.structured_content is not None
-        output = published.structured_content["output"]
-        transitioned = await client.call_tool(
-            "transition_delivery",
-            {
-                "change_id": "change-a",
-                "transition": {
-                    "action": "advance",
-                    "outcome_id": "OUT-001",
-                    "claim_id": "claim-1",
-                    "output": output,
-                },
-            },
-        )
-
-    publication_schema = tools["publish_delivery_result"].input_schema
-    publication_definitions = tools["publish_delivery_result"].input_schema["$defs"]
-    transition_definitions = tools["transition_delivery"].input_schema["$defs"]
-    result_definition = publication_definitions[
-        publication_schema["properties"]["result"]["$ref"].removeprefix("#/$defs/")
-    ]
-    task_result_definition = publication_definitions[
-        result_definition["properties"]["result"]["$ref"].removeprefix("#/$defs/")
-    ]
-    assert set(publication_schema["properties"]) == {"change_id", "result"}
-    assert publication_schema["properties"]["change_id"]["type"] == "string"
-    assert {"observations", "review"} <= set(task_result_definition["required"])
-    finalization_schema = tools["finalize_change"].input_schema
-    assert set(finalization_schema["properties"]) == {"change_id", "finalization"}
-    finalization_request = finalization_schema["$defs"]["FinalizeDeliveryChange"]
-    assert {"operation_id", "exact_head", "observations", "review"} <= set(finalization_request["required"])
-    ready_schema = tools["mark_change_ready"].input_schema
-    assert set(ready_schema["properties"]) == {"change_id", "operation_id", "finalization_id", "exact_head"}
-    assert {"change_id", "operation_id", "finalization_id", "exact_head"} == set(ready_schema["required"])
-    reconciliation_schema = tools["reconcile_finalization_head"].input_schema
-    assert set(reconciliation_schema["properties"]) == {"change_id"}
-    acceptance_schema = tools["observe_acceptance"].input_schema
-    assert set(acceptance_schema["properties"]) == {"change_id"}
-    resolution_schema = tools["resolve_change_disposition"].input_schema
-    assert set(resolution_schema["properties"]) == {"change_id", "expected_disposition_id"}
-    assert set(tools["prepare_review_repair"].input_schema["properties"]) == {"change_id"}
-    supersession_schema = tools["supersede_publication"].input_schema
-    assert set(supersession_schema["properties"]) == {
-        "change_id",
-        "expected_publication_id",
-        "operation_id",
-    }
-    assert {
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "predecessor_publication_id",
-        "successor_publication_id",
-        "git_supersession",
-        "provider_supersession",
-        "publication_history",
-    } <= set(tools["supersede_publication"].output_schema["required"])
-    sync_schema = tools["sync_change_with_target"].input_schema
-    assert set(sync_schema["properties"]) == {"change_id", "expected_target", "operation_id"}
-    assert {
-        "receipt_id",
-        "operation_id",
-        "change_id",
-        "target_branch",
-        "expected_target",
-        "target_head",
-        "change_head_before",
-        "merged_head",
-        "merge_commit",
-    } <= set(tools["sync_change_with_target"].output_schema["required"])
-    assert "integration_target" not in tools["sync_change_with_target"].output_schema["properties"]
-    assert set(tools["transition_delivery"].input_schema["properties"]) == {"change_id", "transition"}
-    assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
-    assert all(
-        "action" in transition_definitions[branch["$ref"].removeprefix("#/$defs/")]["required"]
-        for branch in transition_definitions["DeliveryTransition"]["oneOf"]
-    )
-    assert "output" in tools["publish_delivery_plan"].output_schema["required"]
-    assert "output" in tools["publish_delivery_result"].output_schema["required"]
-    assert output == {
-        "output_id": "result-" + "d" * 64,
-        "claim_id": "claim-1",
-        "stage": "implementation",
-        "kind": "implementation",
-        "digest": "d" * 64,
-    }
-    assert transitioned.structured_content == {"operation": "transition_delivery"}
-    assert application.calls == ["publish_delivery_result", "transition_delivery"]
 
 
 @pytest.mark.asyncio
@@ -738,8 +689,11 @@ async def test_acceptance_observation_yields_the_mcp_event_loop() -> None:
 @pytest.mark.parametrize(
     ("operation_name", "payload"),
     [
-        ("admit_delivery_change", {"change_id": "change-a", "active_claim_ids": []}),
-        ("acquire_frontier_work", {}),
+        (
+            "admit_delivery_change",
+            {"change_id": "change-a", "expected_package_id": "a" * 64, "active_claim_ids": []},
+        ),
+        ("acquire_actions", {}),
     ],
 )
 async def test_foundational_operations_yield_to_independent_health_requests(
@@ -770,7 +724,7 @@ async def test_cancelled_admission_is_reconciled_without_a_blind_retry() -> None
     release = threading.Event()
     application = _BlockingFoundationalApplication("admit_delivery_change", started, release)
     adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
-    request = {"change_id": "change-a", "active_claim_ids": []}
+    request = {"change_id": "change-a", "expected_package_id": "a" * 64, "active_claim_ids": []}
 
     task = asyncio.create_task(adapter.admit_delivery_change(request))
     assert await asyncio.to_thread(started.wait, 2)

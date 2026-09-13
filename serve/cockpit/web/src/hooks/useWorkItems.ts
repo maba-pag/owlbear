@@ -574,7 +574,14 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     ),
     clearBlock: (blockId: string, note: string, locators: string[]) => mutate(
       'clear',
-      () => clearWorkItemBlock(identity.changeId, data!.item.card.work_item_id, blockId, note, locators),
+      () => clearWorkItemBlock(
+        identity.changeId,
+        data!.item.card.work_item_id,
+        blockId,
+        note,
+        locators,
+        data!.item.snapshot_version,
+      ),
       'Block cleared.',
     ),
     recoverClaim: (attemptId: string, claimId: string) => mutate(
@@ -677,7 +684,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     }),
     resolveAttention: (expectedDispositionId: string) => mutate(
       'attention-resolve',
-      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
+      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId, data!.item.snapshot_version),
       'Change attention resolved.',
     ),
     supersedePublication: () => mutate(
@@ -737,17 +744,17 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     ),
     deferChange: (reason: string) => mutate(
       'change-defer',
-      () => deferWorkItemChange(identity.changeId, reason),
+      () => deferWorkItemChange(identity.changeId, reason, data!.item.snapshot_version),
       'Change deferred.',
     ),
     resumeChange: () => mutate(
       'change-resume',
-      () => resumeWorkItemChange(identity.changeId),
+      () => resumeWorkItemChange(identity.changeId, data!.item.snapshot_version),
       'Change resumed.',
     ),
     abandonChange: (reason: string) => mutate(
       'change-abandon',
-      () => abandonWorkItemChange(identity.changeId, reason),
+      () => abandonWorkItemChange(identity.changeId, reason, data!.item.snapshot_version),
       'Change abandoned.',
     ),
     cleanupAbandonedChange: () => mutate(

@@ -31,9 +31,9 @@ The server exposes these operation groups:
 
 | Area | Tools |
 | --- | --- |
-| Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_delivery_change` |
-| Portfolio | `list_work_items`, `delivery_health`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `resolve_request`, `clear_block`, `preview_administrative_move`, `administrative_move`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
-| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
+| Design | `create_design_session`, `put_design`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_change` |
+| Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
+| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
@@ -47,8 +47,13 @@ valid Changes can continue to operate. Quarantined Changes are omitted from acqu
 but remain visible through the Cockpit health section and the read-only `delivery_health` tool. The
 orchestrator calls `delivery_health` with `{}` only when `acquire_frontier_work` returns a non-empty
 health hint; healthy acquisitions remain quiet. Global workspace, Git, configuration, and
-unsupported persisted-state failures still fail closed at startup. Current readers accept only the
-current persisted schema, and health never repairs persisted state. The explicit
+unsupported persisted-state failures still fail closed at startup. Readers canonicalize one prior
+frontier/snapshot schema while preserving predecessor identity evidence; unrelated malformed state
+remains quarantined. Health never repairs persisted state. The read-only
+`propose_quarantined_delivery_state_snapshot_repair` operation returns exact remote-head and raw-byte
+fences. The confirmation-gated `repair_stranded_frontier` operation repairs only the known missing
+request-provenance defect, while `repair_quarantined_delivery_state_snapshot` replaces only a known
+quarantined remote predecessor from validated local authority. The explicit
 `repair_delivery_state_snapshot` operation is confirmation-gated and accepts only the known local
 block/request successor shape; it rejects a remote Change-head mismatch. The
 `recover_out_of_band_head` operation requires exact reviewed, remote, and local heads, preserves the

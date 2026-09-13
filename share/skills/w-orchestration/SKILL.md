@@ -15,16 +15,16 @@ dispatch loop around that authority.
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
 
-Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
+Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
 `recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
 missing operation. If any binding remains unavailable or its focused search returns a tool error,
 report the exact missing operation and end the session without acquisition. Transition and recovery
 are required dispatch safety authority, not optional operations to discover after a claim has been
 acquired.
 
-Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
+Call `list_changes` only for bounded portfolio reporting. Call `acquire_actions` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
 typed `integration_attention`, acquisition failures, and the optional `health_hint`. When
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
@@ -63,16 +63,23 @@ choose which dirty files to keep, discard, adopt, or commit.
 
 ## Step 3 - Forward One Worker Transition
 
-Require the worker result to be one `DeliveryTransition` mapping. Validate only identity binding:
+Require the worker result to be one `DeliveryTransition` mapping or one `kind: submitted`
+`DeliveryResultSubmissionResult` mapping. Validate only identity binding:
 
 - `outcome_id` and `claim_id` equal the launch values;
 - any transition `attempt_id` equals `launch.claim.attempt_id`;
 - any nested output uses the launch claim ID.
 
+For `kind: submitted`, require `change_id`, `outcome_id`, `claim_id`, and `result_id` to be present,
+and require the returned binding to name the launch outcome. The Builder already called
+`submit_result`, so record the submission and do not call `transition_delivery` again.
+
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
-commit fields. Call `transition_delivery` with outer `change_id=launch.change_id` and the returned
-transition as `transition` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
-is forwarded normally and must not be recovered.
+commit fields. For a `DeliveryTransition`, call `transition_delivery` with outer
+`change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
+A worker-owned `block`, `retry`, or `return` is forwarded normally and must not be recovered. A
+malformed submission result or identity mismatch follows the existing dispatch-failure recovery
+route.
 
 Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool
@@ -123,13 +130,13 @@ attempt consumes its cadence slot regardless of its result.
 
 ## Step 6 - Refresh
 
-Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
+Finish the current acquired batch, discard it, and call `acquire_actions` again. Continue
 independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
 a Delivery safety diagnostic requires user/operator action. A housekeeping failure is reported but
 does not stop independent Delivery acquisition.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
-Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
+Before reporting portfolio quiescence after an empty acquisition, call `list_changes`. Quiescence
 requires that projection to be empty as well. If work items remain, report their identities and
 stages as bounded acquisition attention and stop; do not infer a launch or mutate their state.
 

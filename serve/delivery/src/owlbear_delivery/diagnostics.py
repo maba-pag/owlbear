@@ -16,6 +16,7 @@ from owlbear_delivery.completed_history import CompletedHistoryError, CompletedH
 from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryChangeDispositionConflictError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
@@ -101,7 +102,7 @@ def classify_delivery_failure(error: Exception) -> DeliveryFailureClassification
             category=DeliveryFailureCategory.CONFLICT,
             retry_safe=error.retry_safe,
         )
-    elif isinstance(error, DeliveryChangeDispositionConflictError):
+    elif isinstance(error, (DeliveryChangeDispositionConflictError, DeliveryActionSelectionConflictError)):
         classification = _classification(error, category=DeliveryFailureCategory.CONFLICT, retry_safe=False)
     elif isinstance(
         error,

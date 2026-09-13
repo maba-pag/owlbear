@@ -688,11 +688,12 @@ export function clearWorkItemBlock(
   blockId: string,
   operatorNote: string,
   locators: string[],
+  expectedFrontierDigest: string,
 ): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/blocks/${encodeURIComponent(blockId)}/clear`,
     'ERR_WORK_ITEM_BLOCK_CLEAR',
-    { operator_note: operatorNote, locators },
+    { operator_note: operatorNote, locators, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
@@ -794,11 +795,15 @@ export function reconcileWorkItemAcceptance(
   )
 }
 
-export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown> {
+export function resolveWorkItemAttention(
+  changeId: string,
+  expectedDispositionId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
-    { expected_disposition_id: expectedDispositionId },
+    { expected_disposition_id: expectedDispositionId, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
@@ -847,26 +852,27 @@ export function resolveWorkItemTargetSync(
   )
 }
 
-export function deferWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+export function deferWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/defer`,
     'ERR_WORK_ITEM_CHANGE_DEFER',
-    { reason },
+    { reason, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
-export function resumeWorkItemChange(changeId: string): Promise<unknown> {
+export function resumeWorkItemChange(changeId: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/resume`,
     'ERR_WORK_ITEM_CHANGE_RESUME',
+    { expected_frontier_digest: expectedFrontierDigest },
   )
 }
 
-export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+export function abandonWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/abandon`,
     'ERR_WORK_ITEM_CHANGE_ABANDON',
-    { confirmed_abandonment: true, reason },
+    { confirmed_abandonment: true, reason, expected_frontier_digest: expectedFrontierDigest },
   )
 }
 

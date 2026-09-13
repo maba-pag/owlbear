@@ -12,6 +12,7 @@ from owlbear_delivery import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
+    DeliveryBlock,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryFrontier,
@@ -20,8 +21,12 @@ from owlbear_delivery import (
     DeliveryOutputKind,
     DeliveryOutputReference,
     DeliveryPendingCheckpoint,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestResolution,
     DeliveryReview,
     DeliveryReviewReceipt,
+    DeliveryRuntime,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -440,3 +445,104 @@ def test_revision_rejects_active_claims_before_mutation(repository: Path, tmp_pa
         )
 
     assert (target_root / "changes/source-bound-change/contract.json").read_bytes() == first.contract_bytes
+
+
+def test_revision_can_carry_forward_one_confirmed_unresolved_gate(repository: Path, tmp_path: Path) -> None:
+    active_root = tmp_path / "active"
+    target_root = tmp_path / "target"
+    package_store = DesignPackageStore(active_root, repository)
+    package_store.create("source-bound-change", *_sources())
+    registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
+    first = registry.admit(_request(package_store))
+    delivery_root = target_root / "changes/source-bound-change"
+    request = DeliveryRequest(
+        request_id="REQ-001",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Complete the revised pilot.",
+        resolution=DeliveryRequestResolution(
+            response_text="Use the approved SharePoint and Confluence targets.",
+            provenance="user-confirmed",
+        ),
+    )
+    sibling_request = DeliveryRequest(
+        request_id="REQ-SIBLING",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Retain sibling evidence.",
+        resolution=DeliveryRequestResolution(
+            response_text="Sibling evidence was reviewed.",
+            provenance="user-confirmed",
+        ),
+    )
+    blocked = first.frontier.bindings[0].model_copy(
+        update={
+            "stage": DeliveryStage.IMPLEMENTATION,
+            "block": DeliveryBlock(
+                block_id="BLOCK-001",
+                reason="The prior Jira pilot cannot be reused.",
+                unblock_condition="Complete the old Jira pilot.",
+                expected_evidence=("old pilot",),
+                locators=("REQ-001",),
+                request_id="REQ-001",
+                resolution_note="Revise the acceptance contract.",
+                resolution_locators=("REQ-001",),
+            ),
+            "requests": (request, sibling_request),
+        }
+    )
+    frontier = first.frontier.model_copy(update={"bindings": (blocked, *first.frontier.bindings[1:])})
+    frontier_bytes = _canonical(frontier)
+    frontier_digest = hashlib.sha256(frontier_bytes).hexdigest()
+    history_path = delivery_root / "revisions" / frontier_digest / "frontier.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_bytes(frontier_bytes)
+    (delivery_root / "frontier.json").write_bytes(frontier_bytes)
+
+    revised_intent, revised_design = _sources(first_statement="Change the first result behavior.")
+    package_root = active_root / "source-bound-change"
+    (package_root / "intent.md").write_bytes(revised_intent)
+    manifest = DesignPackageManifest.from_content(
+        "source-bound-change",
+        revised_intent,
+        revised_design,
+        first.contract_bytes,
+    )
+    (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
+    revised_request = _request(package_store).model_copy(
+        update={
+            "expected_frontier_digest": hashlib.sha256(frontier_bytes).hexdigest(),
+            "preserve_unresolved_outcome_ids": ("OUT-001",),
+        }
+    )
+
+    revised = registry.admit(revised_request)
+    replayed = registry.admit(revised_request)
+
+    carried = {binding.outcome_id: binding for binding in revised.frontier.bindings}["OUT-001"]
+    assert replayed.replayed is True
+    assert replayed.frontier == revised.frontier
+    assert revised.carry_forward is not None
+    assert revised.carry_forward.carried_forward_outcome_ids == ("OUT-001",)
+    assert carried.stage is DeliveryStage.PLANNING
+    assert carried.block is not None
+    assert carried.block.resolved is False
+    assert "Jira" not in carried.block.reason
+    assert "Jira" not in carried.block.unblock_condition
+    assert carried.requests[0].resolution is not None
+    assert carried.requests[0].resolution.provenance == "user-confirmed"
+    assert carried.requests[1].request_id == "REQ-SIBLING"
+    fresh_request = carried.requests[-1]
+    assert fresh_request.request_id == carried.block.request_id
+    assert fresh_request.resolution is None
+    assert "OUT-001" not in DeliveryRuntime(target_root, revised.contract).claimable_outcome_ids()
+
+    runtime = DeliveryRuntime(target_root, revised.contract)
+    resolved = runtime.resolve_request(
+        fresh_request.request_id,
+        DeliveryRequestResolution(response_text="The revised pilot is complete.", provenance="user-confirmed"),
+    )
+
+    assert resolved.request_id == fresh_request.request_id
+    assert runtime.show_binding("OUT-001").block is not None
+    assert runtime.show_binding("OUT-001").block.resolved is True

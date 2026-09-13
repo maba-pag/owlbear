@@ -9,7 +9,7 @@ import logging
 import subprocess
 import time
 import uuid
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -69,8 +69,10 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeAbandonment,
@@ -116,7 +118,9 @@ from owlbear_delivery.delivery_runtime import (
     is_acceptance_waiting_observation,
     is_change_terminal,
     parse_delivery_frontier,
+    repair_missing_request_provenance,
 )
+from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublicationHistory,
@@ -157,6 +161,11 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     failed_required_publication_checks,
 )
+from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionParticipant,
+)
 from owlbear_delivery.storage_io import atomic_write, locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -167,10 +176,13 @@ from owlbear_delivery.target_contract import (
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     DeliveryPortfolioSnapshot,
+    WorkItemCardView,
+    WorkItemClaimView,
     WorkItemDetailView,
     WorkItemNeed,
     WorkItemProjector,
     WorkItemPublicationPhase,
+    WorkItemRecoveryView,
     WorkItemScope,
     WorkItemTargetSyncConflictView,
     WorkItemWorktreeCleanupView,
@@ -178,7 +190,7 @@ from owlbear_delivery.work_items import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
     from owlbear_delivery.completed_history import (
         CompletedChangePage,
@@ -193,7 +205,6 @@ if TYPE_CHECKING:
     from owlbear_delivery.delivery_state import DeliveryStatePublicationReceipt, DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
-        DesignPackageResult,
         DesignPackageStore,
         VerifiedDesignPackage,
     )
@@ -641,6 +652,24 @@ class DeliveryRolePolicy(_ApplicationModel):
     reviewer_agent: str = Field(min_length=1)
 
 
+class DeliveryActionSelection(_ApplicationModel):
+    """Fence one explicitly selected next Planner or Builder action."""
+
+    change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    expected_stage: Literal[DeliveryStage.PLANNING, DeliveryStage.IMPLEMENTATION]
+    expected_task_id: str | None = Field(default=None, min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_source_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @model_validator(mode="after")
+    def _validate_task_selection(self) -> DeliveryActionSelection:
+        if (self.expected_stage == DeliveryStage.IMPLEMENTATION) != (self.expected_task_id is not None):
+            message = "only an Implementation selection requires the expected next task identity"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryLaunchPackage(_ApplicationModel):
     """Bounded identity and source locators for one named worker invocation."""
 
@@ -808,6 +837,17 @@ class DeliveryRepairResult(_ApplicationModel):
         return self
 
 
+class DeliveryUnresolvedOutcome(_ApplicationModel):
+    """Bounded unresolved outcome evidence retained alongside Change detail."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    card: WorkItemCardView
+    requests: tuple[DeliveryRequest, ...] = ()
+    block: DeliveryBlock | None = None
+    active_claim: WorkItemClaimView | None = None
+    recovery_attention: WorkItemRecoveryView | None = None
+
+
 class DeliveryChangeView(_ApplicationModel):
     """One coherent semantic, health, and repair view for a Delivery Change."""
 
@@ -816,23 +856,171 @@ class DeliveryChangeView(_ApplicationModel):
     detail: WorkItemDetailView
     health: DeliveryHealthView
     repair: DeliveryRepairResult | None = None
+    unresolved_outcomes: tuple[DeliveryUnresolvedOutcome, ...] = ()
+
+
+class DeliveryResultSubmission(_ApplicationModel):
+    """One claim-bound Builder result submitted for publication and promotion."""
+
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result: DeliveryTaskResult
+
+
+class DeliveryResultSubmissionResult(_ApplicationModel):
+    """The promoted Builder result and its current runtime binding."""
+
+    kind: Literal["submitted"] = "submitted"
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result_id: str = Field(min_length=1)
+    binding: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_binding(self) -> DeliveryResultSubmissionResult:
+        if self.binding.outcome_id != self.outcome_id:
+            message = "submitted result binding does not match its Outcome"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryDesignPut(_ApplicationModel):
+    """One create-or-CAS-revise request for authored Design bytes."""
+
+    change_id: str = Field(min_length=1)
+    intent_bytes: bytes
+    design_bytes: bytes
+    expected_package_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class DeliveryChangeIntentKind(StrEnum):
+    """User-directed Change lifecycle intent categories."""
+
+    DEFER = "defer"
+    RESUME = "resume"
+    ABANDON = "abandon"
+
+
+class DeliveryChangeIntent(_ApplicationModel):
+    """One version-bound request to pause, resume, or abandon a Change."""
+
+    change_id: str = Field(min_length=1)
+    kind: DeliveryChangeIntentKind
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reason: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_reason(self) -> DeliveryChangeIntent:
+        if self.kind is DeliveryChangeIntentKind.RESUME:
+            if self.reason is not None:
+                message = "resume intent does not accept a reason"
+                raise ValueError(message)
+        elif self.reason is None or not self.reason.strip():
+            message = "defer and abandon intents require a reason"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeIntentResult(_ApplicationModel):
+    """The applied Change intent receipt and resulting frontier version."""
+
+    change_id: str = Field(min_length=1)
+    kind: DeliveryChangeIntentKind
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    receipt: DeliveryChangeDeferral | DeliveryChangeAbandonment
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryChangeIntentResult:
+        if self.receipt.change_id != self.change_id:
+            message = "Change intent receipt does not match its Change"
+            raise ValueError(message)
+        if self.kind is DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeAbandonment):
+            message = "abandon intent requires an abandonment receipt"
+            raise ValueError(message)
+        if self.kind is not DeliveryChangeIntentKind.ABANDON and not isinstance(self.receipt, DeliveryChangeDeferral):
+            message = "defer or resume intent requires a deferral receipt"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryAnswerKind(StrEnum):
+    """High-level user answer targets currently supported by Delivery."""
+
+    REQUEST = "request"
+    BLOCK = "block"
+    DISPOSITION = "disposition"
 
 
 class DeliveryAnswer(_ApplicationModel):
-    """One version-bound answer to a retained Delivery request."""
+    """One version-bound answer to a retained request or requestless block."""
 
     change_id: str = Field(min_length=1)
-    request_id: str = Field(min_length=1)
-    resolution: DeliveryRequestResolution
+    kind: DeliveryAnswerKind = DeliveryAnswerKind.REQUEST
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_id: str | None = None
+    resolution: DeliveryRequestResolution | None = None
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    block_id: str | None = None
+    operator_note: str | None = None
+    locators: tuple[str, ...] = ()
+    expected_disposition_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> DeliveryAnswer:
+        if self.kind is DeliveryAnswerKind.REQUEST:
+            if self.request_id is None or self.resolution is None:
+                message = "request answers require request identity and resolution"
+                raise ValueError(message)
+            if any((self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "request answers cannot include block evidence"
+                raise ValueError(message)
+        elif self.kind is DeliveryAnswerKind.BLOCK:
+            if (
+                self.outcome_id is None
+                or self.block_id is None
+                or self.operator_note is None
+                or not self.operator_note.strip()
+                or not self.locators
+            ):
+                message = "block answers require outcome, block, note, and locators"
+                raise ValueError(message)
+            if self.request_id is not None or self.resolution is not None:
+                message = "block answers cannot include request resolution"
+                raise ValueError(message)
+        else:
+            if self.expected_disposition_id is None:
+                message = "disposition answers require an expected disposition identity"
+                raise ValueError(message)
+            if any((self.request_id, self.outcome_id, self.block_id, self.operator_note)) or self.locators:
+                message = "disposition answers cannot include request or block evidence"
+                raise ValueError(message)
+        return self
 
 
 class DeliveryAnswerResult(_ApplicationModel):
-    """The resolved request and frontier version after an accepted answer."""
+    """The answered authority and frontier version after an accepted answer."""
 
     change_id: str = Field(min_length=1)
-    request: DeliveryRequest
+    kind: DeliveryAnswerKind
     frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request: DeliveryRequest | None = None
+    binding: OutcomeAuthorityBinding | None = None
+    disposition: DeliveryChangeDispositionResolution | None = None
+
+    @model_validator(mode="after")
+    def _validate_result(self) -> DeliveryAnswerResult:
+        if self.kind is DeliveryAnswerKind.REQUEST and self.request is None:
+            message = "request answer results require the resolved request"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.BLOCK and self.binding is None:
+            message = "block answer results require the cleared binding"
+            raise ValueError(message)
+        if self.kind is DeliveryAnswerKind.DISPOSITION and self.disposition is None:
+            message = "disposition answer results require the resolution receipt"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryAcquisitionResult(_ApplicationModel):
@@ -1086,10 +1274,129 @@ class DeliveryStateSnapshotRepairReceipt(_ApplicationModel):
         return self
 
 
+class DeliveryStrandedFrontierRepairReceipt(_ApplicationModel):
+    """Evidence that one confirmed legacy request-provenance defect was repaired."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    request_id: str = Field(min_length=1)
+    previous_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preserved_frontier_path: str = Field(min_length=1)
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        request_id: str,
+        previous_frontier_digest: str,
+        frontier_digest: str,
+        preserved_frontier_path: str,
+    ) -> DeliveryStrandedFrontierRepairReceipt:
+        """Create deterministic evidence for one frontier repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "request_id": request_id,
+            "previous_frontier_digest": previous_frontier_digest,
+            "frontier_digest": frontier_digest,
+            "preserved_frontier_path": preserved_frontier_path,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryStrandedFrontierRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "stranded frontier repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryQuarantinedSnapshotRepairReceipt(_ApplicationModel):
+    """Evidence that one quarantined remote snapshot was replaced under CAS."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: str = Field(min_length=1)
+    invalid_snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+
+    @classmethod
+    def create(  # noqa: PLR0913 - receipt identity binds each exact repair input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        invalid_snapshot_digest: str,
+        expected_remote_head: str,
+        publication: DeliveryStatePublicationReceipt,
+        diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        """Create deterministic evidence for one remote snapshot repair."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "invalid_snapshot_digest": invalid_snapshot_digest,
+            "expected_remote_head": expected_remote_head,
+            "snapshot_id": publication.snapshot_id,
+            "published_head": publication.published_head,
+            "diagnostic_code": diagnostic_code,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
+        payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
+        receipt_id = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return cls(receipt_id=receipt_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != expected:
+            message = "quarantined snapshot repair identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryQuarantinedSnapshotRepairProposal(_ApplicationModel):
+    """Typed confirmation boundary for one known invalid remote snapshot."""
+
+    change_id: str = Field(min_length=1)
+    diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"]
+    expected_remote_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    requires_confirmation: Literal[True] = True
+    consequence: str = Field(min_length=1)
+
+
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
     code = "ERR_DELIVERY_PORTFOLIO"
+
+
+class DeliveryCapacityWaitingError(DeliveryRuntimeConflictError):
+    """Selected work can be retried when shared execution capacity is available."""
+
+    code = "ERR_DELIVERY_CAPACITY_WAITING"
+
+
+class DeliveryActionBusyError(DeliveryRuntimeConflictError):
+    """A selected Change is temporarily locked by another operation."""
+
+    code = "ERR_DELIVERY_ACTION_BUSY"
 
 
 class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError):
@@ -1391,6 +1698,24 @@ class PortfolioApplication:
     ) -> DesignPackageResult:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
+
+    def put_design(self, design: DeliveryDesignPut) -> DesignPackageResult:
+        """Create or CAS-revise one exact authored Design package."""
+        if design.expected_package_id is None:
+            return self._package_store.create(design.change_id, design.intent_bytes, design.design_bytes)
+        revised = self.revise_design_session(
+            design.change_id,
+            design.expected_package_id,
+            design.intent_bytes,
+            design.design_bytes,
+        )
+        return DesignPackageResult(
+            change_id=revised.change_id,
+            package_id=revised.package_id,
+            package_root=self._package_root / design.change_id,
+            manifest=revised.manifest,
+            replayed=False,
+        )
 
     def observe_change_publication_checks(
         self,
@@ -2519,6 +2844,14 @@ class PortfolioApplication:
     ) -> DeliveryChangeDispositionResolution:
         """Resolve one exact Change attention record without recreating provider authority."""
         runtime = self._runtime(change_id, for_mutation=True)
+        with self._attention_resolution_lock(change_id):
+            resolution = runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"attention-resolution-{resolution.resolution_id}")
+            return resolution
+
+    @contextmanager
+    def _attention_resolution_lock(self, change_id: str) -> Iterator[None]:
+        """Bound checkpoint contention for disposition resolution."""
         deadline = time.monotonic() + _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS
         with ExitStack() as stack:
             while True:
@@ -2535,9 +2868,7 @@ class PortfolioApplication:
                     time.sleep(min(_ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS, remaining))
                 else:
                     break
-            resolution = runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
-            self._publish_delivery_state(change_id, runtime, f"attention-resolution-{resolution.resolution_id}")
-            return resolution
+            yield
 
     def recover_publication_baseline(
         self,
@@ -3186,8 +3517,7 @@ class PortfolioApplication:
                     state=current,
                     reconciled=False,
                     error_code=pending.last_error_code,
-                    error_detail=pending.last_error_detail
-                    or "Checkpoint retry is waiting for its next eligible time.",
+                    error_detail=pending.last_error_detail or "Checkpoint retry is waiting for its next eligible time.",
                 )
             return self._reconcile_change_checkpoint_with_failure_recording(change_id, runtime)
 
@@ -3621,14 +3951,25 @@ class PortfolioApplication:
                     "manifest.json": package.manifest.canonical_bytes(),
                 },
                 _checkpoint_operation_id("package", request.change_id, package.package_id),
+                request.expected_design_package_snapshot_receipt_id,
             )
-            runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
+            checkpoint = runtime.checkpoint_publication_state()
+            if checkpoint.pending_checkpoint is not None:
+                runtime.record_design_package_snapshot(checkpoint, snapshot)
+            elif checkpoint.published_head is not None and checkpoint.published_head != snapshot.snapshot_head:
+                runtime.queue_explicit_checkpoint(snapshot.snapshot_head)
+            else:
+                runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
             if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
                 self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
             return result.model_copy(
                 update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)}
             )
+
+    def admit_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
+        """Admit one exact approved Design version as executable Delivery authority."""
+        return self.admit_delivery_change(request)
 
     def publish_delivery_plan(
         self,
@@ -3737,6 +4078,10 @@ class PortfolioApplication:
             if self._is_work_portfolio_visible(snapshot)
         )
 
+    def list_changes(self) -> PortfolioReadView:
+        """Return current grouped Change state and operating guidance."""
+        return self.portfolio_read_view()
+
     def portfolio_read_view(self) -> PortfolioReadView:
         """Return grouped work and operating facts from one immutable capture."""
         snapshots = self._portfolio_snapshots()
@@ -3824,6 +4169,199 @@ class PortfolioApplication:
                 change_id=change_id,
                 publication=publication,
                 local_frontier_digest=hashlib.sha256(frontier_bytes).hexdigest(),
+            )
+
+    def repair_stranded_frontier(
+        self,
+        change_id: str,
+        request_id: str,
+        expected_frontier_digest: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+    ) -> DeliveryStrandedFrontierRepairReceipt:
+        """Repair one confirmed legacy request-provenance defect with CAS fencing."""
+        if confirmed_repair is not True:
+            self._fail("stranded frontier repair requires explicit confirmation")
+        frontier_path = self._target_root / "changes" / change_id / "frontier.json"
+        history_relative = Path("changes") / change_id / "revisions" / expected_frontier_digest / "frontier.json"
+        history_path = self._target_root / history_relative
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            try:
+                current_bytes = frontier_path.read_bytes()
+            except OSError as exc:
+                self._fail("stranded frontier repair requires the current frontier", exc)
+            current_digest = hashlib.sha256(current_bytes).hexdigest()
+            if current_digest != expected_frontier_digest:
+                if not history_path.is_file():
+                    self._fail("Delivery frontier changed before stranded frontier repair")
+                history_bytes = history_path.read_bytes()
+                if hashlib.sha256(history_bytes).hexdigest() != expected_frontier_digest:
+                    self._fail("stranded frontier repair history does not match the expected frontier")
+                _frontier, repaired_bytes = repair_missing_request_provenance(history_bytes, request_id)
+                if current_bytes != repaired_bytes:
+                    self._fail("stranded frontier repair predecessor is not the expected repaired successor")
+                return DeliveryStrandedFrontierRepairReceipt.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    request_id=request_id,
+                    previous_frontier_digest=expected_frontier_digest,
+                    frontier_digest=hashlib.sha256(repaired_bytes).hexdigest(),
+                    preserved_frontier_path=history_relative.as_posix(),
+                )
+
+            _frontier, repaired_bytes = repair_missing_request_provenance(current_bytes, request_id)
+            if history_path.exists() and history_path.read_bytes() != current_bytes:
+                self._fail("stranded frontier repair history already contains different evidence")
+            participants: list[TransactionParticipant | ReplacementTransactionParticipant] = []
+            if not history_path.exists():
+                participants.append(TransactionParticipant(self._target_root, history_relative, current_bytes))
+            participants.append(
+                ReplacementTransactionParticipant(
+                    self._target_root,
+                    frontier_path.relative_to(self._target_root),
+                    current_bytes,
+                    repaired_bytes,
+                )
+            )
+            pending_path = frontier_path.with_name("state-publication.json")
+            pending_bytes = _canonical_model_bytes(
+                DeliveryPendingStatePublication.pending(
+                    expected_frontier_digest,
+                    hashlib.sha256(repaired_bytes).hexdigest(),
+                )
+            )
+            if pending_path.exists():
+                participants.append(
+                    ReplacementTransactionParticipant(
+                        self._target_root,
+                        pending_path.relative_to(self._target_root),
+                        pending_path.read_bytes(),
+                        pending_bytes,
+                    )
+                )
+            else:
+                participants.append(
+                    TransactionParticipant(
+                        self._target_root,
+                        pending_path.relative_to(self._target_root),
+                        pending_bytes,
+                    )
+                )
+            RuntimeTransaction(
+                self._target_root,
+                f"delivery-stranded-frontier-repair-{change_id}-{expected_frontier_digest}",
+                tuple(participants),
+            ).commit()
+            self._reconcile_runtimes()
+            return DeliveryStrandedFrontierRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                request_id=request_id,
+                previous_frontier_digest=expected_frontier_digest,
+                frontier_digest=hashlib.sha256(repaired_bytes).hexdigest(),
+                preserved_frontier_path=history_relative.as_posix(),
+            )
+
+    def propose_quarantined_delivery_state_snapshot_repair(
+        self,
+        change_id: str,
+    ) -> DeliveryQuarantinedSnapshotRepairProposal:
+        """Return exact fences for one known quarantined remote snapshot."""
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("quarantined snapshot repair requires a configured state publisher")
+        inventory = publisher.read_snapshot_inventory()
+        diagnostics = tuple(
+            item
+            for item in inventory.diagnostics
+            if item.change_id == change_id
+            and item.code in {"snapshot-invalid", "snapshot-identity-invalid"}
+            and item.raw_digest is not None
+        )
+        if inventory.remote_head is None or len(diagnostics) != 1:
+            self._fail("no uniquely repairable quarantined remote snapshot exists")
+        diagnostic = diagnostics[0]
+        if diagnostic.raw_digest is None:
+            self._fail("quarantined remote snapshot has no raw-byte fence")
+        return DeliveryQuarantinedSnapshotRepairProposal(
+            change_id=change_id,
+            diagnostic_code=diagnostic.code,
+            expected_remote_head=inventory.remote_head,
+            snapshot_digest=diagnostic.raw_digest,
+            consequence="Replace the quarantined predecessor with a fresh snapshot from validated local authority.",
+        )
+
+    def repair_quarantined_delivery_state_snapshot(  # noqa: PLR0913 - repair binds each exact authority fence.
+        self,
+        change_id: str,
+        operation_id: str,
+        *,
+        confirmed_repair: Literal[True],
+        expected_remote_head: str,
+        expected_snapshot_digest: str,
+        expected_diagnostic_code: Literal["snapshot-invalid", "snapshot-identity-invalid"],
+    ) -> DeliveryQuarantinedSnapshotRepairReceipt:
+        """Replace one known invalid remote snapshot from validated local authority."""
+        if confirmed_repair is not True:
+            self._fail("quarantined snapshot repair requires explicit confirmation")
+        publisher = self._delivery_state_publisher
+        if publisher is None:
+            self._fail("quarantined snapshot repair requires a configured state publisher")
+        self._reconcile_runtimes()
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            inventory = publisher.read_snapshot_inventory()
+            diagnostic = next(
+                (
+                    item
+                    for item in inventory.diagnostics
+                    if item.change_id == change_id
+                    and item.code == expected_diagnostic_code
+                    and item.raw_digest == expected_snapshot_digest
+                ),
+                None,
+            )
+            if diagnostic is None and inventory.remote_head == expected_remote_head:
+                self._fail("expected quarantined remote snapshot diagnostic is absent")
+            change_diagnostics = tuple(
+                item for item in self._startup_health_diagnostics if item.change_id == change_id
+            )
+            if len(change_diagnostics) != 1 or not (
+                change_diagnostics[0].source == "remote-state"
+                and change_diagnostics[0].code == expected_diagnostic_code
+            ):
+                self._fail("quarantined remote snapshot repair has unrelated Change diagnostics")
+            runtime = self._runtimes.get(change_id)
+            if runtime is None:
+                detail = self._runtime_reconciliation_errors.get(change_id)
+                if detail is not None:
+                    raise DeliveryRuntimeReconciliationError(change_id, detail)
+                self._fail(f"Delivery runtime is absent: {change_id}")
+            package = self._package_store.read_verified(change_id)
+            self._validate_package_authority(runtime, package)
+            admission_path = self._target_root / "changes" / change_id / "admission.json"
+            admission = DeliveryAdmissionReceipt.model_validate_json(admission_path.read_bytes())
+            publication = publisher.repair_quarantined_snapshot(
+                change_id=change_id,
+                package_id=package.package_id,
+                coordination=self._workspace_manager.show(change_id),
+                runtime=runtime,
+                admission=admission,
+                operation_id=operation_id,
+                captured_at=_timestamp(self._clock()),
+                expected_remote_head=expected_remote_head,
+                expected_snapshot_digest=expected_snapshot_digest,
+                expected_diagnostic_code=expected_diagnostic_code,
+            )
+            runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
+            self._clear_remote_state_reconciliation(change_id)
+            return DeliveryQuarantinedSnapshotRepairReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                invalid_snapshot_digest=expected_snapshot_digest,
+                expected_remote_head=expected_remote_head,
+                publication=publication,
+                diagnostic_code=expected_diagnostic_code,
             )
 
     def recover_out_of_band_head(  # noqa: C901, PLR0912, PLR0913 - recovery binds exact Delivery and Git fences.
@@ -4050,8 +4588,15 @@ class PortfolioApplication:
             for diagnostic in self._startup_health_diagnostics
             if not (
                 diagnostic.source == "remote-state"
-                and diagnostic.code == "remote-state-reconciliation-required"
                 and diagnostic.change_id == change_id
+                and diagnostic.code
+                in {
+                    "remote-state-reconciliation-required",
+                    "snapshot-invalid",
+                    "snapshot-identity-invalid",
+                    "snapshot-path-identity-mismatch",
+                    "snapshot-unreadable",
+                }
             )
         )
         self._runtime_reconciliation_errors.pop(change_id, None)
@@ -4149,9 +4694,7 @@ class PortfolioApplication:
             )
         )
         if scoped_change_id is not None:
-            ordered = tuple(
-                item for item in ordered if item.change_id is None or item.change_id == scoped_change_id
-            )
+            ordered = tuple(item for item in ordered if item.change_id is None or item.change_id == scoped_change_id)
         bounded = ordered[:_MAX_HEALTH_DIAGNOSTICS]
         return DeliveryHealthView(
             status=DeliveryHealthStatus.ATTENTION if bounded else DeliveryHealthStatus.HEALTHY,
@@ -5027,8 +5570,7 @@ class PortfolioApplication:
                                     "confirmed before worktree recovery."
                                 ),
                                 retry_condition=(
-                                    "Confirm the Builder invocation has ended before recovering its "
-                                    "managed worktree."
+                                    "Confirm the Builder invocation has ended before recovering its managed worktree."
                                 ),
                             )
                         )
@@ -5117,10 +5659,107 @@ class PortfolioApplication:
                 ),
             )
 
-    def _replay_pending_state_publications(self) -> tuple[DeliveryAcquisitionFailure, ...]:
+    def acquire_actions(self, selection: DeliveryActionSelection | None = None) -> DeliveryAcquisitionResult:
+        """Acquire a fenced selected action, or the explicitly requested portfolio batch."""
+        if selection is None:
+            return self.acquire_frontier_work()
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(selection.change_id),
+        ):
+            runtime = self._runtime(selection.change_id, for_mutation=True)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                return DeliveryAcquisitionResult(
+                    launch_packages=(),
+                    failures=(
+                        DeliveryAcquisitionFailure(
+                            change_id=selection.change_id,
+                            outcome_id=selection.outcome_id,
+                            code="ERR_DELIVERY_ACTION_ALREADY_ACTIVE",
+                            detail=(
+                                "The selected Change already has an active claim; "
+                                "no worker was dispatched by this call."
+                            ),
+                            retry_condition=(
+                                "Inspect get_change before continuing. Do not redispatch an existing worker or recover "
+                                "its claim without establishing that the worker has stopped."
+                            ),
+                        ),
+                    ),
+                )
+            if hashlib.sha256(runtime.frontier_bytes()).hexdigest() != selection.expected_frontier_digest:
+                message = "selected action frontier changed; refresh the selection"
+                raise DeliveryActionSelectionConflictError(message)
+            failures = self._replay_pending_state_publications(selection.change_id)
+            if failures:
+                return DeliveryAcquisitionResult(launch_packages=(), failures=failures)
+            candidate = next(
+                iter(self._candidates(selection.change_id)),
+                None,
+            )
+            if candidate is None:
+                self._fail("selected Change has no currently claimable action")
+            if (
+                candidate.binding.outcome_id != selection.outcome_id
+                or candidate.binding.stage != selection.expected_stage
+                or candidate.task_id != selection.expected_task_id
+            ):
+                message = "selected action does not match the next eligible outcome, stage, and task"
+                raise DeliveryActionSelectionConflictError(message)
+            if self._execution_occupancy() >= self._execution_capacity:
+                message = "selected action is waiting for execution capacity"
+                raise DeliveryCapacityWaitingError(message)
+            return self._acquire_selected_candidate(candidate, selection)
+
+    @contextmanager
+    def _selected_action_checkpoint_lock(self, change_id: str) -> Iterator[None]:
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(locked_roots((self._checkpoint_lock_root(change_id),), blocking=False))
+            except BlockingIOError as exc:
+                message = "selected Change has an operation in progress; retry after that operation finishes"
+                raise DeliveryActionBusyError(message) from exc
+            yield
+
+    def _acquire_selected_candidate(
+        self,
+        candidate: _Candidate,
+        selection: DeliveryActionSelection,
+    ) -> DeliveryAcquisitionResult:
+        source = self._prepare_source(
+            candidate.change_id,
+            candidate.runtime,
+            candidate.binding.outcome_id,
+            candidate.role,
+            allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
+        )
+        if isinstance(source, DeliveryAcquisitionFailure):
+            return DeliveryAcquisitionResult(launch_packages=(), failures=(source,))
+        if source.source_head != selection.expected_source_head:
+            message = "selected action source head changed; refresh the selection"
+            raise DeliveryActionSelectionConflictError(message)
+        if hashlib.sha256(candidate.runtime.frontier_bytes()).hexdigest() != selection.expected_frontier_digest:
+            message = "selected action frontier changed during source preparation; refresh the selection"
+            raise DeliveryActionSelectionConflictError(message)
+        launch = self._activate_candidate(
+            candidate,
+            source,
+            expected_frontier_digest=selection.expected_frontier_digest,
+        )
+        if isinstance(launch, DeliveryAcquisitionFailure):
+            return DeliveryAcquisitionResult(launch_packages=(), failures=(launch,))
+        return DeliveryAcquisitionResult(launch_packages=(launch,))
+
+    def _replay_pending_state_publications(
+        self, selected_change_id: str | None = None
+    ) -> tuple[DeliveryAcquisitionFailure, ...]:
         """Replay durable local state publications before exposing new claims."""
         failures = []
-        for change_id, runtime in sorted(self._runtimes.items()):
+        for change_id, runtime in sorted(
+            self._runtimes.items()
+            if selected_change_id is None
+            else ((selected_change_id, self._runtimes[selected_change_id]),)
+        ):
             try:
                 pending = runtime.pending_state_publication()
             except (OSError, RuntimeError, ValueError) as exc:
@@ -5159,22 +5798,72 @@ class PortfolioApplication:
                 )
                 continue
             current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-            if current_digest != pending.frontier_digest:
+            if self._delivery_state_publisher is None:
+                if current_digest == pending.frontier_digest:
+                    runtime.acknowledge_pending_publication(current_digest)
+                    continue
                 failures.append(
                     DeliveryAcquisitionFailure(
                         change_id=change_id,
                         outcome_id="OUT-000",
                         code=PortfolioApplicationError.code,
-                        detail="Pending Delivery-state publication does not match the current frontier.",
-                        retry_condition="Reconcile the local frontier and its pending publication intent.",
+                        detail="Delivery-state publication publisher is unavailable; pending publication is retained.",
+                        retry_condition="Restore the Delivery-state publisher before replaying publication.",
                     )
                 )
                 continue
-            if self._delivery_state_publisher is None:
-                runtime.acknowledge_pending_publication(current_digest)
-                continue
+            if current_digest != pending.frontier_digest:
+                try:
+                    inventory = self._delivery_state_publisher.read_snapshot_inventory()
+                    snapshot = next(
+                        (item for item in inventory.snapshots if item.change_id == change_id),
+                        None,
+                    )
+                    remote_digest = (
+                        None
+                        if snapshot is None
+                        else hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
+                    )
+                except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id="OUT-000",
+                            code=getattr(exc, "code", PortfolioApplicationError.code),
+                            detail=str(exc),
+                            retry_condition="Retry Delivery-state publication replay.",
+                        )
+                    )
+                    continue
+                if remote_digest == pending.frontier_digest:
+                    runtime.reanchor_pending_publication(pending.frontier_digest)
+                    pending = runtime.pending_state_publication()
+                    if pending is not None:
+                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                elif remote_digest == current_digest:
+                    runtime.reanchor_pending_publication(current_digest)
+                    pending = runtime.pending_state_publication()
+                    if pending is not None:
+                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                if pending is not None and current_digest == pending.frontier_digest:
+                    pass
+                else:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id="OUT-000",
+                            code=PortfolioApplicationError.code,
+                            detail="Pending Delivery-state publication does not match the current frontier.",
+                            retry_condition="Reconcile the local frontier and its pending publication intent.",
+                        )
+                    )
+                    continue
             try:
-                remote_head = self._pending_publication_remote_head(change_id, pending)
+                remote_head = self._pending_publication_remote_head(
+                    change_id,
+                    pending,
+                    current_frontier_digest=current_digest,
+                )
                 self._publish_delivery_state(
                     change_id,
                     runtime,
@@ -5197,6 +5886,7 @@ class PortfolioApplication:
         self,
         change_id: str,
         pending: DeliveryPendingStatePublication,
+        current_frontier_digest: str | None = None,
     ) -> str:
         """Return the remote state head only when its snapshot matches the pending base."""
         publisher = self._delivery_state_publisher
@@ -5210,7 +5900,7 @@ class PortfolioApplication:
         if inventory.remote_head is None or snapshot is None:
             self._fail("remote Delivery snapshot is unavailable for pending replay")
         remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
-        if remote_digest != pending.base_frontier_digest:
+        if remote_digest != pending.base_frontier_digest and remote_digest != current_frontier_digest:
             self._fail("remote Delivery snapshot no longer matches the pending publication base")
         return inventory.remote_head
 
@@ -5294,13 +5984,11 @@ class PortfolioApplication:
                         expected_frontier_digest=digest,
                         summary="Confirm that the stale Builder invocation has ended before recovery.",
                         consequence=(
-                            "Delivery will preserve dirty bytes, restore the reviewed worktree, "
-                            "and release custody."
+                            "Delivery will preserve dirty bytes, restore the reviewed worktree, and release custody."
                         ),
                     )
                     for outcome_id, claim in runtime.active_claims()
-                    if claim.worker_role is DeliveryWorkerRole.BUILDER
-                    and _timestamp(claim.started_at) <= cutoff
+                    if claim.worker_role is DeliveryWorkerRole.BUILDER and _timestamp(claim.started_at) <= cutoff
                 ),
                 None,
             )
@@ -5322,12 +6010,23 @@ class PortfolioApplication:
             )
             return DeliveryRepairResult(change_id=change_id, recovery=recovery)
 
+    def repair(
+        self,
+        change_id: str,
+        proposal_id: str | None = None,
+        *,
+        confirmed_lost: bool = False,
+    ) -> DeliveryRepairResult:
+        """Diagnose or apply one high-level repair proposal."""
+        return self.repair_change(change_id, proposal_id, confirmed_lost=confirmed_lost)
+
     def get_change(self, change_id: str) -> DeliveryChangeView:
         """Return one coherent Change view without requiring caller-side projection joins."""
         runtime = self._runtime(change_id)
         frontier_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
         repair = self.repair_change(change_id)
-        items = self._work_item_projector(runtime).group_view().items
+        projector = self._work_item_projector(runtime)
+        items = projector.group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
         proposal_outcome_id = repair.proposal.outcome_id if repair.proposal is not None else None
@@ -5341,42 +6040,255 @@ class PortfolioApplication:
         )
         detail = self.show_work_item_view(change_id, item_key)
         health = self.delivery_health(change_id)
+        unresolved_outcomes = tuple(
+            DeliveryUnresolvedOutcome(
+                outcome_id=outcome_detail.card.work_item_id,
+                card=outcome_detail.card,
+                requests=tuple(request for request in outcome_detail.requests if request.resolution is None),
+                block=outcome_detail.block if outcome_detail.block and not outcome_detail.block.resolved else None,
+                active_claim=outcome_detail.active_claim,
+                recovery_attention=outcome_detail.recovery_attention,
+            )
+            for card in items
+            if card.scope is WorkItemScope.OUTCOME
+            for outcome_detail in (projector.show_view(card.item_key),)
+            if (
+                any(request.resolution is None for request in outcome_detail.requests)
+                or (outcome_detail.block is not None and not outcome_detail.block.resolved)
+                or outcome_detail.active_claim is not None
+                or outcome_detail.recovery_attention is not None
+            )
+        )
         return DeliveryChangeView(
             change_id=change_id,
             frontier_digest=frontier_digest,
             detail=detail,
             health=health,
             repair=repair if repair.proposal is not None else None,
+            unresolved_outcomes=unresolved_outcomes,
         )
 
-    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:
-        """Apply one request answer after revalidating the captured frontier version."""
+    def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:
+        """Apply one version-bound user lifecycle intent through the owning runtime."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(intent.change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(intent.change_id),)):
+                current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+                if current_digest != intent.expected_frontier_digest:
+                    if intent.kind is DeliveryChangeIntentKind.DEFER:
+                        receipt = runtime.change_deferral()
+                        if receipt is not None and receipt.reason == intent.reason:
+                            return DeliveryChangeIntentResult(
+                                change_id=intent.change_id,
+                                kind=intent.kind,
+                                frontier_digest=current_digest,
+                                receipt=receipt,
+                            )
+                    elif intent.kind is DeliveryChangeIntentKind.ABANDON:
+                        receipt = runtime.change_abandonment()
+                        if receipt is not None and receipt.reason == intent.reason:
+                            return DeliveryChangeIntentResult(
+                                change_id=intent.change_id,
+                                kind=intent.kind,
+                                frontier_digest=current_digest,
+                                receipt=receipt,
+                            )
+                    self._fail("Change intent frontier changed")
+                if intent.kind is DeliveryChangeIntentKind.DEFER:
+                    if intent.reason is None:
+                        self._fail("defer intent requires a reason")
+                    receipt = runtime.defer_change(intent.reason, _timestamp(self._clock()))
+                elif intent.kind is DeliveryChangeIntentKind.RESUME:
+                    receipt = runtime.resume_change()
+                else:
+                    if intent.reason is None:
+                        self._fail("abandon intent requires a reason")
+                    receipt = runtime.abandon_change(intent.reason, _timestamp(self._clock()))
+                self._publish_delivery_state(
+                    intent.change_id,
+                    runtime,
+                    _checkpoint_operation_id(intent.kind.value, intent.change_id, receipt.model_dump_json()),
+                )
+                return DeliveryChangeIntentResult(
+                    change_id=intent.change_id,
+                    kind=intent.kind,
+                    frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    receipt=receipt,
+                )
+
+    def submit_result(self, submission: DeliveryResultSubmission) -> DeliveryResultSubmissionResult:
+        """Publish and promote one exact Builder result as one claim-bound operation."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(submission.change_id, for_mutation=True)
+            with locked_roots((self._checkpoint_lock_root(submission.change_id),)):
+                binding = runtime.show_binding(submission.outcome_id)
+                existing = next(
+                    (item for item in binding.results if item.task_id == submission.result.task_id),
+                    None,
+                )
+                if existing is not None:
+                    if existing != submission.result or (
+                        binding.active_claim is not None and binding.active_claim.task_id == submission.result.task_id
+                    ):
+                        self._fail("submitted result conflicts with current Outcome authority")
+                    if runtime.pending_state_publication() is not None:
+                        self._publish_delivery_state(
+                            submission.change_id,
+                            runtime,
+                            _checkpoint_operation_id(
+                                "submit-result",
+                                submission.change_id,
+                                submission.outcome_id,
+                                submission.result.result_id,
+                            ),
+                        )
+                    return DeliveryResultSubmissionResult(
+                        change_id=submission.change_id,
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        result_id=submission.result.result_id,
+                        binding=binding,
+                    )
+                candidate = runtime.publish_result(
+                    PublishDeliveryResult(
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        result=submission.result,
+                    )
+                )
+                binding = runtime.transition(
+                    AdvanceDelivery(
+                        action="advance",
+                        outcome_id=submission.outcome_id,
+                        claim_id=submission.claim_id,
+                        output=candidate.output,
+                    )
+                )
+                self._publish_delivery_state(
+                    submission.change_id,
+                    runtime,
+                    _checkpoint_operation_id(
+                        "submit-result",
+                        submission.change_id,
+                        submission.outcome_id,
+                        submission.result.result_id,
+                    ),
+                )
+                return DeliveryResultSubmissionResult(
+                    change_id=submission.change_id,
+                    outcome_id=submission.outcome_id,
+                    claim_id=submission.claim_id,
+                    result_id=submission.result.result_id,
+                    binding=binding,
+                )
+
+    def answer(self, answer: DeliveryAnswer) -> DeliveryAnswerResult:  # noqa: C901, PLR0911
+        """Apply one version-bound request answer or requestless block evidence."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
-            with locked_roots((self._checkpoint_lock_root(answer.change_id),)):
+            checkpoint_lock = (
+                self._attention_resolution_lock(answer.change_id)
+                if answer.kind is DeliveryAnswerKind.DISPOSITION
+                else locked_roots((self._checkpoint_lock_root(answer.change_id),))
+            )
+            with checkpoint_lock:
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-                current = self._request(runtime, answer.request_id)
-                if current.kind is DeliveryRequestKind.DECISION and (
-                    answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
-                ):
-                    self._fail("Decision answers require exactly one selected option")
+                if answer.kind is DeliveryAnswerKind.REQUEST:
+                    current = self._request(runtime, answer.request_id)
+                    if current.kind is DeliveryRequestKind.DECISION and (
+                        answer.resolution.selected_option_id is None or answer.resolution.response_text is not None
+                    ):
+                        self._fail("Decision answers require exactly one selected option")
+                    if current_digest != answer.expected_frontier_digest:
+                        if current.resolution == answer.resolution:
+                            return DeliveryAnswerResult(
+                                change_id=answer.change_id,
+                                kind=answer.kind,
+                                request=current,
+                                frontier_digest=current_digest,
+                            )
+                        self._fail("answer frontier changed")
+                    resolved = runtime.resolve_request(answer.request_id, answer.resolution)
+                    self._publish_delivery_state(
+                        answer.change_id,
+                        runtime,
+                        _checkpoint_operation_id("request-answer", answer.change_id, answer.request_id),
+                    )
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        request=resolved,
+                        frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    )
+
+                if answer.kind is DeliveryAnswerKind.BLOCK:
+                    binding = runtime.show_binding(answer.outcome_id)
+                    block = binding.block
+                    if current_digest != answer.expected_frontier_digest:
+                        if (
+                            block is not None
+                            and block.resolved
+                            and block.resolution_note == answer.operator_note
+                            and block.resolution_locators == answer.locators
+                        ):
+                            return DeliveryAnswerResult(
+                                change_id=answer.change_id,
+                                kind=answer.kind,
+                                binding=binding,
+                                frontier_digest=current_digest,
+                            )
+                        self._fail("answer frontier changed")
+                    cleared = runtime.unblock(
+                        answer.outcome_id,
+                        answer.block_id,
+                        answer.operator_note,
+                        answer.locators,
+                    )
+                    self._publish_delivery_state(
+                        answer.change_id,
+                        runtime,
+                        _checkpoint_operation_id("block-answer", answer.change_id, answer.outcome_id, answer.block_id),
+                    )
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        binding=cleared,
+                        frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+                    )
+
+                disposition = runtime.change_disposition()
+                resolution = runtime.change_disposition_resolution()
                 if current_digest != answer.expected_frontier_digest:
-                    if current.resolution == answer.resolution:
+                    if resolution is not None and resolution.disposition_id == answer.expected_disposition_id:
                         return DeliveryAnswerResult(
                             change_id=answer.change_id,
-                            request=current,
+                            kind=answer.kind,
+                            disposition=resolution,
                             frontier_digest=current_digest,
                         )
                     self._fail("answer frontier changed")
-                resolved = runtime.resolve_request(answer.request_id, answer.resolution)
+                if disposition is None and resolution is not None:
+                    if resolution.disposition_id != answer.expected_disposition_id:
+                        self._fail("answer disposition is stale")
+                    return DeliveryAnswerResult(
+                        change_id=answer.change_id,
+                        kind=answer.kind,
+                        disposition=resolution,
+                        frontier_digest=current_digest,
+                    )
+                resolved = runtime.resolve_change_disposition(
+                    answer.expected_disposition_id,
+                    _timestamp(self._clock()),
+                )
                 self._publish_delivery_state(
                     answer.change_id,
                     runtime,
-                    _checkpoint_operation_id("request-answer", answer.change_id, answer.request_id),
+                    f"attention-resolution-{resolved.resolution_id}",
                 )
                 return DeliveryAnswerResult(
                     change_id=answer.change_id,
-                    request=resolved,
+                    kind=answer.kind,
+                    disposition=resolved,
                     frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
                 )
 
@@ -5515,9 +6427,11 @@ class PortfolioApplication:
             quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
         )
 
-    def _candidates(self) -> tuple[_Candidate, ...]:  # noqa: C901 - stable ranking boundary.
+    def _candidates(self, selected_change_id: str | None = None) -> tuple[_Candidate, ...]:  # noqa: C901
         candidates = []
         for change_id, runtime in self._runtimes.items():
+            if selected_change_id is not None and change_id != selected_change_id:
+                continue
             if change_id in self._runtime_reconciliation_errors:
                 continue
             try:
@@ -5720,12 +6634,20 @@ class PortfolioApplication:
         self,
         candidate: _Candidate,
         source: _PreparedSource,
+        *,
+        expected_frontier_digest: str | None = None,
     ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
         claim = self._new_claim(candidate.role, candidate.task_id)
-        candidate.runtime.activate_claim(ActivateDeliveryClaim(outcome_id=candidate.binding.outcome_id, claim=claim))
-        writer = None
-        if candidate.role == DeliveryWorkerRole.BUILDER:
-            try:
+        candidate.runtime.activate_claim(
+            ActivateDeliveryClaim(
+                outcome_id=candidate.binding.outcome_id,
+                claim=claim,
+                expected_frontier_digest=expected_frontier_digest,
+            )
+        )
+        try:
+            writer = None
+            if candidate.role == DeliveryWorkerRole.BUILDER:
                 coordination = self._coordinator.acquire(
                     candidate.change_id,
                     ChangeWriter(
@@ -5738,18 +6660,18 @@ class PortfolioApplication:
                         kind="build",
                     ),
                 )
-            except CoordinationConflictError as exc:
-                return DeliveryAcquisitionFailure(
-                    change_id=candidate.change_id,
-                    outcome_id=candidate.binding.outcome_id,
-                    attempt_id=claim.attempt_id,
-                    claim_id=claim.claim_id,
-                    code=exc.code,
-                    detail=str(exc),
-                    retry_condition="Remove the exact failed claim after reconciling writer custody.",
-                )
-            writer = coordination.writer
-        return self._launch_package(candidate, claim, source, writer)
+                writer = coordination.writer
+            return self._launch_package(candidate, claim, source, writer)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return DeliveryAcquisitionFailure(
+                change_id=candidate.change_id,
+                outcome_id=candidate.binding.outcome_id,
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=str(exc) or "worker launch preparation failed after claim activation",
+                retry_condition="Recover the exact failed claim after reconciling writer custody.",
+            )
 
     def _current_launch(
         self,
@@ -6039,7 +6961,10 @@ __all__ = [
     "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
+    "DeliveryActionBusyError",
+    "DeliveryActionSelection",
     "DeliveryBuildContext",
+    "DeliveryCapacityWaitingError",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
     "DeliveryFinalizationContext",

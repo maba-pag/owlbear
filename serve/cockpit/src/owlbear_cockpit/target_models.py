@@ -320,6 +320,7 @@ class AnswerRequestBody(_TargetHTTPModel):
 
     selected_option_id: str | None = None
     response_text: str | None = None
+    provenance: Literal["user-confirmed"] = "user-confirmed"
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -335,6 +336,7 @@ class ClearBlockBody(_TargetHTTPModel):
 
     operator_note: str = Field(min_length=1)
     locators: list[str] = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ConfirmLostClaimBody(_TargetHTTPModel):
@@ -349,6 +351,7 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     """Exact Change attention identity selected by the operator."""
 
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AdoptExternalHeadAfterAcceptanceAttentionBody(_TargetHTTPModel):
@@ -364,6 +367,13 @@ class ChangeDispositionReasonBody(_TargetHTTPModel):
     """User reason for deferring or abandoning one Change."""
 
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ResumeChangeBody(_TargetHTTPModel):
+    """Expected frontier version for resuming one deferred Change."""
+
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class AbandonChangeBody(_TargetHTTPModel):
@@ -371,6 +381,7 @@ class AbandonChangeBody(_TargetHTTPModel):
 
     confirmed_abandonment: Literal[True]
     reason: str = Field(min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CleanupCompletedChangeBody(_TargetHTTPModel):
@@ -596,6 +607,7 @@ __all__ = [
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
     "ResolveChangeAttentionBody",
+    "ResumeChangeBody",
     "TargetSyncAbortResponse",
     "TargetSyncConflictBody",
     "TargetSyncResponse",

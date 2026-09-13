@@ -21,10 +21,14 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
     DeliveryAnswer,
+    DeliveryAnswerKind,
+    DeliveryChangeIntent,
+    DeliveryChangeIntentKind,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointReconciliationResult,
     DeliveryRuntime,
     PortfolioApplication,
+    PortfolioCoordinator,
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -85,6 +89,7 @@ from owlbear_delivery_github import GitHubCliPublicationProvider
 class _LockOnlyPortfolioApplication(PortfolioApplication):
     def __init__(self, target_root: Path) -> None:
         self._target_root = target_root.resolve()
+        self._coordinator = PortfolioCoordinator(self._target_root)
         self._clock = lambda: "2026-08-11T16:00:00Z"
 
     def _runtime(self, _change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
@@ -125,7 +130,7 @@ class _DeliveryApplicationFake:
         self.calls.append(("list", ()))
         return self._work_item_groups()
 
-    def portfolio_read_view(self) -> SimpleNamespace:
+    def list_changes(self) -> SimpleNamespace:
         self.calls.append(("portfolio", ()))
         return SimpleNamespace(
             groups=self._work_item_groups(),
@@ -298,7 +303,15 @@ class _DeliveryApplicationFake:
         return SimpleNamespace(frontier_digest="a" * 64)
 
     def answer(self, answer: DeliveryAnswer) -> dict[str, object]:
-        self.calls.append(("answer", (answer,)))
+        operation = {
+            "request": "answer",
+            "block": "clear",
+            "disposition": "attention-resolve",
+        }[answer.kind.value]
+        self.calls.append((operation, (answer,)))
+        failure = self.failures.get("answer")
+        if failure is not None:
+            raise failure
         return {"request_id": answer.request_id, "resolved": True}
 
     def clear_block(self, *args: object) -> dict[str, object]:
@@ -476,6 +489,10 @@ class _DeliveryApplicationFake:
     def abandon_change(self, *args: object) -> dict[str, object]:
         self.calls.append(("abandon", args))
         return {"change_id": args[0], "state": "abandoned", "reason": args[1]}
+
+    def set_change_intent(self, intent: DeliveryChangeIntent) -> dict[str, object]:
+        self.calls.append(("intent", (intent,)))
+        return {"change_id": intent.change_id, "state": intent.kind.value}
 
     @staticmethod
     def _cleanup_receipt() -> SimpleNamespace:
@@ -840,7 +857,11 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     )
     clear = client.post(
         "/api/changes/change-a/outcomes/OUT-001/blocks/block-one/clear",
-        json={"operator_note": "Verified externally", "locators": ["request:REQ-001"]},
+        json={
+            "operator_note": "Verified externally",
+            "locators": ["request:REQ-001"],
+            "expected_frontier_digest": "a" * 64,
+        },
     )
     rejected_recovery = client.post(
         "/api/changes/change-a/outcomes/OUT-001/claims/recover",
@@ -899,16 +920,23 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         client.post("/api/changes/change-a/acceptance/observe"),
         client.post(
             "/api/changes/change-a/attention/resolve",
-            json={"expected_disposition_id": "a" * 64},
+            json={
+                "expected_disposition_id": "a" * 64,
+                "expected_frontier_digest": "a" * 64,
+            },
         ),
         client.post(
             "/api/changes/change-a/defer",
-            json={"reason": "Wait for user review"},
+            json={"reason": "Wait for user review", "expected_frontier_digest": "a" * 64},
         ),
-        client.post("/api/changes/change-a/resume"),
+        client.post("/api/changes/change-a/resume", json={"expected_frontier_digest": "a" * 64}),
         client.post(
             "/api/changes/change-a/abandon",
-            json={"confirmed_abandonment": True, "reason": "User stopped the Change"},
+            json={
+                "confirmed_abandonment": True,
+                "reason": "User stopped the Change",
+                "expected_frontier_digest": "a" * 64,
+            },
         ),
         client.post("/api/changes/change-a/worktree/cleanup/abandoned"),
         client.post(
@@ -965,10 +993,49 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         target_sync_call,
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
-        ("attention-resolve", ("change-a", "a" * 64)),
-        ("defer", ("change-a", "Wait for user review")),
-        ("resume", ("change-a",)),
-        ("abandon", ("change-a", "User stopped the Change")),
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.DEFER,
+                    expected_frontier_digest="a" * 64,
+                    reason="Wait for user review",
+                ),
+            ),
+        ),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.RESUME,
+                    expected_frontier_digest="a" * 64,
+                ),
+            ),
+        ),
+        (
+            "intent",
+            (
+                DeliveryChangeIntent(
+                    change_id="change-a",
+                    kind=DeliveryChangeIntentKind.ABANDON,
+                    expected_frontier_digest="a" * 64,
+                    reason="User stopped the Change",
+                ),
+            ),
+        ),
         ("cleanup-abandoned", ("change-a",)),
         ("cleanup-completed", ("change-a", "e" * 64)),
         ("completed-list", (None, 25)),
@@ -1329,12 +1396,12 @@ def test_publication_supersession_route_delegates_current_identity_exactly_once(
 
 def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
     client, application = _client(
-        {"resolve_change_disposition": DeliveryChangeDispositionConflictError("attention identity is stale")}
+        {"answer": DeliveryChangeDispositionConflictError("attention identity is stale")}
     )
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",
-        json={"expected_disposition_id": "a" * 64},
+        json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
     )
 
     assert response.status_code == 409
@@ -1344,17 +1411,29 @@ def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
         "authority": "delivery",
         "retry_safe": False,
     }
-    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+    assert application.calls == [
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
+    ]
 
 
 def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
     client, application = _client(
-        {"resolve_change_disposition": DeliveryChangeDispositionBusyError("attention is already in progress")}
+        {"answer": DeliveryChangeDispositionBusyError("attention is already in progress")}
     )
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",
-        json={"expected_disposition_id": "a" * 64},
+        json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
     )
 
     assert response.status_code == 409
@@ -1364,7 +1443,19 @@ def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
         "authority": "delivery",
         "retry_safe": True,
     }
-    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+    assert application.calls == [
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
+    ]
 
 
 def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_path: Path) -> None:
@@ -1378,7 +1469,7 @@ def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_
     ):
         response = client.post(
             "/api/changes/change-a/attention/resolve",
-            json={"expected_disposition_id": "a" * 64},
+            json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
         )
 
     assert response.status_code == 409

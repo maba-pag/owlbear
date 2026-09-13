@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Luna (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -42,7 +42,8 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
   claim-bound dispatch failures to the matching exact recovery operation.
 - **Forward worker authority unchanged.** Pass each launch-bound transition to
-  `transition_delivery`; route claim-bound dispatch failures only to recovery.
+  `transition_delivery`; accept an already-applied `kind: submitted` Builder result without
+  forwarding it again; route claim-bound dispatch failures only to recovery.
 - **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
   use exact Integration claim recovery only when a legacy claim's identities are supplied.
 - **Route only admitted Change repair.** When `get_change` returns one exact engine-authored repair
@@ -98,7 +99,7 @@ Session complete:
 
 <boundaries>
 
-- Dispatch the stable launch order returned by `acquire_frontier_work`; do not reorder or refetch
+- Dispatch the stable launch order returned by `acquire_actions`; do not reorder or refetch
   context for the worker.
 - Do not create, edit, claim, move, or complete generic tasks.
 - Delivery mutations are limited to unchanged worker transitions and exact failed-claim recovery.

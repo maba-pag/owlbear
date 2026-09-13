@@ -76,10 +76,68 @@ from owlbear_delivery import (
     RetryDelivery,
     ReturnDelivery,
     integration_attention_disposition,
+    repair_missing_request_provenance,
 )
-from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication
+from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
+
+
+def test_parse_delivery_frontier_canonicalizes_schema_17_retry_defaults() -> None:
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    payload = frontier.model_dump(mode="json")
+    payload["schema_version"] = 17
+    payload["bindings"][0].pop("retry_count")
+    payload["bindings"][0].pop("retry_fingerprint")
+    raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+    migrated, canonical = parse_delivery_frontier(raw)
+
+    assert migrated.schema_version == 18
+    assert migrated.bindings[0].retry_count == 0
+    assert migrated.bindings[0].retry_fingerprint is None
+    assert (
+        canonical
+        == (json.dumps(migrated.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+
+
+def test_repair_missing_request_provenance_rejects_wrong_or_multiple_defects() -> None:
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                requests=(
+                    DeliveryRequest(
+                        request_id="REQ-001",
+                        kind=DeliveryRequestKind.ACTION,
+                        outcome_id="OUT-001",
+                        summary="Complete the pilot.",
+                        resolution=DeliveryRequestResolution(
+                            response_text="Use approved targets.",
+                            provenance="user-confirmed",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+    payload = frontier.model_dump(mode="json")
+    payload["schema_version"] = 17
+    payload["bindings"][0]["requests"][0]["resolution"].pop("provenance")
+    raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+    with pytest.raises(DeliveryRuntimeReferenceError, match="unsupported request-provenance defect"):
+        repair_missing_request_provenance(raw, "WRONG-REQUEST")
+
+    duplicate = json.loads(raw)
+    second = json.loads(json.dumps(duplicate["bindings"][0]["requests"][0]))
+    second["request_id"] = "REQ-002"
+    duplicate["bindings"][0]["requests"].append(second)
+    duplicate_raw = (json.dumps(duplicate, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    with pytest.raises(DeliveryRuntimeReferenceError, match="unsupported request-provenance defect"):
+        repair_missing_request_provenance(duplicate_raw, "REQ-001")
 
 
 def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> None:
@@ -2073,6 +2131,9 @@ def test_portable_transition_retains_publication_intent_across_runtime_restart(t
 
 
 def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="user-confirmed provenance"):
+        DeliveryRequestResolution(response_text="Unattributed action evidence.")
+
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")
     request = DeliveryRequest(
@@ -2102,12 +2163,16 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     with pytest.raises(DeliveryRuntimeReferenceError, match="selected option"):
         runtime.resolve_request(
             "request-001",
-            DeliveryRequestResolution(response_text="Use the checked-in copy."),
+            DeliveryRequestResolution(response_text="Use the checked-in copy.", provenance="user-confirmed"),
         )
 
     resolved = runtime.resolve_request(
         "request-001",
-        DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in copy."),
+        DeliveryRequestResolution(
+            selected_option_id="local",
+            response_text="Use the checked-in copy.",
+            provenance="user-confirmed",
+        ),
     )
 
     assert resolved.resolution is not None

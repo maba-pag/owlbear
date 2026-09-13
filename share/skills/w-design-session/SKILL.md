@@ -214,7 +214,7 @@ Run these gates against one unchanged package ID:
 An `error` or malformed challenge, failing baseline, package-ID mismatch, derivation mismatch,
 compiler diagnostic, or unresolved material authority keeps the package unadmitted. Record and
 report the exact finding, repair its owning authority through Step 3, and restart from the earliest
-affected step. Do not invoke `admit_delivery_change`, publish target files manually, or weaken
+affected step. Do not invoke `admit_change`, publish target files manually, or weaken
 evidence to force a pass.
 
 Warnings must be visible in the complete review and represented in known limits. They do not become
@@ -230,7 +230,7 @@ certify dependency mechanics.
 Record approval against the unchanged package ID and derived contract digest. Call
 `read_design_session(change_id)` again and proceed only when its package ID and complete authored
 bytes match the approved package. Call `derive_delivery_contract(change_id)` again and require the
-same canonical contract bytes and digest, then call `admit_delivery_change` with
+same canonical contract bytes and digest, then call `admit_change` with
 `DeliveryAdmissionRequest(change_id=change_id, expected_package_id=approved_package_id,
 active_claim_ids=())`, binding admission to the exact approved authored package version.
 
@@ -283,4 +283,4 @@ not imply that Delivery can begin.
 - **Partial authority:** each active outcome needs commitments, acceptance, dependencies, and one plan scope.
 - **Validator substitution:** challenge, baseline, checkpoint, approval, and deterministic validation are distinct.
 - **Stale compare-and-swap:** read and reconcile current complete bytes instead of overwriting another writer.
-- **Premature admission:** any unresolved gate keeps the package unadmitted and forbids `admit_delivery_change`.
+- **Premature admission:** any unresolved gate keeps the package unadmitted and forbids `admit_change`.

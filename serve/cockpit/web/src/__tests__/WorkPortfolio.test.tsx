@@ -2370,7 +2370,7 @@ it('shows Change attention diagnostics and resolves the selected disposition', a
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/attention/resolve',
     method: 'POST',
-    body: { expected_disposition_id: attentionId },
+    body: { expected_disposition_id: attentionId, expected_frontier_digest: 'a'.repeat(64) },
   }))
   expect(await screen.findByText('Change attention resolved.')).toBeInTheDocument()
 })
@@ -2428,7 +2428,7 @@ it('posts reasoned Change dispositions and resumes a deferred Change', async () 
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/defer',
     method: 'POST',
-    body: { reason: 'Wait for user review' },
+    body: { reason: 'Wait for user review', expected_frontier_digest: 'a'.repeat(64) },
   }))
 
   inputValue(reason, 'User stopped the Change')
@@ -2438,7 +2438,11 @@ it('posts reasoned Change dispositions and resumes a deferred Change', async () 
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/abandon',
     method: 'POST',
-    body: { confirmed_abandonment: true, reason: 'User stopped the Change' },
+    body: {
+      confirmed_abandonment: true,
+      reason: 'User stopped the Change',
+      expected_frontier_digest: 'a'.repeat(64),
+    },
   }))
 
   initialRender.unmount()
@@ -2481,7 +2485,7 @@ it('posts reasoned Change dispositions and resumes a deferred Change', async () 
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/resume',
     method: 'POST',
-    body: null,
+    body: { expected_frontier_digest: 'a'.repeat(64) },
   }))
 })
 
@@ -2512,7 +2516,11 @@ it('keeps Change abandonment confirmation open when abandonment fails', async ()
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/abandon',
     method: 'POST',
-    body: { confirmed_abandonment: true, reason: 'User stopped the Change' },
+    body: {
+      confirmed_abandonment: true,
+      reason: 'User stopped the Change',
+      expected_frontier_digest: 'a'.repeat(64),
+    },
   }))
   const dialog = screen.getByRole('alertdialog')
   expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
