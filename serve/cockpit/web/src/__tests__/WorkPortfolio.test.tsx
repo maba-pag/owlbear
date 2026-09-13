@@ -4065,23 +4065,150 @@ it('reports a clean finalization candidate as ready and a running one as running
   expect(runningRow).toHaveTextContent('Ready for finalization')
 })
 
-it('renders every engine readiness state on the portfolio row', async () => {
-  const cases: Array<[DeliveryReadiness['status'], DeliveryReadiness['reason_code'], string]> = [
-    ['ready', 'ready', 'Ready'],
-    ['running', 'active-custody', 'Running'],
-    ['waiting', 'dependency-wait', 'Waiting'],
-    ['blocked', 'workspace-dirty', 'Blocked'],
-    ['unavailable', 'runtime-unavailable', 'Unavailable'],
-    ['complete', 'change-terminal', 'Complete'],
+it('maps every coherent engine readiness response to its portfolio state and controls', async () => {
+  const finalizeAction = { kind: 'finalize' as const, label: 'Finalize Change', command: '/finalize-change change-alpha' }
+  interface ReadinessScenario {
+    item: WorkItemCardView
+    state: DeliveryReadiness
+    lifecycle: ChangeGroupView['lifecycle']
+    publication: PublicationView | null
+    chip: string
+    reason: string
+    actor: string
+    command: string | null
+  }
+  // Each case is one response the engine can actually compose: status, operation,
+  // executable, action and card facts stay mutually consistent.
+  const scenarios: ReadinessScenario[] = [
+    {
+      item: publicationCardForChecks({
+        publication_phase: 'ready-for-finalization',
+        next_step: 'Finalize the reviewed Change',
+        progress: { kind: 'publication', label: 'Reviewed Change awaiting finalization', done: null, total: null },
+        action: finalizeAction,
+      }),
+      state: readiness({
+        status: 'ready',
+        operation: 'finalize',
+        executable: true,
+        next_actor: 'agent',
+        reason_code: 'ready',
+        action: finalizeAction,
+      }),
+      lifecycle: 'publication',
+      publication: { ...publicationForChecks('ready-for-finalization'), ready_for_finalization: true },
+      chip: 'Ready',
+      reason: 'Delivery reports this operation is eligible now.',
+      actor: 'Agent',
+      command: finalizeAction.command,
+    },
+    {
+      item: card({
+        next_step: 'Builder is implementing TASK-001',
+        activity: { state: 'working', worker_role: 'builder', started_at: '2026-08-08T10:00:00Z', task_id: 'TASK-001' },
+      }),
+      state: readiness({ status: 'running', next_actor: 'agent', reason_code: 'active-custody' }),
+      lifecycle: 'in-delivery',
+      publication: null,
+      chip: 'Running',
+      reason: 'An active operation retains Change custody.',
+      actor: 'Agent',
+      command: null,
+    },
+    {
+      item: card({
+        item_key: 'outcome:OUT-003',
+        work_item_id: 'OUT-003',
+        title: 'Dependent outcome',
+        needs: 'dependency',
+        needs_headline: 'Waiting on OUT-001',
+        next_actor: 'dependency',
+        next_step: 'Waiting on OUT-001',
+        activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+        progress: { kind: 'plan', label: 'Task plan not published', done: null, total: null },
+      }),
+      state: readiness({ status: 'waiting', next_actor: 'dependency', reason_code: 'dependency-wait' }),
+      lifecycle: 'in-delivery',
+      publication: null,
+      chip: 'Waiting',
+      reason: 'A dependency has not completed yet.',
+      actor: 'Dependency',
+      command: null,
+    },
+    {
+      item: card({
+        next_actor: 'you',
+        next_step: 'Resume the deferred Change',
+        activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+      }),
+      state: readiness({ status: 'blocked', next_actor: 'you', reason_code: 'change-paused' }),
+      lifecycle: 'deferred',
+      publication: null,
+      chip: 'Blocked',
+      reason: 'This Change is paused.',
+      actor: 'You',
+      command: null,
+    },
+    {
+      item: publicationCardForChecks({
+        publication_phase: 'ready-for-finalization',
+        next_step: 'Finalize the reviewed Change',
+        progress: { kind: 'publication', label: 'Reviewed Change awaiting finalization', done: null, total: null },
+      }),
+      state: readiness({
+        status: 'unavailable',
+        operation: 'finalize',
+        next_actor: 'agent',
+        reason_code: 'workspace-inspection-failed',
+      }),
+      lifecycle: 'publication',
+      publication: publicationForChecks('ready-for-finalization'),
+      chip: 'Unavailable',
+      reason: 'Managed workspace readiness could not be observed.',
+      actor: 'Agent',
+      command: null,
+    },
+    {
+      item: card({
+        stage: 'completed',
+        next_actor: 'none',
+        next_step: 'Complete — no action needed',
+        activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+        progress: { kind: 'tasks', label: '2 of 2 Delivery tasks reviewed', done: 2, total: 2 },
+      }),
+      state: readiness({ status: 'complete', next_actor: 'none', reason_code: 'change-terminal' }),
+      lifecycle: 'in-delivery',
+      publication: null,
+      chip: 'Complete',
+      reason: 'This Change reached a terminal state.',
+      actor: 'Nobody',
+      command: null,
+    },
   ]
-  for (const [status, reasonCode, label] of cases) {
-    currentPortfolio = portfolio([group({
-      items: [card({ readiness: readiness({ status, reason_code: reasonCode }) })],
-    })])
-    const { unmount } = renderPage()
+
+  for (const scenario of scenarios) {
+    const item: WorkItemCardView = { ...scenario.item, readiness: scenario.state }
+    currentPortfolio = portfolio([group({ lifecycle: scenario.lifecycle, items: [item] })])
+    currentDetail = detail({ card: item, readiness: scenario.state, publication: scenario.publication })
+    const { unmount } = renderPage(`/delivery/change-alpha/${item.item_key}`)
+
     const table = await screen.findByTestId('work-portfolio-table')
-    const chips = Array.from(table.querySelectorAll('[data-status-tone]')).map((chip) => chip.textContent)
-    expect(chips).toContain(label)
+    const row = table.querySelector(`[data-work-item="change-alpha:${item.item_key}"]`) as HTMLElement
+    expect(row.querySelector('[data-status-tone]')).toHaveTextContent(scenario.chip)
+
+    const inspector = await screen.findByTestId('work-item-detail')
+    expect(within(inspector).getByTestId('readiness-status')).toHaveTextContent(scenario.chip)
+    expect(inspector.querySelector(`[data-readiness-reason="${scenario.state.reason_code}"]`)).toHaveTextContent(scenario.reason)
+    expect(inspector.querySelector(`[data-readiness-actor="${scenario.state.next_actor}"]`)).toHaveTextContent(`Next: ${scenario.actor}`)
+    if (scenario.command) {
+      expect(within(inspector).queryByTestId('readiness-not-executable')).not.toBeInTheDocument()
+      expect(within(inspector).getByRole('button', { name: `Copy command ${scenario.command}` })).toBeInTheDocument()
+    } else {
+      expect(within(inspector).getByTestId('readiness-not-executable'))
+        .toHaveTextContent('Delivery offers no runnable operation for this Work Item right now.')
+      expect(within(inspector).queryByRole('button', { name: /^Copy command/ })).not.toBeInTheDocument()
+    }
+    expect(requests.filter((request) => request.method !== 'GET')).toEqual([])
     unmount()
   }
 })
@@ -4193,14 +4320,26 @@ it('keeps the inspector on a Change that becomes unavailable and restores it whe
   }
   currentUnavailableDetail = unavailableChange('change-alpha', 'Portfolio redesign')
 
-  await waitFor(() => expect(screen.getByTestId('delivery-issues-section')).toHaveTextContent('Portfolio redesign'), { timeout: 6000 })
+  await waitFor(() => expect(screen.getByTestId('work-item-detail')).toHaveTextContent('Runtime unavailable'), { timeout: 6000 })
+  const unavailableInspector = screen.getByTestId('work-item-detail')
+  expect(unavailableInspector).toHaveTextContent('This view is read-only inspection evidence; no Change operation is offered here.')
+  expect(within(unavailableInspector).getByTestId('unavailable-change-diagnostics')).toHaveTextContent('runtime-unavailable')
+  expect(within(unavailableInspector).getByTestId('readiness-status')).toHaveTextContent('Unavailable')
+  expect(within(unavailableInspector).queryByRole('button')).not.toBeInTheDocument()
+  expect(requests.filter((request) => request.method !== 'GET')).toEqual([])
+  expect(screen.getByTestId('delivery-issues-section')).toHaveTextContent('Portfolio redesign')
   expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/change-alpha/outcome:OUT-001')
   expect(screen.queryByTestId('completed-history-workspace')).not.toBeInTheDocument()
 
   currentPortfolio = portfolio()
   currentUnavailableDetail = null
-  await waitFor(() => expect(screen.getByTestId('work-portfolio-table')).toHaveTextContent('Delivery foundation'), { timeout: 6000 })
+  await waitFor(() => expect(screen.getByTestId('work-item-detail')).toHaveTextContent('Delivery foundation'), { timeout: 6000 })
+  const restoredInspector = screen.getByTestId('work-item-detail')
+  expect(restoredInspector).toHaveTextContent('Make Delivery supervision coherent.')
+  expect(within(restoredInspector).queryByTestId('unavailable-change-diagnostics')).not.toBeInTheDocument()
+  expect(screen.getByTestId('work-portfolio-table')).toHaveTextContent('Delivery foundation')
   expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/change-alpha/outcome:OUT-001')
+  expect(requests.filter((request) => request.method !== 'GET')).toEqual([])
 })
 
 it('does not duplicate an unavailable Change already carried by an operating status', async () => {
