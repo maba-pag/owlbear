@@ -40,7 +40,9 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 
 ## Step 0 — Setup
 
-Before curation, if the Memory tools are deferred, run one focused `tool_search` with:
+Before curation, invoke directly callable Memory operations as granted; a deferred inventory listing
+does not override those bindings. If the required Memory tools have no direct callable binding, run
+one focused `tool_search` with:
 
 `OwlBear Memory list_memories read_memory curate_memory delete_memory delete_agent_memories rename_agent_memories commit_memory_batch`
 

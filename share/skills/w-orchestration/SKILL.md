@@ -13,13 +13,16 @@ dispatch loop around that authority.
 
 ## Step 1 - Acquire One Current Batch
 
-If target tools are deferred, load them once with `tool_search` using:
+Before using a target operation, call it directly when a callable binding is already present; a
+deferred inventory listing does not override that binding. If a required target operation has no
+direct callable binding, load the target tools once with `tool_search` using:
 
 `OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
-`recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Run one focused `tool_search` for each
-missing operation. If any binding remains unavailable or its focused search returns a tool error,
+`recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Invoke any directly bound
+operation as granted; run one focused `tool_search` only for each operation with no direct callable
+binding. If any binding remains unavailable or its focused search returns a tool error,
 report the exact missing operation and end the session without acquisition. Transition and recovery
 are required dispatch safety authority, not optional operations to discover after a claim has been
 acquired.
@@ -81,7 +84,7 @@ A worker-owned `block`, `retry`, or `return` is forwarded normally and must not 
 malformed submission result or identity mismatch follows the existing dispatch-failure recovery
 route.
 
-Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
+Immediately before forwarding, if no directly callable `transition_delivery` binding exists, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool
 error, call `recover_claim` with `confirmed_lost=true` and the launch's exact change, outcome, attempt, and claim IDs, report
 the routing failure and recovery result, and end the session after the current acquired batch. Do

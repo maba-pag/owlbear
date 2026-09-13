@@ -46,7 +46,9 @@ reviewed authority. For target-sync repair, retain `expected_remote_head`, `expe
 and `target_sync_operation_id`; the exact target-sync evidence may qualify the remote-head
 diagnostic for that repair route. Reject missing, extra, or malformed identities.
 
-If Delivery tools are deferred, run `tool_search` for
+Use any directly callable Delivery operation as granted; a deferred inventory listing does not
+override that binding. If a required Delivery operation has no direct callable binding, run
+`tool_search` for
 `OwlBear Delivery list_work_items get_change answer delivery_health repair_delivery_state_snapshot recover_out_of_band_head repair_target_sync_publication list_retained_change_worktrees show_work_item show_work_item_view show_operator_context preview_administrative_move administrative_move show_integration_attention set_change_intent cleanup_abandoned_change_worktree cleanup_abandoned_change_worktree_after_target_sync_discard cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head abort_target_sync_conflict resolve_target_sync_conflict recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a 64-character attention identity, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
