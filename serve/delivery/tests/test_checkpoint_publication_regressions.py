@@ -42,9 +42,11 @@ from owlbear_delivery.portfolio_application import DeliveryRuntimeReconciliation
 
 
 def test_checkpoint_snapshot_replays_after_publication_failure(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
     )
     initial_head = coordinator.show("change-a").last_reviewed_commit
     _set_checkpoint(
@@ -87,6 +89,13 @@ def test_checkpoint_snapshot_replays_after_publication_failure(tmp_path: Path) -
     assert failed.pending_checkpoint is not None
     assert failed.pending_checkpoint.head == snapshot.snapshot_head
 
+    deferred = application.reconcile_change_checkpoint("change-a")
+
+    assert not deferred.reconciled
+    assert deferred.error_detail == failure_message
+    assert branch_publisher.publish.call_count == 1
+
+    now[0] = "2026-08-04T00:00:05Z"
     result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
