@@ -98,6 +98,37 @@ Outstanding before D02 can close: P07 host/workflow handoff, the shared agent/sk
 two new MCP operations, HTTP/MCP coverage for `waiting`/`stale`/`human` yielding paths through the
 transport, and assembled independent review of the cumulative T2 result.
 
+### D02 P07 Workflow Handoff: 2026-09-13
+
+Single-writer agent-configuration slice on `dev` from `a18a33d47`, no MCP, Delivery, live state or
+worktree use. Unreviewed; **D02 remains not complete** and the user stopped before D03.
+
+`/continue-change <change_id>` is the new normal single-Change entry; `/orchestrate` keeps the
+portfolio batch loop and no prompt was retired. `w-orchestration` gains a Change Continuation Entry
+that binds the exact `get_change` basis, declares capabilities truthfully, dispatches strictly the
+one acquired `launch`, `finalization` or `engine_action`, runs engine actions only through
+`execute_change_action`, yields on `busy`/`waiting`/`human`, refreshes once on `stale`, retains
+custody on `unsupported`/`unavailable`, forbids raw fallbacks and implicit merge/cleanup on
+`terminal`, and reports the engine-authored `/design <change_id>` handoff for `resume-design`.
+`w-change-finalization` Step 0a binds an issued `DeliveryFinalizationLaunch`: `attempt.writer.attempt_id`
+is both the finalization `operation_id` and the failure `attempt_key`, the supplied context is
+retained beside a fresh context read, independent review stays required, and a recorded report keeps
+that attempt's custody. `w-design-session` accepts the same-Change handoff without a second identity
+or implied approval. Orchestrator alone gained `acquire_change_action`/`execute_change_action`;
+the shared orchestrator still has no `finalizer` delegate, so that capability stays undeclared and
+finalization is handed to `/finalize-change <change_id>`.
+
+The shared bootstrap query in `owlbear-system.instructions.md` now lists both new operations, which
+was the missing ecosystem inventory. Proof: **37** ecosystem-validation tests including five new
+continuation/attempt/handoff cases, **39** worktree/governance invariants, **31** setup-init tests,
+all three ecosystem validators (only the pre-existing intentional local `.vscode/mcp.json` Delivery
+gap remains) and clean Markdownlint on the eleven edited documents. Static prose tests are not host
+dispatch proof.
+
+Still required before D02 closes: a claim-free host probe of actual `/continue-change` dispatch,
+capability truthfulness and flat finalizer handoff; HTTP/MCP coverage of the yielding paths; and
+assembled independent review of the cumulative T2 and P07 result. None of this is deferred to D08.
+
 ### Resume Checkpoint: 2026-09-13
 
 The user resumed on 2026-09-13. Continue the authorized sequential delegation from this checkpoint.

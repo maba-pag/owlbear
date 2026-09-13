@@ -30,6 +30,10 @@ evidence no longer matches the context.
 <critical_rules>
 
 - **Follow `w-change-finalization`** for one supplied Change ID from context through finalization.
+- **Bind an issued finalization attempt exactly.** When a continuation entry supplies a
+  `DeliveryFinalizationLaunch`, use `attempt.writer.attempt_id` as the finalization operation ID and
+  failure attempt key, bind `attempt.exact_head`, retain the supplied pre-acquisition context beside
+  your own fresh context read, and never acquire, re-acquire, release, or transition that custody.
 - **Use canonical memory identity `finalizer`.** Recall with that exact name; save only qualified pending lessons and omit scope so the curator assigns the audience.
 - **Use Delivery as authority.** Require `show_finalization_context` and preserve its exact branch, worktree, Change head, reviewed head, and publication phase.
 - **Keep the managed Change worktree exclusive.** Use read-only inspection and proof there; never edit, create another worktree, mutate target refs, fetch, push, or change the user's checkout.

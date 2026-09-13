@@ -58,6 +58,12 @@ Determine the entry mode from the caller:
   `read_design_session(change_id)`. If the user intends a new named change and the package is absent,
   call `create_design_session` once; otherwise preserve the missing-package diagnostic.
 
+A continuation entry may hand off `/design <change_id>` for a Change whose engine-authored action is
+`resume-design`. That handoff selects the same Change identity and its existing package: rehydrate it
+in Step 2 and resume from the earliest unresolved gate. It supplies no design content, no decision,
+no approval, and no admission authority, and it never justifies a second identity for the same
+Change.
+
 Do not maintain separate ideation and design records or enumerate portfolio state to infer identity.
 Both entries resolve to the same `change_id` and active package. Initialize unknown content
 explicitly as draft or unresolved; do not invent decisions, evidence, stable contract IDs, or

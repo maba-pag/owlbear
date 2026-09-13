@@ -36,6 +36,29 @@ context. Treat the Change as already finalized when `finalized_head` equals the 
 and the reviewed head also equals it. If the finalized head differs from the current Change head,
 return `dispatch_failure`; head-drift reconciliation belongs to its owning Delivery operation.
 
+## Step 0a - Bind One Issued Finalization Attempt
+
+A continuation entry may dispatch this role with one serialized `DeliveryFinalizationLaunch` instead
+of a bare Change ID. That launch is already durable finalizer custody: do not acquire, re-acquire,
+release, recover, or transition it, and do not run a second attempt beside it.
+
+Bind its `attempt` as the identity of this attempt:
+
+- `attempt.writer.attempt_id` is the finalization `operation_id` in Step 4 and the `attempt_key` in
+  Step 2a. Never mint, derive, or substitute either value.
+- `attempt.exact_head` is the exact head that custody, observations, and review must bind.
+- `attempt.contract_digest` and `attempt.frontier_digest` must still match current authority; the
+  engine rejects a mismatched attempt as a stale action selection rather than finalizing it.
+
+Retain the launch `context` as the pre-acquisition observation and still call
+`show_finalization_context` yourself. Require the fresh context to preserve the launch context's
+Change identity, branch, worktree, and `attempt.exact_head`. Any difference is a bounded failure, not
+a reason to re-bind the attempt to a newer head. Independent review in Step 3 remains required for an
+issued attempt exactly as for a user-invoked one.
+
+Without an issued launch, the entry is a user-invoked attempt: keep using the supplied Change ID, its
+fresh context, and this workflow's own operation ID.
+
 ## Step 1 - Establish Exact Managed Custody
 
 Use read-only Git commands against the returned `worktree_path` and require:
@@ -69,10 +92,13 @@ When a trusted current context reaches a failed custody preflight, maintained ch
 review, call `report_finalization_failure` with only its registered structural fields: the current
 contract and frontier digests, candidate and reviewed heads, observed diagnostic sequence, stable
 attempt key, category, registered code, checks state, and any category-allowed workspace fingerprint
-or dirty paths. Do not include commands, logs, URLs, summaries, exit details, observer identities, or
-repair instructions. Preserve the returned report identity and checks state in the bounded failure
-result; a report is diagnostic history, not proof, a custody repair, a claim transition, or a
-successful finalization. If context is untrusted or the report store rejects the basis, return the
+or dirty paths. Under an issued attempt the stable attempt key is exactly `attempt.writer.attempt_id`;
+any other value is rejected as a diagnostic conflict. Do not include commands, logs, URLs, summaries,
+exit details, observer identities, or repair instructions. Preserve the returned report identity and
+checks state in the bounded failure result; a report is diagnostic history, not proof, a custody
+repair, a claim transition, or a successful finalization. A recorded report for an issued attempt key
+retains that attempt's custody: the same attempt cannot then finalize, and supported recovery is not
+part of this workflow. If context is untrusted or the report store rejects the basis, return the
 bounded failure without inventing a report identity or calling `finalize_change`.
 
 ## Step 3 - Obtain Independent Exact-Commit Review
@@ -110,6 +136,9 @@ Only after observations and review pass, use the core Delivery models to constru
 - one `FinalizeDeliveryChange` containing the operation ID, exact head, canonical observations, and
   canonical review.
 
+Under an issued attempt, the operation ID is exactly `attempt.writer.attempt_id` and the exact head
+is exactly `attempt.exact_head`; every observation binds that same operation ID and head.
+
 Use a timezone-aware timestamp and serialize model output with `model_dump(mode="json")`. Never
 calculate, copy, or invent observation or review IDs. Never use free-form evidence to replace the
 typed observations or exact reviewer response.
@@ -122,10 +151,12 @@ worktree, Change head, and reviewed head used by the observations and review. Di
 any identity, head, or cleanliness value changed.
 
 Call `finalize_change` once with the unchanged Change ID and the typed `FinalizeDeliveryChange`. Treat
-its returned `DeliveryFinalizationReceipt` as the only successful finalization result. Do not call
-`promote_external_head` separately from this workflow; finalization owns that promotion when the exact
-head is an adopted completed head. Do not call checkpoint reconciliation, mark-ready, acceptance
-observation, Integration, repair, or any target mutation operation from this workflow.
+its returned `DeliveryFinalizationReceipt` as the only successful finalization result. It is also the
+only mutation this workflow performs for an issued attempt: never submit a result, forward a
+transition, or release custody beside it. Do not call `promote_external_head` separately from this
+workflow; finalization owns that promotion when the exact head is an adopted completed head. Do not
+call checkpoint reconciliation, mark-ready, acceptance observation, Integration, repair, or any
+target mutation operation from this workflow.
 
 ## Optional Process Observation
 

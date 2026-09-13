@@ -88,6 +88,8 @@ _TARGET_ROLE_TOOLS = {
     "orchestrator": {
         "list_changes",
         "acquire_actions",
+        "acquire_change_action",
+        "execute_change_action",
         "delivery_health",
         "get_change",
         "transition_delivery",
@@ -653,6 +655,91 @@ def test_orchestration_housekeeping_failure_does_not_stop_acquisition() -> None:
     assert "housekeeping failure is reported but" in refresh
     assert "does not stop independent Delivery acquisition" in refresh
     assert "stop after the current batch" not in housekeeping
+
+
+def _continuation_entry() -> str:
+    content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+    start = content.index("## Change Continuation Entry")
+    end = content.index("## Step 1 - Acquire One Current Batch")
+    return " ".join(content[start:end].split())
+
+
+def test_continuation_entry_prompt_routes_one_change_to_orchestration() -> None:
+    """`/continue-change` is the named-Change entry into the orchestration workflow."""
+    prompt = (_PROMPTS_ROOT / "continue-change.prompt.md").read_text(encoding="utf-8")
+    orchestrate = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
+    metadata = _frontmatter(_PROMPTS_ROOT / "continue-change.prompt.md")
+    body = " ".join(prompt.split())
+
+    assert metadata["agent"] == "orchestrator"
+    assert "${input:change_id:" in prompt
+    assert "Change Continuation Entry of `w-orchestration`" in body
+    assert "/continue-change <change-id>" in " ".join(orchestrate.split())
+    assert "acquire portfolio work" in body
+
+
+def test_continuation_entry_dispatches_only_the_acquired_action() -> None:
+    """Continuation acquisition binds the observed basis and one strict dispatch route."""
+    entry = _continuation_entry()
+
+    assert "Pass its returned `readiness.basis` unchanged as `expected_basis`" in entry
+    assert "Do not edit, complete, reorder, recompute, or infer basis fields" in entry
+    assert "Declare `capabilities` truthfully" in entry
+    assert "Never declare a capability to unlock an action" in entry
+    assert "exactly one of `launch`, `finalization`, or `engine_action`" in entry
+    assert "`execute_change_action` is the fixed executor for every engine action kind" in entry
+    assert "do not dispatch an agent to perform it" in entry
+    assert "never fall back to `acquire_actions`" in entry
+    assert "do not call `transition_delivery` again for that result" in entry
+
+
+def test_continuation_dispositions_yield_refresh_and_retain_custody() -> None:
+    """Every non-acquired continuation disposition has one safe, non-forcing response."""
+    entry = _continuation_entry()
+
+    assert "| `busy` | Yield." in entry
+    assert "do not poll in a loop, revoke custody, or recover a claim" in entry
+    assert "| `waiting` | Yield to the named condition" in entry
+    assert "| `human` | Yield to the user" in entry
+    assert "Refresh once: re-read `get_change` and re-acquire once with the fresh basis" in entry
+    assert "There is no raw-operation fallback and no invented repair" in entry
+    assert "Custody is retained." in entry
+    assert "never redispatch, replay the effect, acquire a replacement operation, or reconstruct journals" in entry
+    assert "Never merge, clean up, remove a worktree, or transition anything implicitly" in entry
+
+
+def test_continuation_design_handoff_stays_on_the_same_change() -> None:
+    """A `resume-design` handoff reuses the same Change identity and carries no authority."""
+    entry = _continuation_entry()
+    design = " ".join((_SKILLS_ROOT / "w-design-session/SKILL.md").read_text(encoding="utf-8").split())
+
+    assert "When the selected Change's action is `resume-design`" in entry
+    assert "report its engine-authored `/design <change_id>` command for that same Change" in entry
+    assert "Do not create another Change identity" in entry
+    assert "whose engine-authored action is `resume-design`" in design
+    assert "selects the same Change identity and its existing package" in design
+    assert "no approval, and no admission authority" in design
+
+
+def test_finalizer_binds_one_issued_continuation_attempt() -> None:
+    """An issued finalization launch supplies identity, not a second attempt or released custody."""
+    content = (_SKILLS_ROOT / "w-change-finalization/SKILL.md").read_text(encoding="utf-8")
+    start = content.index("## Step 0a - Bind One Issued Finalization Attempt")
+    step = " ".join(content[start : content.index("## Step 1 - Establish Exact Managed Custody")].split())
+    normalized = " ".join(content.split())
+    agent = " ".join((_AGENTS_ROOT / "finalizer.agent.md").read_text(encoding="utf-8").split())
+
+    assert "do not acquire, re-acquire, release, recover, or transition it" in step
+    assert "`attempt.writer.attempt_id` is the finalization `operation_id`" in step
+    assert "`attempt_key` in Step 2a" in step
+    assert "Never mint, derive, or substitute either value" in step
+    assert "Retain the launch `context` as the pre-acquisition observation" in step
+    assert "still call `show_finalization_context` yourself" in step
+    assert "Independent review in Step 3 remains required for an issued attempt" in step
+    assert "the stable attempt key is exactly `attempt.writer.attempt_id`" in normalized
+    assert "retains that attempt's custody" in normalized
+    assert "never submit a result, forward a transition, or release custody beside it" in normalized
+    assert "Bind an issued finalization attempt exactly" in agent
 
 
 @pytest.mark.asyncio

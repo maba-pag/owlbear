@@ -11,6 +11,96 @@ Delivery owns readiness, capacity, claims, identities, reviewer policy, writer c
 provider-observed acceptance, and retained Integration attention. Orchestrator performs only the mechanical
 dispatch loop around that authority.
 
+## Change Continuation Entry
+
+`/continue-change <change_id>` is the normal entry for one named Change and uses this section instead
+of the portfolio batch loop. `/orchestrate` remains the unchanged portfolio entry. A continuation
+session carries exactly one Change: never acquire, dispatch, recover, or report a sibling Change from
+it, and never fall back to `acquire_actions` when a continuation operation is unavailable.
+
+### Continuation Bindings
+
+Before the first acquisition, require callable `get_change`, `acquire_change_action`, and
+`execute_change_action` bindings. Invoke any directly bound operation as granted; run one focused
+`tool_search` only for an operation with no direct callable binding:
+
+`OwlBear Delivery get_change acquire_change_action execute_change_action`
+
+If a required binding remains unavailable or its focused search returns a tool error, report the
+exact missing operation and end the session without acquiring. A missing continuation operation is
+never a reason to call the underlying checkpoint, target-sync, mark-ready, acceptance, finalization,
+or transition operation directly.
+
+### Continuation Observation
+
+Call `get_change(change_id)` once per continuation cycle. Pass its returned `readiness.basis`
+unchanged as `expected_basis`. Do not edit, complete, reorder, recompute, or infer basis fields; the
+engine compares the observed basis exactly and answers `stale` when it no longer matches.
+
+Declare `capabilities` truthfully for this session only:
+
+- `planner` and `builder` only while their dispatch bindings are callable here;
+- `engine` only while `execute_change_action` is callable here;
+- `finalizer` only when this host can actually dispatch the `finalizer` agent and that dispatch can
+  obtain its own independent review. The shared `orchestrator` agent does not list `finalizer` among
+  its delegates, so omit that capability unless the running host actually exposes that dispatch.
+
+Never declare a capability to unlock an action. An undeclared capability returns `waiting` /
+`host-capability-unavailable` with no custody consumed; for the finalization case report the exact
+`/finalize-change <change_id>` command as the user's next step instead of finalizing in this loop.
+
+Call `acquire_change_action` once per cycle with the selected `change_id`, that observed basis, the
+truthful capabilities, and stable `host_id` and `session_id` values for this session.
+
+### Continuation Dispatch
+
+An `acquired` result carries exactly one of `launch`, `finalization`, or `engine_action`. Dispatch
+strictly what it carries and nothing else:
+
+| Acquired field | The only permitted action |
+| --- | --- |
+| `launch` | Dispatch `launch.policy.worker_agent` with only the serialized `DeliveryLaunchPackage`, then apply Steps 2 and 3 unchanged |
+| `finalization` | Dispatch `finalizer` with the serialized `DeliveryFinalizationLaunch`; its `attempt` is the issued finalization identity and its `context` is the retained pre-acquisition context |
+| `engine_action` | Call `execute_change_action` once with exactly `change_id` and `engine_action.operation_id` |
+
+`execute_change_action` is the fixed executor for every engine action kind. Do not call the
+underlying checkpoint, target-sync, mark-ready, or acceptance operation, do not dispatch an agent to
+perform it, and do not author effect, target, receipt, success, or recovery arguments. Its returned
+`DeliveryEngineActionResult` is the complete outcome: `completed`, `waiting`, and `stale` release the
+action, while `blocked` retains custody and forbids a replacement operation.
+
+A dispatched Builder that already called `submit_result` returns `kind: submitted`; record it and do
+not call `transition_delivery` again for that result. Worker transitions, malformed worker results,
+and dispatch failures follow Steps 2 and 3 unchanged.
+
+### Continuation Dispositions
+
+A non-acquired result carries no launch. Respond to its `kind` exactly:
+
+| `kind` | Required response |
+| --- | --- |
+| `busy` | Yield. Report the in-progress operation; do not poll in a loop, revoke custody, or recover a claim |
+| `waiting` | Yield to the named condition and report the reason code; no dispatch, no capability upgrade |
+| `human` | Yield to the user with the reason code and readiness; the next actor is not this loop |
+| `stale` | Refresh once: re-read `get_change` and re-acquire once with the fresh basis. If the second attempt is stale again, report both observations and stop |
+| `reconciled` | Report the preserved `engine_result` unchanged; continue only from a fresh observation |
+| `unsupported` | Report the exact reason. There is no raw-operation fallback and no invented repair; `repair-required` uses the Step 4 Change repair route |
+| `unavailable` | Custody is retained. Report `failure` and its retry condition unchanged; never redispatch, replay the effect, acquire a replacement operation, or reconstruct journals |
+| `terminal` | Report completion or abandonment. Never merge, clean up, remove a worktree, or transition anything implicitly |
+
+When the selected Change's action is `resume-design`, report its engine-authored
+`/design <change_id>` command for that same Change. Do not create another Change identity, restate
+design content, or treat the handoff as approval.
+
+### Continuation Refresh And Output
+
+After a released engine action or a recorded worker transition, re-observe with `get_change` and
+acquire again for the same Change. Stop on the first yielding, unsupported, unavailable, or terminal
+disposition, or when readiness offers no further action. Report the Change identity, each acquired
+action and its exact disposition, forwarded transitions, preserved engine results and failure
+envelopes, the retained custody statement when one applies, and the exact next user command when the
+engine authored one.
+
 ## Step 1 - Acquire One Current Batch
 
 Before using a target operation, call it directly when a callable binding is already present; a
