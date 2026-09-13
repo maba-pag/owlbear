@@ -6,7 +6,7 @@
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 critical engine companion is implemented pending independent parent review and T2 consumer wiring; D02 is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
+**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 critical engine companion repair is independently accepted at `6a223aa499289a5b0b9a8fb02424cb75afb253ad`; T2 consumer wiring remains open and D02 is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
@@ -18,7 +18,10 @@ The independent Opus review of core `25fd31325a2165b058d906337b5248e94e86c6e6`
 found M1 blocking T2, recommended M2, and identified optional L3. This narrow repair starts
 from `42fecb439268c0344b883509e5f22250f03371c6`; the resume checkpoint below is historical.
 Astra T3 (`GPT-6 Astra (copilot)`) supplied read-only effect-entry/custody classification;
-the primary session remains the sole writer. Exact-head Opus re-review gates the T2 handoff.
+the primary session remains the sole writer. Independent Opus (`Claude Opus 5 (copilot)`)
+re-review accepted exact repair `6a223aa499289a5b0b9a8fb02424cb75afb253ad`: M1/M2/L3 resolved,
+no medium/high findings, no unsafe duplicate effect or custody release. The core contract is
+stable for T2 wiring; this is not D02 completion or live-activation permission.
 
 - **M1:** [The public runtime guard](../../serve/delivery/src/owlbear_delivery/portfolio_application.py)
   reports healthy unfinished engine custody as `DeliveryActionBusyError`. Missing or malformed
@@ -44,6 +47,13 @@ After the final equivalent-condition lint normalization, **65 engine/continuatio
 tests passed**. The interrupted 391-pass run is not a completed gate. Editor diagnostics are clear;
 structured Ruff comparison against the starting commit found **7 baseline, 7 current, 0 introduced**.
 Existing formatter regions remain unchanged; no whole-file lint/format pass is claimed.
+
+Nonblocking re-review notes: T2 should keep coordination errors typed if damage occurs between
+`_runtime`'s guarded read and `executing_continuation`'s second read (L-A), and map the executor's
+pre-existing fail-closed `ERR_TARGET_COORDINATION_CONFLICT` escape (L-B). L3's shared
+`engine-owner-unavailable` reason covers missing heads as well as missing publishers (L-C);
+copy must not invent a specific remedy. D03 recovery cannot assume the ordinary mutating runtime
+entry bypasses retained engine custody. No broader repair was added for these observations.
 
 Deferred findings from that review, grounded in the existing acquisition/provider paths:
 
@@ -159,7 +169,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
 | D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
-| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Core repair approved; engine companion implemented, awaiting parent review before T2 wiring |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Core accepted at `6a223aa4`; T2 wiring and assembled gates remain open |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
 | D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
