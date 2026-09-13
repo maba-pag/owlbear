@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -143,8 +143,8 @@ def test_legacy_consumer_prevents_activation(tmp_path: Path) -> None:
         controller.activate_controller(tmp_path, "a" * 40)
 
 
-@pytest.mark.parametrize("changed", [False, True])
-def test_activation_preserves_inputs_and_fences_changed_state(tmp_path: Path, *, changed: bool) -> None:
+@pytest.mark.parametrize("change", ["none", "state", "config"])
+def test_activation_preserves_inputs_and_fences_changes(tmp_path: Path, change: str) -> None:
     workspace = tmp_path / "workspace"
     config = workspace / ".vscode/mcp.json"
     config.parent.mkdir(parents=True)
@@ -158,20 +158,56 @@ def test_activation_preserves_inputs_and_fences_changed_state(tmp_path: Path, *,
     release = tmp_path / "release"
     (release / ".venv/bin").mkdir(parents=True)
     (release / ".venv/bin/python").touch()
-    fingerprint = "changed" if changed else "before"
+    fingerprint = "changed" if change == "state" else "before"
+    original_decode = controller.decode_document
+
+    def change_config_after_read(content: bytes, name: str) -> dict[str, object]:
+        if change == "config":
+            config.write_text('{"servers":{"new-server":{"command":"concurrent"}}}')
+        return original_decode(content, name)
+
     with (
         patch.object(controller, "__file__", str(release / "setup/delivery_controller.py")),
         patch.object(controller, "legacy_consumers", return_value=[]),
         patch.object(controller, "check_controller", return_value={"ready_for_switch": True}),
         patch.object(controller, "state_fingerprint", side_effect=["before", fingerprint]),
+        patch.object(controller, "decode_document", side_effect=change_config_after_read),
     ):
-        if changed:
+        if change != "none":
             with pytest.raises(ValueError, match="changed during activation"):
                 controller.activate_controller(workspace, "a" * 40)
-            assert config.read_bytes() == original_bytes
+            if change == "state":
+                assert config.read_bytes() == original_bytes
+            else:
+                assert json.loads(config.read_bytes())["servers"]["new-server"]["command"] == "concurrent"
         else:
             result = controller.activate_controller(workspace, "a" * 40)
             assert result["activated_configuration"]
             assert json.loads(config.read_bytes())["servers"]["other"] == original["servers"]["other"]
             assert (Path(result["backup"]) / "mcp.json").read_bytes() == original_bytes
             assert (Path(result["backup"]) / "runtime/changes").is_dir()
+
+
+def test_same_release_restart_does_not_require_quiescence(tmp_path: Path) -> None:
+    config = tmp_path / ".vscode/mcp.json"
+    config.parent.mkdir()
+    config.write_text(json.dumps({"servers": {"owlbear-delivery": {"args": ["a" * 40]}}}))
+    module = Mock()
+    with (
+        patch.object(controller, "check_controller", return_value={"compatible": True}) as check,
+        patch.object(controller, "switch_locks", side_effect=AssertionError("switch lock on restart")),
+        patch.object(controller.os, "chdir"),
+        patch.object(controller.importlib, "import_module", return_value=module),
+    ):
+        assert controller.run_controller(tmp_path, "a" * 40) == 0
+    check.assert_called_once_with(tmp_path, "a" * 40, quiescent=False)
+    module.mcp.run.assert_called_once_with()
+
+
+def test_incompatible_restart_never_imports_application(tmp_path: Path) -> None:
+    with (
+        patch.object(controller, "check_controller", return_value={"compatible": False}),
+        patch.object(controller.importlib, "import_module") as load,
+    ):
+        assert controller.run_controller(tmp_path, "a" * 40) == 1
+    load.assert_not_called()

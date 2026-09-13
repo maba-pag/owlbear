@@ -28,13 +28,30 @@ CURRENT_RECORD_DEPTH = 3
 
 def read_document(path: Path) -> dict[str, Any]:
     """Read one bounded regular JSON object without accepting symlinks."""
+    return decode_document(read_content(path), path.name)
+
+
+def read_content(path: Path) -> bytes:
+    """Read one regular document once, for both parsing and compare-and-swap."""
     metadata = path.lstat()
     if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_STATE_BYTES:
         message = f"unsafe or oversized state document: {path.name}"
         raise ValueError(message)
-    document = json.loads(path.read_bytes())
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            _refuse("state document changed type")
+        content = stream.read(MAX_STATE_BYTES + 1)
+    if len(content) > MAX_STATE_BYTES:
+        _refuse("oversized state document")
+    return content
+
+
+def decode_document(content: bytes, name: str) -> dict[str, Any]:
+    """Require an object while retaining the exact bytes used by the caller."""
+    document = json.loads(content)
     if not isinstance(document, dict):
-        message = f"state document must be an object: {path.name}"
+        message = f"state document must be an object: {name}"
         raise TypeError(message)
     return document
 
@@ -216,18 +233,19 @@ def validate_state(workspace: Path) -> list[dict[str, str]]:
     return errors
 
 
-def check_controller(workspace: Path, revision: str) -> dict[str, Any]:
-    """Require quiescence, exact source, and compatible state before application import."""
+def check_controller(workspace: Path, revision: str, *, quiescent: bool = True) -> dict[str, Any]:
+    """Validate pinned source and schemas; require quiescence only for a switch."""
     release = Path(__file__).resolve().parents[1]
     verify_release(release, revision, workspace)
-    result = inspect_workspace(workspace)
+    result = inspect_workspace(workspace) if quiescent else {"ready_for_switch": False, "blockers": []}
     if result["blockers"]:
         return result
     delivery = importlib.import_module("owlbear_delivery")
     if not Path(delivery.__file__).resolve().is_relative_to(release):
         _refuse("Delivery imports resolve outside the pinned release")
     result["blockers"].extend(validate_state(workspace))
-    result["ready_for_switch"] = not result["blockers"]
+    result["ready_for_switch"] = quiescent and not result["blockers"]
+    result["compatible"] = not result["blockers"]
     result["controller_revision"] = revision
     result["lock_sha256"] = hashlib.sha256((release / "uv.lock").read_bytes()).hexdigest()
     return result
@@ -296,8 +314,8 @@ def activate_controller(workspace: Path, revision: str) -> dict[str, Any]:
             return result
         fingerprint = state_fingerprint(workspace)
         config_path = workspace / ".vscode/mcp.json"
-        config = read_document(config_path)
-        previous = config_path.read_bytes()
+        previous = read_content(config_path)
+        config = decode_document(previous, config_path.name)
         if "owlbear-delivery" not in config.get("servers", {}):
             _refuse("existing Delivery MCP configuration is required")
         release = Path(__file__).resolve().parents[1]
@@ -330,16 +348,15 @@ def activate_controller(workspace: Path, revision: str) -> dict[str, Any]:
 def run_controller(workspace: Path, revision: str, *, cockpit: bool = False) -> int:
     """Keep the release locked for a complete MCP or Cockpit process lifetime."""
     with controller_lock(workspace, shared=True):
-        with switch_locks(workspace):
-            result = check_controller(workspace, revision)
-            if not result["ready_for_switch"]:
-                print(json.dumps(result), file=sys.stderr)
-                return 1
-            server = read_document(workspace / ".vscode/mcp.json")["servers"]["owlbear-delivery"]
-            if revision not in server.get("args", []):
-                _refuse("requested controller differs from the active configured pin")
-            os.chdir(workspace)
-            module = importlib.import_module("owlbear_cockpit.main" if cockpit else "owlbear_delivery_mcp.server")
+        result = check_controller(workspace, revision, quiescent=False)
+        if not result["compatible"]:
+            print(json.dumps(result), file=sys.stderr)
+            return 1
+        server = read_document(workspace / ".vscode/mcp.json")["servers"]["owlbear-delivery"]
+        if revision not in server.get("args", []):
+            _refuse("requested controller differs from the active configured pin")
+        os.chdir(workspace)
+        module = importlib.import_module("owlbear_cockpit.main" if cockpit else "owlbear_delivery_mcp.server")
         if cockpit:
             sys.argv = [sys.argv[0]]
             module.main()

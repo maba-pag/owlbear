@@ -131,6 +131,11 @@ The agent then performs these steps:
   arguments. Verify health and an actual read before resuming work. Both processes hold a
   shared release lock, so an upgrade cannot overlap either running consumer.
 
+Ordinary restarts of the **same** configured release do not require quiescent state or
+switch locks: the controller must be able to recover an interrupted claim or publication.
+They still require the exact clean release and compatible current schemas. Quiescence is
+an upgrade/activation gate, not a reason to make recovery tools unavailable after a restart.
+
 These are agent operations, not manual user test or worktree-repair steps. The launcher
 requires isolated Python (`-I`) for every operation except offline `inspect`; MCP stdout
 remains reserved for its protocol. Live data stays in the original project, separate from
