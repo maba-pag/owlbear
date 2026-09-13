@@ -3163,6 +3163,74 @@ class ChangeWorkspaceManager:
             self._require_ancestor(promoted_commit, exact_head)
         return coordination
 
+    def capture_finalization_workspace(
+        self,
+        change_id: str,
+        promoted_commits: tuple[str, ...],
+    ) -> tuple[ChangeCoordination, str, str, tuple[str, ...], str | None]:
+        """Capture bounded workspace facts without changing checkout or custody."""
+        coordination = self._coordinator.show(change_id)
+        head = self.observed_change_head(change_id)
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, head)
+        status = self._run_git(
+            "status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=coordination.worktree_path
+        ).stdout
+        paths = self._dirty_paths(status)
+        fingerprint = hashlib.sha256(head.encode() + b"\0" + status)
+        fingerprint.update(self._run_git("diff", "HEAD", "--binary", cwd=coordination.worktree_path).stdout)
+        for relative in paths:
+            try:
+                metadata = (coordination.worktree_path / relative).lstat()
+            except FileNotFoundError:
+                fingerprint.update(repr((relative, "absent")).encode())
+            else:
+                fingerprint.update(
+                    repr(
+                        (relative, metadata.st_mode, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+                    ).encode()
+                )
+        reason = self._captured_finalization_guard(coordination, head, promoted_commits)
+        return coordination, head, fingerprint.hexdigest(), paths, reason or ("workspace-dirty" if status else None)
+
+    @staticmethod
+    def _dirty_paths(status: bytes) -> tuple[str, ...]:
+        records = iter(status.decode("utf-8", errors="strict").split("\0"))
+        paths: set[str] = set()
+        for record in records:
+            if not record:
+                continue
+            paths.add(record[3:])
+            if "R" in record[:2] or "C" in record[:2]:
+                paths.add(next(records))
+        return tuple(sorted(paths))
+
+    def _captured_finalization_guard(
+        self,
+        coordination: ChangeCoordination,
+        head: str,
+        promoted_commits: tuple[str, ...],
+    ) -> str | None:
+        if coordination.writer is not None or coordination.publication_lease is not None:
+            return "active-custody"
+        if any(
+            (
+                coordination.external_head_adoption_intent,
+                coordination.worktree_cleanup_intent,
+                coordination.worktree_cleanup,
+                coordination.dirty_worktree_quarantine,
+            )
+        ):
+            return "workspace-preflight-failed"
+        ancestors = (coordination.last_reviewed_commit, *promoted_commits)
+        if any(not self._is_ancestor(commit, head, cwd=self._repository) for commit in ancestors):
+            return "workspace-preflight-failed"
+        if any(
+            not self._is_ancestor(predecessor, successor, cwd=self._repository)
+            for predecessor, successor in pairwise(promoted_commits)
+        ):
+            return "workspace-preflight-failed"
+        return None
+
     def observed_change_head(self, change_id: str) -> str:
         """Read the current managed Change branch head without mutating any checkout."""
         coordination = self._coordinator.show(change_id)
@@ -4031,7 +4099,10 @@ class ChangeWorkspaceManager:
             (resolve_git_executable(), "-C", str(cwd), "merge-base", "--is-ancestor", ancestor, descendant),
             check=False,
             capture_output=True,
+            timeout=10,
         )
+        if result.returncode not in (0, 1):
+            result.check_returncode()
         return result.returncode == 0
 
     def _resolve(self, revision: str, *, cwd: Path | None = None, missing_ok: bool = False) -> str | None:
@@ -4067,12 +4138,18 @@ class ChangeWorkspaceManager:
         input_bytes: bytes | None = None,
         environment: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
+        command = arguments[2:] if arguments[:1] == ("-C",) else arguments
+        inspection = command[:1] in (("status",), ("diff",), ("rev-parse",)) or command[:2] in (
+            ("branch", "--show-current"),
+            ("worktree", "list"),
+        )
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
             (resolve_git_executable(), "-C", str(cwd or self._repository), *arguments),
             check=check,
             capture_output=True,
             input=input_bytes,
             env=dict(environment) if environment is not None else None,
+            timeout=10 if inspection else None,
         )
 
 
