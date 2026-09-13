@@ -9,7 +9,7 @@ import logging
 import subprocess
 import time
 import uuid
-from contextlib import ExitStack, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -72,6 +72,7 @@ from owlbear_delivery.delivery_runtime import (
     AdvanceDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeAbandonment,
@@ -189,7 +190,7 @@ from owlbear_delivery.work_items import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Iterator, Mapping
 
     from owlbear_delivery.completed_history import (
         CompletedChangePage,
@@ -649,6 +650,24 @@ class DeliveryRolePolicy(_ApplicationModel):
     worker_role: DeliveryWorkerRole
     worker_agent: str = Field(min_length=1)
     reviewer_agent: str = Field(min_length=1)
+
+
+class DeliveryActionSelection(_ApplicationModel):
+    """Fence one explicitly selected next Planner or Builder action."""
+
+    change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    expected_stage: Literal[DeliveryStage.PLANNING, DeliveryStage.IMPLEMENTATION]
+    expected_task_id: str | None = Field(default=None, min_length=1)
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_source_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @model_validator(mode="after")
+    def _validate_task_selection(self) -> DeliveryActionSelection:
+        if (self.expected_stage == DeliveryStage.IMPLEMENTATION) != (self.expected_task_id is not None):
+            message = "only an Implementation selection requires the expected next task identity"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryLaunchPackage(_ApplicationModel):
@@ -1366,6 +1385,18 @@ class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
     code = "ERR_DELIVERY_PORTFOLIO"
+
+
+class DeliveryCapacityWaitingError(DeliveryRuntimeConflictError):
+    """Selected work can be retried when shared execution capacity is available."""
+
+    code = "ERR_DELIVERY_CAPACITY_WAITING"
+
+
+class DeliveryActionBusyError(DeliveryRuntimeConflictError):
+    """A selected Change is temporarily locked by another operation."""
+
+    code = "ERR_DELIVERY_ACTION_BUSY"
 
 
 class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError):
@@ -2813,6 +2844,14 @@ class PortfolioApplication:
     ) -> DeliveryChangeDispositionResolution:
         """Resolve one exact Change attention record without recreating provider authority."""
         runtime = self._runtime(change_id, for_mutation=True)
+        with self._attention_resolution_lock(change_id):
+            resolution = runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+            self._publish_delivery_state(change_id, runtime, f"attention-resolution-{resolution.resolution_id}")
+            return resolution
+
+    @contextmanager
+    def _attention_resolution_lock(self, change_id: str) -> Iterator[None]:
+        """Bound checkpoint contention for disposition resolution."""
         deadline = time.monotonic() + _ATTENTION_RESOLUTION_LOCK_TIMEOUT_SECONDS
         with ExitStack() as stack:
             while True:
@@ -2829,9 +2868,7 @@ class PortfolioApplication:
                     time.sleep(min(_ATTENTION_RESOLUTION_LOCK_RETRY_SECONDS, remaining))
                 else:
                     break
-            resolution = runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
-            self._publish_delivery_state(change_id, runtime, f"attention-resolution-{resolution.resolution_id}")
-            return resolution
+            yield
 
     def recover_publication_baseline(
         self,
@@ -5622,14 +5659,107 @@ class PortfolioApplication:
                 ),
             )
 
-    def acquire_actions(self) -> DeliveryAcquisitionResult:
-        """Claim and return the next bounded Planner or Builder action batch."""
-        return self.acquire_frontier_work()
+    def acquire_actions(self, selection: DeliveryActionSelection | None = None) -> DeliveryAcquisitionResult:
+        """Acquire a fenced selected action, or the explicitly requested portfolio batch."""
+        if selection is None:
+            return self.acquire_frontier_work()
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(selection.change_id),
+        ):
+            runtime = self._runtime(selection.change_id, for_mutation=True)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                return DeliveryAcquisitionResult(
+                    launch_packages=(),
+                    failures=(
+                        DeliveryAcquisitionFailure(
+                            change_id=selection.change_id,
+                            outcome_id=selection.outcome_id,
+                            code="ERR_DELIVERY_ACTION_ALREADY_ACTIVE",
+                            detail=(
+                                "The selected Change already has an active claim; "
+                                "no worker was dispatched by this call."
+                            ),
+                            retry_condition=(
+                                "Inspect get_change before continuing. Do not redispatch an existing worker or recover "
+                                "its claim without establishing that the worker has stopped."
+                            ),
+                        ),
+                    ),
+                )
+            if hashlib.sha256(runtime.frontier_bytes()).hexdigest() != selection.expected_frontier_digest:
+                message = "selected action frontier changed; refresh the selection"
+                raise DeliveryActionSelectionConflictError(message)
+            failures = self._replay_pending_state_publications(selection.change_id)
+            if failures:
+                return DeliveryAcquisitionResult(launch_packages=(), failures=failures)
+            candidate = next(
+                iter(self._candidates(selection.change_id)),
+                None,
+            )
+            if candidate is None:
+                self._fail("selected Change has no currently claimable action")
+            if (
+                candidate.binding.outcome_id != selection.outcome_id
+                or candidate.binding.stage != selection.expected_stage
+                or candidate.task_id != selection.expected_task_id
+            ):
+                message = "selected action does not match the next eligible outcome, stage, and task"
+                raise DeliveryActionSelectionConflictError(message)
+            if self._execution_occupancy() >= self._execution_capacity:
+                message = "selected action is waiting for execution capacity"
+                raise DeliveryCapacityWaitingError(message)
+            return self._acquire_selected_candidate(candidate, selection)
 
-    def _replay_pending_state_publications(self) -> tuple[DeliveryAcquisitionFailure, ...]:
+    @contextmanager
+    def _selected_action_checkpoint_lock(self, change_id: str) -> Iterator[None]:
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(locked_roots((self._checkpoint_lock_root(change_id),), blocking=False))
+            except BlockingIOError as exc:
+                message = "selected Change has an operation in progress; retry after that operation finishes"
+                raise DeliveryActionBusyError(message) from exc
+            yield
+
+    def _acquire_selected_candidate(
+        self,
+        candidate: _Candidate,
+        selection: DeliveryActionSelection,
+    ) -> DeliveryAcquisitionResult:
+        source = self._prepare_source(
+            candidate.change_id,
+            candidate.runtime,
+            candidate.binding.outcome_id,
+            candidate.role,
+            allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
+        )
+        if isinstance(source, DeliveryAcquisitionFailure):
+            return DeliveryAcquisitionResult(launch_packages=(), failures=(source,))
+        if source.source_head != selection.expected_source_head:
+            message = "selected action source head changed; refresh the selection"
+            raise DeliveryActionSelectionConflictError(message)
+        if hashlib.sha256(candidate.runtime.frontier_bytes()).hexdigest() != selection.expected_frontier_digest:
+            message = "selected action frontier changed during source preparation; refresh the selection"
+            raise DeliveryActionSelectionConflictError(message)
+        launch = self._activate_candidate(
+            candidate,
+            source,
+            expected_frontier_digest=selection.expected_frontier_digest,
+        )
+        if isinstance(launch, DeliveryAcquisitionFailure):
+            return DeliveryAcquisitionResult(launch_packages=(), failures=(launch,))
+        return DeliveryAcquisitionResult(launch_packages=(launch,))
+
+    def _replay_pending_state_publications(
+        self, selected_change_id: str | None = None
+    ) -> tuple[DeliveryAcquisitionFailure, ...]:
         """Replay durable local state publications before exposing new claims."""
         failures = []
-        for change_id, runtime in sorted(self._runtimes.items()):
+        for change_id, runtime in sorted(
+            self._runtimes.items()
+            if selected_change_id is None
+            else ((selected_change_id, self._runtimes[selected_change_id]),)
+        ):
             try:
                 pending = runtime.pending_state_publication()
             except (OSError, RuntimeError, ValueError) as exc:
@@ -6056,7 +6186,12 @@ class PortfolioApplication:
         """Apply one version-bound request answer or requestless block evidence."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(answer.change_id, for_mutation=True)
-            with locked_roots((self._checkpoint_lock_root(answer.change_id),)):
+            checkpoint_lock = (
+                self._attention_resolution_lock(answer.change_id)
+                if answer.kind is DeliveryAnswerKind.DISPOSITION
+                else locked_roots((self._checkpoint_lock_root(answer.change_id),))
+            )
+            with checkpoint_lock:
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if answer.kind is DeliveryAnswerKind.REQUEST:
                     current = self._request(runtime, answer.request_id)
@@ -6292,9 +6427,11 @@ class PortfolioApplication:
             quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
         )
 
-    def _candidates(self) -> tuple[_Candidate, ...]:  # noqa: C901 - stable ranking boundary.
+    def _candidates(self, selected_change_id: str | None = None) -> tuple[_Candidate, ...]:  # noqa: C901
         candidates = []
         for change_id, runtime in self._runtimes.items():
+            if selected_change_id is not None and change_id != selected_change_id:
+                continue
             if change_id in self._runtime_reconciliation_errors:
                 continue
             try:
@@ -6497,12 +6634,20 @@ class PortfolioApplication:
         self,
         candidate: _Candidate,
         source: _PreparedSource,
+        *,
+        expected_frontier_digest: str | None = None,
     ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
         claim = self._new_claim(candidate.role, candidate.task_id)
-        candidate.runtime.activate_claim(ActivateDeliveryClaim(outcome_id=candidate.binding.outcome_id, claim=claim))
-        writer = None
-        if candidate.role == DeliveryWorkerRole.BUILDER:
-            try:
+        candidate.runtime.activate_claim(
+            ActivateDeliveryClaim(
+                outcome_id=candidate.binding.outcome_id,
+                claim=claim,
+                expected_frontier_digest=expected_frontier_digest,
+            )
+        )
+        try:
+            writer = None
+            if candidate.role == DeliveryWorkerRole.BUILDER:
                 coordination = self._coordinator.acquire(
                     candidate.change_id,
                     ChangeWriter(
@@ -6515,18 +6660,18 @@ class PortfolioApplication:
                         kind="build",
                     ),
                 )
-            except CoordinationConflictError as exc:
-                return DeliveryAcquisitionFailure(
-                    change_id=candidate.change_id,
-                    outcome_id=candidate.binding.outcome_id,
-                    attempt_id=claim.attempt_id,
-                    claim_id=claim.claim_id,
-                    code=exc.code,
-                    detail=str(exc),
-                    retry_condition="Remove the exact failed claim after reconciling writer custody.",
-                )
-            writer = coordination.writer
-        return self._launch_package(candidate, claim, source, writer)
+                writer = coordination.writer
+            return self._launch_package(candidate, claim, source, writer)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return DeliveryAcquisitionFailure(
+                change_id=candidate.change_id,
+                outcome_id=candidate.binding.outcome_id,
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=str(exc) or "worker launch preparation failed after claim activation",
+                retry_condition="Recover the exact failed claim after reconciling writer custody.",
+            )
 
     def _current_launch(
         self,
@@ -6816,7 +6961,10 @@ __all__ = [
     "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
+    "DeliveryActionBusyError",
+    "DeliveryActionSelection",
     "DeliveryBuildContext",
+    "DeliveryCapacityWaitingError",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
     "DeliveryFinalizationContext",

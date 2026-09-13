@@ -28,6 +28,7 @@ from owlbear_delivery import (
     DeliveryCheckpointReconciliationResult,
     DeliveryRuntime,
     PortfolioApplication,
+    PortfolioCoordinator,
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -88,6 +89,7 @@ from owlbear_delivery_github import GitHubCliPublicationProvider
 class _LockOnlyPortfolioApplication(PortfolioApplication):
     def __init__(self, target_root: Path) -> None:
         self._target_root = target_root.resolve()
+        self._coordinator = PortfolioCoordinator(self._target_root)
         self._clock = lambda: "2026-08-11T16:00:00Z"
 
     def _runtime(self, _change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
@@ -307,6 +309,9 @@ class _DeliveryApplicationFake:
             "disposition": "attention-resolve",
         }[answer.kind.value]
         self.calls.append((operation, (answer,)))
+        failure = self.failures.get("answer")
+        if failure is not None:
+            raise failure
         return {"request_id": answer.request_id, "resolved": True}
 
     def clear_block(self, *args: object) -> dict[str, object]:
@@ -1391,12 +1396,12 @@ def test_publication_supersession_route_delegates_current_identity_exactly_once(
 
 def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
     client, application = _client(
-        {"resolve_change_disposition": DeliveryChangeDispositionConflictError("attention identity is stale")}
+        {"answer": DeliveryChangeDispositionConflictError("attention identity is stale")}
     )
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",
-        json={"expected_disposition_id": "a" * 64},
+        json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
     )
 
     assert response.status_code == 409
@@ -1406,17 +1411,29 @@ def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
         "authority": "delivery",
         "retry_safe": False,
     }
-    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+    assert application.calls == [
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
+    ]
 
 
 def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
     client, application = _client(
-        {"resolve_change_disposition": DeliveryChangeDispositionBusyError("attention is already in progress")}
+        {"answer": DeliveryChangeDispositionBusyError("attention is already in progress")}
     )
 
     response = client.post(
         "/api/changes/change-a/attention/resolve",
-        json={"expected_disposition_id": "a" * 64},
+        json={"expected_disposition_id": "a" * 64, "expected_frontier_digest": "a" * 64},
     )
 
     assert response.status_code == 409
@@ -1426,7 +1443,19 @@ def test_busy_attention_resolution_route_is_retryable_conflict() -> None:
         "authority": "delivery",
         "retry_safe": True,
     }
-    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
+    assert application.calls == [
+        (
+            "attention-resolve",
+            (
+                DeliveryAnswer(
+                    change_id="change-a",
+                    kind=DeliveryAnswerKind.DISPOSITION,
+                    expected_frontier_digest="a" * 64,
+                    expected_disposition_id="a" * 64,
+                ),
+            ),
+        ),
+    ]
 
 
 def test_real_attention_resolution_route_fails_fast_on_held_checkpoint_lock(tmp_path: Path) -> None:

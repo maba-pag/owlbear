@@ -56,6 +56,8 @@ from owlbear_delivery.portfolio_application import (
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
 from owlbear_delivery_mcp.target_models import (
+    AcquireActionsParams,
+    AcquireActionsRequest,
     AdministrativeMoveParams,
     AdministrativeMovePreviewResponse,
     AdministrativeMoveRequest,
@@ -668,13 +670,17 @@ class TargetMCPAdapter:
         )
         return AdministrativeMoveResponse.from_result(result)
 
-    async def acquire_actions(self, request: EmptyRequest) -> dict[str, object]:
-        """Claim and return the next bounded Planner or Builder action batch."""
-        params = self._validate(EmptyParams, request)
+    async def acquire_actions(self, request: AcquireActionsRequest) -> dict[str, object]:
+        """Acquire one fenced action when selection is supplied, otherwise a portfolio batch."""
+        params = self._validate(AcquireActionsParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            self._application.acquire_actions,
+            (
+                self._application.acquire_actions
+                if params.selection is None
+                else lambda: self._application.acquire_actions(params.selection)
+            ),
         )
 
     async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:

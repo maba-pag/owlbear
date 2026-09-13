@@ -78,6 +78,7 @@ from owlbear_delivery.draft_pull_request import (
     MarkChangePullRequestReady,
 )
 from owlbear_delivery.portfolio_application import (
+    DeliveryActionSelection,
     DeliveryAnswer,
     DeliveryAnswerKind,
     DeliveryAnswerResult,
@@ -676,6 +677,24 @@ def _finalization() -> dict[str, object]:
         "observations": [observation.model_dump(mode="json")],
         "review": review.model_dump(mode="json"),
     }
+
+
+@pytest.mark.asyncio
+async def test_selected_acquisition_adapter_preserves_selection() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    selection = DeliveryActionSelection(
+        change_id=CHANGE,
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.IMPLEMENTATION,
+        expected_task_id="TASK-001",
+        expected_frontier_digest=DIGEST,
+        expected_source_head=COMMIT,
+    )
+
+    await adapter.acquire_actions({"selection": selection.model_dump(mode="json")})
+
+    assert application.calls == [("acquire_actions", (selection,), {})]
 
 
 def _requests() -> dict[str, dict[str, object]]:
@@ -1438,13 +1457,13 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             True,
         ),
         (
-            "resolve_change_disposition",
+            "answer",
             DeliveryChangeDispositionConflictError("attention identity is stale"),
             "ERR_DELIVERY_RUNTIME_CONFLICT",
             False,
         ),
         (
-            "resolve_change_disposition",
+            "answer",
             DeliveryChangeDispositionBusyError("attention resolution is already in progress"),
             "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY",
             True,
@@ -1482,9 +1501,10 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
     for operation_name, failure, code, retry_safe in cases:
         application = _RecordingApplication({operation_name: failure})
         adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+        request_key = "answer_disposition" if operation_name == "answer" else operation_name
 
         with pytest.raises(ToolError) as exc_info:
-            await getattr(adapter, operation_name)(_requests()[operation_name])
+            await getattr(adapter, operation_name)(_requests()[request_key])
 
         diagnostic = json.loads(str(exc_info.value))
         assert diagnostic["code"] == code

@@ -420,6 +420,96 @@ async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> N
 
 
 @pytest.mark.asyncio
+async def test_registered_acquisition_rejects_incomplete_selection_without_delegation() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool("acquire_actions", {"selection": {"change_id": "change-a"}})
+
+    assert result.is_error
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_registered_acquisition_accepts_selected_planning_request() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "planning",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                },
+            },
+        )
+
+    assert not result.is_error
+    assert result.structured_content == {"operation": "acquire_actions"}
+    assert application.calls == ["acquire_actions"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"expected_stage": "completed"},
+        {"expected_stage": "implementation"},
+        {"expected_task_id": "TASK-001"},
+        {"unknown": "value"},
+        {"expected_frontier_digest": "wrong"},
+    ],
+)
+async def test_registered_acquisition_rejects_invalid_selection(changes: dict[str, object]) -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    selection = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "expected_stage": "planning",
+        "expected_frontier_digest": "a" * 64,
+        "expected_source_head": "b" * 40,
+        **changes,
+    }
+
+    async with Client(server) as client:
+        result = await client.call_tool("acquire_actions", {"selection": selection})
+
+    assert result.is_error
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_registered_acquisition_accepts_selected_builder_request() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        result = await client.call_tool(
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "implementation",
+                    "expected_task_id": "TASK-001",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                },
+            },
+        )
+
+    assert not result.is_error
+    assert application.calls == ["acquire_actions"]
+
+
+@pytest.mark.asyncio
 async def test_work_item_view_tool_delegates_exact_publication_key() -> None:
     application = _RecordingApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
@@ -599,7 +689,10 @@ async def test_acceptance_observation_yields_the_mcp_event_loop() -> None:
 @pytest.mark.parametrize(
     ("operation_name", "payload"),
     [
-        ("admit_delivery_change", {"change_id": "change-a", "active_claim_ids": []}),
+        (
+            "admit_delivery_change",
+            {"change_id": "change-a", "expected_package_id": "a" * 64, "active_claim_ids": []},
+        ),
         ("acquire_actions", {}),
     ],
 )
@@ -631,7 +724,7 @@ async def test_cancelled_admission_is_reconciled_without_a_blind_retry() -> None
     release = threading.Event()
     application = _BlockingFoundationalApplication("admit_delivery_change", started, release)
     adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
-    request = {"change_id": "change-a", "active_claim_ids": []}
+    request = {"change_id": "change-a", "expected_package_id": "a" * 64, "active_claim_ids": []}
 
     task = asyncio.create_task(adapter.admit_delivery_change(request))
     assert await asyncio.to_thread(started.wait, 2)

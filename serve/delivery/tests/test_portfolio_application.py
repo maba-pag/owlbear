@@ -48,6 +48,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionReceipt,
@@ -150,6 +151,9 @@ from owlbear_delivery.delivery_contract_discovery import (
 )
 from owlbear_delivery.delivery_state import DeliveryStateSnapshotDiagnostic, DeliveryStateSnapshotInventory
 from owlbear_delivery.portfolio_application import (
+    DeliveryActionBusyError,
+    DeliveryActionSelection,
+    DeliveryCapacityWaitingError,
     DeliveryRuntimeReconciliationError,
     _required_check_diagnostics,
 )
@@ -918,6 +922,290 @@ def _wait_for_files(paths: tuple[Path, ...], timeout: float = 10) -> None:
             message = f"timed out waiting for {paths}"
             raise TimeoutError(message)
         time.sleep(0.01)
+
+
+def test_selected_acquisition_leaves_sibling_claims_unchanged(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+    )
+    before_sibling = runtimes["change-a"].frontier_bytes()
+    selection = DeliveryActionSelection(
+        change_id="change-b",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(runtimes["change-b"].frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-b").last_reviewed_commit,
+    )
+
+    result = application.acquire_actions(selection)
+
+    assert len(result.launch_packages) == 1
+    assert result.launch_packages[0].change_id == "change-b"
+    assert result.launch_packages[0].task_id is None
+    assert runtimes["change-a"].frontier_bytes() == before_sibling
+    assert coordinator.show("change-a").writer is None
+    assert result.recoveries == result.failures == result.integration_attention == ()
+
+
+@pytest.mark.parametrize("changed_field", ["expected_frontier_digest", "expected_source_head", "outcome_id"])
+def test_selected_acquisition_rejects_stale_selection_without_claims(tmp_path: Path, changed_field: str) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+    )
+    before = {change_id: runtime.frontier_bytes() for change_id, runtime in runtimes.items()}
+    selection = DeliveryActionSelection(
+        change_id="change-b",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(before["change-b"]).hexdigest(),
+        expected_source_head=coordinator.show("change-b").last_reviewed_commit,
+    )
+    rejected = {
+        "expected_frontier_digest": "0" * 64,
+        "expected_source_head": "0" * 40,
+        "outcome_id": "OUT-999",
+    }
+
+    with pytest.raises(DeliveryActionSelectionConflictError, match="selected action"):
+        application.acquire_actions(selection.model_copy(update={changed_field: rejected[changed_field]}))
+
+    assert {change_id: runtime.frontier_bytes() for change_id, runtime in runtimes.items()} == before
+    assert coordinator.show("change-b").writer is None
+
+
+def test_selected_acquisition_rejects_wrong_task_then_acquires_expected_task(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION, "change-b": DeliveryStage.PLANNING},
+    )
+    runtime = runtimes["change-a"]
+    before = runtime.frontier_bytes()
+    expected_task = runtime.claimable_task_ids("OUT-001")[0]
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.IMPLEMENTATION,
+        expected_task_id="wrong-task",
+        expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+
+    with pytest.raises(DeliveryActionSelectionConflictError, match="next eligible"):
+        application.acquire_actions(selection)
+    assert runtime.frontier_bytes() == before
+    result = application.acquire_actions(selection.model_copy(update={"expected_task_id": expected_task}))
+
+    assert len(result.launch_packages) == 1
+    assert result.launch_packages[0].task_id == expected_task
+    assert result.launch_packages[0].writer is not None
+    assert runtimes["change-b"].active_claims() == ()
+
+
+def test_selected_acquisition_honors_capacity_and_returns_source_failure(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+
+    def selection_for(change_id: str) -> DeliveryActionSelection:
+        return DeliveryActionSelection(
+            change_id=change_id,
+            outcome_id="OUT-001",
+            expected_stage=DeliveryStage.PLANNING,
+            expected_frontier_digest=hashlib.sha256(runtimes[change_id].frontier_bytes()).hexdigest(),
+            expected_source_head=coordinator.show(change_id).last_reviewed_commit,
+        )
+
+    dirty = coordinator.show("change-a").worktree_path / "product.txt"
+    original = dirty.read_bytes()
+    dirty.write_text("unreviewed source\n", encoding="utf-8")
+    result = application.acquire_actions(selection_for("change-a"))
+    assert result.launch_packages == ()
+    assert len(result.failures) == 1
+    assert result.failures[0].change_id == "change-a"
+    assert runtimes["change-a"].active_claims() == ()
+    dirty.write_bytes(original)
+    application.acquire_actions(selection_for("change-a"))
+
+    with pytest.raises(DeliveryCapacityWaitingError, match="execution capacity"):
+        application.acquire_actions(selection_for("change-b"))
+    assert runtimes["change-b"].active_claims() == ()
+
+
+def test_selected_acquisition_fences_frontier_at_claim_activation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    runtime = runtimes["change-a"]
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+    original_activate = runtime.activate_claim
+
+    def change_before_activation(request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
+        runtime.queue_explicit_checkpoint(selection.expected_source_head)
+        return original_activate(request)
+
+    with (
+        patch.object(runtime, "activate_claim", side_effect=change_before_activation),
+        pytest.raises(DeliveryRuntimeConflictError, match="before claim activation"),
+    ):
+        application.acquire_actions(selection)
+
+    assert runtime.active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+
+
+@pytest.mark.parametrize("selected", [True, False])
+def test_acquisition_retains_recovery_identity_after_writer_failure(tmp_path: Path, *, selected: bool) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    runtime = runtimes["change-a"]
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.IMPLEMENTATION,
+        expected_task_id=runtime.claimable_task_ids("OUT-001")[0],
+        expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+
+    with patch.object(coordinator, "acquire", side_effect=OSError("injected writer persistence failure")):
+        result = application.acquire_actions(selection if selected else None)
+
+    assert result.launch_packages == ()
+    assert len(result.failures) == 1
+    failure = result.failures[0]
+    active_claim = runtime.show_binding("OUT-001").active_claim
+    assert active_claim is not None
+    assert failure.claim_id == active_claim.claim_id
+    assert failure.attempt_id == active_claim.attempt_id
+    assert failure.change_id == "change-a"
+    assert coordinator.show("change-a").writer is None
+
+
+def test_selected_acquisition_holds_checkpoint_lock_through_activation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+    original_activate = runtimes["change-a"].activate_claim
+
+    def verify_lock(request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
+        with (
+            pytest.raises(BlockingIOError),
+            locked_roots((state_root / "publications/checkpoints/locks/change-a",), blocking=False),
+        ):
+            pytest.fail("selected activation released its checkpoint lock")
+        return original_activate(request)
+
+    with patch.object(runtimes["change-a"], "activate_claim", side_effect=verify_lock):
+        result = application.acquire_actions(selection)
+
+    assert len(result.launch_packages) == 1
+
+
+def test_selected_acquisition_busy_checkpoint_releases_portfolio_lock(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}
+    )
+    before = runtimes["change-a"].frontier_bytes()
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+
+    with (
+        locked_roots((state_root / "publications/checkpoints/locks/change-a",)),
+        pytest.raises(DeliveryActionBusyError),
+    ):
+        application.acquire_actions(selection)
+
+    with locked_roots((state_root / "claims/acquisition-lock",), blocking=False):
+        assert runtimes["change-a"].frontier_bytes() == before
+
+
+def test_selected_acquisition_repeated_call_reports_active_without_second_launch(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}
+    )
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+    first = application.acquire_actions(selection)
+    claimed = runtimes["change-a"].frontier_bytes()
+
+    repeated = application.acquire_actions(selection)
+
+    assert len(first.launch_packages) == 1
+    assert repeated.launch_packages == ()
+    assert repeated.failures[0].code == "ERR_DELIVERY_ACTION_ALREADY_ACTIVE"
+    assert repeated.failures[0].claim_id is None
+    assert "Do not redispatch" in repeated.failures[0].retry_condition
+    assert runtimes["change-a"].frontier_bytes() == claimed
+
+
+def test_selected_acquisition_replays_only_its_pending_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}
+    )
+    previous = {
+        change_id: DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        for change_id, runtime in runtimes.items()
+    }
+    publisher = Mock()
+    publisher.publish.return_value = object()
+    publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="remote-head",
+        snapshots=tuple(Mock(change_id=change_id, frontier=frontier) for change_id, frontier in previous.items()),
+    )
+    application._delivery_state_publisher = publisher
+    for runtime in runtimes.values():
+        content = runtime.frontier_bytes()
+        frontier = DeliveryFrontier.model_validate_json(content, strict=False)
+        runtime._replace_content(content, _canonical(frontier.model_copy(update={"published_head": "a" * 40})))
+    sibling_content = runtimes["change-b"].frontier_bytes()
+    sibling_pending = runtimes["change-b"].pending_state_publication()
+    selection = DeliveryActionSelection(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        expected_stage=DeliveryStage.PLANNING,
+        expected_frontier_digest=hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest(),
+        expected_source_head=coordinator.show("change-a").last_reviewed_commit,
+    )
+
+    result = application.acquire_actions(selection)
+
+    assert len(result.launch_packages) == 1
+    assert result.failures == ()
+    assert publisher.publish.call_count == 1
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert runtimes["change-b"].frontier_bytes() == sibling_content
+    assert runtimes["change-b"].pending_state_publication() == sibling_pending
 
 
 def test_shared_acquisition_serializes_reconciliation_and_bounds_claims(tmp_path: Path) -> None:
@@ -5524,9 +5812,15 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
 
 
 def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_path: Path) -> None:
+    current = [datetime(2026, 8, 4, tzinfo=UTC)]
+
+    def clock() -> str:
+        return current[0].isoformat()
+
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
+        clock=clock,
     )
     head = coordinator.show("change-a").last_reviewed_commit
     pending = DeliveryPendingCheckpoint(
@@ -5558,6 +5852,11 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     snapshot = coordinator.show("change-a").design_package_snapshot
     assert snapshot is not None
     assert runtime.checkpoint_publication_state().published_head == snapshot.snapshot_head
+    waiting = application.reconcile_change_checkpoint("change-a")
+    assert not waiting.reconciled
+    assert branch_publisher.publish.call_count == 1
+    assert pull_request_publisher.publish.call_count == 1
+    current[0] += timedelta(seconds=5)
     replayed = application.reconcile_change_checkpoint("change-a")
 
     assert replayed.reconciled

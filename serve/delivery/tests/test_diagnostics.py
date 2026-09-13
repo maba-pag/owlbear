@@ -21,6 +21,7 @@ from owlbear_delivery.completed_history import (
 from owlbear_delivery.delivery_admission import DeliveryAdmissionError
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryActionSelectionConflictError,
     DeliveryChangeDispositionBusyError,
     DeliveryChangeDispositionConflictError,
     DeliveryRuntimeConflictError,
@@ -37,6 +38,8 @@ from owlbear_delivery.diagnostics import (
     classify_delivery_failure,
 )
 from owlbear_delivery.portfolio_application import (
+    DeliveryActionBusyError,
+    DeliveryCapacityWaitingError,
     DeliveryRuntimeReconciliationError,
     PortfolioApplicationError,
 )
@@ -111,6 +114,30 @@ def test_busy_change_attention_resolution_is_retryable_conflict() -> None:
     assert classification is not None
     assert classification.code == "ERR_DELIVERY_ATTENTION_RESOLVE_BUSY"
     assert classification.retry_safe is True
+    assert classification.category is DeliveryFailureCategory.CONFLICT
+
+
+def test_selected_capacity_wait_is_retryable_without_changing_selection() -> None:
+    classification = classify_delivery_failure(DeliveryCapacityWaitingError("execution capacity is occupied"))
+
+    assert classification is not None
+    assert classification.code == "ERR_DELIVERY_CAPACITY_WAITING"
+    assert classification.retry_safe is True
+    assert classification.category is DeliveryFailureCategory.CONFLICT
+
+
+@pytest.mark.parametrize(
+    ("error", "retry_safe"),
+    [
+        (DeliveryActionBusyError("checkpoint busy"), True),
+        (DeliveryActionSelectionConflictError("frontier changed"), False),
+    ],
+)
+def test_selected_action_retry_advice_matches_condition(error: Exception, *, retry_safe: bool) -> None:
+    classification = classify_delivery_failure(error)
+
+    assert classification is not None
+    assert classification.retry_safe is retry_safe
     assert classification.category is DeliveryFailureCategory.CONFLICT
 
 

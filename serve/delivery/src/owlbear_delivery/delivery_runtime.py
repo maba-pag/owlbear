@@ -1221,6 +1221,7 @@ class ActivateDeliveryClaim(_DeliveryModel):
 
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim: DeliveryActiveClaim
+    expected_frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @property
     def claim_id(self) -> str:
@@ -1369,6 +1370,12 @@ class DeliveryRuntimeConflictError(RuntimeError):
     """A Delivery mutation is stale or violates canonical routing invariants."""
 
     code = "ERR_DELIVERY_RUNTIME_CONFLICT"
+
+
+class DeliveryActionSelectionConflictError(DeliveryRuntimeConflictError):
+    """A selected action needs fresh authority before another acquisition attempt."""
+
+    code = "ERR_DELIVERY_ACTION_SELECTION_STALE"
 
 
 class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
@@ -3031,6 +3038,12 @@ class DeliveryRuntime:
     def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
+        if (
+            request.expected_frontier_digest is not None
+            and hashlib.sha256(previous).hexdigest() != request.expected_frontier_digest
+        ):
+            message = "selected action frontier changed before claim activation"
+            raise DeliveryActionSelectionConflictError(message)
         _require_change_mutable(frontier, "activate_claim")
         binding = _find_binding(frontier, request.outcome_id)
         if frontier.integration_repair_claim is not None:

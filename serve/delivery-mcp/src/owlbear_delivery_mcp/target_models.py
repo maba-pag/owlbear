@@ -50,6 +50,7 @@ from owlbear_delivery.design_package import DesignPackageManifest, DesignPackage
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryActionSelection,
     DeliveryAnswerKind,
     DeliveryChangeIntentKind,
     DeliveryChangeIntentResult,
@@ -146,6 +147,12 @@ class DeliveryHealthResponse(_TargetProtocolModel):
 
 class EmptyParams(_TargetProtocolModel):
     """Validate an operation that accepts no parameters."""
+
+
+class AcquireActionsParams(_TargetProtocolModel):
+    """Select one fenced action or explicitly request portfolio acquisition."""
+
+    selection: DeliveryActionSelection | None = None
 
 
 class ChangeParams(_TargetProtocolModel):
@@ -1118,6 +1125,10 @@ type CreateDesignSessionRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
 ]
 type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
+type AcquireActionsRequest = Annotated[
+    AcquireActionsParams,
+    BeforeValidator(partial(_parse_json_model, AcquireActionsParams)),
+]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -1198,6 +1209,8 @@ type WorkItemViewRequest = Annotated[
 
 
 __all__ = [
+    "AcquireActionsParams",
+    "AcquireActionsRequest",
     "AdministrativeMoveParams",
     "AdministrativeMovePreviewResponse",
     "AdministrativeMoveRequest",
