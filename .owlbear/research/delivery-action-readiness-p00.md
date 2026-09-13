@@ -3,7 +3,7 @@
 > **Owning request:** Work on wave 00 of the Change-Scoped Continuation redesign.
 > **Date:** 2026-09-12
 > **Inspected baseline:** `5f978744ad356456ff9d198893690b508b6aa1be`, branch `dev`.
-> **Status:** P00 baseline published and synchronized; WP1 approved, admitted, and natively planned. P01 stopped before editing because the named Builder host lacks callable tool discovery for its deferred context tool. Its claim was recovered; managed worktree is clean with no writer. See section 11.
+> **Status:** P00 released; WP1 approved, admitted, and natively planned. Reload did not fix Builder discovery. Disabling experimental host tool deferral plus clarifying direct binding resolution passed claim-free custody probes; P01 is being resumed after synchronizing that repair. See section 12.
 > **Scope:** P00 design/context plus explicitly approved baseline and selected-launch prerequisite maintenance. No WP1/P01 implementation, task acquisition, repair of live B1/D1, or admission was performed.
 
 ## Current Handoff Summary
@@ -20,7 +20,7 @@ The host accepted explicit model overrides for each chosen name in read-only pro
 
 The user explicitly authorized the bounded release steps: scoped prerequisite commit, exact-commit review, local Design checkpoint, and safe live schema activation. No push, WP1 admission, or P01 launch was authorized by that decision. The live `acquire_actions` schema now includes `selection` with Change/outcome, stage/task, frontier digest, and source head fields; `delivery_health` returned healthy with no diagnostics. No restart was needed and no acquisition call was made.
 
-**Current gate:** restore callable tool discovery in the named Builder host before reacquiring P01. WP1 approval/admission, prerequisite publication, managed source synchronization, and independently reviewed native planning are complete. No agent may manufacture a task/claim from packet label P01 or substitute an unrestricted worker.
+**Current gate:** synchronize the tested host/workflow repair and verify directly callable Builder context/submission tools before reacquiring P01. WP1 approval/admission and independently reviewed native planning are complete. No agent may manufacture a task/claim from packet label P01 or substitute an unrestricted worker.
 
 ## 1. Result and Source Authority
 
@@ -304,14 +304,14 @@ P01 acquisition bound TASK-001 to claim `5242e241-0035-485c-bf3a-8df0d04855bf`, 
 
 **Safe retained state:** outcome Implementation, all five tasks retained, zero results, no active claim or writer, clean managed worktree at the reviewed head above. P01 product implementation and P02 have not started. Do not repeat admission or Planning merely because the host session is new.
 
-**Resume action:** reload the VS Code window and start a fresh primary chat, then run the prompt below. Reload is a host recovery attempt, not proof of repair. The agent must verify discovery and named reviewer dispatch before acquiring a fresh TASK-001 claim. If discovery remains unavailable, report that exact host failure without another acquire/recover loop.
+**Superseded recovery advice:** the user reloaded and retried; Builder still reported missing discovery. Do not repeat the reload-only advice. Section 12 records the tested repair and the prompt below now accepts either directly bound tools or successful discovery.
 
 ```text
 Resume wave 01 for delivery-action-readiness only. Read section 11 of
 .owlbear/research/delivery-action-readiness-p00.md. WP1 is approved, admitted,
 and has a reviewed five-task native plan; do not reapprove, readmit, or replan.
-First verify that the named builder host can actually load show_build_context
-and submit_result through callable tool discovery, and can dispatch its named
+First verify that the named builder host has directly callable show_build_context
+and submit_result, or can load them through discovery, and can dispatch its named
 build-reviewer. Preserve Astra implementation and Opus independent review.
 If verified, read current engine fences, acquire TASK-001 only through selected
 acquire_actions, and dispatch its unchanged launch to builder. Implement, test,
@@ -319,3 +319,32 @@ commit, independently review, and submit P01 in the managed Change worktree.
 Stop before TASK-002/P02. Do not bypass missing tools, copy caller custody
 evidence, edit Delivery state, or substitute an unrestricted worker.
 ```
+
+## 12. Tested Host Deferral Repair
+
+After the reload failed, installed VS Code/Copilot 0.65.0 metadata confirmed that
+`chat.agentHost.copilot.toolSearch.enabled` defers MCP and non-core tools behind
+discovery. The workspace had explicitly enabled it. Setting it to `false` in
+[workspace settings](../../.vscode/settings.json) exposed Builder's existing allowed
+`show_build_context` and `submit_result` bindings directly. This increases upfront
+tool-schema context; it does not widen the agent allowlist, disable hooks, or waive
+custody. It is a workspace workaround, not proof that VS Code's discovery defect is fixed.
+
+A claim-free named Builder probe actually invoked `show_build_context` with a
+recovered claim and received the engine's expected inactive-identity error. This
+proves reachability, not custody. A subsequent launch still stopped because it
+treated the separate deferred-tool inventory as overriding actual bindings. Claim
+`33a71b47-16b9-483e-a250-e9e4dd0a1f0f`, attempt
+`640096c7-b856-4418-80cc-c7a136b61d55`, was recovered with no edits or quarantine.
+
+[Packet Building Step 0](../../share/skills/w-packet-building/SKILL.md) now makes
+actual callable definitions decisive for its mandatory custody read: call an
+already-bound tool; otherwise load it through discovery; if neither exists,
+return `dispatch_failure`. A name in prose alone never grants a callable tool.
+A fresh named Builder following this rule reached the engine's inactive-claim
+error and confirmed `submit_result` directly bound without invoking it.
+
+Focused validation: `uv run --locked pytest tests/test_agent_ecosystem_validation.py
+-q --tb=short -n 0` passed all 30 tests; edited settings and workflow have no editor
+diagnostics. Actual P01 execution remains a separate gate and must use a fresh
+engine-acquired claim after the repair reaches the managed source.

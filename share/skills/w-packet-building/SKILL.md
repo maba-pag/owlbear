@@ -18,6 +18,11 @@ task IDs match, and whose writer identity matches the claim attempt, claim, owne
 `DeliveryBuildContext.launch` to equal the supplied launch and the context task to match its task,
 outcome, and plan-scope identities.
 
+For this custody read, inspect the actual callable tool definitions before declaring a capability
+failure. Use a directly bound `show_build_context` as granted even if a separate discovery inventory
+also lists its name as deferred. If no direct binding exists, load it through callable tool search;
+if neither route exists, return `dispatch_failure`. A name in prose alone is never a callable binding.
+
 Before edits, enter only `launch.worktree_path` and require:
 
 - its current branch equals `launch.branch`;
