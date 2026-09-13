@@ -69,6 +69,35 @@ failure envelope, yield on busy/waiting/human, and refresh once on stale. MCP/HT
 HTTP's missing `target_head: null` / `continuation_id: null` expectation, P07 host/workflow handoff,
 frontend/build/E2E and assembled independent review remain open. **Core-only; D02 is not complete.**
 
+### D02 T2 Transport Slice: 2026-09-13
+
+Bounded consumer-transport work on `dev` from `62c8fb353`, single writer, no MCP/Delivery/live state.
+The interrupted four-file candidate was read in full, adopted and committed without reset. **D02 is
+not complete**; this slice is unreviewed and the user stopped before D03 and live activation.
+
+| Commit | Scope |
+| --- | --- |
+| `8a587dd4133ade0476311271af76b897bb576da3` | Adopted HTTP acquire/execute routes, bodies, coordination evidence on unavailable projections, and static-basis expectation repair |
+| `e15ad2305766539f9ca233a3ccce38043ad86890` | MCP `acquire_change_action`/`execute_change_action` adapter, registry and annotations |
+| `3712a0d3b5723d056073a95ea44b79f31ec60bc4` | Frontend basis DTO and detail rows for `source_head`, `target_head`, `continuation_id` |
+
+The MCP adapters reuse the existing `_validate`/`_call_model`/`asyncio.to_thread` path and forward
+`DeliveryContinuationRequest` and `ExecuteDeliveryChangeAction` unchanged. `acquire_change_action`
+is annotated non-idempotent; `execute_change_action` is a replayable write, not a read. Neither
+accepts caller-authored effect, target, receipt or success arguments. The HTTP static basis
+expectation now carries `target_head: null` and `continuation_id: null`. New detail rows are
+read-only identity rows with labels distinct from candidate/reviewed heads; no control was added.
+
+Proof: **51** Cockpit HTTP tests, **175** delivery-mcp tests, **97** boundary/registry/HTTP tests
+(`test_package_boundary.py`, `test_agent_ecosystem_validation.py`, `test_cockpit_boundary.py`,
+`test_cockpit_work_items.py`), **311** frontend unit tests, `npm run build`, and **22**
+`test:e2e:work` cases. Scoped Ruff is clean on the edited files; no full-suite rerun, Megalinter
+pass or whole-file reformat is claimed. Delivery core is unchanged by this slice.
+
+Outstanding before D02 can close: P07 host/workflow handoff, the shared agent/skill inventory for the
+two new MCP operations, HTTP/MCP coverage for `waiting`/`stale`/`human` yielding paths through the
+transport, and assembled independent review of the cumulative T2 result.
+
 ### Resume Checkpoint: 2026-09-13
 
 The user resumed on 2026-09-13. Continue the authorized sequential delegation from this checkpoint.
