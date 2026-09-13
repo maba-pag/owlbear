@@ -1,6 +1,6 @@
 import { Fragment, useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PPopover, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
-import { useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, DeliveryHealthDiagnostic, DeliveryUnavailableChangeResponse, PortfolioChangeLifecycleStatus, PortfolioChangeStage, PortfolioGuidance, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
@@ -22,6 +22,13 @@ import {
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 type FocusDestination = 'trigger' | 'current-view' | 'history-view'
+
+/** Delivery answers any item key with read-only evidence while a Change runtime is unavailable. */
+const UNAVAILABLE_ITEM_KEY = 'publication'
+
+function unavailableChangePath(changeId: string): string {
+  return `/delivery/${encodeURIComponent(changeId)}/${encodeURIComponent(UNAVAILABLE_ITEM_KEY)}`
+}
 
 const CHANGE_STAGE_LABELS: Record<PortfolioChangeStage, string> = {
   design: 'Design',
@@ -366,10 +373,12 @@ function DeliveryIssuesSection({
   diagnostics,
   statuses,
   unavailable,
+  onSelect,
 }: {
   diagnostics: DeliveryHealthDiagnostic[]
   statuses: PortfolioChangeLifecycleStatus[]
   unavailable: DeliveryUnavailableChangeResponse[]
+  onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void
 }) {
   const statusChangeIds = new Set(statuses.map((status) => status.change_id))
   const uncoveredUnavailable = unavailable.filter((change) => !statusChangeIds.has(change.change_id))
@@ -413,9 +422,17 @@ function DeliveryIssuesSection({
           </article>
         ))}
         {uncoveredUnavailable.map((change) => (
-          <article key={change.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-unavailable={change.change_id} role="listitem">
+          <article key={change.change_id} className="relative min-w-0 bg-surface p-static-sm text-sm" data-delivery-unavailable={change.change_id} role="listitem">
             <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
-              <strong className="font-semibold text-primary">{change.title ?? change.change_id}</strong>
+              <Link
+                to={unavailableChangePath(change.change_id)}
+                data-work-item-primary-trigger
+                data-work-item-identity={`${change.change_id}:${UNAVAILABLE_ITEM_KEY}`}
+                className="font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                onClick={(event) => onSelect({ changeId: change.change_id, itemKey: UNAVAILABLE_ITEM_KEY }, event.currentTarget)}
+              >
+                {change.title ?? change.change_id}
+              </Link>
               <span className="text-xs text-contrast-medium">Delivery</span>
             </div>
             <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
@@ -507,6 +524,9 @@ export default function WorkPortfolioPage() {
   const designWorkStatuses = statuses.filter(isUnadmittedDesign)
   const unavailableStatuses = statuses.filter(isUnavailableAdmitted)
   const designWorkIds = designWorkStatuses.map((status) => status.change_id)
+  const unavailableChanges = portfolio.unavailable_changes ?? []
+  const uncoveredUnavailableChanges = unavailableChanges
+    .filter((change) => !unavailableStatuses.some((status) => status.change_id === change.change_id))
   const changes = [
     ...statuses.map((status) => {
       const group = portfolio.groups.find((candidate) => candidate.change_id === status.change_id)
@@ -518,6 +538,9 @@ export default function WorkPortfolioPage() {
     ...portfolio.groups
       .filter((group) => !statuses.some((status) => status.change_id === group.change_id))
       .map((group) => ({ id: group.change_id, title: group.title })),
+    ...uncoveredUnavailableChanges
+      .filter((change) => !portfolio.groups.some((group) => group.change_id === change.change_id))
+      .map((change) => ({ id: change.change_id, title: change.title ?? `Change ${change.change_id}` })),
   ]
   const filteredGroups = portfolio.groups
     .filter((group) => !deferredChange || group.change_id === deferredChange)
@@ -537,12 +560,13 @@ export default function WorkPortfolioPage() {
   const visibleHealthDiagnostics = designMatchesAttention && portfolio.health.status === 'attention'
     ? portfolio.health.diagnostics.filter((diagnostic) => !deferredChange || diagnostic.change_id === deferredChange)
     : []
-  const unavailableChanges = portfolio.unavailable_changes ?? []
-  const visibleUnavailableChanges = designMatchesAttention
-    ? unavailableChanges.filter((change) => !deferredChange || change.change_id === deferredChange)
-    : []
-  const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length
-  const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length
+  const filteredUnavailableChanges = unavailableChanges
+    .filter((change) => !deferredChange || change.change_id === deferredChange)
+  const visibleUnavailableChanges = designMatchesAttention ? filteredUnavailableChanges : []
+  const visibleUncoveredUnavailableCount = visibleUnavailableChanges
+    .filter((change) => !visibleUnavailableStatuses.some((status) => status.change_id === change.change_id)).length
+  const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length + visibleUncoveredUnavailableCount
+  const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length + uncoveredUnavailableChanges.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
   const availableCommands = Array.from(new Set(
     [
@@ -608,7 +632,9 @@ export default function WorkPortfolioPage() {
         const primaryTrigger = Array.from(document.querySelectorAll<HTMLElement>('[data-work-item-primary-trigger]'))
           .find((candidate) => candidate.dataset.workItemIdentity === lastTriggerIdentity.current)
         const destination = focusDestination.current
-        const triggerFocusTarget = lastTrigger.current?.isConnected ? lastTrigger.current : primaryTrigger
+        // The row action control is a shadow-DOM host that cannot hold focus, so the row's own
+        // primary trigger owns restoration whenever it is still rendered.
+        const triggerFocusTarget = primaryTrigger ?? (lastTrigger.current?.isConnected ? lastTrigger.current : undefined)
         const focusTarget = destination === 'history-view'
           ? document.querySelector<HTMLElement>('[data-workspace-view="history"]')
           : destination === 'current-view'
@@ -627,6 +653,11 @@ export default function WorkPortfolioPage() {
     }
   }, [isFiltered, selectedIdentity])
 
+  const selectedIsUnavailable = selected !== null && (
+    unavailableChanges.some((change) => change.change_id === selected.changeId)
+    || unavailableStatuses.some((status) => status.change_id === selected.changeId)
+  )
+
   useEffect(() => {
     if (!selected || !hasData) {
       selectedWasPresent.current = false
@@ -638,7 +669,8 @@ export default function WorkPortfolioPage() {
       : portfolio.groups.some((group) => group.change_id === selected.changeId
         && group.items.some((item) => item.item_key === selected.itemKey))
     if (present) selectedWasPresent.current = true
-    if (!present && selectedWasPresent.current) {
+    // A Change that became unavailable is still inspectable; it has not completed.
+    if (!present && selectedWasPresent.current && !(selectedIsUnavailable && !isDesignWork)) {
       selectedWasPresent.current = false
       const changeCompleted = !isDesignWork && portfolio.groups.every((group) => group.change_id !== selected.changeId)
       restoreFocusAfterClose.current = true
@@ -646,7 +678,7 @@ export default function WorkPortfolioPage() {
       if (changeCompleted) setWorkspace('history')
       navigate(changeCompleted ? '/delivery/history' : '/delivery', { replace: true })
     }
-  }, [hasData, navigate, portfolio.groups, selected])
+  }, [hasData, navigate, portfolio.groups, selected, selectedIsUnavailable])
 
   const filterProps: FilterProps = {
     changes,
@@ -718,6 +750,10 @@ export default function WorkPortfolioPage() {
                   diagnostics={visibleHealthDiagnostics}
                   statuses={visibleUnavailableStatuses}
                   unavailable={visibleUnavailableChanges}
+                  onSelect={(identity, trigger) => {
+                    lastTrigger.current = trigger
+                    lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
+                  }}
                 />
                 {filteredGroups.length > 0 ? (
                   <PortfolioWorkspace
@@ -739,7 +775,7 @@ export default function WorkPortfolioPage() {
                     }}
                   />
                 ) : null}
-                {filteredGroups.length === 0 && visibleUnavailableStatuses.length === 0 && visibleDesignWorkStatuses.length === 0 ? (
+                {filteredGroups.length === 0 && visibleUnavailableStatuses.length === 0 && visibleDesignWorkStatuses.length === 0 && visibleUnavailableChanges.length === 0 ? (
                   <EmptyPortfolioState filtered={isFiltered} />
                 ) : null}
                 <PortfolioOperatingSummary operating={portfolio.operating} commands={availableCommands} />

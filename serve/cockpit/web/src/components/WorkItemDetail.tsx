@@ -114,7 +114,7 @@ const TASK_STATUS_LABELS: Record<WorkItemAvailableDetailResponse['item']['tasks'
 }
 
 function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
-  const { card } = detail.item
+  const card = { ...detail.item.card, readiness: detail.item.card.readiness ?? detail.item.readiness }
   return (
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
@@ -1064,7 +1064,9 @@ function PublicationSection(props: WorkItemDetailProps) {
         : action.kind === 'resolve-attention'
           ? props.pendingAction === 'attention-resolve'
           : props.pendingAction === 'change-resume'
-  const statusTone = workItemStatus({ ...props.detail.item.card, publication_phase: publication.phase }).tone
+  const readiness = props.detail.item.card.readiness ?? props.detail.item.readiness
+  const publicationStatus = workItemStatus({ ...props.detail.item.card, publication_phase: publication.phase, readiness })
+  const statusTone = publicationStatus.tone
   const situationTone = statusTone === 'attention' || statusTone === 'blocked'
     ? 'warning'
     : statusTone === 'active'
@@ -1090,7 +1092,10 @@ function PublicationSection(props: WorkItemDetailProps) {
   return (
     <section className="min-w-0" aria-labelledby="work-publication-heading">
       <SectionCard tone={situationTone} className="border-l-4 p-static-md">
-        <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-static-sm">
+          <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
+          {readiness ? <StatusChip label={publicationStatus.label} tone={publicationStatus.tone} testId="publication-readiness-status" /> : null}
+        </div>
         <p className="mt-static-xs text-sm leading-relaxed">{invalidationReason ?? props.detail.item.card.next_step}</p>
         {invalidationReason ? <div className="mt-static-sm grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-sm gap-y-static-xs text-xs"><span className="text-contrast-medium">Expected</span><code>{publication.invalidated_expected_head}</code><span className="text-contrast-medium">Observed</span><code>{publication.invalidated_observed_head}</code></div> : null}
         {invalidationReason ? <p className="mt-static-sm text-sm text-contrast-medium">Next: {props.detail.item.card.next_step}</p> : null}

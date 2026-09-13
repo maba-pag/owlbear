@@ -1241,6 +1241,28 @@ it('restores focus to the clicked work item after closing its detail', async () 
   await waitFor(() => expect(itemLink).toHaveFocus())
 })
 
+it('restores focus to the row trigger after opening the detail from a row action link', async () => {
+  currentDetail = detail({
+    card: card({
+      item_key: 'outcome:OUT-002',
+      work_item_id: 'OUT-002',
+      title: 'User controls',
+      needs: 'you',
+      action: { kind: 'answer-request', label: 'Answer request', command: null },
+    }),
+  })
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  const itemLink = within(table).getAllByRole('link', { name: /User controls/ })[0]
+  const actionLink = within(table).getAllByText('Answer request')[0].closest('p-link-pure') as HTMLElement
+
+  fireEvent.click(actionLink)
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.keyDown(inspector, { key: 'Escape' })
+
+  await waitFor(() => expect(itemLink).toHaveFocus())
+})
+
 it('opens routed semantic detail with acceptance and bounded task evidence', async () => {
   renderPage()
   const table = await screen.findByTestId('work-portfolio-table')
@@ -3935,6 +3957,164 @@ it('shows the applicable finalization attempt retained by readiness', async () =
   expect(attempt).toHaveTextContent('Not run')
 })
 
+it('reports the historical applicability of a finalization attempt from an earlier candidate', async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: 'ready',
+      reason_code: 'ready',
+      checks_state: 'not-run',
+      last_attempt: {
+        applicability: 'historical',
+        report: {
+          report_id: 'a'.repeat(64),
+          sequence: 2,
+          observed_at: '2026-08-10T09:00:00Z',
+          summary: 'Maintained checks failed on an earlier candidate.',
+          producer: 'finalization-diagnostic',
+          request: {
+            change_id: 'change-alpha',
+            attempt_key: 'attempt-2',
+            category: 'maintained-check',
+            code: 'maintained-check-failed',
+            checks_state: 'failed',
+            check_id: 'uv run test',
+            exit_status: 1,
+            paths: ['serve/delivery'],
+          },
+        },
+      },
+    }),
+  })
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
+
+  const attempt = within(await screen.findByTestId('work-item-detail')).getByTestId('readiness-last-attempt')
+  expect(within(attempt).getByTestId('readiness-attempt-applicability')).toHaveTextContent('Historical')
+  expect(attempt).toHaveTextContent('Maintained checks failed on an earlier candidate.')
+  expect(attempt).toHaveTextContent('Failed')
+})
+
+it('reports engine readiness rather than the publication phase for a dirty candidate', async () => {
+  const publicationCard = publicationCardForChecks({
+    publication_phase: 'ready-for-finalization',
+    next_step: 'Finalize the reviewed Change',
+    progress: { kind: 'publication', label: 'Reviewed Change awaiting finalization', done: null, total: null },
+    readiness: readiness({
+      status: 'blocked',
+      reason_code: 'workspace-dirty',
+      next_actor: 'you',
+      checks_state: 'not-run',
+    }),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('ready-for-finalization'),
+    readiness: readiness({
+      status: 'blocked',
+      reason_code: 'workspace-dirty',
+      next_actor: 'you',
+      checks_state: 'not-run',
+    }),
+  })
+  renderPage()
+
+  const row = await screen.findByLabelText('Change publication for Portfolio redesign')
+  expect(row.querySelector('[data-status-tone]')).toHaveTextContent('Blocked')
+  expect(row).toHaveTextContent('Ready for finalization')
+
+  fireEvent.click(within(row).getByRole('link', { name: 'Publication' }))
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByTestId('publication-readiness-status')).toHaveTextContent('Blocked')
+  expect(inspector).toHaveTextContent('Ready for finalization')
+  expect(within(inspector).getByTestId('readiness-status')).toHaveTextContent('Blocked')
+  expect(within(inspector).getByTestId('readiness-not-executable')).toBeInTheDocument()
+})
+
+it('reports a clean finalization candidate as ready and a running one as running', async () => {
+  const readyCard = publicationCardForChecks({
+    publication_phase: 'ready-for-finalization',
+    readiness: readiness({
+      status: 'ready',
+      operation: 'finalize',
+      executable: true,
+      reason_code: 'ready',
+      next_actor: 'agent',
+      action: { kind: 'finalize', label: 'Finalize the reviewed Change', command: '/finalize-change change-alpha' },
+    }),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [readyCard] })])
+  const { unmount } = renderPage()
+  const readyRow = await screen.findByLabelText('Change publication for Portfolio redesign')
+  expect(readyRow.querySelector('[data-status-tone]')).toHaveTextContent('Ready')
+  expect(readyRow).toHaveTextContent('Ready for finalization')
+  unmount()
+
+  currentPortfolio = portfolio([group({
+    lifecycle: 'publication',
+    outcome_completed: 2,
+    items: [publicationCardForChecks({
+      publication_phase: 'ready-for-finalization',
+      readiness: readiness({ status: 'running', reason_code: 'active-custody', next_actor: 'agent' }),
+    })],
+  })])
+  renderPage()
+  const runningRow = await screen.findByLabelText('Change publication for Portfolio redesign')
+  expect(runningRow.querySelector('[data-status-tone]')).toHaveTextContent('Running')
+  expect(runningRow).toHaveTextContent('Ready for finalization')
+})
+
+it('renders every engine readiness state on the portfolio row', async () => {
+  const cases: Array<[DeliveryReadiness['status'], DeliveryReadiness['reason_code'], string]> = [
+    ['ready', 'ready', 'Ready'],
+    ['running', 'active-custody', 'Running'],
+    ['waiting', 'dependency-wait', 'Waiting'],
+    ['blocked', 'workspace-dirty', 'Blocked'],
+    ['unavailable', 'runtime-unavailable', 'Unavailable'],
+    ['complete', 'change-terminal', 'Complete'],
+  ]
+  for (const [status, reasonCode, label] of cases) {
+    currentPortfolio = portfolio([group({
+      items: [card({ readiness: readiness({ status, reason_code: reasonCode }) })],
+    })])
+    const { unmount } = renderPage()
+    const table = await screen.findByTestId('work-portfolio-table')
+    const chips = Array.from(table.querySelectorAll('[data-status-tone]')).map((chip) => chip.textContent)
+    expect(chips).toContain(label)
+    unmount()
+  }
+})
+
+it('offers the finalize command only while engine readiness is executable', async () => {
+  const executableAction = { kind: 'finalize' as const, label: 'Finalize the reviewed Change', command: '/finalize-change change-alpha' }
+  currentDetail = detail({
+    card: publicationCardForChecks({ publication_phase: 'ready-for-finalization', action: executableAction }),
+    publication: { ...publicationForChecks('ready-for-finalization'), ready_for_finalization: true },
+    readiness: readiness({
+      status: 'ready',
+      operation: 'finalize',
+      executable: true,
+      reason_code: 'ready',
+      action: executableAction,
+    }),
+  })
+  renderPage('/delivery/change-alpha/publication')
+  const executableInspector = await screen.findByTestId('work-item-detail')
+  expect(within(executableInspector).getByRole('button', { name: `Copy command ${executableAction.command}` })).toBeInTheDocument()
+  expect(within(executableInspector).queryByTestId('readiness-not-executable')).not.toBeInTheDocument()
+
+  currentDetail = detail({
+    card: publicationCardForChecks({ publication_phase: 'ready-for-finalization' }),
+    publication: { ...publicationForChecks('ready-for-finalization'), ready_for_finalization: false },
+    readiness: readiness({ status: 'blocked', reason_code: 'workspace-dirty', next_actor: 'you' }),
+  })
+  await waitFor(() => expect(screen.queryByRole('button', { name: `Copy command ${executableAction.command}` })).not.toBeInTheDocument(), { timeout: 6000 })
+  const blockedInspector = screen.getByTestId('work-item-detail')
+  expect(within(blockedInspector).getByTestId('finalization-readiness')).toHaveTextContent('Delivery cannot finalize the current Change yet.')
+  expect(within(blockedInspector).getByTestId('readiness-not-executable')).toBeInTheDocument()
+})
+
 it('offers read-only inspection for an unavailable Change without controls', async () => {
   currentUnavailableDetail = unavailableChange('change-alpha', 'Portfolio redesign')
   renderPage('/delivery/change-alpha/outcome:OUT-001')
@@ -3961,6 +4141,66 @@ it('lists engine-reported unavailable Changes that no operating status covers', 
   expect(row).toHaveTextContent('Quarantined work')
   expect(row).toHaveTextContent('Delivery could not compose this Change runtime.')
   expect(row).toHaveTextContent('Read-only inspection only. Checks: Unknown.')
+})
+
+it('opens read-only inspection for a listed unavailable Change from the keyboard', async () => {
+  currentPortfolio = {
+    ...portfolio([]),
+    unavailable_changes: [unavailableChange('change-alpha', 'Quarantined work')],
+  }
+  currentUnavailableDetail = unavailableChange('change-alpha', 'Quarantined work')
+  renderPage()
+
+  const issues = await screen.findByTestId('delivery-issues-section')
+  const trigger = within(issues).getByRole('link', { name: 'Quarantined work' })
+  trigger.focus()
+  expect(trigger).toHaveFocus()
+  fireEvent.click(trigger)
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/change-alpha/publication')
+  expect(inspector).toHaveTextContent('This view is read-only inspection evidence; no Change operation is offered here.')
+  expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
+
+  fireEvent.keyDown(inspector, { key: 'Escape' })
+  await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+it('counts listed unavailable Changes in portfolio accounting and filters', async () => {
+  currentPortfolio = {
+    ...portfolio(),
+    unavailable_changes: [unavailableChange('quarantined-change', 'Quarantined work')],
+  }
+  const { container } = renderPage()
+
+  await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(screen.getByTestId('work-filters-toggle'))
+  const selects = container.querySelectorAll('p-select')
+  selectValue(selects[0], 'quarantined-change')
+
+  await waitFor(() => expect(screen.getByTestId('work-shown-count')).toHaveTextContent('1 of 3'))
+  expect(screen.getByTestId('delivery-issues-section')).toHaveTextContent('Quarantined work')
+  expect(screen.queryByTestId('work-empty-state')).not.toBeInTheDocument()
+})
+
+it('keeps the inspector on a Change that becomes unavailable and restores it when available again', async () => {
+  renderPage('/delivery/change-alpha/outcome:OUT-001')
+  expect(await screen.findByTestId('work-item-detail')).toHaveTextContent('Delivery foundation')
+
+  currentPortfolio = {
+    ...portfolio([]),
+    unavailable_changes: [unavailableChange('change-alpha', 'Portfolio redesign')],
+  }
+  currentUnavailableDetail = unavailableChange('change-alpha', 'Portfolio redesign')
+
+  await waitFor(() => expect(screen.getByTestId('delivery-issues-section')).toHaveTextContent('Portfolio redesign'), { timeout: 6000 })
+  expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/change-alpha/outcome:OUT-001')
+  expect(screen.queryByTestId('completed-history-workspace')).not.toBeInTheDocument()
+
+  currentPortfolio = portfolio()
+  currentUnavailableDetail = null
+  await waitFor(() => expect(screen.getByTestId('work-portfolio-table')).toHaveTextContent('Delivery foundation'), { timeout: 6000 })
+  expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/change-alpha/outcome:OUT-001')
 })
 
 it('does not duplicate an unavailable Change already carried by an operating status', async () => {

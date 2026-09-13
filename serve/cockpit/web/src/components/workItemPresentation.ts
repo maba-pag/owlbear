@@ -120,6 +120,15 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
       detail: distinctDetail('Publication needs reconciliation', item.needs_headline ?? item.next_step),
     }
   }
+  const phaseLabel = PUBLICATION_PHASE_LABELS[item.publication_phase]
+  // Engine readiness owns the reported state; the lifecycle phase is identified separately.
+  if (item.readiness) {
+    return {
+      label: READINESS_STATUS_LABELS[item.readiness.status],
+      tone: readinessTone(item.readiness.status),
+      detail: distinctDetail(READINESS_STATUS_LABELS[item.readiness.status], phaseLabel),
+    }
+  }
   const tone: WorkItemStatusTone = item.publication_phase === 'acceptance-observed'
     ? 'complete'
     : item.publication_phase === 'finalization-invalidated' || item.publication_phase === 'review-repair' || item.publication_phase === 'awaiting-merge'
@@ -130,15 +139,23 @@ function publicationStatus(item: WorkItemCardView): WorkItemStatusPresentation |
           ? 'ready'
           : 'neutral'
   return {
-    label: PUBLICATION_PHASE_LABELS[item.publication_phase],
+    label: phaseLabel,
     tone,
-    detail: distinctDetail(PUBLICATION_PHASE_LABELS[item.publication_phase], item.needs_headline),
+    detail: distinctDetail(phaseLabel, item.needs_headline),
   }
 }
 
 export function workItemStatus(item: WorkItemCardView): WorkItemStatusPresentation {
   const publication = publicationStatus(item)
   if (publication) return publication
+  if (item.readiness) {
+    const label = READINESS_STATUS_LABELS[item.readiness.status]
+    return {
+      label,
+      tone: readinessTone(item.readiness.status),
+      detail: distinctDetail(label, item.needs_headline),
+    }
+  }
   if (item.needs === 'you') {
     return { label: 'Needs you', tone: 'attention', detail: item.needs_headline }
   }
