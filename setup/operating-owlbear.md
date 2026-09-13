@@ -14,6 +14,7 @@ the [sharing guide](sharing-guide.md).
 | Remove OwlBear from a project | [Uninstalling](#uninstalling) |
 | Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
 | Recover Delivery after a new clone or hardware loss | [Portability and recovery](#portability-and-recovery) |
+| Upgrade Delivery while developing Delivery itself | [Pinned controller maintenance](#pinned-controller-maintenance) |
 | Launch the human control surface | [Cockpit details](#cockpit-details) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
 
@@ -95,6 +96,56 @@ OwlBear uses two different update models:
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
+
+## Pinned Controller Maintenance
+
+When developing Delivery itself, keep the running controller separate from candidate code.
+Ask an ordinary Copilot session to maintain the pinned controller using
+[delivery_controller.py](delivery_controller.py). This bootstrap does not use Delivery jobs
+or MCP to inspect state or change the configured executable. Its current implementation
+requires POSIX file locks (macOS/Linux), Git, and a prepared Python environment.
+
+The agent prepares a separate detached checkout at one reviewed commit under
+`.owlbear/controllers/releases/`, installs that commit's locked dependencies into its own
+`.venv`, runs its required checks, and retains the old release. Never share the development
+checkout's virtual environment or edit a prepared release. Dependency installation happens
+before activation, not during MCP startup. For Cockpit, prepare the matching built `dist/`
+assets before switching; its server code and Delivery dependencies must use the same release.
+
+The agent then performs these steps:
+
+1. Run `inspect --workspace <project>` through the standard-library script. This works even
+  when Delivery imports or MCP startup are broken. It reports active claims, in-progress
+  operations, pending transactions, and unreadable state without repairing any of them.
+2. Run `check --workspace <project> --revision <commit>` using the release interpreter with
+  `-I -B`. It rejects primary-checkout execution, changed source, a non-detached or wrong
+  revision, and current state that the release's own strict schemas cannot read.
+3. Stop new dispatches and let current work finish. Stop MCP and Cockpit only after custody
+  and publication work are clear. Never infer that a worker has stopped from its age alone.
+4. Run `activate --workspace <project> --revision <commit>` with that same interpreter and
+  script. It refuses running guarded consumers and legacy MCP/Cockpit processes, takes
+  Delivery acquisition/checkpoint locks, revalidates state, and saves configuration and
+  state under private `.owlbear/controllers/backups/`. A concurrent input change aborts
+  publication. Only the `owlbear-delivery` MCP entry changes; other servers are preserved.
+5. Start the configured MCP and, if needed, `run-cockpit` with the same release and workspace
+  arguments. Verify health and an actual read before resuming work. Both processes hold a
+  shared release lock, so an upgrade cannot overlap either running consumer.
+
+These are agent operations, not manual user test or worktree-repair steps. The launcher
+requires isolated Python (`-I`) for every operation except offline `inspect`; MCP stdout
+remains reserved for its protocol. Live data stays in the original project, separate from
+release code. The source pin is a deployment boundary, not protection against a privileged
+operator modifying its interpreter or dependencies.
+
+For rollback, stop the consumers and run the retained release's `check` and `activate`
+against **current** state. If schema validation fails, leave configuration and data intact
+and arrange a separately reviewed migration. Never restore an old state snapshot over newer
+work merely to make the old executable start. Backups are preservation evidence, not an
+automatic downgrade mechanism. Source-only rollback does not waive current schema checks.
+
+This bootstrap does not implement arbitrary corruption repair or schema migration. The
+ordinary unpinned setup path is unchanged; controller pinning is an explicit maintenance
+step, not a new task scheduler or another Delivery Change.
 
 ## Refreshing Consumer Configs
 
