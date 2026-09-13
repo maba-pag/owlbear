@@ -57,6 +57,9 @@ def _git(repository: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
+_REMOTE_URL = "https://github.com/example/project.git"
+
+
 def _canonical(value: object) -> bytes:
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
@@ -76,9 +79,12 @@ def _outcome(identity: str, title: str, promise: str, dependencies: tuple[str, .
     )
 
 
+def _sources(change_id: str) -> tuple[bytes, bytes]:
+    return f"intent for {change_id}\n".encode(), f"design for {change_id}\n".encode()
+
+
 def _contract(change_id: str, title: str, outcomes: tuple[DeliveryOutcome, ...]) -> DeliveryContract:
-    intent = f"intent for {change_id}\n".encode()
-    design = f"design for {change_id}\n".encode()
+    intent, design = _sources(change_id)
     return DeliveryContract(
         change_id=change_id,
         title=title,
@@ -259,7 +265,14 @@ def _write_admission(
     (change_root / "admission.json").write_bytes(_canonical(DeliveryAdmissionReceipt.model_validate(receipt_payload)))
 
 
-def _write_current_delivery(runtime_root: Path, head: str) -> None:
+def _write_design_package(store: DesignPackageStore, contract: DeliveryContract) -> None:
+    """Bind the admitted contract to the authored sources its source bindings declare."""
+    intent, design = _sources(contract.change_id)
+    package = store.create(contract.change_id, intent, design)
+    store.publish_contract(contract.change_id, package.package_id, _canonical(contract), lambda *_content: None)
+
+
+def _write_current_delivery(runtime_root: Path, head: str, store: DesignPackageStore) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
         _outcome("OUT-002", "Build operator controls", "Ship exact Delivery controls."),
@@ -277,9 +290,10 @@ def _write_current_delivery(runtime_root: Path, head: str) -> None:
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
     _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
 
 
-def _write_publication_delivery(runtime_root: Path, head: str) -> None:
+def _write_publication_delivery(runtime_root: Path, head: str, store: DesignPackageStore) -> None:
     contract = _contract(
         "publication-e2e",
         "Publication release",
@@ -302,6 +316,7 @@ def _write_publication_delivery(runtime_root: Path, head: str) -> None:
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
     _write_admission(change_root, contract, frontier, head)
+    _write_design_package(store, contract)
 
 
 def _seed_repository(repository: Path) -> str:
@@ -312,8 +327,14 @@ def _seed_repository(repository: Path) -> str:
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
-    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "remote", "add", "origin", _REMOTE_URL)
+    # Delivery startup requires a GitHub-shaped remote URL; rewrite it to a local
+    # bare repository so offline state publication pushes stay in the fixture.
+    mirror = repository.parent / f"{repository.name}-origin.git"
+    _git(repository.parent, "init", "--bare", str(mirror))
+    _git(repository, "config", f"url.{mirror}.insteadOf", _REMOTE_URL)
     head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "push", "origin", "main")
     _git(repository, "update-ref", "refs/remotes/origin/main", head)
     return head
 
@@ -383,13 +404,14 @@ def seed_delivery(workspace: Path) -> None:
     head = _seed_repository(repository)
     _write_completion_receipt(runtime_root, "completed-alpha", "Alpha delivery", 41)
     _write_completion_receipt(runtime_root, "completed-beta", "Beta search", 42)
-    DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
+    store = DesignPackageStore(workspace / ".owlbear/delivery/packages", repository)
+    store.create(
         "design-operations-roadmap",
         b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",
         b"# Design\n\nKeep roadmap authority separate from admitted Changes.\n",
     )
-    _write_current_delivery(runtime_root, head)
-    _write_publication_delivery(runtime_root, head)
+    _write_current_delivery(runtime_root, head, store)
+    _write_publication_delivery(runtime_root, head, store)
     _write_host_config(workspace)
     coordinator = PortfolioCoordinator(runtime_root)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
