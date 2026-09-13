@@ -5104,29 +5104,26 @@ class PortfolioApplication:
             if conflict is not None
             else None
         )
-        if view.readiness is not None and view.publication.phase is not WorkItemPublicationPhase.ABANDONED:
+        publication = view.publication.model_copy(update={"target_sync_conflict": conflict_view})
+        if view.readiness is not None:
             ready = view.readiness.executable and view.readiness.operation is WorkItemActionKind.FINALIZE
-            return view.model_copy(
+            publication = publication.model_copy(
                 update={
-                    "publication": view.publication.model_copy(
-                        update={
-                            "ready_for_finalization": ready,
-                            "readiness_diagnostics": () if ready else (view.readiness.reason_code,),
-                            "target_sync_conflict": conflict_view,
-                        }
-                    )
+                    "ready_for_finalization": ready,
+                    "readiness_diagnostics": () if ready else (view.readiness.reason_code,),
                 }
             )
-        retained = self._workspace_manager.inspect_retained(change_id, coordination)
-        cleanup = self._worktree_cleanup_view(runtime, retained)
-        recovery = self._worktree_recovery_view(retained) if retained is not None else None
-        publication = view.publication.model_copy(
-            update={
-                "worktree_cleanup": cleanup,
-                "worktree_recovery": recovery,
-                "target_sync_conflict": conflict_view,
-            }
-        )
+        if publication.phase in {
+            WorkItemPublicationPhase.ABANDONED,
+            WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
+        } or not coordination.worktree_path.exists():
+            retained = self._workspace_manager.inspect_retained(change_id, coordination)
+            publication = publication.model_copy(
+                update={
+                    "worktree_cleanup": self._worktree_cleanup_view(runtime, retained),
+                    "worktree_recovery": self._worktree_recovery_view(retained),
+                }
+            )
         return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:

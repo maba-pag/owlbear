@@ -4312,6 +4312,11 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert len(retained) == 1
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
+    detail = application.show_work_item_view("change-a", "publication")
+    change = application.get_change("change-a")
+    assert detail.publication.worktree_cleanup == change.detail.publication.worktree_cleanup
+    assert detail.publication.worktree_cleanup.eligible is True
+    assert detail.publication.worktree_cleanup.completion_id == receipt.completion_id
     user_checkout_before.assert_unchanged(repository)
 
 
@@ -4374,10 +4379,16 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
 def test_change_worktree_recovery_recreates_missing_worktree_and_replays_receipt(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
+        {"change-a": DeliveryStage.COMPLETED},
     )
     coordination = application._workspace_manager.show("change-a")
     shutil.rmtree(coordination.worktree_path)
+
+    detail = application.show_work_item_view("change-a", "publication")
+    change = application.get_change("change-a")
+    assert detail.publication.worktree_recovery == change.detail.publication.worktree_recovery
+    assert detail.publication.worktree_recovery.eligible is True
+    assert detail.publication.worktree_recovery.recovery_reviewed_head == coordination.last_reviewed_commit
 
     receipt = application.recover_change_worktree(
         "change-a",
