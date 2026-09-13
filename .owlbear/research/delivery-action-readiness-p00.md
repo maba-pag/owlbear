@@ -3,8 +3,8 @@
 > **Owning request:** Work on wave 00 of the Change-Scoped Continuation redesign.
 > **Date:** 2026-09-12
 > **Inspected baseline:** `5f978744ad356456ff9d198893690b508b6aa1be`, branch `dev`.
-> **Status:** P00 and direct-tool workaround released and synchronized. A real P01 Builder reached fresh context and passed custody checks, then returned to Planning because its task omitted prerequisite/dispatch evidence. No product edits occurred. See section 13.
-> **Scope:** P00 design/context plus explicitly approved baseline and selected-launch prerequisite maintenance. No WP1/P01 implementation, task acquisition, repair of live B1/D1, or admission was performed.
+> **Status:** P00 released; P01 implemented, independently reviewed, and submitted at `4bf2365180c2851723fa09d91fa48a209220eb33`. The managed worktree is clean, custody released, and Delivery healthy. P02 has not started. See section 14 for current evidence and the broader-suite caveat.
+> **Scope:** P00 preparation and authorized launch maintenance, followed by approved WP1 admission/planning and P01 implementation. No live B1/D1 repair, P02 implementation, or whole-Change merge/finalization.
 
 ## Current Handoff Summary
 
@@ -20,7 +20,7 @@ The host accepted explicit model overrides for each chosen name in read-only pro
 
 The user explicitly authorized the bounded release steps: scoped prerequisite commit, exact-commit review, local Design checkpoint, and safe live schema activation. No push, WP1 admission, or P01 launch was authorized by that decision. The live `acquire_actions` schema now includes `selection` with Change/outcome, stage/task, frontier digest, and source head fields; `delivery_health` returned healthy with no diagnostics. No restart was needed and no acquisition call was made.
 
-**Current gate:** repair the returned Planning evidence handoff, independently review and publish the corrected chain, then reacquire only P01. WP1 approval/admission is unchanged. The direct context/submission tool route is verified. No agent may manufacture a task/claim from packet label P01 or substitute an unrestricted worker.
+**Current handoff:** P01 is complete; TASK-002/P02 is the next native task for a separately started wave 02 session. Reuse current approved authority, resolved prerequisite evidence and reviewed P01 result. Do not repeat admission or planning. The direct-tool workaround remains enabled by disabling host deferral; no agent may substitute an unrestricted worker.
 
 ## 1. Result and Source Authority
 
@@ -203,7 +203,7 @@ Later Design preparation owners remain those in programme section 12.8.4: P06 fo
 
 ## 7. Conditional P01 Handoff
 
-**NEXT START: blocked.** The following is a preserved handoff draft, not a prompt to execute today. Once the prerequisite and approval gates pass, the P00 owner must refresh it with the actual approved package, task, model and baseline. The user should receive that complete version, not collect the missing identities.
+**Historical P01 draft, superseded by section 14.** This preserved text records the original gated handoff and must not be used to reacquire the completed TASK-001.
 
 ```text
 Implement P01 for delivery-action-readiness only after P00 marks NEXT START ready.
@@ -391,3 +391,78 @@ handoff that preserves the approved Astra/Opus route and independent review with
 demanding an unavailable hidden identity. This document supplies observations, not
 permission to rewrite task authority or bypass direct Build custody. Validate these
 sources and incorporate needed evidence in the corrected native task before review.
+
+## 14. P01 Submitted Result and Wave 02 Handoff
+
+The user confirmed submission of existing evidence through
+`AR-OUT-001-LAUNCH-PREREQUISITE`, with explicit limits: authorization to submit agent
+observations is not user technical attestation, hidden-model proof, or an acceptance
+waiver. The resolved request now carries release, live-schema, direct-call and named
+reviewer-route evidence into native Planning and Build context.
+
+Planner published reviewed plan `plan-098350cf614c0eefbbd80315597c4e13ea34c8341638f3544652098a9da90f11`
+under claim `d08193ea-21dd-4d85-9926-17dfcc0623b9`. The corrected TASK-001 reuses
+the resolved caller evidence rather than requiring Builder to recreate absent
+pre-acquisition evidence. Delivery accepted the unchanged advance transition.
+
+Named Astra Builder acquired TASK-001 with claim
+`07a602a5-e671-457d-9865-a90c324f467b`, attempt
+`ccc0e3b7-1102-4dff-9156-87e0d5ff1ed1`, and source
+`513a72b471e77d411c46fe0139d3dcddff922768`. It implemented readiness capture, degraded
+Change views and bounded host-local finalization reports, then repaired two concrete
+independent-review findings concerning cleanup/recovery projections. Preserved commits:
+
+- `4600af1fc`: initial P01 implementation.
+- `a5a2af180`: preserve publication cleanup and recovery detail.
+- `4bf2365180c2851723fa09d91fa48a209220eb33`: suppress recovery after recorded cleanup;
+	final independently reviewed and submitted candidate.
+
+Delivery retained result `result-task-001-4bf2365180c2` with task digest
+`d2721b2f0de8dbe0f5f0065d09b989433db84b8dd335233b0abf8d712681f91e`, observation
+`70de62a863b012e3fe412819411e28709ccbd2e3e0fbb923126fdee5e06f1cfb`, and independent
+`build-reviewer` pass `9c466f8187d762773f06547f45760ded661aed1e90fe977af687d5cc75589bc1`.
+The parent verified these identities against persisted engine state and did not apply
+a duplicate transition. The candidate is published on the managed Change branch in
+[PR #316](https://github.com/maba-pag/owlbear/pull/316), not merged into `dev`.
+
+**Proof:** 465 maintained core tests passed on the exact submitted candidate, covering
+application, Work Items, workspace, transactions, portable Delivery state and the new
+report-store suite. The broader changed-scope run reported **1195 passed, 1 failed**:
+[test_checkpoint_publication_regressions.py](../../serve/delivery/tests/test_checkpoint_publication_regressions.py)
+`test_checkpoint_snapshot_replays_after_publication_failure`. Independent review found
+the relevant checkpoint/backoff implementation unchanged. The parent also reproduced
+that exact failure on the primary checkout without P01, confirming it is pre-existing.
+The broader suite is not green; no test was skipped or weakened to accept P01.
+
+**Current state:** one submitted task result; four later tasks retained; no active claim
+or writer; clean managed worktree and reviewed head `4bf2365180c2851723fa09d91fa48a209220eb33`;
+Delivery health returned `healthy` with no diagnostics. P02, HTTP/UI integration,
+finalizer wiring and whole-Change acceptance remain unimplemented. These are later
+tasks, not features claimed by the P01 core result.
+
+**Setting decision:** keep `chat.agentHost.copilot.toolSearch.enabled=false` for now.
+The workaround succeeded through a real Builder context read, implementation, nested
+review and submission, not only a claim-free probe. It loads permitted schemas upfront
+without changing tool grants or hooks. The cause of the earlier menu disappearance
+and its exact version/rollout timing remain unverified. No further reload is requested.
+
+### Next Packet
+
+```text
+Work on wave 02 for delivery-action-readiness. P01/TASK-001 is submitted at
+4bf2365180c2851723fa09d91fa48a209220eb33. Read section 14 of
+.owlbear/research/delivery-action-readiness-p00.md and current engine context.
+Do not repeat admission, Planning, or completed P01 work. Preserve the resolved
+AR-OUT-001-LAUNCH-PREREQUISITE evidence and directly callable tool path.
+Acquire TASK-002 only through selected acquire_actions using fresh engine fences.
+Use named Builder with Claude Opus 5 (copilot) and independent Astra review;
+preserve role grants/hooks and verify that reviewer override is supported.
+Implement P02 MCP adaptation and registration, then its separate TASK-003/P02-W
+domain task serially in the same primary packet session if TASK-002 is reviewed
+and submitted. Stop before TASK-004/P03. Preserve the documented pre-existing
+checkpoint test failure; do not silently waive gates or turn it into P02 cleanup.
+```
+
+P05 remains a separate unadmitted offline-diagnostics outcome. No P05 launch or parallel
+work is authorized by the current WP1 task plan. Core DTOs and report-store behavior
+at the reviewed P01 commit are its future source inputs, not admission authority.
