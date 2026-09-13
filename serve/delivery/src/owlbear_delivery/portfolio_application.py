@@ -6511,9 +6511,14 @@ class PortfolioApplication:
         pending = runtime.checkpoint_publication_state().pending_checkpoint
         if "engine" not in request.capabilities:
             reason = "host-capability-unavailable"
-        elif self._draft_pull_request_publisher is None or (
-            readiness.operation in {WorkItemActionKind.RECONCILE_CHECKPOINT, WorkItemActionKind.SYNC_TARGET}
-            and self._change_branch_publisher is None
+        elif (
+            self._draft_pull_request_publisher is None
+            or readiness.basis.candidate_head is None
+            or readiness.basis.target_head is None
+            or (
+                readiness.operation in {WorkItemActionKind.RECONCILE_CHECKPOINT, WorkItemActionKind.SYNC_TARGET}
+                and self._change_branch_publisher is None
+            )
         ):
             reason = "engine-owner-unavailable"
         elif (
@@ -6594,32 +6599,35 @@ class PortfolioApplication:
 
     def _execute_engine_action(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
         try:
-            runtime = self._runtime(action.change_id, for_mutation=True)
-            if not self._coordinator.start_continuation_action(action):
+            if self._coordinator.continuation_action_started(action):
                 return self._engine_action_failure(
                     action, "engine-action-interrupted", "Original owner result is unknown."
                 )
-            return self._engine_action_preflight(action, runtime) or self._invoke_engine_owner(action)
+            runtime = self._runtime(action.change_id, for_mutation=True)
+            preflight = self._engine_action_preflight(action, runtime)
+            if preflight is not None:
+                return preflight
+            if self._coordinator.start_continuation_action(action):
+                result = self._invoke_engine_owner(action)
+            else:
+                result = self._engine_action_failure(
+                    action, "engine-action-interrupted", "Original owner result is unknown."
+                )
         except ChangeTargetSyncStaleError:
             return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
         except DeliveryAcceptanceWaitingError:
             return DeliveryEngineActionResult(action=action, kind="waiting", reason_code="merge-approval-required")
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             return self._engine_action_failure(action, "engine-action-failed", str(exc), getattr(exc, "code", None))
+        else:
+            return result
 
     def _engine_action_preflight(
         self, action: ChangeContinuationAction, runtime: DeliveryRuntime
     ) -> DeliveryEngineActionResult | None:
-        if (
-            contract_fingerprint(runtime.contract) != action.contract_digest
-            or hashlib.sha256(runtime.frontier_bytes()).hexdigest() != action.frontier_digest
-            or self._workspace_manager.observed_change_head(action.change_id) != action.exact_head
-            or self._workspace_manager.observed_target_head() != action.target_head
-        ):
-            return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
         if runtime.active_claims() or runtime.integration_repair_claim() is not None:
             return self._engine_action_failure(action, "engine-action-failed", "An existing claim retains custody.")
-        _coordination, _head, _fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
+        _coordination, head, _fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
             action.change_id,
             tuple(
                 result.completed_commit
@@ -6627,7 +6635,17 @@ class PortfolioApplication:
                 for result in binding.results
             ),
         )
-        return self._engine_action_failure(action, "engine-action-failed", reason) if reason is not None else None
+        if reason not in {None, "workspace-dirty"}:
+            return self._engine_action_failure(action, "engine-action-failed", reason)
+        if (
+            contract_fingerprint(runtime.contract) != action.contract_digest
+            or hashlib.sha256(runtime.frontier_bytes()).hexdigest() != action.frontier_digest
+            or head != action.exact_head
+            or self._workspace_manager.observed_target_head() != action.target_head
+            or reason == "workspace-dirty"
+        ):
+            return DeliveryEngineActionResult(action=action, kind="stale", reason_code="readiness-changed")
+        return None
 
     @staticmethod
     def _engine_action_failure(
@@ -8127,10 +8145,18 @@ class PortfolioApplication:
             if detail is not None:
                 raise DeliveryRuntimeReconciliationError(change_id, detail)
             try:
-                writer = self._workspace_manager.show(change_id).writer
-                self._coordinator.require_continuation_access(change_id)
+                coordination = self._workspace_manager.show(change_id)
             except (OSError, RuntimeError, ValueError) as exc:
                 raise DeliveryRuntimeReconciliationError(change_id, str(exc)) from exc
+            action = coordination.continuation_action
+            if (
+                action is not None
+                and action.finished_at is None
+                and not self._coordinator.executing_continuation(change_id)
+            ):
+                message = f"selected Change retains engine action custody: {action.operation_id}"
+                raise DeliveryActionBusyError(message)
+            writer = coordination.writer
             if not allow_finalizer and writer is not None and writer.kind == "finalize":
                 message = "selected Change retains active finalizer custody"
                 raise DeliveryActionBusyError(message)

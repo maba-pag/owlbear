@@ -12,6 +12,53 @@
 
 ## 0. Direct Implementation Decision
 
+### Narrow D02 Review Repair: 2026-09-13
+
+The independent Opus review of core `25fd31325a2165b058d906337b5248e94e86c6e6`
+found M1 blocking T2, recommended M2, and identified optional L3. This narrow repair starts
+from `42fecb439268c0344b883509e5f22250f03371c6`; the resume checkpoint below is historical.
+Astra T3 (`GPT-6 Astra (copilot)`) supplied read-only effect-entry/custody classification;
+the primary session remains the sole writer. Exact-head Opus re-review gates the T2 handoff.
+
+- **M1:** [The public runtime guard](../../serve/delivery/src/owlbear_delivery/portfolio_application.py)
+  reports healthy unfinished engine custody as `DeliveryActionBusyError`. Missing or malformed
+  coordination remains `DeliveryRuntimeReconciliationError`; the coordinator write guard is unchanged.
+- **M2:** [The coordinator](../../serve/delivery/src/owlbear_delivery/change_workspace.py) validates
+  existing entry evidence before preflight. The executor creates `started.json` immediately before
+  owner invocation under the existing per-Change lock. Dirty-only workspace or valid head/digest drift
+  returns `stale/readiness-changed` without effect entry and releases only exact engine custody.
+  Claims, contradictory writers, publication custody, failed workspace guards and damaged evidence
+  remain held even with drift. Pre-entry interruption permits the same original operation to replay;
+  post-entry unknown outcomes remain blocked without another effect. No worker termination is inferred.
+- **L3:** Missing required candidate/target heads return `waiting/engine-owner-unavailable` before
+  constructing an action. No public fields, result kinds, reason unions or receipt schemas changed.
+
+[Owning regression tests](../../serve/delivery/tests/test_portfolio_application.py) cover public
+mutation classification, tracked/untracked dirtiness, same-operation restart, marker precedence,
+conflicting custody, malformed markers, unknown outcomes after an actual effect, and missing heads.
+The immediate focused checks passed **23 cases**. The complete scoped gate passed **495 tests**
+in 194.43 seconds: `test_portfolio_application.py`, `test_change_workspace.py`,
+`test_delivery_worktree_authority.py` and `test_package_boundary.py`, using `uv run --locked pytest`
+with `-q --tb=short -m 'not api and not model and not e2e' -n 4 --dist worksteal -p no:cacheprovider`.
+After the final equivalent-condition lint normalization, **65 engine/continuation/coordination
+tests passed**. The interrupted 391-pass run is not a completed gate. Editor diagnostics are clear;
+structured Ruff comparison against the starting commit found **7 baseline, 7 current, 0 introduced**.
+Existing formatter regions remain unchanged; no whole-file lint/format pass is claimed.
+
+Deferred findings from that review, grounded in the existing acquisition/provider paths:
+
+| Finding | Owner and retained requirement |
+| --- | --- |
+| M3 | D03: repeated acceptance waits mint operation IDs. Key bounded retry budgets on stable semantic `(change_id, kind, exact_head, target_head, finalization_id)`, not the changing operation ID. No budget/backoff implementation in this repair. |
+| L1 | D05 provider freshness: acquisition can reuse expired cached observations without fencing them in the readiness basis. This limits shared read/acquisition evidence; completion still requires its owner's fresh observation. |
+| L2 | D05: a known-unmergeable PR can still acquire observation and return `merge-approval-required`. Correct the readiness/copy with exact-head approval work; no merge permission is implied now. |
+| L5 | D07: the portfolio-wide target-sync lock spans fetch; an unreachable remote can stall all target syncs. Preserve current exclusion while assessing bounded fetch/lock behavior. |
+
+L4's `OUT-000` convention is unchanged. T2 must preserve the existing action/result contract and
+failure envelope, yield on busy/waiting/human, and refresh once on stale. MCP/HTTP execution wiring,
+HTTP's missing `target_head: null` / `continuation_id: null` expectation, P07 host/workflow handoff,
+frontend/build/E2E and assembled independent review remain open. **Core-only; D02 is not complete.**
+
 ### Resume Checkpoint: 2026-09-13
 
 The user resumed on 2026-09-13. Continue the authorized sequential delegation from this checkpoint.

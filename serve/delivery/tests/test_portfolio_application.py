@@ -1021,6 +1021,39 @@ def test_engine_action_custody_survives_restart_and_fences_runtime(tmp_path: Pat
     assert coordinator.continuation_record_path("change-a", action.operation_id, result=True).read_bytes() == b"{}\n"
 
 
+@pytest.mark.parametrize("damage", [None, "missing", "malformed"])
+def test_public_mutation_distinguishes_engine_custody_from_coordination_damage(
+    tmp_path: Path, damage: str | None
+) -> None:
+    application, runtime, _provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    before = runtime.frontier_bytes()
+    path = state_root / "coordination/changes/change-a.json"
+    if damage == "missing":
+        path.unlink()
+    elif damage == "malformed":
+        path.write_bytes(b"{")
+    error = DeliveryActionBusyError if damage is None else DeliveryRuntimeReconciliationError
+    with pytest.raises(error):
+        application.set_change_intent(
+            DeliveryChangeIntent(
+                change_id="change-a",
+                kind=DeliveryChangeIntentKind.DEFER,
+                expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+                reason="pause",
+            )
+        )
+    assert runtime.frontier_bytes() == before
+    if damage is None:
+        assert application._coordinator.show("change-a").continuation_action == action
+    elif damage == "missing":
+        assert not path.exists()
+    else:
+        assert path.read_bytes() == b"{"
+
+
 def _engine_action(application: PortfolioApplication) -> ChangeContinuationAction:
     acquired = application.acquire_change_action(_continuation_request(application))
     if acquired.kind == "reconciled":
@@ -1168,7 +1201,7 @@ def test_engine_mark_ready_replays_lost_response_and_acceptance_waits_without_me
     assert _execute_engine(application, waiting_action) == waiting
 
 
-@pytest.mark.parametrize("drift", ["head", "target", "dirty"])
+@pytest.mark.parametrize("drift", ["head", "target", "dirty", "untracked"])
 def test_engine_action_rechecks_head_target_and_workspace_before_provider(tmp_path: Path, drift: str) -> None:
     application, runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
         tmp_path, mark_ready=False
@@ -1182,12 +1215,212 @@ def test_engine_action_rechecks_head_target_and_workspace_before_provider(tmp_pa
         _git(coordination.worktree_path, "update-ref", "refs/remotes/origin/main", moved)
         _git(coordination.worktree_path, "reset", "--hard", action.exact_head)
     else:
-        (coordination.worktree_path / "product.txt").write_text("foreign changes\n")
+        dirty = coordination.worktree_path / ("product.txt" if drift == "dirty" else "untracked.txt")
+        dirty.write_text("foreign changes\n")
     result = _execute_engine(application, action)
-    assert result.kind == ("blocked" if drift == "dirty" else "stale"), result
+    assert result.kind == "stale", result
+    assert result.reason_code == "readiness-changed"
     assert provider.set_pull_request_draft_state.call_count == 0
     assert runtime.ready_receipt() is None
+    assert application._coordinator.show("change-a").continuation_action.finished_at is not None
+    marker = application._coordinator.continuation_record_path("change-a", action.operation_id).with_name(
+        "started.json"
+    )
+    assert not marker.exists()
     assert _execute_engine(application, action) == result
+    if drift in {"dirty", "untracked"}:
+        assert dirty.read_text() == "foreign changes\n"
+
+
+def test_engine_preflight_interruption_replays_same_operation_after_restart(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    intent = application._coordinator.continuation_record_path("change-a", action.operation_id)
+    before = intent.read_bytes()
+    with (
+        patch.object(application._workspace_manager, "capture_finalization_workspace", side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        _execute_engine(application, action)
+    assert not intent.with_name("started.json").exists()
+    assert not intent.with_name("result.json").exists()
+    assert provider.set_pull_request_draft_state.call_count == 0
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+    assert coordinator.show("change-a").continuation_action == action
+    result = _execute_engine(reopened, action)
+    assert result.kind == "completed", result
+    assert result.action == action
+    assert intent.read_bytes() == before
+    assert tuple(intent.parent.parent.iterdir()) == (intent.parent,)
+    assert coordinator.show("change-a").continuation_action.finished_at is not None
+    assert _execute_engine(reopened, action) == result
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+@pytest.mark.parametrize("drift", ["frontier", "head", "target", "dirty"])
+def test_engine_entry_marker_prevents_stale_release_after_interruption(tmp_path: Path, drift: str) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    coordinator = application._coordinator
+    with coordinator.continuation_execution(action):
+        assert coordinator.start_continuation_action(action)
+    coordination = coordinator.show("change-a")
+    if drift == "frontier":
+        (state_root / "changes/change-a/frontier.json").write_bytes(runtime.frontier_bytes() + b"\n")
+    elif drift == "head":
+        _commit_local_descendant(coordination)
+    elif drift == "target":
+        moved = _commit_local_descendant(coordination)
+        _git(coordination.worktree_path, "update-ref", "refs/remotes/origin/main", moved)
+        _git(coordination.worktree_path, "reset", "--hard", action.exact_head)
+    else:
+        (coordination.worktree_path / "product.txt").write_text("foreign changes\n")
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    with patch.object(reopened, "_invoke_engine_owner") as owner:
+        result = _execute_engine(reopened, action)
+        assert _execute_engine(reopened, action) == result
+    assert result.kind == "blocked"
+    assert result.reason_code == "engine-action-interrupted"
+    assert coordinator.show("change-a").continuation_action == action
+    owner.assert_not_called()
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("damage", ["mismatched", "unreadable"])
+def test_engine_damaged_entry_marker_retains_custody_without_effect(tmp_path: Path, damage: str) -> None:
+    application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    coordinator = application._coordinator
+    marker = coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json")
+    if damage == "mismatched":
+        marker.write_bytes(b"{")
+    else:
+        marker.mkdir()
+    _commit_local_descendant(coordinator.show("change-a"))
+    result = _execute_engine(application, action)
+    assert result.kind == "blocked"
+    assert coordinator.show("change-a").continuation_action == action
+    assert _execute_engine(application, action) == result
+    assert marker.read_bytes() == b"{" if damage == "mismatched" else marker.is_dir()
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("custody", ["claim", "integration-repair", "publication", "workspace-guard"])
+def test_engine_conflicting_custody_prevents_stale_release(tmp_path: Path, custody: str) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    coordinator = application._coordinator
+    coordination = coordinator.show("change-a")
+    _commit_local_descendant(coordination)
+    if custody in {"claim", "integration-repair"}:
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        role = DeliveryWorkerRole.BUILDER if custody == "claim" else DeliveryWorkerRole.INTEGRATION_REPAIRER
+        claim = application._new_claim(role, None)
+        if custody == "claim":
+            binding = frontier.bindings[0].model_copy(update={"active_claim": claim})
+            frontier = frontier.model_copy(update={"bindings": (binding, *frontier.bindings[1:])})
+        else:
+            frontier = frontier.model_copy(update={"integration_repair_claim": claim})
+        path = state_root / "changes/change-a/frontier.json"
+        path.write_bytes(_canonical(frontier))
+    else:
+        update = (
+            {
+                "publication_lease": PublicationLease(
+                    operation_id="foreign", owner_id="foreign", expires_at="2026-09-13T00:05:00Z"
+                )
+            }
+            if custody == "publication"
+            else {"last_reviewed_commit": "f" * 40}
+        )
+        path = state_root / "coordination/changes/change-a.json"
+        path.write_bytes(_canonical(coordination.model_copy(update=update)))
+    before = path.read_bytes()
+    result = _execute_engine(application, action)
+    assert result.kind == "blocked", result
+    assert coordinator.show("change-a").continuation_action == action
+    assert path.read_bytes() == before
+    assert not coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json").exists()
+    assert _execute_engine(application, action) == result
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_engine_contradictory_writer_is_preserved_without_release(tmp_path: Path) -> None:
+    application, _runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    coordination = application._coordinator.show("change-a")
+    _commit_local_descendant(coordination)
+    writer = ChangeWriter(
+        attempt_id="foreign",
+        claim_id="foreign",
+        actor_id="foreign",
+        process_id="foreign",
+        claimed_at="2026-09-13T00:00:00Z",
+        job_id=1,
+        kind="build",
+    )
+    path = state_root / "coordination/changes/change-a.json"
+    before = _canonical(coordination.model_copy(update={"writer": writer}))
+    path.write_bytes(before)
+    with pytest.raises(CoordinationConflictError):
+        _execute_engine(application, action)
+    assert path.read_bytes() == before
+    assert not application._coordinator.continuation_record_path("change-a", action.operation_id, result=True).exists()
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("head_field", ["candidate_head", "target_head"])
+def test_engine_acquisition_without_required_head_returns_typed_stop(tmp_path: Path, head_field: str) -> None:
+    application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    capture = application._capture_action_basis
+
+    def missing_head(*args):
+        basis, reason = capture(*args)
+        return basis.model_copy(update={head_field: None}), reason
+
+    with patch.object(application, "_capture_action_basis", side_effect=missing_head):
+        result = application.acquire_change_action(_continuation_request(application))
+        if result.kind == "reconciled":
+            result = application.acquire_change_action(_continuation_request(application))
+    assert result.kind == "waiting", result
+    assert result.reason_code == "engine-owner-unavailable"
+    assert result.engine_action is None
+    assert application._coordinator.show("change-a").continuation_action is None
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_engine_unknown_result_after_effect_never_reenters_owner(tmp_path: Path, *, interrupted: bool) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    invoke = application._invoke_engine_owner
+
+    def lose_result(retained):
+        invoke(retained)
+        raise KeyboardInterrupt if interrupted else RuntimeError("lost owner result")
+
+    with patch.object(application, "_invoke_engine_owner", side_effect=lose_result):
+        if interrupted:
+            with pytest.raises(KeyboardInterrupt):
+                _execute_engine(application, action)
+        else:
+            assert _execute_engine(application, action).kind == "blocked"
+    assert runtime.ready_receipt() is not None
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    with patch.object(reopened, "_invoke_engine_owner") as owner:
+        result = _execute_engine(reopened, action)
+        assert result.kind == "blocked"
+        assert _execute_engine(reopened, action) == result
+    owner.assert_not_called()
+    assert coordinator.show("change-a").continuation_action == action
+    assert provider.set_pull_request_draft_state.call_count == 1
 
 
 def test_engine_action_lost_dispatch_preserves_identity_and_strict_public_result(tmp_path: Path) -> None:

@@ -1239,14 +1239,23 @@ class PortfolioCoordinator:
                 ),
             )
 
-    def start_continuation_action(self, action: ChangeContinuationAction) -> bool:
-        """Record effect entry; an interrupted call is not permission for another effect."""
+    def continuation_action_started(self, action: ChangeContinuationAction) -> bool:
+        """Read exact effect-entry evidence without creating it."""
         self.require_continuation_access(action.change_id)
         path = self.continuation_record_path(action.change_id, action.operation_id).with_name("started.json")
-        if path.exists():
-            if path.read_bytes() != _model_content(action):
-                _coordination_conflict("continuation start identity differs from retained custody")
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
             return False
+        if content != _model_content(action):
+            _coordination_conflict("continuation start identity differs from retained custody")
+        return True
+
+    def start_continuation_action(self, action: ChangeContinuationAction) -> bool:
+        """Record effect entry; an interrupted call is not permission for another effect."""
+        if self.continuation_action_started(action):
+            return False
+        path = self.continuation_record_path(action.change_id, action.operation_id).with_name("started.json")
         self._commit(
             f"start-{action.operation_id}",
             (TransactionParticipant(self._state_root, path.relative_to(self._state_root), _model_content(action)),),
