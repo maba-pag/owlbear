@@ -147,7 +147,8 @@ plan already assigns it to D08-H, but it must not be reported as completed by cl
    D03-P. If D02 is unfinished, prepare its exact remaining slice first. If some D03 work exists,
    reuse its reviewed commits and plan only the remainder; do not reimplement it or assume D04 is ready.
 2. **Publish required context.** The user pushes the reviewed `dev` checkpoint and approved handoff.
-   Record full source/plan/dependency SHAs. Cloud workers cannot see unpushed local work, the fork's
+   The preparing/cloud agent records source/plan/dependency revisions; the user does not look up or
+   paste commit hashes. Cloud workers cannot see unpushed local work, the fork's
    chat or untracked B1 packages. Do not upload live state, private URLs, credentials or browser profiles.
 3. **Verify access and review policy.** Check cloud agent availability, model picker, budget,
    concurrency and eligible human approvals. Always select `dev`, not generated consumer `main`.
@@ -165,8 +166,8 @@ plan already assigns it to D08-H, but it must not be reported as completed by cl
    MegaLinter stays outside agent sessions. Lack of CI access does not stop code or PR work; it
    leaves the external gate pending and cannot authorize a merge that requires it.
 7. **Finalize the first package handoff.** D03-P must produce the concrete paths/contracts/tests
-   for its implementation phases. Save the package PR and plan-commit URLs for low-bandwidth access.
-   Approve the plan before implementation; do not launch placeholder implementation tickets.
+   for its implementation phases. Bookmark the package PR for low-bandwidth access. Approve the
+   displayed plan before implementation; let the agent resolve its revision and prepare the next prompt.
 
 Bootstrap ingredients to verify in the pilot: uv required by [pyproject.toml](../../pyproject.toml),
 `uv python install`, `uv sync --locked --all-packages --all-extras --all-groups`; Node from
@@ -176,12 +177,17 @@ Do not run workspace `setup/init.py`, configure laptop MCPs or disable safety co
 
 ### Cloud-Only Authorization
 
-Before launch, explicitly approve the exception to local "one writer on dev" and "user pushes"
-rules: the cloud platform may create and publish **only each job's assigned PR branch**, targeting
-`dev`. Sequential phases use that same package branch; any separately approved independent job
-uses its own branch and bounded ownership. No direct target push,
-merge, force-push, protection change, real provider mutation during tests or live activation follows.
-This proposal does not install that exception into the running fork's instructions.
+Cloud tasks use GitHub's normal branch, commit and publication workflow. Do not transplant the
+local "one writer on dev" or "user pushes manually" procedure into the cloud session: publication
+to the task's PR is necessary to deliver its work. The kickoff prompt explicitly requests that cloud
+workflow for `maba-pag/owlbear`, with `dev` as the PR base. No manual branch creation or push command
+is needed in the prompt. This does not authorize merging, changing protections, real provider effects
+during tests or live activation. It does not alter how the local implementation fork operates.
+
+GitHub's documented distinction matters: a **new task** creates a new branch from the selected base;
+an **existing-PR comment** normally starts a session that updates that PR's branch. To continue the
+same package, comment on its PR instead of starting another unrelated task from `dev`. Repository
+access alone does not uniquely identify an intended PR; use the invocation's actual PR context.
 
 After handoff the local fork must not write the same implementation slice. The package worker updates
 only its assigned package plan and PR progress, not the programme status or shared governance. One
@@ -202,11 +208,14 @@ for hours or that a worker may implement all phases without checkpoints.
    phase dependencies, negative cases, proof commands, exclusions and unresolved decisions. It has
    compact progress and verification sections separating cloud-required, external-CI and host-only
    proof with explicit fallback routes. It does not replace this guide or the programme authority.
-3. Review the plan, then explicitly approve its exact commit in the PR. Planning stops there.
-   The planning-only PR need not be merged before implementation on that same branch.
-4. Start A with a PR comment containing the approved plan path/commit, phase ID and current head.
-   The next worker reads the file from Git, verifies the plan approval and prerequisite bytes, and
-   implements only A. The same thread is convenient; a fresh session works equally well from these inputs.
+3. Review the displayed plan, then approve it through the implementation comment on that PR.
+   The agent resolves and records the revision being approved; the user need not copy its hash.
+   If intervening specification edits make the approval ambiguous, ask for a plain-language
+   confirmation of the changed plan. The planning-only PR need not be merged first.
+4. Start A with the copy-ready PR comment below. The worker discovers this PR's head, reads its
+   committed package plan and preceding discussion, verifies prerequisites, and implements only A.
+   No PR number, paths, test commands or hashes need to be transcribed by the user. If the launch
+   lacks PR context, ask for the PR link rather than guessing from repository access.
 5. A publishes coherent code/test commits and updates only the package progress record: completed
    observations, actual proof, open findings and next phase. The PR handoff names the exact head and
    last independently reviewed checkpoint. Never infer approval from the worker's own status text.
@@ -314,130 +323,186 @@ strong tier. Do not run planning and review as mandatory extra sessions for a tr
 reuse an already-approved contract. Built-in automatic code review is useful but not evidence of the
 deliberately selected independent reviewer or a required human approval.
 
-## 6. Reusable Prompt Templates
+## 6. Copy-Ready Cloud Prompts
 
-These are ordinary copyable text, not installed skills or agent files. Replace every placeholder
-before dispatch. Choose models and reasoning depth separately in the UI.
+### What Was Wrong With the Earlier Templates
 
-### Common Context for Each Job
+- They made the user fill in PR IDs, commit hashes, plan paths, file lists and commands that the
+   agent should discover or produce. Those are implementation bookkeeping, not human decisions.
+- They mixed new-task and existing-PR launch mechanics, and asked for a PR number before one existed.
+- They required a large common block plus another template, so neither was a useful standalone request.
+- They repeated local push/custody procedures that do not describe GitHub's cloud publication path.
+- They were precise about administrative inputs but vague about the actual D03 result.
+
+The replacements below are complete requests: copy **one block**, not a common block plus a form.
+No hashes, file lists, test commands, approval URLs or PR numbers need filling in. Select
+`maba-pag/owlbear`, `dev` for a new package, and your model/reasoning depth in GitHub's UI.
+The D03 examples are ready as written. For a later phase, change only the human-readable phase ID
+(for example D03-B to D03-C); for a later package, use the exact kickoff prompt its planner prepares.
+
+**Agent-owned bookkeeping:** discover the current checkout revision and, when invoked from a PR,
+its number/base/head from the supplied context and available repository tools. Record revisions for
+review/recovery yourself. The starting checkout SHA is not necessarily the PR base SHA; distinguish
+what is actually observed. Find the package plan from the PR description or its package-specific
+research file, and resolve files/tests from source. Do not ask the user to retrieve this metadata.
+If PR context is genuinely absent or ambiguous, ask only for a PR link; do not assume the repository
+has only one accessible PR. Missing optional metadata does not prevent source work, but a review
+without a known comparison scope must be reported as limited, not invented.
+
+Commit identities still matter for exact-code review and restart, but **the agent records them**.
+Each session must end with a short result, actual proof/gaps, the observed revision and one fully
+written suggested follow-up comment. The suggestion is not automatically authorized or dispatched.
+Never ask the user to assemble the next prompt out of technical fields.
+
+### Start D03 Planning
+
+**Where:** new cloud task; choose `maba-pag/owlbear` and base `dev`. No PR exists yet.
 
 ```text
-Repository: <repo>. Package PR: <number, or create for planning>.
-New package: branch from dev at <base SHA>. Existing package: use this PR branch
-at <expected current head>; do not branch again from dev for each phase.
-Assigned phase: <exact phase>. Package plan: <path and approved plan commit>.
-Plan approval: <PR comment URL, or pending for planning only>.
-Required predecessor checkpoints: <reviewed SHAs>. Result: <one concrete outcome>.
-Owned files: <explicit paths>. Exclusions: <paths and behavior>.
-Interfaces and scenarios: <exact settled contract/examples>.
-Proof commands: <resolved tests/lint/build and expected observations>.
+Prepare D03 for maba-pag/owlbear. Plan only; do not implement it yet.
+Use the checkout GitHub supplied and its normal cloud commit/publication workflow.
+Open a draft PR targeting dev for this package's plan and later implementation.
 
-Read .github/copilot-instructions.md, applicable instructions/skills from this
-checkout, and the named sections of .owlbear/research/change-continuation-delivery-redesign.md.
-Read the Cloud Capability Contract in .owlbear/research/delivery-cloud-flight-handoff.md.
-Read the committed package plan and verify its approved revision and checkpoints.
-Do not select another phase/package or depend on an unmerged sibling PR.
-Missing code/contract prerequisites mean NOT_READY, not permission to invent a substitute.
-Expected tool gaps use the Cloud Capability Contract in this flight guide, not NOT_READY.
+Read .owlbear/research/change-continuation-delivery-redesign.md for D03/P05/P10/P11,
+and .owlbear/research/delivery-cloud-flight-handoff.md for cloud execution limits.
+Check the current code and recorded D02 status. Reuse completed work; if a necessary
+D02 prerequisite is unfinished, identify it rather than starting D02 or inventing it.
 
-For this cloud job I authorize platform publication only to its assigned PR branch
-targeting dev, as an exception to local direct-dev/user-push rules. No target push,
-merge, force-push, protection changes or live activation. No Delivery records,
-claims or laptop MCP workflows. Use disposable repos, local provider fixtures and
-synthetic private inputs; no real credentials or managed-company authentication.
-Do not edit the active programme status, shared governance or another job's files.
-Update only the assigned package plan's progress section and PR handoff. Contract
-changes require explicit reapproval; your own progress text does not grant it.
+Plan how to recover retained failed claims/finalizers/engine actions without losing
+work or replacing a worker that may still write; preserve foreign/staged/private
+changes; bound equivalent retries across restart; and diagnose broken state offline.
+Write .owlbear/research/delivery-cloud-d03-plan.md with concrete implementation
+phases, owning files, interfaces, negative cases, tests, and explicit exclusions.
+Separate cloud-executable proof from later CI/host checks. Aim for phases that fit
+30 minutes of coding plus 15 minutes of proof, not one huge D03 session.
 
-Use the available file/edit/shell/platform tools; no VS Code-specific APIs, memory
-or nested agents are required. Do not launch/configure OwlBear MCP servers or use
-live Delivery workflows. Test registered tools with existing in-process Client(server)
-pytest fixtures; this does not prove host transport/discovery. Test HTTP in-process.
-NEVER install or run MegaLinter, uv run megalint, uv run quality, its runner/image,
-or an aggregate that invokes it. Use scoped check-only Ruff, pytest, Vitest,
-TypeScript/build and direct linters. This cloud scope replaces broad local aggregate
-recommendations, not product safety rules or required merge checks.
+No live OwlBear MCP/Delivery workflows, live state or credentials. Do not install
+or run MegaLinter or uv run quality. Read files and use ordinary available tools;
+missing editor/MCP tools must not block planning. Do not change the main programme
+plan or this flight guide. Leave genuine safety/product decisions visible.
 
-Use locked toolchains and existing helpers. Do not add test skips, weaken assertions
-or claim unrun checks passed. Missing MCP/editor/heavy tools must not stop supported
-implementation. Record NOT_RUN_CAPABILITY with reason, affected claim, available
-proof and exact external follow-up in the package ledger/PR; then continue locally
-testable work. Missing browser execution is not solved by calling jsdom layout proof.
-Real test/build failures require repair, not a capability label. If core behavior
-cannot be tested, preserve an unverified draft. Keep CI/host/merge gates pending.
-Plan for 50 minutes: stop starting new edits by minute 35, publish coherent
-checkpoints and the current status by minute 45, then finish proof/report and stop.
-These soft targets do not override the platform's hard limit. Publish early.
-Return exact base/head, owned changes, actual commands/results, unrun gates,
-blockers and one precise next action. Do not dispatch another job yourself.
+Record the checkout revision yourself. Publish the plan through this cloud task,
+summarize decisions I must make, give a ready-to-paste first implementation comment,
+and stop by 50 minutes. Do not implement or merge anything.
 ```
 
-### Plan, Then Stop
+### Approve the Plan and Start D03-A
+
+**Where:** comment on the D03 PR after reading its plan. No PR number is needed in the text.
+This approves the displayed plan for D03-A, not any unresolved permission/privacy decision.
 
 ```text
-Plan ONLY <D03-P or named package planning phase>, using the common context. No product edits.
-Ground the contract in current owning source/tests, not assumed future features.
-Resolve state transitions, side-effect boundaries, error mapping and negative cases.
-Split into coherent jobs targeting 30 minutes coding plus 15 minutes proof/handoff.
-Give each exact file ownership, dependency SHAs, runnable checks and exclusions.
-Classify checks as cloud-required, external CI or host-only; name available fallback
-proof and follow-up owners. No phase may depend on a live OwlBear MCP or MegaLinter.
-Identify remaining critical decisions and sequential within-package checkpoints.
-Commit the plan to <one assigned package research file> on the package branch,
-open its draft PR, report the plan commit SHA and STOP. Do not edit the programme
-or flight guide. Implementation requires approval of this exact plan revision;
-the same unmerged PR will host implementation phases after approval.
-Do not infer undecided product/privacy/permission choices from that approval.
+@copilot I approve the D03 plan currently presented in this PR. Implement D03-A only.
+Use this PR's committed package plan and current code; discover and record the
+revisions yourself. If the plan has changed since it was presented or a genuine
+decision remains unresolved, explain the difference before acting on it.
+
+Implement the planned worker-exclusion and recovery reference path: a worker that
+may still write must not be replaced, and retained work/evidence must survive recovery.
+Use existing owners and realistic restart/controlled-worker tests. Run a focused
+behavior check immediately after the first substantive edit, then the affected tests.
+Publish changes normally to this PR; do not create another package or merge it.
+
+Follow .owlbear/research/delivery-cloud-flight-handoff.md's Cloud Capability Contract:
+no live OwlBear MCP or Delivery workflows, no MegaLinter or uv run quality. Use
+in-process tests, locked toolchains and scoped linters. Record unavailable external
+checks and continue supported work; fix actual failures instead of weakening tests.
+
+Update the package plan's progress and PR summary, not the programme authority.
+Report actual results and the next ready-to-paste review or repair request. Publish
+coherent checkpoints early and stop by 50 minutes, before D03-B. If unfinished,
+preserve the partial result and say exactly what remains; do not claim completion.
 ```
 
-### Implement an Approved Job
+### Start the Next Named Phase
+
+**Where:** same PR, after review/repair of the predecessor. This example starts D03-B;
+change only `D03-B` to the next phase named in the reviewed package plan when appropriate.
 
 ```text
-Implement ONLY <phase> from committed package plan <path at approved SHA>,
-approval <comment URL>, expected package PR head <SHA>, using the common context.
-Continue this assigned PR branch; do not create a new PR or start again from dev.
-Start at the named owner and cheapest discriminating test. After the first
-substantive edit, run that check before expanding the slice. Keep required
-schemas/exports/tests with their owner; no placeholder behavior to meet the clock.
-Checkpoint coherent progress early. If blocked by a new critical decision, record
-evidence and stop instead of guessing. No successor work or own merge/approval.
-Update package progress and the PR handoff; record the exact head, completed
-observations, actual proof, capability gaps, findings and next phase. Report
-READY_FOR_INDEPENDENT_REVIEW (verification: partial when external checks remain),
-CHECKPOINT_ONLY, BLOCKED_ENVIRONMENT or BLOCKED_DECISION. Missing expected tools
-alone is not BLOCKED_ENVIRONMENT. Stop before the next phase.
+@copilot Implement D03-B only, following the approved package plan in this PR.
+Read the current branch, previous phase result and independent review. Verify that
+the prerequisite code and required proof are present and review findings addressed.
+Resolve paths, tests and revisions yourself; do not ask me to supply commit hashes.
+Do not reinterpret an unchecked progress box as approval or start another phase.
+
+Use GitHub's normal publication to this PR and the cloud capability rules in
+.owlbear/research/delivery-cloud-flight-handoff.md. No live OwlBear MCP/Delivery,
+MegaLinter or uv run quality. Run in-process behavior tests and scoped lint/build;
+record unavailable external checks without abandoning supported implementation.
+Repair real failures and preserve safety rules and existing evidence.
+
+Update the package progress and PR summary with actual results, unresolved checks
+and a ready-to-paste follow-up request. Publish checkpoints early, stop by 50 minutes
+and leave the next phase for a separate instruction. Do not merge.
 ```
 
-### Fresh Independent Review
+### Review the Current PR
+
+**Where:** on the package PR, with the review model selected separately. A PR-comment session
+has the PR context but can inherit previous conversation context; do not claim it is context-isolated.
+For a fresh independent review, start a separate review task with the **PR URL attached**, remove
+`@copilot` below, and use the same text. That link is the only input needed outside a PR context.
 
 ```text
-Review ONLY PR <number>, base <SHA>, head <SHA>, against <approved ticket/revision>.
-Read-only source review: no fixes, commits, branches, merges or approval API calls.
-Inspect actual code/tests before relying on implementation conclusions. Prioritize
-data loss, custody, stale approval, replay, privacy and missing discriminating tests.
-Distinguish executed proof, worker-reported proof and unrun checks. Post findings
-with severity/path/line, or no findings, and explicit limits. Bind the verdict to
-the exact base/head; any subsequent change requires relevant revalidation/re-review.
-Use the Cloud Capability Contract: no OwlBear MCP launch, MegaLinter or quality
-aggregate. Their expected absence is not an implementation defect; assess available
-in-process proof and the recorded external obligations. Do not waive a real failure.
-This is advisory review, not GitHub's required human approval. Stop.
+@copilot Review this PR's latest implementation against its package plan and the
+Delivery programme. Review only: do not edit code, apply fixes, approve or merge.
+Determine and record the actual base/head revisions yourself. Inspect source and
+tests rather than accepting the implementation summary as evidence.
+
+Focus on custody, data preservation, replay, stale approval, privacy and missing
+discriminating tests. Check the latest phase and its interaction with earlier phases;
+if the package claims completion, assess the cumulative package diff and required proof.
+Report concrete findings with severity and file references, or no findings with limits.
+
+Use .owlbear/research/delivery-cloud-flight-handoff.md's cloud verification rules:
+no live OwlBear MCP, MegaLinter or uv run quality. Distinguish proven behavior, reported
+tests and checks awaiting CI/the real host. Missing expected cloud tools is not itself
+a code defect or permission to waive a failed test. If review scope/context cannot be
+resolved, ask for the PR link, not hashes. End with one ready-to-paste repair request
+when needed and stop by 50 minutes. This report is not a required human approval.
 ```
 
-Start a fresh review session rather than reusing the implementer's reasoning thread. A session
-report is sufficient if that entry point cannot post a PR comment; link it without calling it approval.
+### Repair Review Findings
 
-### Resume or Repair on the Same PR
+**Where:** on the same PR, after the reviewer has returned findings.
 
 ```text
-@copilot Resume ONLY <phase> on this package PR at observed head <SHA>.
-Read the package plan <path at approved SHA>, approval <comment URL>, last reviewed
-checkpoint <SHA>, pushed commits, PR handoff and check results before editing.
-The prior session may have timed out before reporting. Preserve its work, verify
-what exists and don't repeat an effect without its owning receipt. Do not restart
-the programme or choose a successor. Remaining slice/findings: <exact scope>.
-Required proof: <commands>. Apply the common context and publish a durable status
-before the working budget ends. Leave incomplete work draft. Stop.
+@copilot Address the latest independent review findings on this PR. Inspect the
+current code and review evidence first; repair valid findings in the existing scope
+and explain any disagreement with source/test evidence. Do not start another phase.
+Use the committed package plan and discover revisions and affected tests yourself.
+
+Follow .owlbear/research/delivery-cloud-flight-handoff.md's capability rules: no live
+OwlBear MCP/Delivery, MegaLinter or uv run quality. Run focused regression tests and
+scoped lint/build; report missing external checks separately from real failures.
+Publish corrections normally to this PR without discarding good prior work.
+
+Update the package progress and PR summary, mapping each finding to its correction
+and proof. Give a ready-to-paste re-review request, then stop by 50 minutes. Do not
+claim independent review has passed your new code and do not merge.
+```
+
+### Resume an Interrupted Phase
+
+**Where:** on the same PR after timeout or a lost response. This continues the existing phase,
+not whichever D package happens to be next in the programme.
+
+```text
+@copilot Resume the interrupted phase on this PR, not the next phase or package.
+Inspect the published commits, package plan, latest task instruction, progress and
+available session/check logs to determine what actually completed. Do not start over
+or assume success from a missing final response. If the interrupted scope cannot be
+identified, ask which phase; don't ask me to reconstruct hashes or test commands.
+
+Preserve good committed work and finish only the remaining phase. Follow
+.owlbear/research/delivery-cloud-flight-handoff.md: no live OwlBear MCP/Delivery,
+MegaLinter or uv run quality; use in-process tests and scoped checks, and record
+unavailable external verification without hiding genuine failures.
+
+Publish coherent progress normally to this PR, update the package progress and give
+actual proof plus one ready-to-paste next action. Stop by 50 minutes and do not merge
+or advance to another phase. Request explicit approval before discarding prior work.
 ```
 
 ## 7. Low-Bandwidth Operating Cycle
