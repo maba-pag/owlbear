@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -23,6 +24,7 @@ from owlbear_delivery.delivery_runtime import (
     parse_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
+from owlbear_delivery.finalization_reports import FinalizationAttempt
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
 
@@ -129,6 +131,39 @@ class WorkItemPublicationPhase(StrEnum):
     ABANDONED = "abandoned"
 
 
+def resolve_publication_phase(frontier: DeliveryFrontier) -> WorkItemPublicationPhase:  # noqa: C901
+    """Resolve publication phase from captured authority without inspecting a workspace."""
+    if frontier.change_abandonment is not None:
+        phase = WorkItemPublicationPhase.ABANDONED
+    elif frontier.change_deferral is not None:
+        phase = WorkItemPublicationPhase.DEFERRED
+    elif (
+        frontier.finalization_invalidation is not None and frontier.finalization_invalidation.reason == "review-repair"
+    ):
+        phase = WorkItemPublicationPhase.REVIEW_REPAIR
+    elif frontier.finalization_invalidation is not None:
+        phase = WorkItemPublicationPhase.FINALIZATION_INVALIDATED
+    elif (
+        frontier.target_sync_receipt is not None
+        and frontier.target_sync_receipt.review_required
+        and frontier.finalization is None
+    ):
+        phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
+    elif frontier.pending_checkpoint is not None:
+        phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
+    elif frontier.finalization is None:
+        phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
+    elif frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
+        phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
+    elif frontier.ready is None:
+        phase = WorkItemPublicationPhase.PULL_REQUEST_DRAFT
+    elif frontier.merged_pull_request_latch is None:
+        phase = WorkItemPublicationPhase.AWAITING_MERGE
+    else:
+        phase = WorkItemPublicationPhase.ACCEPTANCE_OBSERVED
+    return phase
+
+
 class _ProjectionModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -218,6 +253,62 @@ class WorkItemAction(_ProjectionModel):
     adopted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
+class DeliveryReadinessBasis(_ProjectionModel):
+    """Only trusted authority and workspace facts from one response capture."""
+
+    contract_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    frontier_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    candidate_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    workspace_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    diagnostic_sequence: int | None = Field(default=None, ge=0)
+
+
+class DeliveryReadiness(_ProjectionModel):
+    """Application-owned eligibility for one supported action at a captured basis."""
+
+    status: Literal["ready", "running", "waiting", "blocked", "unavailable", "complete"]
+    operation: WorkItemActionKind | None = None
+    executable: bool = False
+    next_actor: WorkItemNextActor
+    reason_code: Literal[
+        "ready",
+        "active-custody",
+        "runtime-unavailable",
+        "dependency-wait",
+        "request-action",
+        "change-paused",
+        "change-terminal",
+        "task-incomplete",
+        "workspace-inspection-failed",
+        "workspace-dirty",
+        "workspace-preflight-failed",
+        "review-repair",
+        "publication-wait",
+        "checkpoint-pending",
+        "report-store-unavailable",
+    ]
+    checks_state: Literal["not-run", "failed", "passed", "unknown"] = "not-run"
+    basis: DeliveryReadinessBasis
+    action: WorkItemAction | None = None
+    last_attempt: FinalizationAttempt | None = None
+
+    @model_validator(mode="after")
+    def _validate_action(self) -> DeliveryReadiness:
+        if self.executable != (self.action is not None):
+            msg = "executable readiness requires exactly one supported action"
+            raise ValueError(msg)
+        if self.action is not None and (
+            self.action.kind is WorkItemActionKind.NONE or self.action.kind != self.operation
+        ):
+            msg = "readiness action must match its supported operation"
+            raise ValueError(msg)
+        if self.executable and self.status != "ready":
+            msg = "only ready operations can be executable"
+            raise ValueError(msg)
+        return self
+
+
 class WorkItemProgress(_ProjectionModel):
     """Scope-applicable progress with an explicit noun."""
 
@@ -244,6 +335,7 @@ class WorkItemCardView(_ProjectionModel):
     activity: WorkItemActivity
     progress: WorkItemProgress
     action: WorkItemAction
+    readiness: DeliveryReadiness | None = None
 
 
 class ChangeGroupView(_ProjectionModel):
@@ -398,16 +490,39 @@ class WorkItemDetailView(_ProjectionModel):
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
     publication: WorkItemPublicationView | None = None
+    readiness: DeliveryReadiness | None = None
 
 
 class WorkItemProjector:
     """Derive MCP and Cockpit views from one immutable Delivery snapshot."""
 
-    def __init__(self, snapshot: DeliveryPortfolioSnapshot) -> None:
+    def __init__(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        readiness: tuple[DeliveryReadiness, ...] = (),
+    ) -> None:
         self._snapshot = snapshot
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
+        if readiness:
+            self._cards = tuple(
+                card.model_copy(
+                    update={
+                        "readiness": decision,
+                        "action": decision.action or WorkItemAction(),
+                        "next_actor": decision.next_actor,
+                        "next_step": {
+                            "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
+                            "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
+                            "workspace-preflight-failed": "Managed workspace preflight did not pass.",
+                            "active-custody": "An active operation retains Change custody.",
+                            "review-repair": "Review repair requires a new Change commit before verification.",
+                        }.get(decision.reason_code, card.next_step),
+                    }
+                )
+                for card, decision in zip(self._cards, readiness, strict=True)
+            )
         self._items = {card.work_item_id: self._compatibility_projection(card) for card in self._cards}
 
     def list_items(self) -> tuple[WorkItemProjection, ...]:
@@ -462,6 +577,7 @@ class WorkItemProjector:
                 promise="Publish the reviewed Change and observe its user-merged pull request.",
                 operator_moves=self._snapshot.frontier.operator_moves,
                 publication=self._publication_view(),
+                readiness=card.readiness,
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -483,6 +599,7 @@ class WorkItemProjector:
             return_context=binding.return_context,
             operator_moves=self._snapshot.frontier.operator_moves,
             recovery_attention=self._recovery_view(binding.recovery_attention),
+            readiness=card.readiness,
         )
 
     def _project_cards(self) -> tuple[WorkItemCardView, ...]:
@@ -987,38 +1104,8 @@ class WorkItemProjector:
                     lifecycle = WorkItemChangeLifecycle.ACCEPTANCE
         return lifecycle
 
-    def _publication_phase(self) -> WorkItemPublicationPhase:  # noqa: C901
-        frontier = self._snapshot.frontier
-        if frontier.change_abandonment is not None:
-            phase = WorkItemPublicationPhase.ABANDONED
-        elif frontier.change_deferral is not None:
-            phase = WorkItemPublicationPhase.DEFERRED
-        elif (
-            frontier.finalization_invalidation is not None
-            and frontier.finalization_invalidation.reason == "review-repair"
-        ):
-            phase = WorkItemPublicationPhase.REVIEW_REPAIR
-        elif frontier.finalization_invalidation is not None:
-            phase = WorkItemPublicationPhase.FINALIZATION_INVALIDATED
-        elif (
-            frontier.target_sync_receipt is not None
-            and frontier.target_sync_receipt.review_required
-            and frontier.finalization is None
-        ):
-            phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
-        elif frontier.pending_checkpoint is not None:
-            phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
-        elif frontier.finalization is None:
-            phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
-        elif frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
-            phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
-        elif frontier.ready is None:
-            phase = WorkItemPublicationPhase.PULL_REQUEST_DRAFT
-        elif frontier.merged_pull_request_latch is None:
-            phase = WorkItemPublicationPhase.AWAITING_MERGE
-        else:
-            phase = WorkItemPublicationPhase.ACCEPTANCE_OBSERVED
-        return phase
+    def _publication_phase(self) -> WorkItemPublicationPhase:
+        return resolve_publication_phase(self._snapshot.frontier)
 
     def _publication_view(self) -> WorkItemPublicationView:
         frontier = self._snapshot.frontier

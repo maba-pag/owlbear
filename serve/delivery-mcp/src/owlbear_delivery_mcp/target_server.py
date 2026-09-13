@@ -35,23 +35,28 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
+from owlbear_delivery.finalization_reports import FinalizationReport, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
     DeliveryChangeIntent,
     DeliveryChangeIntentResult,
     DeliveryChangePublicationSupersessionReceipt,
+    DeliveryChangeView,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryDesignPut,
+    DeliveryFinalizationContext,
     DeliveryOperatorContext,
     DeliveryQuarantinedSnapshotRepairProposal,
     DeliveryQuarantinedSnapshotRepairReceipt,
+    DeliveryReadiness,
     DeliveryResultSubmission,
     DeliveryResultSubmissionResult,
     DeliveryStateSnapshotRepairReceipt,
     DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    DeliveryUnavailableChangeView,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthView
@@ -133,6 +138,7 @@ from owlbear_delivery_mcp.target_models import (
     RepairStrandedFrontierRequest,
     RepairTargetSyncPublicationParams,
     RepairTargetSyncPublicationRequest,
+    ReportFinalizationFailureParams,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -201,6 +207,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
+    "report_finalization_failure",
     "publish_delivery_plan",
     "submit_result",
     "finalize_change",
@@ -409,11 +416,13 @@ class TargetMCPAdapter:
     async def get_change(self, request: ChangeRequest) -> dict[str, object]:
         """Return one coherent Change detail, health, and repair projection."""
         params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
+        view = await asyncio.to_thread(
+            self._call_adapter,
             params,
             lambda: self._application.get_change(params.change_id),
+            TypeAdapter(DeliveryChangeView | DeliveryUnavailableChangeView),
         )
+        return self._serialize(view)
 
     async def answer(self, request: AnswerRequest) -> DeliveryAnswerResponse:
         """Apply one version-bound answer to a retained Delivery request."""
@@ -696,7 +705,25 @@ class TargetMCPAdapter:
     async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
         """Show engine-resolved context for one exact Change finalization."""
         params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.show_finalization_context(params.change_id))
+        context = self._call_model(
+            params,
+            lambda: self._application.show_finalization_context(params.change_id),
+            DeliveryFinalizationContext,
+        )
+        return self._serialize(context)
+
+    async def report_finalization_failure(self, request: ReportFinalizationFailureParams) -> dict[str, object]:
+        """Persist one bounded finalization diagnostic without granting proof authority."""
+        params = self._validate(ReportFinalizationFailureParams, request)
+        result = await asyncio.to_thread(
+            self._call_adapter,
+            params,
+            lambda: self._application.report_finalization_failure(
+                ReportFinalizationFailure.model_validate(params.model_dump())
+            ),
+            TypeAdapter(FinalizationReport | DeliveryReadiness),
+        )
+        return self._serialize(result)
 
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""
@@ -1072,6 +1099,19 @@ class TargetMCPAdapter:
             message = f"unsupported structured output: {type(value).__name__}"
             raise TypeError(message)
         return value
+
+    def _call_adapter[ModelT: BaseModel](
+        self,
+        params: BaseModel,
+        operation: Callable[[], object],
+        adapter: TypeAdapter[ModelT],
+    ) -> ModelT:
+        value = self._call_raw(params, operation)
+        try:
+            return adapter.validate_python(value)
+        except ValidationError as exc:
+            message = f"unsupported structured output: {exc}"
+            raise TypeError(message) from exc
 
     def _call(self, params: BaseModel, operation: Callable[[], object]) -> StructuredOutput:
         return self._serialize(self._call_raw(params, operation))

@@ -140,6 +140,14 @@ from owlbear_delivery.draft_pull_request import (
     SupersedeDraftPullRequest,
     UpdateGeneratedPullRequestSummary,
 )
+from owlbear_delivery.finalization_reports import (
+    FinalizationAttempt,
+    FinalizationReport,
+    FinalizationReportError,
+    FinalizationReportSnapshot,
+    FinalizationReportStore,
+    ReportFinalizationFailure,
+)
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthReason,
@@ -176,10 +184,16 @@ from owlbear_delivery.target_contract import (
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     DeliveryPortfolioSnapshot,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    WorkItemAction,
+    WorkItemActionKind,
+    WorkItemActivityState,
     WorkItemCardView,
     WorkItemClaimView,
     WorkItemDetailView,
     WorkItemNeed,
+    WorkItemNextActor,
     WorkItemProjector,
     WorkItemPublicationPhase,
     WorkItemRecoveryView,
@@ -187,6 +201,7 @@ from owlbear_delivery.work_items import (
     WorkItemTargetSyncConflictView,
     WorkItemWorktreeCleanupView,
     WorkItemWorktreeRecoveryView,
+    resolve_publication_phase,
 )
 
 if TYPE_CHECKING:
@@ -857,6 +872,24 @@ class DeliveryChangeView(_ApplicationModel):
     health: DeliveryHealthView
     repair: DeliveryRepairResult | None = None
     unresolved_outcomes: tuple[DeliveryUnresolvedOutcome, ...] = ()
+    kind: Literal["available"] = "available"
+    readiness: DeliveryReadiness
+
+
+class DeliveryUnavailableChangeView(_ApplicationModel):
+    """Known Change whose canonical runtime authority could not be composed."""
+
+    kind: Literal["unavailable"] = "unavailable"
+    change_id: str = Field(min_length=1)
+    title: str | None = None
+    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    readiness: DeliveryReadiness
+
+
+class _FinalizationReadUnavailableError(RuntimeError):
+    def __init__(self, readiness: DeliveryReadiness) -> None:
+        self.readiness = readiness
+        super().__init__(readiness.reason_code)
 
 
 class DeliveryResultSubmission(_ApplicationModel):
@@ -1062,7 +1095,7 @@ class DeliveryFinalizationContext(_ApplicationModel):
     change_id: str = Field(min_length=1)
     branch: str = Field(min_length=1)
     worktree_path: Path
-    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head: str | None = Field(pattern=r"^[0-9a-f]{40}$")
     reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     publication_phase: WorkItemPublicationPhase
     ready_for_finalization: bool
@@ -1070,6 +1103,7 @@ class DeliveryFinalizationContext(_ApplicationModel):
     finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     finalization_invalidation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    readiness: DeliveryReadiness
 
 
 class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
@@ -1432,6 +1466,7 @@ class PortfolioReadView(_ApplicationModel):
     groups: tuple[ChangeGroupView, ...]
     operating: PortfolioOperatingView
     health: DeliveryHealthView = DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
+    unavailable_changes: tuple[DeliveryUnavailableChangeView, ...] = ()
 
 
 class DeliveryCheckpointReconciliationResult(_ApplicationModel):
@@ -2519,44 +2554,30 @@ class PortfolioApplication:
     def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
         """Return engine-resolved finalization context without changing Delivery state."""
         runtime = self._runtime(change_id)
+        snapshot = self._delivery_snapshot(runtime)
+        projector = self._read_projector(snapshot)
+        cards = projector.group_view().items
+        card = next((item for item in cards if item.item_key == "publication"), cards[0])
+        readiness = card.readiness
+        if readiness is None:
+            self._fail("finalization readiness was not captured")
         coordination = self._workspace_manager.show(change_id)
-        try:
-            change_head = self._workspace_manager.observed_change_head(change_id)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-            self._fail("finalization context could not resolve the managed Change head", exc)
-        ready, diagnostics = runtime.finalization_readiness()
-        finalization = runtime.finalization()
-        invalidation = runtime.finalization_invalidation()
-        if (
-            ready
-            and invalidation is not None
-            and invalidation.reason == "review-repair"
-            and change_head == invalidation.expected_head
-        ):
-            ready = False
-            diagnostics = (*diagnostics, "review repair requires a new Change commit before finalization")
-        if ready:
-            try:
-                self._workspace_manager.validate_finalization_head(
-                    change_id,
-                    change_head,
-                    tuple(result.completed_commit for binding in runtime.bindings() for result in binding.results),
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                ready = False
-                diagnostics = (str(exc),)
+        finalization = snapshot.frontier.finalization
+        invalidation = snapshot.frontier.finalization_invalidation
+        ready = readiness.executable and readiness.operation is WorkItemActionKind.FINALIZE
         return DeliveryFinalizationContext(
             change_id=change_id,
             branch=coordination.branch,
             worktree_path=coordination.worktree_path,
-            change_head=change_head,
+            change_head=readiness.basis.candidate_head,
             reviewed_change_head=coordination.last_reviewed_commit,
-            publication_phase=self._work_item_projector(runtime).publication_phase(),
+            publication_phase=resolve_publication_phase(snapshot.frontier),
             ready_for_finalization=ready,
-            readiness_diagnostics=diagnostics,
+            readiness_diagnostics=() if ready else (readiness.reason_code,),
             finalization_id=finalization.finalization_id if finalization is not None else None,
             finalized_head=finalization.exact_head if finalization is not None else None,
             finalization_invalidation_id=invalidation.invalidation_id if invalidation is not None else None,
+            readiness=readiness,
         )
 
     def finalize_change(
@@ -2576,6 +2597,7 @@ class PortfolioApplication:
             ):
                 with locked_roots((self._checkpoint_lock_root(change_id),)):
                     self._promote_finalized_external_head(change_id, existing.exact_head)
+                self._retire_finalization_report(runtime, existing.exact_head)
                 return existing
             self._fail(
                 "Delivery Change is already finalized with different authority",
@@ -2610,7 +2632,71 @@ class PortfolioApplication:
                     additional_participants=additional_participants,
                 )
             self._promote_finalized_external_head(change_id, finalization.exact_head)
+            self._retire_finalization_report(runtime, finalization.exact_head)
             return finalization
+
+    def _retire_finalization_report(self, runtime: DeliveryRuntime, exact_head: str) -> None:
+        try:
+            FinalizationReportStore(self._target_root, runtime.contract.change_id).retire(
+                exact_head, contract_fingerprint(runtime.contract)
+            )
+        except FinalizationReportError:
+            _logger.warning("Successful finalization retained a diagnostic pointer: report-store-unavailable")
+
+    def report_finalization_failure(
+        self,
+        request: ReportFinalizationFailure,
+    ) -> FinalizationReport | DeliveryReadiness:
+        """Persist structural diagnostics without granting lifecycle or proof authority."""
+        try:
+            return FinalizationReportStore(self._target_root, request.change_id).record(
+                request,
+                _timestamp(self._clock()),
+                lambda: self._validate_finalization_report_basis(request),
+            )
+        except _FinalizationReadUnavailableError as exc:
+            return exc.readiness
+
+    def _validate_finalization_report_basis(self, request: ReportFinalizationFailure) -> None:
+        self._reconcile_runtimes()
+        observation = self._discovered_changes.get(request.change_id)
+        if observation is not None and not observation.actionable_runtime:
+            raise _FinalizationReadUnavailableError(self._unavailable_change(request.change_id).readiness)
+        runtime = self._runtime(request.change_id)
+        snapshot = self._delivery_snapshot(runtime)
+        basis = DeliveryReadinessBasis(
+            contract_digest=contract_fingerprint(snapshot.contract), frontier_digest=snapshot.version
+        )
+        try:
+            coordination, head, fingerprint, paths, reason = self._workspace_manager.capture_finalization_workspace(
+                request.change_id,
+                tuple(result.completed_commit for binding in snapshot.frontier.bindings for result in binding.results),
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            raise _FinalizationReadUnavailableError(
+                DeliveryReadiness(
+                    status="unavailable",
+                    next_actor=WorkItemNextActor.NONE,
+                    reason_code="workspace-inspection-failed",
+                    basis=basis,
+                )
+            ) from exc
+        if (
+            request.expected_contract_digest != basis.contract_digest
+            or request.expected_frontier_digest != basis.frontier_digest
+            or request.expected_change_head != head
+            or request.expected_reviewed_head != coordination.last_reviewed_commit
+        ):
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
+        if request.category == "custody-preflight" and (
+            request.expected_workspace_fingerprint != fingerprint
+            or not set(request.paths) <= set(paths)
+            or (request.code.value == "workspace-dirty" and not paths)
+            or (request.code.value == "workspace-preflight-failed" and reason is None)
+        ):
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
 
     def mark_change_ready(
         self,
@@ -4072,7 +4158,7 @@ class PortfolioApplication:
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         """List grouped Cockpit views from exact per-change snapshots."""
         return tuple(
-            WorkItemProjector(snapshot).group_view()
+            self._read_projector(snapshot).group_view()
             for snapshot in self._portfolio_snapshots()
             if snapshot.contract.change_id not in self._runtime_reconciliation_errors
             if self._is_work_portfolio_visible(snapshot)
@@ -4086,7 +4172,7 @@ class PortfolioApplication:
         """Return grouped work and operating facts from one immutable capture."""
         snapshots = self._portfolio_snapshots()
         groups = tuple(
-            WorkItemProjector(snapshot).group_view()
+            self._read_projector(snapshot).group_view()
             for snapshot in snapshots
             if snapshot.contract.change_id not in self._runtime_reconciliation_errors
             if self._is_work_portfolio_visible(snapshot)
@@ -4094,7 +4180,12 @@ class PortfolioApplication:
         return PortfolioReadView(
             groups=groups,
             operating=self._portfolio_operating_view(snapshots, groups),
-            health=self._delivery_health_view(),
+            health=self._delivery_health_view(inspect_workspaces=False),
+            unavailable_changes=tuple(
+                self._unavailable_change(change_id)
+                for change_id, observation in sorted(self._discovered_changes.items())
+                if not observation.actionable_runtime or change_id in self._runtime_reconciliation_errors
+            ),
         )
 
     def portfolio_operating_view(self) -> PortfolioOperatingView:
@@ -4323,9 +4414,7 @@ class PortfolioApplication:
             )
             if diagnostic is None and inventory.remote_head == expected_remote_head:
                 self._fail("expected quarantined remote snapshot diagnostic is absent")
-            change_diagnostics = tuple(
-                item for item in self._startup_health_diagnostics if item.change_id == change_id
-            )
+            change_diagnostics = tuple(item for item in self._startup_health_diagnostics if item.change_id == change_id)
             if len(change_diagnostics) != 1 or not (
                 change_diagnostics[0].source == "remote-state"
                 and change_diagnostics[0].code == expected_diagnostic_code
@@ -4608,13 +4697,15 @@ class PortfolioApplication:
                 f"{self._runtime_reconciliation_errors[change_id]}"
             )
 
-    def _delivery_health_view(self, *, scoped_change_id: str | None = None) -> DeliveryHealthView:
+    def _delivery_health_view(
+        self, *, scoped_change_id: str | None = None, inspect_workspaces: bool = True
+    ) -> DeliveryHealthView:
         diagnostics: list[DeliveryHealthDiagnostic] = [
             *self._startup_health_diagnostics,
         ]
         diagnosed_change_ids = {diagnostic.change_id for diagnostic in diagnostics if diagnostic.change_id is not None}
         for change_id, runtime in sorted(self._runtimes.items()):
-            if change_id not in diagnosed_change_ids:
+            if inspect_workspaces and change_id not in diagnosed_change_ids:
                 out_of_band = self._out_of_band_head_diagnostic(change_id)
                 if out_of_band is not None:
                     diagnostics.append(out_of_band)
@@ -4978,60 +5069,64 @@ class PortfolioApplication:
                 )
             self._fail(f"work item is absent: {work_item_id}", exc)
 
-    def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
+    def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView | DeliveryUnavailableChangeView:
         """Show semantic and operator detail from one exact snapshot."""
+        self._reconcile_runtimes()
+        observation = self._discovered_changes.get(change_id)
+        if observation is not None and not observation.actionable_runtime:
+            return self._unavailable_change(change_id)
         runtime = self._runtime(change_id)
+        return self._captured_detail(runtime, self._work_item_projector(runtime), item_key)
+
+    def _captured_detail(
+        self,
+        runtime: DeliveryRuntime,
+        projector: WorkItemProjector,
+        item_key: str,
+    ) -> WorkItemDetailView:
+        change_id = runtime.contract.change_id
         try:
-            view = self._work_item_projector(runtime).show_view(item_key)
+            view = projector.show_view(item_key)
         except (KeyError, StopIteration) as exc:
             self._fail(f"work item is absent: {item_key}", exc)
         if view.publication is None:
             return view
-        cleanup = self._worktree_cleanup_view(runtime)
-        conflict = self._workspace_manager.show(change_id).target_sync_conflict
-        retained = next(
-            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
-            None,
+        coordination = self._workspace_manager.show(change_id)
+        conflict = coordination.target_sync_conflict
+        conflict_view = (
+            WorkItemTargetSyncConflictView(
+                conflict_id=conflict.conflict_id,
+                operation_id=conflict.operation_id,
+                target_head=conflict.target_head,
+                change_head_before=conflict.change_head_before,
+                conflict_paths=conflict.conflict_paths,
+            )
+            if conflict is not None
+            else None
         )
-        recovery = self._worktree_recovery_view(retained) if retained is not None else None
-        publication = view.publication.model_copy(
-            update={
-                "worktree_cleanup": cleanup,
-                "worktree_recovery": recovery,
-                "target_sync_conflict": (
-                    WorkItemTargetSyncConflictView(
-                        conflict_id=conflict.conflict_id,
-                        operation_id=conflict.operation_id,
-                        target_head=conflict.target_head,
-                        change_head_before=conflict.change_head_before,
-                        conflict_paths=conflict.conflict_paths,
-                    )
-                    if conflict is not None
-                    else None
-                ),
+        publication = view.publication.model_copy(update={"target_sync_conflict": conflict_view})
+        if view.readiness is not None:
+            ready = view.readiness.executable and view.readiness.operation is WorkItemActionKind.FINALIZE
+            publication = publication.model_copy(
+                update={
+                    "ready_for_finalization": ready,
+                    "readiness_diagnostics": () if ready else (view.readiness.reason_code,),
+                }
+            )
+        if coordination.worktree_cleanup is None and (
+            publication.phase in {
+                WorkItemPublicationPhase.ABANDONED,
+                WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
             }
-        )
-        if publication.phase in {
-            WorkItemPublicationPhase.READY_FOR_FINALIZATION,
-            WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
-        }:
-            try:
-                finalization_context = self.show_finalization_context(change_id)
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                diagnostic = str(exc) or "Finalization readiness could not be inspected."
-                publication = publication.model_copy(
-                    update={
-                        "ready_for_finalization": False,
-                        "readiness_diagnostics": (diagnostic,),
-                    }
-                )
-            else:
-                publication = publication.model_copy(
-                    update={
-                        "ready_for_finalization": finalization_context.ready_for_finalization,
-                        "readiness_diagnostics": finalization_context.readiness_diagnostics,
-                    }
-                )
+            or not coordination.worktree_path.exists()
+        ):
+            retained = self._workspace_manager.inspect_retained(change_id, coordination)
+            publication = publication.model_copy(
+                update={
+                    "worktree_cleanup": self._worktree_cleanup_view(runtime, retained),
+                    "worktree_recovery": self._worktree_recovery_view(retained),
+                }
+            )
         return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
@@ -5114,16 +5209,181 @@ class PortfolioApplication:
         return self._runtime(change_id).preview_administrative_move(outcome_id, target)
 
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
-        return WorkItemProjector(self._delivery_snapshot(runtime))
+        return self._read_projector(self._delivery_snapshot(runtime))
 
-    def _worktree_cleanup_view(self, runtime: DeliveryRuntime) -> WorkItemWorktreeCleanupView | None:
-        change_id = runtime.contract.change_id
-        retained = next(
-            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
-            None,
+    def _read_projector(self, snapshot: DeliveryPortfolioSnapshot) -> WorkItemProjector:
+        cards = WorkItemProjector(snapshot).group_view().items
+        basis = DeliveryReadinessBasis(
+            contract_digest=contract_fingerprint(snapshot.contract),
+            frontier_digest=snapshot.version,
+            candidate_head=snapshot.frontier.finalization.exact_head if snapshot.frontier.finalization else None,
         )
-        if retained is None:
-            return None
+        workspace_reason = None
+        needs_workspace = self._supports_finalization(snapshot.frontier) or any(
+            card.action.kind is WorkItemActionKind.FINALIZE for card in cards
+        )
+        if needs_workspace and not self._snapshot_has_active_claims(snapshot):
+            basis, workspace_reason = self._capture_readiness_workspace(snapshot, basis)
+        try:
+            reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
+        except FinalizationReportError:
+            reports = None
+        basis = basis.model_copy(update={"diagnostic_sequence": reports.sequence if reports is not None else None})
+        decisions = tuple(
+            self._with_finalization_report(self._card_readiness(snapshot, card, basis, workspace_reason), reports)
+            for card in cards
+        )
+        return WorkItemProjector(snapshot, decisions)
+
+    @staticmethod
+    def _with_finalization_report(
+        decision: DeliveryReadiness,
+        reports: FinalizationReportSnapshot | None,
+    ) -> DeliveryReadiness:
+        if reports is None:
+            return decision.model_copy(
+                update={
+                    "reason_code": "report-store-unavailable"
+                    if decision.reason_code == "ready"
+                    else decision.reason_code,
+                    "checks_state": "passed" if decision.checks_state == "passed" else "unknown",
+                }
+            )
+        if not reports.reports:
+            return decision
+        report = reports.reports[-1]
+        current = (
+            report.request.expected_change_head == decision.basis.candidate_head
+            and report.request.expected_contract_digest == decision.basis.contract_digest
+            and decision.checks_state != "passed"
+        )
+        updates = {
+            "last_attempt": FinalizationAttempt(report=report, applicability="current" if current else "historical")
+        }
+        if current and decision.reason_code not in {"workspace-dirty", "workspace-inspection-failed"}:
+            updates["checks_state"] = report.request.checks_state
+        if current and decision.executable and decision.operation is WorkItemActionKind.FINALIZE:
+            updates["action"] = decision.action.model_copy(update={"label": "Retry verification"})
+        return decision.model_copy(update=updates)
+
+    def _capture_readiness_workspace(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        basis: DeliveryReadinessBasis,
+    ) -> tuple[DeliveryReadinessBasis, str | None]:
+        try:
+            coordination = self._workspace_manager.show(snapshot.contract.change_id)
+            basis = basis.model_copy(update={"reviewed_head": coordination.last_reviewed_commit})
+            if coordination.writer is not None or coordination.publication_lease is not None:
+                return basis, "active-custody"
+            coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
+                snapshot.contract.change_id,
+                tuple(result.completed_commit for binding in snapshot.frontier.bindings for result in binding.results),
+            )
+            basis = basis.model_copy(update={"candidate_head": head, "workspace_fingerprint": fingerprint})
+            invalidation = snapshot.frontier.finalization_invalidation
+            if invalidation and invalidation.reason == "review-repair" and head == invalidation.expected_head:
+                reason = "review-repair"
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+            return basis, "workspace-inspection-failed"
+        return basis, reason
+
+    @staticmethod
+    def _supports_finalization(frontier: DeliveryFrontier) -> bool:
+        return (
+            frontier.finalization is None
+            and frontier.change_completion is None
+            and frontier.change_abandonment is None
+            and frontier.change_deferral is None
+            and frontier.change_disposition is None
+            and frontier.integration_repair_claim is None
+            and all(
+                binding.stage is DeliveryStage.COMPLETED
+                and binding.active_claim is None
+                and binding.recovery_attention is None
+                and not any(request.resolution is None for request in binding.requests)
+                and (binding.block is None or binding.block.resolved)
+                and tuple(result.task_id for result in binding.results) == binding.task_ids
+                for binding in frontier.bindings
+            )
+        )
+
+    @classmethod
+    def _captured_action(cls, frontier: DeliveryFrontier, card: WorkItemCardView) -> WorkItemAction:
+        if card.scope is WorkItemScope.CHANGE_PUBLICATION and cls._supports_finalization(frontier):
+            return WorkItemAction(
+                kind=WorkItemActionKind.FINALIZE, label="Finalize Change", command=f"/finalize-change {card.change_id}"
+            )
+        if card.action.kind is WorkItemActionKind.FINALIZE:
+            return WorkItemAction()
+        if (
+            card.scope is WorkItemScope.OUTCOME
+            and card.stage is not None
+            and card.stage.value in {"planning", "implementation"}
+            and card.needs is WorkItemNeed.NONE
+            and card.activity.state is WorkItemActivityState.READY
+            and card.action.kind is WorkItemActionKind.NONE
+        ):
+            return WorkItemAction(kind=WorkItemActionKind.START_ORCHESTRATION, label="Start Orchestration")
+        return card.action
+
+    @staticmethod
+    def _action_prerequisites(operation: WorkItemActionKind | None, workspace_reason: str | None) -> tuple[str, str]:
+        if operation is WorkItemActionKind.FINALIZE and workspace_reason:
+            return ("unavailable" if workspace_reason == "workspace-inspection-failed" else "blocked"), workspace_reason
+        if operation is None:
+            return "waiting", "publication-wait"
+        return "ready", "ready"
+
+    @classmethod
+    def _card_readiness(
+        cls,
+        snapshot: DeliveryPortfolioSnapshot,
+        card: WorkItemCardView,
+        basis: DeliveryReadinessBasis,
+        workspace_reason: str | None,
+    ) -> DeliveryReadiness:
+        frontier = snapshot.frontier
+        finalization = card.scope is WorkItemScope.CHANGE_PUBLICATION and cls._supports_finalization(frontier)
+        action = cls._captured_action(frontier, card)
+        operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
+        status, reason = "ready", "ready"
+        if (
+            card.activity.state is WorkItemActivityState.WORKING
+            or (
+                card.scope is WorkItemScope.CHANGE_PUBLICATION
+                and (any(binding.active_claim for binding in frontier.bindings) or frontier.integration_repair_claim)
+            )
+            or (card.scope is WorkItemScope.CHANGE_PUBLICATION and workspace_reason == "active-custody")
+        ):
+            status, reason = "running", "active-custody"
+        elif frontier.change_completion is not None or frontier.change_abandonment is not None:
+            status, reason = "complete", "change-terminal"
+        elif frontier.change_deferral is not None:
+            status, reason = ("ready" if operation else "blocked"), "change-paused"
+        elif card.scope is WorkItemScope.OUTCOME and card.stage is not None and card.stage.value == "completed":
+            status, reason = "complete", "change-terminal"
+        elif card.needs is WorkItemNeed.DEPENDENCY:
+            status, reason = "waiting", "dependency-wait"
+        elif card.needs is WorkItemNeed.YOU and not finalization:
+            status, reason = ("ready" if operation else "blocked"), "request-action"
+        else:
+            status, reason = cls._action_prerequisites(operation, workspace_reason)
+        executable = status == "ready" and operation is not None
+        return DeliveryReadiness(
+            status=status,
+            operation=operation,
+            executable=executable,
+            next_actor=WorkItemNextActor.AGENT if finalization else card.next_actor,
+            reason_code=reason,
+            checks_state="passed" if frontier.finalization is not None else "not-run",
+            basis=basis,
+            action=action if executable else None,
+        )
+
+    def _worktree_cleanup_view(
+        self, runtime: DeliveryRuntime, retained: RetainedChangeWorktree
+    ) -> WorkItemWorktreeCleanupView:
         projection = self._retained_change_worktree_view(retained)
         try:
             completion = runtime.completion_receipt()
@@ -6020,12 +6280,31 @@ class PortfolioApplication:
         """Diagnose or apply one high-level repair proposal."""
         return self.repair_change(change_id, proposal_id, confirmed_lost=confirmed_lost)
 
-    def get_change(self, change_id: str) -> DeliveryChangeView:
+    def _unavailable_change(self, change_id: str) -> DeliveryUnavailableChangeView:
+        observation = self._discovered_changes[change_id]
+        return DeliveryUnavailableChangeView(
+            change_id=change_id,
+            title=observation.contract.title if observation.contract else None,
+            readiness=DeliveryReadiness(
+                status="unavailable",
+                next_actor=WorkItemNextActor.NONE,
+                reason_code="runtime-unavailable",
+                checks_state="unknown",
+                basis=DeliveryReadinessBasis(contract_digest=observation.contract_fingerprint),
+            ),
+        )
+
+    def get_change(self, change_id: str) -> DeliveryChangeView | DeliveryUnavailableChangeView:
         """Return one coherent Change view without requiring caller-side projection joins."""
+        self._reconcile_runtimes()
+        observation = self._discovered_changes.get(change_id)
+        if observation is not None and (not observation.actionable_runtime or change_id not in self._runtimes):
+            return self._unavailable_change(change_id)
         runtime = self._runtime(change_id)
-        frontier_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
         repair = self.repair_change(change_id)
-        projector = self._work_item_projector(runtime)
+        snapshot = self._delivery_snapshot(runtime)
+        projector = self._read_projector(snapshot)
+        frontier_digest = snapshot.version
         items = projector.group_view().items
         if not items:
             self._fail(f"Change has no projected work items: {change_id}")
@@ -6038,8 +6317,8 @@ class PortfolioApplication:
             ),
             "publication" if any(item.item_key == "publication" for item in items) else items[0].item_key,
         )
-        detail = self.show_work_item_view(change_id, item_key)
-        health = self.delivery_health(change_id)
+        detail = self._captured_detail(runtime, projector, item_key)
+        health = self._delivery_health_view(scoped_change_id=change_id, inspect_workspaces=False)
         unresolved_outcomes = tuple(
             DeliveryUnresolvedOutcome(
                 outcome_id=outcome_detail.card.work_item_id,
@@ -6066,6 +6345,7 @@ class PortfolioApplication:
             health=health,
             repair=repair if repair.proposal is not None else None,
             unresolved_outcomes=unresolved_outcomes,
+            readiness=detail.readiness,
         )
 
     def set_change_intent(self, intent: DeliveryChangeIntent) -> DeliveryChangeIntentResult:

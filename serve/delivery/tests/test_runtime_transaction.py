@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,72 @@ from owlbear_delivery.runtime_transaction import (
     TransactionPathError,
 )
 from owlbear_delivery.storage_io import locked_roots
+
+
+def test_contained_report_transaction_recovers_after_directory_swap(tmp_path: Path) -> None:
+    root = tmp_path / "reports-root"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "report.json"
+    sentinel.write_bytes(b"untouched")
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    transaction = RuntimeTransaction(
+        root,
+        "report",
+        (
+            TransactionParticipant(root, Path("reports/report.json"), b"report"),
+            TransactionParticipant(root, Path("current.json"), b"pointer"),
+        ),
+    )
+
+    def swap(stage: str) -> None:
+        if stage == "before-publication":
+            (root / "reports").symlink_to(outside, target_is_directory=True)
+
+    try:
+        with pytest.raises(OSError, match="Not a directory"):
+            transaction.commit_contained(descriptor, failure=swap)
+        assert sentinel.read_bytes() == b"untouched"
+        assert not (root / "current.json").exists()
+        (root / "reports").unlink()
+        RuntimeTransaction.recover_contained(root, descriptor)
+        assert (root / "reports/report.json").read_bytes() == b"report"
+        assert (root / "current.json").read_bytes() == b"pointer"
+    finally:
+        os.close(descriptor)
+
+
+def test_contained_transaction_rejects_root_swap_and_escaped_recovery(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "current.json"
+    sentinel.write_bytes(b"untouched")
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    transaction = RuntimeTransaction(root, "report", (TransactionParticipant(root, Path("current.json"), b"report"),))
+
+    def swap(stage):
+        if stage == "before-publication":
+            root.rename(tmp_path / "preserved")
+            root.symlink_to(outside, target_is_directory=True)
+
+    try:
+        with pytest.raises(TransactionPathError):
+            transaction.commit_contained(descriptor, failure=swap)
+        assert sentinel.read_bytes() == b"untouched"
+        root.unlink()
+        (tmp_path / "preserved").rename(root)
+        manifest_path = root / "transactions/report.yaml"
+        manifest = yaml.safe_load(manifest_path.read_text())
+        manifest["participants"][0]["root"] = str(outside)
+        manifest_path.write_text(yaml.safe_dump(manifest))
+        with pytest.raises(TransactionPathError):
+            RuntimeTransaction.recover_contained(root, descriptor)
+        assert sentinel.read_bytes() == b"untouched"
+    finally:
+        os.close(descriptor)
 
 
 def test_locked_roots_rejects_symlink_roots_and_lock_files(tmp_path: Path) -> None:

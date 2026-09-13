@@ -29,6 +29,7 @@ from owlbear_cockpit.target_models import (
     ClearBlockBody,
     ConfirmLostClaimBody,
     DeliveryHealthResponse,
+    DeliveryUnavailableChangeResponse,
     DesignWorkDetailResponse,
     ExternalHeadAdoptionResponse,
     NeedsCounts,
@@ -43,10 +44,12 @@ from owlbear_cockpit.target_models import (
     TargetSyncBody,
     TargetSyncConflictBody,
     TargetSyncResponse,
+    WorkItemAvailableDetailResponse,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
     WorkItemPublicationReconciliationResponse,
+    WorkItemUnavailableDetailResponse,
 )
 from owlbear_delivery.completed_history import (
     CompletedChangePage,
@@ -63,6 +66,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryAnswerKind,
     DeliveryChangeIntent,
     DeliveryChangeIntentKind,
+    DeliveryUnavailableChangeView,
     PortfolioApplication,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
@@ -92,6 +96,10 @@ class TargetCockpitService:
         health = getattr(view, "health", DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY))
         return WorkItemPortfolioResponse(
             groups=view.groups,
+            unavailable_changes=tuple(
+                DeliveryUnavailableChangeResponse.from_view(item)
+                for item in view.unavailable_changes
+            ),
             totals=_portfolio_totals(view.groups),
             operating=PortfolioOperatingResponse.from_view(view.operating),
             health=DeliveryHealthResponse.from_view(health),
@@ -100,7 +108,9 @@ class TargetCockpitService:
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
         """Return semantic and operator detail from one exact snapshot."""
         item = self._invoke(lambda: self._application.show_work_item_view(change_id, item_key))
-        return WorkItemDetailResponse(item=item)
+        if isinstance(item, DeliveryUnavailableChangeView):
+            return WorkItemUnavailableDetailResponse.from_view(item)
+        return WorkItemAvailableDetailResponse(item=item)
 
     def show_design_work(self, change_id: str) -> DesignWorkDetailResponse:
         """Return verified authored sources for one pre-admission Design package."""

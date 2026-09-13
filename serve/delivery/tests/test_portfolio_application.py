@@ -149,7 +149,13 @@ from owlbear_delivery.delivery_contract_discovery import (
     contract_fingerprint,
     discover_persisted_changes,
 )
+from owlbear_delivery.delivery_runtime import parse_delivery_frontier
 from owlbear_delivery.delivery_state import DeliveryStateSnapshotDiagnostic, DeliveryStateSnapshotInventory
+from owlbear_delivery.finalization_reports import (
+    FinalizationFailureCode,
+    FinalizationReportError,
+    ReportFinalizationFailure,
+)
 from owlbear_delivery.portfolio_application import (
     DeliveryActionBusyError,
     DeliveryActionSelection,
@@ -1123,9 +1129,7 @@ def test_selected_acquisition_holds_checkpoint_lock_through_activation(tmp_path:
 
 
 def test_selected_acquisition_busy_checkpoint_releases_portfolio_lock(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
-        tmp_path, {"change-a": DeliveryStage.PLANNING}
-    )
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     before = runtimes["change-a"].frontier_bytes()
     selection = DeliveryActionSelection(
         change_id="change-a",
@@ -1146,9 +1150,7 @@ def test_selected_acquisition_busy_checkpoint_releases_portfolio_lock(tmp_path: 
 
 
 def test_selected_acquisition_repeated_call_reports_active_without_second_launch(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path, {"change-a": DeliveryStage.PLANNING}
-    )
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     selection = DeliveryActionSelection(
         change_id="change-a",
         outcome_id="OUT-001",
@@ -2672,6 +2674,216 @@ def test_abandoned_target_sync_conflict_can_be_discarded_and_cleaned(
     assert application.list_retained_change_worktrees() == ()
 
 
+@pytest.mark.parametrize("dirty", [False, True])
+def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty: bool) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    coordination = coordinator.show("change-a")
+    if dirty:
+        (coordination.worktree_path / "product.txt").unlink()
+    before = runtimes["change-a"].frontier_bytes()
+    context = application.show_finalization_context("change-a")
+    group = application.list_changes().groups[0]
+    card = next(item for item in group.items if item.item_key == "publication")
+    detail = application.show_work_item_view("change-a", "publication")
+    with patch.object(
+        application._workspace_manager,
+        "observed_change_head",
+        wraps=application._workspace_manager.observed_change_head,
+    ) as observe:
+        change = application.get_change("change-a")
+    assert observe.call_count == 1
+    assert card.readiness == detail.readiness == change.readiness == context.readiness
+    assert context.readiness.executable is not dirty
+    assert context.readiness.reason_code == ("workspace-dirty" if dirty else "ready")
+    assert context.readiness.checks_state == "not-run"
+    assert runtimes["change-a"].frontier_bytes() == before
+    if not dirty:
+        (coordination.worktree_path / "product.txt").write_text("changed after read\n")
+    with pytest.raises(PortfolioApplicationError):
+        application.finalize_change("change-a", _finalization_request("change-a", coordination.last_reviewed_commit))
+    assert runtimes["change-a"].finalization() is None
+
+
+@pytest.mark.parametrize("failure", [PermissionError("private detail"), subprocess.TimeoutExpired("git", 10)])
+def test_required_workspace_inspection_is_bounded_and_isolated(tmp_path: Path, failure: Exception) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.DESIGN}
+    )
+    manager = application._workspace_manager
+    with patch.object(manager, "capture_finalization_workspace", side_effect=failure) as capture:
+        view = application.list_changes()
+    assert capture.call_count == 1
+    card = next(item for item in view.groups[0].items if item.item_key == "publication")
+    assert card.readiness.status == "unavailable"
+    assert card.readiness.reason_code == "workspace-inspection-failed"
+    assert card.readiness.basis.workspace_fingerprint is None
+    assert not card.readiness.executable
+    assert view.groups[1].change_id == "change-b"
+
+
+def _failure_request(application: PortfolioApplication, **updates):
+    readiness = application.show_finalization_context("change-a").readiness
+    return ReportFinalizationFailure(
+        **{
+            "change_id": "change-a",
+            "expected_contract_digest": readiness.basis.contract_digest,
+            "expected_frontier_digest": readiness.basis.frontier_digest,
+            "expected_change_head": readiness.basis.candidate_head,
+            "expected_reviewed_head": readiness.basis.reviewed_head,
+            "expected_diagnostic_sequence": readiness.basis.diagnostic_sequence,
+            "attempt_key": "attempt-1",
+            "category": "maintained-check",
+            "code": FinalizationFailureCode.MAINTAINED_CHECK_FAILED,
+            "checks_state": "failed",
+            **updates,
+        }
+    )
+
+
+def test_application_retains_failure_without_lifecycle_effect_and_prioritizes_success(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    request = _failure_request(application)
+    before = runtimes["change-a"].frontier_bytes()
+    custody = coordinator.show("change-a")
+    report = application.report_finalization_failure(request)
+    assert runtimes["change-a"].frontier_bytes() == before
+    assert coordinator.show("change-a") == custody
+    view = application.get_change("change-a")
+    assert view.readiness.last_attempt.report == report
+    assert view.readiness.last_attempt.applicability == "current"
+    assert view.readiness.checks_state == "failed"
+    assert view.readiness.action.label == "Retry verification"
+    assert view.readiness.executable
+    application.finalize_change("change-a", _finalization_request("change-a", custody.last_reviewed_commit))
+    successful = application.show_finalization_context("change-a")
+    assert successful.readiness.checks_state == "passed"
+    assert successful.readiness.last_attempt.applicability == "historical"
+    assert (state_root / "finalization-reports/change-a/reports" / f"{report.report_id}.json").is_file()
+    assert application.report_finalization_failure(request) == report
+
+
+def test_application_restart_marks_changed_candidate_report_historical_and_replays(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    request = _failure_request(application)
+    report = application.report_finalization_failure(request)
+    restarted = PortfolioApplication(
+        {},
+        PortfolioApplicationDependencies(
+            target_root=state_root,
+            package_store=application._package_store,
+            authority_registry=application._authority_registry,
+            coordinator=coordinator,
+            workspace_manager=application._workspace_manager,
+        ),
+        PortfolioApplicationConfig(
+            package_root=application._package_root, execution_capacity=3, role_policies=_policies()
+        ),
+    )
+    assert restarted.get_change("change-a").readiness.last_attempt.report == report
+    _commit_local_descendant(coordinator.show("change-a"))
+    decision = restarted.get_change("change-a").readiness
+    assert decision.last_attempt.applicability == "historical"
+    assert decision.executable
+    assert restarted.report_finalization_failure(request) == report
+    with pytest.raises(FinalizationReportError, match="diagnostic-conflict"):
+        restarted.report_finalization_failure(
+            request.model_copy(update={"attempt_key": "new-key", "expected_diagnostic_sequence": 1})
+        )
+
+
+def test_success_survives_report_retirement_failure_and_replay_reconciles(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    report = application.report_finalization_failure(_failure_request(application))
+    pointer = state_root / "finalization-reports/change-a/current.json"
+    before = pointer.read_bytes()
+    request = _finalization_request("change-a", coordinator.show("change-a").last_reviewed_commit)
+    with patch(
+        "owlbear_delivery.portfolio_application.FinalizationReportStore.retire",
+        side_effect=FinalizationReportError("report-store-unavailable"),
+    ):
+        receipt = application.finalize_change("change-a", request)
+    assert application.get_change("change-a").readiness.checks_state == "passed"
+    assert pointer.read_bytes() == before
+    assert application.finalize_change("change-a", request) == receipt
+    assert json.loads(pointer.read_bytes())["report_id"] is None
+    assert (pointer.parent / "reports" / f"{report.report_id}.json").is_file()
+
+
+def test_custody_reporting_rejects_stale_fingerprint_and_unobserved_paths(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    path = coordinator.show("change-a").worktree_path / "product.txt"
+    path.write_text("dirty\n")
+    basis = application.show_finalization_context("change-a").readiness.basis
+    request = _failure_request(
+        application,
+        category="custody-preflight",
+        code=FinalizationFailureCode.WORKSPACE_DIRTY,
+        checks_state="not-run",
+        expected_workspace_fingerprint=basis.workspace_fingerprint,
+        paths=("absent.txt",),
+    )
+    with pytest.raises(FinalizationReportError, match="diagnostic-conflict"):
+        application.report_finalization_failure(request)
+    path.write_text("different dirt\n")
+    with pytest.raises(FinalizationReportError, match="diagnostic-conflict"):
+        application.report_finalization_failure(request.model_copy(update={"paths": ("product.txt",)}))
+    assert not (state_root / "finalization-reports/change-a/current.json").exists()
+    assert path.read_text() == "different dirt\n"
+
+
+def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.DESIGN}
+    )
+    path = state_root / "changes/change-a/frontier.json"
+    path.write_bytes(b"{invalid canonical bytes")
+    view = application.get_change("change-a")
+    assert view.kind == "unavailable"
+    assert view.readiness.basis.frontier_digest is None
+    assert view.readiness.action is None
+    assert application.show_work_item_view("change-a", "publication") == view
+    listing = application.list_changes()
+    assert listing.unavailable_changes == (view,)
+    assert listing.groups[0].change_id == "change-b"
+    with pytest.raises(json.JSONDecodeError):
+        parse_delivery_frontier(path.read_bytes())
+    with pytest.raises(PortfolioApplicationError):
+        application.get_change("unknown-change")
+    assert path.read_bytes() == b"{invalid canonical bytes"
+
+
+@pytest.mark.parametrize(
+    ("stage", "operation"),
+    [
+        (DeliveryStage.DESIGN, "resume-design"),
+        (DeliveryStage.PLANNING, "start-orchestration"),
+        (DeliveryStage.IMPLEMENTATION, "start-orchestration"),
+    ],
+)
+def test_nonfinalization_ready_actions_skip_workspace_inspection(tmp_path: Path, stage, operation) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": stage})
+    with patch.object(
+        application._workspace_manager,
+        "observed_change_head",
+        side_effect=AssertionError("irrelevant workspace inspection"),
+    ):
+        decision = application.get_change("change-a").readiness
+    assert decision.status == "ready"
+    assert decision.operation.value == operation
+    assert decision.executable
+    assert decision.basis.workspace_fingerprint is None
+
+
+def test_active_lifecycle_guard_survives_readiness_capture(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    acquired = application.acquire_frontier_work()
+    assert len(acquired.launch_packages) == 1
+    active = application.get_change("change-a").readiness
+    assert active.status == "running"
+    assert not active.executable
+    assert active.reason_code == "active-custody"
+
+
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -4100,6 +4312,14 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert len(retained) == 1
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
+    detail = application.show_work_item_view("change-a", "publication")
+    change = application.get_change("change-a")
+    assert detail.publication.worktree_cleanup == change.detail.publication.worktree_cleanup
+    assert detail.publication.worktree_cleanup.eligible is True
+    assert detail.publication.worktree_cleanup.completion_id == receipt.completion_id
+    application.cleanup_change_worktree("change-a", receipt.completion_id)
+    assert application.show_work_item_view("change-a", "publication").publication.worktree_cleanup is None
+    assert application.get_change("change-a").detail.publication.worktree_recovery is None
     user_checkout_before.assert_unchanged(repository)
 
 
@@ -4156,16 +4376,24 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
     assert application.cleanup_abandoned_change_worktree("change-a") == receipt
     assert application.list_retained_change_worktrees() == ()
+    assert application.show_work_item_view("change-a", "publication").publication.worktree_cleanup is None
+    assert application.get_change("change-a").detail.publication.worktree_recovery is None
     before.assert_unchanged(repository)
 
 
 def test_change_worktree_recovery_recreates_missing_worktree_and_replays_receipt(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
+        {"change-a": DeliveryStage.COMPLETED},
     )
     coordination = application._workspace_manager.show("change-a")
     shutil.rmtree(coordination.worktree_path)
+
+    detail = application.show_work_item_view("change-a", "publication")
+    change = application.get_change("change-a")
+    assert detail.publication.worktree_recovery == change.detail.publication.worktree_recovery
+    assert detail.publication.worktree_recovery.eligible is True
+    assert detail.publication.worktree_recovery.recovery_reviewed_head == coordination.last_reviewed_commit
 
     receipt = application.recover_change_worktree(
         "change-a",

@@ -83,6 +83,40 @@ authority, and a missing or invalid cursor safely starts a new rotation. Recover
 transaction manifests live under
 `.owlbear/delivery/runtime/transactions/`.
 
+## Readiness And Finalization Diagnostics
+
+`PortfolioApplication` captures action readiness for Change, Work Item card/detail, and finalization
+context reads. `DeliveryReadiness` carries status, the existing operation and next-actor values,
+execution eligibility, a stable reason code, finalization checks state, nullable observed basis,
+and an optional retained attempt. Required workspace inspection is bounded; an inspection failure
+is not evidence of a clean workspace. Finalization revalidates the workspace at its effect boundary.
+Independently timed reads are not a global filesystem snapshot.
+
+`get_change` and detail reads distinguish `kind="available"` semantic runtime data from
+`kind="unavailable"` known but unreadable authority. Available data can still have unavailable
+workspace readiness. `list_changes().unavailable_changes` retains unreadable entries separately
+from normal groups. Unknown Changes remain errors; canonical parsing is unchanged.
+
+`report_finalization_failure(ReportFinalizationFailure(...))` accepts only bounded structural
+diagnostics bound to contract/frontier digests, candidate/reviewed heads, and diagnostic sequence.
+The ASCII attempt key is idempotent: an identical replay returns its immutable original report,
+even after the candidate changes, without moving the current pointer. New reports require current
+basis and sequence. Custody reports also require the observed fingerprint and matching dirty paths.
+There are no caller-supplied summaries, commands, logs, URLs, observer identities, or success proof.
+Unresolved check identity and exit detail remain null.
+
+Reports live under the injected runtime root at `finalization-reports/<change-id>/`, with a dedicated
+per-Change lock, contained recoverable transactions, immutable history, and a current pointer.
+The limits are 16 KiB per encoded report and 256 reports per Change; capacity does not evict replay
+history. Missing storage means no prior report. Unsafe, corrupt, or inaccessible storage reports
+`report-store-unavailable`, without a fallback location or automatic byte repair. Reports are
+host-local and excluded from portable Delivery snapshots.
+
+A current failed report does not veto an otherwise eligible retry, labelled `Retry verification`.
+Changed candidate or contract makes it historical. Current successful finalization proof takes
+precedence and retires only the matching pointer; failed retirement cannot undo success, and exact
+finalization replay can reconcile it. Ordinary reads neither create reports nor retire pointers.
+
 ## Configuration
 
 The package reads no environment variables. Canonical MCP and Cockpit startup uses the tracked

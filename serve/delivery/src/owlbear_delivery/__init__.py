@@ -197,6 +197,13 @@ from owlbear_delivery.draft_pull_request import (
     SupersedeDraftPullRequest,
     UpdateGeneratedPullRequestSummary,
 )
+from owlbear_delivery.finalization_reports import (
+    FinalizationAttempt,
+    FinalizationFailureCode,
+    FinalizationReport,
+    FinalizationReportError,
+    ReportFinalizationFailure,
+)
 from owlbear_delivery.portfolio_application import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
@@ -239,6 +246,7 @@ from owlbear_delivery.portfolio_application import (
     DeliveryStateSnapshotRepairReceipt,
     DeliveryStrandedFrontierRepairReceipt,
     DeliveryTargetSyncRepairReceipt,
+    DeliveryUnavailableChangeView,
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
@@ -291,6 +299,8 @@ from owlbear_delivery.target_contract import (
     compile_delivery_contract,
 )
 from owlbear_delivery.work_items import (
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
     WorkItemAttention,
     WorkItemDetail,
     WorkItemProjection,
@@ -438,6 +448,8 @@ __all__ = [
     "DeliveryPlanScope",
     "DeliveryQuarantinedSnapshotRepairProposal",
     "DeliveryQuarantinedSnapshotRepairReceipt",
+    "DeliveryReadiness",
+    "DeliveryReadinessBasis",
     "DeliveryRecoveryAttention",
     "DeliveryRequest",
     "DeliveryRequestKind",
@@ -473,6 +485,7 @@ __all__ = [
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
     "DeliveryTransition",
+    "DeliveryUnavailableChangeView",
     "DeliveryWorkerRole",
     "DesignCheckpointResult",
     "DesignPackageConflictError",
@@ -484,6 +497,10 @@ __all__ = [
     "DraftPullRequestPublicationReceipt",
     "DraftPullRequestPublisher",
     "DraftPullRequestSupersessionReceipt",
+    "FinalizationAttempt",
+    "FinalizationFailureCode",
+    "FinalizationReport",
+    "FinalizationReportError",
     "FinalizeDeliveryChange",
     "FindPublicationPullRequest",
     "GeneratedPullRequestSummaryReceipt",
@@ -532,6 +549,7 @@ __all__ = [
     "ReceiptCompletedChangeRecord",
     "RecoverOutOfBandHead",
     "RecoverPublicationBaseline",
+    "ReportFinalizationFailure",
     "RequiredPublicationChecksFailedError",
     "RetainedChangeWorktree",
     "RetryDelivery",

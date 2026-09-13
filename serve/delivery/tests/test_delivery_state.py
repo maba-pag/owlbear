@@ -669,6 +669,10 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
     before = (_git(repository, "rev-parse", "HEAD"), _git(repository, "status", "--porcelain"))
 
+    report = tmp_path / "state/finalization-reports/state-change/reports/host-only.json"
+    report.parent.mkdir(parents=True)
+    report.write_bytes(b"host-local diagnostic sentinel")
+
     receipt = _publish(publisher, runtime, manager, "state-change", "a" * 64, "state-one")
     replayed = _publish(publisher, runtime, manager, "state-change", "a" * 64, "state-one")
     snapshots = publisher.read_snapshots()
@@ -679,6 +683,11 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].change_id == "state-change"
     assert snapshots[0].contract == contract
     assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    assert "finalization-reports" not in _git(
+        remote, "ls-tree", "-r", "--name-only", "refs/heads/owlbear/delivery-state"
+    )
+    assert b"host-local diagnostic sentinel" not in snapshots[0].model_dump_json().encode()
+    assert report.read_bytes() == b"host-local diagnostic sentinel"
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
 

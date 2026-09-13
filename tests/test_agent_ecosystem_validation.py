@@ -98,6 +98,7 @@ _TARGET_ROLE_TOOLS = {
     "finalizer": {
         "show_finalization_context",
         "reconcile_finalization_head",
+        "report_finalization_failure",
         "finalize_change",
     },
 }
@@ -440,6 +441,40 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
 
     assert prompt_files
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
+
+
+def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
+    path = _PROMPTS_ROOT / "inspect-change.prompt.md"
+    metadata = _frontmatter(path)
+
+    assert metadata["mode"] == "ask"
+    assert metadata["tools"] == [
+        "owlbear-delivery/get_change",
+        "owlbear-delivery/delivery_health",
+    ]
+    content = path.read_text(encoding="utf-8")
+    assert "cannot enforce this read-only surface" in content
+    assert "raw Git" in content
+
+
+def test_prompt_validator_rejects_inspect_change_allowlist_drift(tmp_path: Path) -> None:
+    path = _write_prompt(
+        tmp_path / "prompts",
+        "inspect-change",
+        """---
+description: Inspect a Change
+mode: ask
+tools:
+  - owlbear-delivery/get_change
+  - owlbear-delivery/repair
+---
+Inspect the returned state.
+""",
+    )
+
+    errors = _PROMPT_VALIDATOR.validate_prompt(path)
+
+    assert any("exactly the read-only allowlist" in error for error in errors)
 
 
 def test_prompt_validator_rejects_unresolved_agent_and_skill(tmp_path: Path) -> None:
