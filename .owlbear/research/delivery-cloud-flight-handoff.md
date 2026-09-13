@@ -200,9 +200,16 @@ Expected absent cloud tools alone are not findings. No edits, fix commits, PR ap
 A new reviewer session is preferred; PR-thread context reuse must not be called context isolation.
 If PR/scope is missing, ask for its link. Do not guess a passing verdict without a comparison scope.
 
+Publish findings or the no-findings verdict as a comment on the reviewed package PR when permitted.
+If commenting is unavailable, return the full report in the persistent session result and a copy-ready
+Repair request that includes its link. Do not request broader permissions. The next worker must be
+able to retrieve the report; if the link is inaccessible, ask for the report text rather than guessing.
+
 ### Repair
 
-Read the named phase's latest review, current source and approved plan. Repair supported findings
+Retrieve and read the named phase's review from the package PR or supplied report link, verifying
+its phase and reviewed revision. If findings are missing or inaccessible, request the report before
+making review-driven edits. Read current source and the approved plan. Repair supported findings
 in that scope, explain any disagreement using code/test evidence, and preserve good prior work.
 Do not redesign the package or start the next phase. Run focused regression proof, update progress
 and map findings to fixes. Publish and request re-review of the new head; do not self-certify it.
@@ -342,8 +349,12 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 ## Operator Quick Start
 
 1. Have the local implementation owner finish/review D02 and publish `dev` plus this guide. Cloud
-   workers cannot see unpushed source or local chats. Run one real cloud setup/test pilot before relying
-   on it; in-process test feasibility alone does not establish cloud dependency/tool availability.
+   workers cannot see unpushed source or local chats. Run a bounded cloud pilot before relying on
+   unattended implementation. Success means the selected checkout's locked dependencies install,
+   one relevant focused in-process test passes, and the platform publishes a result/checkpoint that
+   a subsequent session can retrieve. Record the actual revision, command and result; no full suite,
+   live MCP, MegaLinter or test merge is required. If the pilot fails, identify the specific missing
+   capability and limit work to what can be verified; do not declare cloud execution ready.
 2. For a new package, select **maba-pag/owlbear**, starting branch **dev**, and the model/reasoning
    level in GitHub. Paste the first prompt with the desired ID. Only the ID changes.
 3. Read the resulting plan. On that PR, post the implementation prompt for its first phase. This
@@ -388,8 +399,14 @@ I approve the package plan presented in this PR for that phase. Follow the readi
 ### Platform Preparation
 
 Check account cloud access, model availability, budget and human approval requirements before flight.
-The requester may not qualify as the required approver of their own Copilot PR. A new cloud task
-creates a branch; an existing-PR comment normally updates that PR's branch. Use the latter for phases.
+Before relying on multiple sequential packages, inspect `dev`'s actual required checks and approval
+rules and confirm an eligible approver is available where required. The requester may not qualify
+as the required approver of their own Copilot PR. If merge eligibility cannot be established, continue
+useful work on the current package PR but do not start a dependent package or weaken protections.
+An agent review is not a substitute for a required human approval.
+
+A new cloud task creates a branch; an existing-PR comment normally updates that PR's branch.
+Use the latter for phases.
 
 Bootstrap uses current locked manifests and only required tools: uv/Python for backend, pinned
 Node/npm for UI, and Playwright browsers only for browser proof. A Copilot setup workflow must be
