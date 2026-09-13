@@ -25,7 +25,8 @@ from owlbear_delivery.publication_provider import (
     PublicationCheckKind,
     classify_publication_check,
 )
-from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
+from owlbear_delivery.portfolio_application import DeliveryUnavailableChangeView
+from owlbear_delivery.work_items import ChangeGroupView, DeliveryReadiness, WorkItemDetailView
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import (
@@ -163,19 +164,67 @@ class DeliveryHealthResponse(_TargetHTTPModel):
         )
 
 
+class DeliveryUnavailableChangeResponse(_TargetHTTPModel):
+    """Expose a known Change whose canonical runtime is unavailable."""
+
+    kind: Literal["unavailable"] = "unavailable"
+    change_id: str = Field(min_length=1)
+    title: str | None = None
+    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    readiness: DeliveryReadiness
+
+    @classmethod
+    def from_view(cls, view: DeliveryUnavailableChangeView) -> DeliveryUnavailableChangeResponse:
+        """Adapt one unavailable Change without inventing HTTP state."""
+        return cls(
+            change_id=view.change_id,
+            title=view.title,
+            diagnostics=view.diagnostics,
+            readiness=view.readiness,
+        )
+
+
+class WorkItemAvailableDetailResponse(_TargetHTTPModel):
+    """Semantic and operator detail from one exact available snapshot."""
+
+    kind: Literal["available"] = "available"
+    item: WorkItemDetailView
+
+
+class WorkItemUnavailableDetailResponse(_TargetHTTPModel):
+    """Degraded detail for a known Change without canonical runtime authority."""
+
+    kind: Literal["unavailable"] = "unavailable"
+    change_id: str = Field(min_length=1)
+    title: str | None = None
+    diagnostics: tuple[Literal["runtime-unavailable"], ...] = ("runtime-unavailable",)
+    readiness: DeliveryReadiness
+
+    @classmethod
+    def from_view(cls, view: DeliveryUnavailableChangeView) -> WorkItemUnavailableDetailResponse:
+        """Adapt unavailable detail without exposing mutation or custody state."""
+        return cls(
+            change_id=view.change_id,
+            title=view.title,
+            diagnostics=view.diagnostics,
+            readiness=view.readiness,
+        )
+
+
+WorkItemDetailResponse = Annotated[
+    WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse,
+    Field(discriminator="kind"),
+]
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
     """Return Change-grouped current Work Items and independent totals."""
 
     groups: tuple[ChangeGroupView, ...]
+    unavailable_changes: tuple[DeliveryUnavailableChangeResponse, ...] = ()
     totals: WorkItemPortfolioTotals
     operating: PortfolioOperatingResponse
     health: DeliveryHealthResponse
-
-
-class WorkItemDetailResponse(_TargetHTTPModel):
-    """Semantic and operator detail from one exact snapshot."""
-
-    item: WorkItemDetailView
 
 
 class PublicationCheckView(_TargetHTTPModel):

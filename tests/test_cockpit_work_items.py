@@ -20,6 +20,9 @@ from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    DeliveryReadiness,
+    DeliveryReadinessBasis,
+    DeliveryUnavailableChangeView,
     DeliveryAnswer,
     DeliveryAnswerKind,
     DeliveryChangeIntent,
@@ -121,10 +124,12 @@ class _DeliveryApplicationFake:
         self,
         failures: dict[str, Exception] | None = None,
         health: DeliveryHealthView | None = None,
+        unavailable_changes: tuple[DeliveryUnavailableChangeView, ...] = (),
     ) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self.failures = failures or {}
         self.health = health or DeliveryHealthView(status=DeliveryHealthStatus.HEALTHY)
+        self.unavailable_changes = unavailable_changes
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
@@ -136,6 +141,7 @@ class _DeliveryApplicationFake:
             groups=self._work_item_groups(),
             operating=self._portfolio_operating_view(),
             health=self.health,
+            unavailable_changes=self.unavailable_changes,
         )
 
     @staticmethod
@@ -248,8 +254,11 @@ class _DeliveryApplicationFake:
             design_bytes=b"# Design architecture\n",
         )
 
-    def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
+    def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView | DeliveryUnavailableChangeView:
         self.calls.append(("show", (change_id, item_key)))
+        unavailable = next((item for item in self.unavailable_changes if item.change_id == change_id), None)
+        if unavailable is not None:
+            return unavailable
         if item_key == "publication":
             card = WorkItemCardView(
                 item_key="publication",
@@ -615,8 +624,9 @@ class _DeliveryApplicationFake:
 def _client(
     failures: dict[str, Exception] | None = None,
     health: DeliveryHealthView | None = None,
+    unavailable_changes: tuple[DeliveryUnavailableChangeView, ...] = (),
 ) -> tuple[TestClient, _DeliveryApplicationFake]:
-    application = _DeliveryApplicationFake(failures, health)
+    application = _DeliveryApplicationFake(failures, health, unavailable_changes)
     return TestClient(assemble_target_app(application)), application  # type: ignore[arg-type]
 
 
@@ -771,6 +781,59 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert application.calls == [
         ("portfolio", ()),
         ("show", ("change-a", "outcome:OUT-001")),
+    ]
+
+
+def test_list_and_detail_preserve_known_unavailable_change_projection() -> None:
+    unavailable = DeliveryUnavailableChangeView(
+        change_id="unavailable-change",
+        title="Unreadable Change",
+        readiness=DeliveryReadiness(
+            status="unavailable",
+            next_actor=WorkItemNextActor.NONE,
+            reason_code="runtime-unavailable",
+            checks_state="unknown",
+            basis=DeliveryReadinessBasis(contract_digest="a" * 64),
+        ),
+    )
+    client, application = _client(unavailable_changes=(unavailable,))
+
+    portfolio = client.get("/api/work-items")
+    detail = client.get("/api/changes/unavailable-change/work-items/outcome:OUT-001")
+
+    assert portfolio.status_code == 200
+    assert portfolio.json()["groups"]
+    assert portfolio.json()["unavailable_changes"] == [
+        {
+            "kind": "unavailable",
+            "change_id": "unavailable-change",
+            "title": "Unreadable Change",
+            "diagnostics": ["runtime-unavailable"],
+            "readiness": {
+                "status": "unavailable",
+                "operation": None,
+                "executable": False,
+                "next_actor": "none",
+                "reason_code": "runtime-unavailable",
+                "checks_state": "unknown",
+                "basis": {
+                    "contract_digest": "a" * 64,
+                    "frontier_digest": None,
+                    "candidate_head": None,
+                    "reviewed_head": None,
+                    "workspace_fingerprint": None,
+                    "diagnostic_sequence": None,
+                },
+                "action": None,
+                "last_attempt": None,
+            },
+        },
+    ]
+    assert detail.status_code == 200
+    assert detail.json() == portfolio.json()["unavailable_changes"][0]
+    assert application.calls == [
+        ("portfolio", ()),
+        ("show", ("unavailable-change", "outcome:OUT-001")),
     ]
 
 
