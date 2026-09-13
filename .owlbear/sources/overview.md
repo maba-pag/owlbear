@@ -4,6 +4,20 @@
 
 External repos and resources studied during OwlBear development.
 
+## Intermittent-Connectivity Cloud Delivery
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub cloud agent | <https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent> | Background execution, one-branch/PR scope, hard 59-minute limit and usage costs | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud planning | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/research-plan-iterate> | Separate planning and implementation with durable PR context | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub model selection | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model> | User-selected model/reasoning controls, supported entry points and Auto fallback | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud PR controls | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github> | Base branch, follow-up PR comments, model choice and workflow approval | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub session management | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents> | Persisted logs and pushed checkpoints, not ephemeral workspace assumptions | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub cloud environment | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Default-branch setup discovery, failed setup behavior and runner OS limits | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub security controls | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations> | Branch publication, human approval and workflow constraints | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub alternative agents | <https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents> | Claude/Codex alternatives and shared platform limitations | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+| GitHub automations | <https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-automations> | Private/internal availability, permissions, triggers and billing | [Flight handoff](../research/delivery-cloud-flight-handoff.md) | 2026-09-13 |
+
 ## Memory System End-to-End Audit
 
 | Source | URL | What | Where Used | Date |
