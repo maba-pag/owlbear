@@ -45,6 +45,7 @@ completion of D03-D08 during the flight. Useful reviewed PRs are the realistic g
 | [GitHub and PR controls](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github) | Select starting branch; a new PR comment can select a model for follow-up work. Later issue comments are not automatically consumed. |
 | [Session management](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) | Pushed commits and session logs survive; unpushed workspace contents are not a durable handoff guarantee. |
 | [Cloud environment](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment) | Setup workflow must be on the default branch; setup failure can leave the agent running. Ubuntu/Windows supported, not macOS. |
+| [Repository MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers) | Cloud MCP tools require repository configuration; local VS Code bindings do not transfer automatically. No OwlBear MCP configuration is required for the in-process tests below. |
 | [Security controls](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations) | Restricted branch publication, human review/merge controls and workflow approval by default. The requester cannot supply their own required approval. |
 | [Other agents](https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents), [automations](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-automations) | Policy-dependent alternatives, not assumed available or configured here. |
 | [Programme](change-continuation-delivery-redesign.md) | D03-D08 dependencies, original P scope, V01-V24 acceptance and live-state protections remain authoritative. |
@@ -57,6 +58,89 @@ No Copilot setup workflow was present. Repository visibility/default-branch meta
 returned no usable output; account model access, approval rules and cloud execution are unverified.
 Usage includes Actions time and AI credits/tokens; do not estimate cost solely by session count.
 
+### Cloud Capability Contract
+
+The implementation needs repository read/edit tools, a shell able to run the locked Python/Node
+toolchains, and platform branch publication. It does **not** need this chat's VS Code tools,
+subagents, language server, OwlBear MCPs or MegaLinter. This is a source-verified execution path,
+not a claim that the user's cloud environment has already passed the pilot.
+
+For these cloud jobs, **do not start or configure an OwlBear MCP server**. GitHub can support
+configured MCP servers in general; their absence here is intentional, not a fatal prerequisite.
+Testing MCP server code is different from using a live MCP tool as the agent's execution interface.
+
+| Need or unavailable capability | Cloud route and evidence limit |
+| --- | --- |
+| Delivery core behavior | Owning pytest suites with temporary repositories, fake clocks and provider fixtures. Run real owners; do not replace the behavior under test with a mock. |
+| Registered MCP tools, schemas and envelopes | [Existing tests](../../serve/delivery-mcp/tests/test_target_server.py) assemble the real server object and use `Client(server)` in-process. Tests cover listing, invocation, rejected arguments and a fixture-backed runtime transition. No daemon, listening port or agent MCP binding is needed; this does not prove stdio/remote transport or VS Code discovery. |
+| HTTP behavior | [Existing route tests](../../tests/test_cockpit_work_items.py) use the test application/client and disposable fixtures rather than a live Cockpit installation. |
+| UI behavior and types | The [frontend scripts](../../serve/cockpit/web/package.json) provide Vitest, TypeScript/build and direct lint. If browser execution works, use Playwright's disposable harness; no browser MCP tool is required. |
+| Real browser geometry/focus | `npm run test:e2e:work` uses a temporary workspace and local fixture server through [the harness](../../serve/cockpit/web/e2e/support/start-work-portfolio-stack.mjs). If browser binaries, subprocesses or local ports are unavailable, record a pending browser check and continue unit/build work; jsdom is not equivalent proof. |
+| Editor diagnostics, symbol search, skill loading | Read repository-relative instruction/skill files with available file/shell tools; use text search and compiler/linter diagnostics. Do not require `get_errors`, `tool_search`, a rename provider or a VS Code task API. |
+| Native agents, memory and live host handoffs | Do not invoke claim-dependent Planner/Builder/Finalizer workflows, memory bootstrap or nested subagents. Validate their files/contracts with existing tests; actual host dispatch/review and termination capabilities remain host checks. |
+| Git and PR handling | Use the platform's permitted branch/commit/publication tools. No particular local helper binding or unrestricted GitHub API token is a prerequisite. Preserve the assigned branch/owned scope; never broaden token permissions to reproduce this editor's tools. |
+
+**MegaLinter is prohibited inside these agent sessions**, including installation/image pulls,
+`uv run megalint`, `uv run quality`, `npx mega-linter-runner`, and Docker-based equivalents.
+The [quality aggregate](../../serve/tools/src/owlbear_tools/quality.py) includes MegaLinter, so
+it is not a fallback. Avoid uninspected aggregate hooks, whole-repository autofixes and broad
+pre-commit runs. Use direct, check-only linters scoped to owned files instead, even when a general
+skill recommends an aggregate. Do not change the repository's CI or disable a required check.
+Existing CI can run MegaLinter separately on its configured infrastructure; absence of an agent-run
+MegaLinter result never blocks implementation or creation of a reviewable PR.
+
+Lightweight recipes, resolved against the departure revision and changed paths:
+
+```shell
+uv run --locked pytest serve/delivery-mcp/tests/test_target_server.py serve/delivery-mcp/tests/test_delivery_adapter.py -q --tb=short -n 0
+uv run --locked pytest tests/test_cockpit_work_items.py -q --tb=short -n 0
+uv run --locked pytest tests/test_agent_ecosystem_validation.py -q --tb=short -n 0
+```
+
+These are alternative owning scopes, not a mandatory combined gate for every edit. Add the touched
+core suite or exact node IDs. Use direct `uv run --locked ruff check` and `ruff format --check` with
+explicit changed Python paths; never run automatic fixes on unrelated files. In the frontend directory,
+use `npm test -- <test-file>`, `npm run build`, and `npx --no-install eslint <changed-files>`;
+use the maintained CSS/HTML checks when relevant. Existing locked tools are preferred to downloads.
+Start pytest with one worker in constrained runners; split slow suites across sessions instead of
+removing assertions or globally increasing timeouts. No full-suite/MegaLinter prerequisite to coding.
+
+Local capability-path proof on 2026-09-13: **3 passed in 4.16 seconds** for
+`test_registered_tool_invokes_strict_adapter_once`,
+`test_flattened_tool_rejects_unknown_arguments_before_delegation`, and
+`test_assembled_work_item_tools_observe_runtime_transition` in the registered-tool suite above,
+using `uv run --locked pytest <node IDs> -q --tb=short -n 0 -p no:cacheprovider`.
+No MCP daemon, live state or MegaLinter was used. This proves the existing in-process route is
+executable locally; Linux cloud dependencies, resource limits and actual tool access still need the pilot.
+
+### Nonfatal Capability Gaps and Real Blockers
+
+Missing OwlBear MCP, VS Code APIs, memory, nested agents or MegaLinter is **expected**: use the
+routes above without retry loops, installation attempts or a request for more credentials.
+Mark transport/host/heavy checks `NOT_RUN_CAPABILITY` with the exact reason, affected claim,
+replacement proof already run, and follow-up command/environment/owner. Preserve them in the
+package plan's verification ledger and PR handoff, not only ephemeral chat. Missing browser or
+lightweight lint binaries gets one bounded environment diagnosis, then the same treatment.
+
+Continue implementing and testing the supported slice. Use `READY_FOR_INDEPENDENT_REVIEW` plus
+`verification: partial` when scoped code and available meaningful proof are ready but external
+checks remain. Use `CHECKPOINT_ONLY` if insufficient behavioral proof is available. A failing
+assertion, compile error or introduced lint error is **not** a capability gap: repair it or record
+the exact unresolved defect. Do not add skips or weaken tests to conceal it.
+
+No shell, no usable dependencies, inability to publish, or a missing safety-critical contract can
+block the affected slice. Keep already useful work and report the smallest unblock. Do not turn
+one unavailable optional tool into abandonment of the entire package. If even the core behavior
+cannot be exercised, publish an explicitly unverified draft, not a passing result.
+
+The planner classifies proof before implementation: **cloud-required**, **external CI**, and
+**host-only**. Intermediate phases can proceed after scoped proof and review when a recorded
+external check does not invalidate their dependency contract. Do not claim whole-package acceptance
+until its required checks are satisfied. Merge protections, safety-critical predecessor proof and
+live activation gates remain unchanged; any change to a mandatory acceptance gate needs explicit
+approval. Host-only product acceptance can remain pending after a code PR merges when the approved
+plan already assigns it to D08-H, but it must not be reported as completed by cloud tests.
+
 ## 3. Preflight and Handoff
 
 1. **Freeze a reviewed checkpoint with the other chat.** Confirm actual D02 completion, then start
@@ -68,15 +152,18 @@ Usage includes Actions time and AI credits/tokens; do not estimate cost solely b
 3. **Verify access and review policy.** Check cloud agent availability, model picker, budget,
    concurrency and eligible human approvals. Always select `dev`, not generated consumer `main`.
    If another eligible human is required but unavailable, plan to accumulate candidate PRs, not merge.
-4. **Run a real cloud pilot before departure.** Verify the chosen branch/SHA, locked dependency
-   installation, one owning Python test and, for UI work, build and the disposable E2E harness.
-   Record setup duration. Pilot success, not a prompt, establishes environment readiness.
+4. **Run a real cloud pilot before departure.** Verify branch/SHA, read/edit/shell/publication tools,
+   locked dependencies and one owning Python/in-process MCP test. For UI work, try build and the
+   disposable browser harness; record unavailable capabilities rather than aborting other proof.
+   No OwlBear MCP startup or MegaLinter is part of the pilot. Record setup duration and proof limits.
 5. **Prepare deterministic setup if needed.** Reuse current CI's pinned actions/tool versions.
    A Copilot setup workflow only works once present on the actual default branch; do not change
    that branch or protections as a shortcut. Otherwise validate explicit bootstrap in the pilot.
-6. **Resolve CI operation.** Draft PRs here skip the source/Cockpit workflows even after permission
+6. **Resolve external verification.** Draft PRs here skip the source/Cockpit workflows even after permission
    to run workflows. The user marks appropriate PRs ready and approves workflow execution when needed.
    Alternatively use a supported manual workflow on the exact branch/head. Skipped means unrun.
+   MegaLinter stays outside agent sessions. Lack of CI access does not stop code or PR work; it
+   leaves the external gate pending and cannot authorize a merge that requires it.
 7. **Finalize the first package handoff.** D03-P must produce the concrete paths/contracts/tests
    for its implementation phases. Save the package PR and plan-commit URLs for low-bandwidth access.
    Approve the plan before implementation; do not launch placeholder implementation tickets.
@@ -112,8 +199,9 @@ for hours or that a worker may implement all phases without checkpoints.
    for example `delivery-cloud-d03-plan.md`. D04-P later does the same with
    `delivery-cloud-d04-plan.md` on the D04 PR. These files are future outputs, not created here.
 2. The plan names the source baseline, approved product requirements, owning files, exact interfaces,
-   phase dependencies, negative cases, proof commands, exclusions and unresolved decisions. It has a
-   compact progress section. It does not replace or edit this flight guide or the programme authority.
+   phase dependencies, negative cases, proof commands, exclusions and unresolved decisions. It has
+   compact progress and verification sections separating cloud-required, external-CI and host-only
+   proof with explicit fallback routes. It does not replace this guide or the programme authority.
 3. Review the plan, then explicitly approve its exact commit in the PR. Planning stops there.
    The planning-only PR need not be merged before implementation on that same branch.
 4. Start A with a PR comment containing the approved plan path/commit, phase ID and current head.
@@ -156,9 +244,11 @@ Optional read-only D05 provider research, D07 compatibility inventory or D08 pro
 run separately later, with their own outputs and explicit authorization. They are not prerequisite
 parallel launches. Their findings must be revalidated against subsequent package changes.
 
-**Within-package barrier:** completed tests and independent review of the phase checkpoint, with
-the predecessor commits present on the same PR branch. **Between-package barrier:** completed
-package acceptance, required checks/reviews and merge into the baseline used by the next package.
+**Within-package barrier:** required cloud tests and independent review of the phase checkpoint,
+with predecessor commits on the same branch and external gaps recorded as above. No unresolved
+gap may invalidate the successor's safety contract. **Between-package barrier:** the approved
+package merge requirements, checks/reviews and merge into the baseline used by the next package;
+host-only acceptance explicitly assigned to D08-H remains pending rather than being fabricated.
 Neither a finished chat nor an open PR is proof that either barrier is satisfied.
 
 ### Implementation Queue After Planning
@@ -244,9 +334,11 @@ Proof commands: <resolved tests/lint/build and expected observations>.
 
 Read .github/copilot-instructions.md, applicable instructions/skills from this
 checkout, and the named sections of .owlbear/research/change-continuation-delivery-redesign.md.
+Read the Cloud Capability Contract in .owlbear/research/delivery-cloud-flight-handoff.md.
 Read the committed package plan and verify its approved revision and checkpoints.
 Do not select another phase/package or depend on an unmerged sibling PR.
-Missing prerequisites mean NOT_READY, not permission to invent a substitute.
+Missing code/contract prerequisites mean NOT_READY, not permission to invent a substitute.
+Expected tool gaps use the Cloud Capability Contract in this flight guide, not NOT_READY.
 
 For this cloud job I authorize platform publication only to its assigned PR branch
 targeting dev, as an exception to local direct-dev/user-push rules. No target push,
@@ -257,8 +349,22 @@ Do not edit the active programme status, shared governance or another job's file
 Update only the assigned package plan's progress section and PR handoff. Contract
 changes require explicit reapproval; your own progress text does not grant it.
 
-Use locked repository toolchains and existing test helpers. Do not skip tests,
-weaken assertions, alter safety semantics or claim unrun host checks passed.
+Use the available file/edit/shell/platform tools; no VS Code-specific APIs, memory
+or nested agents are required. Do not launch/configure OwlBear MCP servers or use
+live Delivery workflows. Test registered tools with existing in-process Client(server)
+pytest fixtures; this does not prove host transport/discovery. Test HTTP in-process.
+NEVER install or run MegaLinter, uv run megalint, uv run quality, its runner/image,
+or an aggregate that invokes it. Use scoped check-only Ruff, pytest, Vitest,
+TypeScript/build and direct linters. This cloud scope replaces broad local aggregate
+recommendations, not product safety rules or required merge checks.
+
+Use locked toolchains and existing helpers. Do not add test skips, weaken assertions
+or claim unrun checks passed. Missing MCP/editor/heavy tools must not stop supported
+implementation. Record NOT_RUN_CAPABILITY with reason, affected claim, available
+proof and exact external follow-up in the package ledger/PR; then continue locally
+testable work. Missing browser execution is not solved by calling jsdom layout proof.
+Real test/build failures require repair, not a capability label. If core behavior
+cannot be tested, preserve an unverified draft. Keep CI/host/merge gates pending.
 Plan for 50 minutes: stop starting new edits by minute 35, publish coherent
 checkpoints and the current status by minute 45, then finish proof/report and stop.
 These soft targets do not override the platform's hard limit. Publish early.
@@ -274,6 +380,8 @@ Ground the contract in current owning source/tests, not assumed future features.
 Resolve state transitions, side-effect boundaries, error mapping and negative cases.
 Split into coherent jobs targeting 30 minutes coding plus 15 minutes proof/handoff.
 Give each exact file ownership, dependency SHAs, runnable checks and exclusions.
+Classify checks as cloud-required, external CI or host-only; name available fallback
+proof and follow-up owners. No phase may depend on a live OwlBear MCP or MegaLinter.
 Identify remaining critical decisions and sequential within-package checkpoints.
 Commit the plan to <one assigned package research file> on the package branch,
 open its draft PR, report the plan commit SHA and STOP. Do not edit the programme
@@ -294,8 +402,10 @@ schemas/exports/tests with their owner; no placeholder behavior to meet the cloc
 Checkpoint coherent progress early. If blocked by a new critical decision, record
 evidence and stop instead of guessing. No successor work or own merge/approval.
 Update package progress and the PR handoff; record the exact head, completed
-observations, actual proof, findings and next phase. Report READY_FOR_INDEPENDENT_REVIEW,
-CHECKPOINT_ONLY, BLOCKED_ENVIRONMENT or BLOCKED_DECISION. Stop before the next phase.
+observations, actual proof, capability gaps, findings and next phase. Report
+READY_FOR_INDEPENDENT_REVIEW (verification: partial when external checks remain),
+CHECKPOINT_ONLY, BLOCKED_ENVIRONMENT or BLOCKED_DECISION. Missing expected tools
+alone is not BLOCKED_ENVIRONMENT. Stop before the next phase.
 ```
 
 ### Fresh Independent Review
@@ -308,6 +418,9 @@ data loss, custody, stale approval, replay, privacy and missing discriminating t
 Distinguish executed proof, worker-reported proof and unrun checks. Post findings
 with severity/path/line, or no findings, and explicit limits. Bind the verdict to
 the exact base/head; any subsequent change requires relevant revalidation/re-review.
+Use the Cloud Capability Contract: no OwlBear MCP launch, MegaLinter or quality
+aggregate. Their expected absence is not an implementation defect; assess available
+in-process proof and the recorded external obligations. Do not waive a real failure.
 This is advisory review, not GitHub's required human approval. Stop.
 ```
 
@@ -333,7 +446,8 @@ before the working budget ends. Leave incomplete work draft. Stop.
    Run one writer. Only launch parallel read-only work when separately approved and independent.
 2. At the next connection, read the package PR's short status and request review or a bounded repair.
    Select the model in the new session/PR-comment UI, not in the pasted instruction.
-3. After a phase passes proof and independent review, approve the next phase on the same PR branch.
+3. After required cloud proof and independent review, approve the next phase on the same PR branch
+   only if pending external checks do not invalidate its dependency contract. Carry the gap ledger.
    Allow required workflows/manual branch checks as appropriate; absent draft checks are not green.
 4. When the package is complete, mark its PR ready, satisfy actual CI/approval requirements and
    review the cumulative exact head before merging. Repairs or base changes require relevant revalidation.
@@ -341,4 +455,5 @@ before the working budget ends. Leave incomplete work draft. Stop.
 
 The next preparation action is an actual cloud setup/pilot and a departure-SHA planning ticket,
 not a new runtime automation system. This document does not dispatch work or change repository policy.
-Its checks validate structure/links, not cloud access, bootstrap success or 50-minute task fit.
+Its document checks validate structure/links, not cloud access or 50-minute task fit. In-process
+test-path evidence must be reported separately from an actual cloud pilot; never conflate them.
