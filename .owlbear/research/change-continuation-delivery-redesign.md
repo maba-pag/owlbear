@@ -12,13 +12,14 @@
 
 ## 0. Direct Implementation Decision
 
-### Paused Checkpoint: 2026-09-13
+### Resume Checkpoint: 2026-09-13
 
-Paused at the user's request. Do not dispatch further work until the user resumes.
+The user resumed on 2026-09-13. Continue the authorized sequential delegation from this checkpoint.
 D01 is complete; D02's critical engine companion is committed at
 `25fd31325a2165b058d906337b5248e94e86c6e6` on `dev` but has not received independent review.
 The tracked working tree was clean at pause; all 19 unrelated untracked entries remain preserved.
-No delegate is running. Live Delivery MCP and Cockpit stay stopped; nothing was pushed.
+No delegate was running at pause. Live Delivery MCP and Cockpit stay stopped. On resume,
+`dev` and `origin/dev` both point to pause-note commit `99b8c4d3b`; the agent did not push.
 
 Resume by verifying the current checkout, then dispatching an independent read-only Opus review of
 that exact candidate against `662c02a47eebbb11d3933cbab7f627ab909b7c9f`. Use the D02 Engine Companion
