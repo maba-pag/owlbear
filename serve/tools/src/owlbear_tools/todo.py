@@ -34,6 +34,7 @@ _EXCLUDED_RELATIVE_DIRS = frozenset(
         ".owlbear/delivery/packages",
         ".owlbear/delivery/runtime",
         ".owlbear/kanban/archive",
+        ".owlbear/legacy",
         ".owlbear/memory",
         ".owlbear/research",
         ".owlbear/sources",

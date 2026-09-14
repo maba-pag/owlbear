@@ -24,7 +24,7 @@ exclude: |
     |\.owlbear/(
       delivery/(packages|runtime)/
       |(doc|py|ts)-index\.md$
-      |(memory|research|target)/
+      |(legacy|memory|research|target)/
     )
     |store/(audit|knowledge)/.*\.db$
     |(
