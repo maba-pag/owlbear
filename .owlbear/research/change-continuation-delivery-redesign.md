@@ -6,11 +6,41 @@
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** Reviewed P01, P02, P02-W and P03 implementation from Change head `7580a8caacbd6f849081adf9f61bf28165b4851c` is merged into `dev` at `364daf61c`. D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`, including the readiness UI and assembled gates. D02 critical engine companion repair is independently accepted at `6a223aa499289a5b0b9a8fb02424cb75afb253ad`; T2 consumer wiring remains open and D02 is not complete. P05 offline diagnosis is not implemented. The [P00/P01 record](delivery-action-readiness-p00.md) is historical evidence, not an active launch instruction.
+**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 core, transports and workflow repairs are committed through `6759214c686d196d80eb94d58e70d0b1ef882164`, but D02 is not accepted: actual host rehearsal and exact-candidate assembled proof remain open. Stop before D03 for departure; the checkpoint below supersedes older pending-work instructions. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
 ## 0. Direct Implementation Decision
+
+### Departure Checkpoint: D02 Acceptance Blocked
+
+The user requested the next completed package as the departure stop. D02's known code findings
+are repaired, but the remaining gates cannot honestly be declared passed in this session. No D03
+work was started. Stop further dispatch here; resume only after the user directs continuation.
+
+Latest implementation: `6020bdb6ed331aedb0460e4e528c0294845144d4` repaired issued-finalizer readiness,
+unknown continuation dispatch, declared nested finalizer routing, frontend reasons/provenance and
+transport yielding cases. Independent Astra review of committed source confirmed those repairs,
+leaving only the missing `sync-target` frontend action literal. Opus corrected it and added a typed
+rendering scenario at `6759214c686d196d80eb94d58e70d0b1ef882164`; parent read-only diff review confirms
+that narrow correction. Its frontend file passed 110 tests, TypeScript and scoped ESLint.
+
+The broader repair worker reported 40 ecosystem, 48 registered-MCP, 54 HTTP, 314 frontend and
+22 E2E passes, plus build/lint. Those runs included another session's uncommitted core/HTTP changes,
+so they are not exact-commit execution proof. Seven other-session paths remain staged or modified
+in core, owning tests, the Cockpit route and the inspection prompt; they were not reverted or
+included in this session's commits. Earlier package/memory/research entries were separately committed
+by that session. Do not assume the checkout is clean or still has 19 untracked entries.
+
+| Remaining gate | Evidence and next owner |
+| --- | --- |
+| Exact-candidate assembled proof | After the other source writer checkpoints its changes, the integration owner selects the combined head and reruns affected MCP/HTTP/ecosystem and frontend/build/E2E gates, then obtains exact-head review. Preserve both sessions' work; do not stash, reset or include foreign staged paths to manufacture a clean candidate. |
+| Actual continuation host rehearsal | This session exposes reviewer/Explore delegates, not the normal orchestrator/finalizer chain; Delivery bindings intentionally remain disabled. Static frontmatter tests and in-process MCP tests do not prove nested dispatch, finalizer-to-reviewer availability, or issued-context/result handling. A capable VS Code host must rehearse the declared nested or supported flat route with disposable fixtures and no live claims/state. Do not restart live Delivery as a shortcut. |
+
+No D08 waiver or D03 predecessor acceptance is inferred from the flight-guide proposal. Cloud D03
+planning must not assume D02 is complete; use the exact remaining D02 gate above as the next handoff.
+All agents dispatched by this session have returned. No push, live activation or live state mutation
+was performed by this session. The detailed historical slices below retain their original proof limits.
 
 ### Narrow D02 Review Repair: 2026-09-13
 
