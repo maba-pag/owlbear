@@ -591,8 +591,8 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     assert retained[0].worktree_branch == "owlbear/change/change-a"
     assert all("/s1" not in item.branch for item in retained)
     assert [call.args[:3] for call in run_git.call_args_list] == [
-        ("worktree", "list", "--porcelain"),
-        ("for-each-ref", "--format=%(refname)%00%(objectname)", "refs/heads/owlbear/change"),
+        ("--no-optional-locks", "worktree", "list"),
+        ("--no-optional-locks", "for-each-ref", "--format=%(refname)%00%(objectname)"),
         ("--no-optional-locks", "status", "--porcelain=v1"),
         ("--no-optional-locks", "status", "--porcelain=v1"),
     ]

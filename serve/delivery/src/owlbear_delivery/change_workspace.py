@@ -4157,7 +4157,7 @@ class ChangeWorkspaceManager:
         return records
 
     def _registered_worktrees_all(self) -> dict[Path, _RegisteredGitWorktree]:
-        completed = self._run_git("worktree", "list", "--porcelain", "-z")
+        completed = self._run_git("--no-optional-locks", "worktree", "list", "--porcelain", "-z")
         records: dict[Path, _RegisteredGitWorktree] = {}
         for raw_record in completed.stdout.split(b"\0\0"):
             fields = tuple(field for field in raw_record.split(b"\0") if field)
@@ -4285,6 +4285,7 @@ class ChangeWorkspaceManager:
     def _change_branch_heads(self) -> dict[str, str]:
         prefix = "refs/heads/owlbear/change/"
         completed = self._run_git(
+            "--no-optional-locks",
             "for-each-ref",
             "--format=%(refname)%00%(objectname)",
             "refs/heads/owlbear/change",

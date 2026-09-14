@@ -32,6 +32,7 @@ MAX_REPORT_BYTES = 16_384
 MAX_REPORTS = 256
 _MAX_PATH_LENGTH = 240
 _MAX_IDENTIFIER_LENGTH = 128
+type _ReportFileSignature = tuple[str, int, int, int, int, int]
 
 
 class FinalizationReportError(RuntimeError):
@@ -203,6 +204,9 @@ class FinalizationReportStore:
         self._relative_root = Path("finalization-reports") / change_id
         self._root = runtime_root / self._relative_root
         self._change_id = change_id
+        self._cached_pointer: bytes | None = None
+        self._cached_report_inventory: tuple[_ReportFileSignature, ...] = ()
+        self._cached_snapshot: FinalizationReportSnapshot | None = None
 
     @contextmanager
     def _locked(self, *, create: bool) -> Iterator[int | None]:
@@ -243,11 +247,14 @@ class FinalizationReportStore:
 
     def _read(self, descriptor: int) -> FinalizationReportSnapshot:
         pointer_bytes = read_contained(descriptor, Path("current.json"), limit=MAX_REPORT_BYTES)
-        try:
-            with contained_directory(descriptor, Path("reports")) as reports_fd, os.scandir(reports_fd) as entries:
-                names = tuple(entry.name for entry in entries)
-        except FileNotFoundError:
-            names = ()
+        inventory = self._report_inventory(descriptor)
+        if (
+            self._cached_snapshot is not None
+            and pointer_bytes == self._cached_pointer
+            and inventory == self._cached_report_inventory
+        ):
+            return self._cached_snapshot
+        names = tuple(item[0] for item in inventory)
         if len(names) > MAX_REPORTS:
             msg = "diagnostic history exceeds capacity"
             raise ValueError(msg)
@@ -276,9 +283,42 @@ class FinalizationReportStore:
         ):
             msg = "report pointer is inconsistent with immutable history"
             raise ValueError(msg)
-        return FinalizationReportSnapshot(
+        snapshot = FinalizationReportSnapshot(
             sequence=pointer.sequence, current_report_id=pointer.report_id, reports=ordered
         )
+        self._cache_snapshot(snapshot, pointer_bytes, inventory)
+        return snapshot
+
+    @staticmethod
+    def _report_inventory(descriptor: int) -> tuple[_ReportFileSignature, ...]:
+        try:
+            with contained_directory(descriptor, Path("reports")) as reports_fd, os.scandir(reports_fd) as entries:
+                return tuple(
+                    sorted(
+                        (
+                            entry.name,
+                            metadata.st_mode,
+                            metadata.st_ino,
+                            metadata.st_size,
+                            metadata.st_mtime_ns,
+                            metadata.st_ctime_ns,
+                        )
+                        for entry in entries
+                        for metadata in (entry.stat(follow_symlinks=False),)
+                    )
+                )
+        except FileNotFoundError:
+            return ()
+
+    def _cache_snapshot(
+        self,
+        snapshot: FinalizationReportSnapshot,
+        pointer_bytes: bytes | None,
+        inventory: tuple[_ReportFileSignature, ...],
+    ) -> None:
+        self._cached_snapshot = snapshot
+        self._cached_pointer = pointer_bytes
+        self._cached_report_inventory = inventory
 
     def record(
         self,
@@ -323,6 +363,15 @@ class FinalizationReportStore:
                     participant,
                 ),
             ).commit_contained(descriptor)
+            self._cache_snapshot(
+                FinalizationReportSnapshot(
+                    sequence=report.sequence,
+                    current_report_id=report.report_id,
+                    reports=(*snapshot.reports, report),
+                ),
+                _encoded(pointer),
+                self._report_inventory(descriptor),
+            )
             return report
 
     def retire(self, candidate: str, contract_digest: str) -> None:
@@ -346,3 +395,6 @@ class FinalizationReportStore:
                 f"retire-{report.report_id}",
                 (ReplacementTransactionParticipant(self._root, Path("current.json"), previous, replacement),),
             ).commit_contained(descriptor)
+            self._cache_snapshot(
+                snapshot.model_copy(update={"current_report_id": None}), replacement, self._cached_report_inventory
+            )
