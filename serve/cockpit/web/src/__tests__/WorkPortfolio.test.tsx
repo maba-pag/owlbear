@@ -4082,6 +4082,8 @@ it('reports a clean finalization candidate as ready and a running one as running
 
 it('maps every coherent engine readiness response to its portfolio state and controls', async () => {
   const finalizeAction = { kind: 'finalize' as const, label: 'Finalize Change', command: '/finalize-change change-alpha' }
+  // Engine target-sync prerequisite: named operation with a label but no caller-runnable command.
+  const syncTargetAction = { kind: 'sync-target' as const, label: 'Synchronize target', command: null }
   interface ReadinessScenario {
     item: WorkItemCardView
     state: DeliveryReadiness
@@ -4180,6 +4182,37 @@ it('maps every coherent engine readiness response to its portfolio state and con
       publication: publicationForChecks('ready-for-finalization'),
       chip: 'Unavailable',
       reason: 'Managed workspace readiness could not be observed.',
+      actor: 'Agent',
+      command: null,
+    },
+    {
+      item: publicationCardForChecks({
+        publication_phase: 'ready-for-finalization',
+        next_step: 'Synchronize the Change with its integration target',
+        progress: { kind: 'publication', label: 'Reviewed Change awaiting finalization', done: null, total: null },
+        action: syncTargetAction,
+      }),
+      state: readiness({
+        status: 'ready',
+        operation: 'sync-target',
+        next_actor: 'agent',
+        reason_code: 'target-sync-required',
+        basis: {
+          contract_digest: 'c'.repeat(64),
+          frontier_digest: 'd'.repeat(64),
+          source_head: '1'.repeat(40),
+          target_head: 'e'.repeat(40),
+          continuation_id: `continue-${'c'.repeat(64)}`,
+          candidate_head: '1'.repeat(40),
+          reviewed_head: '2'.repeat(40),
+          workspace_fingerprint: null,
+          diagnostic_sequence: 0,
+        },
+      }),
+      lifecycle: 'publication',
+      publication: publicationForChecks('ready-for-finalization'),
+      chip: 'Ready',
+      reason: 'The Change must be synchronized with its integration target first.',
       actor: 'Agent',
       command: null,
     },

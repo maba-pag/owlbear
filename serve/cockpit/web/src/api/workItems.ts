@@ -11,6 +11,7 @@ export type WorkItemActionKind =
   | 'recover-claim'
   | 'finalize'
   | 'reconcile-checkpoint'
+  | 'sync-target'
   | 'mark-ready'
   | 'observe-acceptance'
   | 'resolve-attention'
