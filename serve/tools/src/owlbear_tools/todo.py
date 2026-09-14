@@ -76,7 +76,7 @@ def _walk_todo(root: Path, hits: list[str]) -> None:
             directory
             for directory in dirnames
             if (
-                directory not in _SKIP_DIRS
+                not _is_skipped_directory(directory)
                 and not directory.endswith(".egg-info")
                 and not _is_nested_repository(current / directory)
                 and not (current / directory).is_symlink()
@@ -92,6 +92,10 @@ def _walk_todo(root: Path, hits: list[str]) -> None:
 def _is_nested_repository(path: Path) -> bool:
     """Return whether a child directory is a separately rooted Git checkout."""
     return (path / ".git").is_file() or (path / ".git").is_dir()
+
+
+def _is_skipped_directory(directory: str) -> bool:
+    return directory in _SKIP_DIRS or directory.startswith(".venv-")
 
 
 def _is_excluded_path(path: Path, root: Path) -> bool:

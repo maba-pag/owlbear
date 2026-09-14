@@ -65,9 +65,12 @@ def test_todo_skips_archived_and_egg_info_directories(
     legacy = tmp_path / ".owlbear/legacy"
     legacy.mkdir(parents=True)
     (legacy / "brief.md").write_text("> **TODO:** stale - archived [#1]\n", encoding="utf-8")
+    versioned_venv = tmp_path / ".venv-3.12.14/lib/python3.12/site-packages"
+    versioned_venv.mkdir(parents=True)
+    (versioned_venv / "third_party.py").write_text("> **TODO:** stale - generated [#2]\n", encoding="utf-8")
     egg_info = tmp_path / "package.egg-info"
     egg_info.mkdir()
-    (egg_info / "metadata.txt").write_text("> **TODO:** stale - generated [#2]\n", encoding="utf-8")
+    (egg_info / "metadata.txt").write_text("> **TODO:** stale - generated [#3]\n", encoding="utf-8")
 
     run_todo()
 
