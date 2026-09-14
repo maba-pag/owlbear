@@ -1,18 +1,90 @@
 # Change-Scoped Continuation and Recoverable Delivery
 
 > **Owning request:** User-authorized direct implementation of the Delivery redesign on `dev`.
-> **Updated:** 2026-09-13
+> **Updated:** 2026-09-14
 > **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 core, transports and workflow repairs are committed through `6759214c686d196d80eb94d58e70d0b1ef882164`, but D02 is not accepted: actual host rehearsal and exact-candidate assembled proof remain open. Stop before D03 for departure; the checkpoint below supersedes older pending-work instructions. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
+**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03's D02 prerequisite is satisfied; D03 has not started. Stop this session before D03. The accepted checkpoint below supersedes older blocked and pending-work instructions. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
 ## 0. Direct Implementation Decision
 
+### D02 Accepted Checkpoint: 2026-09-14
+
+The user authorized finishing acceptance and publishing the result. The combined source head
+`1ab5ae7e4f56201e3b01dc2a5a88fc8525352806` remained unchanged with a clean tracked tree before and
+after verification. Independent Astra read-only integration review returned PASS for that exact
+head, including the consumer/workflow corrections and the subsequently committed quality edits.
+No blocking code finding remains. This closeout changes documentation only.
+
+| Gate | Actual result on the accepted source head |
+| --- | --- |
+| Scoped Delivery core, registered MCP, HTTP, package boundaries and ecosystem | 837 passed; 4 existing Starlette deprecation warnings; exit 0 in 263.16 seconds |
+| Frontend unit/component suite | `npm test`: 314 passed across 25 files |
+| TypeScript and production bundle | `npm run build`: passed (`tsc -b` and Vite) |
+| Assembled Work portfolio browser gate | `npm run test:e2e:work`: 22 passed using the disposable fixture stack |
+| Scoped static checks | Ruff passed on the 16 affected Python files; ESLint passed on the four affected frontend files |
+| Actual host permissions and issued-context rehearsal | Named `orchestrator` -> `finalizer` -> `build-reviewer` dispatch succeeded; valid, missing-capability and target-drift decisions behaved as specified below |
+
+The completed Python command was observed running with this exact selection, and its final log
+reported `837 passed` and `PYTEST_EXIT=0`. Earlier interrupted attempts are not proof and are not
+added to this count. Other sessions' full-suite processes and results are not part of this gate.
+
+```shell
+uv run --locked pytest \
+  serve/delivery/tests/test_portfolio_application.py \
+  serve/delivery/tests/test_change_workspace.py \
+  serve/delivery/tests/test_delivery_runtime.py \
+  serve/delivery/tests/test_work_items.py \
+  serve/delivery/tests/test_checkpoint_publication_regressions.py \
+  serve/delivery-mcp/tests/test_delivery_adapter.py \
+  serve/delivery-mcp/tests/test_target_server.py \
+  tests/test_cockpit_work_items.py tests/test_cockpit_boundary.py \
+  tests/test_package_boundary.py tests/test_agent_ecosystem_validation.py \
+  -q --tb=short -m 'not api and not model and not e2e' \
+  -n 4 --dist worksteal -p no:cacheprovider
+```
+
+The host gate used actual named delegates, not a generic worker substituted for them. Typed snapshots
+came from the real core and the existing `_portfolio` / `_continuation_request` test helpers in
+[the owning suite](../../serve/delivery/tests/test_portfolio_application.py), using separate disposable
+repositories and no external remotes. Fixture seed authority is synthetic, not a product review.
+
+- Valid issued custody: retained context was ready before acquisition; fresh context was running
+  under the same attempt. The actual finalizer accepted that self-owned state, checked the exact
+  Change, operation and head, and dispatched the actual build-reviewer for read-only Git inspection.
+  The fixture was `change-a`, operation `identity-001`, claim `identity-002`, exact fixture commit
+  `15722f7b9626784f681011ace549cb0637da0292`. The response was `ready_for_review_only`, not a fabricated
+  finalization receipt. No worker transition was forwarded.
+- Missing capability: the real core returned `waiting / host-capability-unavailable` without consuming
+  custody. The orchestrator yielded without dispatching a finalizer for that scenario.
+- Target drift: a separate fixture's target changed from
+  `745d9913c042511f69a4a5165ddedbfb70b52930` to `ad176fcb264918ce476e38f03301f6bb87897178`.
+  The actual finalizer stopped, retained the original identity and did not dispatch review or recover
+  custody. Wrong-operation handling was checked as a read-only identity decision, not a real submission.
+
+The earlier conclusion that the named agents were unavailable was incorrect: direct named dispatch
+worked despite the abbreviated displayed agent list. No repository permission change or new model
+router was required. The rehearsal proves host dispatch, independent reviewer availability and
+issued-context decisions; registered MCP and engine effects are exercised by the separate in-process
+tests. It is not a live MCP/stdio journey, a production finalization, worker-termination evidence,
+managed-device authentication, or live activation. Those later product obligations remain with their
+owning packages, including D03 exclusion/recovery, D05 approval and D08 real-host end-to-end acceptance.
+No mandatory D02 gate was waived or reassigned.
+
+Cloud handoff: after this closeout is published, start **D03-P** under
+[the cloud execution guide](delivery-cloud-flight-handoff.md), from `dev` containing this acceptance
+record and the exact source head above. Plan from the implemented retained-custody contracts; do not
+reimplement D02 or infer permission to replace a possibly live worker. No D03 implementation or live
+activation was started by this acceptance session.
+
 ### Departure Checkpoint: D02 Acceptance Blocked
+
+**Historical checkpoint, superseded by D02 Accepted Checkpoint above.** Its blockers and capability
+assessment describe the earlier session, not current D02 status or the next cloud prerequisite.
 
 The user requested the next completed package as the departure stop. D02's known code findings
 are repaired, but the remaining gates cannot honestly be declared passed in this session. No D03
@@ -288,7 +360,7 @@ checklist labels, not runtime tasks. The old P identifiers remain only to show r
 | --- | --- | --- | --- |
 | D00 | Consolidate reviewed work into `dev`, remove unused bootstrap and retire self-hosted execution | P00 plus completed P01/P02/P02-W/P03 | Complete; 739 scoped checks passed |
 | D01 | Finish readiness UI and prove the existing core -> MCP/HTTP -> rendered controls; settle the known failing baseline test | Remaining P04 and WP1 assembled proof | Complete; reviewed `dcee688c654`, 311 frontend and 22/22 E2E passed |
-| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Core accepted at `6a223aa4`; T2 wiring and assembled gates remain open |
+| D02 | One Change continuation entry using the existing actions, finalization and typed result routes | P06/P07 and required adapter companions | Complete; reviewed source `1ab5ae7e4`, 837 Python / 314 frontend / 22 browser tests and actual named-host rehearsal passed |
 | D03 | Preservation-first recovery, worker exclusion, bounded retries and a minimal read-only offline diagnostic entry | P05/P10/P11 | T3 core, T2 adapters; after D02 |
 | D04 | Versioned Design revision, restartable activation, evidence applicability and precise requests | P12/P13/P14 | T3 contracts, T2 workflow; after D03 |
 | D05 | Exact-head user merge approval, provider readback and Cockpit confirmation | P08/P09 | T3 provider, T2 UI; after D04 |
