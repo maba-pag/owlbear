@@ -103,8 +103,7 @@ class TargetCockpitService:
         return WorkItemPortfolioResponse(
             groups=view.groups,
             unavailable_changes=tuple(
-                DeliveryUnavailableChangeResponse.from_view(item)
-                for item in view.unavailable_changes
+                DeliveryUnavailableChangeResponse.from_view(item) for item in view.unavailable_changes
             ),
             totals=_portfolio_totals(view.groups),
             operating=PortfolioOperatingResponse.from_view(view.operating),

@@ -5404,7 +5404,8 @@ class PortfolioApplication:
                 }
             )
         if coordination.worktree_cleanup is None and (
-            publication.phase in {
+            publication.phase
+            in {
                 WorkItemPublicationPhase.ABANDONED,
                 WorkItemPublicationPhase.ACCEPTANCE_OBSERVED,
             }

@@ -208,9 +208,7 @@ class DeliveryAuthorityRegistry:
                     current.frontier,
                     current.receipt,
                     RevisionCarryForward(
-                        preserved_outcome_ids=tuple(
-                            outcome.outcome_id for outcome in compiled.contract.outcomes
-                        ),
+                        preserved_outcome_ids=tuple(outcome.outcome_id for outcome in compiled.contract.outcomes),
                         invalidated_outcome_ids=(),
                         carried_forward_outcome_ids=request.preserve_unresolved_outcome_ids,
                     )

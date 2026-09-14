@@ -433,13 +433,16 @@ def test_snapshot_design_package_revises_with_receipt_fence_and_replays(tmp_path
     assert revised.package_id == "b" * 64
     assert revised.previous_head == original.snapshot_head
     assert revised.snapshot_head != original.snapshot_head
-    assert _git(
-        coordination.worktree_path,
-        "merge-base",
-        "--is-ancestor",
-        original.snapshot_head,
-        revised.snapshot_head,
-    ) == ""
+    assert (
+        _git(
+            coordination.worktree_path,
+            "merge-base",
+            "--is-ancestor",
+            original.snapshot_head,
+            revised.snapshot_head,
+        )
+        == ""
+    )
     assert coordinator.show(coordination.change_id).design_package_snapshot == revised
 
     with pytest.raises(CoordinationConflictError, match="differs from the expected receipt"):

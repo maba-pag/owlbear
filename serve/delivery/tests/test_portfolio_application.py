@@ -9213,7 +9213,9 @@ def test_acquisition_reports_divergent_pending_publication_without_publisher(tmp
     )
     runtime = runtimes["change-a"]
     current = runtime.frontier_bytes()
-    revised = _canonical(DeliveryFrontier.model_validate_json(current, strict=False).model_copy(update={"published_head": "a" * 40}))
+    revised = _canonical(
+        DeliveryFrontier.model_validate_json(current, strict=False).model_copy(update={"published_head": "a" * 40})
+    )
     runtime._replace_content(current, revised, base_frontier_digest=hashlib.sha256(current).hexdigest())
     (state_root / "changes/change-a/state-publication.json").write_bytes(
         _canonical(
