@@ -201,9 +201,8 @@ class DeliveryAuthorityRegistry:
                         request.preserve_unresolved_outcome_ids
                         and self._state_preserving_frontier_matches(current, compiled.contract, request)
                     ):
-                        raise DeliveryAdmissionConflictError(
-                            f"Delivery frontier changed before authority replay: {request.change_id}"
-                        )
+                        message = f"Delivery frontier changed before authority replay: {request.change_id}"
+                        raise DeliveryAdmissionConflictError(message)
                 return _delivery_result(
                     compiled,
                     current.frontier,
@@ -260,23 +259,20 @@ class DeliveryAuthorityRegistry:
         request: DeliveryAdmissionRequest,
     ) -> None:
         if current.frontier is None:
-            raise DeliveryAdmissionConflictError("state-preserving admission requires a current frontier")
+            message = "state-preserving admission requires a current frontier"
+            raise DeliveryAdmissionConflictError(message)
         bindings = {binding.outcome_id: binding for binding in current.frontier.bindings}
         outcomes = {outcome.outcome_id: outcome for outcome in contract.outcomes}
         for outcome_id in request.preserve_unresolved_outcome_ids:
             binding = bindings.get(outcome_id)
             outcome = outcomes.get(outcome_id)
             if binding is None or outcome is None or binding.block is None or binding.block.resolved:
-                raise DeliveryAdmissionConflictError(
-                    f"state-preserving admission replay lost unresolved Outcome evidence: {outcome_id}"
-                )
-            matching_requests = tuple(
-                item for item in binding.requests if item.request_id == binding.block.request_id
-            )
+                message = f"state-preserving admission replay lost unresolved Outcome evidence: {outcome_id}"
+                raise DeliveryAdmissionConflictError(message)
+            matching_requests = tuple(item for item in binding.requests if item.request_id == binding.block.request_id)
             if len(matching_requests) != 1 or matching_requests[0].resolution is not None:
-                raise DeliveryAdmissionConflictError(
-                    f"state-preserving admission replay has unexpected request state: {outcome_id}"
-                )
+                message = f"state-preserving admission replay has unexpected request state: {outcome_id}"
+                raise DeliveryAdmissionConflictError(message)
 
     def _compile_package(self, change_id: str) -> _CompiledDelivery:
         package = self._package_store.read_verified(change_id)
@@ -327,9 +323,8 @@ class DeliveryAuthorityRegistry:
         if request.expected_frontier_digest is None:
             return
         if current is None or current.is_partial or current.frontier_bytes is None or current.contract is None:
-            raise DeliveryAdmissionConflictError(
-                f"expected frontier is unavailable for Delivery authority revision: {request.change_id}"
-            )
+            message = f"expected frontier is unavailable for Delivery authority revision: {request.change_id}"
+            raise DeliveryAdmissionConflictError(message)
         observed = hashlib.sha256(current.frontier_bytes).hexdigest()
         if observed == request.expected_frontier_digest:
             return
@@ -339,7 +334,8 @@ class DeliveryAuthorityRegistry:
             and self._state_preserving_frontier_matches(current, compiled_contract, request)
         ):
             return
-        raise DeliveryAdmissionConflictError(f"Delivery frontier changed before authority revision: {request.change_id}")
+        message = f"Delivery frontier changed before authority revision: {request.change_id}"
+        raise DeliveryAdmissionConflictError(message)
 
     @staticmethod
     def _state_preserving_frontier_matches(

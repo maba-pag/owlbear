@@ -7903,8 +7903,11 @@ def test_returned_design_revision_is_allowed_for_quiescent_change(tmp_path: Path
     assert runtime.change_stage() is DeliveryChangeStage.DESIGN
 
 
-def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+def _assert_composed_delivery_admission(
+    application: PortfolioApplication,
+    tmp_path: Path,
+    state_root: Path,
+) -> tuple[bytes, bytes, bytes, DeliveryContract]:
     intent = b"""# Composed Delivery
 
 ```yaml target-contract
@@ -7965,7 +7968,7 @@ dependencies: []
         ("composed-delivery", "OUT-001"),
         ("composed-delivery", "composed-delivery"),
     )
-    coordination = _coordinator.show("composed-delivery")
+    coordination = application._coordinator.show("composed-delivery")
     package_paths = {
         ".owlbear/delivery/packages/composed-delivery/authority.json",
         ".owlbear/delivery/packages/composed-delivery/design.md",
@@ -7980,6 +7983,14 @@ dependencies: []
     assert pending.head == coordination.last_reviewed_commit
     assert pending.triggers == (DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN),)
     assert application.acquire_frontier_work().launch_packages == ()
+    return intent, design, admitted.contract_bytes, admitted.contract
+
+
+def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    intent, design, admitted_contract_bytes, admitted_contract = _assert_composed_delivery_admission(
+        application, tmp_path, state_root
+    )
 
     delivery_root = state_root / "changes/composed-delivery"
     admitted_bytes = _file_bytes(delivery_root)
@@ -7990,7 +8001,7 @@ dependencies: []
         "composed-delivery",
         changed_intent,
         design,
-        admitted.contract_bytes,
+        admitted_contract_bytes,
     )
     (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
 
@@ -8022,19 +8033,22 @@ dependencies: []
 
     coordination_after_revision = _coordinator.show("composed-delivery")
     revised_package = application.read_design_session("composed-delivery")
-    assert replacement.contract != admitted.contract
+    assert replacement.contract != admitted_contract
     assert coordination_after_revision.design_package_snapshot is not None
     assert coordination_after_revision.design_package_snapshot.package_id == revised_package.package_id
     assert coordination_after_revision.design_package_snapshot.snapshot_head != (
         coordination_before_revision.design_package_snapshot.snapshot_head
     )
-    assert _git(
-        coordination_after_revision.worktree_path,
-        "merge-base",
-        "--is-ancestor",
-        coordination_before_revision.design_package_snapshot.snapshot_head,
-        coordination_after_revision.design_package_snapshot.snapshot_head,
-    ) == ""
+    assert (
+        _git(
+            coordination_after_revision.worktree_path,
+            "merge-base",
+            "--is-ancestor",
+            coordination_before_revision.design_package_snapshot.snapshot_head,
+            coordination_after_revision.design_package_snapshot.snapshot_head,
+        )
+        == ""
+    )
 
 
 def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:

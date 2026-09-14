@@ -2006,11 +2006,10 @@ class ChangeWorkspaceManager:
                     _coordination_conflict("Design package snapshot differs from the expected receipt")
                 return self._replace_design_package_snapshot(
                     coordination,
-                    existing,
                     package_id,
                     package_files,
                     operation_id,
-                    lock,
+                    lock=lock,
                 )
             intent = coordination.design_package_snapshot_intent
             branch_head = self._resolve(coordination.branch)
@@ -2055,13 +2054,16 @@ class ChangeWorkspaceManager:
     def _replace_design_package_snapshot(
         self,
         coordination: ChangeCoordination,
-        existing: ChangeDesignPackageSnapshotReceipt,
         package_id: str,
         package_files: Mapping[str, bytes],
         operation_id: str,
+        *,
         lock: PublicationLock,
     ) -> ChangeDesignPackageSnapshotReceipt:
         """Replace one exact package snapshot after an admitted Design revision."""
+        existing = coordination.design_package_snapshot
+        if existing is None:
+            _coordination_conflict("Design package snapshot replacement requires an existing snapshot")
         if coordination.writer is not None:
             _coordination_conflict("Design package snapshot replacement cannot overlap an active writer")
         branch_head = self._resolve(coordination.branch)

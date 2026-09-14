@@ -476,17 +476,18 @@ def test_snapshot_design_package_revises_after_commit_before_receipt(tmp_path: P
     )
     original_update = coordinator.update
     update_count = 0
+    failure_message = "simulated replacement receipt failure"
 
     def fail_replacement_receipt(updated: ChangeCoordination, *, lock=None) -> ChangeCoordination:
         nonlocal update_count
         update_count += 1
         if update_count == 1:
             return original_update(updated, lock=lock)
-        raise RuntimeError("simulated replacement receipt failure")
+        raise RuntimeError(failure_message)
 
     with (
         patch.object(coordinator, "update", side_effect=fail_replacement_receipt),
-        pytest.raises(RuntimeError, match="simulated replacement receipt failure"),
+        pytest.raises(RuntimeError, match=failure_message),
     ):
         manager.snapshot_design_package(
             coordination.change_id,

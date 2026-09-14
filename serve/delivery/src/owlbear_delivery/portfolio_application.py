@@ -6947,127 +6947,159 @@ class PortfolioApplication:
             if selected_change_id is None
             else ((selected_change_id, self._runtimes[selected_change_id]),)
         ):
-            try:
-                pending = runtime.pending_state_publication()
-            except (OSError, RuntimeError, ValueError) as exc:
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=getattr(exc, "code", PortfolioApplicationError.code),
-                        detail=f"Delivery-state publication intent is invalid: {exc}",
-                        retry_condition="Repair the local Delivery-state publication intent.",
-                    )
-                )
-                continue
-            if pending is None:
-                continue
-            if change_id in self._runtime_reconciliation_errors:
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=PortfolioApplicationError.code,
-                        detail=self._runtime_reconciliation_errors[change_id],
-                        retry_condition="Resolve the retained Delivery reconciliation attention.",
-                    )
-                )
-                continue
-            if pending.base_frontier_digest is None:
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=PortfolioApplicationError.code,
-                        detail="Pending Delivery-state publication lacks its pre-mutation frontier boundary.",
-                        retry_condition="Repair the local Delivery-state publication intent.",
-                    )
-                )
-                continue
-            current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-            if self._delivery_state_publisher is None:
-                if current_digest == pending.frontier_digest:
-                    runtime.acknowledge_pending_publication(current_digest)
-                    continue
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=PortfolioApplicationError.code,
-                        detail="Delivery-state publication publisher is unavailable; pending publication is retained.",
-                        retry_condition="Restore the Delivery-state publisher before replaying publication.",
-                    )
-                )
-                continue
-            if current_digest != pending.frontier_digest:
-                try:
-                    inventory = self._delivery_state_publisher.read_snapshot_inventory()
-                    snapshot = next(
-                        (item for item in inventory.snapshots if item.change_id == change_id),
-                        None,
-                    )
-                    remote_digest = (
-                        None
-                        if snapshot is None
-                        else hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
-                    )
-                except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
-                    failures.append(
-                        DeliveryAcquisitionFailure(
-                            change_id=change_id,
-                            outcome_id="OUT-000",
-                            code=getattr(exc, "code", PortfolioApplicationError.code),
-                            detail=str(exc),
-                            retry_condition="Retry Delivery-state publication replay.",
-                        )
-                    )
-                    continue
-                if remote_digest == pending.frontier_digest:
-                    runtime.reanchor_pending_publication(pending.frontier_digest)
-                    pending = runtime.pending_state_publication()
-                    if pending is not None:
-                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-                elif remote_digest == current_digest:
-                    runtime.reanchor_pending_publication(current_digest)
-                    pending = runtime.pending_state_publication()
-                    if pending is not None:
-                        current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
-                if pending is not None and current_digest == pending.frontier_digest:
-                    pass
-                else:
-                    failures.append(
-                        DeliveryAcquisitionFailure(
-                            change_id=change_id,
-                            outcome_id="OUT-000",
-                            code=PortfolioApplicationError.code,
-                            detail="Pending Delivery-state publication does not match the current frontier.",
-                            retry_condition="Reconcile the local frontier and its pending publication intent.",
-                        )
-                    )
-                    continue
-            try:
-                remote_head = self._pending_publication_remote_head(
-                    change_id,
-                    pending,
-                    current_frontier_digest=current_digest,
-                )
-                self._publish_delivery_state(
-                    change_id,
-                    runtime,
-                    f"replay-state-{pending.frontier_digest}",
-                    expected_remote_head=remote_head,
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
-                failures.append(
-                    DeliveryAcquisitionFailure(
-                        change_id=change_id,
-                        outcome_id="OUT-000",
-                        code=getattr(exc, "code", PortfolioApplicationError.code),
-                        detail=str(exc),
-                        retry_condition="Retry Delivery-state publication replay.",
-                    )
-                )
+            failure = self._replay_pending_state_publication(change_id, runtime)
+            if failure is not None:
+                failures.append(failure)
         return tuple(failures)
+
+    def _replay_pending_state_publication(
+        self, change_id: str, runtime: DeliveryRuntime
+    ) -> DeliveryAcquisitionFailure | None:
+        context = self._pending_state_publication_context(change_id, runtime)
+        if context is None:
+            return None
+        if isinstance(context, DeliveryAcquisitionFailure):
+            return context
+        pending, current_digest, publisher = context
+        if publisher is None:
+            return self._handle_unpublished_pending_state(
+                change_id,
+                runtime,
+                pending,
+                current_digest,
+            )
+        if current_digest != pending.frontier_digest:
+            reconciled = self._reconcile_pending_state_publication(
+                change_id,
+                runtime,
+                pending,
+                current_digest,
+                publisher,
+            )
+            if isinstance(reconciled, DeliveryAcquisitionFailure):
+                return reconciled
+            pending, current_digest = reconciled
+        try:
+            remote_head = self._pending_publication_remote_head(
+                change_id,
+                pending,
+                current_frontier_digest=current_digest,
+            )
+            self._publish_delivery_state(
+                change_id,
+                runtime,
+                f"replay-state-{pending.frontier_digest}",
+                expected_remote_head=remote_head,
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+            return DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-000",
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=str(exc),
+                retry_condition="Retry Delivery-state publication replay.",
+            )
+        return None
+
+    def _pending_state_publication_context(
+        self, change_id: str, runtime: DeliveryRuntime
+    ) -> tuple[DeliveryPendingStatePublication, str, DeliveryStatePublisher | None] | DeliveryAcquisitionFailure | None:
+        try:
+            pending = runtime.pending_state_publication()
+        except (OSError, RuntimeError, ValueError) as exc:
+            return DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-000",
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=f"Delivery-state publication intent is invalid: {exc}",
+                retry_condition="Repair the local Delivery-state publication intent.",
+            )
+        if pending is None:
+            return None
+        if change_id in self._runtime_reconciliation_errors:
+            return DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-000",
+                code=PortfolioApplicationError.code,
+                detail=self._runtime_reconciliation_errors[change_id],
+                retry_condition="Resolve the retained Delivery reconciliation attention.",
+            )
+        if pending.base_frontier_digest is None:
+            return DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-000",
+                code=PortfolioApplicationError.code,
+                detail="Pending Delivery-state publication lacks its pre-mutation frontier boundary.",
+                retry_condition="Repair the local Delivery-state publication intent.",
+            )
+        return (
+            pending,
+            hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            self._delivery_state_publisher,
+        )
+
+    def _handle_unpublished_pending_state(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        pending: DeliveryPendingStatePublication,
+        current_digest: str,
+    ) -> DeliveryAcquisitionFailure | None:
+        if current_digest == pending.frontier_digest:
+            runtime.acknowledge_pending_publication(current_digest)
+            return None
+        return DeliveryAcquisitionFailure(
+            change_id=change_id,
+            outcome_id="OUT-000",
+            code=PortfolioApplicationError.code,
+            detail="Delivery-state publication publisher is unavailable; pending publication is retained.",
+            retry_condition="Restore the Delivery-state publisher before replaying publication.",
+        )
+
+    def _reconcile_pending_state_publication(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        pending: DeliveryPendingStatePublication,
+        current_digest: str,
+        publisher: DeliveryStatePublisher,
+    ) -> tuple[DeliveryPendingStatePublication, str] | DeliveryAcquisitionFailure:
+        try:
+            inventory = publisher.read_snapshot_inventory()
+            snapshot = next(
+                (item for item in inventory.snapshots if item.change_id == change_id),
+                None,
+            )
+            remote_digest = (
+                None if snapshot is None else hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
+            )
+        except (OSError, RuntimeError, subprocess.SubprocessError, TypeError, ValueError) as exc:
+            return DeliveryAcquisitionFailure(
+                change_id=change_id,
+                outcome_id="OUT-000",
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=str(exc),
+                retry_condition="Retry Delivery-state publication replay.",
+            )
+        if remote_digest == pending.frontier_digest:
+            runtime.reanchor_pending_publication(pending.frontier_digest)
+            pending = runtime.pending_state_publication()
+            if pending is not None:
+                current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+        elif remote_digest == current_digest:
+            runtime.reanchor_pending_publication(current_digest)
+            pending = runtime.pending_state_publication()
+            if pending is not None:
+                current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
+        if pending is not None and current_digest == pending.frontier_digest:
+            return pending, current_digest
+        return DeliveryAcquisitionFailure(
+            change_id=change_id,
+            outcome_id="OUT-000",
+            code=PortfolioApplicationError.code,
+            detail="Pending Delivery-state publication does not match the current frontier.",
+            retry_condition="Reconcile the local frontier and its pending publication intent.",
+        )
 
     def _pending_publication_remote_head(
         self,
@@ -7087,7 +7119,7 @@ class PortfolioApplication:
         if inventory.remote_head is None or snapshot is None:
             self._fail("remote Delivery snapshot is unavailable for pending replay")
         remote_digest = hashlib.sha256(_canonical_model_bytes(snapshot.frontier)).hexdigest()
-        if remote_digest != pending.base_frontier_digest and remote_digest != current_frontier_digest:
+        if remote_digest not in {pending.base_frontier_digest, current_frontier_digest}:
             self._fail("remote Delivery snapshot no longer matches the pending publication base")
         return inventory.remote_head
 
