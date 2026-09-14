@@ -141,6 +141,7 @@ def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     with (
         patch.object(sys, "argv", ["megalint", "--unsafe-fix"]),
         patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
