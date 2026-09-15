@@ -151,6 +151,8 @@ def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     assert command[:6] == ["docker", "run", "--rm", "--platform", "linux/amd64", "-v"]
     assert "registry.example/megalinter-main:v-current" in command
     assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
+    assert "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix" in command
+    assert "ACTION_ZIZMOR_ARGUMENTS=--fix=all" in command
 
 
 def test_quality_runs_local_lint_then_megalint() -> None:

@@ -299,6 +299,10 @@ def run_megalint(fix_mode: FixMode) -> int:
                     "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix",
                     "-e",
                     "CSS_STYLELINT_ARGUMENTS=--fix=lax",
+                    "-e",
+                    "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix",
+                    "-e",
+                    "ACTION_ZIZMOR_ARGUMENTS=--fix=all",
                 ]
             )
         command.extend(

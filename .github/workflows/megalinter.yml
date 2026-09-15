@@ -9,7 +9,7 @@ name: MegaLinter
         type: boolean
         default: false
       unsafe_fixes:
-        description: "Allow Ruff unsafe fixes and Stylelint lax fixes"
+        description: "Allow Ruff unsafe, Stylelint lax, and Zizmor unsafe fixes"
         type: boolean
         default: false
       fix_mode:
@@ -47,6 +47,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: true
           # PAT enables create-pull-request to trigger subsequent workflow runs.
           # MegaLinter v9.5+ discourages PATs; keep fine-grained, single-repo,
           # minimum permissions. Remove if fix-PR feature is not needed.
@@ -78,6 +79,8 @@ jobs:
             echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes"
             echo "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix"
             echo "CSS_STYLELINT_ARGUMENTS=--fix=lax"
+            echo "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix"
+            echo "ACTION_ZIZMOR_ARGUMENTS=--fix=all"
           } >> "$GITHUB_ENV"
 
       - name: Verify MegaLinter version alignment

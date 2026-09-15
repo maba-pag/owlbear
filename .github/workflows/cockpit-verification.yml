@@ -81,7 +81,9 @@ jobs:
           python3 ../../../.github/scripts/check_node_runtime.py \
             --version-file .nvmrc \
             --engines-file package.json \
-            --expected-version "${{ matrix.node }}"
+            --expected-version "${MATRIX_NODE}"
+        env:
+          MATRIX_NODE: ${{ matrix.node }}
 
       - name: Install locked Cockpit dependencies
         run: npm ci --engine-strict

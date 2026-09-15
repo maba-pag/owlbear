@@ -210,31 +210,43 @@ jobs:
         run: python3 .github/scripts/check_uv_version.py
 
       - name: Install requested Python
-        run: uv python install "${{ matrix.python }}"
+        run: uv python install "${MATRIX_PYTHON}"
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Install locked Python workspace
-        run: uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups
+        run: uv sync --locked --python "${MATRIX_PYTHON}" --all-packages --all-extras --all-groups
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Prove workspace lock regeneration
         if: matrix.python == '3.12.14'
-        run: uv run --python "${{ matrix.python }}" python .github/scripts/check_uv_workspace_lock.py
+        run: uv run --python "${MATRIX_PYTHON}" python .github/scripts/check_uv_workspace_lock.py
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Compile Python sources
         if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
-          uv run --python "${{ matrix.python }}" python -m compileall -q serve setup tests .owlbear/hooks seed
+          uv run --python "${MATRIX_PYTHON}" python -m compileall -q serve setup tests .owlbear/hooks seed
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Check Python sources
         if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
-          uv run --python "${{ matrix.python }}" ruff check .
-          uv run --python "${{ matrix.python }}" ruff format --check .
+          uv run --python "${MATRIX_PYTHON}" ruff check .
+          uv run --python "${MATRIX_PYTHON}" ruff format --check .
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
       - name: Run Python behavior tests
         if: github.event_name == 'workflow_dispatch' || matrix.python == '3.12.14'
         run: |
-          uv run --python "${{ matrix.python }}" pytest tests serve \
+          uv run --python "${MATRIX_PYTHON}" pytest tests serve \
             -m "not api and not e2e and not browser and not cockpit and not model"
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
 
   proof-node:
     name: Prove Node dependency surfaces
