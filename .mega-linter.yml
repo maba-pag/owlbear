@@ -44,7 +44,7 @@ FILTER_REGEX_EXCLUDE: "(\
     memory/|research/|target/\
   )|\
   store/(audit|knowledge)/.*\\.db$\
-)"
+ )"
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
 ADDITIONAL_EXCLUDED_DIRECTORIES:
@@ -84,9 +84,11 @@ PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CONFIG_FILE: pyproject.toml
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
-# TypeScript — scope to Cockpit web (only dir with eslint.config.js).
-TYPESCRIPT_ES_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.(ts|tsx)$'
+# Cockpit ESLint — match the direct `eslint src e2e` CI surface.
+TYPESCRIPT_ES_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$'
 TYPESCRIPT_ES_FILE_EXTENSIONS:
+  - .js
+  - .mjs
   - .ts
   - .tsx
 TYPESCRIPT_ES_CONFIG_FILE: eslint.config.js
@@ -116,7 +118,7 @@ JAVASCRIPT_ES_FILE_EXTENSIONS:
   - .jsonc
 JAVASCRIPT_ES_CONFIG_FILE: eslint-json.config.cjs
 JAVASCRIPT_ES_RULES_PATH: .
-JAVASCRIPT_ES_CLI_EXECUTABLE: serve/cockpit/web/node_modules/.bin/eslint
+JAVASCRIPT_ES_CLI_EXECUTABLE: [serve/cockpit/web/node_modules/.bin/eslint]
 JAVASCRIPT_ES_ARGUMENTS: "--no-config-lookup --no-warn-ignored --no-error-on-unmatched-pattern"
 
 # EditorConfig — GitHub Actions annotations

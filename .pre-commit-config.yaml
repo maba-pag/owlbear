@@ -138,7 +138,7 @@ repos:
         entry: >-
           npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
           serve/cockpit/web/e2e/ --fix --max-warnings 0
-        files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
+        files: ^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$
         pass_filenames: false
       - id: eslint-frontend-check
         name: ESLint (Cockpit frontend, no fix)
@@ -146,7 +146,7 @@ repos:
         entry: >-
           npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
           serve/cockpit/web/e2e/ --max-warnings 0
-        files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
+        files: ^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$
         pass_filenames: false
         stages: [manual]
       - id: stylelint-frontend-fix
