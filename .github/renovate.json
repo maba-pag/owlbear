@@ -96,41 +96,20 @@
       "automerge": false
     },
     {
-      "description": "Keep standalone Ruff tool versions coupled",
-      "matchManagers": ["pep621", "pre-commit"],
-      "matchDatasources": ["pypi", "github-tags"],
-      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch",
-        "pin",
-        "pinDigest",
-        "digest"
+      "description": "Derive Ruff and Biome pins from the proposed MegaLinter release in CI",
+      "matchPackageNames": [
+        "ruff",
+        "astral-sh/ruff-pre-commit",
+        "@biomejs/biome"
       ],
-      "groupName": "Ruff toolchain"
-    },
-    {
-      "description": "Keep standalone Ruff within the current MegaLinter-compatible ceiling",
-      "matchManagers": ["pep621", "pre-commit"],
-      "matchDatasources": ["pypi", "github-tags"],
-      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
-      "allowedVersions": "<=0.16.5"
+      "enabled": false
     },
     {
       "description": "Keep native and action MegaLinter versions coupled",
       "matchManagers": ["custom.regex", "github-actions"],
       "matchDatasources": ["github-tags"],
       "matchPackageNames": ["oxsecurity/megalinter"],
-      "matchUpdateTypes": ["major", "minor", "patch", "pin"],
-      "groupName": "MegaLinter declarations"
-    },
-    {
-      "description": "Update local Biome only with MegaLinter's bundled Biome",
-      "matchPackageNames": ["@biomejs/biome", "oxsecurity/megalinter"],
-      "matchManagers": ["npm", "custom.regex", "github-actions"],
-      "groupName": "Biome and MegaLinter",
-      "minimumGroupSize": 2
+      "groupName": "MegaLinter toolchain"
     },
     {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",

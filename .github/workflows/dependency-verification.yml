@@ -14,12 +14,14 @@ name: Dependency verification
       - .github/renovate.json
       - .github/scripts/check_uv_workspace_lock.py
       - .github/scripts/check_ruff_toolchain.py
+      - .github/scripts/sync_megalinter_toolchain.py
       - .github/workflows/**
       - .mega-linter.yml
       - .pre-commit-config.yaml
       - .python-version
       - .owlbear/scripts/diagrams/**
       - share/diagrams/**
+      - biome.json
       - package.json
       - package-lock.json
       - pyproject.toml
@@ -153,6 +155,10 @@ jobs:
               .github/workflows/*|\
               .github/renovate.json|\
               .github/scripts/check_ruff_toolchain.py|\
+              .github/scripts/sync_megalinter_toolchain.py|\
+              biome.json|\
+              serve/cockpit/web/package.json|\
+              serve/cockpit/web/package-lock.json|\
               serve/tools/src/owlbear_tools/dependency_ci.py|\
               serve/tools/src/owlbear_tools/megalinter.py|\
               tests/test_dependency_verification_workflow.py)
@@ -384,6 +390,9 @@ jobs:
       - name: Verify Ruff toolchain parity
         if: needs.classify.outputs.ruff_toolchain == 'true'
         run: uv run python .github/scripts/check_ruff_toolchain.py
+
+      - name: Verify MegaLinter derived pins and locks
+        run: uv run --locked python .github/scripts/sync_megalinter_toolchain.py --check
 
       - name: Setup Node.js for frontend lint hooks
         if: needs.classify.outputs.precommit == 'true'

@@ -1,0 +1,108 @@
+---
+name: Sync MegaLinter toolchain
+
+"on":  # zizmor: ignore[dangerous-triggers] -- Trusted base code; same-repo bot guard; version-only inputs; leased push.
+  pull_request_target:
+    branches: [dev]
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - .mega-linter.yml
+      - .github/workflows/megalinter.yml
+
+concurrency:
+  group: sync-megalinter-toolchain-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  sync:
+    if: >-
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted base code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          enable-cache: false
+
+      - name: Install trusted synchronization dependencies
+        run: uv sync --locked --only-group dev
+
+      - name: Setup trusted Node.js runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          package-manager-cache: false
+
+      - name: Read candidate without executing PR code
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            fetch origin "refs/pull/$PR_NUMBER/head"
+          test "$(git rev-parse FETCH_HEAD)" = "$HEAD_SHA"
+          git worktree add --detach "$RUNNER_TEMP/toolchain" "$HEAD_SHA"
+
+      - name: Validate candidate and synchronize exact versions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          UV_NO_CACHE: "1"
+          NPM_CONFIG_CACHE: ${{ runner.temp }}/toolchain-npm-cache
+        run: |
+          uv run --locked --no-sync python .github/scripts/sync_megalinter_toolchain.py \
+            --root "$RUNNER_TEMP/toolchain" --base-ref "$BASE_SHA"
+
+      - name: Publish alignment commit on unchanged PR head
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+          READ_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          cd "$RUNNER_TEMP/toolchain"
+          git add -- pyproject.toml .pre-commit-config.yaml biome.json uv.lock \
+            serve/cockpit/web/package.json serve/cockpit/web/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Toolchain already aligned; no commit needed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::Set the repository PAT secret with Contents: write and Pull requests: read so the alignment commit triggers CI."
+            exit 1
+          fi
+          GH_TOKEN="$READ_TOKEN" gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" \
+            > "$RUNNER_TEMP/toolchain-pr.json"
+          jq --exit-status --arg head "$HEAD_SHA" --arg branch "$HEAD_BRANCH" \
+            --arg repo "$REPOSITORY" \
+            '.state == "open" and .draft == false and .user.login == "renovate[bot]" and
+             .base.ref == "dev" and .head.repo.full_name == $repo and
+             .head.sha == $head and .head.ref == $branch' "$RUNNER_TEMP/toolchain-pr.json"
+          git -c core.hooksPath=/dev/null \
+            -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "chore: align Ruff and Biome with MegaLinter"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push --force-with-lease="refs/heads/$HEAD_BRANCH:$HEAD_SHA" \
+            origin "HEAD:refs/heads/$HEAD_BRANCH"
+          echo "Aligned Ruff and Biome on the MegaLinter PR; CI will run on the new commit." \
+            >> "$GITHUB_STEP_SUMMARY"

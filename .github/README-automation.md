@@ -39,6 +39,44 @@ pull-request browser gate is Chromium-only, while manual dispatch retains the fu
 Dependency workflow contract tests own workflow-shape validation; the agent-ecosystem workflow
 focuses on agent, hook, and knowledge surfaces.
 
+## MegaLinter toolchain updates
+
+[Renovate](renovate.json) updates the native and action MegaLinter declarations together. Ruff,
+`ruff-pre-commit`, and Biome are derived pins, not independent routine updates. The
+[synchronization workflow](workflows/sync-megalinter-toolchain.yml) adds those pins and both lockfiles
+to the same PR using the proposed release's tagged linter-version manifest. It also aligns the
+[Biome schema](../biome.json); it never follows a moving `latest` manifest.
+
+Activation requires the workflow and [synchronizer](scripts/sync_megalinter_toolchain.py) on the
+repository's default branch and the PR's `dev` base. Configure the repository `PAT` Actions secret
+with single-repository Contents write and Pull requests read access. A PAT is required for changed
+pins so its push triggers fresh CI; the workflow deliberately has no `GITHUB_TOKEN` write fallback.
+The commit author remains `github-actions[bot]`, which Renovate already accepts through
+`gitIgnoredAuthors`. No commit is made when the PR is already aligned.
+
+Only non-draft, same-repository `renovate[bot]` PRs on `renovate/` branches are eligible. Trusted
+base-branch code rejects unexpected paths, symlinks, and non-version edits before resolving locks.
+PR lockfile changes are discarded in the disposable checkout and regenerated from the trusted
+baseline, with Python builds and npm install scripts disabled. Publication checks the open PR's
+identity and uses an exact-head lease, so a concurrent Renovate update is not overwritten.
+
+The [dependency verification workflow](workflows/dependency-verification.yml) independently checks
+Ruff, Biome, their locks, and the schema on the resulting commit. Local check-only equivalent:
+
+```shell
+uv run --locked python .github/scripts/sync_megalinter_toolchain.py --check
+```
+
+For an existing MegaLinter PR, request a Renovate rebase after activation. Old grouped PRs containing
+unrelated edits fail closed; recreate them under the new policy. Missing metadata, unavailable
+packages, or missing credentials leave a visible failed workflow instead of selecting newer tools.
+After correcting a transient failure, rerun the failed job on the current PR head. An unexpected
+bundled downgrade is reflected exactly in the reviewable PR, rather than silently retaining drift.
+
+Keep GitHub Dependabot alerts enabled: disabling independent Renovate updates is not a security
+exception policy. An urgent Ruff or Biome fix unavailable in MegaLinter requires an explicit reviewed
+exception or a newer MegaLinter release; the parity check intentionally blocks silent divergence.
+
 ## Changing the sync boundary
 
 Treat [`sync-manifest.json`](sync-manifest.json) as the source of truth for the source allowlists

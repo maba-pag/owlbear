@@ -4,6 +4,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## MegaLinter Toolchain Synchronization
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter release manifest | <https://raw.githubusercontent.com/oxsecurity/megalinter/v10.1.0/.automation/generated/linter-versions.json> | Exact release-owned Ruff, Ruff formatter, and Biome versions | `.github/scripts/sync_megalinter_toolchain.py` | 2026-09-16 |
+| Renovate configuration | <https://docs.renovatebot.com/configuration-options/> | Grouping versus version selection, disabled derived dependencies, and ignored bot authors | `.github/renovate.json` | 2026-09-16 |
+| Renovate hosted FAQ | <https://docs.renovatebot.com/mend-hosted/faq/> | Hosted post-upgrade command restrictions motivating repository-owned synchronization | `.github/workflows/sync-megalinter-toolchain.yml` | 2026-09-16 |
+| GitHub workflow triggers | <https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-when-your-workflow-runs/triggering-a-workflow> | Token-triggered CI limitations and PAT-triggered verification on the new commit | `.github/workflows/sync-megalinter-toolchain.yml` | 2026-09-16 |
+
 ## Biome Incremental Lint Adoption
 
 | Source | URL | What | Where Used | Date |
