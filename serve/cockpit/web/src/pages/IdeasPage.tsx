@@ -1,319 +1,361 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useBeforeUnload, useBlocker } from 'react-router'
-import { PButton, PHeading, PModal } from '@porsche-design-system/components-react'
-import MarkdownPreview from '../components/MarkdownPreview'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBeforeUnload, useBlocker } from "react-router";
+import {
+  PButton,
+  PHeading,
+  PModal,
+} from "@porsche-design-system/components-react";
+import MarkdownPreview from "../components/MarkdownPreview";
 
-import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from '../api/ideas'
-import { WorkspaceHeader } from '../components/WorkspaceHeader'
+import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from "../api/ideas";
+import { WorkspaceHeader } from "../components/WorkspaceHeader";
 
 type IdeasConflictSnapshot = {
-  content: string
-  updatedAt: string | null
-}
+  content: string;
+  updatedAt: string | null;
+};
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en').format(value)
+  return new Intl.NumberFormat("en").format(value);
 }
 
 function formatLastSavedAt(updatedAt: string | null): string {
   if (!updatedAt) {
-    return 'Not saved yet'
+    return "Not saved yet";
   }
 
-  const timestamp = Date.parse(updatedAt)
+  const timestamp = Date.parse(updatedAt);
   if (!Number.isFinite(timestamp)) {
-    return 'Saved recently'
+    return "Saved recently";
   }
 
-  const elapsedMs = Math.max(0, Date.now() - timestamp)
-  const elapsedMinutes = Math.floor(elapsedMs / 60_000)
+  const elapsedMs = Math.max(0, Date.now() - timestamp);
+  const elapsedMinutes = Math.floor(elapsedMs / 60_000);
   if (elapsedMinutes < 1) {
-    return 'just now'
+    return "just now";
   }
 
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes}m ago`
+    return `${elapsedMinutes}m ago`;
   }
 
-  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) {
-    return `${elapsedHours}h ago`
+    return `${elapsedHours}h ago`;
   }
 
-  const elapsedDays = Math.floor(elapsedHours / 24)
-  return `${elapsedDays}d ago`
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays}d ago`;
 }
 
 function IdeasPage() {
-  const [content, setContent] = useState('')
-  const [previewMode, setPreviewMode] = useState(true)
-  const [lastSavedContent, setLastSavedContent] = useState('')
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
-  const [conflictSnapshot, setConflictSnapshot] = useState<IdeasConflictSnapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
-  const [ideasCanScrollDown, setIdeasCanScrollDown] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const previewRef = useRef<HTMLDivElement | null>(null)
-  const contentRef = useRef('')
-  const lastSavedContentRef = useRef('')
-  const stayButtonRef = useRef<HTMLElement | null>(null)
+  const [content, setContent] = useState("");
+  const [previewMode, setPreviewMode] = useState(true);
+  const [lastSavedContent, setLastSavedContent] = useState("");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [conflictSnapshot, setConflictSnapshot] =
+    useState<IdeasConflictSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [ideasCanScrollDown, setIdeasCanScrollDown] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef("");
+  const lastSavedContentRef = useRef("");
+  const stayButtonRef = useRef<HTMLElement | null>(null);
 
-  const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent])
-  const hasConflict = conflictSnapshot !== null
-  const navigationBlocker = useBlocker(isDirty)
+  const isDirty = useMemo(
+    () => content !== lastSavedContent,
+    [content, lastSavedContent],
+  );
+  const hasConflict = conflictSnapshot !== null;
+  const navigationBlocker = useBlocker(isDirty);
   const lineCount = useMemo(
     () => (content.length === 0 ? 0 : content.split(/\r\n|\r|\n/).length),
     [content],
-  )
+  );
   const wordCount = useMemo(() => {
-    const words = content.trim().match(/\S+/g)
-    return words?.length ?? 0
-  }, [content])
-  const saveDisabled = !isDirty || saving || hasConflict
-  const lastSavedLabel = useMemo(() => formatLastSavedAt(lastSavedAt), [lastSavedAt])
+    const words = content.trim().match(/\S+/g);
+    return words?.length ?? 0;
+  }, [content]);
+  const saveDisabled = !isDirty || saving || hasConflict;
+  const lastSavedLabel = useMemo(
+    () => formatLastSavedAt(lastSavedAt),
+    [lastSavedAt],
+  );
 
   const updateIdeasScrollCue = useCallback(() => {
     if (loading) {
-      setIdeasCanScrollDown(false)
-      return
+      setIdeasCanScrollDown(false);
+      return;
     }
-    const surface = previewMode ? previewRef.current : textareaRef.current
-    setIdeasCanScrollDown(Boolean(surface && surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1))
-  }, [loading, previewMode])
+    const surface = previewMode ? previewRef.current : textareaRef.current;
+    setIdeasCanScrollDown(
+      Boolean(
+        surface &&
+          surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1,
+      ),
+    );
+  }, [loading, previewMode]);
 
   useEffect(() => {
-    contentRef.current = content
-  }, [content])
+    contentRef.current = content;
+  }, [content]);
 
   useEffect(() => {
-    updateIdeasScrollCue()
+    updateIdeasScrollCue();
 
-    const textarea = textareaRef.current
-    const preview = previewRef.current
-    textarea?.addEventListener('input', updateIdeasScrollCue)
-    let observer: MutationObserver | null = null
-    if (preview && typeof MutationObserver !== 'undefined') {
-      observer = new MutationObserver(updateIdeasScrollCue)
-      observer.observe(preview, { childList: true, subtree: true, characterData: true })
+    const textarea = textareaRef.current;
+    const preview = previewRef.current;
+    textarea?.addEventListener("input", updateIdeasScrollCue);
+    let observer: MutationObserver | null = null;
+    if (preview && typeof MutationObserver !== "undefined") {
+      observer = new MutationObserver(updateIdeasScrollCue);
+      observer.observe(preview, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
     }
 
     return () => {
-      textarea?.removeEventListener('input', updateIdeasScrollCue)
-      observer?.disconnect()
-    }
-  }, [updateIdeasScrollCue])
+      textarea?.removeEventListener("input", updateIdeasScrollCue);
+      observer?.disconnect();
+    };
+  }, [updateIdeasScrollCue]);
 
   useEffect(() => {
-    window.addEventListener('resize', updateIdeasScrollCue)
+    window.addEventListener("resize", updateIdeasScrollCue);
     return () => {
-      window.removeEventListener('resize', updateIdeasScrollCue)
-    }
-  }, [updateIdeasScrollCue])
+      window.removeEventListener("resize", updateIdeasScrollCue);
+    };
+  }, [updateIdeasScrollCue]);
 
   useEffect(() => {
-    lastSavedContentRef.current = lastSavedContent
-  }, [lastSavedContent])
+    lastSavedContentRef.current = lastSavedContent;
+  }, [lastSavedContent]);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     const load = async () => {
       try {
-        const response = await fetchIdeas()
+        const response = await fetchIdeas();
         if (cancelled) {
-          return
+          return;
         }
-        setContent(response.content)
-        setLastSavedContent(response.content)
-        setLastSavedAt(response.updated_at ?? null)
-        setErrorMessage(null)
+        setContent(response.content);
+        setLastSavedContent(response.content);
+        setLastSavedAt(response.updated_at ?? null);
+        setErrorMessage(null);
       } catch (error) {
         if (cancelled) {
-          return
+          return;
         }
-        const message = error instanceof Error ? error.message : 'Failed to load ideas'
-        setErrorMessage(message)
+        const message =
+          error instanceof Error ? error.message : "Failed to load ideas";
+        setErrorMessage(message);
       } finally {
         if (!cancelled) {
-          setLoading(false)
+          setLoading(false);
         }
       }
-    }
+    };
 
-    void load()
+    void load();
 
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading && !errorMessage && !previewMode) {
-      textareaRef.current?.focus()
+      textareaRef.current?.focus();
     }
-  }, [errorMessage, loading, previewMode])
+  }, [errorMessage, loading, previewMode]);
 
   useEffect(() => {
     if (showUnsavedDialog) {
-      stayButtonRef.current?.focus()
+      stayButtonRef.current?.focus();
     }
-  }, [showUnsavedDialog])
+  }, [showUnsavedDialog]);
 
   const handleSave = useCallback(async () => {
     if (!isDirty || saving || loading || hasConflict) {
-      return
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
-      const updatedAt = await saveIdeas(content, { expectedUpdatedAt: lastSavedAt })
-      setLastSavedContent(content)
-      setLastSavedAt(updatedAt ?? new Date().toISOString())
-      setConflictSnapshot(null)
-      setErrorMessage(null)
+      const updatedAt = await saveIdeas(content, {
+        expectedUpdatedAt: lastSavedAt,
+      });
+      setLastSavedContent(content);
+      setLastSavedAt(updatedAt ?? new Date().toISOString());
+      setConflictSnapshot(null);
+      setErrorMessage(null);
     } catch (error) {
       if (error instanceof IdeasSaveConflictError) {
-        setConflictSnapshot({ content: error.content, updatedAt: error.updatedAt })
-        setErrorMessage(null)
-        return
+        setConflictSnapshot({
+          content: error.content,
+          updatedAt: error.updatedAt,
+        });
+        setErrorMessage(null);
+        return;
       }
-      const message = error instanceof Error ? error.message : 'Failed to save ideas'
-      setErrorMessage(message)
+      const message =
+        error instanceof Error ? error.message : "Failed to save ideas";
+      setErrorMessage(message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }, [content, hasConflict, isDirty, lastSavedAt, loading, saving])
+  }, [content, hasConflict, isDirty, lastSavedAt, loading, saving]);
 
   useEffect(() => {
     const refetchIdeas = async () => {
-      const triggerContent = contentRef.current
-      const triggerLastSaved = lastSavedContentRef.current
-      const wasDirtyAtTrigger = triggerContent !== triggerLastSaved
+      const triggerContent = contentRef.current;
+      const triggerLastSaved = lastSavedContentRef.current;
+      const wasDirtyAtTrigger = triggerContent !== triggerLastSaved;
 
       try {
-        const response = await fetchIdeas()
+        const response = await fetchIdeas();
 
         if (!wasDirtyAtTrigger) {
-          const isDirtyAtResolve = contentRef.current !== lastSavedContentRef.current
-          const baselineChangedSinceTrigger = lastSavedContentRef.current !== triggerLastSaved
+          const isDirtyAtResolve =
+            contentRef.current !== lastSavedContentRef.current;
+          const baselineChangedSinceTrigger =
+            lastSavedContentRef.current !== triggerLastSaved;
           if (isDirtyAtResolve || baselineChangedSinceTrigger) {
-            return
+            return;
           }
 
-          setContent(response.content)
-          setLastSavedContent(response.content)
-          setLastSavedAt(response.updated_at ?? null)
-          return
+          setContent(response.content);
+          setLastSavedContent(response.content);
+          setLastSavedAt(response.updated_at ?? null);
+          return;
         }
       } catch {
         // Background refetch failure is intentionally silent.
       }
-    }
+    };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') {
-        return
+      if (document.visibilityState !== "visible") {
+        return;
       }
 
-      void refetchIdeas()
-    }
+      void refetchIdeas();
+    };
 
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [])
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isSaveKey = event.key.toLowerCase() === 's' && (event.metaKey || event.ctrlKey)
+      const isSaveKey =
+        event.key.toLowerCase() === "s" && (event.metaKey || event.ctrlKey);
       if (!isSaveKey) {
-        return
+        return;
       }
 
-      event.preventDefault()
+      event.preventDefault();
       if (!isDirty || hasConflict) {
-        return
+        return;
       }
 
-      void handleSave()
-    }
+      void handleSave();
+    };
 
-    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [handleSave, hasConflict, isDirty])
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [handleSave, hasConflict, isDirty]);
 
   const handleConflictOverwrite = useCallback(async () => {
     if (conflictSnapshot === null) {
-      return
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
-      const updatedAt = await saveIdeas(content, { expectedUpdatedAt: conflictSnapshot.updatedAt, force: true })
-      setLastSavedContent(content)
-      setLastSavedAt(updatedAt ?? new Date().toISOString())
-      setConflictSnapshot(null)
-      setErrorMessage(null)
+      const updatedAt = await saveIdeas(content, {
+        expectedUpdatedAt: conflictSnapshot.updatedAt,
+        force: true,
+      });
+      setLastSavedContent(content);
+      setLastSavedAt(updatedAt ?? new Date().toISOString());
+      setConflictSnapshot(null);
+      setErrorMessage(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save ideas'
-      setErrorMessage(message)
+      const message =
+        error instanceof Error ? error.message : "Failed to save ideas";
+      setErrorMessage(message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }, [conflictSnapshot, content])
+  }, [conflictSnapshot, content]);
 
   const handleConflictLoad = useCallback(() => {
     if (conflictSnapshot === null) {
-      return
+      return;
     }
 
-    setContent(conflictSnapshot.content)
-    setLastSavedContent(conflictSnapshot.content)
-    setLastSavedAt(conflictSnapshot.updatedAt)
-    setConflictSnapshot(null)
-    setErrorMessage(null)
-  }, [conflictSnapshot])
+    setContent(conflictSnapshot.content);
+    setLastSavedContent(conflictSnapshot.content);
+    setLastSavedAt(conflictSnapshot.updatedAt);
+    setConflictSnapshot(null);
+    setErrorMessage(null);
+  }, [conflictSnapshot]);
 
   const handleConflictCancel = useCallback(() => {
-    setConflictSnapshot(null)
-  }, [])
+    setConflictSnapshot(null);
+  }, []);
 
   useEffect(() => {
-    setShowUnsavedDialog(navigationBlocker.state === 'blocked')
-  }, [navigationBlocker.state])
+    setShowUnsavedDialog(navigationBlocker.state === "blocked");
+  }, [navigationBlocker.state]);
 
-  useBeforeUnload(useCallback((event: BeforeUnloadEvent) => {
-    if (!isDirty) {
-      return
-    }
+  useBeforeUnload(
+    useCallback(
+      (event: BeforeUnloadEvent) => {
+        if (!isDirty) {
+          return;
+        }
 
-    event.preventDefault()
-    event.returnValue = ''
-  }, [isDirty]))
+        event.preventDefault();
+        event.returnValue = "";
+      },
+      [isDirty],
+    ),
+  );
 
   const handleLeavePage = useCallback(() => {
-    setShowUnsavedDialog(false)
-    if (navigationBlocker.state === 'blocked') {
-      navigationBlocker.proceed()
+    setShowUnsavedDialog(false);
+    if (navigationBlocker.state === "blocked") {
+      navigationBlocker.proceed();
     }
-  }, [navigationBlocker])
+  }, [navigationBlocker]);
 
   const handleStayOnPage = useCallback(() => {
-    setShowUnsavedDialog(false)
-    if (navigationBlocker.state === 'blocked') {
-      navigationBlocker.reset()
+    setShowUnsavedDialog(false);
+    if (navigationBlocker.state === "blocked") {
+      navigationBlocker.reset();
     }
-  }, [navigationBlocker])
+  }, [navigationBlocker]);
 
   if (loading) {
     return (
-      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
+      <section
+        className="flex h-full min-h-0 flex-col p-static-lg text-primary"
+        data-region="ideas-workspace"
+      >
         <div
           data-testid="ideas-loading"
           role="status"
@@ -322,29 +364,45 @@ function IdeasPage() {
           Loading ideas...
         </div>
       </section>
-    )
+    );
   }
 
-  if (errorMessage && !saving && content.length === 0 && lastSavedContent.length === 0) {
+  if (
+    errorMessage &&
+    !saving &&
+    content.length === 0 &&
+    lastSavedContent.length === 0
+  ) {
     return (
-      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
+      <section
+        className="flex h-full min-h-0 flex-col p-static-lg text-primary"
+        data-region="ideas-workspace"
+      >
         <div
           data-testid="ideas-error"
           role="alert"
           className="flex h-full min-h-[320px] flex-col justify-center gap-static-sm rounded-lg border border-error bg-error-low p-static-lg text-primary"
         >
-          <span className="text-xs font-semibold uppercase text-error">Ideas unavailable</span>
+          <span className="text-xs font-semibold uppercase text-error">
+            Ideas unavailable
+          </span>
           <h1 className="m-0 text-2xl font-semibold leading-tight text-primary">
             Could not open the notebook
           </h1>
-          <p className="max-w-[56ch] text-sm leading-normal text-primary">{errorMessage}</p>
+          <p className="max-w-[56ch] text-sm leading-normal text-primary">
+            {errorMessage}
+          </p>
         </div>
       </section>
-    )
+    );
   }
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-canvas text-primary" data-region="ideas-workspace" aria-labelledby="ideas-title">
+    <section
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-canvas text-primary"
+      data-region="ideas-workspace"
+      aria-labelledby="ideas-title"
+    >
       {showUnsavedDialog ? (
         <PModal
           data-testid="ideas-unsaved-dialog"
@@ -354,34 +412,49 @@ function IdeasPage() {
           tabIndex={-1}
           disableBackdropClick
           dismissButton={false}
-          aria={{ role: 'alertdialog', 'aria-label': 'Leave this notebook?' }}
+          aria={{ role: "alertdialog", "aria-label": "Leave this notebook?" }}
           onDismiss={handleStayOnPage}
         >
           <div className="grid w-[min(440px,calc(100vw-2rem))] gap-static-md text-primary">
             <div className="grid gap-static-xs rounded-lg border border-error bg-error-low p-static-md">
-              <span className="text-xs font-semibold uppercase text-error">Unsaved draft</span>
-              <h2 id="ideas-unsaved-title" className="m-0 text-xl font-semibold leading-tight text-primary">
+              <span className="text-xs font-semibold uppercase text-error">
+                Unsaved draft
+              </span>
+              <h2
+                id="ideas-unsaved-title"
+                className="m-0 text-xl font-semibold leading-tight text-primary"
+              >
                 Leave this notebook?
               </h2>
-              <p id="ideas-unsaved-description" className="m-0 text-sm leading-normal text-primary">
+              <p
+                id="ideas-unsaved-description"
+                className="m-0 text-sm leading-normal text-primary"
+              >
                 You have unsaved changes. Leave anyway?
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-static-xs">
-              <PButton type="button" data-testid="ideas-unsaved-leave" variant="secondary" onClick={handleLeavePage}>
+              <PButton
+                type="button"
+                data-testid="ideas-unsaved-leave"
+                variant="secondary"
+                onClick={handleLeavePage}
+              >
                 Leave
               </PButton>
-              <PButton ref={stayButtonRef} type="button" data-testid="ideas-unsaved-cancel" onClick={handleStayOnPage}>
+              <PButton
+                ref={stayButtonRef}
+                type="button"
+                data-testid="ideas-unsaved-cancel"
+                onClick={handleStayOnPage}
+              >
                 Cancel
               </PButton>
             </div>
           </div>
         </PModal>
       ) : null}
-      <WorkspaceHeader
-        title="Ideas"
-        titleId="ideas-title"
-      />
+      <WorkspaceHeader title="Ideas" titleId="ideas-title" />
 
       <div className="flex min-h-0 flex-1 flex-col gap-static-lg px-static-lg py-static-lg">
         {hasConflict ? (
@@ -391,8 +464,13 @@ function IdeasPage() {
             className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-md text-primary"
           >
             <div className="grid gap-1">
-              <span className="text-sm font-semibold text-primary">Ideas changed on disk.</span>
-              <span className="text-xs text-primary">Overwrite the file, load the disk version, or cancel and keep editing.</span>
+              <span className="text-sm font-semibold text-primary">
+                Ideas changed on disk.
+              </span>
+              <span className="text-xs text-primary">
+                Overwrite the file, load the disk version, or cancel and keep
+                editing.
+              </span>
             </div>
             <div className="flex flex-wrap gap-static-xs">
               <PButton
@@ -401,7 +479,7 @@ function IdeasPage() {
                 variant="secondary"
                 compact
                 onClick={() => {
-                  void handleConflictOverwrite()
+                  void handleConflictOverwrite();
                 }}
               >
                 Overwrite
@@ -437,128 +515,176 @@ function IdeasPage() {
         ) : null}
 
         <div className="grid min-h-0 flex-1 gap-static-lg md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
-        <div data-testid="ideas-editor-shell" className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
-          <div data-testid="ideas-editor-toolbar" className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-surface px-static-md py-static-sm sm:items-center sm:justify-between">
-            <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
-              <span>{previewMode ? 'Markdown preview' : 'Editor'}</span>
-              <span aria-hidden="true">/</span>
-              <span>{formatNumber(lineCount)} lines</span>
-            </div>
-            <div data-testid="ideas-toolbar-actions" className="flex w-full min-w-0 flex-wrap items-center gap-static-xs sm:w-auto sm:justify-end">
-              {isDirty ? (
-                <span data-testid="ideas-dirty" className="rounded-full bg-info-low px-static-xs py-1 text-xs font-semibold text-primary">
-                  Unsaved changes
-                </span>
-              ) : null}
-              <PButton
-                type="button"
-                data-testid="ideas-preview-toggle"
-                variant="secondary"
-                compact
-                icon={previewMode ? 'edit' : 'view'}
-                onClick={() => {
-                  setPreviewMode((value) => !value)
-                }}
-              >
-                {previewMode ? 'Edit' : 'Preview'}
-              </PButton>
-              <PButton
-                type="button"
-                data-testid="ideas-save"
-                compact
-                icon="save"
-                onClick={() => {
-                  void handleSave()
-                }}
-                disabled={saveDisabled}
-                aria-disabled={saveDisabled ? 'true' : undefined}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </PButton>
-            </div>
-          </div>
-          {previewMode ? (
+          <div
+            data-testid="ideas-editor-shell"
+            className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas"
+          >
             <div
-              ref={previewRef}
-              data-testid="ideas-preview"
-              className="min-h-0 flex-1 overflow-auto p-static-md"
-              onScroll={updateIdeasScrollCue}
+              data-testid="ideas-editor-toolbar"
+              className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-surface px-static-md py-static-sm sm:items-center sm:justify-between"
             >
-              {content.trim() ? (
-                <MarkdownPreview>{content}</MarkdownPreview>
-              ) : (
-                <div className="grid min-h-full place-items-center px-static-lg py-static-xl text-center" data-testid="ideas-empty-state">
-                  <div className="grid max-w-[34rem] gap-static-xs">
-                    <PHeading tag="h2" size="small">No ideas yet</PHeading>
-                    <p className="text-sm leading-relaxed text-contrast-medium">This notebook is empty. Switch to Edit to start writing.</p>
-                    <PButton type="button" compact className="mx-auto" onClick={() => setPreviewMode(false)}>Start writing</PButton>
+              <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
+                <span>{previewMode ? "Markdown preview" : "Editor"}</span>
+                <span aria-hidden="true">/</span>
+                <span>{formatNumber(lineCount)} lines</span>
+              </div>
+              <div
+                data-testid="ideas-toolbar-actions"
+                className="flex w-full min-w-0 flex-wrap items-center gap-static-xs sm:w-auto sm:justify-end"
+              >
+                {isDirty ? (
+                  <span
+                    data-testid="ideas-dirty"
+                    className="rounded-full bg-info-low px-static-xs py-1 text-xs font-semibold text-primary"
+                  >
+                    Unsaved changes
+                  </span>
+                ) : null}
+                <PButton
+                  type="button"
+                  data-testid="ideas-preview-toggle"
+                  variant="secondary"
+                  compact
+                  icon={previewMode ? "edit" : "view"}
+                  onClick={() => {
+                    setPreviewMode((value) => !value);
+                  }}
+                >
+                  {previewMode ? "Edit" : "Preview"}
+                </PButton>
+                <PButton
+                  type="button"
+                  data-testid="ideas-save"
+                  compact
+                  icon="save"
+                  onClick={() => {
+                    void handleSave();
+                  }}
+                  disabled={saveDisabled}
+                  aria-disabled={saveDisabled ? "true" : undefined}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </PButton>
+              </div>
+            </div>
+            {previewMode ? (
+              <div
+                ref={previewRef}
+                data-testid="ideas-preview"
+                className="min-h-0 flex-1 overflow-auto p-static-md"
+                onScroll={updateIdeasScrollCue}
+              >
+                {content.trim() ? (
+                  <MarkdownPreview>{content}</MarkdownPreview>
+                ) : (
+                  <div
+                    className="grid min-h-full place-items-center px-static-lg py-static-xl text-center"
+                    data-testid="ideas-empty-state"
+                  >
+                    <div className="grid max-w-[34rem] gap-static-xs">
+                      <PHeading tag="h2" size="small">
+                        No ideas yet
+                      </PHeading>
+                      <p className="text-sm leading-relaxed text-contrast-medium">
+                        This notebook is empty. Switch to Edit to start writing.
+                      </p>
+                      <PButton
+                        type="button"
+                        compact
+                        className="mx-auto"
+                        onClick={() => setPreviewMode(false)}
+                      >
+                        Start writing
+                      </PButton>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <textarea
-              ref={textareaRef}
-              value={content}
-              aria-label="Ideas draft"
-              data-pds-exception="ideas-markdown-editor"
-              className="min-h-0 flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--color-focus)]"
-              onChange={(event) => {
-                setContent(event.target.value)
-              }}
-              onScroll={updateIdeasScrollCue}
-              placeholder="Capture ideas here..."
-            />
-          )}
-          {ideasCanScrollDown ? (
-            <div
-              aria-hidden="true"
-              data-testid="ideas-scroll-cue"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
-            />
-          ) : null}
-        </div>
+                )}
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                value={content}
+                aria-label="Ideas draft"
+                data-pds-exception="ideas-markdown-editor"
+                className="min-h-0 flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--color-focus)]"
+                onChange={(event) => {
+                  setContent(event.target.value);
+                }}
+                onScroll={updateIdeasScrollCue}
+                placeholder="Capture ideas here..."
+              />
+            )}
+            {ideasCanScrollDown ? (
+              <div
+                aria-hidden="true"
+                data-testid="ideas-scroll-cue"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+              />
+            ) : null}
+          </div>
 
-        <aside data-testid="ideas-state-panel" className="grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">
-          <div className="grid gap-static-sm">
-            <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
-            <div className="grid gap-static-xs text-sm text-primary">
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Changes</span>
-                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{isDirty ? 'Changed' : 'Current'}</span>
-              </div>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Sync</span>
-                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{hasConflict ? 'Needs choice' : 'Ready'}</span>
-              </div>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Last saved</span>
-                <span data-testid="ideas-last-saved" className="min-w-0 break-words text-left font-semibold sm:text-right">{lastSavedLabel}</span>
-              </div>
-            </div>
-          </div>
-          <div className="grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm text-sm leading-normal text-primary">
-            <span className="text-xs font-semibold uppercase text-primary">Writing metrics</span>
-            <div className="grid gap-static-xs">
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Lines</span>
-                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(lineCount)}</span>
-              </div>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Words</span>
-                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(wordCount)}</span>
-              </div>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
-                <span className="min-w-0">Characters</span>
-                <span className="min-w-0 break-words text-left font-semibold sm:text-right">{formatNumber(content.length)}</span>
+          <aside
+            data-testid="ideas-state-panel"
+            className="grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border border-contrast-low bg-canvas p-static-md text-primary"
+          >
+            <div className="grid gap-static-sm">
+              <span className="text-xs font-semibold uppercase text-primary">
+                Notebook
+              </span>
+              <div className="grid gap-static-xs text-sm text-primary">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Changes</span>
+                  <span className="min-w-0 break-words text-left font-semibold sm:text-right">
+                    {isDirty ? "Changed" : "Current"}
+                  </span>
+                </div>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Sync</span>
+                  <span className="min-w-0 break-words text-left font-semibold sm:text-right">
+                    {hasConflict ? "Needs choice" : "Ready"}
+                  </span>
+                </div>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Last saved</span>
+                  <span
+                    data-testid="ideas-last-saved"
+                    className="min-w-0 break-words text-left font-semibold sm:text-right"
+                  >
+                    {lastSavedLabel}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
+            <div className="grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm text-sm leading-normal text-primary">
+              <span className="text-xs font-semibold uppercase text-primary">
+                Writing metrics
+              </span>
+              <div className="grid gap-static-xs">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Lines</span>
+                  <span className="min-w-0 break-words text-left font-semibold sm:text-right">
+                    {formatNumber(lineCount)}
+                  </span>
+                </div>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Words</span>
+                  <span className="min-w-0 break-words text-left font-semibold sm:text-right">
+                    {formatNumber(wordCount)}
+                  </span>
+                </div>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
+                  <span className="min-w-0">Characters</span>
+                  <span className="min-w-0 break-words text-left font-semibold sm:text-right">
+                    {formatNumber(content.length)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </section>
-  )
+  );
 }
 
-export default IdeasPage
+export default IdeasPage;

@@ -1,11 +1,14 @@
-import type { ReactNode } from 'react'
-import type { WorkItemNeed } from '../api/workItems'
-import { workItemStatusClassName, type WorkItemStatusTone } from './workItemPresentation'
+import type { ReactNode } from "react";
+import type { WorkItemNeed } from "../api/workItems";
+import {
+  workItemStatusClassName,
+  type WorkItemStatusTone,
+} from "./workItemPresentation";
 
 interface StatusChipProps {
-  label: string
-  tone: WorkItemStatusTone
-  testId?: string
+  label: string;
+  tone: WorkItemStatusTone;
+  testId?: string;
 }
 
 export function StatusChip({ label, tone, testId }: StatusChipProps) {
@@ -17,86 +20,96 @@ export function StatusChip({ label, tone, testId }: StatusChipProps) {
     >
       {label}
     </span>
-  )
+  );
 }
 
 interface WorkRowProps {
-  children: ReactNode
-  selected?: boolean
-  needs?: WorkItemNeed
-  ariaLabel?: string
-  dataWorkItem?: string
-  className?: string
+  children: ReactNode;
+  selected?: boolean;
+  needs?: WorkItemNeed;
+  ariaLabel?: string;
+  dataWorkItem?: string;
+  className?: string;
 }
 
-export function WorkRow({ children, selected = false, needs = 'none', ariaLabel, dataWorkItem, className = '' }: WorkRowProps) {
-  const attentionClass = needs === 'you' ? 'border-l-4 border-l-error' : 'border-l-4 border-l-contrast-low'
+export function WorkRow({
+  children,
+  selected = false,
+  needs = "none",
+  ariaLabel,
+  dataWorkItem,
+  className = "",
+}: WorkRowProps) {
+  const attentionClass =
+    needs === "you"
+      ? "border-l-4 border-l-error"
+      : "border-l-4 border-l-contrast-low";
   return (
     <article
       className={[
-        'relative min-w-0 rounded-lg border-y border-r border-contrast-low bg-surface',
+        "relative min-w-0 rounded-lg border-y border-r border-contrast-low bg-surface",
         attentionClass,
-        selected ? 'bg-frosted-soft' : 'hover:bg-frosted-soft',
+        selected ? "bg-frosted-soft" : "hover:bg-frosted-soft",
         className,
-      ].join(' ')}
+      ].join(" ")}
       aria-label={ariaLabel}
       data-work-item={dataWorkItem}
     >
       {children}
     </article>
-  )
+  );
 }
 
-type SectionCardElement = 'section' | 'article' | 'div' | 'details'
-type SectionCardTone = 'neutral' | 'warning' | 'danger' | 'info' | 'success'
+type SectionCardElement = "section" | "article" | "div" | "details";
+type SectionCardTone = "neutral" | "warning" | "danger" | "info" | "success";
 
 interface SectionCardProps {
-  children: ReactNode
-  as?: SectionCardElement
-  tone?: SectionCardTone
-  muted?: boolean
-  interactive?: boolean
-  ariaLabel?: string
-  dataTestId?: string
-  dataStale?: boolean
-  className?: string
+  children: ReactNode;
+  as?: SectionCardElement;
+  tone?: SectionCardTone;
+  muted?: boolean;
+  interactive?: boolean;
+  ariaLabel?: string;
+  dataTestId?: string;
+  dataStale?: boolean;
+  className?: string;
 }
 
 const TONE_CLASS_NAMES: Record<SectionCardTone, string> = {
-  neutral: 'border-contrast-low bg-surface',
-  warning: 'border-warning bg-warning-low',
-  danger: 'border-danger bg-surface',
-  info: 'border-info bg-info-low',
-  success: 'border-success bg-success-low',
-}
+  neutral: "border-contrast-low bg-surface",
+  warning: "border-warning bg-warning-low",
+  danger: "border-danger bg-surface",
+  info: "border-info bg-info-low",
+  success: "border-success bg-success-low",
+};
 
 export function SectionCard({
   children,
-  as = 'section',
-  tone = 'neutral',
+  as = "section",
+  tone = "neutral",
   muted = false,
   interactive = false,
   ariaLabel,
   dataTestId,
   dataStale,
-  className = '',
+  className = "",
 }: SectionCardProps) {
-  const Element = as
+  const Element = as;
   return (
     <Element
       className={[
-        'min-w-0 rounded-lg border',
+        "min-w-0 rounded-lg border",
         TONE_CLASS_NAMES[tone],
-        muted ? 'bg-frosted-soft' : '',
-        interactive ? 'hover:bg-frosted-soft' : '',
+        muted ? "bg-frosted-soft" : "",
+        interactive ? "hover:bg-frosted-soft" : "",
         className,
-      ].join(' ')}
+      ].join(" ")}
       aria-label={ariaLabel}
       data-section-tone={tone}
-      data-stale={dataStale ? 'true' : undefined}
+      data-stale={dataStale ? "true" : undefined}
       data-testid={dataTestId}
     >
       {children}
     </Element>
-  )
+  );
 }

@@ -1,790 +1,887 @@
-export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'completed'
-export type WorkItemScope = 'outcome' | 'change-publication'
-export type WorkItemNeed = 'you' | 'dependency' | 'none'
-export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
-export type WorkItemActivityState = 'idle' | 'ready' | 'working'
+export type WorkItemStage =
+  | "design"
+  | "planning"
+  | "implementation"
+  | "completed";
+export type WorkItemScope = "outcome" | "change-publication";
+export type WorkItemNeed = "you" | "dependency" | "none";
+export type WorkItemNextActor = "you" | "agent" | "dependency" | "none";
+export type WorkItemActivityState = "idle" | "ready" | "working";
 export type WorkItemActionKind =
-  | 'none'
-  | 'resume-design'
-  | 'answer-request'
-  | 'clear-block'
-  | 'recover-claim'
-  | 'finalize'
-  | 'reconcile-checkpoint'
-  | 'sync-target'
-  | 'mark-ready'
-  | 'observe-acceptance'
-  | 'resolve-attention'
-  | 'adopt-external-head'
-  | 'resume-change'
-  | 'start-orchestration'
-export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
-export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance' | 'deferred' | 'abandoned'
-export type DeliveryWorkerRole = 'planner' | 'builder'
+  | "none"
+  | "resume-design"
+  | "answer-request"
+  | "clear-block"
+  | "recover-claim"
+  | "finalize"
+  | "reconcile-checkpoint"
+  | "sync-target"
+  | "mark-ready"
+  | "observe-acceptance"
+  | "resolve-attention"
+  | "adopt-external-head"
+  | "resume-change"
+  | "start-orchestration";
+export type WorkItemProgressKind =
+  | "tasks"
+  | "design-return"
+  | "plan"
+  | "publication";
+export type WorkItemChangeLifecycle =
+  | "in-delivery"
+  | "finalization"
+  | "publication"
+  | "awaiting-merge"
+  | "acceptance"
+  | "deferred"
+  | "abandoned";
+export type DeliveryWorkerRole = "planner" | "builder";
 export type WorkItemPublicationPhase =
-  | 'finalization-invalidated'
-  | 'review-repair'
-  | 'ready-for-finalization'
-  | 'checkpoint-pending'
-  | 'pull-request-draft'
-  | 'awaiting-merge'
-  | 'acceptance-observed'
-  | 'deferred'
-  | 'abandoned'
+  | "finalization-invalidated"
+  | "review-repair"
+  | "ready-for-finalization"
+  | "checkpoint-pending"
+  | "pull-request-draft"
+  | "awaiting-merge"
+  | "acceptance-observed"
+  | "deferred"
+  | "abandoned";
 
 export interface WorkItemActivity {
-  state: WorkItemActivityState
-  worker_role: DeliveryWorkerRole | null
-  started_at: string | null
-  task_id: string | null
+  state: WorkItemActivityState;
+  worker_role: DeliveryWorkerRole | null;
+  started_at: string | null;
+  task_id: string | null;
 }
 
 export interface WorkItemAction {
-  kind: WorkItemActionKind
-  label: string | null
-  command: string | null
-  attention_id?: string | null
-  expected_head?: string | null
-  adopted_head?: string | null
+  kind: WorkItemActionKind;
+  label: string | null;
+  command: string | null;
+  attention_id?: string | null;
+  expected_head?: string | null;
+  adopted_head?: string | null;
 }
 
 export interface WorkItemProgress {
-  kind: WorkItemProgressKind
-  label: string
-  done: number | null
-  total: number | null
+  kind: WorkItemProgressKind;
+  label: string;
+  done: number | null;
+  total: number | null;
 }
 
-export type DeliveryReadinessStatus = 'ready' | 'running' | 'waiting' | 'blocked' | 'unavailable' | 'complete'
-export type DeliveryReadinessChecksState = 'not-run' | 'failed' | 'passed' | 'unknown'
+export type DeliveryReadinessStatus =
+  | "ready"
+  | "running"
+  | "waiting"
+  | "blocked"
+  | "unavailable"
+  | "complete";
+export type DeliveryReadinessChecksState =
+  | "not-run"
+  | "failed"
+  | "passed"
+  | "unknown";
 export type DeliveryReadinessReasonCode =
-  | 'ready'
-  | 'active-custody'
-  | 'finalization-failed'
-  | 'claim-activation-failed'
-  | 'coordination-unavailable'
-  | 'execution-occupancy-unavailable'
-  | 'engine-action-pending'
-  | 'engine-action-blocked'
-  | 'target-sync-required'
-  | 'claim-custody-unreconciled'
-  | 'runtime-unavailable'
-  | 'dependency-wait'
-  | 'request-action'
-  | 'change-paused'
-  | 'change-terminal'
-  | 'task-incomplete'
-  | 'workspace-inspection-failed'
-  | 'workspace-dirty'
-  | 'workspace-preflight-failed'
-  | 'review-repair'
-  | 'publication-wait'
-  | 'checkpoint-pending'
-  | 'report-store-unavailable'
+  | "ready"
+  | "active-custody"
+  | "finalization-failed"
+  | "claim-activation-failed"
+  | "coordination-unavailable"
+  | "execution-occupancy-unavailable"
+  | "engine-action-pending"
+  | "engine-action-blocked"
+  | "target-sync-required"
+  | "claim-custody-unreconciled"
+  | "runtime-unavailable"
+  | "dependency-wait"
+  | "request-action"
+  | "change-paused"
+  | "change-terminal"
+  | "task-incomplete"
+  | "workspace-inspection-failed"
+  | "workspace-dirty"
+  | "workspace-preflight-failed"
+  | "review-repair"
+  | "publication-wait"
+  | "checkpoint-pending"
+  | "report-store-unavailable";
 export type FinalizationFailureCode =
-  | 'workspace-dirty'
-  | 'workspace-preflight-failed'
-  | 'maintained-check-failed'
-  | 'maintained-check-unavailable'
-  | 'independent-review-failed'
-  | 'independent-review-unavailable'
-export type FinalizationFailureCategory = 'custody-preflight' | 'maintained-check' | 'independent-review'
+  | "workspace-dirty"
+  | "workspace-preflight-failed"
+  | "maintained-check-failed"
+  | "maintained-check-unavailable"
+  | "independent-review-failed"
+  | "independent-review-unavailable";
+export type FinalizationFailureCategory =
+  | "custody-preflight"
+  | "maintained-check"
+  | "independent-review";
 
 export interface DeliveryReadinessBasis {
-  contract_digest: string | null
-  frontier_digest: string | null
-  source_head: string | null
-  target_head: string | null
-  continuation_id: string | null
-  candidate_head: string | null
-  reviewed_head: string | null
-  workspace_fingerprint: string | null
-  diagnostic_sequence: number | null
+  contract_digest: string | null;
+  frontier_digest: string | null;
+  source_head: string | null;
+  target_head: string | null;
+  continuation_id: string | null;
+  candidate_head: string | null;
+  reviewed_head: string | null;
+  workspace_fingerprint: string | null;
+  diagnostic_sequence: number | null;
 }
 
 export interface FinalizationReport {
-  report_id: string
-  sequence: number
-  observed_at: string
-  summary: string
-  producer: 'finalization-diagnostic'
+  report_id: string;
+  sequence: number;
+  observed_at: string;
+  summary: string;
+  producer: "finalization-diagnostic";
   request: {
-    change_id: string
-    attempt_key: string
-    category: FinalizationFailureCategory
-    code: FinalizationFailureCode
-    checks_state: 'not-run' | 'failed' | 'unknown'
-    check_id: string | null
-    exit_status: number | null
-    paths: string[]
-  }
+    change_id: string;
+    attempt_key: string;
+    category: FinalizationFailureCategory;
+    code: FinalizationFailureCode;
+    checks_state: "not-run" | "failed" | "unknown";
+    check_id: string | null;
+    exit_status: number | null;
+    paths: string[];
+  };
 }
 
 export interface FinalizationAttempt {
-  report: FinalizationReport
-  applicability: 'current' | 'historical'
+  report: FinalizationReport;
+  applicability: "current" | "historical";
 }
 
 /** Engine-computed eligibility for one supported action at a captured basis. */
 export interface DeliveryReadiness {
-  status: DeliveryReadinessStatus
-  operation: WorkItemActionKind | null
-  executable: boolean
-  next_actor: WorkItemNextActor
-  reason_code: DeliveryReadinessReasonCode
-  checks_state: DeliveryReadinessChecksState
-  basis: DeliveryReadinessBasis
-  action: WorkItemAction | null
-  last_attempt: FinalizationAttempt | null
+  status: DeliveryReadinessStatus;
+  operation: WorkItemActionKind | null;
+  executable: boolean;
+  next_actor: WorkItemNextActor;
+  reason_code: DeliveryReadinessReasonCode;
+  checks_state: DeliveryReadinessChecksState;
+  basis: DeliveryReadinessBasis;
+  action: WorkItemAction | null;
+  last_attempt: FinalizationAttempt | null;
 }
 
 export interface WorkItemCardView {
-  item_key: string
-  work_item_id: string
-  change_id: string
-  scope: WorkItemScope
-  title: string
-  stage: WorkItemStage | null
-  publication_phase?: WorkItemPublicationPhase | null
-  needs: WorkItemNeed
-  needs_headline: string | null
-  next_actor: WorkItemNextActor
-  next_step: string
-  activity: WorkItemActivity
-  progress: WorkItemProgress
-  action: WorkItemAction
-  readiness?: DeliveryReadiness | null
+  item_key: string;
+  work_item_id: string;
+  change_id: string;
+  scope: WorkItemScope;
+  title: string;
+  stage: WorkItemStage | null;
+  publication_phase?: WorkItemPublicationPhase | null;
+  needs: WorkItemNeed;
+  needs_headline: string | null;
+  next_actor: WorkItemNextActor;
+  next_step: string;
+  activity: WorkItemActivity;
+  progress: WorkItemProgress;
+  action: WorkItemAction;
+  readiness?: DeliveryReadiness | null;
 }
 
 export interface ChangeGroupView {
-  change_id: string
-  title: string
-  snapshot_version: string
-  lifecycle: WorkItemChangeLifecycle
-  outcome_total: number
-  outcome_completed: number
-  items: WorkItemCardView[]
+  change_id: string;
+  title: string;
+  snapshot_version: string;
+  lifecycle: WorkItemChangeLifecycle;
+  outcome_total: number;
+  outcome_completed: number;
+  items: WorkItemCardView[];
 }
 
 export interface NeedsCounts {
-  you: number
-  dependency: number
-  none: number
+  you: number;
+  dependency: number;
+  none: number;
 }
 
 export interface ActivityCounts {
-  idle: number
-  ready: number
-  working: number
+  idle: number;
+  ready: number;
+  working: number;
 }
 
 export interface WorkItemPortfolioTotals {
-  total: number
-  complete: number
-  needs: NeedsCounts
-  activity: ActivityCounts
+  total: number;
+  complete: number;
+  needs: NeedsCounts;
+  activity: ActivityCounts;
 }
 
-export type PortfolioChangeAdmission = 'admitted' | 'unadmitted'
+export type PortfolioChangeAdmission = "admitted" | "unadmitted";
 export type PortfolioChangeStage =
-  | 'design'
-  | 'building'
-  | 'finalized'
-  | 'awaiting-merge'
-  | 'publication-attention'
-  | 'acceptance-attention'
-  | 'deferred'
-  | 'abandoned'
-  | 'completed'
+  | "design"
+  | "building"
+  | "finalized"
+  | "awaiting-merge"
+  | "publication-attention"
+  | "acceptance-attention"
+  | "deferred"
+  | "abandoned"
+  | "completed";
 
 export interface PortfolioChangeLifecycleStatus {
-  change_id: string
-  admission: PortfolioChangeAdmission
-  stage: PortfolioChangeStage | null
-  actionable_runtime: boolean
-  diagnostic_code: string | null
-  diagnostic_detail: string | null
+  change_id: string;
+  admission: PortfolioChangeAdmission;
+  stage: PortfolioChangeStage | null;
+  actionable_runtime: boolean;
+  diagnostic_code: string | null;
+  diagnostic_detail: string | null;
 }
 
-export type PortfolioWorkScope = 'outcome' | 'publication'
+export type PortfolioWorkScope = "outcome" | "publication";
 export type PortfolioGuidanceKind =
-  | 'resume-design'
-  | 'start-orchestration'
-  | 'work-underway'
-  | 'intervene'
-  | 'wait'
-  | 'create-change'
+  | "resume-design"
+  | "start-orchestration"
+  | "work-underway"
+  | "intervene"
+  | "wait"
+  | "create-change";
 
 export interface PortfolioWorkReference {
-  change_id: string
-  item_key: string
-  scope: PortfolioWorkScope
+  change_id: string;
+  item_key: string;
+  scope: PortfolioWorkScope;
 }
 
 export interface PortfolioGuidance {
-  kind: PortfolioGuidanceKind
-  change_ids: string[]
-  work_count: number
+  kind: PortfolioGuidanceKind;
+  change_ids: string[];
+  work_count: number;
 }
 
 export interface PortfolioOperatingView {
-  unfinished_change_count: number
-  completed_change_count: number
-  statuses: PortfolioChangeLifecycleStatus[]
-  draft_design_change_ids: string[]
-  design_required_change_ids: string[]
-  claimed: PortfolioWorkReference[]
-  queued_for_orchestration: PortfolioWorkReference[]
-  interventions: PortfolioWorkReference[]
-  dependency_waits: PortfolioWorkReference[]
-  guidance: PortfolioGuidance[]
+  unfinished_change_count: number;
+  completed_change_count: number;
+  statuses: PortfolioChangeLifecycleStatus[];
+  draft_design_change_ids: string[];
+  design_required_change_ids: string[];
+  claimed: PortfolioWorkReference[];
+  queued_for_orchestration: PortfolioWorkReference[];
+  interventions: PortfolioWorkReference[];
+  dependency_waits: PortfolioWorkReference[];
+  guidance: PortfolioGuidance[];
 }
 
-export type DeliveryHealthStatus = 'healthy' | 'attention'
-export type DeliveryHealthResolution = 'retry' | 'inspect' | 'authority-gap'
+export type DeliveryHealthStatus = "healthy" | "attention";
+export type DeliveryHealthResolution = "retry" | "inspect" | "authority-gap";
 export type DeliveryHealthReason =
-  | 'unknown'
-  | 'remote-state-unavailable'
-  | 'remote-state-reconciliation'
-  | 'remote-change-head-ahead'
-  | 'remote-change-head-mismatch'
-  | 'local-change-head-out-of-band'
-  | 'local-frontier-mismatch'
-  | 'runtime-unavailable'
-  | 'state-publication-invalid'
-  | 'state-publication-pending'
-  | 'runtime-reconciliation-required'
-export type DeliveryHealthHeadRelation = 'equal' | 'descendant' | 'ancestor' | 'divergent'
+  | "unknown"
+  | "remote-state-unavailable"
+  | "remote-state-reconciliation"
+  | "remote-change-head-ahead"
+  | "remote-change-head-mismatch"
+  | "local-change-head-out-of-band"
+  | "local-frontier-mismatch"
+  | "runtime-unavailable"
+  | "state-publication-invalid"
+  | "state-publication-pending"
+  | "runtime-reconciliation-required";
+export type DeliveryHealthHeadRelation =
+  | "equal"
+  | "descendant"
+  | "ancestor"
+  | "divergent";
 
 export interface DeliveryHealthDiagnostic {
-  source: string
-  code: string
-  detail: string
-  change_id: string | null
-  path: string | null
-  retry_safe: boolean
-  reason: DeliveryHealthReason
-  resolution: DeliveryHealthResolution
-  expected_head: string | null
-  observed_head: string | null
-  observed_local_head: string | null
-  head_relation: DeliveryHealthHeadRelation | null
+  source: string;
+  code: string;
+  detail: string;
+  change_id: string | null;
+  path: string | null;
+  retry_safe: boolean;
+  reason: DeliveryHealthReason;
+  resolution: DeliveryHealthResolution;
+  expected_head: string | null;
+  observed_head: string | null;
+  observed_local_head: string | null;
+  head_relation: DeliveryHealthHeadRelation | null;
 }
 
 export interface DeliveryHealthResponse {
-  status: DeliveryHealthStatus
-  diagnostics: DeliveryHealthDiagnostic[]
+  status: DeliveryHealthStatus;
+  diagnostics: DeliveryHealthDiagnostic[];
 }
 
-export type DeliveryUnavailableDiagnostic = 'runtime-unavailable' | 'coordination-unavailable'
-export type DeliveryCoordinationStatus = 'missing' | 'unreadable'
+export type DeliveryUnavailableDiagnostic =
+  | "runtime-unavailable"
+  | "coordination-unavailable";
+export type DeliveryCoordinationStatus = "missing" | "unreadable";
 
 export interface DeliveryUnavailableChangeResponse {
-  kind: 'unavailable'
-  change_id: string
-  title: string | null
-  diagnostics: DeliveryUnavailableDiagnostic[]
-  coordination_status: DeliveryCoordinationStatus | null
-  readiness: DeliveryReadiness
+  kind: "unavailable";
+  change_id: string;
+  title: string | null;
+  diagnostics: DeliveryUnavailableDiagnostic[];
+  coordination_status: DeliveryCoordinationStatus | null;
+  readiness: DeliveryReadiness;
 }
 
 export interface WorkItemPortfolioResponse {
-  groups: ChangeGroupView[]
-  unavailable_changes?: DeliveryUnavailableChangeResponse[]
-  totals: WorkItemPortfolioTotals
-  operating: PortfolioOperatingView
-  health: DeliveryHealthResponse
+  groups: ChangeGroupView[];
+  unavailable_changes?: DeliveryUnavailableChangeResponse[];
+  totals: WorkItemPortfolioTotals;
+  operating: PortfolioOperatingView;
+  health: DeliveryHealthResponse;
 }
 
 export type AcceptanceReconciliationStatus =
-  | 'completed'
-  | 'waiting'
-  | 'head-moved'
-  | 'attention'
-  | 'provider-unavailable'
-  | 'skipped'
+  | "completed"
+  | "waiting"
+  | "head-moved"
+  | "attention"
+  | "provider-unavailable"
+  | "skipped";
 
 export interface AcceptanceReconciliationOutcome {
-  change_id: string
-  status: AcceptanceReconciliationStatus
-  code: string | null
-  detail: string | null
-  completion_id: string | null
+  change_id: string;
+  status: AcceptanceReconciliationStatus;
+  code: string | null;
+  detail: string | null;
+  completion_id: string | null;
 }
 
 export interface AcceptanceReconciliationResponse {
-  outcomes: AcceptanceReconciliationOutcome[]
+  outcomes: AcceptanceReconciliationOutcome[];
 }
 
 export interface DesignWorkDetailResponse {
-  change_id: string
-  package_id: string
-  intent_markdown: string
-  design_markdown: string
+  change_id: string;
+  package_id: string;
+  intent_markdown: string;
+  design_markdown: string;
 }
 
 export interface DeliveryRequestResolution {
-  selected_option_id: string | null
-  response_text: string | null
+  selected_option_id: string | null;
+  response_text: string | null;
 }
 
 export interface DeliveryRequest {
-  request_id: string
-  kind: 'decision' | 'action'
-  outcome_id: string
-  summary: string
-  options: Array<{ option_id: string; label: string }>
-  resolution: DeliveryRequestResolution | null
+  request_id: string;
+  kind: "decision" | "action";
+  outcome_id: string;
+  summary: string;
+  options: Array<{ option_id: string; label: string }>;
+  resolution: DeliveryRequestResolution | null;
 }
 
 export interface DeliveryBlock {
-  block_id: string
-  reason: string
-  unblock_condition: string
-  expected_evidence: string[]
-  locators: string[]
-  request_id: string | null
-  resolution_note: string | null
-  resolution_locators: string[]
-  resume_commit: string | null
+  block_id: string;
+  reason: string;
+  unblock_condition: string;
+  expected_evidence: string[];
+  locators: string[];
+  request_id: string | null;
+  resolution_note: string | null;
+  resolution_locators: string[];
+  resume_commit: string | null;
 }
 
 export interface WorkItemCommitment {
-  commitment_id: string
-  commitment_class: string
-  provenance: string
-  statement: string
+  commitment_id: string;
+  commitment_class: string;
+  provenance: string;
+  statement: string;
 }
 
 export interface WorkItemDependency {
-  outcome_id: string
-  title: string
-  stage: WorkItemStage
+  outcome_id: string;
+  title: string;
+  stage: WorkItemStage;
 }
 
 export interface WorkItemTaskEvidence {
-  task_id: string
-  title: string
-  result: string
-  status: 'pending' | 'active' | 'reviewed'
-  completed_commit: string | null
-  acceptance_observations: string[]
-  proof_boundaries: string[]
+  task_id: string;
+  title: string;
+  result: string;
+  status: "pending" | "active" | "reviewed";
+  completed_commit: string | null;
+  acceptance_observations: string[];
+  proof_boundaries: string[];
 }
 
 export interface WorkItemPublicationGeneration {
-  repository: string
-  number: number
-  node_id: string
-  head_sha: string
+  repository: string;
+  number: number;
+  node_id: string;
+  head_sha: string;
 }
 
-export type PublicationCheckKind = 'check_run' | 'status_context'
-export type PublicationCheckBlockingState = 'blocking' | 'required-pending' | 'not-blocking'
+export type PublicationCheckKind = "check_run" | "status_context";
+export type PublicationCheckBlockingState =
+  | "blocking"
+  | "required-pending"
+  | "not-blocking";
 
 export interface PublicationCheckView {
-  check_id: string
-  kind: PublicationCheckKind
-  name: string
-  status: string
-  conclusion: string | null
-  required: boolean
-  blocking_state: PublicationCheckBlockingState
+  check_id: string;
+  kind: PublicationCheckKind;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  required: boolean;
+  blocking_state: PublicationCheckBlockingState;
 }
 
 export interface PublicationChecksObservationResponse {
-  schema_version: 1
-  observation_id: string
-  change_id: string
-  repository: string
-  pull_request_number: number
-  exact_commit: string
-  observed_at: string
-  rollup_state: string | null
-  checks: PublicationCheckView[]
-  required_failure_count: number
-  truncated_count: number
+  schema_version: 1;
+  observation_id: string;
+  change_id: string;
+  repository: string;
+  pull_request_number: number;
+  exact_commit: string;
+  observed_at: string;
+  rollup_state: string | null;
+  checks: PublicationCheckView[];
+  required_failure_count: number;
+  truncated_count: number;
 }
 
 export interface WorkItemPublicationReconciliationResponse {
-  change_id: string
-  attempted_head: string | null
-  reconciled: boolean
-  error_code: string | null
-  error_detail: string | null
-  pending_checkpoint_attempt_count: number
-  pending_checkpoint_last_attempted_at: string | null
-  pending_checkpoint_error_code: string | null
-  pending_checkpoint_error_detail: string | null
+  change_id: string;
+  attempted_head: string | null;
+  reconciled: boolean;
+  error_code: string | null;
+  error_detail: string | null;
+  pending_checkpoint_attempt_count: number;
+  pending_checkpoint_last_attempted_at: string | null;
+  pending_checkpoint_error_code: string | null;
+  pending_checkpoint_error_detail: string | null;
 }
 
 export interface WorkItemPublicationView {
-  phase: WorkItemPublicationPhase
-  finalization_id: string | null
-  finalized_head: string | null
-  ready_for_finalization?: boolean | null
-  readiness_diagnostics?: string[]
-  published_head: string | null
-  pending_checkpoint_head: string | null
-  pending_checkpoint_triggers: string[]
-  pending_checkpoint_attempt_count?: number
-  pending_checkpoint_last_attempted_at?: string | null
-  pending_checkpoint_error_code?: string | null
-  pending_checkpoint_error_detail?: string | null
-  invalidated_expected_head: string | null
-  invalidated_observed_head: string | null
-  repository: string | null
-  pull_request_number: number | null
-  pull_request_head: string | null
-  mergeable?: boolean | null
-  merge_state_status?: string | null
-  mergeability_observed_at?: string | null
-  accepted_merge_commit: string | null
-  merged_at: string | null
-  publication_generations: WorkItemPublicationGeneration[]
+  phase: WorkItemPublicationPhase;
+  finalization_id: string | null;
+  finalized_head: string | null;
+  ready_for_finalization?: boolean | null;
+  readiness_diagnostics?: string[];
+  published_head: string | null;
+  pending_checkpoint_head: string | null;
+  pending_checkpoint_triggers: string[];
+  pending_checkpoint_attempt_count?: number;
+  pending_checkpoint_last_attempted_at?: string | null;
+  pending_checkpoint_error_code?: string | null;
+  pending_checkpoint_error_detail?: string | null;
+  invalidated_expected_head: string | null;
+  invalidated_observed_head: string | null;
+  repository: string | null;
+  pull_request_number: number | null;
+  pull_request_head: string | null;
+  mergeable?: boolean | null;
+  merge_state_status?: string | null;
+  mergeability_observed_at?: string | null;
+  accepted_merge_commit: string | null;
+  merged_at: string | null;
+  publication_generations: WorkItemPublicationGeneration[];
   attention?: {
-    disposition_id: string
-    kind: 'publication-attention' | 'acceptance-attention'
-    change_id: string
-    entered_from: string
-    recorded_at: string
-    diagnostics: string[]
-    acceptance_reason?: 'head-moved' | 'closed-unmerged' | 'identity-mismatch' | 'merge-evidence-missing' | 'latch-regression' | null
-  } | null
-  target_sync?: WorkItemTargetSyncView | null
-  target_sync_conflict?: WorkItemTargetSyncConflictView | null
-  worktree_cleanup?: WorkItemWorktreeCleanupView | null
-  worktree_recovery?: WorkItemWorktreeRecoveryView | null
+    disposition_id: string;
+    kind: "publication-attention" | "acceptance-attention";
+    change_id: string;
+    entered_from: string;
+    recorded_at: string;
+    diagnostics: string[];
+    acceptance_reason?:
+      | "head-moved"
+      | "closed-unmerged"
+      | "identity-mismatch"
+      | "merge-evidence-missing"
+      | "latch-regression"
+      | null;
+  } | null;
+  target_sync?: WorkItemTargetSyncView | null;
+  target_sync_conflict?: WorkItemTargetSyncConflictView | null;
+  worktree_cleanup?: WorkItemWorktreeCleanupView | null;
+  worktree_recovery?: WorkItemWorktreeRecoveryView | null;
 }
 
 export interface WorkItemTargetSyncView {
-  receipt_id: string
-  operation_id: string
-  target_branch: string
-  expected_target: string
-  target_head: string
-  change_head_before: string
-  merged_head: string
-  merge_commit: boolean
-  review_required: boolean
+  receipt_id: string;
+  operation_id: string;
+  target_branch: string;
+  expected_target: string;
+  target_head: string;
+  change_head_before: string;
+  merged_head: string;
+  merge_commit: boolean;
+  review_required: boolean;
 }
 
 export interface WorkItemTargetSyncConflictView {
-  conflict_id: string
-  operation_id: string
-  target_head: string
-  change_head_before: string
-  conflict_paths: string[]
+  conflict_id: string;
+  operation_id: string;
+  target_head: string;
+  change_head_before: string;
+  conflict_paths: string[];
 }
 
 export interface WorkItemWorktreeCleanupView {
-  eligible: boolean
-  blocked_reason: string | null
-  completion_id: string | null
+  eligible: boolean;
+  blocked_reason: string | null;
+  completion_id: string | null;
 }
 
 export interface WorkItemWorktreeRecoveryView {
-  eligible: boolean
-  blocked_reason: string | null
-  recovery_reviewed_head: string | null
+  eligible: boolean;
+  blocked_reason: string | null;
+  recovery_reviewed_head: string | null;
 }
 
 export interface ChangeWorktreeCleanupResponse {
-  cleanup_id: string
-  change_id: string
-  branch: string
-  worktree_path: string
-  branch_head: string
+  cleanup_id: string;
+  change_id: string;
+  branch: string;
+  worktree_path: string;
+  branch_head: string;
 }
 
 export interface ChangeWorktreeRecoveryResponse {
-  change_id: string
-  branch: string
-  worktree_path: string
-  branch_head: string
-  recovery_reviewed_head: string
+  change_id: string;
+  branch: string;
+  worktree_path: string;
+  branch_head: string;
+  recovery_reviewed_head: string;
 }
 
 export interface TargetSyncResponse {
-  schema_version: 1
-  receipt_id: string
-  operation_id: string
-  change_id: string
-  target_branch: string
-  expected_target: string
-  target_head: string
-  change_head_before: string
-  merged_head: string
-  merge_commit: boolean
-  review_required: boolean
+  schema_version: 1;
+  receipt_id: string;
+  operation_id: string;
+  change_id: string;
+  target_branch: string;
+  expected_target: string;
+  target_head: string;
+  change_head_before: string;
+  merged_head: string;
+  merge_commit: boolean;
+  review_required: boolean;
 }
 
 export interface TargetSyncAbortResponse {
-  schema_version: 1
-  receipt_id: string
-  operation_id: string
-  change_id: string
-  target_head: string
-  restored_head: string
+  schema_version: 1;
+  receipt_id: string;
+  operation_id: string;
+  change_id: string;
+  target_head: string;
+  restored_head: string;
 }
 
 export interface ExternalHeadAdoptionResponse {
-  schema_version: 2
-  receipt_id: string
-  operation_id: string
-  change_id: string
-  branch: string
-  expected_head: string
-  adopted_head: string
-  provenance: 'fast-forward' | 'observed'
+  schema_version: 2;
+  receipt_id: string;
+  operation_id: string;
+  change_id: string;
+  branch: string;
+  expected_head: string;
+  adopted_head: string;
+  provenance: "fast-forward" | "observed";
 }
 
 export interface PublicationSupersessionResponse {
-  schema_version: 1
-  receipt_id: string
-  operation_id: string
-  change_id: string
-  predecessor_publication_id: string
-  successor_publication_id: string
+  schema_version: 1;
+  receipt_id: string;
+  operation_id: string;
+  change_id: string;
+  predecessor_publication_id: string;
+  successor_publication_id: string;
 }
 
 export interface WorkItemDetailView {
-  snapshot_version: string
-  change_title: string
-  card: WorkItemCardView
-  promise: string
-  acceptance: string[]
-  commitments: WorkItemCommitment[]
-  dependencies: WorkItemDependency[]
-  tasks: WorkItemTaskEvidence[]
-  block: DeliveryBlock | null
-  requests: DeliveryRequest[]
+  snapshot_version: string;
+  change_title: string;
+  card: WorkItemCardView;
+  promise: string;
+  acceptance: string[];
+  commitments: WorkItemCommitment[];
+  dependencies: WorkItemDependency[];
+  tasks: WorkItemTaskEvidence[];
+  block: DeliveryBlock | null;
+  requests: DeliveryRequest[];
   active_claim: {
-    attempt_id: string
-    claim_id: string
-    owner_id: string
-    process_id: string
-    continuation: boolean
-    started_at: string
-    worker_role: DeliveryWorkerRole
-    task_id: string | null
-  } | null
+    attempt_id: string;
+    claim_id: string;
+    owner_id: string;
+    process_id: string;
+    continuation: boolean;
+    started_at: string;
+    worker_role: DeliveryWorkerRole;
+    task_id: string | null;
+  } | null;
   return_context: {
-    target: WorkItemStage
-    reason: string
-    locators: string[]
-    source_boundary: string | null
-    preserved_commit: string | null
-  } | null
+    target: WorkItemStage;
+    reason: string;
+    locators: string[];
+    source_boundary: string | null;
+    preserved_commit: string | null;
+  } | null;
   operator_moves: Array<{
-    move_id: string
-    outcome_id: string
-    destination: WorkItemStage
-    reason: string
-    invalidated_outcome_ids: string[]
-  }>
+    move_id: string;
+    outcome_id: string;
+    destination: WorkItemStage;
+    reason: string;
+    invalidated_outcome_ids: string[];
+  }>;
   recovery_attention: {
-    attempt_id: string
-    claim_id: string
-    reason: string
-    custody_retained: boolean
-    retry_condition: string
-  } | null
-  publication: WorkItemPublicationView | null
-  readiness?: DeliveryReadiness | null
+    attempt_id: string;
+    claim_id: string;
+    reason: string;
+    custody_retained: boolean;
+    retry_condition: string;
+  } | null;
+  publication: WorkItemPublicationView | null;
+  readiness?: DeliveryReadiness | null;
 }
 
 export interface WorkItemAvailableDetailResponse {
-  kind?: 'available'
-  item: WorkItemDetailView
+  kind?: "available";
+  item: WorkItemDetailView;
 }
 
 export interface WorkItemUnavailableDetailResponse {
-  kind: 'unavailable'
-  change_id: string
-  title: string | null
-  diagnostics: DeliveryUnavailableDiagnostic[]
-  coordination_status: DeliveryCoordinationStatus | null
-  readiness: DeliveryReadiness
+  kind: "unavailable";
+  change_id: string;
+  title: string | null;
+  diagnostics: DeliveryUnavailableDiagnostic[];
+  coordination_status: DeliveryCoordinationStatus | null;
+  readiness: DeliveryReadiness;
 }
 
-export type WorkItemDetailResponse = WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse
+export type WorkItemDetailResponse =
+  | WorkItemAvailableDetailResponse
+  | WorkItemUnavailableDetailResponse;
 
-export function isUnavailableDetail(detail: WorkItemDetailResponse): detail is WorkItemUnavailableDetailResponse {
-  return detail.kind === 'unavailable'
+export function isUnavailableDetail(
+  detail: WorkItemDetailResponse,
+): detail is WorkItemUnavailableDetailResponse {
+  return detail.kind === "unavailable";
 }
 
 export interface BackwardMoveResult {
   move: {
-    move_id: string
-    outcome_id: string
-    destination: WorkItemStage
-    reason: string
-    invalidated_outcome_ids: string[]
-  }
-  invalidated_outcome_ids: string[]
+    move_id: string;
+    outcome_id: string;
+    destination: WorkItemStage;
+    reason: string;
+    invalidated_outcome_ids: string[];
+  };
+  invalidated_outcome_ids: string[];
 }
 
 export interface BackwardMovePreview {
-  outcome_id: string
-  target: WorkItemStage
-  snapshot_version: string
-  invalidated_outcome_ids: string[]
+  outcome_id: string;
+  target: WorkItemStage;
+  snapshot_version: string;
+  invalidated_outcome_ids: string[];
 }
 
 interface CompletedChangeRecordBase {
-  schema_version: 2
-  change_id: string
-  completion_id: string
-  title: string
-  semantic_summary: string
-  outcome_titles: string[]
-  outcome_promises?: string[] | null
+  schema_version: 2;
+  change_id: string;
+  completion_id: string;
+  title: string;
+  semantic_summary: string;
+  outcome_titles: string[];
+  outcome_promises?: string[] | null;
 }
 
 export interface CompletionPullRequestIdentity {
-  number: number
-  node_id: string
+  number: number;
+  node_id: string;
 }
 
-export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase {
-  record_kind: 'completion-receipt'
-  finalization_receipt_id: string
-  finalized_change_head: string
-  repository_identity: string
-  pull_request_identity: CompletionPullRequestIdentity
-  accepted_target_ref: string
-  accepted_merge_commit: string
-  merged_at: string
-  acceptance_observation_id: string
-  check_observation_ids: string[]
-  review_receipt_ids: string[]
-  acceptance_evidence_digest: string
-  completed_at: string
+export interface ReceiptCompletedChangeRecord
+  extends CompletedChangeRecordBase {
+  record_kind: "completion-receipt";
+  finalization_receipt_id: string;
+  finalized_change_head: string;
+  repository_identity: string;
+  pull_request_identity: CompletionPullRequestIdentity;
+  accepted_target_ref: string;
+  accepted_merge_commit: string;
+  merged_at: string;
+  acceptance_observation_id: string;
+  check_observation_ids: string[];
+  review_receipt_ids: string[];
+  acceptance_evidence_digest: string;
+  completed_at: string;
 }
 
 export interface AbandonedChangeRecord {
-  schema_version: 1
-  record_kind: 'abandoned-change'
-  change_id: string
-  abandonment_id: string
-  title: string
-  semantic_summary: string
-  outcome_titles: string[]
-  outcome_promises?: string[] | null
-  prior_stage: 'design' | 'building' | 'finalized' | 'awaiting-merge' | 'publication-attention' | 'acceptance-attention' | 'deferred'
-  reason: string
-  abandoned_at: string
-  cleanup_available: boolean
-  target_sync_conflict: boolean
-  target_sync_conflict_target_head: string | null
-  target_sync_conflict_operation_id: string | null
+  schema_version: 1;
+  record_kind: "abandoned-change";
+  change_id: string;
+  abandonment_id: string;
+  title: string;
+  semantic_summary: string;
+  outcome_titles: string[];
+  outcome_promises?: string[] | null;
+  prior_stage:
+    | "design"
+    | "building"
+    | "finalized"
+    | "awaiting-merge"
+    | "publication-attention"
+    | "acceptance-attention"
+    | "deferred";
+  reason: string;
+  abandoned_at: string;
+  cleanup_available: boolean;
+  target_sync_conflict: boolean;
+  target_sync_conflict_target_head: string | null;
+  target_sync_conflict_operation_id: string | null;
 }
 
-export type CompletedChangeRecord = ReceiptCompletedChangeRecord | AbandonedChangeRecord
+export type CompletedChangeRecord =
+  | ReceiptCompletedChangeRecord
+  | AbandonedChangeRecord;
 
 export interface CompletedChangePage {
-  records: CompletedChangeRecord[]
-  total_count: number
-  next_cursor: string | null
+  records: CompletedChangeRecord[];
+  total_count: number;
+  next_cursor: string | null;
 }
 
 interface WorkItemRequestOptions extends RequestInit {
-  fallbackCode: string
+  fallbackCode: string;
 }
 
 export class WorkItemApiError extends Error {
-  readonly status: number
-  readonly code: string
-  readonly authority: string | null
-  readonly retrySafe: boolean
+  readonly status: number;
+  readonly code: string;
+  readonly authority: string | null;
+  readonly retrySafe: boolean;
 
-  constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean) {
-    super(detail)
-    this.name = 'WorkItemApiError'
-    this.status = status
-    this.code = code
-    this.authority = authority
-    this.retrySafe = retrySafe
+  constructor(
+    status: number,
+    code: string,
+    detail: string,
+    authority: string | null,
+    retrySafe: boolean,
+  ) {
+    super(detail);
+    this.name = "WorkItemApiError";
+    this.status = status;
+    this.code = code;
+    this.authority = authority;
+    this.retrySafe = retrySafe;
   }
 }
 
-async function workItemRequest<T>(url: string, options: WorkItemRequestOptions): Promise<T> {
-  const response = await fetch(url, options)
-  if (response.ok) return response.json() as Promise<T>
-  const payload = await response.json().catch(() => ({})) as Record<string, unknown>
-  const nested = typeof payload.detail === 'object' && payload.detail !== null
-    ? payload.detail as Record<string, unknown>
-    : payload
+async function workItemRequest<T>(
+  url: string,
+  options: WorkItemRequestOptions,
+): Promise<T> {
+  const response = await fetch(url, options);
+  if (response.ok) return response.json() as Promise<T>;
+  const payload = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  const nested =
+    typeof payload.detail === "object" && payload.detail !== null
+      ? (payload.detail as Record<string, unknown>)
+      : payload;
   throw new WorkItemApiError(
     response.status,
-    typeof nested.code === 'string' ? nested.code : options.fallbackCode,
-    typeof nested.detail === 'string' ? nested.detail : `Delivery request failed with status ${response.status}`,
-    typeof nested.authority === 'string' ? nested.authority : null,
+    typeof nested.code === "string" ? nested.code : options.fallbackCode,
+    typeof nested.detail === "string"
+      ? nested.detail
+      : `Delivery request failed with status ${response.status}`,
+    typeof nested.authority === "string" ? nested.authority : null,
     nested.retry_safe === true,
-  )
+  );
 }
 
-function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T> {
+function controlRequest<T>(
+  url: string,
+  fallbackCode: string,
+  body?: object,
+  signal?: AbortSignal,
+): Promise<T> {
   return workItemRequest(url, {
-    method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
     signal,
     fallbackCode,
-  })
+  });
 }
 
 export function listWorkItems(): Promise<WorkItemPortfolioResponse> {
-  return workItemRequest('/api/work-items', { fallbackCode: 'ERR_WORK_ITEM_PORTFOLIO' })
+  return workItemRequest("/api/work-items", {
+    fallbackCode: "ERR_WORK_ITEM_PORTFOLIO",
+  });
 }
 
-export function listCompletedChanges(cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage> {
-  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : ''
-  return workItemRequest(`/api/work-items/completed${query}`, { fallbackCode: 'ERR_COMPLETED_HISTORY', signal })
+export function listCompletedChanges(
+  cursor?: string,
+  signal?: AbortSignal,
+): Promise<CompletedChangePage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
+  return workItemRequest(`/api/work-items/completed${query}`, {
+    fallbackCode: "ERR_COMPLETED_HISTORY",
+    signal,
+  });
 }
 
-export function searchCompletedChanges(query: string, cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage> {
-  const parameters = new URLSearchParams({ query })
-  if (cursor) parameters.set('cursor', cursor)
+export function searchCompletedChanges(
+  query: string,
+  cursor?: string,
+  signal?: AbortSignal,
+): Promise<CompletedChangePage> {
+  const parameters = new URLSearchParams({ query });
+  if (cursor) parameters.set("cursor", cursor);
   return workItemRequest(
     `/api/work-items/completed/search?${parameters.toString()}`,
-    { fallbackCode: 'ERR_COMPLETED_HISTORY_SEARCH', signal },
-  )
+    { fallbackCode: "ERR_COMPLETED_HISTORY_SEARCH", signal },
+  );
 }
 
 export function completedChangeRecordId(record: CompletedChangeRecord): string {
-  return record.record_kind === 'abandoned-change' ? record.abandonment_id : record.completion_id
+  return record.record_kind === "abandoned-change"
+    ? record.abandonment_id
+    : record.completion_id;
 }
 
-export function showCompletedChange(changeId: string, recordId: string): Promise<CompletedChangeRecord> {
-  const query = new URLSearchParams({ completion_id: recordId })
+export function showCompletedChange(
+  changeId: string,
+  recordId: string,
+): Promise<CompletedChangeRecord> {
+  const query = new URLSearchParams({ completion_id: recordId });
   return workItemRequest(
     `/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`,
-    { fallbackCode: 'ERR_COMPLETED_HISTORY_DETAIL' },
-  )
+    { fallbackCode: "ERR_COMPLETED_HISTORY_DETAIL" },
+  );
 }
 
 export function workItemDetailUrl(changeId: string, itemKey: string): string {
-  return `/api/changes/${encodeURIComponent(changeId)}/work-items/${encodeURIComponent(itemKey)}`
+  return `/api/changes/${encodeURIComponent(changeId)}/work-items/${encodeURIComponent(itemKey)}`;
 }
 
-export function showWorkItem(changeId: string, itemKey: string): Promise<WorkItemDetailResponse> {
-  return workItemRequest(
-    workItemDetailUrl(changeId, itemKey),
-    { fallbackCode: 'ERR_WORK_ITEM_DETAIL' },
-  )
+export function showWorkItem(
+  changeId: string,
+  itemKey: string,
+): Promise<WorkItemDetailResponse> {
+  return workItemRequest(workItemDetailUrl(changeId, itemKey), {
+    fallbackCode: "ERR_WORK_ITEM_DETAIL",
+  });
 }
 
 export function designWorkDetailUrl(changeId: string): string {
-  return `/api/design-work/${encodeURIComponent(changeId)}`
+  return `/api/design-work/${encodeURIComponent(changeId)}`;
 }
 
-export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse> {
-  return workItemRequest(
-    designWorkDetailUrl(changeId),
-    { fallbackCode: 'ERR_DESIGN_WORK_DETAIL' },
-  )
+export function showDesignWork(
+  changeId: string,
+): Promise<DesignWorkDetailResponse> {
+  return workItemRequest(designWorkDetailUrl(changeId), {
+    fallbackCode: "ERR_DESIGN_WORK_DETAIL",
+  });
 }
 
 export function answerWorkItemRequest(
@@ -795,9 +892,9 @@ export function answerWorkItemRequest(
 ): Promise<DeliveryRequest> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/requests/${encodeURIComponent(requestId)}/answer`,
-    'ERR_WORK_ITEM_REQUEST_ANSWER',
+    "ERR_WORK_ITEM_REQUEST_ANSWER",
     { ...resolution, expected_frontier_digest: expectedFrontierDigest },
-  )
+  );
 }
 
 export function clearWorkItemBlock(
@@ -810,9 +907,13 @@ export function clearWorkItemBlock(
 ): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/blocks/${encodeURIComponent(blockId)}/clear`,
-    'ERR_WORK_ITEM_BLOCK_CLEAR',
-    { operator_note: operatorNote, locators, expected_frontier_digest: expectedFrontierDigest },
-  )
+    "ERR_WORK_ITEM_BLOCK_CLEAR",
+    {
+      operator_note: operatorNote,
+      locators,
+      expected_frontier_digest: expectedFrontierDigest,
+    },
+  );
 }
 
 export function recoverWorkItemClaim(
@@ -823,9 +924,9 @@ export function recoverWorkItemClaim(
 ): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/claims/recover`,
-    'ERR_WORK_ITEM_CLAIM_RECOVERY',
+    "ERR_WORK_ITEM_CLAIM_RECOVERY",
     { confirmed_lost: true, attempt_id: attemptId, claim_id: claimId },
-  )
+  );
 }
 
 export function moveWorkItemBackward(
@@ -837,9 +938,9 @@ export function moveWorkItemBackward(
 ): Promise<BackwardMoveResult> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/move-backward`,
-    'ERR_WORK_ITEM_BACKWARD_MOVE',
+    "ERR_WORK_ITEM_BACKWARD_MOVE",
     { target, reason, snapshot_version: snapshotVersion },
-  )
+  );
 }
 
 export function previewWorkItemBackward(
@@ -849,37 +950,43 @@ export function previewWorkItemBackward(
 ): Promise<BackwardMovePreview> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/move-backward/preview`,
-    'ERR_WORK_ITEM_BACKWARD_PREVIEW',
+    "ERR_WORK_ITEM_BACKWARD_PREVIEW",
     { target },
-  )
+  );
 }
 
-export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse> {
+export function reconcileWorkItemPublication(
+  changeId: string,
+): Promise<WorkItemPublicationReconciliationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/reconcile`,
-    'ERR_WORK_ITEM_PUBLICATION_RECONCILE',
-  )
+    "ERR_WORK_ITEM_PUBLICATION_RECONCILE",
+  );
 }
 
-export function markWorkItemPublicationReady(changeId: string): Promise<unknown> {
+export function markWorkItemPublicationReady(
+  changeId: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/ready`,
-    'ERR_WORK_ITEM_PUBLICATION_READY',
-  )
+    "ERR_WORK_ITEM_PUBLICATION_READY",
+  );
 }
 
-export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse> {
+export function observeWorkItemPublicationChecks(
+  changeId: string,
+): Promise<PublicationChecksObservationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/checks/observe`,
-    'ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE',
-  )
+    "ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE",
+  );
 }
 
 export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/acceptance/observe`,
-    'ERR_WORK_ITEM_ACCEPTANCE_OBSERVE',
-  )
+    "ERR_WORK_ITEM_ACCEPTANCE_OBSERVE",
+  );
 }
 
 export function adoptExternalHeadAfterAcceptanceAttention(
@@ -891,14 +998,14 @@ export function adoptExternalHeadAfterAcceptanceAttention(
 ): Promise<ExternalHeadAdoptionResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/acceptance/external-head/adopt`,
-    'ERR_WORK_ITEM_ACCEPTANCE_HEAD_ADOPTION',
+    "ERR_WORK_ITEM_ACCEPTANCE_HEAD_ADOPTION",
     {
       expected_disposition_id: expectedDispositionId,
       expected_head: expectedHead,
       adopted_head: adoptedHead,
       operation_id: operationId,
     },
-  )
+  );
 }
 
 export function reconcileWorkItemAcceptance(
@@ -906,11 +1013,11 @@ export function reconcileWorkItemAcceptance(
   signal?: AbortSignal,
 ): Promise<AcceptanceReconciliationResponse> {
   return controlRequest(
-    '/api/work-items/acceptance/reconcile',
-    'ERR_WORK_ITEM_ACCEPTANCE_RECONCILE',
+    "/api/work-items/acceptance/reconcile",
+    "ERR_WORK_ITEM_ACCEPTANCE_RECONCILE",
     { change_ids: changeIds },
     signal,
-  )
+  );
 }
 
 export function resolveWorkItemAttention(
@@ -920,9 +1027,12 @@ export function resolveWorkItemAttention(
 ): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
-    'ERR_WORK_ITEM_ATTENTION_RESOLVE',
-    { expected_disposition_id: expectedDispositionId, expected_frontier_digest: expectedFrontierDigest },
-  )
+    "ERR_WORK_ITEM_ATTENTION_RESOLVE",
+    {
+      expected_disposition_id: expectedDispositionId,
+      expected_frontier_digest: expectedFrontierDigest,
+    },
+  );
 }
 
 export function supersedeWorkItemPublication(
@@ -931,17 +1041,20 @@ export function supersedeWorkItemPublication(
 ): Promise<PublicationSupersessionResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/supersede`,
-    'ERR_WORK_ITEM_PUBLICATION_SUPERSEDE',
+    "ERR_WORK_ITEM_PUBLICATION_SUPERSEDE",
     { operation_id: operationId },
-  )
+  );
 }
 
-export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse> {
+export function syncWorkItemTarget(
+  changeId: string,
+  operationId: string,
+): Promise<TargetSyncResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/target/sync`,
-    'ERR_WORK_ITEM_TARGET_SYNC',
+    "ERR_WORK_ITEM_TARGET_SYNC",
     { operation_id: operationId },
-  )
+  );
 }
 
 export function abortWorkItemTargetSync(
@@ -952,9 +1065,13 @@ export function abortWorkItemTargetSync(
 ): Promise<TargetSyncAbortResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/target/conflict/abort`,
-    'ERR_WORK_ITEM_TARGET_SYNC_ABORT',
-    { expected_disposition_id: expectedDispositionId, target_head: targetHead, operation_id: operationId },
-  )
+    "ERR_WORK_ITEM_TARGET_SYNC_ABORT",
+    {
+      expected_disposition_id: expectedDispositionId,
+      target_head: targetHead,
+      operation_id: operationId,
+    },
+  );
 }
 
 export function resolveWorkItemTargetSync(
@@ -965,40 +1082,61 @@ export function resolveWorkItemTargetSync(
 ): Promise<TargetSyncResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/target/conflict/resolve`,
-    'ERR_WORK_ITEM_TARGET_SYNC_RESOLVE',
-    { expected_disposition_id: expectedDispositionId, target_head: targetHead, operation_id: operationId },
-  )
+    "ERR_WORK_ITEM_TARGET_SYNC_RESOLVE",
+    {
+      expected_disposition_id: expectedDispositionId,
+      target_head: targetHead,
+      operation_id: operationId,
+    },
+  );
 }
 
-export function deferWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
+export function deferWorkItemChange(
+  changeId: string,
+  reason: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/defer`,
-    'ERR_WORK_ITEM_CHANGE_DEFER',
+    "ERR_WORK_ITEM_CHANGE_DEFER",
     { reason, expected_frontier_digest: expectedFrontierDigest },
-  )
+  );
 }
 
-export function resumeWorkItemChange(changeId: string, expectedFrontierDigest: string): Promise<unknown> {
+export function resumeWorkItemChange(
+  changeId: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/resume`,
-    'ERR_WORK_ITEM_CHANGE_RESUME',
+    "ERR_WORK_ITEM_CHANGE_RESUME",
     { expected_frontier_digest: expectedFrontierDigest },
-  )
+  );
 }
 
-export function abandonWorkItemChange(changeId: string, reason: string, expectedFrontierDigest: string): Promise<unknown> {
+export function abandonWorkItemChange(
+  changeId: string,
+  reason: string,
+  expectedFrontierDigest: string,
+): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/abandon`,
-    'ERR_WORK_ITEM_CHANGE_ABANDON',
-    { confirmed_abandonment: true, reason, expected_frontier_digest: expectedFrontierDigest },
-  )
+    "ERR_WORK_ITEM_CHANGE_ABANDON",
+    {
+      confirmed_abandonment: true,
+      reason,
+      expected_frontier_digest: expectedFrontierDigest,
+    },
+  );
 }
 
-export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
+export function cleanupAbandonedWorkItemChange(
+  changeId: string,
+): Promise<ChangeWorktreeCleanupResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned`,
-    'ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP',
-  )
+    "ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP",
+  );
 }
 
 export function discardAbandonedTargetSyncAndCleanup(
@@ -1008,13 +1146,13 @@ export function discardAbandonedTargetSyncAndCleanup(
 ): Promise<ChangeWorktreeCleanupResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned/target-sync-discard`,
-    'ERR_WORK_ITEM_TARGET_SYNC_DISCARD_CLEANUP',
+    "ERR_WORK_ITEM_TARGET_SYNC_DISCARD_CLEANUP",
     {
       confirmed_discard: true,
       expected_target_head: expectedTargetHead,
       expected_operation_id: expectedOperationId,
     },
-  )
+  );
 }
 
 export function cleanupCompletedWorkItemChange(
@@ -1023,9 +1161,9 @@ export function cleanupCompletedWorkItemChange(
 ): Promise<ChangeWorktreeCleanupResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/completed`,
-    'ERR_WORK_ITEM_COMPLETED_WORKTREE_CLEANUP',
+    "ERR_WORK_ITEM_COMPLETED_WORKTREE_CLEANUP",
     { completion_id: completionId },
-  )
+  );
 }
 
 export function recoverWorkItemChange(
@@ -1034,7 +1172,7 @@ export function recoverWorkItemChange(
 ): Promise<ChangeWorktreeRecoveryResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/recover`,
-    'ERR_WORK_ITEM_WORKTREE_RECOVERY',
+    "ERR_WORK_ITEM_WORKTREE_RECOVERY",
     { confirmed_recovery: true, recovery_reviewed_head: recoveryReviewedHead },
-  )
+  );
 }

@@ -1,32 +1,29 @@
-import { PLinkPure } from '@porsche-design-system/components-react'
-import { Link, useNavigate } from 'react-router'
-import type {
-  ChangeGroupView,
-  WorkItemCardView,
-} from '../api/workItems'
-import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
-import { StatusChip, WorkRow } from './DeliveryPrimitives'
-import {
-  PROGRESS_STAGE_LABELS,
-  workItemStatus,
-} from './workItemPresentation'
+import { PLinkPure } from "@porsche-design-system/components-react";
+import { Link, useNavigate } from "react-router";
+import type { ChangeGroupView, WorkItemCardView } from "../api/workItems";
+import { workItemIdentity, type WorkItemIdentity } from "../hooks/useWorkItems";
+import { StatusChip, WorkRow } from "./DeliveryPrimitives";
+import { PROGRESS_STAGE_LABELS, workItemStatus } from "./workItemPresentation";
 
 interface WorkPortfolioTableProps {
-  groups: ChangeGroupView[]
-  selected: WorkItemIdentity | null
-  emptyMessage?: string
-  onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void
+  groups: ChangeGroupView[];
+  selected: WorkItemIdentity | null;
+  emptyMessage?: string;
+  onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
 }
 
-type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & { group: ChangeGroupView }
+type GroupTableProps = Pick<
+  WorkPortfolioTableProps,
+  "selected" | "onSelect"
+> & { group: ChangeGroupView };
 
 function attentionBorder(item: WorkItemCardView): string {
-  if (item.needs === 'you') return 'border-l-4 border-l-error'
-  return 'border-l-4 border-l-contrast-low'
+  if (item.needs === "you") return "border-l-4 border-l-error";
+  return "border-l-4 border-l-contrast-low";
 }
 
 function workItemPath(item: WorkItemCardView): string {
-  return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`
+  return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`;
 }
 
 function ItemLink({
@@ -34,60 +31,89 @@ function ItemLink({
   selected,
   onSelect,
 }: {
-  item: WorkItemCardView
-  selected: boolean
-  onSelect: WorkPortfolioTableProps['onSelect']
+  item: WorkItemCardView;
+  selected: boolean;
+  onSelect: WorkPortfolioTableProps["onSelect"];
 }) {
-  const identity = { changeId: item.change_id, itemKey: item.item_key }
+  const identity = { changeId: item.change_id, itemKey: item.item_key };
   return (
     <Link
       to={workItemPath(item)}
       data-work-item-primary-trigger
       data-work-item-identity={`${item.change_id}:${item.item_key}`}
       className="block min-w-0 font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-      aria-current={selected ? 'location' : undefined}
+      aria-current={selected ? "location" : undefined}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
-      <span className="block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{item.title}</span>
+      <span className="block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+        {item.title}
+      </span>
     </Link>
-  )
+  );
 }
 
-function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
-  const navigate = useNavigate()
-  if (item.action.kind === 'none' || !item.action.label || item.action.command) return null
-  const identity = { changeId: item.change_id, itemKey: item.item_key }
-  const path = workItemPath(item)
+function ActionLink({
+  item,
+  onSelect,
+  subdued = false,
+}: {
+  item: WorkItemCardView;
+  onSelect: WorkPortfolioTableProps["onSelect"];
+  subdued?: boolean;
+}) {
+  const navigate = useNavigate();
+  if (item.action.kind === "none" || !item.action.label || item.action.command)
+    return null;
+  const identity = { changeId: item.change_id, itemKey: item.item_key };
+  const path = workItemPath(item);
   return (
     <PLinkPure
       href={path}
-      color={subdued ? 'contrast-medium' : 'primary'}
+      color={subdued ? "contrast-medium" : "primary"}
       size="xs"
       className="relative z-[1]"
       onClick={(event) => {
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-        event.preventDefault()
-        onSelect(identity, event.currentTarget as HTMLElement)
-        navigate(path)
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        event.preventDefault();
+        onSelect(identity, event.currentTarget as HTMLElement);
+        navigate(path);
       }}
     >
       {item.action.label}
     </PLinkPure>
-  )
+  );
 }
 
 function ProgressState({ item }: { item: WorkItemCardView }) {
-  const stage = item.stage === null ? null : PROGRESS_STAGE_LABELS[item.stage]
-  const quantified = item.progress.done !== null && item.progress.total !== null && item.progress.total > 0
-  const complete = quantified && item.progress.done === item.progress.total
-  const state = workItemStatus(item)
-  if (complete || (!stage && item.progress.label === state.label)) return null
+  const stage = item.stage === null ? null : PROGRESS_STAGE_LABELS[item.stage];
+  const quantified =
+    item.progress.done !== null &&
+    item.progress.total !== null &&
+    item.progress.total > 0;
+  const complete = quantified && item.progress.done === item.progress.total;
+  const state = workItemStatus(item);
+  if (complete || (!stage && item.progress.label === state.label)) return null;
   const percentage = quantified
-    ? Math.min(100, Math.round((item.progress.done as number / (item.progress.total as number)) * 100))
-    : null
+    ? Math.min(
+        100,
+        Math.round(
+          ((item.progress.done as number) / (item.progress.total as number)) *
+            100,
+        ),
+      )
+    : null;
   return (
     <span className="mt-static-xs block">
-      {stage ? <strong className="block font-medium text-primary">{stage}</strong> : null}
+      {stage ? (
+        <strong className="block font-medium text-primary">{stage}</strong>
+      ) : null}
       {percentage !== null ? (
         <span
           className="mt-1 block h-1.5 w-full max-w-40 overflow-hidden rounded-full bg-contrast-low"
@@ -97,93 +123,162 @@ function ProgressState({ item }: { item: WorkItemCardView }) {
           aria-valuemax={100}
           aria-valuenow={percentage}
         >
-          <span className="block h-full rounded-full bg-primary" style={{ width: `${percentage}%` }} />
+          <span
+            className="block h-full rounded-full bg-primary"
+            style={{ width: `${percentage}%` }}
+          />
         </span>
       ) : null}
-      <span className="mt-0.5 block text-xs text-contrast-medium">{item.progress.label}</span>
+      <span className="mt-0.5 block text-xs text-contrast-medium">
+        {item.progress.label}
+      </span>
     </span>
-  )
+  );
 }
 
-function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
-  const state = workItemStatus(item)
+function CurrentState({
+  item,
+  onSelect,
+}: {
+  item: WorkItemCardView;
+  onSelect: WorkPortfolioTableProps["onSelect"];
+}) {
+  const state = workItemStatus(item);
   return (
     <span>
       <StatusChip label={state.label} tone={state.tone} />
-      {state.detail ? <span className="mt-1 block text-xs text-contrast-medium">{state.detail}</span> : null}
-      {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' && !item.action.command ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
+      {state.detail ? (
+        <span className="mt-1 block text-xs text-contrast-medium">
+          {state.detail}
+        </span>
+      ) : null}
+      {item.activity.task_id ? (
+        <span className="mt-0.5 block text-xs text-contrast-medium">
+          Task {item.activity.task_id}
+        </span>
+      ) : null}
+      {item.action.kind !== "none" && !item.action.command ? (
+        <span className="mt-0.5 block">
+          <ActionLink item={item} onSelect={onSelect} />
+        </span>
+      ) : null}
     </span>
-  )
+  );
 }
 
 function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
-  const outcomes = group.items.filter((item) => item.scope === 'outcome')
+  const outcomes = group.items.filter((item) => item.scope === "outcome");
   return (
-    <div className="hidden overflow-x-auto md:block" data-testid="work-table-scroll">
+    <div
+      className="hidden overflow-x-auto md:block"
+      data-testid="work-table-scroll"
+    >
       <table className="w-full min-w-[42rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
-        <caption className="sr-only">Current Outcomes for {group.title}</caption>
+        <caption className="sr-only">
+          Current Outcomes for {group.title}
+        </caption>
         <colgroup>
           <col className="w-[60%]" />
           <col className="w-[40%]" />
         </colgroup>
         <thead className="sr-only">
           <tr className="text-2xs font-semibold uppercase text-contrast-high">
-            <th className="px-static-sm py-static-xs" scope="col">Work</th>
-            <th className="px-static-sm py-static-xs" scope="col">State</th>
+            <th className="px-static-sm py-static-xs" scope="col">
+              Work
+            </th>
+            <th className="px-static-sm py-static-xs" scope="col">
+              State
+            </th>
           </tr>
         </thead>
         <tbody>
           {outcomes.map((item) => {
-            const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
+            const isSelected =
+              selected?.changeId === item.change_id &&
+              selected.itemKey === item.item_key;
             return (
               <tr
                 key={workItemIdentity(item)}
-                className={['relative align-top', isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft'].join(' ')}
+                className={[
+                  "relative align-top",
+                  isSelected
+                    ? "bg-frosted-soft"
+                    : "bg-surface hover:bg-frosted-soft",
+                ].join(" ")}
                 data-work-item={workItemIdentity(item)}
               >
-                <td className={`rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm ${attentionBorder(item)}`}>
-                  <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-                  <span className="block text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
+                <td
+                  className={`rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm ${attentionBorder(item)}`}
+                >
+                  <ItemLink
+                    item={item}
+                    selected={isSelected}
+                    onSelect={onSelect}
+                  />
+                  <span className="block text-xs text-contrast-medium">
+                    Outcome: <code>{item.work_item_id}</code>
+                  </span>
                   <ProgressState item={item} />
                 </td>
-                <td className="rounded-r-lg border-y border-r border-contrast-low px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
+                <td className="rounded-r-lg border-y border-r border-contrast-low px-static-sm py-static-sm">
+                  <CurrentState item={item} onSelect={onSelect} />
+                </td>
               </tr>
-            )
+            );
           })}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
 function CompactRows({ group, selected, onSelect }: GroupTableProps) {
-  const outcomes = group.items.filter((item) => item.scope === 'outcome')
+  const outcomes = group.items.filter((item) => item.scope === "outcome");
   return (
     <div className="grid gap-static-sm md:hidden">
       {outcomes.map((item) => {
-        const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
+        const isSelected =
+          selected?.changeId === item.change_id &&
+          selected.itemKey === item.item_key;
         return (
-          <WorkRow key={workItemIdentity(item)} selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`${item.title} work item`} className="grid gap-static-sm p-static-sm">
+          <WorkRow
+            key={workItemIdentity(item)}
+            selected={isSelected}
+            needs={item.needs}
+            dataWorkItem={workItemIdentity(item)}
+            ariaLabel={`${item.title} work item`}
+            className="grid gap-static-sm p-static-sm"
+          >
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-            <span className="text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
+            <span className="text-xs text-contrast-medium">
+              Outcome: <code>{item.work_item_id}</code>
+            </span>
             <ProgressState item={item} />
             <CurrentState item={item} onSelect={onSelect} />
           </WorkRow>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
-  const item = group.items.find((candidate) => candidate.scope === 'change-publication')
-  if (!item) return null
-  const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
-  const identity = { changeId: item.change_id, itemKey: item.item_key }
-  const path = workItemPath(item)
+  const item = group.items.find(
+    (candidate) => candidate.scope === "change-publication",
+  );
+  if (!item) return null;
+  const isSelected =
+    selected?.changeId === item.change_id && selected.itemKey === item.item_key;
+  const identity = { changeId: item.change_id, itemKey: item.item_key };
+  const path = workItemPath(item);
   return (
-    <WorkRow selected={isSelected} needs={item.needs} dataWorkItem={workItemIdentity(item)} ariaLabel={`Change publication for ${group.title}`} className="mt-static-sm px-static-sm py-static-md md:px-0 md:py-0">
+    <WorkRow
+      selected={isSelected}
+      needs={item.needs}
+      dataWorkItem={workItemIdentity(item)}
+      ariaLabel={`Change publication for ${group.title}`}
+      className="mt-static-sm px-static-sm py-static-md md:px-0 md:py-0"
+    >
       <dl className="grid gap-static-sm md:grid-cols-[minmax(0,60fr)_minmax(0,40fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
           <dt className="sr-only">Work</dt>
@@ -193,39 +288,76 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
               data-work-item-primary-trigger
               data-work-item-identity={`${item.change_id}:${item.item_key}`}
               className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-              aria-current={isSelected ? 'location' : undefined}
+              aria-current={isSelected ? "location" : undefined}
               onClick={(event) => onSelect(identity, event.currentTarget)}
             >
               Publication
             </Link>
-            <span className="text-xs text-contrast-medium">Change: {group.title}</span>
+            <span className="text-xs text-contrast-medium">
+              Change: {group.title}
+            </span>
             <ProgressState item={item} />
           </dd>
         </div>
         <div className="md:px-static-sm md:py-static-sm">
           <dt className="sr-only">State</dt>
-          <dd><CurrentState item={item} onSelect={onSelect} /></dd>
+          <dd>
+            <CurrentState item={item} onSelect={onSelect} />
+          </dd>
         </div>
       </dl>
     </WorkRow>
-  )
+  );
 }
 
-export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps) {
-  if (groups.length === 0) return <p className="py-static-lg text-sm text-contrast-medium">{emptyMessage ?? 'No current Delivery work.'}</p>
+export default function WorkPortfolioTable({
+  groups,
+  selected,
+  emptyMessage,
+  onSelect,
+}: WorkPortfolioTableProps) {
+  if (groups.length === 0)
+    return (
+      <p className="py-static-lg text-sm text-contrast-medium">
+        {emptyMessage ?? "No current Delivery work."}
+      </p>
+    );
   return (
-    <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-lg">
+    <section
+      aria-label="Delivery work"
+      data-testid="work-portfolio-table"
+      className="grid gap-static-lg"
+    >
       {groups.map((group) => (
-        <section key={group.change_id} className="min-w-0" aria-labelledby={`work-group-${group.change_id}`}>
+        <section
+          key={group.change_id}
+          className="min-w-0"
+          aria-labelledby={`work-group-${group.change_id}`}
+        >
           <div className="mb-static-xs flex min-w-0 flex-wrap items-baseline justify-between gap-x-static-md gap-y-static-xs border-b border-contrast-low px-static-sm pb-static-xs">
-            <h2 id={`work-group-${group.change_id}`} className="m-0 min-w-0 text-md font-semibold text-primary">{group.title}</h2>
-            <span className="text-xs text-contrast-medium"><strong className="font-semibold text-primary">{group.outcome_completed} of {group.outcome_total}</strong> outcomes <span aria-hidden="true">·</span> {group.lifecycle.replace(/-/g, ' ')}</span>
+            <h2
+              id={`work-group-${group.change_id}`}
+              className="m-0 min-w-0 text-md font-semibold text-primary"
+            >
+              {group.title}
+            </h2>
+            <span className="text-xs text-contrast-medium">
+              <strong className="font-semibold text-primary">
+                {group.outcome_completed} of {group.outcome_total}
+              </strong>{" "}
+              outcomes <span aria-hidden="true">·</span>{" "}
+              {group.lifecycle.replace(/-/g, " ")}
+            </span>
           </div>
           <DesktopTable group={group} selected={selected} onSelect={onSelect} />
           <CompactRows group={group} selected={selected} onSelect={onSelect} />
-          <PublicationGate group={group} selected={selected} onSelect={onSelect} />
+          <PublicationGate
+            group={group}
+            selected={selected}
+            onSelect={onSelect}
+          />
         </section>
       ))}
     </section>
-  )
+  );
 }
