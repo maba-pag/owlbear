@@ -29,7 +29,20 @@ from owlbear_tools.todo import run_todo
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 _JSON_SUFFIXES = frozenset({".json", ".jsonc"})
-_BIOME_SUFFIXES = frozenset({".css", ".js", ".mjs", ".ts", ".tsx"})
+_BIOME_SOURCE_SUFFIXES = frozenset({".css", ".js", ".mjs", ".ts", ".tsx"})
+_BIOME_JSON_PATHS = frozenset(
+    {
+        ".github/renovate.json",
+        ".github/sync-manifest.json",
+        ".markdownlint-cli2.jsonc",
+        ".markdownlint.json",
+        "package.json",
+        "serve/cockpit/web/.stylelintrc.json",
+        "serve/cockpit/web/package.json",
+        "serve/cockpit/web/tsconfig.e2e.json",
+        "serve/cockpit/web/tsconfig.json",
+    }
+)
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
@@ -163,9 +176,19 @@ def _run_cockpit_html(*, staged: bool) -> int:
     return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
+def _is_biome_staged_path(path: str) -> bool:
+    if path in _BIOME_JSON_PATHS:
+        return True
+    return (
+        path.startswith("serve/cockpit/web/")
+        and Path(path).relative_to("serve/cockpit/web").parts[0] in {"src", "e2e"}
+        and Path(path).suffix in _BIOME_SOURCE_SUFFIXES
+    )
+
+
 def _run_cockpit_biome(*, staged: bool) -> int:
     if staged and not any(
-        path.startswith("serve/cockpit/web/") and Path(path).suffix in _BIOME_SUFFIXES
+        _is_biome_staged_path(path)
         for path in _git_paths(staged=True)
     ):
         return 0

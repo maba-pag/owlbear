@@ -7,6 +7,11 @@ name: Cockpit verification
       - dev
     paths:
       - "biome.json"
+      - ".github/renovate.json"
+      - ".github/sync-manifest.json"
+      - ".markdownlint-cli2.jsonc"
+      - ".markdownlint.json"
+      - "package.json"
       - "serve/cockpit/web/**"
       - "serve/cockpit/README.md"
       - ".github/scripts/check_node_runtime.py"

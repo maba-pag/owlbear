@@ -5,72 +5,47 @@
     "security:minimumReleaseAgeNpm",
     "security:minimumReleaseAgePypi"
   ],
-  "baseBranchPatterns": [
-    "dev"
-  ],
+  "baseBranchPatterns": ["dev"],
   "timezone": "Europe/Berlin",
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "updateNotScheduled": true,
-  "labels": [
-    "dependencies",
-    "renovate"
-  ],
+  "labels": ["dependencies", "renovate"],
   "gitIgnoredAuthors": [
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
     "groupName": "{{datasource}} security updates",
-    "schedule": [
-      "* 9-12 * * 1,5"
-    ],
+    "schedule": ["* 9-12 * * 1,5"],
     "minimumReleaseAge": "6 hours",
     "prCreation": "immediate",
     "vulnerabilityFixStrategy": "highest",
-    "labels": [
-      "dependencies",
-      "renovate",
-      "security"
-    ]
+    "labels": ["dependencies", "renovate", "security"]
   },
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": [
-      "* 9-12 * * 5"
-    ],
+    "schedule": ["* 9-12 * * 5"],
     "automerge": false
   },
   "packageRules": [
     {
       "description": "Keep Python runtime floor within supported 3.12-3.14 releases",
-      "matchPackageNames": [
-        "python"
-      ],
-      "matchManagers": [
-        "pep621"
-      ],
+      "matchPackageNames": ["python"],
+      "matchManagers": ["pep621"],
       "allowedVersions": ">=3.12.14,<3.15.0"
     },
     {
       "description": "Freeze the checked-in Python runtime to 3.14.x",
-      "matchPackageNames": [
-        "python"
-      ],
-      "matchManagers": [
-        "pyenv"
-      ],
-      "matchFileNames": [
-        ".python-version"
-      ],
+      "matchPackageNames": ["python"],
+      "matchManagers": ["pyenv"],
+      "matchFileNames": [".python-version"],
       "allowedVersions": "/^3\\.14(?:\\.[0-9]+)?$/"
     },
     {
       "description": "Prefer lockfile-only updates for in-range npm dependency updates",
-      "matchManagers": [
-        "npm"
-      ],
+      "matchManagers": ["npm"],
       "matchDepTypes": [
         "dependencies",
         "devDependencies",
@@ -81,91 +56,50 @@
     },
     {
       "description": "Prefer lockfile-only updates for in-range uv.lock-backed Python updates",
-      "matchManagers": [
-        "pep621"
-      ],
+      "matchManagers": ["pep621"],
       "rangeStrategy": "update-lockfile"
     },
     {
       "description": "Keep Node runtime declarations aligned",
-      "matchDatasources": [
-        "node-version"
-      ],
-      "matchPackageNames": [
-        "node"
-      ],
+      "matchDatasources": ["node-version"],
+      "matchPackageNames": ["node"],
       "versioning": "node",
       "groupName": "Node.js runtime"
     },
     {
       "description": "Group routine version updates by ecosystem on Friday",
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchUpdateTypes": ["minor", "patch"],
       "groupName": "{{datasource}} minor/patch updates",
-      "schedule": [
-        "* 9-12 * * 5"
-      ],
+      "schedule": ["* 9-12 * * 5"],
       "prCreation": "immediate",
       "automerge": false
     },
     {
       "description": "Give Docker routine updates a one-day maturity floor",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch"],
       "minimumReleaseAge": "24 hours"
     },
     {
       "description": "Give MegaLinter routine updates a one-day maturity floor",
-      "matchManagers": [
-        "custom.regex",
-        "github-actions"
-      ],
-      "matchDatasources": [
-        "github-tags"
-      ],
-      "matchPackageNames": [
-        "oxsecurity/megalinter"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchManagers": ["custom.regex", "github-actions"],
+      "matchDatasources": ["github-tags"],
+      "matchPackageNames": ["oxsecurity/megalinter"],
+      "matchUpdateTypes": ["minor", "patch"],
       "minimumReleaseAge": "24 hours"
     },
     {
       "description": "Group integrity updates by ecosystem on Friday",
-      "matchUpdateTypes": [
-        "pin",
-        "pinDigest",
-        "digest"
-      ],
+      "matchUpdateTypes": ["pin", "pinDigest", "digest"],
       "groupName": "{{datasource}} integrity updates",
-      "schedule": [
-        "* 9-12 * * 5"
-      ],
+      "schedule": ["* 9-12 * * 5"],
       "automerge": false
     },
     {
       "description": "Keep standalone Ruff tool versions coupled",
-      "matchManagers": [
-        "pep621",
-        "pre-commit"
-      ],
-      "matchDatasources": [
-        "pypi",
-        "github-tags"
-      ],
-      "matchPackageNames": [
-        "ruff",
-        "astral-sh/ruff-pre-commit"
-      ],
+      "matchManagers": ["pep621", "pre-commit"],
+      "matchDatasources": ["pypi", "github-tags"],
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
       "matchUpdateTypes": [
         "major",
         "minor",
@@ -178,111 +112,65 @@
     },
     {
       "description": "Keep standalone Ruff within the current MegaLinter-compatible ceiling",
-      "matchManagers": [
-        "pep621",
-        "pre-commit"
-      ],
-      "matchDatasources": [
-        "pypi",
-        "github-tags"
-      ],
-      "matchPackageNames": [
-        "ruff",
-        "astral-sh/ruff-pre-commit"
-      ],
+      "matchManagers": ["pep621", "pre-commit"],
+      "matchDatasources": ["pypi", "github-tags"],
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit"],
       "allowedVersions": "<=0.16.5"
     },
     {
       "description": "Keep native and action MegaLinter versions coupled",
-      "matchManagers": [
-        "custom.regex",
-        "github-actions"
-      ],
-      "matchDatasources": [
-        "github-tags"
-      ],
-      "matchPackageNames": [
-        "oxsecurity/megalinter"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch",
-        "pin"
-      ],
+      "matchManagers": ["custom.regex", "github-actions"],
+      "matchDatasources": ["github-tags"],
+      "matchPackageNames": ["oxsecurity/megalinter"],
+      "matchUpdateTypes": ["major", "minor", "patch", "pin"],
       "groupName": "MegaLinter declarations"
     },
     {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",
-      "matchManagers": [
-        "npm"
-      ],
+      "matchManagers": ["npm"],
       "matchPackageNames": [
         "@porsche-design-system/components-js",
         "@porsche-design-system/components-react"
       ],
-      "addLabels": [
-        "cockpit",
-        "pds"
-      ],
+      "addLabels": ["cockpit", "pds"],
       "automerge": false
     },
     {
       "description": "Review Archify release asset and digest updates",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchDatasources": [
-        "github-release-attachments"
-      ],
-      "matchPackageNames": [
-        "tt-a1i/archify"
-      ],
-      "addLabels": [
-        "diagrams"
-      ],
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["github-release-attachments"],
+      "matchPackageNames": ["tt-a1i/archify"],
+      "addLabels": ["diagrams"],
       "automerge": false
     },
     {
       "description": "Open major version updates on Sunday",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "schedule": [
-        "* 12-15 * * 0"
-      ],
+      "matchUpdateTypes": ["major"],
+      "schedule": ["* 12-15 * * 0"],
       "minimumReleaseAge": "72 hours",
       "prCreation": "immediate",
       "automerge": false
     },
     {
       "description": "Keep Porsche Design System major versions coupled",
-      "matchManagers": [
-        "npm"
-      ],
+      "matchManagers": ["npm"],
       "matchPackageNames": [
         "@porsche-design-system/components-js",
         "@porsche-design-system/components-react"
       ],
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "matchUpdateTypes": ["major"],
       "groupName": "Porsche Design System major updates"
     },
     {
       "description": "Keep Vite and its build plugins coupled on major updates",
-      "matchManagers": [
-        "npm"
-      ],
+      "matchManagers": ["npm"],
       "matchPackageNames": [
         "vite",
         "@vitejs/plugin-react",
         "@rolldown/plugin-babel",
         "babel-plugin-react-compiler"
       ],
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "matchUpdateTypes": ["major"],
       "groupName": "Vite major updates"
     }
   ],
@@ -293,9 +181,7 @@
     {
       "customType": "regex",
       "description": "MegaLinter native version; keep version match last for combination write-back",
-      "managerFilePatterns": [
-        "/^\\.mega-linter\\.yml$/"
-      ],
+      "managerFilePatterns": ["/^\\.mega-linter\\.yml$/"],
       "matchStringsStrategy": "combination",
       "matchStrings": [
         "MEGALINTER_FLAVOR:[ \\t]*[\\x22']?(?:all|(?<flavor>[a-z0-9_-]+))[\\x22']?[ \\t]*(?:#.*)?(?:\\r?\\n|$)",

@@ -15,7 +15,16 @@
       "serve/cockpit/web/e2e/**/*.mjs",
       "serve/cockpit/web/e2e/**/*.ts",
       "serve/cockpit/web/e2e/**/*.tsx",
-      "serve/cockpit/web/src/**/*.css"
+      "serve/cockpit/web/src/**/*.css",
+      ".github/renovate.json",
+      ".github/sync-manifest.json",
+      ".markdownlint-cli2.jsonc",
+      ".markdownlint.json",
+      "package.json",
+      "serve/cockpit/web/package.json",
+      "serve/cockpit/web/tsconfig.json",
+      "serve/cockpit/web/tsconfig.e2e.json",
+      "serve/cockpit/web/.stylelintrc.json"
     ]
   },
   "linter": {
@@ -31,7 +40,7 @@
   "plugins": [
     "./serve/cockpit/web/plugins/pds-component-wrappers.grit"
   ],
-    "css": {
+  "css": {
     "parser": {
       "tailwindDirectives": true
     }

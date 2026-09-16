@@ -12,6 +12,7 @@ from owlbear_tools.megalinter import MegaLinterImage, megalint
 from owlbear_tools.quality import (
     FixMode,
     _consumer_lint,
+    _is_biome_staged_path,
     _run_cockpit_html,
     _run_named,
     format_eof,
@@ -131,6 +132,22 @@ def test_lint_cockpit_biome_runs_the_package_lint_script() -> None:
 
     assert call.call_args.args[0] == ["npm", "run", "lint:biome"]
     assert call.call_args.kwargs["cwd"] == Path("serve/cockpit/web")
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (".github/sync-manifest.json", True),
+        ("package.json", True),
+        ("serve/cockpit/web/src/App.tsx", True),
+        ("serve/cockpit/web/src/theme.css", True),
+        (".owlbear/delivery/config.json", False),
+        ("serve/cockpit/web/package-lock.json", False),
+        (".vscode/settings.json", False),
+    ],
+)
+def test_biome_staged_path_matches_the_owned_allowlist(path: str, expected: bool) -> None:
+    assert _is_biome_staged_path(path) is expected
 
 
 def test_lint_json_staged_targets_only_staged_json_files() -> None:
