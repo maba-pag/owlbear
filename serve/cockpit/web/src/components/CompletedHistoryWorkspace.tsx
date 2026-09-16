@@ -346,7 +346,7 @@ export default function CompletedHistoryWorkspace() {
   }, [detail.data, detail.error, detail.isLoading, history.error, history.page.records, isQueryLoading, navigate, searchQuery, selected])
 
   useEffect(() => {
-    if (selected || !restoreFocusAfterClose.current) return
+    if (selectedKey || !restoreFocusAfterClose.current) return
     let secondFrame: number | null = null
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {

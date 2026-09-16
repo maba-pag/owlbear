@@ -1,0 +1,21 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+  `<p-select $... />` as $element,
+  `<p-button $... />` as $element,
+  `<p-input-search $... />` as $element,
+  `<p-input-text $... />` as $element,
+  `<p-tag $... />` as $element,
+  `<p-select $...>` as $element,
+  `<p-button $...>` as $element,
+  `<p-input-search $...>` as $element,
+  `<p-input-text $...>` as $element,
+  `<p-tag $...>` as $element
+} where {
+  register_diagnostic(
+    span = $element,
+    message = "Use the corresponding Porsche Design System React wrapper instead of a raw custom element.",
+    severity = "error"
+  )
+}

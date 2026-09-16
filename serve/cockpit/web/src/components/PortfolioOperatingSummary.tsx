@@ -122,9 +122,8 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
 
   return (
     <>
-      <div
+      <section
         className="flex min-w-0 flex-wrap items-baseline gap-x-static-md gap-y-static-xs"
-        role="group"
         aria-label="Portfolio inventory"
         data-testid="portfolio-inventory-summary"
       >
@@ -139,22 +138,21 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
           <strong className="font-semibold tabular-nums text-primary">{deliveryCount}</strong>
           <span>Delivery</span>
         </span>
-      </div>
-      <div
+      </section>
+      <section
         className="flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-xs sm:translate-y-0.5 sm:self-center sm:border-l sm:border-t-0 sm:pl-static-md sm:pt-0"
-        role="group"
         aria-label="Work item status"
         data-testid="portfolio-work-summary"
       >
-        <div className="flex flex-wrap items-center gap-static-xs" role="group" aria-label="Attention">
+        <section className="flex flex-wrap items-center gap-static-xs" aria-label="Attention">
           <AttentionMetric count={totals.needs.you} filter="you" icon="warning" label="Needs you" selected={needsFilter === 'you'} onSelect={onNeedsFilter} />
           <AttentionMetric count={totals.needs.dependency} filter="dependency" icon="clock" label="Blocked" selected={needsFilter === 'dependency'} onSelect={onNeedsFilter} />
-        </div>
-        <div className="flex items-center gap-static-md" role="group" aria-label="Activity">
+        </section>
+        <section className="flex items-center gap-static-md" aria-label="Activity">
           <ActivityMetric count={runningCount} icon="play" label="Running" />
           <ActivityMetric count={totals.activity.ready} icon="list" label="Ready" />
-        </div>
-      </div>
+        </section>
+      </section>
     </>
   )
 }

@@ -17,6 +17,7 @@ from owlbear_tools.quality import (
     format_eof,
     format_whitespace,
     lint,
+    lint_cockpit_biome,
     lint_json,
     lint_python,
     quality,
@@ -54,6 +55,7 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["pre-commit", "run", "actionlint", "--all-files"],
         ["pre-commit", "run", "editorconfig-checker", "--all-files"],
         ["pre-commit", "run", "eslint-frontend-fix", "--all-files"],
+        ["npm", "run", "lint:biome"],
         ["pre-commit", "run", "stylelint-frontend-fix", "--all-files"],
         ["npm", "run", "lint:html"],
     ]
@@ -87,8 +89,14 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
     ):
         lint()
 
-    assert all("--files" in item.args[0] for item in call.call_args_list)
-    assert all("README.md" in item.args[0] for item in call.call_args_list)
+    precommit_commands = [item.args[0] for item in call.call_args_list if item.args[0][0] == "pre-commit"]
+    assert all("--files" in command for command in precommit_commands)
+    assert all("README.md" in command for command in precommit_commands)
+    assert [
+        item.args[0]
+        for item in call.call_args_list
+        if item.args[0][:3] == ["npm", "run", "lint:biome:staged"]
+    ] == [["npm", "run", "lint:biome:staged"]]
 
 
 def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
@@ -111,6 +119,18 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
             assert "manual" in command
         else:
             assert "--all-files" in command
+
+
+def test_lint_cockpit_biome_runs_the_package_lint_script() -> None:
+    with (
+        patch.object(sys, "argv", ["lint-cockpit-biome"]),
+        patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        lint_cockpit_biome()
+
+    assert call.call_args.args[0] == ["npm", "run", "lint:biome"]
+    assert call.call_args.kwargs["cwd"] == Path("serve/cockpit/web")
 
 
 def test_lint_json_staged_targets_only_staged_json_files() -> None:
@@ -194,6 +214,7 @@ def test_quality_executes_todo_last() -> None:
         "lint-actions",
         "lint-editorconfig",
         "lint-cockpit-code",
+        "lint-cockpit-biome",
         "lint-cockpit-style",
         "lint-cockpit-html",
         "megalint",

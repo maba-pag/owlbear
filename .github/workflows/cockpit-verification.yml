@@ -6,6 +6,7 @@ name: Cockpit verification
     branches:
       - dev
     paths:
+      - "biome.json"
       - "serve/cockpit/web/**"
       - "serve/cockpit/README.md"
       - ".github/scripts/check_node_runtime.py"
@@ -67,6 +68,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
@@ -95,10 +97,16 @@ jobs:
         run: npm run typecheck:e2e
 
       - name: Check Cockpit sources
+        env:
+          BIOME_BASE_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
         run: |
           npx eslint src e2e --max-warnings 0
+          npm run lint:biome:ci -- --since="origin/${BIOME_BASE_REF}"
           npm run lint:css
           npm run lint:html
+
+      - name: Verify PDS Biome plugin
+        run: npm run test:biome-pds
 
       - name: Build production Cockpit
         run: npm run build

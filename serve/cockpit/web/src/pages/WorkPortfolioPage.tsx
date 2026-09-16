@@ -25,6 +25,7 @@ type FocusDestination = 'trigger' | 'current-view' | 'history-view'
 
 /** Delivery answers any item key with read-only evidence while a Change runtime is unavailable. */
 const UNAVAILABLE_ITEM_KEY = 'publication'
+const PORTFOLIO_LOADING_SKELETON_KEYS = ['one', 'two', 'three', 'four'] as const
 
 function unavailableChangePath(changeId: string): string {
   return `/delivery/${encodeURIComponent(changeId)}/${encodeURIComponent(UNAVAILABLE_ITEM_KEY)}`
@@ -404,9 +405,9 @@ function DeliveryIssuesSection({
       </div>
       <details className="border-t border-warning">
         <summary className="cursor-pointer px-static-sm py-static-xs text-xs font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">View issue details</summary>
-        <div className="grid gap-static-sm border-t border-warning px-static-sm py-static-sm" role="list">
+        <ul className="m-0 grid list-none gap-static-sm border-t border-warning px-static-sm py-static-sm">
         {statuses.map((status) => (
-          <article key={status.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-status={status.change_id} role="listitem">
+          <li key={status.change_id} className="min-w-0 bg-surface p-static-sm text-sm" data-delivery-status={status.change_id}>
             <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
               <strong className="font-semibold text-primary">{status.change_id}</strong>
               <span className="text-xs text-contrast-medium">{status.stage ? CHANGE_STAGE_LABELS[status.stage] : 'Delivery'}</span>
@@ -419,10 +420,10 @@ function DeliveryIssuesSection({
                 <HealthDiagnosticDetails diagnostic={diagnosticByChangeId.get(status.change_id) as DeliveryHealthDiagnostic} />
               </>
             ) : null}
-          </article>
+          </li>
         ))}
         {uncoveredUnavailable.map((change) => (
-          <article key={change.change_id} className="relative min-w-0 bg-surface p-static-sm text-sm" data-delivery-unavailable={change.change_id} role="listitem">
+          <li key={change.change_id} className="relative min-w-0 bg-surface p-static-sm text-sm" data-delivery-unavailable={change.change_id}>
             <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
               <Link
                 to={unavailableChangePath(change.change_id)}
@@ -438,10 +439,10 @@ function DeliveryIssuesSection({
             <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
             <p className="mt-1 text-xs text-contrast-medium">Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.</p>
             <p className="mt-1 break-words font-mono text-2xs text-contrast-medium"><code>{change.change_id}</code><span aria-hidden="true"> / </span><code>{change.diagnostics.join(', ')}</code></p>
-          </article>
+          </li>
         ))}
-        {additionalDiagnostics.map((diagnostic, index) => (
-          <article key={`${diagnostic.change_id ?? 'portfolio'}-${diagnostic.code}-${index}`} className="min-w-0 bg-surface p-static-sm text-sm" role="listitem">
+        {additionalDiagnostics.map((diagnostic) => (
+          <li key={`${diagnostic.change_id ?? 'portfolio'}-${diagnostic.source}-${diagnostic.code}-${diagnostic.path ?? ''}-${diagnostic.detail}`} className="min-w-0 bg-surface p-static-sm text-sm">
             <p className="font-medium text-primary">Quarantined state is hidden from dispatch.</p>
             <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
               <dt className="text-contrast-medium">Change</dt>
@@ -452,9 +453,9 @@ function DeliveryIssuesSection({
               <dd className="break-words">{diagnostic.detail}{diagnostic.path ? <span className="mt-1 block break-all font-mono text-2xs">{diagnostic.path}</span> : null}</dd>
             </dl>
             <HealthDiagnosticDetails diagnostic={diagnostic} />
-          </article>
+          </li>
         ))}
-        </div>
+        </ul>
       </details>
     </section>
   )
@@ -620,7 +621,7 @@ export default function WorkPortfolioPage() {
   }
 
   useEffect(() => {
-    if (selected) {
+    if (selectedIdentity) {
       previousSelectedIdentity.current = selectedIdentity
       return
     }
@@ -657,28 +658,33 @@ export default function WorkPortfolioPage() {
     unavailableChanges.some((change) => change.change_id === selected.changeId)
     || unavailableStatuses.some((status) => status.change_id === selected.changeId)
   )
+  const selectedChangeId = selected?.changeId
+  const selectedItemKey = selected?.itemKey
+  const selectedIsDesignWork = selectedItemKey === 'design'
+  const selectedIsPresent = selectedChangeId !== undefined && (
+    selectedIsDesignWork
+      ? designWorkIds.includes(selectedChangeId)
+      : portfolio.groups.some((group) => group.change_id === selectedChangeId
+        && group.items.some((item) => item.item_key === selectedItemKey))
+  )
 
   useEffect(() => {
-    if (!selected || !hasData) {
+    if (selectedChangeId === undefined || !hasData) {
       selectedWasPresent.current = false
       return
     }
-    const isDesignWork = selected.itemKey === 'design'
-    const present = isDesignWork
-      ? designWorkIds.includes(selected.changeId)
-      : portfolio.groups.some((group) => group.change_id === selected.changeId
-        && group.items.some((item) => item.item_key === selected.itemKey))
+    const present = selectedIsPresent
     if (present) selectedWasPresent.current = true
     // A Change that became unavailable is still inspectable; it has not completed.
-    if (!present && selectedWasPresent.current && !(selectedIsUnavailable && !isDesignWork)) {
+    if (!present && selectedWasPresent.current && !(selectedIsUnavailable && !selectedIsDesignWork)) {
       selectedWasPresent.current = false
-      const changeCompleted = !isDesignWork && portfolio.groups.every((group) => group.change_id !== selected.changeId)
+      const changeCompleted = !selectedIsDesignWork && portfolio.groups.every((group) => group.change_id !== selectedChangeId)
       restoreFocusAfterClose.current = true
       focusDestination.current = changeCompleted ? 'history-view' : 'current-view'
       if (changeCompleted) setWorkspace('history')
       navigate(changeCompleted ? '/delivery/history' : '/delivery', { replace: true })
     }
-  }, [hasData, navigate, portfolio.groups, selected, selectedIsUnavailable])
+  }, [hasData, navigate, portfolio.groups, selectedChangeId, selectedIsDesignWork, selectedIsPresent, selectedIsUnavailable])
 
   const filterProps: FilterProps = {
     changes,
@@ -724,7 +730,7 @@ export default function WorkPortfolioPage() {
       >
         {workspace === 'current' ? (
           <>
-            {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{Array.from({ length: 4 }, (_, index) => <span key={index} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
+            {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{PORTFOLIO_LOADING_SKELETON_KEYS.map((key) => <span key={key} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
             {error ? (
               <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
                 <PIcon name="error" aria-hidden="true" />

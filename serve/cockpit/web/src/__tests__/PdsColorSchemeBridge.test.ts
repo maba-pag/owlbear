@@ -39,14 +39,19 @@ function runBootstrapScript(): void {
   new Function(content)()
 }
 
-interface SpiedMQL extends MediaQueryList {
+type SpiedMQL = {
+  matches: boolean
+  media: string
   simulateChange: (newMatches: boolean) => void
 }
 
 function createSpiedMQL(initialMatches: boolean): SpiedMQL {
   const changeListeners: Array<(e: MediaQueryListEvent) => void> = []
+  let currentMatches = initialMatches
   const mql = {
-    matches: initialMatches,
+    get matches(): boolean {
+      return currentMatches
+    },
     media: '(prefers-color-scheme: dark)',
     onchange: null,
     addEventListener: vi.fn((type: string, handler: (e: MediaQueryListEvent) => void) => {
@@ -57,8 +62,10 @@ function createSpiedMQL(initialMatches: boolean): SpiedMQL {
     removeListener: vi.fn(),
     dispatchEvent: vi.fn(() => true),
     simulateChange(newMatches: boolean): void {
-      mql.matches = newMatches
-      changeListeners.forEach((h) => h({ matches: newMatches } as unknown as MediaQueryListEvent))
+      currentMatches = newMatches
+      changeListeners.forEach((h) => {
+        h({ matches: newMatches } as unknown as MediaQueryListEvent)
+      })
     },
   } as SpiedMQL
   return mql

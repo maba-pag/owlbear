@@ -818,9 +818,9 @@ it('summarizes all current Change phases and nonzero operating states', () => {
 
   render(<PortfolioHeaderSummary operating={operating} totals={totals} needsFilter="you" onNeedsFilter={onNeedsFilter} />)
 
-  expect(screen.getByRole('group', { name: 'Portfolio inventory' })).toHaveTextContent('4Changes2Design·2Delivery')
-  expect(screen.getByRole('group', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked')
-  expect(screen.getByRole('group', { name: 'Activity' })).toHaveTextContent('1Running1Ready')
+  expect(screen.getByRole('region', { name: 'Portfolio inventory' })).toHaveTextContent('4Changes2Design·2Delivery')
+  expect(screen.getByRole('region', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked')
+  expect(screen.getByRole('region', { name: 'Activity' })).toHaveTextContent('1Running1Ready')
 
   const needsYou = screen.getByRole('button', { name: 'Filter to 1 work item: Needs you' })
   expect(needsYou).toHaveAttribute('aria-pressed', 'true')

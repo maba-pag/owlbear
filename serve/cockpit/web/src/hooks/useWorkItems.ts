@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerWorkItemRequest,
   abortWorkItemTargetSync,
@@ -142,8 +142,9 @@ export function useAcceptanceReconciliation(
   onChangedRef.current = onChanged
 
   useEffect(() => {
+    const reconciliationKey = `${changeIdsKey}\u0000${retryNonce}`
     if (!changeIdsKey) providerFailureCountRef.current = 0
-    if (paused || !changeIdsKey) {
+    if (paused || !reconciliationKey.split('\u0000', 1)[0]) {
       setProviderError(null)
       setProviderChangeIds([])
       setIsRetrying(false)
@@ -265,8 +266,8 @@ export function useDesignWorkDetail(changeId: string) {
   })
 
   useEffect(() => {
-    setData(null)
-    setDetailError(null)
+    setData((current) => (current?.change_id === changeId ? current : null))
+    setDetailError((current) => (current === null ? null : current))
   }, [changeId])
 
   return {
@@ -289,6 +290,7 @@ export function useCompletedHistory(query: string) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const requestGeneration = useRef(0)
   const latestQuery = useRef(query)
+  const requestInput = useMemo(() => ({ query, retryNonce }), [query, retryNonce])
   latestQuery.current = query
 
   useEffect(() => {
@@ -298,8 +300,8 @@ export function useCompletedHistory(query: string) {
     setFailedCursor(null)
     setIsLoadingMore(false)
     setResource((current) => ({ ...current, isLoading: true, error: null }))
-    const request = query
-      ? searchCompletedChanges(query, undefined, controller.signal)
+    const request = requestInput.query
+      ? searchCompletedChanges(requestInput.query, undefined, controller.signal)
       : listCompletedChanges(undefined, controller.signal)
     void request
       .then((data) => active && generation === requestGeneration.current
@@ -307,18 +309,18 @@ export function useCompletedHistory(query: string) {
       .catch((caught: unknown) => {
         if (!active || generation !== requestGeneration.current) return
         const error = caught instanceof Error ? caught : new Error('Change history is unavailable')
-        setResource({
-          data: resource.data,
+        setResource((current) => ({
+          data: current.data,
           error,
           isLoading: false,
-        })
+        }))
         setFailedCursor(null)
       })
     return () => {
       active = false
       controller.abort()
     }
-  }, [query, retryNonce])
+  }, [requestInput])
 
   const loadMore = async () => {
     const current = resource.data
@@ -381,20 +383,26 @@ export function useCompletedChange(identity: { changeId: string; recordId: strin
     isLoading: false,
   })
   const [retryNonce, setRetryNonce] = useState(0)
+  const requestedChangeId = identity?.changeId
+  const requestedRecordId = identity?.recordId
+  const requestInput = useMemo(
+    () => ({ changeId: requestedChangeId, recordId: requestedRecordId, retryNonce }),
+    [requestedChangeId, requestedRecordId, retryNonce],
+  )
 
   useEffect(() => {
     let active = true
-    if (!identity) {
+    if (!requestInput.changeId || !requestInput.recordId) {
       setResource({ data: null, error: null, isLoading: false })
       return () => {
         active = false
       }
     }
     setResource({ data: null, error: null, isLoading: true })
-    void showCompletedChange(identity.changeId, identity.recordId)
+    void showCompletedChange(requestInput.changeId, requestInput.recordId)
       .then((data) => {
         if (!active) return
-        if (data.change_id !== identity.changeId || completedChangeRecordId(data) !== identity.recordId) {
+        if (data.change_id !== requestInput.changeId || completedChangeRecordId(data) !== requestInput.recordId) {
           throw new Error('Completed change detail did not match the requested identity')
         }
         setResource({ data, error: null, isLoading: false })
@@ -410,7 +418,7 @@ export function useCompletedChange(identity: { changeId: string; recordId: strin
     return () => {
       active = false
     }
-  }, [identity?.changeId, identity?.recordId, retryNonce])
+  }, [requestInput])
 
   return {
     ...resource,
@@ -453,13 +461,13 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     setPublicationChecksError(null)
     setPublicationChecksStale(false)
     setIsObservingPublicationChecks(false)
-    setData(null)
-    setUnavailable(null)
+    setData((current) => (current && `${current.item.card.change_id}:${current.item.card.item_key}` === identityKey ? current : null))
+    setUnavailable((current) => (current?.change_id === identity.changeId ? current : null))
     setDetailError(null)
     setPendingAction(null)
     setActionError(null)
     setActionResult(null)
-  }, [identityKey])
+  }, [identityKey, identity.changeId])
 
   const polling = usePollingFetch<WorkItemDetailResponse>(
     workItemDetailUrl(identity.changeId, identity.itemKey),

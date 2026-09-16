@@ -29,6 +29,7 @@ from owlbear_tools.todo import run_todo
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 _JSON_SUFFIXES = frozenset({".json", ".jsonc"})
+_BIOME_SUFFIXES = frozenset({".js", ".mjs", ".ts", ".tsx"})
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
@@ -57,7 +58,7 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-editorconfig",
         "lint-cockpit",
     ),
-    "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
+    "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-biome", "lint-cockpit-style", "lint-cockpit-html"),
     "format": ("format-python", "format-whitespace", "format-eof"),
     "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
 }
@@ -162,6 +163,16 @@ def _run_cockpit_html(*, staged: bool) -> int:
     return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
+def _run_cockpit_biome(*, staged: bool) -> int:
+    if staged and not any(
+        path.startswith("serve/cockpit/web/") and Path(path).suffix in _BIOME_SUFFIXES
+        for path in _git_paths(staged=True)
+    ):
+        return 0
+    script = "lint:biome:staged" if staged else "lint:biome"
+    return _call(["npm", "run", script], cwd=COCKPIT_WEB)
+
+
 def _run_json_lint(*, staged: bool) -> int:
     """Run the repository-owned JSON and JSONC ESLint configuration."""
     targets = (
@@ -205,6 +216,8 @@ def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
+    elif name == "lint-cockpit-biome":
+        result = _run_cockpit_biome(staged=staged)
     elif name == "lint-cockpit-html":
         result = _run_cockpit_html(staged=staged)
     elif name == "megalint":
@@ -368,6 +381,11 @@ def lint_editorconfig() -> None:
 def lint_cockpit_code() -> None:
     """Run Cockpit ESLint checks."""
     _run_public_leaf("lint-cockpit-code", fixes=True, allow_unsafe=False, staged=True)
+
+
+def lint_cockpit_biome() -> None:
+    """Run Cockpit Biome checks."""
+    _run_public_leaf("lint-cockpit-biome", fixes=False, allow_unsafe=False, staged=True)
 
 
 def lint_cockpit_style() -> None:

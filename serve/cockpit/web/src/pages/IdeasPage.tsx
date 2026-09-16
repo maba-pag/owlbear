@@ -76,9 +76,13 @@ function IdeasPage() {
   const lastSavedLabel = useMemo(() => formatLastSavedAt(lastSavedAt), [lastSavedAt])
 
   const updateIdeasScrollCue = useCallback(() => {
+    if (loading) {
+      setIdeasCanScrollDown(false)
+      return
+    }
     const surface = previewMode ? previewRef.current : textareaRef.current
     setIdeasCanScrollDown(Boolean(surface && surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1))
-  }, [previewMode])
+  }, [loading, previewMode])
 
   useEffect(() => {
     contentRef.current = content
@@ -86,7 +90,21 @@ function IdeasPage() {
 
   useEffect(() => {
     updateIdeasScrollCue()
-  }, [content, loading, previewMode, updateIdeasScrollCue])
+
+    const textarea = textareaRef.current
+    const preview = previewRef.current
+    textarea?.addEventListener('input', updateIdeasScrollCue)
+    let observer: MutationObserver | null = null
+    if (preview && typeof MutationObserver !== 'undefined') {
+      observer = new MutationObserver(updateIdeasScrollCue)
+      observer.observe(preview, { childList: true, subtree: true, characterData: true })
+    }
+
+    return () => {
+      textarea?.removeEventListener('input', updateIdeasScrollCue)
+      observer?.disconnect()
+    }
+  }, [updateIdeasScrollCue])
 
   useEffect(() => {
     window.addEventListener('resize', updateIdeasScrollCue)

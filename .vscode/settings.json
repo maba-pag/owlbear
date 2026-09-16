@@ -72,6 +72,17 @@
   "editor.formatOnSave": false,
   "editor.links": false,
   "editor.maxTokenizationLineLength": 2500,
+  "biome.configurationPath": "biome.json",
+  "biome.lsp.bin": {
+    "darwin-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-darwin-arm64/biome",
+    "darwin-x64": "serve/cockpit/web/node_modules/@biomejs/cli-darwin-x64/biome",
+    "linux-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64/biome",
+    "linux-arm64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-arm64-musl/biome",
+    "linux-x64": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64/biome",
+    "linux-x64-musl": "serve/cockpit/web/node_modules/@biomejs/cli-linux-x64-musl/biome",
+    "win32-arm64": "serve/cockpit/web/node_modules/@biomejs/cli-win32-arm64/biome.exe",
+    "win32-x64": "serve/cockpit/web/node_modules/@biomejs/cli-win32-x64/biome.exe"
+  },
   "eslint.workingDirectories": [
     {
       "directory": "serve/cockpit/web"

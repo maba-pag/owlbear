@@ -96,7 +96,7 @@ COMMANDS = (
         "uv run lint-cockpit",
         "Cockpit frontend lint.",
         "Quality",
-        includes=("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
+        includes=("lint-cockpit-code", "lint-cockpit-biome", "lint-cockpit-style", "lint-cockpit-html"),
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
@@ -169,6 +169,14 @@ COMMANDS = (
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
+    ),
+    Command(
+        "lint-cockpit-biome",
+        "uv run lint-cockpit-biome",
+        "Cockpit Biome lint.",
+        "Quality",
+        development_only=True,
+        supports_staged=True,
     ),
     Command(
         "lint-cockpit-style",

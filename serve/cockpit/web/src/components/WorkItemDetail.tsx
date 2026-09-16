@@ -410,11 +410,11 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
   const targetIsAvailable = target !== '' && available.includes(target)
   const canMove = targetIsAvailable && Boolean(reason.trim()) && pendingAction === null
   useEffect(() => {
-    if (!target || available.includes(target)) return
+    if (!target || targetIsAvailable) return
     setTarget('')
     setPreview(null)
     setConfirmOpen(false)
-  }, [currentStage, target])
+  }, [target, targetIsAvailable])
   useEffect(() => {
     if (!preview || preview.snapshot_version === detail.item.snapshot_version) return
     setPreview(null)
@@ -591,7 +591,7 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
 
 function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetailResponse }) {
   return (
-    <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+    <section className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
         <div>
           <span className="text-xs text-contrast-medium">
@@ -616,7 +616,7 @@ function UnavailableChangeDetail({ detail }: { detail: WorkItemUnavailableDetail
         </SectionCard>
         <ReadinessSection readiness={detail.readiness} />
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -1246,7 +1246,7 @@ export default function WorkItemDetail(props: Omit<WorkItemDetailProps, 'detail'
   const available = { ...props, detail: props.detail }
   const { card } = props.detail.item
   return (
-    <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+    <section className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
         <div>
           <DetailHeader detail={props.detail} />
@@ -1267,6 +1267,6 @@ export default function WorkItemDetail(props: Omit<WorkItemDetailProps, 'detail'
         <BackwardMoveSection {...available} />
         <ChangeDispositionSection {...available} />
       </div>
-    </div>
+    </section>
   )
 }

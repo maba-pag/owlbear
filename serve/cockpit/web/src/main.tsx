@@ -28,7 +28,9 @@ function applyTokenFallbacks(): void {
 
 function installPdsCdnTrap(): void {
   const docWithPds = document as { porscheDesignSystem?: Record<string, unknown> }
-  const pds = (docWithPds.porscheDesignSystem ??= {})
+  const existingPds = docWithPds.porscheDesignSystem
+  const pds = existingPds ?? {}
+  if (!existingPds) docWithPds.porscheDesignSystem = pds
   let assignedCdn: unknown
 
   Object.defineProperty(pds, 'cdn', {

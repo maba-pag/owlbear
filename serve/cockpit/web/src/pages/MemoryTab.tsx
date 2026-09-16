@@ -398,6 +398,8 @@ function MemoryTab() {
   }
 
   const purgeFlow = useMemoryPurgeFlow({ onSuccess: () => void refetch() })
+  const memoryConflictEntryId = memoryConflict?.entryId
+  const memoryConflictStatus = memoryConflict?.status
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -413,11 +415,11 @@ function MemoryTab() {
   }, [refetch])
 
   useEffect(() => {
-    if (!memoryConflict || memoryConflict.status === 'refreshing') {
+    if (!memoryConflictEntryId || memoryConflictStatus === 'refreshing') {
       return
     }
     conflictPanelRef.current?.focus()
-  }, [memoryConflict?.entryId, memoryConflict?.status])
+  }, [memoryConflictEntryId, memoryConflictStatus])
 
   useEffect(() => {
     const entryId = restoreConflictFocusRef.current
@@ -567,10 +569,15 @@ function MemoryTab() {
 
     const observer = new ResizeObserver(updateMemoryListScrollCue)
     observer.observe(list)
+    const mutationObserver = typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(updateMemoryListScrollCue)
+    mutationObserver?.observe(list, { childList: true, subtree: true, characterData: true })
     return () => {
       observer.disconnect()
+      mutationObserver?.disconnect()
     }
-  }, [openEntryId, updateMemoryListScrollCue, visibleEntries.length])
+  }, [updateMemoryListScrollCue])
 
   useEffect(() => {
     if (editingEntryId === null) {
@@ -598,7 +605,9 @@ function MemoryTab() {
   }, [editingEntryId, updateMemoryListScrollCue])
 
   useEffect(() => {
+    const visibleEntryIds = new Set(visibleEntries.map((entry) => entry.id))
     const entriesToBind = Object.entries(accordionRefs.current)
+      .filter(([entryId]) => visibleEntryIds.has(entryId))
     if (entriesToBind.length === 0) {
       return
     }
@@ -1146,7 +1155,6 @@ function MemoryTab() {
                         ref={(element) => {
                           conflictPanelRef.current = element as unknown as HTMLElement | null
                         }}
-                        role="region"
                         aria-labelledby={`memory-conflict-title-${entry.id}`}
                         tabIndex={-1}
                         className="grid gap-static-sm rounded-lg border border-warning bg-warning-low p-static-md text-primary"

@@ -110,6 +110,7 @@ Apply these only when the target is the OwlBear repository or matching configura
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
 | `uv run lint-cockpit` | Cockpit frontend lint aggregate |
+| `uv run lint-cockpit-biome` | Standalone Cockpit Biome lint |
 | `uv run megalint` | Standalone MegaLinter on the workspace; safe fixes by default, or check-only with `--no-fix` |
 | `uv run format` | Python, whitespace, and final-newline formatters |
 | `uv run typecheck-cockpit` | Cockpit frontend TypeScript check |

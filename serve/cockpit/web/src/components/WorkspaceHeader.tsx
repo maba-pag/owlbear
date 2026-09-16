@@ -47,13 +47,13 @@ export function WorkspaceHeader({
       {summary || actions ? (
         <div className="flex min-w-0 flex-wrap items-center gap-x-static-lg gap-y-static-xs">
           {summary ? (
-            <div
+            <section
               data-testid="workspace-header-summary"
               className="flex min-w-0 flex-wrap items-baseline gap-x-static-md gap-y-static-xs [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-contrast-low [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:pl-static-md"
               aria-label={summaryLabel}
             >
               {summary}
-            </div>
+            </section>
           ) : null}
           {actions ? (
             <div
