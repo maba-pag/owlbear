@@ -3,6 +3,13 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 function renderErrorBoundary() {
   const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   function ThrowError(): never {
@@ -46,7 +53,7 @@ describe("ErrorBoundary", () => {
       </PorscheDesignSystemProvider>,
     );
     shouldThrow = false;
-    fireEvent.click(container.querySelector("p-button")!);
+    fireEvent.click(requirePresent(container.querySelector("p-button")));
     expect(getByTestId("recovered")).toBeInTheDocument();
     consoleSpy.mockRestore();
   });

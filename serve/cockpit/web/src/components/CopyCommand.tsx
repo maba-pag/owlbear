@@ -66,7 +66,9 @@ export default function CopyCommand({
     <button
       type="button"
       className={[
-        "relative z-[1] inline-flex max-w-full cursor-copy items-start gap-1 border-0 bg-transparent p-0 align-middle text-left text-[0.8125rem] leading-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        "relative z-[1] inline-flex max-w-full cursor-copy items-start gap-1 border-0 bg-transparent",
+        "p-0 align-middle text-left text-[0.8125rem] leading-5 focus-visible:outline-2",
+        "focus-visible:outline-offset-2 focus-visible:outline-focus",
         copyState === "copied"
           ? "text-success"
           : copyState === "failed"

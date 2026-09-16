@@ -215,6 +215,13 @@ test.describe("TestFromAC_CSPFontSrc", () => {
     return match ? match[1].trim() : null;
   }
 
+  function requirePresent<T>(value: T | null | undefined): T {
+    if (value === null || value === undefined) {
+      throw new Error("Expected value to be present");
+    }
+    return value;
+  }
+
   // Happy path: CSP contains a font-src directive
   test("CSP content includes a font-src directive", async ({ page }) => {
     const content = await getCspContent(page);
@@ -231,7 +238,7 @@ test.describe("TestFromAC_CSPFontSrc", () => {
     const content = await getCspContent(page);
     const fontSrc = extractFontSrcDirective(content);
     expect(fontSrc, "font-src directive must be present in CSP").not.toBeNull();
-    const tokens = fontSrc!.split(/\s+/);
+    const tokens = requirePresent(fontSrc).split(/\s+/);
     expect(
       tokens,
       "font-src directive must contain 'https://cdn.ui.porsche.com' as an exact token",
@@ -246,7 +253,7 @@ test.describe("TestFromAC_CSPFontSrc", () => {
     const content = await getCspContent(page);
     const fontSrc = extractFontSrcDirective(content);
     expect(fontSrc, "font-src directive must be present in CSP").not.toBeNull();
-    const tokens = fontSrc!.split(/\s+/);
+    const tokens = requirePresent(fontSrc).split(/\s+/);
     expect(
       tokens,
       "font-src directive must contain \"'self'\" as an exact token",

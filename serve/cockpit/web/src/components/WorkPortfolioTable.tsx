@@ -41,11 +41,19 @@ function ItemLink({
       to={workItemPath(item)}
       data-work-item-primary-trigger
       data-work-item-identity={`${item.change_id}:${item.item_key}`}
-      className="block min-w-0 font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className={[
+        "block min-w-0 font-semibold text-primary after:absolute after:inset-0 after:content-['']",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+      ].join(" ")}
       aria-current={selected ? "location" : undefined}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
-      <span className="block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+      <span
+        className={[
+          "block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical]",
+          "[-webkit-line-clamp:2]",
+        ].join(" ")}
+      >
         {item.title}
       </span>
     </Link>
@@ -208,7 +216,10 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
                 data-work-item={workItemIdentity(item)}
               >
                 <td
-                  className={`rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm ${attentionBorder(item)}`}
+                  className={[
+                    "rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm",
+                    attentionBorder(item),
+                  ].join(" ")}
                 >
                   <ItemLink
                     item={item}
@@ -287,7 +298,10 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
               to={path}
               data-work-item-primary-trigger
               data-work-item-identity={`${item.change_id}:${item.item_key}`}
-              className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              className={[
+                "block font-semibold text-primary after:absolute after:inset-0 after:content-['']",
+                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+              ].join(" ")}
               aria-current={isSelected ? "location" : undefined}
               onClick={(event) => onSelect(identity, event.currentTarget)}
             >
@@ -334,7 +348,12 @@ export default function WorkPortfolioTable({
           className="min-w-0"
           aria-labelledby={`work-group-${group.change_id}`}
         >
-          <div className="mb-static-xs flex min-w-0 flex-wrap items-baseline justify-between gap-x-static-md gap-y-static-xs border-b border-contrast-low px-static-sm pb-static-xs">
+          <div
+            className={[
+              "mb-static-xs flex min-w-0 flex-wrap items-baseline justify-between gap-x-static-md",
+              "gap-y-static-xs border-b border-contrast-low px-static-sm pb-static-xs",
+            ].join(" ")}
+          >
             <h2
               id={`work-group-${group.change_id}`}
               className="m-0 min-w-0 text-md font-semibold text-primary"

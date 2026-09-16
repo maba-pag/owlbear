@@ -29,7 +29,10 @@ export default function DesignWorkSection({
     >
       <h2
         id="design-work-heading"
-        className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary"
+        className={[
+          "mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs",
+          "text-md font-semibold text-primary",
+        ].join(" ")}
       >
         Design work
       </h2>
@@ -53,7 +56,11 @@ export default function DesignWorkSection({
                       to={`/delivery/${encodeURIComponent(changeId)}/design`}
                       data-work-item-primary-trigger
                       data-work-item-identity={`${changeId}:design`}
-                      className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      className={[
+                        "block font-semibold text-primary after:absolute after:inset-0",
+                        "after:content-['']",
+                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                      ].join(" ")}
                       aria-current={selected ? "location" : undefined}
                       onClick={(event) =>
                         onSelect(

@@ -12,6 +12,13 @@ const BOOTSTRAP_PATH = resolve(__dirname, "../../public/theme-bootstrap.js");
 const INDEX_HTML_PATH = resolve(__dirname, "../../index.html");
 const THEME_STORAGE_KEY = "owlbear-theme";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 type MatchMediaMock = (query: string) => MediaQueryList;
 
 function setMatchMedia(darkPreferred: boolean): void {
@@ -205,7 +212,7 @@ describe("TestFromAC_IndexHtmlBootstrap_1545", () => {
   it('AC-1: theme-bootstrap.js script is first child of <body>, not in <head>, before <div id="root">', () => {
     const bodyMatch = indexHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     expect(bodyMatch).not.toBeNull();
-    const bodyContent = bodyMatch![1];
+    const bodyContent = requirePresent(bodyMatch)[1];
     const scriptPos = bodyContent.indexOf("/theme-bootstrap.js");
     const rootDivPos = bodyContent.indexOf('<div id="root">');
 
@@ -232,8 +239,9 @@ describe("TestFromAC_IndexHtmlBootstrap_1545", () => {
     const firstBodyChild = doc.body.firstElementChild;
 
     expect(firstBodyChild).not.toBeNull();
-    expect(firstBodyChild!.tagName.toLowerCase()).toBe("script");
-    expect(firstBodyChild!.getAttribute("src")).toBe("/theme-bootstrap.js");
+    const bodyChild = requirePresent(firstBodyChild);
+    expect(bodyChild.tagName.toLowerCase()).toBe("script");
+    expect(bodyChild.getAttribute("src")).toBe("/theme-bootstrap.js");
   });
 });
 
@@ -310,63 +318,76 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
 
   // Edge cases — stable reference and cleanup
 
-  it("AC-4 edge: addEventListener and removeEventListener target the same MediaQueryList instance (stable reference)", () => {
-    const instances: SpiedMQL[] = [];
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      writable: true,
-      value: (_query: string) => {
-        const inst = createSpiedMQL(false);
-        instances.push(inst);
-        return inst;
-      },
-    });
+  it(
+    [
+      "AC-4 edge: addEventListener and removeEventListener target the same ",
+      "MediaQueryList instance (stable reference)",
+    ].join(""),
+    () => {
+      const instances: SpiedMQL[] = [];
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: (_query: string) => {
+          const inst = createSpiedMQL(false);
+          instances.push(inst);
+          return inst;
+        },
+      });
 
-    const { unmount } = renderHook(() => useTheme());
+      const { unmount } = renderHook(() => useTheme());
 
-    const addInstance = instances.find(
-      (i) =>
-        (i.addEventListener as ReturnType<typeof vi.fn>).mock.calls.length > 0,
-    );
-    expect(addInstance).toBeDefined();
+      const addInstance = instances.find(
+        (i) =>
+          (i.addEventListener as ReturnType<typeof vi.fn>).mock.calls.length >
+          0,
+      );
+      expect(addInstance).toBeDefined();
 
-    unmount();
+      unmount();
 
-    expect(addInstance!.removeEventListener).toHaveBeenCalled();
-  });
+      expect(addInstance?.removeEventListener).toHaveBeenCalled();
+    },
+  );
 
-  it("AC-4 edge: when theme transitions from auto to dark, removeEventListener is called on the MQL instance", async () => {
-    const { result, unmount } = renderHook(() => useTheme());
+  it(
+    [
+      "AC-4 edge: when theme transitions from auto to dark, ",
+      "removeEventListener is called on the MQL instance",
+    ].join(""),
+    async () => {
+      const { result, unmount } = renderHook(() => useTheme());
 
-    await act(async () => {
-      result.current.toggle(); // auto → light
-    });
+      await act(async () => {
+        result.current.toggle(); // auto → light
+      });
 
-    await act(async () => {
-      result.current.toggle(); // light → dark
-    });
+      await act(async () => {
+        result.current.toggle(); // light → dark
+      });
 
-    await act(async () => {
-      result.current.toggle(); // dark → auto
-    });
+      await act(async () => {
+        result.current.toggle(); // dark → auto
+      });
 
-    // Listener must be registered now (theme=auto)
-    expect(mql.addEventListener).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function),
-    );
+      // Listener must be registered now (theme=auto)
+      expect(mql.addEventListener).toHaveBeenCalledWith(
+        "change",
+        expect.any(Function),
+      );
 
-    await act(async () => {
-      result.current.toggle(); // auto → light: listener must be removed
-    });
+      await act(async () => {
+        result.current.toggle(); // auto → light: listener must be removed
+      });
 
-    expect(mql.removeEventListener).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function),
-    );
+      expect(mql.removeEventListener).toHaveBeenCalledWith(
+        "change",
+        expect.any(Function),
+      );
 
-    unmount();
-  });
+      unmount();
+    },
+  );
 
   it("AC-4 edge: when component unmounts with theme=auto, change listener is removed from MQL instance", () => {
     const { unmount } = renderHook(() => useTheme());

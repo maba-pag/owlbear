@@ -47,7 +47,9 @@ function ProductNavigation({
             aria-label={route.label}
             aria-current={route.path === activePath ? "page" : undefined}
             className={[
-              "relative grid h-10 w-10 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus before:absolute before:-left-2 before:top-2 before:h-6 before:w-0.5 before:content-['']",
+              "relative grid h-10 w-10 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2",
+              "focus-visible:outline-focus before:absolute before:-left-2 before:top-2 before:h-6 before:w-0.5",
+              "before:content-['']",
               route.path === activePath
                 ? "bg-frosted-soft text-primary before:bg-primary"
                 : "text-contrast-medium before:bg-transparent hover:bg-canvas hover:text-primary",
@@ -103,11 +105,17 @@ export default function CockpitShell() {
 
   return (
     <div
-      className="grid h-dvh min-w-0 grid-cols-1 overflow-hidden bg-canvas text-primary md:grid-cols-[4rem_minmax(0,1fr)]"
+      className={[
+        "grid h-dvh min-w-0 grid-cols-1 overflow-hidden bg-canvas text-primary",
+        "md:grid-cols-[4rem_minmax(0,1fr)]",
+      ].join(" ")}
       data-testid="cockpit-shell"
     >
       <aside
-        className="hidden h-dvh flex-col items-center border-r border-contrast-low bg-surface px-static-xs py-static-md md:flex"
+        className={[
+          "hidden h-dvh flex-col items-center border-r border-contrast-low bg-surface",
+          "px-static-xs py-static-md md:flex",
+        ].join(" ")}
         data-region="nav-rail"
         data-testid="desktop-product-navigation"
       >
@@ -149,7 +157,12 @@ export default function CockpitShell() {
         className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden"
         data-region="workspace"
       >
-        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md border-b border-contrast-low bg-canvas/95 px-static-md backdrop-blur-md md:hidden">
+        <header
+          className={[
+            "sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md",
+            "border-b border-contrast-low bg-canvas/95 px-static-md backdrop-blur-md md:hidden",
+          ].join(" ")}
+        >
           <div className="min-w-0">
             <strong className="block text-sm">OwlBear</strong>
             <span className="block text-xs text-contrast-medium">Cockpit</span>

@@ -277,24 +277,30 @@ describe("UseThemeSchemeClasses", () => {
     unmount();
   });
 
-  it("AC-4 site2 boundary: after toggle dark→auto (OS prefers light), .scheme-light present and .scheme-dark absent", async () => {
-    localStorage.setItem(THEME_STORAGE_KEY, "dark");
-    // setMatchMedia(false) = OS prefers light, set in beforeEach
+  it(
+    [
+      "AC-4 site2 boundary: after toggle dark→auto (OS prefers light), ",
+      ".scheme-light present and .scheme-dark absent",
+    ].join(""),
+    async () => {
+      localStorage.setItem(THEME_STORAGE_KEY, "dark");
+      // setMatchMedia(false) = OS prefers light, set in beforeEach
 
-    const { result, unmount } = renderHook(() => useTheme());
+      const { result, unmount } = renderHook(() => useTheme());
 
-    await act(async () => {
-      result.current.toggle(); // dark → auto (OS light)
-    });
+      await act(async () => {
+        result.current.toggle(); // dark → auto (OS light)
+      });
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      false,
-    );
-    unmount();
-  });
+      expect(document.documentElement.classList.contains("scheme-light")).toBe(
+        true,
+      );
+      expect(document.documentElement.classList.contains("scheme-dark")).toBe(
+        false,
+      );
+      unmount();
+    },
+  );
 });
 
 // ─── AC-4 (site 3): media-change handler (fires on OS preference change) ──────

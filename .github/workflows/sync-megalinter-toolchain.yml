@@ -86,7 +86,8 @@ jobs:
             exit 0
           fi
           if [[ -z "$GH_TOKEN" ]]; then
-            echo "::error::Set the repository PAT secret with Contents: write and Pull requests: read so the alignment commit triggers CI."
+            echo "::error::Set the repository PAT secret with Contents: write; "\
+              "Pull requests: read so the alignment commit triggers CI."
             exit 1
           fi
           GH_TOKEN="$READ_TOKEN" gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" \

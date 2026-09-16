@@ -94,9 +94,7 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
     assert all("--files" in command for command in precommit_commands)
     assert all("README.md" in command for command in precommit_commands)
     assert [
-        item.args[0]
-        for item in call.call_args_list
-        if item.args[0][:3] == ["npm", "run", "lint:biome:staged"]
+        item.args[0] for item in call.call_args_list if item.args[0][:3] == ["npm", "run", "lint:biome:staged"]
     ] == [["npm", "run", "lint:biome:staged"]]
 
 
@@ -146,7 +144,7 @@ def test_lint_cockpit_biome_runs_the_package_lint_script() -> None:
         (".vscode/settings.json", False),
     ],
 )
-def test_biome_staged_path_matches_the_owned_allowlist(path: str, expected: bool) -> None:
+def test_biome_staged_path_matches_the_owned_allowlist(path: str, *, expected: bool) -> None:
     assert _is_biome_staged_path(path) is expected
 
 

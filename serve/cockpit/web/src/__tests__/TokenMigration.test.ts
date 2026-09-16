@@ -38,7 +38,7 @@ function findPdsViolations(files: string[]): string[] {
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       if (/--pds-/.test(lines[i])) {
-        const rel = filePath.replace(SRC_DIR + "/", "src/");
+        const rel = filePath.replace(`${SRC_DIR}/`, "src/");
         violations.push(`${rel}:${i + 1}: ${lines[i].trim()}`);
       }
     }
@@ -168,7 +168,7 @@ describe("dark-mode override removal", () => {
     for (const filePath of cssFiles) {
       const content = readFileSync(filePath, "utf-8");
       if (/\[data-theme\s*=\s*["']dark["']\]/.test(content)) {
-        violations.push(filePath.replace(SRC_DIR + "/", "src/"));
+        violations.push(filePath.replace(`${SRC_DIR}/`, "src/"));
       }
     }
     expect(
@@ -187,7 +187,7 @@ describe("dark-mode override removal", () => {
     for (const filePath of cssFiles) {
       const content = readFileSync(filePath, "utf-8");
       if (/@media\s*\(\s*prefers-color-scheme/.test(content)) {
-        violations.push(filePath.replace(SRC_DIR + "/", "src/"));
+        violations.push(filePath.replace(`${SRC_DIR}/`, "src/"));
       }
     }
     expect(

@@ -316,7 +316,10 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
     >
       <summary
         id="change-disposition-heading"
-        className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        className={[
+          "cursor-pointer text-xs font-semibold uppercase text-contrast-medium",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        ].join(" ")}
       >
         Change lifecycle
       </summary>
@@ -1232,7 +1235,12 @@ function ExternalHeadAdoptionSection(props: WorkItemDetailProps) {
         Adopt the exact open pull-request head before re-running finalization
         and review.
       </p>
-      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
+      <dl
+        className={[
+          "mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
+          "gap-y-static-xs break-all text-xs",
+        ].join(" ")}
+      >
         <IdentityRow label="Finalized head" value={action.expected_head} />
         <IdentityRow label="Pull request head" value={action.adopted_head} />
       </dl>
@@ -1662,7 +1670,12 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
           />
         </div>
       ) : null}
-      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
+      <dl
+        className={[
+          "mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md",
+          "gap-y-static-xs break-all text-xs",
+        ].join(" ")}
+      >
         <IdentityRow label="Operation" value={conflict.operation_id} />
         <IdentityRow label="Target head" value={conflict.target_head} />
         <IdentityRow
@@ -1987,7 +2000,10 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
       ) : null}
       {props.publicationChecksError ? (
         <p
-          className="mt-static-sm flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm"
+          className={[
+            "mt-static-sm flex items-center gap-static-xs border-l-4",
+            "border-danger bg-surface p-static-sm text-sm",
+          ].join(" ")}
           role="alert"
         >
           <PIcon name="error" size="sm" aria-hidden="true" />
@@ -2102,7 +2118,13 @@ function PublicationSection(props: WorkItemDetailProps) {
   const invalidationReason =
     publication.invalidated_expected_head &&
     publication.invalidated_observed_head
-      ? `The Change head moved from ${publication.invalidated_expected_head.slice(0, 12)} to ${publication.invalidated_observed_head.slice(0, 12)}, so the previous finalization no longer matches.`
+      ? [
+          "The Change head moved from",
+          publication.invalidated_expected_head.slice(0, 12),
+          "to",
+          publication.invalidated_observed_head.slice(0, 12),
+          "so the previous finalization no longer matches.",
+        ].join(" ")
       : null;
   const runControl = () => {
     if (!control) return;
@@ -2266,7 +2288,12 @@ function PublicationSection(props: WorkItemDetailProps) {
       ) : null}
       <ExternalHeadAdoptionSection {...props} />
       <details className="mt-static-md border-t border-contrast-low pt-static-sm">
-        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+        <summary
+          className={[
+            "cursor-pointer text-xs font-semibold uppercase text-contrast-medium",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+          ].join(" ")}
+        >
           Publication evidence
         </summary>
         <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
@@ -2276,7 +2303,10 @@ function PublicationSection(props: WorkItemDetailProps) {
               <dt className="text-contrast-medium">Pull request</dt>
               <dd className="min-w-0 break-all text-xs">
                 <a
-                  className="font-medium text-primary underline decoration-contrast-low underline-offset-2 hover:decoration-primary"
+                  className={[
+                    "font-medium text-primary underline decoration-contrast-low",
+                    "underline-offset-2 hover:decoration-primary",
+                  ].join(" ")}
                   href={pullRequestUrl(
                     publication.repository,
                     publication.pull_request_number,
@@ -2360,7 +2390,13 @@ function PublicationSection(props: WorkItemDetailProps) {
           publication.pending_checkpoint_head ||
           publication.pending_checkpoint_triggers.length > 0) ? (
           <div
-            className={`mt-static-sm border-l-2 p-static-sm text-sm ${publication.pending_checkpoint_error_code || (publication.pending_checkpoint_attempt_count ?? 0) > 0 ? "border-warning bg-surface" : "border-info bg-info-low"}`}
+            className={[
+              "mt-static-sm border-l-2 p-static-sm text-sm",
+              publication.pending_checkpoint_error_code ||
+              (publication.pending_checkpoint_attempt_count ?? 0) > 0
+                ? "border-warning bg-surface"
+                : "border-info bg-info-low",
+            ].join(" ")}
             data-testid="checkpoint-diagnostics"
             role={
               publication.pending_checkpoint_error_code ? "alert" : "status"
@@ -2448,7 +2484,11 @@ function ActionFeedback({
     const waiting = code === "ERR_DELIVERY_ACCEPTANCE_WAITING";
     return (
       <p
-        className={`flex items-center gap-static-xs border-l-4 ${waiting ? "border-warning" : "border-danger"} bg-surface p-static-sm text-sm`}
+        className={[
+          "flex items-center gap-static-xs border-l-4",
+          waiting ? "border-warning" : "border-danger",
+          "bg-surface p-static-sm text-sm",
+        ].join(" ")}
         role={waiting ? "status" : "alert"}
       >
         <PIcon

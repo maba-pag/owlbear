@@ -3,6 +3,13 @@ import { MemoryRouter } from "react-router";
 import { expect, it, vi } from "vitest";
 import CockpitShell from "./CockpitShell";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 vi.mock("./components/ThemeToggle", () => ({
   default: () => <button type="button">Theme</button>,
 }));
@@ -55,7 +62,9 @@ it("navigates between the target product areas", async () => {
     desktopNavigation.querySelector('a[title="Delivery"]'),
   ).toHaveAttribute("aria-current", "page");
 
-  fireEvent.click(desktopNavigation.querySelector('a[title="Memory"]')!);
+  fireEvent.click(
+    requirePresent(desktopNavigation.querySelector('a[title="Memory"]')),
+  );
 
   expect(await screen.findByText("Memory workspace")).toBeInTheDocument();
   expect(desktopNavigation.querySelector('a[title="Memory"]')).toHaveAttribute(

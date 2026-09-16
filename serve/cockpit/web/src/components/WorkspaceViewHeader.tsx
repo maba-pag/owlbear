@@ -21,7 +21,12 @@ export default function WorkspaceViewHeader({
   tools,
 }: WorkspaceViewHeaderProps) {
   return (
-    <div className="flex min-h-11 min-w-0 flex-wrap items-center justify-between gap-x-static-md gap-y-static-xs border-b border-contrast-low pb-static-sm">
+    <div
+      className={[
+        "flex min-h-11 min-w-0 flex-wrap items-center justify-between gap-x-static-md",
+        "gap-y-static-xs border-b border-contrast-low pb-static-sm",
+      ].join(" ")}
+    >
       <div className="flex min-w-0 items-center gap-static-xs">
         <h2
           id={headingId}

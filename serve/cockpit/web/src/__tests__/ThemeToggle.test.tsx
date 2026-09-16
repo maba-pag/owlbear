@@ -12,6 +12,13 @@ type ThemeMode = "light" | "dark" | "auto";
 
 const mockedUseTheme = vi.mocked(useTheme);
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 function renderThemeToggle(
   theme: ThemeMode = "light",
   toggle = vi.fn(),
@@ -72,14 +79,16 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
     const button = container.querySelector('[data-testid="theme-toggle"]');
     expect(button).toBeInTheDocument();
-    expect(button!.tagName.toLowerCase()).toBe("p-button-pure");
+    expect(requirePresent(button).tagName.toLowerCase()).toBe("p-button-pure");
     expect(button).toHaveAttribute("aria-label", "Theme mode: light");
   });
 
   it("AC-2: clicking toggle button invokes useTheme().toggle exactly once", () => {
     const { container, toggle } = renderThemeToggle("light");
 
-    fireEvent.click(container.querySelector('[data-testid="theme-toggle"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="theme-toggle"]')),
+    );
 
     expect(toggle).toHaveBeenCalledTimes(1);
   });
@@ -100,7 +109,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
       '[data-testid="theme-toggle"]',
     );
 
-    expect(button!.tagName.toLowerCase()).toBe("button");
+    expect(requirePresent(button).tagName.toLowerCase()).toBe("button");
     expect(button).toHaveAttribute(
       "aria-label",
       "Theme mode: auto (OS); open theme menu",
@@ -120,7 +129,9 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode opens a mode menu and selects an explicit theme", () => {
     const { container, toggle, selectTheme } = renderCompactThemeToggle("auto");
-    const button = container.querySelector('[data-testid="theme-toggle"]')!;
+    const button = requirePresent(
+      container.querySelector('[data-testid="theme-toggle"]'),
+    );
 
     fireEvent.click(button);
 
@@ -193,7 +204,9 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode closes the menu when a pointer starts outside it", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = container.querySelector('[data-testid="theme-toggle"]')!;
+    const button = requirePresent(
+      container.querySelector('[data-testid="theme-toggle"]'),
+    );
 
     fireEvent.click(button);
     fireEvent.pointerDown(document.body);
@@ -203,7 +216,9 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode keeps the menu open when a pointer starts inside it", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = container.querySelector('[data-testid="theme-toggle"]')!;
+    const button = requirePresent(
+      container.querySelector('[data-testid="theme-toggle"]'),
+    );
 
     fireEvent.click(button);
     fireEvent.pointerDown(screen.getByTestId("theme-mode-menu"));
@@ -213,7 +228,9 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode closes an open menu when the trigger is clicked again", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = container.querySelector('[data-testid="theme-toggle"]')!;
+    const button = requirePresent(
+      container.querySelector('[data-testid="theme-toggle"]'),
+    );
 
     fireEvent.click(button);
     fireEvent.click(button);

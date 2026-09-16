@@ -41,6 +41,13 @@ function findCspPlugin(
 const SAMPLE_HTML = "<!DOCTYPE html><html><head></head><body></body></html>";
 const NO_HEAD_HTML = "<html><body>no head tag here</body></html>";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 describe("TestFromAC_CSP", () => {
   const rawConfig = config as { plugins?: unknown[] };
   const plugins = rawConfig.plugins ?? [];
@@ -53,31 +60,31 @@ describe("TestFromAC_CSP", () => {
 
   it("vite config registers a plugin named csp-meta", () => {
     expect(csp).toBeDefined();
-    expect(csp!.name).toBe("csp-meta");
+    expect(requirePresent(csp).name).toBe("csp-meta");
   });
 
   it('csp-meta plugin has apply: "build" — never runs during dev/serve', () => {
     expect(csp).toBeDefined();
-    expect(csp!.apply).toBe("build");
+    expect(requirePresent(csp).apply).toBe("build");
   });
 
   // ─── CSP meta tag injection (build mode) ──────────────────────────────────
 
   it('transformIndexHtml injects <meta http-equiv="Content-Security-Policy"> tag', () => {
     expect(transform).toBeDefined();
-    const result = transform!(SAMPLE_HTML);
+    const result = requirePresent(transform)(SAMPLE_HTML);
     expect(result).toContain('<meta http-equiv="Content-Security-Policy"');
   });
 
   it("CSP policy includes default-src 'self'", () => {
     expect(transform).toBeDefined();
-    const result = transform!(SAMPLE_HTML);
+    const result = requirePresent(transform)(SAMPLE_HTML);
     expect(result).toContain("default-src 'self'");
   });
 
   it("CSP policy includes script-src 'self'", () => {
     expect(transform).toBeDefined();
-    const result = transform!(SAMPLE_HTML);
+    const result = requirePresent(transform)(SAMPLE_HTML);
     expect(result).toContain("script-src 'self'");
   });
 
@@ -85,7 +92,7 @@ describe("TestFromAC_CSP", () => {
 
   it("transformIndexHtml leaves HTML unchanged when no </head> tag is present", () => {
     expect(transform).toBeDefined();
-    const result = transform!(NO_HEAD_HTML);
+    const result = requirePresent(transform)(NO_HEAD_HTML);
     expect(result).toBe(NO_HEAD_HTML);
     expect(result).not.toContain("Content-Security-Policy");
   });

@@ -127,7 +127,10 @@ async function bootstrap(): Promise<void> {
     applyTokenFallbacks();
     await waitForRequiredPdsElements();
 
-    createRoot(document.getElementById("root")!).render(
+    const root = document.getElementById("root");
+    if (!root) throw new Error("Cockpit root element is missing");
+
+    createRoot(root).render(
       <StrictMode>
         <App />
       </StrictMode>,

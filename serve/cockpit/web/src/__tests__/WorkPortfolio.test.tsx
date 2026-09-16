@@ -35,6 +35,13 @@ import { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary"
 import { READINESS_REASON_LABELS } from "../components/workItemPresentation";
 import WorkPortfolioPage from "../pages/WorkPortfolioPage";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
   return {
     item_key: "outcome:OUT-001",
@@ -1750,7 +1757,7 @@ it("answers a decision request and refetches its resolved state", async () => {
       "request-REQ-001-option",
     );
     expect(element).not.toBeNull();
-    return element!;
+    return requirePresent(element);
   });
   selectValue(option, "keep");
   await waitFor(() => expect(submit.disabled).toBe(false));
@@ -1796,7 +1803,7 @@ it("clears action feedback when switching to another work item", async () => {
       "request-REQ-001-option",
     );
     expect(element).not.toBeNull();
-    return element!;
+    return requirePresent(element);
   });
   selectValue(option, "keep");
   await waitFor(() => expect(submit.disabled).toBe(false));
@@ -1851,7 +1858,7 @@ it("clears earlier action feedback before previewing a backward move", async () 
       "request-REQ-001-option",
     );
     expect(element).not.toBeNull();
-    return element!;
+    return requirePresent(element);
   });
   selectValue(option, "keep");
   await waitFor(() => expect(submit.disabled).toBe(false));
@@ -2006,7 +2013,7 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
   const previewMessage = await screen.findByText(
     "The following Outcomes will be reset:",
   );
-  const previewModal = previewMessage.closest("p-modal")!;
+  const previewModal = requirePresent(previewMessage.closest("p-modal"));
   expect(within(previewModal).getByText("OUT-002")).toBeInTheDocument();
   fireEvent.click(screen.getByText("Confirm backward move"));
   await waitFor(() =>
@@ -2126,8 +2133,8 @@ it("expires a backward preview when polling detects a newer snapshot", async () 
     );
     expect(stage).not.toBeNull();
     expect(reason).not.toBeNull();
-    selectValue(stage!, "planning");
-    inputValue(reason!, "Authority changed");
+    selectValue(requirePresent(stage), "planning");
+    inputValue(requirePresent(reason), "Authority changed");
     fireEvent.click(screen.getByText("Review backward move"));
     await act(async () => {
       await Promise.resolve();
@@ -3401,7 +3408,9 @@ it("shows Change attention diagnostics and resolves the selected disposition", a
   expect(inspector).toHaveTextContent(`Disposition: ${attentionId}`);
   expect(within(inspector).queryByTestId("publication-supersede")).toBeNull();
   fireEvent.click(
-    within(inspector).getAllByText("Resolve acceptance attention").at(-1)!,
+    requirePresent(
+      within(inspector).getAllByText("Resolve acceptance attention").at(-1),
+    ),
   );
   await waitFor(() =>
     expect(requests).toContainEqual({
@@ -3485,7 +3494,7 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
       "change-disposition-reason",
     );
     expect(element).not.toBeNull();
-    return element!;
+    return requirePresent(element);
   });
   inputValue(reason, "Wait for user review");
   fireEvent.change(
@@ -3619,7 +3628,7 @@ it("keeps Change abandonment confirmation open when abandonment fails", async ()
       "change-disposition-reason",
     );
     expect(element).not.toBeNull();
-    return element!;
+    return requirePresent(element);
   });
   inputValue(reason, "User stopped the Change");
   fireEvent.change(
@@ -4456,9 +4465,8 @@ it("disables publication-check observation while another publication action is p
     }),
   ]);
   pendingMutationPath = "/target/sync";
-  const inspector =
-    (renderPage("/delivery/change-alpha/publication"),
-    await screen.findByTestId("work-item-detail"));
+  renderPage("/delivery/change-alpha/publication");
+  const inspector = await screen.findByTestId("work-item-detail");
 
   try {
     fireEvent.click(
@@ -5134,7 +5142,7 @@ it("closes completed history detail when a settled search removes the selected r
       );
     expect(record).toBeDefined();
     fireEvent.click(
-      within(record!).getByRole("button", {
+      within(requirePresent(record)).getByRole("button", {
         name: "Inspect Portfolio redesign",
       }),
     );

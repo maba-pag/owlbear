@@ -147,7 +147,10 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
           role="menu"
           aria-label="Theme mode"
           tabIndex={-1}
-          className="fixed z-[80] flex w-[196px] flex-col gap-static-xs rounded-sm border border-contrast-low bg-canvas p-static-xs shadow-[0_16px_48px_rgb(0_0_0_/_0.16)]"
+          className={[
+            "fixed z-[80] flex w-[196px] flex-col gap-static-xs rounded-sm border",
+            "border-contrast-low bg-canvas p-static-xs shadow-[0_16px_48px_rgb(0_0_0_/_0.16)]",
+          ].join(" ")}
           style={menuPosition}
           onKeyDown={handleMenuKeyDown}
         >
@@ -162,7 +165,11 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
                 role="menuitemradio"
                 aria-checked={isSelected}
                 data-testid={`theme-mode-option-${option}`}
-                className="flex w-full items-center gap-static-xs rounded-sm px-static-xs py-static-xs text-left text-primary hover:bg-frosted-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--p-color-state-focus)]"
+                className={[
+                  "flex w-full items-center gap-static-xs rounded-sm px-static-xs py-static-xs text-left text-primary",
+                  "hover:bg-frosted-soft focus-visible:outline focus-visible:outline-2",
+                  "focus-visible:outline-offset-2 focus-visible:outline-[var(--p-color-state-focus)]",
+                ].join(" ")}
                 onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
                   chooseTheme(option, event.detail === 0)
                 }
@@ -193,8 +200,9 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
           data-testid="theme-toggle"
           data-pds-exception="status-bar-control"
           className={[
-            "inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary transition-colors duration-sm",
-            "hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
+            "inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0",
+            "text-primary transition-colors duration-sm hover:bg-surface focus-visible:outline-2",
+            "focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
             isMenuOpen ? "bg-surface" : "",
           ].join(" ")}
           aria-label={`${label.ariaLabel}; open theme menu`}

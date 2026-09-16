@@ -9,6 +9,13 @@ import { routeConfig } from "../routes";
 
 // Mined from #1666: Ideas Notebook loading, editing, preview, navigation, and conflict flows.
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 
 function timestampMinutesAgo(minutes: number): string {
@@ -136,7 +143,7 @@ async function enterEditMode(container: HTMLElement): Promise<void> {
   );
   expect(toggle).not.toBeNull();
   await act(async () => {
-    fireEvent.click(toggle!);
+    fireEvent.click(requirePresent(toggle));
   });
   await flush();
 }
@@ -146,12 +153,12 @@ async function renderPreviewLoaded(
   content: string,
 ): Promise<ReturnType<typeof renderInRouter>> {
   vi.stubGlobal("fetch", makeGetOkFetch(content));
-  let result!: ReturnType<typeof renderInRouter>;
+  let result: ReturnType<typeof renderInRouter> | undefined;
   await act(async () => {
     result = renderInRouter();
   });
   await flush();
-  return result;
+  return requirePresent(result);
 }
 
 /** Render in router context and wait for GET /api/ideas to settle. */
@@ -159,13 +166,14 @@ async function renderLoaded(
   content: string,
 ): Promise<ReturnType<typeof renderInRouter>> {
   vi.stubGlobal("fetch", makeGetOkFetch(content));
-  let result!: ReturnType<typeof renderInRouter>;
+  let result: ReturnType<typeof renderInRouter> | undefined;
   await act(async () => {
     result = renderInRouter();
   });
   await flush();
-  await enterEditMode(result.container);
-  return result;
+  const rendered = requirePresent(result);
+  await enterEditMode(rendered.container);
+  return rendered;
 }
 
 async function renderDirty(
@@ -173,7 +181,7 @@ async function renderDirty(
   newContent: string,
 ): Promise<ReturnType<typeof renderInRouter>> {
   const result = await renderLoaded(initialContent);
-  fireEvent.change(result.container.querySelector("textarea")!, {
+  fireEvent.change(requirePresent(result.container.querySelector("textarea")), {
     target: { value: newContent },
   });
   return result;
@@ -188,25 +196,28 @@ async function renderAfterSave(
   editedContent: string,
 ): Promise<ReturnType<typeof renderInRouter>> {
   vi.stubGlobal("fetch", makeGetOkPutOkFetch(initialContent));
-  let result!: ReturnType<typeof renderInRouter>;
+  let result: ReturnType<typeof renderInRouter> | undefined;
   await act(async () => {
     result = renderInRouter();
   });
   await flush();
-  await enterEditMode(result.container);
+  const rendered = requirePresent(result);
+  await enterEditMode(rendered.container);
 
-  const textarea = result.container.querySelector("textarea")!;
+  const textarea = requirePresent(rendered.container.querySelector("textarea"));
   fireEvent.change(textarea, { target: { value: editedContent } });
 
-  const saveBtn = result.container.querySelector<HTMLButtonElement>(
-    '[data-testid="ideas-save"]',
-  )!;
+  const saveBtn = requirePresent(
+    rendered.container.querySelector<HTMLButtonElement>(
+      '[data-testid="ideas-save"]',
+    ),
+  );
   await act(async () => {
     fireEvent.click(saveBtn);
   });
   await flush();
 
-  return result;
+  return rendered;
 }
 
 function setVisibilityState(state: "visible" | "hidden"): void {
@@ -236,7 +247,7 @@ describe("IdeasPageIntegration_SaveFlow", () => {
 
   it("ac1 happy: editing textarea makes the dirty indicator appear", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "edited" },
     });
     expect(
@@ -246,7 +257,7 @@ describe("IdeasPageIntegration_SaveFlow", () => {
 
   it("ac1 happy: save button is enabled when textarea value differs from last-saved baseline", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "changed" },
     });
     const saveBtn = container.querySelector<HTMLButtonElement>(
@@ -271,19 +282,25 @@ describe("IdeasPageIntegration_SaveFlow", () => {
   it("ac1 happy: PUT /api/ideas is called with the current textarea value in the request body", async () => {
     const mockFetch = makeGetOkPutOkFetch("original");
     vi.stubGlobal("fetch", mockFetch);
-    let result!: ReturnType<typeof renderInRouter>;
+    let result: ReturnType<typeof renderInRouter> | undefined;
     await act(async () => {
       result = renderInRouter();
     });
     await flush();
-    await enterEditMode(result.container);
+    const rendered = requirePresent(result);
+    await enterEditMode(rendered.container);
 
-    fireEvent.change(result.container.querySelector("textarea")!, {
-      target: { value: "# My saved ideas" },
-    });
+    fireEvent.change(
+      requirePresent(rendered.container.querySelector("textarea")),
+      {
+        target: { value: "# My saved ideas" },
+      },
+    );
     await act(async () => {
       fireEvent.click(
-        result.container.querySelector('[data-testid="ideas-save"]')!,
+        requirePresent(
+          rendered.container.querySelector('[data-testid="ideas-save"]'),
+        ),
       );
     });
     await flush();
@@ -292,7 +309,11 @@ describe("IdeasPageIntegration_SaveFlow", () => {
       ([, init]: [string, RequestInit | undefined]) => init?.method === "PUT",
     );
     expect(putCall).toBeDefined();
-    const body = JSON.parse(putCall![1]!.body as string) as { content: string };
+    const request = requirePresent(putCall);
+    const requestInit = requirePresent(request[1]);
+    const body = JSON.parse(requirePresent(requestInit.body) as string) as {
+      content: string;
+    };
     expect(body.content).toBe("# My saved ideas");
   });
 
@@ -325,9 +346,11 @@ describe("IdeasPageIntegration_PreviewAfterSave", () => {
       "# Old Heading",
       "# Saved Heading",
     );
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-testid="ideas-preview-toggle"]',
-    )!;
+    const toggle = requirePresent(
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="ideas-preview-toggle"]',
+      ),
+    );
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -339,9 +362,11 @@ describe("IdeasPageIntegration_PreviewAfterSave", () => {
 
   it("ac2 happy: preview renders the SAVED content not the originally loaded content", async () => {
     const { container } = await renderAfterSave("# Original", "# Saved");
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-testid="ideas-preview-toggle"]',
-    )!;
+    const toggle = requirePresent(
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="ideas-preview-toggle"]',
+      ),
+    );
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -354,9 +379,11 @@ describe("IdeasPageIntegration_PreviewAfterSave", () => {
 
   it("ac2 edge: preview container appears after toggle even when content is empty after save", async () => {
     const { container } = await renderAfterSave("some content", "");
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-testid="ideas-preview-toggle"]',
-    )!;
+    const toggle = requirePresent(
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="ideas-preview-toggle"]',
+      ),
+    );
     await act(async () => {
       fireEvent.click(toggle);
     });
@@ -385,21 +412,21 @@ describe("IdeasPageIntegration_ScrollAffordance", () => {
       '[data-testid="ideas-preview"]',
     ) as HTMLElement | null;
     expect(preview).not.toBeNull();
-    Object.defineProperty(preview!, "scrollHeight", {
+    Object.defineProperty(requirePresent(preview), "scrollHeight", {
       configurable: true,
       value: 800,
     });
-    Object.defineProperty(preview!, "clientHeight", {
+    Object.defineProperty(requirePresent(preview), "clientHeight", {
       configurable: true,
       value: 300,
     });
-    Object.defineProperty(preview!, "scrollTop", {
+    Object.defineProperty(requirePresent(preview), "scrollTop", {
       configurable: true,
       value: 0,
     });
 
     await act(async () => {
-      fireEvent.scroll(preview!);
+      fireEvent.scroll(requirePresent(preview));
     });
 
     const cue = container.querySelector('[data-testid="ideas-scroll-cue"]');
@@ -414,21 +441,21 @@ describe("IdeasPageIntegration_ScrollAffordance", () => {
       '[data-testid="ideas-preview"]',
     ) as HTMLElement | null;
     expect(preview).not.toBeNull();
-    Object.defineProperty(preview!, "scrollHeight", {
+    Object.defineProperty(requirePresent(preview), "scrollHeight", {
       configurable: true,
       value: 800,
     });
-    Object.defineProperty(preview!, "clientHeight", {
+    Object.defineProperty(requirePresent(preview), "clientHeight", {
       configurable: true,
       value: 300,
     });
-    Object.defineProperty(preview!, "scrollTop", {
+    Object.defineProperty(requirePresent(preview), "scrollTop", {
       configurable: true,
       value: 500,
     });
 
     await act(async () => {
-      fireEvent.scroll(preview!);
+      fireEvent.scroll(requirePresent(preview));
     });
 
     expect(
@@ -442,21 +469,21 @@ describe("IdeasPageIntegration_ScrollAffordance", () => {
       "textarea",
     ) as HTMLTextAreaElement | null;
     expect(textarea).not.toBeNull();
-    Object.defineProperty(textarea!, "scrollHeight", {
+    Object.defineProperty(requirePresent(textarea), "scrollHeight", {
       configurable: true,
       value: 1200,
     });
-    Object.defineProperty(textarea!, "clientHeight", {
+    Object.defineProperty(requirePresent(textarea), "clientHeight", {
       configurable: true,
       value: 400,
     });
-    Object.defineProperty(textarea!, "scrollTop", {
+    Object.defineProperty(requirePresent(textarea), "scrollTop", {
       configurable: true,
       value: 0,
     });
 
     await act(async () => {
-      fireEvent.scroll(textarea!);
+      fireEvent.scroll(requirePresent(textarea));
     });
 
     expect(
@@ -477,7 +504,9 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
 
   it("ac3 happy: navigation proceeds without alertdialog after a successful save", async () => {
     const { container } = await renderAfterSave("initial", "saved edits");
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(
         container.querySelector('[data-testid="home-page"]'),
@@ -488,7 +517,9 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
 
   it("ac3 happy: home page renders immediately after navigation following a save", async () => {
     const { container } = await renderAfterSave("initial", "saved");
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(
         container.querySelector('[data-testid="home-page"]'),
@@ -498,10 +529,12 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
 
   it("ac3 regression: alertdialog DOES appear when navigating while still dirty (no save)", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "unsaved" },
     });
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(container.querySelector('[role="alertdialog"]')).not.toBeNull();
     });
@@ -509,10 +542,12 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
 
   it("keeps the user on Ideas when cancelling a dirty navigation", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "unsaved" },
     });
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(
         container.querySelector('[data-testid="ideas-unsaved-dialog"]'),
@@ -520,7 +555,9 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
     });
 
     fireEvent.click(
-      container.querySelector('[data-testid="ideas-unsaved-cancel"]')!,
+      requirePresent(
+        container.querySelector('[data-testid="ideas-unsaved-cancel"]'),
+      ),
     );
 
     await waitFor(() => {
@@ -536,10 +573,12 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
 
   it("continues the blocked navigation when the user confirms leaving Ideas", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "unsaved" },
     });
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(
         container.querySelector('[data-testid="ideas-unsaved-dialog"]'),
@@ -547,7 +586,9 @@ describe("IdeasPageIntegration_GuardAfterSave", () => {
     });
 
     fireEvent.click(
-      container.querySelector('[data-testid="ideas-unsaved-leave"]')!,
+      requirePresent(
+        container.querySelector('[data-testid="ideas-unsaved-leave"]'),
+      ),
     );
 
     await waitFor(() => {
@@ -599,10 +640,12 @@ describe("IdeasPageIntegration_PdsControls", () => {
 
   it("renders the unsaved navigation confirmation with PModal", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "unsaved" },
     });
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
     await waitFor(() => {
       expect(
         container
@@ -629,7 +672,7 @@ describe("IdeasPageIntegration_StatusWording", () => {
 
   it("keeps unsaved changes out of the Ideas header after editing", async () => {
     const { container } = await renderLoaded("base");
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "changed" },
     });
 
@@ -708,18 +751,21 @@ describe("IdeasPageIntegration_SaveTimeConflict", () => {
   }> {
     const fetchMock = makeSaveConflictFetch();
     vi.stubGlobal("fetch", fetchMock);
-    let result!: ReturnType<typeof renderInRouter>;
+    let result: ReturnType<typeof renderInRouter> | undefined;
     await act(async () => {
       result = renderInRouter();
     });
     await flush();
-    await enterEditMode(result.container);
-    const { container } = result;
-    fireEvent.change(container.querySelector("textarea")!, {
+    const rendered = requirePresent(result);
+    await enterEditMode(rendered.container);
+    const { container } = rendered;
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "user edits" },
     });
     await act(async () => {
-      fireEvent.click(container.querySelector('[data-testid="ideas-save"]')!);
+      fireEvent.click(
+        requirePresent(container.querySelector('[data-testid="ideas-save"]')),
+      );
     });
     await flush();
     return { container, fetchMock };
@@ -744,7 +790,9 @@ describe("IdeasPageIntegration_SaveTimeConflict", () => {
   it("cancel keeps the local draft dirty and re-enables save", async () => {
     const { container } = await renderAfterSaveConflict();
     fireEvent.click(
-      container.querySelector('[data-testid="ideas-conflict-cancel"]')!,
+      requirePresent(
+        container.querySelector('[data-testid="ideas-conflict-cancel"]'),
+      ),
     );
     await flush();
     expect(
@@ -763,7 +811,9 @@ describe("IdeasPageIntegration_SaveTimeConflict", () => {
   it("load from disk replaces the draft and clears dirty state", async () => {
     const { container } = await renderAfterSaveConflict();
     fireEvent.click(
-      container.querySelector('[data-testid="ideas-conflict-load"]')!,
+      requirePresent(
+        container.querySelector('[data-testid="ideas-conflict-load"]'),
+      ),
     );
     await flush();
     expect(container.querySelector("textarea")?.value).toBe("disk version");
@@ -778,7 +828,9 @@ describe("IdeasPageIntegration_SaveTimeConflict", () => {
     const { container, fetchMock } = await renderAfterSaveConflict();
     await act(async () => {
       fireEvent.click(
-        container.querySelector('[data-testid="ideas-conflict-overwrite"]')!,
+        requirePresent(
+          container.querySelector('[data-testid="ideas-conflict-overwrite"]'),
+        ),
       );
     });
     await flush();
@@ -816,10 +868,9 @@ describe("IdeasPageIntegration_RouteWiring", () => {
   it("binds the lazy /ideas route to IdeasPage-specific loading DOM", async () => {
     vi.stubGlobal("fetch", makeGetPendingFetch());
     const entry = routeConfig.find((route) => route.path === "/ideas");
-    const RouteComponent = entry!.component as unknown as ComponentType<
-      Record<string, never>
-    >;
-    let container!: HTMLElement;
+    const RouteComponent = requirePresent(entry)
+      .component as unknown as ComponentType<Record<string, never>>;
+    let container: HTMLElement | undefined;
 
     await act(async () => {
       container = renderIdeasPage(
@@ -830,8 +881,9 @@ describe("IdeasPageIntegration_RouteWiring", () => {
     });
     await flush();
 
+    const renderedContainer = requirePresent(container);
     expect(
-      container.querySelector('[data-testid="ideas-loading"]'),
+      renderedContainer.querySelector('[data-testid="ideas-loading"]'),
     ).not.toBeNull();
   });
 });
@@ -843,16 +895,17 @@ describe("IdeasPageIntegration_LoadingAndEditorContracts", () => {
 
   it("shows ideas-loading and keeps the textarea out of the DOM while GET /api/ideas is pending", async () => {
     vi.stubGlobal("fetch", makeGetPendingFetch());
-    let container!: HTMLElement;
+    let container: HTMLElement | undefined;
 
     await act(async () => {
       container = renderIdeasPage().container;
     });
 
+    const renderedContainer = requirePresent(container);
     expect(
-      container.querySelector('[data-testid="ideas-loading"]'),
+      renderedContainer.querySelector('[data-testid="ideas-loading"]'),
     ).not.toBeNull();
-    expect(container.querySelector("textarea")).toBeNull();
+    expect(renderedContainer.querySelector("textarea")).toBeNull();
   });
 
   it("keeps the markdown textarea placeholder text stable in edit mode", async () => {
@@ -889,20 +942,24 @@ describe("IdeasPageIntegration_MarkdownPreviewContracts", () => {
   it("preserves user-edited markdown across a preview toggle round-trip", async () => {
     const { container } = await renderPreviewLoaded("original");
     await enterEditMode(container);
-    fireEvent.change(container.querySelector("textarea")!, {
+    fireEvent.change(requirePresent(container.querySelector("textarea")), {
       target: { value: "edited by user" },
     });
 
     await act(async () => {
       fireEvent.click(
-        container.querySelector('[data-testid="ideas-preview-toggle"]')!,
+        requirePresent(
+          container.querySelector('[data-testid="ideas-preview-toggle"]'),
+        ),
       );
     });
     await flush();
 
     await act(async () => {
       fireEvent.click(
-        container.querySelector('[data-testid="ideas-preview-toggle"]')!,
+        requirePresent(
+          container.querySelector('[data-testid="ideas-preview-toggle"]'),
+        ),
       );
     });
     await flush();
@@ -918,58 +975,74 @@ describe("IdeasPageIntegration_SaveErrorRecovery", () => {
 
   it("renders ideas-error and keeps the editor hidden when GET /api/ideas fails", async () => {
     vi.stubGlobal("fetch", makeGetErrorFetch(500));
-    let container!: HTMLElement;
+    let container: HTMLElement | undefined;
 
     await act(async () => {
       container = renderIdeasPage().container;
     });
     await flush();
 
+    const renderedContainer = requirePresent(container);
     expect(
-      container.querySelector('[data-testid="ideas-error"]'),
+      renderedContainer.querySelector('[data-testid="ideas-error"]'),
     ).not.toBeNull();
-    expect(container.querySelector("textarea")).toBeNull();
+    expect(renderedContainer.querySelector("textarea")).toBeNull();
   });
 
   it("preserves the draft and re-enables save after a failed PUT", async () => {
     const fetchMock = makeGetOkPutErrorFetch("original text");
     vi.stubGlobal("fetch", fetchMock);
-    let container!: HTMLElement;
+    let container: HTMLElement | undefined;
 
     await act(async () => {
       container = renderIdeasPage().container;
     });
     await flush();
-    await enterEditMode(container);
-    fireEvent.change(container.querySelector("textarea")!, {
-      target: { value: "modified text" },
-    });
+    const renderedContainer = requirePresent(container);
+    await enterEditMode(renderedContainer);
+    fireEvent.change(
+      requirePresent(renderedContainer.querySelector("textarea")),
+      {
+        target: { value: "modified text" },
+      },
+    );
 
     await act(async () => {
-      fireEvent.click(container.querySelector('[data-testid="ideas-save"]')!);
+      fireEvent.click(
+        requirePresent(
+          renderedContainer.querySelector('[data-testid="ideas-save"]'),
+        ),
+      );
     });
     await flush();
 
-    expect(container.querySelector("textarea")?.value).toBe("modified text");
+    expect(renderedContainer.querySelector("textarea")?.value).toBe(
+      "modified text",
+    );
     expect(
-      container.querySelector<HTMLButtonElement>('[data-testid="ideas-save"]')
-        ?.disabled,
+      renderedContainer.querySelector<HTMLButtonElement>(
+        '[data-testid="ideas-save"]',
+      )?.disabled,
     ).toBe(false);
   });
 
   it("issues a second PUT when Cmd+S retries after a failed save", async () => {
     const fetchMock = makeGetOkPutErrorFetch("original text");
     vi.stubGlobal("fetch", fetchMock);
-    let container!: HTMLElement;
+    let container: HTMLElement | undefined;
 
     await act(async () => {
       container = renderIdeasPage().container;
     });
     await flush();
-    await enterEditMode(container);
-    fireEvent.change(container.querySelector("textarea")!, {
-      target: { value: "modified text" },
-    });
+    const renderedContainer = requirePresent(container);
+    await enterEditMode(renderedContainer);
+    fireEvent.change(
+      requirePresent(renderedContainer.querySelector("textarea")),
+      {
+        target: { value: "modified text" },
+      },
+    );
 
     await act(async () => {
       fireEvent.keyDown(document, { key: "s", code: "KeyS", metaKey: true });
@@ -996,7 +1069,9 @@ describe("IdeasPageIntegration_UnsavedUnloadGuard", () => {
 
   it("shows the required unsaved-changes wording when dirty navigation is blocked", async () => {
     const { container } = await renderDirty("base", "unsaved");
-    fireEvent.click(container.querySelector('[data-testid="nav-home"]')!);
+    fireEvent.click(
+      requirePresent(container.querySelector('[data-testid="nav-home"]')),
+    );
 
     await waitFor(() => {
       const dialog = container.querySelector('[role="alertdialog"]');

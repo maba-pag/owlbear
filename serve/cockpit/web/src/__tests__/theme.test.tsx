@@ -139,15 +139,21 @@ describe("TestFromAC_UseThemeHook_1537", () => {
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
 
-  it("AC-2c: when localStorage is absent and OS prefers light, returns theme=auto, isDark=false, data-theme=light", () => {
-    // setMatchMedia(false) already set in beforeEach
+  it(
+    [
+      "AC-2c: when localStorage is absent and OS prefers light, ",
+      "returns theme=auto, isDark=false, data-theme=light",
+    ].join(""),
+    () => {
+      // setMatchMedia(false) already set in beforeEach
 
-    const { result } = renderHook(() => useTheme());
+      const { result } = renderHook(() => useTheme());
 
-    expect(result.current.theme).toBe("auto");
-    expect(result.current.isDark).toBe(false);
-    expect(document.documentElement.dataset.theme).toBe("light");
-  });
+      expect(result.current.theme).toBe("auto");
+      expect(result.current.isDark).toBe(false);
+      expect(document.documentElement.dataset.theme).toBe("light");
+    },
+  );
 
   // AC-2(d): full 3-transition toggle cycle light → dark → auto → light ———
 

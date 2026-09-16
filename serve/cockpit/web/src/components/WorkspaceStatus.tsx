@@ -179,7 +179,10 @@ export default function WorkspaceStatus({
           aria-label={CONTROL_NAME}
           tabIndex={-1}
           data-testid="workspace-status-panel"
-          className="fixed z-[80] grid w-[320px] max-w-[calc(100vw-24px)] gap-static-sm overflow-hidden rounded-sm border border-contrast-low bg-canvas p-static-md text-primary shadow-[0_16px_48px_rgb(0_0_0_/_0.16)]"
+          className={[
+            "fixed z-[80] grid w-[320px] max-w-[calc(100vw-24px)] gap-static-sm overflow-hidden rounded-sm border",
+            "border-contrast-low bg-canvas p-static-md text-primary shadow-[0_16px_48px_rgb(0_0_0_/_0.16)]",
+          ].join(" ")}
           style={position}
           onKeyDown={handlePanelKeyDown}
         >
@@ -216,12 +219,22 @@ export default function WorkspaceStatus({
                   </span>
                 </span>
                 {module.summary ? (
-                  <span className="break-words pl-[calc(0.625rem+var(--spacing-static-xs))] text-xs text-contrast-medium">
+                  <span
+                    className={[
+                      "break-words pl-[calc(0.625rem+var(--spacing-static-xs))]",
+                      "text-xs text-contrast-medium",
+                    ].join(" ")}
+                  >
                     {module.summary}
                   </span>
                 ) : null}
                 {module.findings.length > 0 ? (
-                  <ul className="m-0 grid max-h-40 list-none gap-1 overflow-y-auto p-0 pl-[calc(0.625rem+var(--spacing-static-xs))] text-xs">
+                  <ul
+                    className={[
+                      "m-0 grid max-h-40 list-none gap-1 overflow-y-auto p-0",
+                      "pl-[calc(0.625rem+var(--spacing-static-xs))] text-xs",
+                    ].join(" ")}
+                  >
                     {module.findings.slice(0, 8).map((finding) => (
                       <li
                         key={finding}
@@ -268,8 +281,9 @@ export default function WorkspaceStatus({
         data-pds-exception="status-bar-control"
         data-status={status}
         className={[
-          "inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary transition-colors duration-sm",
-          "hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
+          "inline-flex size-8 items-center justify-center rounded-full border-0 bg-transparent p-0",
+          "text-primary transition-colors duration-sm hover:bg-surface focus-visible:outline-2",
+          "focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
           isOpen ? "bg-surface" : "",
         ].join(" ")}
         aria-haspopup="dialog"

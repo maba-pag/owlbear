@@ -358,7 +358,10 @@ function IdeasPage() {
         <div
           data-testid="ideas-loading"
           role="status"
-          className="flex h-full min-h-[320px] items-center justify-center rounded-lg border border-contrast-low bg-surface text-sm font-semibold text-primary"
+          className={[
+            "flex h-full min-h-[320px] items-center justify-center rounded-lg border",
+            "border-contrast-low bg-surface text-sm font-semibold text-primary",
+          ].join(" ")}
         >
           Loading ideas...
         </div>
@@ -380,7 +383,10 @@ function IdeasPage() {
         <div
           data-testid="ideas-error"
           role="alert"
-          className="flex h-full min-h-[320px] flex-col justify-center gap-static-sm rounded-lg border border-error bg-error-low p-static-lg text-primary"
+          className={[
+            "flex h-full min-h-[320px] flex-col justify-center gap-static-sm rounded-lg border",
+            "border-error bg-error-low p-static-lg text-primary",
+          ].join(" ")}
         >
           <span className="text-xs font-semibold uppercase text-error">
             Ideas unavailable
@@ -460,7 +466,10 @@ function IdeasPage() {
           <div
             data-testid="ideas-conflict-notice"
             role="alert"
-            className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-md text-primary"
+            className={[
+              "flex flex-wrap items-center justify-between gap-static-sm rounded-lg border",
+              "border-error bg-error-low p-static-md text-primary",
+            ].join(" ")}
           >
             <div className="grid gap-1">
               <span className="text-sm font-semibold text-primary">
@@ -513,16 +522,29 @@ function IdeasPage() {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-static-lg md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+        <div
+          className={[
+            "grid min-h-0 flex-1 gap-static-lg md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]",
+            "lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]",
+          ].join(" ")}
+        >
           <div
             data-testid="ideas-editor-shell"
             className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas"
           >
             <div
               data-testid="ideas-editor-toolbar"
-              className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-surface px-static-md py-static-sm sm:items-center sm:justify-between"
+              className={[
+                "flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low",
+                "bg-surface px-static-md py-static-sm sm:items-center sm:justify-between",
+              ].join(" ")}
             >
-              <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
+              <div
+                className={[
+                  "flex min-w-0 flex-wrap items-center gap-static-xs text-xs",
+                  "font-semibold uppercase text-primary",
+                ].join(" ")}
+              >
                 <span>{previewMode ? "Markdown preview" : "Editor"}</span>
                 <span aria-hidden="true">/</span>
                 <span>{formatNumber(lineCount)} lines</span>
@@ -605,7 +627,11 @@ function IdeasPage() {
                 value={content}
                 aria-label="Ideas draft"
                 data-pds-exception="ideas-markdown-editor"
-                className="min-h-0 flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--color-focus)]"
+                className={[
+                  "min-h-0 flex-1 resize-none border-0 bg-canvas p-static-md font-mono text-sm",
+                  "leading-relaxed text-primary outline-none focus-visible:outline-2 focus-visible:outline-inset",
+                  "focus-visible:outline-[var(--color-focus)]",
+                ].join(" ")}
                 onChange={(event) => {
                   setContent(event.target.value);
                 }}
@@ -617,14 +643,20 @@ function IdeasPage() {
               <div
                 aria-hidden="true"
                 data-testid="ideas-scroll-cue"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+                className={[
+                  "pointer-events-none absolute inset-x-0 bottom-0 h-10",
+                  "[background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]",
+                ].join(" ")}
               />
             ) : null}
           </div>
 
           <aside
             data-testid="ideas-state-panel"
-            className="grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border border-contrast-low bg-canvas p-static-md text-primary"
+            className={[
+              "grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border",
+              "border-contrast-low bg-canvas p-static-md text-primary",
+            ].join(" ")}
           >
             <div className="grid gap-static-sm">
               <span className="text-xs font-semibold uppercase text-primary">
@@ -654,7 +686,12 @@ function IdeasPage() {
                 </div>
               </div>
             </div>
-            <div className="grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm text-sm leading-normal text-primary">
+            <div
+              className={[
+                "grid gap-static-xs rounded-md border border-contrast-low bg-surface p-static-sm",
+                "text-sm leading-normal text-primary",
+              ].join(" ")}
+            >
               <span className="text-xs font-semibold uppercase text-primary">
                 Writing metrics
               </span>

@@ -905,15 +905,20 @@ export function clearWorkItemBlock(
   locators: string[],
   expectedFrontierDigest: string,
 ): Promise<unknown> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/blocks/${encodeURIComponent(blockId)}/clear`,
-    "ERR_WORK_ITEM_BLOCK_CLEAR",
-    {
-      operator_note: operatorNote,
-      locators,
-      expected_frontier_digest: expectedFrontierDigest,
-    },
-  );
+  const blockPath = [
+    "/api/changes",
+    encodeURIComponent(changeId),
+    "outcomes",
+    encodeURIComponent(outcomeId),
+    "blocks",
+    encodeURIComponent(blockId),
+    "clear",
+  ].join("/");
+  return controlRequest(blockPath, "ERR_WORK_ITEM_BLOCK_CLEAR", {
+    operator_note: operatorNote,
+    locators,
+    expected_frontier_digest: expectedFrontierDigest,
+  });
 }
 
 export function recoverWorkItemClaim(

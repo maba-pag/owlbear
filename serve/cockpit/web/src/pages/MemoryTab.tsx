@@ -1103,7 +1103,10 @@ function MemoryTab() {
 
       {purgeFlow.receipt ? (
         <div
-          className="mx-static-lg mt-static-md flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-success bg-success-low p-static-sm text-sm text-primary"
+          className={[
+            "mx-static-lg mt-static-md flex flex-wrap items-center justify-between gap-static-sm rounded-lg border",
+            "border-success bg-success-low p-static-sm text-sm text-primary",
+          ].join(" ")}
           data-testid="memory-purge-receipt"
         >
           <span>
@@ -1124,7 +1127,10 @@ function MemoryTab() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-static-lg px-static-lg py-static-lg">
         <div
-          className="grid gap-static-md rounded-md border border-contrast-low bg-surface p-static-md sm:grid-cols-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
+          className={[
+            "grid gap-static-md rounded-md border border-contrast-low bg-surface p-static-md",
+            "sm:grid-cols-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]",
+          ].join(" ")}
           data-testid="memory-filter-panel"
         >
           <PMultiSelect
@@ -1217,7 +1223,10 @@ function MemoryTab() {
         {loadError ? (
           <div
             data-testid="memory-load-error"
-            className="flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-error bg-error-low p-static-sm text-primary"
+            className={[
+              "flex flex-wrap items-center justify-between gap-static-sm rounded-lg border",
+              "border-error bg-error-low p-static-sm text-primary",
+            ].join(" ")}
           >
             <span role="alert">
               {entries.length > 0
@@ -1260,7 +1269,10 @@ function MemoryTab() {
         >
           <div
             data-testid="memory-entries-toolbar"
-            className="flex min-w-0 flex-wrap items-center justify-end gap-static-sm border-b border-contrast-low pb-static-xs pr-static-sm"
+            className={[
+              "flex min-w-0 flex-wrap items-center justify-end gap-static-sm border-b",
+              "border-contrast-low pb-static-xs pr-static-sm",
+            ].join(" ")}
           >
             <PButtonPure
               type="button"
@@ -1276,7 +1288,10 @@ function MemoryTab() {
 
           {!hasEntries && hasFetched && !isFetching && !loadError ? (
             <section
-              className="grid min-h-40 place-items-center border border-dashed border-contrast-low bg-canvas px-static-lg py-static-xl text-center"
+              className={[
+                "grid min-h-40 place-items-center border border-dashed border-contrast-low",
+                "bg-canvas px-static-lg py-static-xl text-center",
+              ].join(" ")}
               data-testid="memory-empty-state"
             >
               <div className="grid max-w-[44rem] gap-static-xs">
@@ -1313,13 +1328,19 @@ function MemoryTab() {
               <ul
                 ref={memoryListRef}
                 onScroll={updateMemoryListScrollCue}
-                className="m-0 flex h-full min-h-0 list-none flex-col gap-static-md overflow-x-hidden overflow-y-auto p-0 pb-static-lg pr-static-sm"
+                className={[
+                  "m-0 flex h-full min-h-0 list-none flex-col gap-static-md overflow-x-hidden",
+                  "overflow-y-auto p-0 pb-static-lg pr-static-sm",
+                ].join(" ")}
               >
                 {visibleEntries.map((entry) => (
                   <li
                     key={entry.id}
                     data-testid="memory-entry"
-                    className={`rounded-lg border border-l-4 border-contrast-low bg-canvas px-static-md shadow-sm ${STATE_BORDERS[entry.state]}`}
+                    className={[
+                      "rounded-lg border border-l-4 border-contrast-low bg-canvas px-static-md shadow-sm",
+                      STATE_BORDERS[entry.state],
+                    ].join(" ")}
                   >
                     <p-accordion
                       className="block"
@@ -1335,7 +1356,10 @@ function MemoryTab() {
                     >
                       <div
                         slot="summary"
-                        className="grid min-w-0 gap-static-sm py-static-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+                        className={[
+                          "grid min-w-0 gap-static-sm py-static-sm md:grid-cols-[minmax(0,1fr)_auto]",
+                          "md:items-start",
+                        ].join(" ")}
                       >
                         <div className="min-w-0">
                           <strong
@@ -1370,7 +1394,10 @@ function MemoryTab() {
                         </div>
                         <div
                           data-testid="memory-entry-signal-group"
-                          className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs md:justify-end md:border-l md:border-contrast-low md:pl-static-sm"
+                          className={[
+                            "flex min-w-0 flex-wrap items-center gap-static-xs text-xs md:justify-end",
+                            "md:border-l md:border-contrast-low md:pl-static-sm",
+                          ].join(" ")}
                         >
                           <PTag
                             compact
@@ -1390,7 +1417,10 @@ function MemoryTab() {
                         >
                           <div
                             data-testid="memory-content-panel"
-                            className="rounded-md border border-contrast-low bg-surface p-static-md text-base leading-relaxed text-primary shadow-sm"
+                            className={[
+                              "rounded-md border border-contrast-low bg-surface p-static-md text-base",
+                              "leading-relaxed text-primary shadow-sm",
+                            ].join(" ")}
                           >
                             <MarkdownPreview
                               className="text-base"
@@ -1412,7 +1442,10 @@ function MemoryTab() {
                             </div>
                             <dl
                               data-testid="memory-metadata-grid"
-                              className="grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2 lg:grid-cols-3"
+                              className={[
+                                "grid gap-x-static-lg gap-y-static-xs text-sm text-primary sm:grid-cols-2",
+                                "lg:grid-cols-3",
+                              ].join(" ")}
                             >
                               <div className="min-w-0">
                                 <dt className="font-semibold text-contrast-high">
@@ -1540,7 +1573,10 @@ function MemoryTab() {
                               }}
                               aria-labelledby={`memory-conflict-title-${entry.id}`}
                               tabIndex={-1}
-                              className="grid gap-static-sm rounded-lg border border-warning bg-warning-low p-static-md text-primary"
+                              className={[
+                                "grid gap-static-sm rounded-lg border border-warning bg-warning-low",
+                                "p-static-md text-primary",
+                              ].join(" ")}
                             >
                               <div className="grid gap-static-xs">
                                 <h3
@@ -1567,7 +1603,8 @@ function MemoryTab() {
                                   : memoryConflict.status === "error"
                                     ? (memoryConflict.refreshError ??
                                       "The latest server version could not be loaded.")
-                                    : "The latest server version is ready. Choose whether to discard the draft or reapply it."}
+                                    : "The latest server version is ready. Choose whether to discard " +
+                                      "the draft or reapply it."}
                               </span>
                               {memoryConflict.status === "refreshing" ? (
                                 <p
@@ -1750,7 +1787,11 @@ function MemoryTab() {
                               <div
                                 ref={memoryEditActionsRef}
                                 data-testid="memory-edit-actions"
-                                className="sticky top-0 z-20 -mx-static-md -mt-static-md flex min-w-0 flex-wrap items-center justify-between gap-static-sm border-b border-contrast-low bg-canvas px-static-md py-static-sm shadow-lg"
+                                className={[
+                                  "sticky top-0 z-20 -mx-static-md -mt-static-md flex min-w-0 flex-wrap",
+                                  "items-center justify-between gap-static-sm border-b border-contrast-low",
+                                  "bg-canvas px-static-md py-static-sm shadow-lg",
+                                ].join(" ")}
                               >
                                 <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
                                   <span className="text-sm font-semibold text-primary">
@@ -1783,7 +1824,12 @@ function MemoryTab() {
                                   </PButton>
                                 </div>
                               </div>
-                              <div className="grid gap-static-sm xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)]">
+                              <div
+                                className={[
+                                  "grid gap-static-sm",
+                                  "xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)]",
+                                ].join(" ")}
+                              >
                                 <PInputText
                                   name="edit-title"
                                   data-testid="edit-title"
@@ -2043,7 +2089,10 @@ function MemoryTab() {
                               {validationMessages.length > 0 ? (
                                 <ul
                                   data-testid="memory-validation-errors"
-                                  className="m-0 grid list-none gap-static-xs rounded-lg border border-warning bg-warning-low p-static-sm text-sm text-primary"
+                                  className={[
+                                    "m-0 grid list-none gap-static-xs rounded-lg border border-warning bg-warning-low",
+                                    "p-static-sm text-sm text-primary",
+                                  ].join(" ")}
                                 >
                                   {validationMessages.map(
                                     ({ field, message }) => (
@@ -2070,7 +2119,10 @@ function MemoryTab() {
                 <div
                   aria-hidden="true"
                   data-testid="memory-list-scroll-cue"
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-10 [background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]"
+                  className={[
+                    "pointer-events-none absolute inset-x-0 bottom-0 h-10",
+                    "[background:linear-gradient(to_bottom,transparent,var(--p-color-canvas))]",
+                  ].join(" ")}
                 />
               ) : null}
             </div>
@@ -2168,7 +2220,10 @@ function MemoryTab() {
               />
               {purgeFlow.preview ? (
                 <dl
-                  className="grid grid-cols-3 gap-static-sm rounded-lg border border-contrast-low bg-surface p-static-sm text-sm"
+                  className={[
+                    "grid grid-cols-3 gap-static-sm rounded-lg border border-contrast-low",
+                    "bg-surface p-static-sm text-sm",
+                  ].join(" ")}
                   data-testid="memory-purge-preview"
                 >
                   <div>

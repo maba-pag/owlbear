@@ -10,7 +10,7 @@ const runFile = promisify(execFile);
 async function box(page: Page, testId: string) {
   const found = await page.getByTestId(testId).boundingBox();
   expect(found, `${testId} must have rendered geometry`).not.toBeNull();
-  return found!;
+  return requirePresent(found);
 }
 
 /**
@@ -54,7 +54,9 @@ async function expectPurgeOwnsEntriesRegion(page: Page): Promise<void> {
     followingTop,
     "entries content must follow the purge toolbar",
   ).not.toBeNull();
-  expect(followingTop! - (toolbar.y + toolbar.height)).toBeLessThanOrEqual(24);
+  expect(
+    requirePresent(followingTop) - (toolbar.y + toolbar.height),
+  ).toBeLessThanOrEqual(24);
 }
 
 test.describe("assembled Memory purge", () => {

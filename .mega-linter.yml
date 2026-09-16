@@ -133,10 +133,17 @@ CSS_BIOME_CONFIG_FILE: biome.json
 CSS_BIOME_RULES_PATH: .
 
 JSON_BIOME_CLI_LINT_MODE: list_of_files
-JSON_BIOME_FILTER_REGEX_INCLUDE: '^(\.github/(renovate|sync-manifest)\.json|\.markdownlint(-cli2)?\.jsonc?|package\.json|serve/cockpit/web/(package|tsconfig(\.e2e)?|\.stylelint)\.json)$'
+JSON_BIOME_FILTER_REGEX_INCLUDE: '^(.github/|\.markdownlint|package\.json|serve/cockpit/web/)'
 JSON_BIOME_FILE_EXTENSIONS:
   - .json
   - .jsonc
+JSON_BIOME_FILE_NAMES_REGEX:
+  - '^renovate\.json$'
+  - '^sync-manifest\.json$'
+  - '^\.markdownlint(-cli2)?\.jsonc?$'
+  - '^package\.json$'
+  - '^tsconfig(\.e2e)?\.json$'
+  - '^\.stylelintrc\.json$'
 JSON_BIOME_CONFIG_FILE: biome.json
 JSON_BIOME_RULES_PATH: .
 
@@ -167,9 +174,8 @@ JAVASCRIPT_ES_CLI_EXECUTABLE: [serve/cockpit/web/node_modules/.bin/eslint]
 JAVASCRIPT_ES_ARGUMENTS: "--no-config-lookup --no-warn-ignored --no-error-on-unmatched-pattern"
 
 # EditorConfig — GitHub Actions annotations
-# --disable-indent-size: ruff handles Python indent; editorconfig-checker
-# false-positives on docstring content (2-space RST lists inside 4-space code).
-# Tabs-vs-spaces (indent_style) is still enforced.
+# Ruff handles Python indent; editorconfig-checker false-positives on docstring
+# content (2-space RST lists inside 4-space code). Biome owns formatter wrapping.
 EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
 
 # ──────────────────────────────────────────────

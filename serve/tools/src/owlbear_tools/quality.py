@@ -187,10 +187,7 @@ def _is_biome_staged_path(path: str) -> bool:
 
 
 def _run_cockpit_biome(*, staged: bool) -> int:
-    if staged and not any(
-        _is_biome_staged_path(path)
-        for path in _git_paths(staged=True)
-    ):
+    if staged and not any(_is_biome_staged_path(path) for path in _git_paths(staged=True)):
         return 0
     script = "lint:biome:staged" if staged else "lint:biome"
     return _call(["npm", "run", script], cwd=COCKPIT_WEB)

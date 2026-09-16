@@ -93,7 +93,10 @@ function AttentionMetric({
     return (
       <span
         data-testid={`portfolio-attention-${filter}`}
-        className="inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-sm border border-transparent px-static-xs py-1 text-xs font-semibold leading-none text-contrast-medium"
+        className={[
+          "inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-sm border",
+          "border-transparent px-static-xs py-1 text-xs font-semibold leading-none text-contrast-medium",
+        ].join(" ")}
       >
         {content}
       </span>
@@ -105,7 +108,9 @@ function AttentionMetric({
       type="button"
       data-testid={`portfolio-attention-${filter}`}
       className={[
-        "inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        "inline-flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-sm border px-static-xs py-1",
+        "text-xs font-semibold leading-none transition-colors focus-visible:outline-2",
+        "focus-visible:outline-offset-2 focus-visible:outline-focus",
         tone,
         selected ? "outline outline-2 outline-offset-1 outline-focus" : "",
       ].join(" ")}
@@ -185,7 +190,11 @@ export function PortfolioHeaderSummary({
         </span>
       </section>
       <section
-        className="flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-xs sm:translate-y-0.5 sm:self-center sm:border-l sm:border-t-0 sm:pl-static-md sm:pt-0"
+        className={[
+          "flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs border-t",
+          "border-contrast-low pt-static-xs sm:translate-y-0.5 sm:self-center sm:border-l",
+          "sm:border-t-0 sm:pl-static-md sm:pt-0",
+        ].join(" ")}
         aria-label="Work item status"
         data-testid="portfolio-work-summary"
       >
@@ -233,7 +242,11 @@ export default function PortfolioOperatingSummary({
   if (operating.guidance.length === 0 && commands.length === 0) return null;
   return (
     <aside
-      className="grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-x-static-md"
+      className={[
+        "grid min-w-0 gap-static-sm border-t border-contrast-low px-static-sm pt-static-md",
+        "text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)]",
+        "sm:items-start sm:gap-x-static-md",
+      ].join(" ")}
       aria-label="Delivery guidance"
     >
       {operating.guidance.length > 0 ? (

@@ -53,7 +53,11 @@ function parseSelection(pathname: string): CompletedHistorySelection | null {
 }
 
 function historyDetailPath(record: CompletedChangeRecord): string {
-  return `/delivery/history/${encodeURIComponent(record.change_id)}/${encodeURIComponent(completedChangeRecordId(record))}`;
+  return [
+    "/delivery/history",
+    encodeURIComponent(record.change_id),
+    encodeURIComponent(completedChangeRecordId(record)),
+  ].join("/");
 }
 
 function fieldValue(event: FieldValueEvent): string {
@@ -126,7 +130,15 @@ function CopyValue({
   return (
     <button
       type="button"
-      className={`inline-flex max-w-full items-start gap-1 border-0 bg-transparent p-0 text-left text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${copyState === "copied" ? "text-success" : copyState === "failed" ? "text-error" : "text-contrast-medium hover:text-primary"}`}
+      className={[
+        "inline-flex max-w-full items-start gap-1 border-0 bg-transparent p-0 text-left text-xs",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        copyState === "copied"
+          ? "text-success"
+          : copyState === "failed"
+            ? "text-error"
+            : "text-contrast-medium hover:text-primary",
+      ].join(" ")}
       aria-label={`Copy ${label}`}
       title={copyState === "copied" ? `Copied ${label}` : `Copy ${label}`}
       onClick={() =>
@@ -164,13 +176,19 @@ function CompletedRecord({
       ariaLabel={stale ? `${record.title}, previous search result` : undefined}
       dataStale={stale}
       dataTestId="completed-change-record"
-      className="relative grid gap-x-static-lg gap-y-static-sm p-static-sm md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start"
+      className={[
+        "relative grid gap-x-static-lg gap-y-static-sm p-static-sm",
+        "md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start",
+      ].join(" ")}
     >
       <div className="min-w-0">
         <PHeading tag="h3" size="small">
           <button
             type="button"
-            className="block w-full text-left font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            className={[
+              "block w-full text-left font-semibold text-primary after:absolute after:inset-0",
+              "after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+            ].join(" ")}
             data-completed-history-primary-trigger
             aria-label={`Inspect ${record.title}`}
             onClick={(event) => onSelect(event.currentTarget)}
@@ -185,7 +203,12 @@ function CompletedRecord({
           {record.semantic_summary}
         </p>
         {!isAbandoned(record) ? (
-          <div className="mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs text-xs text-contrast-medium">
+          <div
+            className={[
+              "mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs",
+              "text-xs text-contrast-medium",
+            ].join(" ")}
+          >
             <PullRequestLink record={record} />
             <CopyValue
               label="accepted merge commit"
@@ -197,7 +220,12 @@ function CompletedRecord({
             </time>
           </div>
         ) : isAbandoned(record) ? (
-          <div className="mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs text-xs text-contrast-medium">
+          <div
+            className={[
+              "mt-static-sm flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs",
+              "text-xs text-contrast-medium",
+            ].join(" ")}
+          >
             <StatusChip label="Abandoned" tone="neutral" />
             <time dateTime={record.abandoned_at}>
               {formatCompletedAt(record.abandoned_at)}
@@ -654,7 +682,10 @@ export default function CompletedHistoryWorkspace() {
 
       {history.error ? (
         <div
-          className="mt-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md"
+          className={[
+            "mt-static-lg flex flex-wrap items-center gap-static-sm border-l-4",
+            "border-danger bg-surface p-static-md",
+          ].join(" ")}
           role="alert"
         >
           <span className="min-w-0 flex-1">
@@ -694,7 +725,10 @@ export default function CompletedHistoryWorkspace() {
       !history.error &&
       history.page.records.length === 0 ? (
         <section
-          className="mt-static-lg grid min-h-40 place-items-center border border-dashed border-contrast-low bg-surface px-static-lg py-static-xl text-center"
+          className={[
+            "mt-static-lg grid min-h-40 place-items-center border border-dashed",
+            "border-contrast-low bg-surface px-static-lg py-static-xl text-center",
+          ].join(" ")}
           data-testid="completed-history-empty-state"
         >
           <div className="grid max-w-[44rem] gap-static-xs">

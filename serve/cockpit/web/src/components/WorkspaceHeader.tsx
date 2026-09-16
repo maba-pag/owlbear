@@ -37,7 +37,8 @@ export function WorkspaceHeader({
     <header
       data-testid="workspace-header"
       className={[
-        "sticky top-0 z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-x-static-xl gap-y-static-xs bg-canvas px-static-lg py-static-sm",
+        "sticky top-0 z-10 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-x-static-xl",
+        "gap-y-static-xs bg-canvas px-static-lg py-static-sm",
         flush ? "" : "border-b border-contrast-low",
       ].join(" ")}
     >
@@ -52,7 +53,12 @@ export function WorkspaceHeader({
           {summary ? (
             <section
               data-testid="workspace-header-summary"
-              className="flex min-w-0 flex-wrap items-baseline gap-x-static-md gap-y-static-xs [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-contrast-low [&>[data-workspace-header-metric]~[data-workspace-header-metric]]:pl-static-md"
+              className={[
+                "flex min-w-0 flex-wrap items-baseline gap-x-static-md gap-y-static-xs",
+                "[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l",
+                "[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-contrast-low",
+                "[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:pl-static-md",
+              ].join(" ")}
               aria-label={summaryLabel}
             >
               {summary}
@@ -106,7 +112,8 @@ export function WorkspaceHeaderPill({
   return (
     <span
       className={[
-        "inline-flex min-h-8 items-center whitespace-nowrap rounded-full border px-static-xs py-1 text-xs font-semibold leading-none",
+        "inline-flex min-h-8 items-center whitespace-nowrap rounded-full border px-static-xs py-1",
+        "text-xs font-semibold leading-none",
         tone === "error"
           ? "border-error bg-error-low text-error"
           : tone === "info"

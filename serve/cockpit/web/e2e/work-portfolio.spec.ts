@@ -1,6 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 async function visibleRows(page: Page): Promise<Locator> {
   return page.locator("[data-work-item]").filter({ visible: true });
 }
@@ -185,8 +192,10 @@ test.describe("assembled Delivery portfolio", () => {
     const guidanceBox = await guidance.boundingBox();
     expect(tableBox).not.toBeNull();
     expect(guidanceBox).not.toBeNull();
-    expect(guidanceBox!.y).toBeGreaterThanOrEqual(
-      tableBox!.y + tableBox!.height,
+    const tableBounds = requirePresent(tableBox);
+    const guidanceBounds = requirePresent(guidanceBox);
+    expect(guidanceBounds.y).toBeGreaterThanOrEqual(
+      tableBounds.y + tableBounds.height,
     );
 
     const publicationRow = page.getByLabel(
@@ -221,6 +230,7 @@ test.describe("assembled Delivery portfolio", () => {
       .last()
       .boundingBox();
     expect(publicationStatusBox).not.toBeNull();
+    const publicationStatusBounds = requirePresent(publicationStatusBox);
     const publicationHitTarget = await page.evaluate(
       ({ x, y }) => {
         const element = document.elementFromPoint(x, y);
@@ -231,8 +241,8 @@ test.describe("assembled Delivery portfolio", () => {
         };
       },
       {
-        x: publicationStatusBox!.x + publicationStatusBox!.width / 2,
-        y: publicationStatusBox!.y + publicationStatusBox!.height / 2,
+        x: publicationStatusBounds.x + publicationStatusBounds.width / 2,
+        y: publicationStatusBounds.y + publicationStatusBounds.height / 2,
       },
     );
     expect(publicationHitTarget.cursor).toBe("pointer");
@@ -240,8 +250,8 @@ test.describe("assembled Delivery portfolio", () => {
       "/delivery/publication-e2e/publication",
     );
     await page.mouse.click(
-      publicationStatusBox!.x + publicationStatusBox!.width / 2,
-      publicationStatusBox!.y + publicationStatusBox!.height / 2,
+      publicationStatusBounds.x + publicationStatusBounds.width / 2,
+      publicationStatusBounds.y + publicationStatusBounds.height / 2,
     );
     await expect(
       page
@@ -250,9 +260,10 @@ test.describe("assembled Delivery portfolio", () => {
     ).toBeVisible();
     const publicationFlyoutBox = await flyoutPanelBox(page);
     expect(publicationFlyoutBox).not.toBeNull();
+    const publicationFlyoutBounds = requirePresent(publicationFlyoutBox);
     await page.mouse.click(
-      publicationFlyoutBox!.x / 2,
-      publicationFlyoutBox!.y + publicationFlyoutBox!.height / 2,
+      publicationFlyoutBounds.x / 2,
+      publicationFlyoutBounds.y + publicationFlyoutBounds.height / 2,
     );
     await expect(page.getByTestId("work-item-detail")).not.toBeVisible();
     await expect(publicationTrigger).toBeFocused();
@@ -313,17 +324,24 @@ test.describe("assembled Delivery portfolio", () => {
     expect(designBox).not.toBeNull();
     expect(designHeadingBox).not.toBeNull();
     expect(designRowBox).not.toBeNull();
-    expect(changeRowBox!.y).toBeGreaterThanOrEqual(
-      changeHeadingBox!.y + changeHeadingBox!.height,
+    const changeHeadingBounds = requirePresent(changeHeadingBox);
+    const changeRowBounds = requirePresent(changeRowBox);
+    const designBounds = requirePresent(designBox);
+    const designHeadingBounds = requirePresent(designHeadingBox);
+    const designRowBounds = requirePresent(designRowBox);
+    expect(changeRowBounds.y).toBeGreaterThanOrEqual(
+      changeHeadingBounds.y + changeHeadingBounds.height,
     );
     expect(
-      designRowBox!.y - (designHeadingBox!.y + designHeadingBox!.height),
+      designRowBounds.y - (designHeadingBounds.y + designHeadingBounds.height),
     ).toBeCloseTo(8, 0);
-    expect(designBox!.y - (tableBox!.y + tableBox!.height)).toBeCloseTo(32, 0);
-    expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(
+    expect(designBounds.y - (tableBounds.y + tableBounds.height)).toBeCloseTo(
       32,
       0,
     );
+    expect(
+      guidanceBounds.y - (designBounds.y + designBounds.height),
+    ).toBeCloseTo(32, 0);
     await page
       .context()
       .grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -357,11 +375,12 @@ test.describe("assembled Delivery portfolio", () => {
         };
       });
       expect(visualContract).not.toBeNull();
-      expect(visualContract!.fontSize).toBe("13px");
-      expect(visualContract!.color).toBe("rgba(17, 17, 19, 0.6)");
-      expect(visualContract!.iconName).toBe("ai-code");
-      expect(visualContract!.centerDelta).toBeLessThanOrEqual(1);
-      expect(visualContract!.codeInsideButton).toBe(true);
+      const visual = requirePresent(visualContract);
+      expect(visual.fontSize).toBe("13px");
+      expect(visual.color).toBe("rgba(17, 17, 19, 0.6)");
+      expect(visual.iconName).toBe("ai-code");
+      expect(visual.centerDelta).toBeLessThanOrEqual(1);
+      expect(visual.codeInsideButton).toBe(true);
     }
     const guidanceItems = guidance
       .getByTestId("portfolio-next-session")
@@ -376,8 +395,9 @@ test.describe("assembled Delivery portfolio", () => {
     });
     expect(guidanceLayout.display).toBe("flex");
     expect(guidanceLayout.adjacentGap).not.toBeNull();
-    expect(guidanceLayout.adjacentGap!).toBeGreaterThanOrEqual(32);
-    expect(guidanceLayout.adjacentGap!).toBeLessThanOrEqual(64);
+    const adjacentGap = requirePresent(guidanceLayout.adjacentGap);
+    expect(adjacentGap).toBeGreaterThanOrEqual(32);
+    expect(adjacentGap).toBeLessThanOrEqual(64);
     await expect(designCommandButton).toHaveCount(0);
     await page.screenshot({
       path: testInfo.outputPath("delivery-command-alignment.png"),
@@ -414,8 +434,9 @@ test.describe("assembled Delivery portfolio", () => {
       };
     });
     expect(detailCommandLayout).not.toBeNull();
-    expect(detailCommandLayout!.centerDelta).toBeLessThanOrEqual(1);
-    expect(detailCommandLayout!.gap).toBeGreaterThanOrEqual(8);
+    const detailLayout = requirePresent(detailCommandLayout);
+    expect(detailLayout.centerDelta).toBeLessThanOrEqual(1);
+    expect(detailLayout.gap).toBeGreaterThanOrEqual(8);
     await page.reload();
     await expect(designDetail.locator("h1").first()).toHaveText(
       "Design Operations Roadmap",
@@ -458,9 +479,10 @@ test.describe("assembled Delivery portfolio", () => {
     const progressCell = returnedRow.locator("td").nth(1);
     const progressBox = await progressCell.boundingBox();
     expect(progressBox).not.toBeNull();
+    const progressBounds = requirePresent(progressBox);
     await page.mouse.click(
-      progressBox!.x + progressBox!.width / 2,
-      progressBox!.y + progressBox!.height / 2,
+      progressBounds.x + progressBounds.width / 2,
+      progressBounds.y + progressBounds.height / 2,
     );
     const returnedDetail = page.getByTestId("work-item-detail");
     await expect(
@@ -654,10 +676,11 @@ test.describe("assembled Delivery portfolio", () => {
       };
     });
     expect(compactCommandLayout).not.toBeNull();
-    expect(compactCommandLayout!.iconName).toBe("ai-code");
-    expect(compactCommandLayout!.firstLineDelta).toBeLessThanOrEqual(1);
-    expect(compactCommandLayout!.overflow).toBe(0);
-    expect(compactCommandLayout!.contained).toBe(true);
+    const compactLayout = requirePresent(compactCommandLayout);
+    expect(compactLayout.iconName).toBe("ai-code");
+    expect(compactLayout.firstLineDelta).toBeLessThanOrEqual(1);
+    expect(compactLayout.overflow).toBe(0);
+    expect(compactLayout.contained).toBe(true);
 
     const inspected = await inspect(page, "Build operator controls");
     await expect(
@@ -666,7 +689,7 @@ test.describe("assembled Delivery portfolio", () => {
     await expect(inspected.detail).toContainText("Build OUT-002");
     const flyoutBox = await flyoutPanelBox(page);
     expect(flyoutBox).not.toBeNull();
-    expect(flyoutBox!.width).toBeGreaterThan(380);
+    expect(requirePresent(flyoutBox).width).toBeGreaterThan(380);
     await page.screenshot({
       path: testInfo.outputPath("delivery-compact-flyout.png"),
     });
@@ -723,7 +746,7 @@ test.describe("assembled Delivery portfolio", () => {
       await expect(page.getByTestId("work-filters-panel")).toBeVisible();
       const openBox = await table.boundingBox();
       expect(openBox).not.toBeNull();
-      expect(openBox!.y).toBe(closedBox!.y);
+      expect(requirePresent(openBox).y).toBe(requirePresent(closedBox).y);
 
       const attention = page.getByRole("combobox", { name: "Attention" });
       await attention.click();
@@ -760,8 +783,9 @@ test.describe("assembled Delivery portfolio", () => {
     await expect(panel).toBeVisible();
     const panelBox = await panel.boundingBox();
     expect(panelBox).not.toBeNull();
-    expect(panelBox!.x).toBeGreaterThanOrEqual(0);
-    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(390);
+    const panelBounds = requirePresent(panelBox);
+    expect(panelBounds.x).toBeGreaterThanOrEqual(0);
+    expect(panelBounds.x + panelBounds.width).toBeLessThanOrEqual(390);
     await expect(panel.getByRole("combobox", { name: "Change" })).toBeVisible();
     await expect(
       panel.getByRole("combobox", { name: "Attention" }),
@@ -785,7 +809,7 @@ test.describe("assembled Delivery portfolio", () => {
       await expect(inspected.detail).toContainText("Build OUT-002");
       const flyoutBox = await flyoutPanelBox(page);
       expect(flyoutBox).not.toBeNull();
-      expect(flyoutBox!.width).toBeLessThan(width);
+      expect(requirePresent(flyoutBox).width).toBeLessThan(width);
       await expect(page.getByTestId("work-portfolio-table")).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await returnToPortfolio(page, inspected.trigger);
@@ -806,8 +830,10 @@ test.describe("assembled Delivery portfolio", () => {
     ]);
     expect(surfaceBox).not.toBeNull();
     expect(flyoutBox).not.toBeNull();
-    expect(flyoutBox!.width).toBeGreaterThan(surfaceBox!.width * 0.55);
-    expect(flyoutBox!.width).toBeLessThan(surfaceBox!.width * 0.75);
+    const surfaceBounds = requirePresent(surfaceBox);
+    const flyoutBounds = requirePresent(flyoutBox);
+    expect(flyoutBounds.width).toBeGreaterThan(surfaceBounds.width * 0.55);
+    expect(flyoutBounds.width).toBeLessThan(surfaceBounds.width * 0.75);
     await expectNoHorizontalOverflow(page);
   });
 
@@ -1063,7 +1089,8 @@ test.describe("assembled Delivery portfolio", () => {
         return { x: box.left + 16, y: box.top + box.height / 2 };
       });
     expect(backdropPoint).not.toBeNull();
-    await page.mouse.click(backdropPoint!.x, backdropPoint!.y);
+    const point = requirePresent(backdropPoint);
+    await page.mouse.click(point.x, point.y);
     await expect(completionDetail).not.toBeVisible();
     await expect(trigger).toBeFocused();
   });

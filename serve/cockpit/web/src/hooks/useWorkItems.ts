@@ -712,6 +712,13 @@ export function useWorkItemDetail(
     }
   }
 
+  function currentDetail(): WorkItemAvailableDetailResponse {
+    if (data === null) {
+      throw new Error("Work Item detail is not available");
+    }
+    return data;
+  }
+
   return {
     detail: {
       data: (unavailable ?? data) as WorkItemDetailResponse | null,
@@ -730,7 +737,7 @@ export function useWorkItemDetail(
             identity.changeId,
             requestId,
             resolution,
-            data!.item.snapshot_version,
+            currentDetail().item.snapshot_version,
           ),
         "Request answered.",
       ),
@@ -740,11 +747,11 @@ export function useWorkItemDetail(
         () =>
           clearWorkItemBlock(
             identity.changeId,
-            data!.item.card.work_item_id,
+            currentDetail().item.card.work_item_id,
             blockId,
             note,
             locators,
-            data!.item.snapshot_version,
+            currentDetail().item.snapshot_version,
           ),
         "Block cleared.",
       ),
@@ -754,7 +761,7 @@ export function useWorkItemDetail(
         () =>
           recoverWorkItemClaim(
             identity.changeId,
-            data!.item.card.work_item_id,
+            currentDetail().item.card.work_item_id,
             attemptId,
             claimId,
           ),
@@ -767,7 +774,7 @@ export function useWorkItemDetail(
       try {
         return await previewWorkItemBackward(
           identity.changeId,
-          data!.item.card.work_item_id,
+          currentDetail().item.card.work_item_id,
           target,
         );
       } catch (caught: unknown) {
@@ -792,7 +799,7 @@ export function useWorkItemDetail(
       try {
         const moved = await moveWorkItemBackward(
           identity.changeId,
-          data!.item.card.work_item_id,
+          currentDetail().item.card.work_item_id,
           target,
           reason,
           snapshotVersion,
@@ -889,7 +896,7 @@ export function useWorkItemDetail(
           resolveWorkItemAttention(
             identity.changeId,
             expectedDispositionId,
-            data!.item.snapshot_version,
+            currentDetail().item.snapshot_version,
           ),
         "Change attention resolved.",
       ),
@@ -989,7 +996,7 @@ export function useWorkItemDetail(
           deferWorkItemChange(
             identity.changeId,
             reason,
-            data!.item.snapshot_version,
+            currentDetail().item.snapshot_version,
           ),
         "Change deferred.",
       ),
@@ -997,7 +1004,10 @@ export function useWorkItemDetail(
       mutate(
         "change-resume",
         () =>
-          resumeWorkItemChange(identity.changeId, data!.item.snapshot_version),
+          resumeWorkItemChange(
+            identity.changeId,
+            currentDetail().item.snapshot_version,
+          ),
         "Change resumed.",
       ),
     abandonChange: (reason: string) =>
@@ -1007,7 +1017,7 @@ export function useWorkItemDetail(
           abandonWorkItemChange(
             identity.changeId,
             reason,
-            data!.item.snapshot_version,
+            currentDetail().item.snapshot_version,
           ),
         "Change abandoned.",
       ),

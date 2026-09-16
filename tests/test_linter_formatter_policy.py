@@ -88,7 +88,7 @@ _BIOME_DESCRIPTORS = {
     "JSX_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.tsx$", [".tsx"]),
     "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", [".css"]),
     "JSON_BIOME": (
-        r"^(\.github/(renovate|sync-manifest)\.json|\.markdownlint(-cli2)?\.jsonc?|package\.json|serve/cockpit/web/(package|tsconfig(\.e2e)?|\.stylelint)\.json)$",
+        r"^(.github/|\.markdownlint|package\.json|serve/cockpit/web/)",
         [".json", ".jsonc"],
     ),
 }
@@ -544,6 +544,14 @@ def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
         assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
         assert megalinter.get(f"{descriptor}_CONFIG_FILE") == "biome.json"
         assert megalinter.get(f"{descriptor}_RULES_PATH") == "."
+        assert megalinter.get("JSON_BIOME_FILE_NAMES_REGEX") == [
+            r"^renovate\.json$",
+            r"^sync-manifest\.json$",
+            r"^\.markdownlint(-cli2)?\.jsonc?$",
+            r"^package\.json$",
+            r"^tsconfig(\.e2e)?\.json$",
+            r"^\.stylelintrc\.json$",
+        ]
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:

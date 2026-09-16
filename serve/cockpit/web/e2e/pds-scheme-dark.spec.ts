@@ -12,6 +12,13 @@ import {
   waitForWorkspaceWithoutPageErrors,
 } from "./support/page-errors";
 
+function requirePresent<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error("Expected value to be present");
+  }
+  return value;
+}
+
 // ─── Minimal API fixtures ─────────────────────────────────────────────────────
 
 const STATUSES = [
@@ -136,7 +143,7 @@ async function getRenderedPButtonTextColor(
       "null means the PDS component is not initialized or shadow root is closed",
   ).not.toBeNull();
 
-  return color!;
+  return requirePresent(color);
 }
 
 // ─── AC-5: falsifiable dark-mode proof on PDS shadow DOM ─────────────────────

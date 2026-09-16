@@ -123,7 +123,8 @@ function PortfolioViewSwitch({
           key={value}
           type="button"
           className={[
-            "border-b-2 pb-static-xs pt-1 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+            "border-b-2 pb-static-xs pt-1 text-xs focus-visible:outline-2 focus-visible:outline-offset-2",
+            "focus-visible:outline-focus",
             workspace === value
               ? "border-primary font-semibold text-primary"
               : "border-transparent font-medium text-contrast-medium hover:text-primary",
@@ -169,7 +170,13 @@ function PortfolioFilterTools(props: FilterProps) {
       {props.needsFilter ? (
         <PTagDismissible
           compact
-          label={`Attention: ${props.needsFilter === "you" ? "Needs you" : props.needsFilter === "dependency" ? "Waiting on dependency" : "No intervention"}`}
+          label={`Attention: ${
+            props.needsFilter === "you"
+              ? "Needs you"
+              : props.needsFilter === "dependency"
+                ? "Waiting on dependency"
+                : "No intervention"
+          }`}
           data-testid="work-filter-chip-needs"
           aria={{ "aria-label": "Remove Attention filter" }}
           onClick={() => props.onNeedsFilter("")}
@@ -190,7 +197,11 @@ function PortfolioFilterTools(props: FilterProps) {
           type="button"
           slot="button"
           ref={triggerRef}
-          className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus hover:text-primary"
+          className={[
+            "inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-primary",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+            "hover:text-primary",
+          ].join(" ")}
           data-testid="work-filters-toggle"
           aria-expanded={props.open}
           aria-controls="work-filters-panel"
@@ -212,7 +223,11 @@ function PortfolioFilterPanel(props: FilterProps) {
     <div
       id="work-filters-panel"
       data-testid="work-filters-panel"
-      className="flex w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-wrap items-end gap-x-static-sm gap-y-static-xs rounded-sm border border-contrast-low bg-surface px-static-sm py-static-xs"
+      className={[
+        "flex w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] flex-wrap",
+        "items-end gap-x-static-sm gap-y-static-xs rounded-sm border border-contrast-low",
+        "bg-surface px-static-sm py-static-xs",
+      ].join(" ")}
     >
       <PSelect
         compact
@@ -301,7 +316,10 @@ function SelectedDesignDetail({
       <>
         {detail.error ? (
           <div
-            className="mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md"
+            className={[
+              "mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4",
+              "border-warning bg-surface p-static-md",
+            ].join(" ")}
             role="alert"
           >
             <span className="min-w-0 flex-1">
@@ -348,7 +366,10 @@ function SelectedWorkItemDetail({
       <>
         {selectedDetail.detail.error ? (
           <div
-            className="mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md"
+            className={[
+              "mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4",
+              "border-warning bg-surface p-static-md",
+            ].join(" ")}
             role="alert"
           >
             <span className="min-w-0 flex-1">
@@ -458,7 +479,10 @@ function PortfolioWorkspace({
 function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   return (
     <section
-      className="grid min-h-40 place-items-center border border-dashed border-contrast-low bg-surface px-static-lg py-static-xl text-center"
+      className={[
+        "grid min-h-40 place-items-center border border-dashed border-contrast-low",
+        "bg-surface px-static-lg py-static-xl text-center",
+      ].join(" ")}
       data-testid="work-empty-state"
     >
       <div className="grid max-w-[44rem] gap-static-xs">
@@ -485,7 +509,10 @@ function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string {
   if (diagnostic.resolution === "inspect") {
     return `Inspect the exact Delivery evidence with ${command} before choosing a repair.`;
   }
-  return `No safe automatic repair is available. Inspect the exact Delivery evidence with ${command}; operator escalation may be required.`;
+  return [
+    "No safe automatic repair is available. Inspect the exact Delivery evidence with",
+    ` ${command}; operator escalation may be required.`,
+  ].join("");
 }
 
 function HealthDiagnosticDetails({
@@ -578,8 +605,14 @@ function DeliveryIssuesSection({
           </h2>
           <p className="mt-1 text-xs text-contrast-medium">
             {unavailableCount > 0
-              ? `${unavailableCount} Change${unavailableCount === 1 ? "" : "s"} unavailable to Delivery.`
-              : `${issueCount} Delivery issue${issueCount === 1 ? "" : "s"} need review.`}
+              ? [
+                  `${unavailableCount} Change${unavailableCount === 1 ? "" : "s"} unavailable to`,
+                  " Delivery.",
+                ].join("")
+              : [
+                  `${issueCount} Delivery issue${issueCount === 1 ? "" : "s"} need`,
+                  " review.",
+                ].join("")}
           </p>
         </div>
         <span className="ml-auto rounded-full border border-warning px-static-xs py-1 text-xs tabular-nums">
@@ -587,7 +620,12 @@ function DeliveryIssuesSection({
         </span>
       </div>
       <details className="border-t border-warning">
-        <summary className="cursor-pointer px-static-sm py-static-xs text-xs font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+        <summary
+          className={[
+            "cursor-pointer px-static-sm py-static-xs text-xs font-semibold text-primary",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+          ].join(" ")}
+        >
           View issue details
         </summary>
         <ul className="m-0 grid list-none gap-static-sm border-t border-warning px-static-sm py-static-sm">
@@ -649,7 +687,10 @@ function DeliveryIssuesSection({
                   to={unavailableChangePath(change.change_id)}
                   data-work-item-primary-trigger
                   data-work-item-identity={`${change.change_id}:${UNAVAILABLE_ITEM_KEY}`}
-                  className="font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  className={[
+                    "font-semibold text-primary after:absolute after:inset-0 after:content-['']",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                  ].join(" ")}
                   onClick={(event) =>
                     onSelect(
                       {
@@ -680,13 +721,24 @@ function DeliveryIssuesSection({
           ))}
           {additionalDiagnostics.map((diagnostic) => (
             <li
-              key={`${diagnostic.change_id ?? "portfolio"}-${diagnostic.source}-${diagnostic.code}-${diagnostic.path ?? ""}-${diagnostic.detail}`}
+              key={[
+                diagnostic.change_id ?? "portfolio",
+                diagnostic.source,
+                diagnostic.code,
+                diagnostic.path ?? "",
+                diagnostic.detail,
+              ].join("-")}
               className="min-w-0 bg-surface p-static-sm text-sm"
             >
               <p className="font-medium text-primary">
                 Quarantined state is hidden from dispatch.
               </p>
-              <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+              <dl
+                className={[
+                  "mt-static-sm grid gap-static-xs text-xs",
+                  "md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]",
+                ].join(" ")}
+              >
                 <dt className="text-contrast-medium">Change</dt>
                 <dd className="break-words font-mono">
                   {diagnostic.change_id ?? "Delivery portfolio"}
@@ -1117,13 +1169,23 @@ export default function WorkPortfolioPage() {
         }
       />
 
-      <div className="flex min-w-0 shrink-0 flex-wrap items-end gap-x-static-md gap-y-static-xs bg-canvas px-static-lg">
+      <div
+        className={[
+          "flex min-w-0 shrink-0 flex-wrap items-end gap-x-static-md gap-y-static-xs",
+          "bg-canvas px-static-lg",
+        ].join(" ")}
+      >
         <PortfolioViewSwitch
           workspace={workspace}
           onChange={handleWorkspaceChange}
         />
         {workspace === "current" ? (
-          <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-static-xs pb-static-xs">
+          <div
+            className={[
+              "ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-static-xs",
+              "pb-static-xs",
+            ].join(" ")}
+          >
             {isFiltered ? (
               <span data-testid="work-shown-count">
                 <WorkspaceViewCount
@@ -1138,7 +1200,10 @@ export default function WorkPortfolioPage() {
       </div>
 
       <div
-        className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-lg overflow-y-auto overflow-x-hidden px-static-lg py-static-lg"
+        className={[
+          "flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-lg overflow-y-auto",
+          "overflow-x-hidden px-static-lg py-static-lg",
+        ].join(" ")}
         data-testid="work-scroll-surface"
       >
         {workspace === "current" ? (

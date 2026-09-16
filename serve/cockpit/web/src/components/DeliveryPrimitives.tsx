@@ -14,7 +14,10 @@ interface StatusChipProps {
 export function StatusChip({ label, tone, testId }: StatusChipProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(tone)}`}
+      className={[
+        "inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none",
+        workItemStatusClassName(tone),
+      ].join(" ")}
       data-status-tone={tone}
       data-testid={testId}
     >
