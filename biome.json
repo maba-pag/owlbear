@@ -14,7 +14,8 @@
       "serve/cockpit/web/e2e/**/*.js",
       "serve/cockpit/web/e2e/**/*.mjs",
       "serve/cockpit/web/e2e/**/*.ts",
-      "serve/cockpit/web/e2e/**/*.tsx"
+      "serve/cockpit/web/e2e/**/*.tsx",
+      "serve/cockpit/web/src/**/*.css"
     ]
   },
   "linter": {
@@ -23,6 +24,11 @@
   "formatter": {
     "enabled": true,
     "useEditorconfig": true
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "assist": {
     "enabled": true

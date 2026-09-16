@@ -29,7 +29,7 @@ from owlbear_tools.todo import run_todo
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 _JSON_SUFFIXES = frozenset({".json", ".jsonc"})
-_BIOME_SUFFIXES = frozenset({".js", ".mjs", ".ts", ".tsx"})
+_BIOME_SUFFIXES = frozenset({".css", ".js", ".mjs", ".ts", ".tsx"})
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {

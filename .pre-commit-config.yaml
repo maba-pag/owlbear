@@ -153,7 +153,7 @@ repos:
         name: Biome recommended (Cockpit frontend, staged)
         language: system
         entry: npm --prefix serve/cockpit/web run lint:biome:staged
-        files: ^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$
+        files: ^serve/cockpit/web/(src|e2e)/.*\.(css|js|mjs|ts|tsx)$
         pass_filenames: false
         stages: [manual]
       - id: stylelint-frontend-fix
