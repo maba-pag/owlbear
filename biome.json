@@ -18,7 +18,8 @@
     ]
   },
   "formatter": {
-    "enabled": false
+    "enabled": true,
+    "useEditorconfig": true
   },
   "linter": {
     "enabled": true,
