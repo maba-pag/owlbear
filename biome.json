@@ -25,15 +25,15 @@
     "enabled": true,
     "useEditorconfig": true
   },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
   "assist": {
     "enabled": true
   },
   "plugins": [
     "./serve/cockpit/web/plugins/pds-component-wrappers.grit"
-  ]
+  ],
+    "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }
