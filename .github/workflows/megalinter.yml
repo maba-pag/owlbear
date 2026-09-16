@@ -9,7 +9,7 @@ name: MegaLinter
         type: boolean
         default: false
       unsafe_fixes:
-        description: "Allow Ruff unsafe, Stylelint lax, and Zizmor unsafe fixes"
+        description: "Allow Ruff unsafe and Zizmor unsafe fixes"
         type: boolean
         default: false
       fix_mode:
@@ -54,7 +54,7 @@ jobs:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Install Cockpit web dependencies (for ESLint config resolution)
+      - name: Install Cockpit web dependencies (for Biome and frontend checks)
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
@@ -77,8 +77,6 @@ jobs:
         run: |
           {
             echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes"
-            echo "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix"
-            echo "CSS_STYLELINT_ARGUMENTS=--fix=lax"
             echo "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix"
             echo "ACTION_ZIZMOR_ARGUMENTS=--fix=all"
           } >> "$GITHUB_ENV"

@@ -19,7 +19,6 @@ from owlbear_tools.quality import (
     format_whitespace,
     lint,
     lint_cockpit_biome,
-    lint_json,
     lint_python,
     quality,
     typecheck_cockpit,
@@ -41,23 +40,11 @@ def test_lint_runs_the_normal_local_suite() -> None:
     assert commands == [
         ["pre-commit", "run", "ruff-fix", "--all-files"],
         ["pre-commit", "run", "markdownlint-fix", "--all-files"],
-        [
-            "serve/cockpit/web/node_modules/.bin/eslint",
-            "--config",
-            "eslint-json.config.cjs",
-            "--no-config-lookup",
-            "--no-warn-ignored",
-            "--no-error-on-unmatched-pattern",
-            "**/*.json",
-            "**/*.jsonc",
-        ],
         ["pre-commit", "run", "yamllint", "--all-files"],
         ["pre-commit", "run", "shellcheck", "--all-files"],
         ["pre-commit", "run", "actionlint", "--all-files"],
         ["pre-commit", "run", "editorconfig-checker", "--all-files"],
-        ["pre-commit", "run", "eslint-frontend-fix", "--all-files"],
         ["npm", "run", "lint:biome"],
-        ["pre-commit", "run", "stylelint-frontend-fix", "--all-files"],
         ["npm", "run", "lint:html"],
     ]
     assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
@@ -139,37 +126,13 @@ def test_lint_cockpit_biome_runs_the_package_lint_script() -> None:
         ("package.json", True),
         ("serve/cockpit/web/src/App.tsx", True),
         ("serve/cockpit/web/src/theme.css", True),
-        (".owlbear/delivery/config.json", False),
-        ("serve/cockpit/web/package-lock.json", False),
-        (".vscode/settings.json", False),
+        (".owlbear/delivery/config.json", True),
+        ("serve/cockpit/web/package-lock.json", True),
+        (".vscode/settings.json", True),
     ],
 )
 def test_biome_staged_path_matches_the_owned_allowlist(path: str, *, expected: bool) -> None:
     assert _is_biome_staged_path(path) is expected
-
-
-def test_lint_json_staged_targets_only_staged_json_files() -> None:
-    with (
-        patch.object(sys, "argv", ["lint-json", "--staged"]),
-        patch(
-            "owlbear_tools.quality._git_paths",
-            return_value=["README.md", "package.json", ".vscode/settings.json", "src/App.tsx"],
-        ),
-        patch("owlbear_tools.quality._call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint_json()
-
-    assert call.call_args.args[0] == [
-        "serve/cockpit/web/node_modules/.bin/eslint",
-        "--config",
-        "eslint-json.config.cjs",
-        "--no-config-lookup",
-        "--no-warn-ignored",
-        "--no-error-on-unmatched-pattern",
-        "package.json",
-        ".vscode/settings.json",
-    ]
 
 
 def test_megalint_runs_as_a_direct_workspace_engine() -> None:
@@ -223,14 +186,11 @@ def test_quality_executes_todo_last() -> None:
         "format-eof",
         "lint-python",
         "lint-markdown",
-        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
         "lint-editorconfig",
-        "lint-cockpit-code",
         "lint-cockpit-biome",
-        "lint-cockpit-style",
         "lint-cockpit-html",
         "megalint",
         "typecheck-cockpit",

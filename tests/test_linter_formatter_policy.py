@@ -49,20 +49,6 @@ _P01_SHARED_INCLUDED_PATHS = (
     "store/audit/history.txt",
     "generated/output.txt",
 )
-_P04_LOCAL_ESLINT_SCOPE = r"^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$"
-_P04_CI_ESLINT_SCOPE = r"^serve/cockpit/web/.*\.(ts|tsx)$"
-_P04_SCOPE_SAMPLES = (
-    ("serve/cockpit/web/src/CockpitShell.tsx", True, True),
-    ("serve/cockpit/web/e2e/smoke.spec.ts", True, True),
-    ("serve/cockpit/web/vitest.setup.ts", False, True),
-    ("serve/cockpit/web/scripts/run-e2e.mjs", False, False),
-)
-_P05_STYLELINT_SCOPE = r"^serve/cockpit/web/src/.*\.css$"
-_P05_SCOPE_SAMPLES = (
-    ("serve/cockpit/web/src/custom-tokens.css", True),
-    ("serve/cockpit/web/public/porsche-design-system/future.css", False),
-    ("serve/cockpit/dist/assets/index.css", False),
-)
 _P08_JSON_SCOPE = r"(^|/).*\.(json|jsonc)$"
 _P08_JSON_SCOPE_SAMPLES = (
     ("package.json", True),
@@ -71,24 +57,13 @@ _P08_JSON_SCOPE_SAMPLES = (
     (".markdownlint-cli2.jsonc", True),
     ("serve/cockpit/web/src/App.tsx", False),
 )
-_P08_JSON_IGNORE_MARKERS = (
-    '".owlbear/delivery/packages/**"',
-    '".owlbear/research/**"',
-    '".owlbear/sources/**"',
-    '".venv/**"',
-    '"**/.venv/**"',
-    '"node_modules/**"',
-    '"test-results/**"',
-    '"megalinter-reports/**"',
-    '"store/audit/*.db"',
-)
 _BIOME_DESCRIPTORS = {
     "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.(js|mjs)$", [".js", ".mjs"]),
     "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.ts$", [".ts"]),
     "JSX_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.tsx$", [".tsx"]),
     "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", [".css"]),
     "JSON_BIOME": (
-        r"^(.github/|\.markdownlint|package\.json|serve/cockpit/web/)",
+        r"(^|/).*\.(json|jsonc)$",
         [".json", ".jsonc"],
     ),
 }
@@ -447,57 +422,22 @@ def test_precommit_and_megalinter_share_exclusion_taxonomy() -> None:
     assert all(precommit_pattern.search(path) is None for path in _P01_SHARED_INCLUDED_PATHS)
 
 
-def test_frontend_eslint_local_ci_scope_contract() -> None:
-    precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    local_pattern = re.compile(_P04_LOCAL_ESLINT_SCOPE)
-    ci_pattern = re.compile(_P04_CI_ESLINT_SCOPE)
-
-    for hook_id in ("eslint-frontend", "eslint-frontend-check"):
-        hook = precommit_hooks[hook_id]
-        assert hook.get("files") == _P04_LOCAL_ESLINT_SCOPE
-        assert hook.get("pass_filenames") is False
-        entry = hook.get("entry")
-        assert isinstance(entry, str)
-        assert "serve/cockpit/web/src/" in entry
-        assert "serve/cockpit/web/e2e/" in entry
-
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    assert megalinter.get("TYPESCRIPT_ES_FILTER_REGEX_INCLUDE") == _P04_CI_ESLINT_SCOPE
-
-    for path, local_expected, ci_expected in _P04_SCOPE_SAMPLES:
-        assert bool(local_pattern.search(path)) is local_expected, path
-        assert bool(ci_pattern.search(path)) is ci_expected, path
-
-
-def test_frontend_stylelint_local_ci_scope_contract() -> None:
-    precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    stylelint_pattern = re.compile(_P05_STYLELINT_SCOPE)
-
-    for hook_id in ("stylelint-frontend-fix", "stylelint-frontend-check", "stylelint-frontend-lax"):
-        hook = precommit_hooks[hook_id]
-        assert hook.get("files") == _P05_STYLELINT_SCOPE
-        assert hook.get("pass_filenames") is False
-        entry = hook.get("entry")
-        assert isinstance(entry, str)
-        assert "npm --prefix serve/cockpit/web run lint:css" in entry
-
-    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
-    assert megalinter.get("CSS_STYLELINT_FILTER_REGEX_INCLUDE") == _P05_STYLELINT_SCOPE
-
-    for path, expected in _P05_SCOPE_SAMPLES:
-        assert bool(stylelint_pattern.search(path)) is expected, path
-
-
-def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
+def test_biome_replaces_frontend_and_json_scanners() -> None:
     megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
     enabled = megalinter.get("ENABLE_LINTERS")
     assert isinstance(enabled, list)
     assert "JSON_JSONLINT" not in enabled
-    assert "JAVASCRIPT_ES" in enabled
-    assert megalinter.get("JAVASCRIPT_ES_FILTER_REGEX_INCLUDE") == _P08_JSON_SCOPE
-    assert megalinter.get("JAVASCRIPT_ES_FILE_EXTENSIONS") == [".json", ".jsonc"]
-    assert megalinter.get("JAVASCRIPT_ES_CONFIG_FILE") == "eslint-json.config.cjs"
-    assert megalinter.get("JAVASCRIPT_ES_RULES_PATH") == "."
+    assert "JAVASCRIPT_ES" not in enabled
+    assert "TYPESCRIPT_ES" not in enabled
+    assert "CSS_STYLELINT" not in enabled
+    assert "JAVASCRIPT_BIOME" in enabled
+    assert "TYPESCRIPT_BIOME" in enabled
+    assert "CSS_BIOME" in enabled
+    assert "JSON_BIOME" in enabled
+    assert megalinter.get("JSON_BIOME_FILTER_REGEX_INCLUDE") == _P08_JSON_SCOPE
+    assert megalinter.get("JSON_BIOME_FILE_EXTENSIONS") == [".json", ".jsonc"]
+    assert megalinter.get("JSON_BIOME_CONFIG_FILE") == "biome.json"
+    assert megalinter.get("JSON_BIOME_RULES_PATH") == "."
 
     root_package = json.loads((_ROOT / "package.json").read_text(encoding="utf-8"))
     assert isinstance(root_package, dict)
@@ -512,24 +452,44 @@ def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
     scripts = package.get("scripts")
     assert isinstance(dependencies, dict)
     assert isinstance(scripts, dict)
-    assert dependencies.get("@eslint/json") == "^2.0.1"
-    assert "lint:json" not in scripts
-
-    config_text = (_ROOT / "eslint-json.config.cjs").read_text(encoding="utf-8")
-    assert 'language: "json/json"' in config_text
-    assert 'language: "json/jsonc"' in config_text
-    assert '".vscode/*.json"' in config_text
-    assert "allowTrailingCommas: true" in config_text
-    assert all(marker in config_text for marker in _P08_JSON_IGNORE_MARKERS)
+    assert "@eslint/json" not in dependencies
+    assert "eslint" not in dependencies
+    assert "stylelint" not in dependencies
+    assert "typescript-eslint" not in dependencies
+    assert "lint:css" not in scripts
 
     precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
-    json_hook = precommit_hooks["eslint-json"]
-    assert json_hook.get("files") == r".*(\.json|\.jsonc)$"
-    assert json_hook.get("pass_filenames") is False
-    assert json_hook.get("entry") == "uv run lint-json"
+    biome_hook = precommit_hooks["biome-frontend-check"]
+    assert biome_hook.get("pass_filenames") is False
+    assert "stages" not in biome_hook
+    assert "run lint:biome" in biome_hook.get("entry", "")
+
+    workflow = (_ROOT / ".github/workflows/cockpit-verification.yml").read_text(encoding="utf-8")
+    assert "npm run lint:biome\n" in workflow
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
+
+
+def test_biome_json_scope_excludes_generated_and_machine_managed_paths() -> None:
+    biome = json.loads((_ROOT / "biome.json").read_text(encoding="utf-8"))
+    assert isinstance(biome, dict)
+    files = biome.get("files")
+    assert isinstance(files, dict)
+    includes = files.get("includes")
+    assert isinstance(includes, list)
+    assert "**/*.json" in includes
+    assert "**/*.jsonc" in includes
+    assert all(isinstance(include, str) for include in includes)
+    assert {
+        "!**/.owlbear/delivery/packages",
+        "!**/.owlbear/delivery/runtime",
+        "!**/.owlbear/memory",
+        "!**/.owlbear/research",
+        "!**/.owlbear/sources",
+        "!**/store/audit/*.db",
+        "!**/store/knowledge/*.db",
+    }.issubset(includes)
 
 
 def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
@@ -544,14 +504,6 @@ def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
         assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
         assert megalinter.get(f"{descriptor}_CONFIG_FILE") == "biome.json"
         assert megalinter.get(f"{descriptor}_RULES_PATH") == "."
-        assert megalinter.get("JSON_BIOME_FILE_NAMES_REGEX") == [
-            r"^renovate\.json$",
-            r"^sync-manifest\.json$",
-            r"^\.markdownlint(-cli2)?\.jsonc?$",
-            r"^package\.json$",
-            r"^tsconfig(\.e2e)?\.json$",
-            r"^\.stylelintrc\.json$",
-        ]
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:

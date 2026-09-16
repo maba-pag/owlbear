@@ -119,15 +119,13 @@ Apply these only when the target is the OwlBear repository or matching configura
 Use these workspace entry points instead of invoking individual linters manually. `lint` and
 `megalint` may auto-fix files through their configured safe fixers; inspect the diff afterward.
 MegaLinter's repository policy is `APPLY_FIXES: all` by default, while `--no-fix` explicitly selects
-a check-only run. Agents should
-scope validation to their own work with `lint --staged`; workspace-wide `lint`, `megalint`, and
-`quality` are broad user workflows rather than focused agent validation commands.
+check-only runs. Agents should scope validation to their own work with `lint --staged`; workspace-wide
+`lint`, `megalint`, and `quality` are broad user workflows rather than focused agent validation commands.
 
-`lint`, `lint-cockpit`, `megalint`, and `quality` accept one optional fix-policy
-flag. `--no-fix` replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables Ruff
-unsafe fixes and Stylelint lax fixes in addition to the configured safe fixes. The two flags are
-mutually exclusive; review the resulting diff whenever unsafe fixes are enabled. Full
-aggregates are listed by `uv run help quality`.
+`lint`, `lint-cockpit`, `megalint`, and `quality` accept one optional fix-policy flag. `--no-fix`
+replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables unsafe Ruff fixes in
+addition to the configured safe fixes. The flags are mutually exclusive; review the resulting diff
+whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help quality`.
 
 | Marker | Local meaning |
 | --- | --- |

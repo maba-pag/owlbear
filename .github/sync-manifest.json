@@ -55,9 +55,10 @@
     ".pre-commit-config.yaml",
     ".vscode",
     "conftest.py",
-    "eslint-json.config.cjs",
     "package-lock.json",
     "package.json",
+    "pnpm-lock.yaml",
+    "biome.json",
     "store",
     "tests",
     "serve/cockpit/web"

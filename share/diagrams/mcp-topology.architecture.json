@@ -100,32 +100,72 @@
     {
       "kind": "region",
       "label": "MCP server processes",
-      "wraps": ["delivery_mcp", "knowledge_mcp", "memory_mcp", "browser_mcp", "markitdown_mcp"]
+      "wraps": [
+        "delivery_mcp",
+        "knowledge_mcp",
+        "memory_mcp",
+        "browser_mcp",
+        "markitdown_mcp"
+      ]
     },
     {
       "kind": "region",
       "label": "OwlBear backing surfaces",
-      "wraps": ["delivery_core", "knowledge_core", "memory_core", "browser_core", "markitdown_core"]
+      "wraps": [
+        "delivery_core",
+        "knowledge_core",
+        "memory_core",
+        "browser_core",
+        "markitdown_core"
+      ]
     }
   ],
   "connections": [
-    { "id": "copilot_delivery", "from": "copilot", "to": "delivery_mcp", "variant": "emphasis" },
-    { "id": "copilot_knowledge", "from": "copilot", "to": "knowledge_mcp", "variant": "emphasis" },
-      {
-        "id": "copilot_memory",
-        "from": "copilot",
-        "to": "memory_mcp",
-        "variant": "emphasis",
-        "fromSide": "bottom",
-        "toSide": "top",
-        "route": "orthogonal-v"
-      },
-    { "id": "copilot_browser", "from": "copilot", "to": "browser_mcp", "variant": "emphasis" },
-    { "id": "copilot_markitdown", "from": "copilot", "to": "markitdown_mcp", "variant": "emphasis" },
+    {
+      "id": "copilot_delivery",
+      "from": "copilot",
+      "to": "delivery_mcp",
+      "variant": "emphasis"
+    },
+    {
+      "id": "copilot_knowledge",
+      "from": "copilot",
+      "to": "knowledge_mcp",
+      "variant": "emphasis"
+    },
+    {
+      "id": "copilot_memory",
+      "from": "copilot",
+      "to": "memory_mcp",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "orthogonal-v"
+    },
+    {
+      "id": "copilot_browser",
+      "from": "copilot",
+      "to": "browser_mcp",
+      "variant": "emphasis"
+    },
+    {
+      "id": "copilot_markitdown",
+      "from": "copilot",
+      "to": "markitdown_mcp",
+      "variant": "emphasis"
+    },
     { "id": "delivery_binding", "from": "delivery_mcp", "to": "delivery_core" },
-    { "id": "knowledge_binding", "from": "knowledge_mcp", "to": "knowledge_core" },
+    {
+      "id": "knowledge_binding",
+      "from": "knowledge_mcp",
+      "to": "knowledge_core"
+    },
     { "id": "memory_binding", "from": "memory_mcp", "to": "memory_core" },
     { "id": "browser_binding", "from": "browser_mcp", "to": "browser_core" },
-    { "id": "markitdown_binding", "from": "markitdown_mcp", "to": "markitdown_core" }
+    {
+      "id": "markitdown_binding",
+      "from": "markitdown_mcp",
+      "to": "markitdown_core"
+    }
   ]
 }

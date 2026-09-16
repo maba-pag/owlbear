@@ -30,26 +30,11 @@ COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 _JSON_SUFFIXES = frozenset({".json", ".jsonc"})
 _BIOME_SOURCE_SUFFIXES = frozenset({".css", ".js", ".mjs", ".ts", ".tsx"})
-_BIOME_JSON_PATHS = frozenset(
-    {
-        ".github/renovate.json",
-        ".github/sync-manifest.json",
-        ".markdownlint-cli2.jsonc",
-        ".markdownlint.json",
-        "package.json",
-        "serve/cockpit/web/.stylelintrc.json",
-        "serve/cockpit/web/package.json",
-        "serve/cockpit/web/tsconfig.e2e.json",
-        "serve/cockpit/web/tsconfig.json",
-    }
-)
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
     "lint-python": ("ruff-fix", "ruff-check", "ruff-unsafe-fix"),
     "lint-markdown": ("markdownlint-fix", "markdownlint-check", None),
-    "lint-cockpit-code": ("eslint-frontend-fix", "eslint-frontend-check", None),
-    "lint-cockpit-style": ("stylelint-frontend-fix", "stylelint-frontend-check", "stylelint-frontend-lax"),
     "format-python": ("ruff-format-fix", "ruff-format-check", None),
     "format-whitespace": ("trailing-whitespace-fix", "", None),
     "format-eof": ("end-of-file-fix", "", None),
@@ -64,14 +49,13 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (
         "lint-python",
         "lint-markdown",
-        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
         "lint-editorconfig",
         "lint-cockpit",
     ),
-    "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-biome", "lint-cockpit-style", "lint-cockpit-html"),
+    "lint-cockpit": ("lint-cockpit-biome", "lint-cockpit-html"),
     "format": ("format-python", "format-whitespace", "format-eof"),
     "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
 }
@@ -177,7 +161,7 @@ def _run_cockpit_html(*, staged: bool) -> int:
 
 
 def _is_biome_staged_path(path: str) -> bool:
-    if path in _BIOME_JSON_PATHS:
+    if Path(path).suffix in _JSON_SUFFIXES:
         return True
     return (
         path.startswith("serve/cockpit/web/")
@@ -191,28 +175,6 @@ def _run_cockpit_biome(*, staged: bool) -> int:
         return 0
     script = "lint:biome:staged" if staged else "lint:biome"
     return _call(["npm", "run", script], cwd=COCKPIT_WEB)
-
-
-def _run_json_lint(*, staged: bool) -> int:
-    """Run the repository-owned JSON and JSONC ESLint configuration."""
-    targets = (
-        [path for path in _git_paths(staged=True) if Path(path).suffix in _JSON_SUFFIXES]
-        if staged
-        else ["**/*.json", "**/*.jsonc"]
-    )
-    if not targets:
-        return 0
-    return _call(
-        [
-            str(COCKPIT_WEB / "node_modules/.bin/eslint"),
-            "--config",
-            "eslint-json.config.cjs",
-            "--no-config-lookup",
-            "--no-warn-ignored",
-            "--no-error-on-unmatched-pattern",
-            *targets,
-        ]
-    )
 
 
 def _run_typecheck_cockpit() -> int:
@@ -230,9 +192,7 @@ def _run_typecheck_cockpit() -> int:
 
 
 def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
-    if name == "lint-json":
-        result = _run_json_lint(staged=staged)
-    elif name in _PRECOMMIT_FIX_HOOKS:
+    if name in _PRECOMMIT_FIX_HOOKS:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
@@ -360,7 +320,7 @@ def _run_public_leaf(name: str, *, fixes: bool, allow_unsafe: bool, staged: bool
 
 def lint_cockpit() -> None:
     """Run the Cockpit frontend lint suite."""
-    _run_public_leaf("lint-cockpit", fixes=True, allow_unsafe=True, staged=True)
+    _run_public_leaf("lint-cockpit", fixes=False, allow_unsafe=False, staged=True)
 
 
 def lint_python() -> None:
@@ -371,11 +331,6 @@ def lint_python() -> None:
 def lint_markdown() -> None:
     """Run Markdown lint checks."""
     _run_public_leaf("lint-markdown", fixes=True, allow_unsafe=False, staged=True)
-
-
-def lint_json() -> None:
-    """Run JSON and JSONC ESLint checks."""
-    _run_public_leaf("lint-json", fixes=False, allow_unsafe=False, staged=True)
 
 
 def lint_yaml() -> None:
@@ -398,19 +353,9 @@ def lint_editorconfig() -> None:
     _run_public_leaf("lint-editorconfig", fixes=False, allow_unsafe=False, staged=True)
 
 
-def lint_cockpit_code() -> None:
-    """Run Cockpit ESLint checks."""
-    _run_public_leaf("lint-cockpit-code", fixes=True, allow_unsafe=False, staged=True)
-
-
 def lint_cockpit_biome() -> None:
-    """Run Cockpit Biome checks."""
+    """Run Biome checks for the Cockpit and owned repository frontend files."""
     _run_public_leaf("lint-cockpit-biome", fixes=False, allow_unsafe=False, staged=True)
-
-
-def lint_cockpit_style() -> None:
-    """Run Cockpit Stylelint checks."""
-    _run_public_leaf("lint-cockpit-style", fixes=True, allow_unsafe=True, staged=True)
 
 
 def lint_cockpit_html() -> None:

@@ -63,7 +63,7 @@ for progress. Other projects and unrelated Changes retain their normal workflow.
 | Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 8 + React Compiler (`babel-plugin-react-compiler`) |
 | Test runner | Vitest 4 (`npm test`) |
 | E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
-| CSS/HTML lint | Stylelint (`npm run lint:css`) and HTMLHint (`npm run lint:html`) |
+| CSS/HTML lint | Biome and HTMLHint (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` (`npm run build`); gitignored on `dev` — pre-built in `main` by sync-to-main CI |
 | Node requirement | Node 24.19.0 pinned in `serve/cockpit/web/.nvmrc`; `package.json` requires `>=24.16.0` |
 | Package manager | `npm` (never `uv` for this package) |

@@ -16,19 +16,43 @@
       "serve/cockpit/web/e2e/**/*.ts",
       "serve/cockpit/web/e2e/**/*.tsx",
       "serve/cockpit/web/src/**/*.css",
-      ".github/renovate.json",
-      ".github/sync-manifest.json",
-      ".markdownlint-cli2.jsonc",
-      ".markdownlint.json",
-      "package.json",
-      "serve/cockpit/web/package.json",
-      "serve/cockpit/web/tsconfig.json",
-      "serve/cockpit/web/tsconfig.e2e.json",
-      "serve/cockpit/web/.stylelintrc.json"
+      "**/*.json",
+      "**/*.jsonc",
+      "!**/.owlbear/delivery/packages",
+      "!**/.owlbear/delivery/runtime",
+      "!**/.owlbear/memory",
+      "!**/.owlbear/research",
+      "!**/.owlbear/sources",
+      "!**/store/audit/*.db",
+      "!**/store/knowledge/*.db"
     ]
   },
   "linter": {
-    "enabled": true
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noEmptyBlock": "error",
+        "noUnknownAtRules": {
+          "level": "error",
+          "options": {
+            "ignore": [
+              "theme",
+              "utility",
+              "apply",
+              "source",
+              "reference",
+              "variant",
+              "custom-variant",
+              "plugin"
+            ]
+          }
+        }
+      },
+      "nursery": {
+        "noDuplicateSelectors": "error"
+      }
+    }
   },
   "formatter": {
     "enabled": true,
@@ -37,10 +61,11 @@
   "assist": {
     "enabled": true
   },
-  "plugins": [
-    "./serve/cockpit/web/plugins/pds-component-wrappers.grit"
-  ],
+  "plugins": ["./serve/cockpit/web/plugins/pds-component-wrappers.grit"],
   "css": {
+    "linter": {
+      "enabled": true
+    },
     "parser": {
       "tailwindDirectives": true
     }

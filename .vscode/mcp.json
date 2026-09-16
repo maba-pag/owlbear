@@ -1,51 +1,29 @@
 {
-    "servers": {
-        "owlbear-delivery": {
-            "type": "stdio",
-            "command": "uv",
-            "args": [
-                "run",
-                "python",
-                "-m",
-                "owlbear_delivery_mcp"
-            ]
-        },
-        "owlbear-knowledge": {
-            "type": "stdio",
-            "command": "uv",
-            "args": [
-                "run",
-                "python",
-                "-m",
-                "owlbear_knowledge_mcp"
-            ]
-        },
-        "owlbear-memory": {
-            "type": "stdio",
-            "command": "uv",
-            "args": [
-                "run",
-                "python",
-                "-m",
-                "owlbear_memory_mcp"
-            ]
-        },
-        "owlbear-browser": {
-            "type": "stdio",
-            "command": "uv",
-            "args": [
-                "run",
-                "python",
-                "-m",
-                "owlbear_browser_mcp"
-            ]
-        },
-        "markitdown": {
-            "type": "stdio",
-            "command": "uvx",
-            "args": [
-                "markitdown-mcp"
-            ]
-        }
+  "servers": {
+    "owlbear-delivery": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_delivery_mcp"]
+    },
+    "owlbear-knowledge": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_knowledge_mcp"]
+    },
+    "owlbear-memory": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_memory_mcp"]
+    },
+    "owlbear-browser": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "python", "-m", "owlbear_browser_mcp"]
+    },
+    "markitdown": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["markitdown-mcp"]
     }
+  }
 }

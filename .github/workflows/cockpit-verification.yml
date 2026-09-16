@@ -105,9 +105,8 @@ jobs:
         env:
           BIOME_BASE_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
         run: |
-          npx eslint src e2e --max-warnings 0
+          npm run lint:biome
           npm run lint:biome:ci -- --since="origin/${BIOME_BASE_REF}"
-          npm run lint:css
           npm run lint:html
 
       - name: Verify PDS Biome plugin

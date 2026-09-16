@@ -13,8 +13,8 @@
 #   uv run quality [--no-fix | --unsafe-fix]
 #                     Full format, lint, typecheck, and advisory checks
 #
-# Auto-fix on commit: Ruff, frontend lint hooks, trailing-whitespace,
-# end-of-file-fixer, and markdownlint.
+# Auto-fix on commit: Ruff, trailing-whitespace, end-of-file-fixer, and
+# markdownlint.
 
 # Exclude the same generated, archived, and third-party paths as MegaLinter
 # where pre-commit's path matching can express them.
@@ -130,57 +130,11 @@ repos:
   # ── Local hooks ─────────────────────────────────────────
   - repo: local
     hooks:
-      # Frontend — matches CI: TYPESCRIPT_ES
-      - id: eslint-frontend
-        alias: eslint-frontend-fix
-        name: ESLint (Cockpit frontend)
-        language: system
-        entry: >-
-          npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
-          serve/cockpit/web/e2e/ --fix --max-warnings 0
-        files: ^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$
-        pass_filenames: false
-      - id: eslint-frontend-check
-        name: ESLint (Cockpit frontend, no fix)
-        language: system
-        entry: >-
-          npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
-          serve/cockpit/web/e2e/ --max-warnings 0
-        files: ^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$
-        pass_filenames: false
-        stages: [manual]
       - id: biome-frontend-check
-        name: Biome recommended (Cockpit frontend, staged)
+        name: Biome (Cockpit frontend and owned JSON)
         language: system
-        entry: npm --prefix serve/cockpit/web run lint:biome:staged
+        entry: npm --prefix serve/cockpit/web run lint:biome
         files: ^(serve/cockpit/web/(src|e2e)/.*\.(css|js|mjs|ts|tsx)|.*\.(json|jsonc))$
-        pass_filenames: false
-        stages: [manual]
-      - id: stylelint-frontend-fix
-        name: Stylelint (Cockpit frontend)
-        language: system
-        entry: npm --prefix serve/cockpit/web run lint:css -- --fix=strict
-        files: ^serve/cockpit/web/src/.*\.css$
-        pass_filenames: false
-      - id: stylelint-frontend-check
-        name: Stylelint (Cockpit frontend, no fix)
-        language: system
-        entry: npm --prefix serve/cockpit/web run lint:css
-        files: ^serve/cockpit/web/src/.*\.css$
-        pass_filenames: false
-        stages: [manual]
-      - id: stylelint-frontend-lax
-        name: Stylelint (Cockpit frontend, lax fixes)
-        language: system
-        entry: npm --prefix serve/cockpit/web run lint:css -- --fix=lax
-        files: ^serve/cockpit/web/src/.*\.css$
-        pass_filenames: false
-        stages: [manual]
-      - id: eslint-json
-        name: ESLint (JSON/JSONC)
-        language: system
-        entry: uv run lint-json
-        files: .*(\.json|\.jsonc)$
         pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to

@@ -10,11 +10,9 @@ ENABLE_LINTERS:
   - ACTION_ACTIONLINT
   - ACTION_ZIZMOR
   - BASH_SHELLCHECK
-  - CSS_STYLELINT
   - CSS_BIOME
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   - HTML_HTMLHINT
-  - JAVASCRIPT_ES
   - JAVASCRIPT_BIOME
   - JSX_BIOME
   - JSON_BIOME
@@ -23,13 +21,11 @@ ENABLE_LINTERS:
   - PYTHON_RUFF_FORMAT
   - REPOSITORY_GIT_DIFF
   - REPOSITORY_OSV_SCANNER
-  - TYPESCRIPT_ES
   - TYPESCRIPT_BIOME
   - YAML_YAMLLINT
 
 # Allow all fixer-capable linters to apply their standard fixes by default.
-# The CLI's --no-fix mode disables fixes; --unsafe-fix adds Ruff unsafe fixes
-# and Stylelint lax fixes.
+# The CLI's --no-fix mode disables fixes; --unsafe-fix adds Ruff unsafe fixes.
 APPLY_FIXES: all
 
 # Reporters
@@ -90,17 +86,6 @@ PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CONFIG_FILE: pyproject.toml
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
-# Cockpit ESLint — match the direct `eslint src e2e` CI surface.
-TYPESCRIPT_ES_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.(js|mjs|ts|tsx)$'
-TYPESCRIPT_ES_FILE_EXTENSIONS:
-  - .js
-  - .mjs
-  - .ts
-  - .tsx
-TYPESCRIPT_ES_CONFIG_FILE: eslint.config.js
-TYPESCRIPT_ES_RULES_PATH: serve/cockpit/web
-TYPESCRIPT_ES_ARGUMENTS: "--max-warnings 0"
-
 # Biome — use the repository-owned biome.json and split descriptors by syntax
 # so MegaLinter does not run the same project-wide Biome check five times.
 JAVASCRIPT_BIOME_CLI_LINT_MODE: list_of_files
@@ -133,24 +118,12 @@ CSS_BIOME_CONFIG_FILE: biome.json
 CSS_BIOME_RULES_PATH: .
 
 JSON_BIOME_CLI_LINT_MODE: list_of_files
-JSON_BIOME_FILTER_REGEX_INCLUDE: '^(.github/|\.markdownlint|package\.json|serve/cockpit/web/)'
+JSON_BIOME_FILTER_REGEX_INCLUDE: '(^|/).*\.(json|jsonc)$'
 JSON_BIOME_FILE_EXTENSIONS:
   - .json
   - .jsonc
-JSON_BIOME_FILE_NAMES_REGEX:
-  - '^renovate\.json$'
-  - '^sync-manifest\.json$'
-  - '^\.markdownlint(-cli2)?\.jsonc?$'
-  - '^package\.json$'
-  - '^tsconfig(\.e2e)?\.json$'
-  - '^\.stylelintrc\.json$'
 JSON_BIOME_CONFIG_FILE: biome.json
 JSON_BIOME_RULES_PATH: .
-
-# CSS — use the Cockpit web policy instead of MegaLinter defaults.
-CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/src/.*\.css$'
-CSS_STYLELINT_CONFIG_FILE: .stylelintrc.json
-CSS_STYLELINT_RULES_PATH: serve/cockpit/web
 
 # HTML — use the Cockpit web policy instead of MegaLinter defaults.
 HTML_HTMLHINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.html$'
@@ -162,16 +135,6 @@ ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 
 # YAML — strict mode
 YAML_YAMLLINT_ARGUMENTS: "--strict"
-
-# JSON — use the repository-owned flat config for strict JSON and JSONC.
-JAVASCRIPT_ES_FILTER_REGEX_INCLUDE: '(^|/).*\.(json|jsonc)$'
-JAVASCRIPT_ES_FILE_EXTENSIONS:
-  - .json
-  - .jsonc
-JAVASCRIPT_ES_CONFIG_FILE: eslint-json.config.cjs
-JAVASCRIPT_ES_RULES_PATH: .
-JAVASCRIPT_ES_CLI_EXECUTABLE: [serve/cockpit/web/node_modules/.bin/eslint]
-JAVASCRIPT_ES_ARGUMENTS: "--no-config-lookup --no-warn-ignored --no-error-on-unmatched-pattern"
 
 # EditorConfig — GitHub Actions annotations
 # Ruff handles Python indent; editorconfig-checker false-positives on docstring

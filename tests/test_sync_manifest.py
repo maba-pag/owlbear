@@ -59,7 +59,6 @@ def test_all_consumer_paths_exclude_dev_only_surfaces() -> None:
         ".pre-commit-config.yaml",
         ".vscode",
         "conftest.py",
-        "eslint-json.config.cjs",
         "package-lock.json",
         "package.json",
         "store",
@@ -116,11 +115,10 @@ def test_tracked_projection_roots_have_one_boundary_owner() -> None:
         .stdout.decode()
         .split("\0")
     )
-    candidates = {path.split("/", 1)[0] for path in tracked_paths if path}
+    active_paths = [path for path in tracked_paths if path and (_ROOT / path).exists()]
+    candidates = {path.split("/", 1)[0] for path in active_paths}
     candidates.update(
-        "/".join(path.split("/")[:2])
-        for path in tracked_paths
-        if path.startswith("serve/") and len(path.split("/")) > 1
+        "/".join(path.split("/")[:2]) for path in active_paths if path.startswith("serve/") and len(path.split("/")) > 1
     )
 
     def is_within(path: str, root: str) -> bool:

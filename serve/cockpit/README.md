@@ -68,7 +68,7 @@ repository.
 | Test runner | Vitest `^4.1.10` (`npm test`) |
 | E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
 | Browser output target | Chrome/Edge `123`, Firefox `120`, Safari/iOS `17.5` (native `light-dark()` floor) |
-| CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
+| CSS/HTML lint | Biome `2.5.11`, HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
 The Node development pin is the reproducible local toolchain; the support/build floor is the
