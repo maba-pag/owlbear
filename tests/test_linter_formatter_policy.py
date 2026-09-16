@@ -82,6 +82,16 @@ _P08_JSON_IGNORE_MARKERS = (
     '"megalinter-reports/**"',
     '"store/audit/*.db"',
 )
+_BIOME_DESCRIPTORS = {
+    "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.(js|mjs)$", [".js", ".mjs"]),
+    "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.ts$", [".ts"]),
+    "JSX_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.tsx$", [".tsx"]),
+    "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", [".css"]),
+    "JSON_BIOME": (
+        r"^(\.github/(renovate|sync-manifest)\.json|\.markdownlint(-cli2)?\.jsonc?|package\.json|serve/cockpit/web/(package|tsconfig(\.e2e)?|\.stylelint)\.json)$",
+        [".json", ".jsonc"],
+    ),
+}
 _M04_ALLOWED_ELEMENTS = [
     "agents",
     "boundaries",
@@ -520,6 +530,20 @@ def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
+
+
+def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
+    megalinter = _read_yaml_mapping(_ROOT / ".mega-linter.yml")
+    enabled = megalinter.get("ENABLE_LINTERS")
+    assert isinstance(enabled, list)
+
+    for descriptor, (scope, extensions) in _BIOME_DESCRIPTORS.items():
+        assert descriptor in enabled
+        assert megalinter.get(f"{descriptor}_CLI_LINT_MODE") == "list_of_files"
+        assert megalinter.get(f"{descriptor}_FILTER_REGEX_INCLUDE") == scope
+        assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
+        assert megalinter.get(f"{descriptor}_CONFIG_FILE") == "biome.json"
+        assert megalinter.get(f"{descriptor}_RULES_PATH") == "."
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:

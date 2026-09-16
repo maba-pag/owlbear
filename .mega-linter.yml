@@ -11,15 +11,20 @@ ENABLE_LINTERS:
   - ACTION_ZIZMOR
   - BASH_SHELLCHECK
   - CSS_STYLELINT
+  - CSS_BIOME
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   - HTML_HTMLHINT
   - JAVASCRIPT_ES
+  - JAVASCRIPT_BIOME
+  - JSX_BIOME
+  - JSON_BIOME
   - MARKDOWN_MARKDOWNLINT
   - PYTHON_RUFF
   - PYTHON_RUFF_FORMAT
   - REPOSITORY_GIT_DIFF
   - REPOSITORY_OSV_SCANNER
   - TYPESCRIPT_ES
+  - TYPESCRIPT_BIOME
   - YAML_YAMLLINT
 
 # Allow all fixer-capable linters to apply their standard fixes by default.
@@ -95,6 +100,45 @@ TYPESCRIPT_ES_FILE_EXTENSIONS:
 TYPESCRIPT_ES_CONFIG_FILE: eslint.config.js
 TYPESCRIPT_ES_RULES_PATH: serve/cockpit/web
 TYPESCRIPT_ES_ARGUMENTS: "--max-warnings 0"
+
+# Biome — use the repository-owned biome.json and split descriptors by syntax
+# so MegaLinter does not run the same project-wide Biome check five times.
+JAVASCRIPT_BIOME_CLI_LINT_MODE: list_of_files
+JAVASCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.(js|mjs)$'
+JAVASCRIPT_BIOME_FILE_EXTENSIONS:
+  - .js
+  - .mjs
+JAVASCRIPT_BIOME_CONFIG_FILE: biome.json
+JAVASCRIPT_BIOME_RULES_PATH: .
+
+TYPESCRIPT_BIOME_CLI_LINT_MODE: list_of_files
+TYPESCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.ts$'
+TYPESCRIPT_BIOME_FILE_EXTENSIONS:
+  - .ts
+TYPESCRIPT_BIOME_CONFIG_FILE: biome.json
+TYPESCRIPT_BIOME_RULES_PATH: .
+
+JSX_BIOME_CLI_LINT_MODE: list_of_files
+JSX_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.tsx$'
+JSX_BIOME_FILE_EXTENSIONS:
+  - .tsx
+JSX_BIOME_CONFIG_FILE: biome.json
+JSX_BIOME_RULES_PATH: .
+
+CSS_BIOME_CLI_LINT_MODE: list_of_files
+CSS_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/src/.*\.css$'
+CSS_BIOME_FILE_EXTENSIONS:
+  - .css
+CSS_BIOME_CONFIG_FILE: biome.json
+CSS_BIOME_RULES_PATH: .
+
+JSON_BIOME_CLI_LINT_MODE: list_of_files
+JSON_BIOME_FILTER_REGEX_INCLUDE: '^(\.github/(renovate|sync-manifest)\.json|\.markdownlint(-cli2)?\.jsonc?|package\.json|serve/cockpit/web/(package|tsconfig(\.e2e)?|\.stylelint)\.json)$'
+JSON_BIOME_FILE_EXTENSIONS:
+  - .json
+  - .jsonc
+JSON_BIOME_CONFIG_FILE: biome.json
+JSON_BIOME_RULES_PATH: .
 
 # CSS — use the Cockpit web policy instead of MegaLinter defaults.
 CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/src/.*\.css$'
