@@ -8,7 +8,7 @@
  * @vitejs/plugin-react is mocked to prevent esbuild initialization in jsdom
  * (esbuild's TextEncoder invariant fails in jsdom environment).
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 // Must be hoisted before vite.config import to suppress esbuild initialisation
 vi.mock("vitest/config", () => ({ defineConfig: (c: unknown) => c }));

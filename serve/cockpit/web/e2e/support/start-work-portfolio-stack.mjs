@@ -1,8 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawn } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "../../../../..");
 const fixture = await mkdtemp(join(tmpdir(), "owlbear-work-portfolio-"));

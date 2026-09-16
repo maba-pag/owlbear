@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   editMemory,
-  MemoryMutationError,
   type MemoryEditPayload,
+  MemoryMutationError,
 } from "./memories";
 
 function response(body: unknown, status: number): Response {

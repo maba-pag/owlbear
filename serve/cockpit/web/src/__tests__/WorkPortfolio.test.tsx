@@ -1,4 +1,8 @@
 import {
+  PorscheDesignSystemProvider,
+  PToast,
+} from "@porsche-design-system/components-react";
+import {
   act,
   fireEvent,
   render,
@@ -6,10 +10,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import {
-  PorscheDesignSystemProvider,
-  PToast,
-} from "@porsche-design-system/components-react";
 import { MemoryRouter, useLocation } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
 import type {
@@ -23,16 +23,16 @@ import type {
   DesignWorkDetailResponse,
   PortfolioChangeLifecycleStatus,
   PortfolioOperatingView,
+  PublicationChecksObservationResponse,
   WorkItemAvailableDetailResponse,
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
   WorkItemPublicationReconciliationResponse,
-  PublicationChecksObservationResponse,
 } from "../api/workItems";
 import { completedChangeRecordId } from "../api/workItems";
-import { READINESS_REASON_LABELS } from "../components/workItemPresentation";
 import { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary";
+import { READINESS_REASON_LABELS } from "../components/workItemPresentation";
 import WorkPortfolioPage from "../pages/WorkPortfolioPage";
 
 function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {

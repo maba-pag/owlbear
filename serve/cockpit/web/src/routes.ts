@@ -1,4 +1,4 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from "react";
+import { type ComponentType, type LazyExoticComponent, lazy } from "react";
 
 const WorkPortfolioPage = lazy(() => import("./pages/WorkPortfolioPage"));
 const IdeasPage = lazy(() => import("./pages/IdeasPage"));

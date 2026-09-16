@@ -2,7 +2,7 @@ import {
   PIcon,
   useToastManager,
 } from "@porsche-design-system/components-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 interface CopyCommandProps {
   command: string;

@@ -5,7 +5,7 @@
  * font loading, and shell load emits no Porsche-related console errors.
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
 import {
   trackPageErrors,

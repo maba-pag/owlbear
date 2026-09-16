@@ -1,8 +1,8 @@
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
 import {
-  usePollingFetch,
   type UsePollingFetchOptions,
+  usePollingFetch,
 } from "../hooks/usePollingFetch";
 
 function makeOkFetch(body: unknown = {}) {

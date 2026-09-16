@@ -1,8 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
   "vcs": {
-    "enabled": true,
     "clientKind": "git",
+    "enabled": true,
     "useIgnoreFile": true
   },
   "files": {
@@ -17,18 +17,15 @@
       "serve/cockpit/web/e2e/**/*.tsx"
     ]
   },
+  "linter": {
+    "enabled": true
+  },
   "formatter": {
     "enabled": true,
     "useEditorconfig": true
   },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "preset": "recommended"
-    }
-  },
   "assist": {
-    "enabled": false
+    "enabled": true
   },
   "plugins": [
     "./serve/cockpit/web/plugins/pds-component-wrappers.grit"

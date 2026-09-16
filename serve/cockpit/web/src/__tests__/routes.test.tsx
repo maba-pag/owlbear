@@ -1,6 +1,6 @@
 /** Durable route-contract tests for Cockpit routing. */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { legacyRouteRedirects, routeConfig, routeForPath } from "../routes";
 
 // Mined from #1639 and #1644: route configuration, redirects, lazy loading, and path matching.

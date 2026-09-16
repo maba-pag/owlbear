@@ -1,5 +1,5 @@
 /** Durable regression tests for the PDS CDN property trap. */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mined from #1496: the CDN URL remains the application origin during PDS load.
 

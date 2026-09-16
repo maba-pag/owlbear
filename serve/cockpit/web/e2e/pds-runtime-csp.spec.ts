@@ -5,12 +5,12 @@
  * so the shell works under the script-src 'self' CSP injected by vite.config.ts.
  * API isolation: all /api/* routes stubbed via page.route(); no backend required.
  */
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
 import {
+  type PageErrorTracker,
   trackPageErrors,
   waitForWorkspaceWithoutPageErrors,
-  type PageErrorTracker,
 } from "./support/page-errors";
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────

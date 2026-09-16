@@ -1,5 +1,5 @@
-import { fireEvent, render } from "@testing-library/react";
 import { PorscheDesignSystemProvider } from "@porsche-design-system/components-react";
+import { fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 

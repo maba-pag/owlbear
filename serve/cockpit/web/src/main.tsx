@@ -1,6 +1,6 @@
+import { load } from "@porsche-design-system/components-js";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { load } from "@porsche-design-system/components-js";
 import "./tailwind.css";
 import "./custom-tokens.css";
 import App from "./App";

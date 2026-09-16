@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const runFile = promisify(execFile);

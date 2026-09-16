@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBeforeUnload, useBlocker } from "react-router";
 import {
   PButton,
   PHeading,
   PModal,
 } from "@porsche-design-system/components-react";
-import MarkdownPreview from "../components/MarkdownPreview";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBeforeUnload, useBlocker } from "react-router";
 import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from "../api/ideas";
+import MarkdownPreview from "../components/MarkdownPreview";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 
 type IdeasConflictSnapshot = {

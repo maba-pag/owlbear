@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PButton,
   PButtonPure,
@@ -15,18 +14,19 @@ import {
   PTagDismissible,
   PTextarea,
 } from "@porsche-design-system/components-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import rehypeSanitize from "rehype-sanitize";
 import { getResponseErrorMessage } from "../api/errorMessage";
 import {
   approveMemory,
   deleteMemory,
   editMemory,
-  MemoryMutationError,
-  resolveMemory,
   type MemoriesResponse,
   type MemoryEditPayload,
   type MemoryEntry,
+  MemoryMutationError,
   type MemoryState,
+  resolveMemory,
   type ValidationMessage,
 } from "../api/memories";
 import MarkdownPreview from "../components/MarkdownPreview";

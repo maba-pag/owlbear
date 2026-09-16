@@ -1,32 +1,32 @@
 import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from "react";
-import {
   PButton,
+  PFlyout,
   PHeading,
   PIcon,
   PInputSearch,
-  PFlyout,
   PModal,
   PTag,
 } from "@porsche-design-system/components-react";
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
-  WorkItemApiError,
+  type AbandonedChangeRecord,
+  type CompletedChangeRecord,
   cleanupAbandonedWorkItemChange,
   completedChangeRecordId,
   discardAbandonedTargetSyncAndCleanup,
-  type AbandonedChangeRecord,
-  type CompletedChangeRecord,
   type ReceiptCompletedChangeRecord,
+  WorkItemApiError,
 } from "../api/workItems";
+import { useCompletedChange, useCompletedHistory } from "../hooks/useWorkItems";
 import { useCopyToClipboard } from "./CopyCommand";
 import { SectionCard, StatusChip } from "./DeliveryPrimitives";
-import { useCompletedChange, useCompletedHistory } from "../hooks/useWorkItems";
 import WorkspaceViewHeader, { WorkspaceViewCount } from "./WorkspaceViewHeader";
 
 type FieldValueEvent = {

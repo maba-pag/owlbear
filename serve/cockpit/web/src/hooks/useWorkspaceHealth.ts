@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { getResponseErrorMessage } from "../api/errorMessage";
 import {
   IDEAS_HEALTH_URL,
-  MEMORY_HEALTH_URL,
   type IdeasHealthResponse,
+  MEMORY_HEALTH_URL,
   type MemoryHealthResponse,
 } from "../api/health";
-import { getResponseErrorMessage } from "../api/errorMessage";
 
 export type WorkspaceHealthStatus =
   | "healthy"

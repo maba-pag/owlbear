@@ -1,4 +1,3 @@
-import { type ReactNode, useEffect, useState } from "react";
 import {
   PButton,
   PHeading,
@@ -9,22 +8,25 @@ import {
   PSelectOption,
   PTag,
 } from "@porsche-design-system/components-react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
-  WorkItemApiError,
-  isUnavailableDetail,
   type BackwardMovePreview,
   type DeliveryReadiness,
   type DeliveryRequest,
   type DeliveryRequestResolution,
-  type WorkItemAvailableDetailResponse,
-  type WorkItemDetailResponse,
-  type WorkItemUnavailableDetailResponse,
+  type DeliveryWorkerRole,
+  isUnavailableDetail,
   type PublicationCheckBlockingState,
   type PublicationChecksObservationResponse,
+  WorkItemApiError,
+  type WorkItemAvailableDetailResponse,
+  type WorkItemDetailResponse,
   type WorkItemPublicationPhase,
   type WorkItemStage,
-  type DeliveryWorkerRole,
+  type WorkItemUnavailableDetailResponse,
 } from "../api/workItems";
+import CopyCommand from "./CopyCommand";
+import { SectionCard, StatusChip } from "./DeliveryPrimitives";
 import {
   NEXT_ACTOR_LABELS,
   PROGRESS_STAGE_LABELS,
@@ -35,8 +37,6 @@ import {
   workItemStatus,
   workItemStatusLabel,
 } from "./workItemPresentation";
-import CopyCommand from "./CopyCommand";
-import { SectionCard, StatusChip } from "./DeliveryPrimitives";
 
 type FieldValueEvent = {
   target?: { value?: unknown };

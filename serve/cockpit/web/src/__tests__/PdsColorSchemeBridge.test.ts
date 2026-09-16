@@ -1,10 +1,11 @@
 /** Durable runtime tests for PDS color-scheme class synchronization. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+
 import { readFileSync } from "node:fs";
-import { applyTheme, useTheme } from "../hooks/useTheme";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { applyTheme, useTheme } from "../hooks/useTheme";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

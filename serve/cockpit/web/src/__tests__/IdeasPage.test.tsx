@@ -1,9 +1,9 @@
 /** Durable integration tests for the Ideas Notebook workflow. */
 
-import { Suspense, type ComponentType } from "react";
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, act, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import { type ComponentType, Suspense } from "react";
 import { createMemoryRouter, RouterProvider, useNavigate } from "react-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import IdeasPage from "../pages/IdeasPage";
 import { routeConfig } from "../routes";
 

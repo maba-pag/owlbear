@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import {
-  previewMemoryPurge,
-  purgeMemories,
   type MemoryPurgePreview,
   type MemoryPurgeReceipt,
+  previewMemoryPurge,
+  purgeMemories,
 } from "../api/memoryPurge";
 
 export type MemoryPurgePhase =

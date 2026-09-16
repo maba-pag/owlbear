@@ -1,13 +1,4 @@
 import {
-  Fragment,
-  useDeferredValue,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-} from "react";
-import {
   PButton,
   PButtonPure,
   PFlyout,
@@ -18,6 +9,15 @@ import {
   PSelectOption,
   PTagDismissible,
 } from "@porsche-design-system/components-react";
+import {
+  type CSSProperties,
+  Fragment,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import type {
   ChangeGroupView,
@@ -35,17 +35,17 @@ import {
   designCommand,
   designWorkTitle,
 } from "../components/designWorkPresentation";
+import PortfolioOperatingSummary, {
+  PortfolioHeaderSummary,
+} from "../components/PortfolioOperatingSummary";
+import WorkItemDetail from "../components/WorkItemDetail";
+import WorkPortfolioTable from "../components/WorkPortfolioTable";
+import { WorkspaceHeader } from "../components/WorkspaceHeader";
+import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
 import {
   READINESS_CHECKS_LABELS,
   READINESS_REASON_LABELS,
 } from "../components/workItemPresentation";
-import PortfolioOperatingSummary, {
-  PortfolioHeaderSummary,
-} from "../components/PortfolioOperatingSummary";
-import { WorkspaceHeader } from "../components/WorkspaceHeader";
-import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
-import WorkItemDetail from "../components/WorkItemDetail";
-import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import {
   useAcceptanceReconciliation,
   useDesignWorkDetail,

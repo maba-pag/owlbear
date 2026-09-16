@@ -1,14 +1,14 @@
+import { PButtonPure } from "@porsche-design-system/components-react";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { PButtonPure } from "@porsche-design-system/components-react";
 import {
-  WORKSPACE_HEALTH_LABELS,
   type UseWorkspaceHealthResult,
+  WORKSPACE_HEALTH_LABELS,
   type WorkspaceHealthStatus,
 } from "../hooks/useWorkspaceHealth";
 import { getRailPanelPosition } from "./railPanelPosition";

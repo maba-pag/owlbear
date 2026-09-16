@@ -1,8 +1,8 @@
 import { PHeading, PTag } from "@porsche-design-system/components-react";
 import type { DesignWorkDetailResponse } from "../api/workItems";
 import CopyCommand from "./CopyCommand";
-import MarkdownPreview from "./MarkdownPreview";
 import { designCommand, designWorkTitle } from "./designWorkPresentation";
+import MarkdownPreview from "./MarkdownPreview";
 
 export default function DesignWorkDetail({
   detail,

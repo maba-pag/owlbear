@@ -1,7 +1,7 @@
 import { PLinkPure } from "@porsche-design-system/components-react";
 import { Link, useNavigate } from "react-router";
 import type { ChangeGroupView, WorkItemCardView } from "../api/workItems";
-import { workItemIdentity, type WorkItemIdentity } from "../hooks/useWorkItems";
+import { type WorkItemIdentity, workItemIdentity } from "../hooks/useWorkItems";
 import { StatusChip, WorkRow } from "./DeliveryPrimitives";
 import { PROGRESS_STAGE_LABELS, workItemStatus } from "./workItemPresentation";
 

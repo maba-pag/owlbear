@@ -1,4 +1,4 @@
-import { type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const TRANSFORM_EPSILON = 0.01;

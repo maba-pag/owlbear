@@ -1,14 +1,14 @@
+import { PButtonPure, PIcon } from "@porsche-design-system/components-react";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { PButtonPure, PIcon } from "@porsche-design-system/components-react";
-import { useTheme } from "../hooks/useTheme";
 import type { Theme } from "../hooks/useTheme";
+import { useTheme } from "../hooks/useTheme";
 import { getRailPanelPosition } from "./railPanelPosition";
 
 const THEME_LABELS = {

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { WorkItemNeed } from "../api/workItems";
 import {
-  workItemStatusClassName,
   type WorkItemStatusTone,
+  workItemStatusClassName,
 } from "./workItemPresentation";
 
 interface StatusChipProps {

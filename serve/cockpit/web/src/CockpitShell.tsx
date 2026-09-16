@@ -1,4 +1,3 @@
-import { Suspense, useState } from "react";
 import {
   PButtonPure,
   PFlyout,
@@ -6,11 +5,12 @@ import {
   PIcon,
   PLinkPure,
 } from "@porsche-design-system/components-react";
+import { Suspense, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { routeConfig, routeForPath } from "./routes";
 import ThemeToggle from "./components/ThemeToggle";
 import WorkspaceStatus from "./components/WorkspaceStatus";
 import { useWorkspaceHealth } from "./hooks/useWorkspaceHealth";
+import { routeConfig, routeForPath } from "./routes";
 
 const ICONS = {
   work: "grid",

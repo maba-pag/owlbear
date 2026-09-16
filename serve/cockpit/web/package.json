@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint:biome": "biome lint src e2e",
+    "lint:biome": "biome check src e2e",
     "lint:biome:ci": "biome ci --changed --no-errors-on-unmatched",
     "lint:biome:staged": "biome check --staged",
     "sync:pds": "node scripts/sync-pds-assets.mjs",
