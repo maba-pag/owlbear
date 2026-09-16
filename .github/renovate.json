@@ -126,6 +126,13 @@
       "groupName": "MegaLinter declarations"
     },
     {
+      "description": "Update local Biome only with MegaLinter's bundled Biome",
+      "matchPackageNames": ["@biomejs/biome", "oxsecurity/megalinter"],
+      "matchManagers": ["npm", "custom.regex", "github-actions"],
+      "groupName": "Biome and MegaLinter",
+      "minimumGroupSize": 2
+    },
+    {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",
       "matchManagers": ["npm"],
       "matchPackageNames": [
