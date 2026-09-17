@@ -129,7 +129,9 @@ The plan must contain:
    existing owners to reuse, explicit exclusions and unresolved decisions.
 2. **Phases:** exact IDs, dependency order, editable paths, required exports/consumer companions,
    positive/negative scenarios and runnable proof commands. Separate narrow inner-loop checks from
-   justified closeout checks, with expected runtime where known. Keep tests with the behavior they prove.
+   justified closeout checks, with expected runtime where known. For each phase, assess complexity/
+   uncertainty and impact if wrong; recommend an implementation tier and review model with a short
+   reason using Model Selection below. Keep tests with the behavior they prove.
 3. **Progress:** for each phase, implementation revision, actual proof, review reference and remaining
    work. Keep specification approval separate from worker-written progress.
 4. **Verification gaps:** check/claim, reason unrun, evidence available, responsible environment and
@@ -161,7 +163,9 @@ or proof to fit the clock. Split an oversized PR only at a reviewed coherent bou
 
 End with the phase, observed code revision, actual checks, unresolved findings/gaps and **one short
 copy-ready next request** using the prompts below. The recommendation does not dispatch or authorize
-anything. Use plain status: ready for review, partial, or blocked. "Ready for review" can have recorded
+anything. Beside the request, give the recommended next model and reasoning depth with one reason;
+keep those choices outside the copied prompt. Use plain status: ready for review, partial, or blocked.
+"Ready for review" can have recorded
 external gaps; it is not a merge approval or permission to advance despite missing critical proof.
 
 On interruption, inspect published commits, the package record and actual test/review evidence.
@@ -371,6 +375,54 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 | D08-H | Host-only: actual VS Code/macOS/managed-browser journey, fresh-session handoffs and copy-based upgrade rehearsal. Stop before live activation pending explicit user authorization. |
 
 ## Operator Quick Start
+
+### Model Selection
+
+These are starting recommendations for the phase scopes in this guide, following the programme's
+three tiers. The package planner must refine them for its actual scope, including any split phases.
+If an approved package plan uses different phase boundaries, use its reasoned assessment rather than
+matching letters blindly. A phase ID or short diff alone does not establish complexity.
+
+| Tier | Manual model choice | Reasoning-depth starting point |
+| --- | --- | --- |
+| T3: critical or unresolved | GPT-6 Astra | High if offered; otherwise the model's default. |
+| T2: bounded engineering | Claude Opus 5 | Default; raise depth for a concrete difficult local problem. |
+| T1: settled mechanical work | GPT-5.6 Luna | Default; maximum depth is not needed just because it is available. |
+
+Depth labels vary by model and entry point; these are cost-aware suggestions, not measured quality
+guarantees. Higher depth is not a substitute for the appropriate tier. A strong plan does not turn
+authorization, custody, privacy or migration decisions into mechanical implementation.
+
+| Phase(s) | Complexity / uncertainty | Impact if wrong | Default implementation |
+| --- | --- | --- | --- |
+| D03-P through D08-P | High: settle the next package's contracts and proof | High: errors propagate into dependent phases | Astra |
+| D03-A | High: exclusion, recovery and restart interleavings | Critical: replacement of a live writer or lost custody | Astra |
+| D03-B | Medium if retry identity/budgets are fully specified | High: repeated effects or an unrecoverable wait | Opus; Astra if policy/identity remains unresolved |
+| D03-C | High: preservation and partial-failure recovery | Critical: lost or exposed work | Astra |
+| D03-D | Medium: bounded read-only diagnosis | High if corrupt input is misclassified as safe | Opus under the settled diagnostic contract |
+| D03-E | Medium: adapter and controller wiring | High: incorrect recovery dispatch | Opus; no new recovery semantics |
+| D04-A, D04-B | High: coherent activation and evidence applicability | Critical: inconsistent authority or false acceptance | Astra |
+| D04-C | Medium: consumers of approved revision contracts | High: wrong revision or request handoff | Opus |
+| D05-A | High: approval identity and provider effects | Critical: unapproved or duplicate merge | Astra |
+| D05-B | Medium under settled server authorization | High: stale or misleading confirmation | Opus; Astra for any new authorization decision |
+| D06-A, D06-B | High: provenance, resource ownership and private inputs | Critical: secret disclosure or false confirmation | Astra |
+| D06-C | Medium under an exact runner/resource contract | High: wrong resource cleanup or misleading proof | Opus |
+| D06-D | Low only for supplied state/copy rendering | Low only with no input, privacy or lifecycle decisions | Luna; otherwise Opus or Astra for the newly involved boundary |
+| D07-A, D07-B | High: migration, interrupted recovery and restart | Critical: state loss or incompatible execution | Astra |
+| D07-C | Medium under the tested installation contract | High: incorrect installed version or startup behavior | Opus |
+| D08-A | Medium for evidence collection/docs using approved test oracles | High: missed integration gap | Opus; Astra owns new oracles and final acceptance judgment |
+| D08-H | High: actual host rehearsal and readiness judgment | Critical: unsafe live transition | Astra; real host only, no automatic activation |
+
+**Review:** use a fresh Opus review for Astra-written plans/code, and an Astra review for
+safety-relevant Opus implementation. Luna's mechanical work needs at least an Opus review. Final
+assembled judgment needs critical-level scrutiny and an independent different-family review;
+choosing a reviewer model alone does not establish that the required review was performed.
+
+**Repair/resume:** normally keep the implementation tier. Escalate if a finding reveals unresolved
+contracts or greater impact; do not increase model cost merely because the previous session timed out.
+Workers report the reason and stop before crossing that new boundary; the user selects the next model.
+
+### Launch and Continue
 
 1. Have the local implementation owner finish/review D02 and publish `dev` plus this guide. Cloud
    workers cannot see unpushed source or local chats. Run a bounded cloud pilot before relying on
