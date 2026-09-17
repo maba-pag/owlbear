@@ -678,6 +678,9 @@ plan differs. Secret scanning passed. Markdownlint is unavailable; no Markdown l
 No proposed implementation tests were run or claimed to exist or pass. The final repair
 commit is identified by the PR publication history; a later reviewer must review that published head,
 not reuse the earlier candidate's verdict.
+`parallel_validation` was invoked on repair checkpoint `558ad949fd1e7030214ae4308d498994cfc4c706`:
+CodeQL skipped the documentation-only change; automated review remained unavailable because its
+configured model was absent. No automated review pass or independent re-review is claimed.
 
 ### Gaps and decisions
 
