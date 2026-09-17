@@ -61,7 +61,7 @@ unknown corruption into a valid-looking record, or treat an existing hash as pro
 | [Finalization reports](../../serve/delivery/src/owlbear_delivery/finalization_reports.py) | Reports are bounded structural diagnostics, explicitly not authenticated proof. Current schema rejects raw commands/logs and maintained-check paths. Keep that privacy distinction when adding proof-mutation evidence. |
 | [Projection](../../serve/delivery/src/owlbear_delivery/work_items.py) and application readiness | Preserve a single readiness basis for cards/acquisition. Add typed recovery/backoff/exhaustion rather than infer readiness in MCP, HTTP or agents. |
 | [State publication](../../serve/delivery/src/owlbear_delivery/delivery_state.py), [branch publication](../../serve/delivery/src/owlbear_delivery/change_publication.py), [draft PR](../../serve/delivery/src/owlbear_delivery/draft_pull_request.py) | Reuse exact owner intents/receipts and readback. No generic retry of a provider mutation whose result is unknown. Public snapshots must not acquire private preservation contents or host termination credentials. |
-| [Tools package](../../serve/tools/pyproject.toml) | Place the offline entry here, in the consumer-distributed tools boundary. Existing `delivery_config.py` imports Delivery; `diagnostics.py` imports the application. Neither is a safe offline bootstrap import. `owlbear_tools.__init__` is currently inert. |
+| [Tools package](../../serve/tools/pyproject.toml) | Place the offline entry here, in the consumer-distributed tools boundary. Existing `owlbear_tools/delivery_config.py` imports Delivery; core `owlbear_delivery/diagnostics.py` imports the application. Neither is a safe offline bootstrap import. `owlbear_tools.__init__` is currently inert. |
 | [MCP](../../serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py), [HTTP](../../serve/cockpit/src/owlbear_cockpit/routes/target_work.py), [continuation workflow](../../share/skills/w-orchestration/SKILL.md) | Extend strict existing adapters and mechanical dispatch; no transport-owned recovery decisions. The existing `/continue-change` entry already preserves failed custody. |
 
 Important retained states in the inspected source:
@@ -217,6 +217,8 @@ under `recovery-receipts/<recovery_id>/preservation/`; do not assume `git add` p
 attributes/clean filters or line-ending conversion apply. Raw preservation is authoritative;
 existing attempt/quarantine refs may supplement it only for already privacy-qualified content.
 No automatic remote publication or inclusion in `DeliveryStateSnapshot`.
+Create private directories/files with owner-only permissions; no automatic deletion/garbage
+collection of preserved evidence in D03. Public receipts expose opaque references, not content.
 
 Supported v1 inventory: regular/binary files, deletions, rename source/destination, executable modes,
 and symlink text without following links. Retain raw index bytes and HEAD/ref metadata; reject
@@ -246,6 +248,38 @@ repair creates a new candidate, invalidates old exact-head finalization through 
 owners, and requires fresh cumulative independent review. Fix a mutating proof procedure before
 rerunning it; do not alternate restore/formatter indefinitely. Source defects remain Builder work;
 semantic gaps return to Designer/user. No weakened tests or acceptance exemptions.
+
+#### Completed-outcome Builder repair
+
+Current `claimable_outcome_ids`/`claimable_task_ids` exclude completed work, and
+`prepare_review_repair` requires an existing successful finalization: neither already supplies the
+failed-before-proof Builder route. C must add one fenced runtime operation for that route rather
+than ask an unclaimed Builder to edit or use an administrative move that erases prior results.
+
+For a reproduced local finding with one proven owning outcome/task, the engine derives one immutable
+`DeliveryTaskDefinition` from that task's admitted maintained surfaces, commitments, constraints,
+exclusions and proof boundaries, narrowed to the defect. Append the repair task with an
+episode/attempt-bound ID and dependencies on the preserved completed task results; retain every old
+task/result unchanged and reopen only that outcome to `implementation`. Bind the derivation and
+original continuation action in the recovery intent. No arbitrary caller-authored task or broadened
+scope. If the owning scope cannot be established, return a bounded planning/design attention rather
+than choosing the first outcome or pretending the repair is dispatchable.
+
+Publish the repair-task addition, exact finalizer/failed-claim release and recovery receipt in the
+same fenced transaction. The existing `activate_claim`, `show_build_context`, `submit_result` and
+independent exact-commit review then carry that task. Preserve the failure episode when the outcome
+completes again; acceptance of an unrelated repair task does not prove the original failed check.
+The original action resumes only after the repair result and required review, with the failed
+whole-Change check still required. Downstream completed receipts remain historical exact-head
+evidence; they are not automatically proof of the new candidate.
+
+If successful finalization/publication authority already exists, use the existing draft/readback and
+invalidation owners before admitting the repair; a failed draft transition admits no task. If proof
+failed before any successful finalization, no fictitious invalidation ID or provider prerequisite is
+created. Reject merged/terminal Changes. C's proof must include both branches, duplicate task
+publication after restart, preserved prior results and a semantic/out-of-scope finding rejection.
+Include a completed downstream outcome during repair/restart: its old receipt stays intact but
+cannot certify the repaired candidate or bypass the required whole-Change proof.
 
 ### D. Offline diagnosis
 
@@ -487,12 +521,31 @@ Closeout, split into bounded selections:
 
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
-| D03-P | No product revision; source inspected at `96f21ec5d87de2a8003d4010281fc4dc47b7d645` | Reading route and published D02 acceptance/source inspected; plan validation/review pending below | Publish draft, review specification; stop |
+| D03-P | Plan checkpoint `0fbd3b19745c6d796dc482d9053233ea48b27acf` plus reviewed documentation refinements; no product revision; source inspected at `96f21ec5d87de2a8003d4010281fc4dc47b7d645` | Reading route/published D02 acceptance inspected; whitespace and secret scan passed; independent specification review and re-review PASS | Publish draft for specification approval; stop |
 | D03-A | Not started | None | Exclusion and recovery reference path |
 | D03-B | Not started | None | Durable budgets/backoff |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
+
+### D03-P verification record
+
+- Scope check: only this plan is changed; no product, programme or live-state edits.
+- `git diff --no-index --check` on the new file and committed `git diff HEAD^ HEAD --check` passed.
+  Linked files/headings and named existing test nodes were inspected against source; new files and
+  test selections are labeled planned. No Markdownlint executable was available; no lint pass is claimed.
+- Secret scanning passed for the plan before publication.
+- Independent read-only specification review: `d03-plan-review`, Claude Opus 4.8, returned PASS on
+  the initial plan with one non-blocking source-attribution correction; the core diagnostics package
+  is now qualified explicitly. Its second review returned PASS on the completed-outcome repair
+  clarification and privacy refinements against the working diff from the plan checkpoint. The
+  non-blocking recommendation to test a completed downstream outcome during repair/restart is
+  explicit in C. No unresolved specification finding; user specification approval remains pending.
+- `parallel_validation` was invoked on plan checkpoint `0fbd3b19745c6d796dc482d9053233ea48b27acf`.
+  CodeQL skipped this documentation-only change. Its automatic review component could not run
+  because its configured model was absent from the model registry; “no comments” is not a review
+  pass. The independent specification review is the available substitute, not a claim that the
+  unavailable component ran. Product tests/builds are intentionally unrun for P.
 
 ### Gaps and decisions
 
