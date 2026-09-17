@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-A: implementation checkpoint with focused proof; independent implementation review pending.**
+**D03-A: ready for review at source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`; external verification gaps remain.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -635,7 +635,7 @@ Closeout, split into bounded selections:
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
-| D03-A | Resumed `ec392dfa91790bd270378e550ab6ed1ca01f1959`, implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c`; coordinating session assigns publication revision | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up | Independent implementation review and any findings remain; no self-acceptance or B authorization. Actual host integration remains unavailable. |
+| D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
 | D03-B | Not started | None | Durable budgets/backoff |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
@@ -983,6 +983,31 @@ uv run --locked pytest -n 1 -m 'not api and not model and not e2e' \
 test passed (0.074 s / 0.055 s wall). `git diff --check` passed. Owned disposable pytest directories
 were cleaned; restored dependencies/tooling remain available to the coordinating reviewer.
 
+#### Published source review and validation
+
+The coordinating session published the resume as
+`4dff7c0421aca9b0f84330c4fc1c52689158bbb0`. Independent read-only Claude Opus 5 reviewer
+`d03-a-audit` reviewed the interrupted A implementation and resumed changes, then confirmed its
+consolidated verdict against that exact published source: **no blocking in-scope defects**.
+The evidence-evolution finding was resolved by immutable-record adoption and monotonic verified
+replay. Two later concerns were withdrawn after checking the approved A boundary: executable
+public recovery is deliberately deferred, and unverifiable ongoing exclusion must fail closed.
+Additional finalizer/ready restart tests cover the internal route without enabling a public one.
+The reviewer did not run tests or substitute its reading for automated security checks.
+
+Secret scanning passed across the cumulative A paths and again on the six resumed paths before
+publication. `parallel_validation` ran on the published source with a **non-trivial** CodeQL
+assessment. Its automated reviewer could not run because the configured model was unavailable;
+the wrapper's success label is **not a review pass**. CodeQL **timed out** and explicitly prohibited
+another attempt in this environment. Neither check is claimed to have passed. External verification
+must cover those outstanding gates; the successful independent review does not waive them.
+The final progress-only documentation commit leaves this reviewed source unchanged.
+
+Non-blocking follow-up notes: historical exclusion identities are reverified after each restart
+rather than pruned on closure; their bound matches the recovery-intent limit. E must preserve these
+constraints when exposing its approved public route. No B–E implementation or live activation was
+started.
+
 ### Gaps and decisions
 
 | Gap | Available evidence / reason unrun | Owner/environment and blocking effect |
@@ -995,7 +1020,8 @@ were cleaned; restored dependencies/tooling remain available to the coordinating
 | External CI at interrupted head | Coordinating session inspected implementation run `35219983240`: cancelled, zero failed jobs. Source/agent/Cockpit runs at `ec392dfa91790bd270378e550ab6ed1ca01f1959` are `action_required` with no jobs, including source run `35225758084` | Repository/integration owner must obtain completed external checks for the eventual review head. No external acceptance is inferred, and no CI policy/protection change was made. |
 | Actual host workflow/stdio and live activation | Not exercised by planning or in-process adapters | D08-H / user-controlled host acceptance; no service start or activation here. |
 | Repair re-review | Independent Claude Opus 5 `d03-p-prerequisite` PASS supplied by coordinating session on approved repaired plan | Prerequisite satisfied; separate user approval recorded above. |
-| D03-A independent implementation review | Positive authority/reference paths and restart guard are implemented with focused proof above | Coordinating session must obtain independent review and resolve findings before A acceptance or B. No worker-written acceptance is claimed. |
+| D03-A independent implementation review | Claude Opus 5 `d03-a-audit` found no blocking in-scope defects at `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`; original evidence-evolution finding resolved | Review prerequisite is present; this is not package acceptance, merge approval or authorization to start B. |
+| Automated review and CodeQL | Automated review model unavailable; CodeQL timed out at the published source and prohibited a repeat attempt here | External verification/integration owner must obtain the missing checks before package merge. No security-scan pass or waiver is inferred. |
 | Existing workflow-registry test mismatch | Baseline orchestrator expected-tool set omits two already-granted D02 continuation tools | Coordinating/integration owner; not hidden by skips or modified role permissions. |
 
 There is no new product permission request to resolve during planning: unavailable exclusion fails
@@ -1003,5 +1029,5 @@ closed under the already required policy. A future request to release unverifiab
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-**Next request:** `Review D03-A on this PR at the newly published implementation checkpoint.`
+**Next request:** `Review D03-A using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.`
 This recommendation does not start B, approve a merge, waive host proof or authorize live activation.
