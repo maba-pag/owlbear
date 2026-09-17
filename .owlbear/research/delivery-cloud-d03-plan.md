@@ -6,12 +6,13 @@
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 Only this file is changed by D03-P. The programme and shared governance remain unchanged.
 
-- Inspected checkout head: `96f21ec5d87de2a8003d4010281fc4dc47b7d645`, branch `copilot/d03-p`.
-- Publication target: one draft package PR against `dev`; no existing PR for this exact head branch
-  was returned by GitHub during planning. Subsequent phases belong on that PR.
-- Observed remote `dev`: `fd0dec2aaca7831532505573c4d348eaa9012dbb`. This is the observed target tip,
-  **not** the checkout head or an asserted PR merge base. The PR does not yet exist at this writing;
-  its eventual comparison base must be obtained from the platform. Do not rebase or merge in D03-P.
+- Original source inspection: `96f21ec5d87de2a8003d4010281fc4dc47b7d645`, branch `copilot/d03-p`.
+- Published package: draft [PR #326](https://github.com/maba-pag/owlbear/pull/326), targeting `dev`.
+  Subsequent phases belong on that PR; do not create another package PR.
+- At repair start, checkout and reviewed PR head were
+  `466b5ea50e8d9569c0e4295941a05b4fb0e84134`; GitHub reported comparison target
+  `dev@fd0dec2aaca7831532505573c4d348eaa9012dbb`. These are distinct from the original inspected
+  source and from a computed Git merge base. Do not rebase or merge in D03-P.
 - D02 prerequisite: accepted source `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806` and acceptance record
   `e45ea3e4bc4e6f7456af8c8ac3c82313a36a3764` are in GitHub's published `dev` history. The checkout
   contains the [accepted checkpoint](change-continuation-delivery-redesign.md#d02-accepted-checkpoint-2026-09-14)
@@ -220,6 +221,40 @@ No automatic remote publication or inclusion in `DeliveryStateSnapshot`.
 Create private directories/files with owner-only permissions; no automatic deletion/garbage
 collection of preserved evidence in D03. Public receipts expose opaque references, not content.
 
+**Raw-index owner and v1 boundary:** C adds descriptor-backed capture to `ChangeWorkspaceManager`;
+the existing temporary quarantine index is not the managed index. Resolve the index using
+`git rev-parse --path-format=absolute --git-path index` in the exact registered worktree. Resolve
+that worktree's administration directory and common directory through Git (`--absolute-git-dir`
+and `--git-common-dir` with absolute path formatting), not a constructed administrative path.
+Reject inherited Git repository/worktree/index/object-directory overrides for these reads; no
+caller-supplied index path or `GIT_INDEX_FILE` may select the evidence.
+
+The managed index is outside the worktree content root. Permit only the exact Git-resolved `index`
+file directly within that registered worktree's Git-resolved administration directory, itself
+verified against the registered repository/common directory. Pin directory descriptors and verify
+the worktree registration, directory identities and Git-resolved paths again before applying any
+proposal. Reject symlinked ancestors/files, nonregular or multiply linked index files, path swaps,
+missing index and an existing index lock; do not delete a lock or initialize/refresh the index.
+Use read-only Git inventory with optional locks disabled and no external filters/textconv.
+
+V1 supports only a self-contained full index. Detect split-index dependencies using Git's
+`--shared-index-path` and sparse-index entries with `ls-files --sparse --stage -z`; either produces
+containment, not index expansion or conversion. Capture all ordinary stage/mode/object/path entries
+using `ls-files --stage -z` and compare staged state to the exact HEAD. Reject staged/unmerged content
+before copying raw index data. Index paths/extensions may contain private metadata: the entire raw
+index, not merely changed paths, must pass the same privacy policy before owner-only preservation.
+Unknown extensions whose privacy/independence cannot be established remain contained. The index
+counts against the existing per-file/total preservation limits; never include its bytes or entries
+in public receipts, Git objects or logs.
+
+Read raw bytes from the pinned descriptor, recording content digest and file/directory identity;
+check descriptor metadata and the raw digest again around inventory and before every restoration
+step. Disable optional Git index refreshes throughout recovery. V1 restoration changes only selected
+worktree content and **never rewrites the index**; therefore the raw index must remain exactly the
+recorded preimage on replay, even if Git would consider a different index semantically equivalent.
+Any index drift retains custody and preserved evidence without restoring a saved index over newer
+staging. Raw capture is recovery evidence, not an authorization to modify Git administration.
+
 Supported v1 inventory: regular/binary files, deletions, rename source/destination, executable modes,
 and symlink text without following links. Retain raw index bytes and HEAD/ref metadata; reject
 unmerged or pre-existing staged content before mutation. Refuse external symlink traversal, special
@@ -338,6 +373,30 @@ The selections below are inner-loop commands once their planned tests exist. Do 
 pytest, workspace test aggregate, MegaLinter, `quality`, or broad autofix. Runtime for these new
 selections is **unmeasured**; record actual duration on first use rather than copying D02 totals.
 
+### Mandatory same-phase companions
+
+- **Central mutation authority (A/B/C):** every added or changed frontier-writing runtime operation,
+  including C's repair-task/reopen operation, must participate in `_NORMAL_CHANGE_MUTATIONS` and
+  invoke `_require_change_mutable` under the existing policy. Settle any permitted attention state
+  explicitly in that owner; no recovery exemption or direct transaction side door. The introducing
+  phase owns necessary additions to `tests/test_delivery_worktree_authority.py`, without weakening
+  existing assertions. Its focused proof is
+  `uv run --locked pytest /home/runner/work/owlbear/owlbear/tests/test_delivery_worktree_authority.py::test_runtime_frontier_writers_use_the_central_mutability_policy -q -n 1 -m 'not api and not model and not e2e'`.
+  A/B run this when changing frontier mutation behavior; C must run it for the new reopen operation.
+- **Workspace authority (A/C):** when touching registration/removal paths, run the existing
+  `test_worktree_registration_has_only_named_lifecycle_callers` and
+  `test_worktree_removal_has_only_named_cleanup_caller` nodes in that same file. C's index work
+  must run `test_delivery_sources_have_no_git_admin_artifact_path`. No allowlist widening just to
+  bypass ownership, and no raw administrative paths in production code or workflow instructions.
+- **Readiness mirrors (any introducing phase):** adding a reason/action/status or changing a public
+  readiness field requires the corresponding `serve/cockpit/web/src/api/workItems.ts` update in
+  that phase, not deferred to E. Its editable companions are the existing readiness consumers
+  `pages/WorkPortfolioPage.tsx`, `components/WorkItemDetail.tsx` and
+  `__tests__/WorkPortfolio.test.tsx` beneath that frontend source root. Add a focused parity assertion
+  for backend reason values versus the TypeScript union to `tests/test_cockpit_boundary.py`, and
+  render the newly introduced states in the component test. Use the scoped frontend test/build
+  commands in E and the new parity node in the introducing phase; do not repeat unchanged proof.
+
 ### D03-A — Exclusion and exact recovery reference path
 
 **Editable sources:** `serve/delivery/src/owlbear_delivery/{recovery.py,portfolio_application.py,
@@ -349,10 +408,45 @@ is necessary, with its owning test. Tests: owning application/workspace/runtime 
 
 Export versioned recovery intent/result/evidence-reference contracts and map core readiness together.
 No registered executable recovery route yet; current public adapters must remain able to serialize
-the unchanged safe fallback. Include closure evidence capture at the issuing boundary; never make
+the bounded rejection described below. Include closure evidence capture at the issuing boundary; never make
 existing D02 identity strings into authentication. Close known finalizer/claim failures and one
 interrupted engine reference path only when both exclusion and effect reconciliation are proven.
 Dirty or damaged unknown state stays contained pending C/D.
+
+**Intermediate public contract (A through D):** retain existing request shapes to produce a truthful
+bounded result, not successful recovery from an assertion. `recover_claim`, `repair`/`repair_change`
+with a proposal, and legacy `recover_integration_repair_claim` must reject release unless the
+engine-configured owner independently verifies exact closure/exclusion and all recovery fences.
+`confirmed_lost=true` never contributes evidence, including for non-Builder/legacy claims; a missing
+flag is not an alternative release route. A's default-unavailable owner therefore permits **no**
+public claim release through these forms. An already completed exact recovery may replay its verified
+receipt without another release. Read-only diagnosis and other unaffected valid operations remain
+available. Expiry/acquisition and retry transitions cannot bypass this decision.
+
+For a syntactically valid request without verified evidence, raise an engine-owned
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` conflict, mapped to HTTP 409 and the existing MCP diagnostic
+envelope with `retry_safe: false`. State that custody/files are unchanged and supported host evidence
+is required; neither transport retries nor converts it into “recovered”. Invalid input keeps existing
+validation behavior. Add the specific classification before generic runtime-conflict handling.
+No new executable public recovery operation is enabled by A.
+
+A's required editable companions are core `diagnostics.py`, MCP `target_models.py`/`target_server.py`,
+Cockpit `target_models.py`/`routes/target_work.py`, and `share/skills/w-orchestration/SKILL.md`,
+`share/agents/{orchestrator,repairer}.agent.md`. Remove instructions to assert `confirmed_lost=true`
+as evidence in the same phase that removes its meaning. Update existing frontend confirmation
+wording in `api/workItems.ts` and its corresponding Work detail/portfolio consumers so it cannot
+promise that user confirmation stops a worker. Reuse the frontend paths in the mandatory companions
+above; no broader role grants or new confirmation UI.
+
+Add A tests in `serve/delivery-mcp/tests/{test_delivery_adapter.py,test_target_server.py}`,
+`tests/test_cockpit_work_items.py` and `tests/test_agent_ecosystem_validation.py`: invoke the actual
+core with an unavailable/unknown host-evidence owner through each registered recovery route and
+assert the same non-retryable rejection, unchanged claim/writer/index/content, and no provider effect.
+Cover legacy Planner, Builder and Integration identities, read-only `repair` diagnosis versus rejected
+proposal application, exact receipt replay,
+and forged/unknown evidence. Keep invalid-input tests. Name new cases `exclusion_required` and run
+that selection across the three transport test files with the common pytest flags; include affected
+workflow-contract tests and frontend copy tests at A closeout, not only E.
 
 **First discriminating check:** a controlled worker continues writing after lease expiry while a
 second application attempts recovery. It must remain the only owner; after a supported close
@@ -424,6 +518,12 @@ foreign, secret-like, root/path/head/index drift leaves all affected bytes untou
 V08 a zero-exit mutating proof is not pass, and repairs the procedure before rerun; V13 failures
 before/after each preservation, restore and receipt step neither lose data nor falsely free custody.
 New Builder commit rejects old proof; interrupted partial restoration rejects third-party edits.
+Index-specific cases: linked worktree versus main-checkout index isolation; a different staged blob
+from both HEAD and worktree bytes; private paths in an otherwise clean index; inherited Git overrides;
+symlink/lock/split/sparse index containment; same-size raw-index edits between proposal and apply and
+between partial restore and restart. Assert exact raw index bytes remain unchanged on successful
+worktree-only restoration, and newer staging is never overwritten on stale replay. These belong in
+the `nonterminal_recovery` selection below, with the mandatory authority checks above.
 
 Inner loop:
 `uv run --locked pytest /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_change_workspace.py -q -n 1 -k 'nonterminal_recovery' -m 'not api and not model and not e2e'`.
@@ -439,6 +539,11 @@ application tests. Only changed report schema requires its corresponding MCP sel
 `share/prompts/repair-delivery.prompt.md`; `tests/test_package_boundary.py` and
 `tests/test_agent_ecosystem_validation.py` only for this import/prompt contract. No setup, migration
 runner, root tooling, live config or general maintenance framework.
+The new prompt also requires the existing authority tests in `tests/test_delivery_worktree_authority.py`:
+`test_delivery_automation_has_no_special_approval_or_risk_gate`,
+`test_delivery_automation_scan_covers_required_roots` and
+`test_delivery_sources_have_no_git_admin_artifact_path`. D may add a focused prompt assertion there,
+but must preserve the existing scans and constraints.
 
 Implement D's fixed operation and ordinary-session prompt. The entry is distributed through existing
 `serve/tools` and `share` sync scopes; no sync-manifest changes are necessary.
@@ -458,6 +563,8 @@ Closeout runs that focused diagnostic module once, the new offline-boundary test
 `/home/runner/work/owlbear/owlbear/tests/test_agent_ecosystem_validation.py`.
 Direct CLI smoke uses an agent-created disposable root and `python -B` on the new module, with MCP
 unavailable; never point it at live Delivery state during this programme.
+Run the three authority nodes with
+`uv run --locked pytest /home/runner/work/owlbear/owlbear/tests/test_delivery_worktree_authority.py -q -n 1 -k 'delivery_automation_has_no_special_approval_or_risk_gate or delivery_automation_scan_covers_required_roots or delivery_sources_have_no_git_admin_artifact_path' -m 'not api and not model and not e2e'`.
 
 ### D03-E — Registered handoff and cumulative package proof
 
@@ -475,10 +582,14 @@ Ship strict recovery request/result mappings, registrations/annotations and shar
 Keep `repair` the high-level diagnose/apply operation: application discovers exact proposals;
 callers forward Change/proposal and, where supported, opaque owner evidence references. Reject
 caller-authored preservation paths, commands, budgets, effect receipts and stop assertions.
-Retain compatibility of safe existing requests without preserving an unsafe release bypass.
+Keep A's rejection semantics until an exact proposal and independently validated host evidence make
+the new registered recovery contract executable. E adds strict proposal/opaque-reference forwarding
+and positive recovery tests; it must retain A's negative legacy-call tests and remove any remaining
+assertion-based workflow advice. Success compatibility covers verified receipt replay and read-only
+requests, never unverified legacy release.
 Expose one complete `/continue-change` or `/repair-delivery` prompt in readiness; a new UI control
-is unnecessary for U1. If existing frontend strict types/reason tables require a companion, limit
-edits to `serve/cockpit/web/src/{api/workItems.ts,pages/WorkPortfolioPage.tsx,
+is unnecessary for U1. Required frontend mirrors ship with each introducing phase; remaining E
+presentation changes are limited to `serve/cockpit/web/src/{api/workItems.ts,pages/WorkPortfolioPage.tsx,
 components/WorkItemDetail.tsx,__tests__/WorkPortfolio.test.tsx}`, not a UI redesign.
 
 Assembled proof uses real application state and `Client(assemble_target_server(...))`, the existing
@@ -521,7 +632,7 @@ Closeout, split into bounded selections:
 
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
-| D03-P | Plan checkpoint `0fbd3b19745c6d796dc482d9053233ea48b27acf` plus reviewed documentation refinements; no product revision; source inspected at `96f21ec5d87de2a8003d4010281fc4dc47b7d645` | Reading route/published D02 acceptance inspected; whitespace and secret scan passed; independent specification review and re-review PASS | Publish draft for specification approval; stop |
+| D03-P | Reviewed candidate `466b5ea50e8d9569c0e4295941a05b4fb0e84134`; this repair changes only the plan | PR review requested changes; three finding repairs mapped below; prior reviews are historical, not approval of this candidate | Publish repair on PR #326 and request D03-P re-review; stop |
 | D03-A | Not started | None | Exclusion and recovery reference path |
 | D03-B | Not started | None | Durable budgets/backoff |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
@@ -540,12 +651,33 @@ Closeout, split into bounded selections:
   is now qualified explicitly. Its second review returned PASS on the completed-outcome repair
   clarification and privacy refinements against the working diff from the plan checkpoint. The
   non-blocking recommendation to test a completed downstream outcome during repair/restart is
-  explicit in C. No unresolved specification finding; user specification approval remains pending.
+  explicit in C. Those earlier PASS results were superseded by the subsequent PR review below;
+  user specification approval remains pending.
 - `parallel_validation` was invoked on plan checkpoint `0fbd3b19745c6d796dc482d9053233ea48b27acf`.
   CodeQL skipped this documentation-only change. Its automatic review component could not run
   because its configured model was absent from the model registry; “no comments” is not a review
   pass. The independent specification review is the available substitute, not a claim that the
   unavailable component ran. Product tests/builds are intentionally unrun for P.
+
+### D03-P review repair
+
+Controlling [PR review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5713893377):
+Claude Opus 5 reviewed `466b5ea50e8d9569c0e4295941a05b4fb0e84134` against
+`dev@fd0dec2aaca7831532505573c4d348eaa9012dbb` and requested changes. This repair is a proposed
+response, **not** a self-issued re-review pass or implementation approval.
+
+| Finding | Plan repair | Verification required of implementation |
+| --- | --- | --- |
+| 1 — Missing authority-invariant proof (medium) | Mandatory same-phase companions assign central mutation registration/policy and `test_delivery_worktree_authority.py` to A/B/C; C must prove its new reopen operation; D owns the prompt scans. | Exact central-mutability node, applicable workspace-caller nodes and named prompt/admin-path scans; no recovery exemptions. |
+| 2 — Intermediate public handoff (low) | A now defines no-evidence rejection, verified receipt replay, read-only diagnosis, error mapping and same-phase transport/workflow/copy companions. Readiness mirrors/parity proof belong to each introducing phase; E adds positive registered recovery without reviving assertion authority. | A's actual registered MCP/HTTP rejection cases and unchanged-state assertions, workflow/copy checks, and reason-union parity; E retains them alongside supported positive cases. |
+| 3 — Raw-index capture boundary (low) | C names Git-resolved index/admin-directory discovery, independent containment, descriptor capture, override rejection, index privacy/limits, supported full-index boundary and no-index-write replay. | Linked/main index isolation, staged/private/index-layout negatives and exact raw-byte drift before apply/restart; no restoration over newer staging. |
+
+Repair validation: the six named existing authority-test nodes and affected public contracts were
+checked against source; `git diff --check` passed and changed-file inspection confirmed only this
+plan differs. Secret scanning passed. Markdownlint is unavailable; no Markdown lint pass is claimed.
+No proposed implementation tests were run or claimed to exist or pass. The final repair
+commit is identified by the PR publication history; a later reviewer must review that published head,
+not reuse the earlier candidate's verdict.
 
 ### Gaps and decisions
 
@@ -557,12 +689,12 @@ Closeout, split into bounded selections:
 | Offline structure is not semantic integrity | Runtime imports and automatic transaction recovery are deliberately excluded | D's output must label this limit. Unknown corruption remains diagnosed; D07 owns any approved repair. Not a blocker for a truthful read-only entry. |
 | Product tests/build/static checks | D03-P changes documentation only; proposed tests do not yet exist | Intentionally not run in P. Each implementing phase owns its cloud-required checks; external CI retains broad gates. No old counts are a new pass. |
 | Actual host workflow/stdio and live activation | Not exercised by planning or in-process adapters | D08-H / user-controlled host acceptance; no service start or activation here. |
-| Package PR comparison metadata | Head/target tips known, PR not created at initial inspection | Obtain actual comparison metadata after publication; no invented hash or user-supplied hash required. |
+| Repair re-review | Three review findings have proposed plan fixes; no re-review verdict yet | Independent reviewer on PR #326 must review the published repair before specification approval. |
 
 There is no new product permission request to resolve during planning: unavailable exclusion fails
 closed under the already required policy. A future request to release unverifiable D02 workers,
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-**Next request after specification review:** `Implement D03-A using the package plan on this PR.`
+**Next request:** `Review D03-P using the package plan and review-repair record on this PR.`
 This recommendation does not start A, approve a merge, waive host proof or authorize live activation.
