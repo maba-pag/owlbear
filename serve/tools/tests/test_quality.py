@@ -12,7 +12,7 @@ from owlbear_tools.megalinter import MegaLinterImage, megalint
 from owlbear_tools.quality import (
     FixMode,
     _consumer_lint,
-    _is_biome_staged_path,
+    _run_biome,
     _run_cockpit_html,
     _run_named,
     format_eof,
@@ -44,7 +44,7 @@ def test_lint_runs_the_normal_local_suite() -> None:
         ["pre-commit", "run", "shellcheck", "--all-files"],
         ["pre-commit", "run", "actionlint", "--all-files"],
         ["pre-commit", "run", "editorconfig-checker", "--all-files"],
-        ["npm", "run", "lint:biome"],
+        ["node", "serve/cockpit/web/scripts/run-biome-check.mjs", "check", ".", "--write"],
         ["npm", "run", "lint:html"],
     ]
     assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
@@ -80,9 +80,8 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
     precommit_commands = [item.args[0] for item in call.call_args_list if item.args[0][0] == "pre-commit"]
     assert all("--files" in command for command in precommit_commands)
     assert all("README.md" in command for command in precommit_commands)
-    assert [
-        item.args[0] for item in call.call_args_list if item.args[0][:3] == ["npm", "run", "lint:biome:staged"]
-    ] == [["npm", "run", "lint:biome:staged"]]
+    biome_command = next(item.args[0] for item in call.call_args_list if item.args[0][0] == "node")
+    assert biome_command[2:] == ["check", "--staged", "--no-errors-on-unmatched", "--write"]
 
 
 def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
@@ -107,32 +106,33 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
             assert "--all-files" in command
 
 
-def test_lint_cockpit_biome_runs_the_package_lint_script() -> None:
+@pytest.mark.parametrize(
+    ("options", "flags"),
+    [([], ["--write"]), (["--no-fix"], []), (["--unsafe-fix"], ["--write", "--unsafe"])],
+)
+def test_lint_cockpit_biome_forwards_fix_policy(options: list[str], flags: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["lint-cockpit-biome"]),
+        patch.object(sys, "argv", ["lint-cockpit-biome", *options]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         lint_cockpit_biome()
 
-    assert call.call_args.args[0] == ["npm", "run", "lint:biome"]
-    assert call.call_args.kwargs["cwd"] == Path("serve/cockpit/web")
+    assert call.call_args.args[0] == [
+        "node",
+        "serve/cockpit/web/scripts/run-biome-check.mjs",
+        "check",
+        ".",
+        *flags,
+    ]
 
 
-@pytest.mark.parametrize(
-    ("path", "expected"),
-    [
-        (".github/sync-manifest.json", True),
-        ("package.json", True),
-        ("serve/cockpit/web/src/App.tsx", True),
-        ("serve/cockpit/web/src/theme.css", True),
-        (".owlbear/delivery/config.json", True),
-        ("serve/cockpit/web/package-lock.json", True),
-        (".vscode/settings.json", True),
-    ],
-)
-def test_biome_staged_path_matches_the_owned_allowlist(path: str, *, expected: bool) -> None:
-    assert _is_biome_staged_path(path) is expected
+@pytest.mark.parametrize("staged", [False, True])
+def test_biome_formatter_preserves_selection_without_lint_fixes(*, staged: bool) -> None:
+    with patch("owlbear_tools.quality._call", return_value=0) as call:
+        assert _run_biome(staged=staged, fix_mode=FixMode.SAFE, format_only=True) == 0
+    selection = ["--staged", "--no-errors-on-unmatched"] if staged else ["."]
+    assert call.call_args.args[0][2:] == ["format", *selection, "--write"]
 
 
 def test_megalint_runs_as_a_direct_workspace_engine() -> None:
@@ -149,6 +149,10 @@ def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     assert command[:6] == ["docker", "run", "--rm", "--platform", "linux/amd64", "-v"]
     assert "registry.example/megalinter-main:v-current" in command
     assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
+    assert all(
+        f"{descriptor}_BIOME_ARGUMENTS=--unsafe" in command
+        for descriptor in ("CSS", "JAVASCRIPT", "JSON", "JSX", "TYPESCRIPT")
+    )
     assert "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix" in command
     assert "ACTION_ZIZMOR_ARGUMENTS=--fix=all" in command
 
@@ -182,6 +186,7 @@ def test_quality_executes_todo_last() -> None:
     assert executed[-1] == "todo"
     assert executed == [
         "format-python",
+        "format-biome",
         "format-whitespace",
         "format-eof",
         "lint-python",
@@ -356,6 +361,19 @@ def test_text_check_reports_invalid_precommit_exclude(capsys: pytest.CaptureFixt
         format_eof()
 
     assert "Error:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("results", "expected"), [([0, 0], "0"), ([1, 0], "1"), ([0, 1], "1")])
+def test_typecheck_covers_application_and_all_browser_specs(results: list[int], expected: str) -> None:
+    with (
+        patch.object(sys, "argv", ["typecheck-cockpit"]),
+        patch("owlbear_tools.quality._call", side_effect=results) as call,
+        pytest.raises(SystemExit, match=expected),
+    ):
+        typecheck_cockpit()
+    assert call.call_args_list[0].args[0][-1] == "serve/cockpit/web/tsconfig.json"
+    assert call.call_args_list[1].args[0] == ["npm", "run", "typecheck:e2e"]
+    assert call.call_args_list[1].kwargs["cwd"] == Path("serve/cockpit/web")
 
 
 def test_typecheck_reports_missing_runtime(capsys: pytest.CaptureFixture[str]) -> None:

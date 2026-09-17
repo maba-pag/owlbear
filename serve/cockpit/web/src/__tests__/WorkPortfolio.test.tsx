@@ -1,15 +1,5 @@
-import {
-  PorscheDesignSystemProvider,
-  PToast,
-} from "@porsche-design-system/components-react";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { PorscheDesignSystemProvider, PToast } from "@porsche-design-system/components-react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { beforeEach, expect, it, vi } from "vitest";
 import type {
@@ -128,9 +118,7 @@ function changeStatus(
   };
 }
 
-function readiness(
-  overrides: Partial<DeliveryReadiness> = {},
-): DeliveryReadiness {
+function readiness(overrides: Partial<DeliveryReadiness> = {}): DeliveryReadiness {
   return {
     status: "waiting",
     operation: null,
@@ -155,10 +143,7 @@ function readiness(
   };
 }
 
-function unavailableChange(
-  changeId: string,
-  title: string | null = null,
-): DeliveryUnavailableChangeResponse {
+function unavailableChange(changeId: string, title: string | null = null): DeliveryUnavailableChangeResponse {
   return {
     kind: "unavailable",
     change_id: changeId,
@@ -193,23 +178,12 @@ function portfolio(
   const reference = (item: WorkItemCardView) => ({
     change_id: item.change_id,
     item_key: item.item_key,
-    scope:
-      item.scope === "change-publication"
-        ? ("publication" as const)
-        : ("outcome" as const),
+    scope: item.scope === "change-publication" ? ("publication" as const) : ("outcome" as const),
   });
-  const claimed = items
-    .filter((item) => item.activity.state === "working")
-    .map(reference);
-  const queued = items
-    .filter((item) => item.activity.state === "ready")
-    .map(reference);
-  const interventions = items
-    .filter((item) => item.needs === "you")
-    .map(reference);
-  const dependencyWaits = items
-    .filter((item) => item.needs === "dependency")
-    .map(reference);
+  const claimed = items.filter((item) => item.activity.state === "working").map(reference);
+  const queued = items.filter((item) => item.activity.state === "ready").map(reference);
+  const interventions = items.filter((item) => item.needs === "you").map(reference);
+  const dependencyWaits = items.filter((item) => item.needs === "dependency").map(reference);
   const guidance: WorkItemPortfolioResponse["operating"]["guidance"] = [];
   if (interventions.length > 0)
     guidance.push({
@@ -235,15 +209,12 @@ function portfolio(
       change_ids: [...new Set(dependencyWaits.map((item) => item.change_id))],
       work_count: dependencyWaits.length,
     });
-  if (groups.length === 0)
-    guidance.push({ kind: "create-change", change_ids: [], work_count: 0 });
+  if (groups.length === 0) guidance.push({ kind: "create-change", change_ids: [], work_count: 0 });
   return {
     groups,
     totals: {
       total: items.length,
-      complete: items.filter(
-        (item) => item.stage === "completed" && item.scope === "outcome",
-      ).length,
+      complete: items.filter((item) => item.stage === "completed" && item.scope === "outcome").length,
       needs: {
         you: items.filter((item) => item.needs === "you").length,
         dependency: items.filter((item) => item.needs === "dependency").length,
@@ -252,8 +223,7 @@ function portfolio(
       activity: {
         idle: items.filter((item) => item.activity.state === "idle").length,
         ready: items.filter((item) => item.activity.state === "ready").length,
-        working: items.filter((item) => item.activity.state === "working")
-          .length,
+        working: items.filter((item) => item.activity.state === "working").length,
       },
     },
     operating: {
@@ -272,10 +242,7 @@ function portfolio(
   };
 }
 
-function withUnadmittedDesign(
-  data: WorkItemPortfolioResponse,
-  changeId = "design-draft",
-): WorkItemPortfolioResponse {
+function withUnadmittedDesign(data: WorkItemPortfolioResponse, changeId = "design-draft"): WorkItemPortfolioResponse {
   return {
     ...data,
     operating: {
@@ -293,9 +260,7 @@ function withUnadmittedDesign(
   };
 }
 
-function detail(
-  overrides: Partial<WorkItemAvailableDetailResponse["item"]> = {},
-): WorkItemAvailableDetailResponse {
+function detail(overrides: Partial<WorkItemAvailableDetailResponse["item"]> = {}): WorkItemAvailableDetailResponse {
   const publication = overrides.publication && {
     publication_generations: [],
     ...overrides.publication,
@@ -339,9 +304,7 @@ function detail(
   };
 }
 
-type PublicationView = NonNullable<
-  WorkItemAvailableDetailResponse["item"]["publication"]
->;
+type PublicationView = NonNullable<WorkItemAvailableDetailResponse["item"]["publication"]>;
 
 function publicationForChecks(
   phase: "pull-request-draft" | "awaiting-merge" | "ready-for-finalization",
@@ -372,9 +335,7 @@ function publicationForChecks(
   };
 }
 
-function publicationCardForChecks(
-  overrides: Partial<WorkItemCardView> = {},
-): WorkItemCardView {
+function publicationCardForChecks(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
   return card({
     item_key: "publication",
     work_item_id: "change-alpha",
@@ -448,17 +409,14 @@ const receiptCompleted: CompletedChangeRecord = {
   completed_at: "2026-08-11T13:00:00Z",
 };
 
-function abandonedRecord(
-  overrides: Partial<AbandonedChangeRecord> = {},
-): AbandonedChangeRecord {
+function abandonedRecord(overrides: Partial<AbandonedChangeRecord> = {}): AbandonedChangeRecord {
   return {
     schema_version: 1,
     record_kind: "abandoned-change",
     change_id: "change-alpha",
     abandonment_id: "9".repeat(64),
     title: "Abandoned portfolio change",
-    semantic_summary:
-      "Stopped before completion with its terminal evidence retained.",
+    semantic_summary: "Stopped before completion with its terminal evidence retained.",
     outcome_titles: ["Preserve the abandoned Change record"],
     outcome_promises: ["Keep the abandoned Change recoverable for cleanup."],
     prior_stage: "building",
@@ -520,11 +478,7 @@ function response(payload: unknown, status = 200): Response {
 }
 
 function requestUrl(input: RequestInfo | URL): string {
-  return typeof input === "string"
-    ? input
-    : input instanceof URL
-      ? input.toString()
-      : input.url;
+  return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 }
 
 function installFetch() {
@@ -533,32 +487,20 @@ function installFetch() {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = requestUrl(input);
       const method = init?.method ?? "GET";
-      const body =
-        typeof init?.body === "string" ? JSON.parse(init.body) : null;
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
       requests.push({ url, method, body });
 
       if (method === "GET" && url === "/api/work-items") {
-        return portfolioFailure
-          ? response({ detail: "Temporary polling failure" }, 503)
-          : response(currentPortfolio);
+        return portfolioFailure ? response({ detail: "Temporary polling failure" }, 503) : response(currentPortfolio);
       }
-      if (
-        method === "GET" &&
-        url.startsWith("/api/changes/change-alpha/work-items/")
-      ) {
-        if (
-          pendingDetailItemKey !== null &&
-          url.endsWith(pendingDetailItemKey)
-        ) {
+      if (method === "GET" && url.startsWith("/api/changes/change-alpha/work-items/")) {
+        if (pendingDetailItemKey !== null && url.endsWith(pendingDetailItemKey)) {
           await new Promise<void>((resolve) => {
             pendingDetailRelease = resolve;
           });
         }
         return detailFailure
-          ? response(
-              { detail: "Delivery runtime is absent: change-alpha" },
-              409,
-            )
+          ? response({ detail: "Delivery runtime is absent: change-alpha" }, 409)
           : response(currentUnavailableDetail ?? currentDetail);
       }
       if (method === "GET" && url === "/api/design-work/design-draft") {
@@ -573,33 +515,22 @@ function installFetch() {
         }
         return response({
           records: completedRecords,
-          total_count:
-            completedRecords.length + completedHistoryPageRecords.length,
+          total_count: completedRecords.length + completedHistoryPageRecords.length,
           next_cursor: completedHistoryNextCursor,
         });
       }
-      if (
-        method === "GET" &&
-        url.startsWith("/api/work-items/completed?cursor=")
-      ) {
+      if (method === "GET" && url.startsWith("/api/work-items/completed?cursor=")) {
         if (completedHistoryPageFailuresRemaining > 0) {
           completedHistoryPageFailuresRemaining -= 1;
-          return response(
-            { detail: "Next completed history page unavailable" },
-            503,
-          );
+          return response({ detail: "Next completed history page unavailable" }, 503);
         }
         return response({
           records: completedHistoryPageRecords,
-          total_count:
-            completedRecords.length + completedHistoryPageRecords.length,
+          total_count: completedRecords.length + completedHistoryPageRecords.length,
           next_cursor: null,
         });
       }
-      if (
-        method === "GET" &&
-        url.startsWith("/api/work-items/completed/search?")
-      ) {
+      if (method === "GET" && url.startsWith("/api/work-items/completed/search?")) {
         if (completedHistorySearchPending) {
           await new Promise<void>((resolve) => {
             completedHistorySearchRelease = resolve;
@@ -607,43 +538,27 @@ function installFetch() {
         }
         if (completedHistorySearchFailuresRemaining > 0) {
           completedHistorySearchFailuresRemaining -= 1;
-          return response(
-            { detail: "Completed history search unavailable" },
-            503,
-          );
+          return response({ detail: "Completed history search unavailable" }, 503);
         }
         const pageRequest = url.includes("cursor=");
         return response({
-          records: pageRequest
-            ? completedHistorySearchPageRecords
-            : completedHistorySearchRecords,
-          total_count:
-            completedHistorySearchRecords.length +
-            completedHistorySearchPageRecords.length,
+          records: pageRequest ? completedHistorySearchPageRecords : completedHistorySearchRecords,
+          total_count: completedHistorySearchRecords.length + completedHistorySearchPageRecords.length,
           next_cursor: pageRequest ? null : completedHistorySearchNextCursor,
         });
       }
       if (method === "GET" && url.startsWith("/api/work-items/completed/")) {
         const selected =
           completedDetailMismatch ??
-          (completedDetailRecord &&
-          url.includes(completedChangeRecordId(completedDetailRecord))
+          (completedDetailRecord && url.includes(completedChangeRecordId(completedDetailRecord))
             ? completedDetailRecord
-            : completedRecords.find((record) =>
-                url.includes(completedChangeRecordId(record)),
-              ));
-        if (completedDetailNotFound)
-          return response({ detail: "Completion detail was removed" }, 404);
+            : completedRecords.find((record) => url.includes(completedChangeRecordId(record))));
+        if (completedDetailNotFound) return response({ detail: "Completion detail was removed" }, 404);
         if (completedDetailFailuresRemaining > 0) {
           completedDetailFailuresRemaining -= 1;
-          return response(
-            { detail: "Completion detail temporarily unavailable" },
-            503,
-          );
+          return response({ detail: "Completion detail temporarily unavailable" }, 503);
         }
-        return selected
-          ? response(selected)
-          : response({ detail: "Not found" }, 404);
+        return selected ? response(selected) : response({ detail: "Not found" }, 404);
       }
 
       if (method === "POST" && url.endsWith("/publication/checks/observe")) {
@@ -672,31 +587,20 @@ function installFetch() {
           outcomes: [
             {
               change_id: "change-alpha",
-              status: acceptanceReconciliationProviderUnavailable
-                ? "provider-unavailable"
-                : "waiting",
-              code: acceptanceReconciliationProviderUnavailable
-                ? "ERR_DELIVERY_PROVIDER_UNAVAILABLE"
-                : null,
-              detail: acceptanceReconciliationProviderUnavailable
-                ? "GitHub acceptance provider unavailable"
-                : null,
+              status: acceptanceReconciliationProviderUnavailable ? "provider-unavailable" : "waiting",
+              code: acceptanceReconciliationProviderUnavailable ? "ERR_DELIVERY_PROVIDER_UNAVAILABLE" : null,
+              detail: acceptanceReconciliationProviderUnavailable ? "GitHub acceptance provider unavailable" : null,
               completion_id: null,
             },
           ],
         });
       }
-      if (
-        method === "POST" &&
-        mutationFailurePath &&
-        url.endsWith(mutationFailurePath)
-      ) {
+      if (method === "POST" && mutationFailurePath && url.endsWith(mutationFailurePath)) {
         return response(
           {
             detail: {
               code: "ERR_DELIVERY_CONTROL_CONFLICT",
-              detail:
-                "The Delivery operation was rejected while the confirmation was open.",
+              detail: "The Delivery operation was rejected while the confirmation was open.",
               authority: "delivery",
               retry_safe: true,
             },
@@ -745,8 +649,7 @@ function installFetch() {
             {
               detail: {
                 code: "ERR_DELIVERY_ADMINISTRATIVE_MOVE",
-                detail:
-                  "The Delivery frontier changed before the move was applied.",
+                detail: "The Delivery frontier changed before the move was applied.",
                 authority: "delivery",
                 retry_safe: true,
               },
@@ -788,12 +691,8 @@ function installFetch() {
             pendingMutationRelease = resolve;
           });
         }
-        if (url.endsWith("/publication/reconcile"))
-          return response(publicationReconciliationResult);
-        if (
-          url.endsWith("/acceptance/observe") &&
-          acceptanceObservationFailure
-        ) {
+        if (url.endsWith("/publication/reconcile")) return response(publicationReconciliationResult);
+        if (url.endsWith("/acceptance/observe") && acceptanceObservationFailure) {
           return response(
             {
               detail: {
@@ -806,8 +705,7 @@ function installFetch() {
             409,
           );
         }
-        if (portfolioAfterPublication)
-          currentPortfolio = portfolioAfterPublication;
+        if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication;
         if (url.endsWith("/publication/supersede")) {
           if (supersedeFailuresRemaining > 0) {
             supersedeFailuresRemaining -= 1;
@@ -891,32 +789,19 @@ function installFetch() {
 function selectValue(element: Element, value: string) {
   const host = element as HTMLElement & { value: string };
   host.value = value;
-  fireEvent(
-    host,
-    new CustomEvent("change", { detail: { value }, bubbles: true }),
-  );
+  fireEvent(host, new CustomEvent("change", { detail: { value }, bubbles: true }));
 }
 
 function inputValue(element: Element, value: string) {
   const host = element as HTMLElement & { value: string };
   host.value = value;
-  fireEvent(
-    host,
-    new CustomEvent("input", { detail: { value }, bubbles: true }),
-  );
+  fireEvent(host, new CustomEvent("input", { detail: { value }, bubbles: true }));
 }
 
-function namedPdsHost(
-  container: HTMLElement,
-  tagName: "p-input-text" | "p-select",
-  name: string,
-): Element | null {
+function namedPdsHost(container: HTMLElement, tagName: "p-input-text" | "p-select", name: string): Element | null {
   return (
-    Array.from(
-      container.querySelectorAll<HTMLElement & { name?: string }>(tagName),
-    ).find(
-      (element) =>
-        element.name === name || element.getAttribute("name") === name,
+    Array.from(container.querySelectorAll<HTMLElement & { name?: string }>(tagName)).find(
+      (element) => element.name === name || element.getAttribute("name") === name,
     ) ?? null
   );
 }
@@ -1065,11 +950,7 @@ it("summarizes all current Change phases and nonzero operating states", () => {
       }),
     ],
     draft_design_change_ids: ["legacy-draft", "legacy-draft-2"],
-    design_required_change_ids: [
-      "legacy-reentry",
-      "legacy-reentry-2",
-      "legacy-reentry-3",
-    ],
+    design_required_change_ids: ["legacy-reentry", "legacy-reentry-2", "legacy-reentry-3"],
     claimed: [outcome],
     queued_for_orchestration: [publication],
     interventions: [outcome],
@@ -1085,23 +966,12 @@ it("summarizes all current Change phases and nonzero operating states", () => {
   const onNeedsFilter = vi.fn();
 
   render(
-    <PortfolioHeaderSummary
-      operating={operating}
-      totals={totals}
-      needsFilter="you"
-      onNeedsFilter={onNeedsFilter}
-    />,
+    <PortfolioHeaderSummary operating={operating} totals={totals} needsFilter="you" onNeedsFilter={onNeedsFilter} />,
   );
 
-  expect(
-    screen.getByRole("region", { name: "Portfolio inventory" }),
-  ).toHaveTextContent("4Changes2Design·2Delivery");
-  expect(screen.getByRole("region", { name: "Attention" })).toHaveTextContent(
-    "1Needs you1Blocked",
-  );
-  expect(screen.getByRole("region", { name: "Activity" })).toHaveTextContent(
-    "1Running1Ready",
-  );
+  expect(screen.getByRole("region", { name: "Portfolio inventory" })).toHaveTextContent("4Changes2Design·2Delivery");
+  expect(screen.getByRole("region", { name: "Attention" })).toHaveTextContent("1Needs you1Blocked");
+  expect(screen.getByRole("region", { name: "Activity" })).toHaveTextContent("1Running1Ready");
 
   const needsYou = screen.getByRole("button", {
     name: "Filter to 1 work item: Needs you",
@@ -1161,15 +1031,10 @@ it("classifies Design and Delivery entries from explicit lifecycle statuses", as
         changeStatus("unavailable-change", {
           actionable_runtime: false,
           diagnostic_code: "runtime_unavailable",
-          diagnostic_detail:
-            "Persisted admission is valid, but runtime composition is unavailable.",
+          diagnostic_detail: "Persisted admission is valid, but runtime composition is unavailable.",
         }),
       ],
-      draft_design_change_ids: [
-        "planning-change",
-        "design-reentry",
-        "unavailable-change",
-      ],
+      draft_design_change_ids: ["planning-change", "design-reentry", "unavailable-change"],
       design_required_change_ids: [],
     },
   };
@@ -1190,9 +1055,7 @@ it("classifies Design and Delivery entries from explicit lifecycle statuses", as
   const unavailable = screen.getByTestId("delivery-issues-section");
   expect(unavailable).toHaveTextContent("unavailable-change");
   expect(unavailable).toHaveTextContent("Runtime unavailable");
-  expect(unavailable).toHaveTextContent(
-    "Persisted admission is valid, but runtime composition is unavailable.",
-  );
+  expect(unavailable).toHaveTextContent("Persisted admission is valid, but runtime composition is unavailable.");
   expect(unavailable).not.toHaveTextContent("Not admitted to Delivery");
 
   const summary = await screen.findByLabelText("Delivery portfolio status");
@@ -1239,14 +1102,10 @@ it("shows bounded Delivery health diagnostics for quarantined state", async () =
 
   const health = await screen.findByTestId("delivery-issues-section");
   expect(health).toHaveTextContent("Delivery issues");
-  expect(health).toHaveTextContent(
-    "Quarantined state is hidden from dispatch.",
-  );
+  expect(health).toHaveTextContent("Quarantined state is hidden from dispatch.");
   expect(health).toHaveTextContent("quarantined-change");
   expect(health).toHaveTextContent("local-runtime / contract-identity-invalid");
-  expect(health).toHaveTextContent(
-    "Persisted Change contract identity is invalid",
-  );
+  expect(health).toHaveTextContent("Persisted Change contract identity is invalid");
   expect(screen.queryByTestId("work-portfolio-table")).not.toBeInTheDocument();
 });
 
@@ -1260,8 +1119,7 @@ it("shows actionable head evidence for a quarantined Change status", async () =>
       {
         source: "remote-state",
         code: "remote-state-reconciliation-required",
-        detail:
-          "remote Change branch differs from Delivery-state snapshot: quarantined-change",
+        detail: "remote Change branch differs from Delivery-state snapshot: quarantined-change",
         change_id: "quarantined-change",
         path: null,
         retry_safe: false,
@@ -1282,8 +1140,7 @@ it("shows actionable head evidence for a quarantined Change status", async () =>
         changeStatus("quarantined-change", {
           actionable_runtime: false,
           diagnostic_code: "runtime_unavailable",
-          diagnostic_detail:
-            "Remote Change branch differs from Delivery-state snapshot.",
+          diagnostic_detail: "Remote Change branch differs from Delivery-state snapshot.",
         }),
       ],
     },
@@ -1293,9 +1150,7 @@ it("shows actionable head evidence for a quarantined Change status", async () =>
 
   const health = await screen.findByTestId("delivery-issues-section");
   expect(health).toHaveTextContent("No safe automatic repair is available.");
-  expect(health).toHaveTextContent(
-    "/resolve-delivery-attention quarantined-change",
-  );
+  expect(health).toHaveTextContent("/resolve-delivery-attention quarantined-change");
   expect(health).toHaveTextContent(expectedHead);
   expect(health).toHaveTextContent(remoteHead);
   expect(health).toHaveTextContent(localHead);
@@ -1314,31 +1169,17 @@ it("presents Change-grouped Outcomes by work, progress, and status", async () =>
   expect(table).toHaveTextContent("Decision required");
   expect(table).toHaveTextContent("Answer request");
   expect(table).toHaveTextContent("Outcome: OUT-001");
-  expect(
-    within(table).getAllByText("OUT-001", { selector: "code" }).length,
-  ).toBeGreaterThan(0);
+  expect(within(table).getAllByText("OUT-001", { selector: "code" }).length).toBeGreaterThan(0);
   expect(within(table).getAllByText("Portfolio redesign")).toHaveLength(1);
-  expect(
-    await screen.findByLabelText("Delivery portfolio status"),
-  ).toHaveTextContent("1Running");
+  expect(await screen.findByLabelText("Delivery portfolio status")).toHaveTextContent("1Running");
   const guidance = screen.getByLabelText("Delivery guidance");
   expect(guidance).toHaveTextContent("Review 1 item that needs you");
-  expect(guidance).toHaveTextContent(
-    "An orchestration session is already working",
-  );
-  expect(within(guidance).getByTestId("portfolio-commands")).toHaveTextContent(
-    "/orchestrate",
-  );
-  expect(
-    within(guidance).getByRole("button", { name: "Copy command /orchestrate" }),
-  ).toBeInTheDocument();
+  expect(guidance).toHaveTextContent("An orchestration session is already working");
+  expect(within(guidance).getByTestId("portfolio-commands")).toHaveTextContent("/orchestrate");
+  expect(within(guidance).getByRole("button", { name: "Copy command /orchestrate" })).toBeInTheDocument();
   expect(guidance).not.toHaveTextContent("Start /orchestrate");
-  expect(
-    table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
-  expect(
-    screen.queryByText("Reviewed", { exact: true }),
-  ).not.toBeInTheDocument();
+  expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByText("Reviewed", { exact: true })).not.toBeInTheDocument();
 });
 
 it("copies empty-portfolio session commands with the shared compact control", async () => {
@@ -1365,9 +1206,7 @@ it("shows unadmitted Design work on the board and opens its verified sources", a
     ...basePortfolio,
     operating: {
       ...basePortfolio.operating,
-      guidance: [
-        { kind: "resume-design", change_ids: ["design-draft"], work_count: 1 },
-      ],
+      guidance: [{ kind: "resume-design", change_ids: ["design-draft"], work_count: 1 }],
     },
   };
   renderPage("/delivery/design-draft/design");
@@ -1406,14 +1245,10 @@ it("shows unadmitted Design work on the board and opens its verified sources", a
   ).toBeInTheDocument();
   fireEvent.click(screen.getByText("Design", { selector: "summary" }));
   expect(detailView).toHaveTextContent("Keep authority explicit.");
-  expect(
-    requests.some(({ url }) => url === "/api/design-work/design-draft"),
-  ).toBe(true);
+  expect(requests.some(({ url }) => url === "/api/design-work/design-draft")).toBe(true);
   const guidance = screen.getByLabelText("Delivery guidance");
   expect(guidance).toHaveTextContent("Continue Design for: design-draft");
-  expect(
-    within(guidance).queryByTestId("portfolio-commands"),
-  ).not.toBeInTheDocument();
+  expect(within(guidance).queryByTestId("portfolio-commands")).not.toBeInTheDocument();
 });
 
 it("uses Design-specific unavailable detail copy and retry action", async () => {
@@ -1480,9 +1315,7 @@ it("shows stale Design detail state and retries the refresh in place", async () 
       await vi.advanceTimersByTimeAsync(3_000);
     });
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(
-      "Showing the last successful Design detail; live updates paused.",
-    );
+    expect(alert).toHaveTextContent("Showing the last successful Design detail; live updates paused.");
     expect(alert).toHaveTextContent("Design source temporarily unavailable");
     expect(detailView).toBeInTheDocument();
 
@@ -1493,9 +1326,7 @@ it("shows stale Design detail state and retries the refresh in place", async () 
       await Promise.resolve();
     });
     expect(
-      screen.queryByText(
-        "Showing the last successful Design detail; live updates paused.",
-      ),
+      screen.queryByText("Showing the last successful Design detail; live updates paused."),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("design-work-detail")).toBeInTheDocument();
   } finally {
@@ -1510,13 +1341,9 @@ it("closes removed Design detail after a portfolio refresh", async () => {
   await screen.findByTestId("design-work-detail");
 
   currentPortfolio = portfolio();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Change history", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Change history", exact: true }));
   await screen.findByTestId("completed-history-workspace");
-  fireEvent.click(
-    screen.getByRole("button", { name: "Current delivery", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Current delivery", exact: true }));
 
   await waitFor(() => {
     const openFlyout = Array.from(document.querySelectorAll("p-flyout")).find(
@@ -1524,11 +1351,7 @@ it("closes removed Design detail after a portfolio refresh", async () => {
     );
     expect(openFlyout).toBeUndefined();
   });
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Current delivery", exact: true }),
-    ).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "Current delivery", exact: true })).toHaveFocus());
 });
 
 it("filters grouped rows by Change and Needs without conflating Activity", async () => {
@@ -1562,54 +1385,35 @@ it("filters grouped rows by Change and Needs without conflating Activity", async
   await waitFor(() => expect(needsYou).toHaveAttribute("aria-pressed", "true"));
   expect(screen.getByTestId("work-shown-count")).toHaveTextContent("2 of 4");
   fireEvent.click(needsYou);
-  await waitFor(() =>
-    expect(needsYou).toHaveAttribute("aria-pressed", "false"),
-  );
+  await waitFor(() => expect(needsYou).toHaveAttribute("aria-pressed", "false"));
   expect(screen.queryByTestId("work-shown-count")).not.toBeInTheDocument();
 
   const filterToggle = screen.getByTestId("work-filters-toggle");
   fireEvent.click(filterToggle);
   expect(filterToggle).toHaveAttribute("aria-expanded", "true");
   expect(filterToggle).toHaveAttribute("aria-controls", "work-filters-panel");
-  expect(screen.getByTestId("work-filters-panel")).toHaveAttribute(
-    "id",
-    "work-filters-panel",
-  );
+  expect(screen.getByTestId("work-filters-panel")).toHaveAttribute("id", "work-filters-panel");
   const selects = container.querySelectorAll("p-select");
   selectValue(selects[0], "change-alpha");
   selectValue(selects[1], "you");
 
   expect(screen.getByTestId("work-shown-count")).toHaveTextContent("1 of 4");
-  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent(
-    "User controls",
-  );
-  expect(screen.getByTestId("work-portfolio-table")).not.toHaveTextContent(
-    "Delivery foundation",
-  );
-  expect(screen.getByTestId("work-portfolio-table")).not.toHaveTextContent(
-    "Runtime hardening",
-  );
+  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("User controls");
+  expect(screen.getByTestId("work-portfolio-table")).not.toHaveTextContent("Delivery foundation");
+  expect(screen.getByTestId("work-portfolio-table")).not.toHaveTextContent("Runtime hardening");
 
   selectValue(selects[0], "");
-  expect(await screen.findByTestId("design-work-section")).toHaveTextContent(
-    "Design Draft",
-  );
+  expect(await screen.findByTestId("design-work-section")).toHaveTextContent("Design Draft");
   expect(screen.getByTestId("work-shown-count")).toHaveTextContent("2 of 4");
 
   selectValue(selects[1], "dependency");
-  await waitFor(() =>
-    expect(screen.queryByTestId("design-work-section")).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByTestId("design-work-section")).not.toBeInTheDocument());
   expect(screen.getByTestId("work-shown-count")).toHaveTextContent("1 of 4");
 
   selectValue(selects[1], "you");
   selectValue(selects[0], "change-beta");
-  expect(
-    await screen.findByText("No matching delivery work"),
-  ).toBeInTheDocument();
-  expect(
-    screen.queryByText("No current Delivery work."),
-  ).not.toBeInTheDocument();
+  expect(await screen.findByText("No matching delivery work")).toBeInTheDocument();
+  expect(screen.queryByText("No current Delivery work.")).not.toBeInTheDocument();
 });
 
 it("keeps routed detail open when filters hide its portfolio row", async () => {
@@ -1631,25 +1435,19 @@ it("keeps routed detail open when filters hide its portfolio row", async () => {
   currentPortfolio = portfolio([group(), secondGroup]);
   const { container } = renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
   const inspector = await screen.findByTestId("work-item-detail");
   fireEvent.click(screen.getByTestId("work-filters-toggle"));
   const selects = container.querySelectorAll("p-select");
   selectValue(selects[1], "dependency");
 
-  await waitFor(() =>
-    expect(table).not.toHaveTextContent("Delivery foundation"),
-  );
+  await waitFor(() => expect(table).not.toHaveTextContent("Delivery foundation"));
   expect(inspector).toBeInTheDocument();
   expect(screen.getByTestId("work-filters-panel")).toBeInTheDocument();
 
   fireEvent.keyDown(inspector, { key: "Escape" });
-  await waitFor(() =>
-    expect(screen.getByTestId("work-filters-toggle")).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByTestId("work-filters-toggle")).toHaveFocus());
 });
 
 it("restores focus to the clicked work item after closing its detail", async () => {
@@ -1685,9 +1483,7 @@ it("restores focus to the row trigger after opening the detail from a row action
   const itemLink = within(table).getAllByRole("link", {
     name: /User controls/,
   })[0];
-  const actionLink = within(table)
-    .getAllByText("Answer request")[0]
-    .closest("p-link-pure") as HTMLElement;
+  const actionLink = within(table).getAllByText("Answer request")[0].closest("p-link-pure") as HTMLElement;
 
   fireEvent.click(actionLink);
   const inspector = await screen.findByTestId("work-item-detail");
@@ -1699,36 +1495,21 @@ it("restores focus to the row trigger after opening the detail from a row action
 it("opens routed semantic detail with acceptance and bounded task evidence", async () => {
   renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(screen.getByLabelText("Delivery guidance")).toBeInTheDocument();
   expect(screen.getByTestId("work-portfolio-table")).toBeInTheDocument();
-  expect(
-    screen.queryByRole("heading", { name: "Current delivery" }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Current delivery" })).not.toBeInTheDocument();
   expect(inspector).toHaveTextContent("Portfolio redesign / OUT-001");
-  expect(
-    within(inspector).getByText("OUT-001", { selector: "code" }),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByText("OUT-001", { selector: "code" })).toBeInTheDocument();
   expect(inspector).toHaveTextContent("Make Delivery supervision coherent.");
   expect(inspector).toHaveTextContent("The current state is unambiguous.");
   expect(inspector).toHaveTextContent("Build the projection");
   expect(inspector).toHaveTextContent("A reviewed grouped snapshot.");
-  expect(
-    screen.getByText("Acceptance (1)").closest("details"),
-  ).not.toHaveAttribute("open");
-  expect(
-    screen.getByText("Delivery task evidence (1)").closest("details"),
-  ).not.toHaveAttribute("open");
-  expect(
-    requests.some(
-      ({ url }) =>
-        url === "/api/changes/change-alpha/work-items/outcome%3AOUT-001",
-    ),
-  ).toBe(true);
+  expect(screen.getByText("Acceptance (1)").closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByText("Delivery task evidence (1)").closest("details")).not.toHaveAttribute("open");
+  expect(requests.some(({ url }) => url === "/api/changes/change-alpha/work-items/outcome%3AOUT-001")).toBe(true);
 });
 
 it("answers a decision request and refetches its resolved state", async () => {
@@ -1751,11 +1532,7 @@ it("answers a decision request and refetches its resolved state", async () => {
     disabled: boolean;
   };
   const option = await waitFor(() => {
-    const element = namedPdsHost(
-      container,
-      "p-select",
-      "request-REQ-001-option",
-    );
+    const element = namedPdsHost(container, "p-select", "request-REQ-001-option");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
@@ -1797,11 +1574,7 @@ it("clears action feedback when switching to another work item", async () => {
     disabled: boolean;
   };
   const option = await waitFor(() => {
-    const element = namedPdsHost(
-      container,
-      "p-select",
-      "request-REQ-001-option",
-    );
+    const element = namedPdsHost(container, "p-select", "request-REQ-001-option");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
@@ -1811,9 +1584,7 @@ it("clears action feedback when switching to another work item", async () => {
   expect(await screen.findByText("Request answered.")).toBeInTheDocument();
 
   fireEvent.click(screen.getAllByRole("link", { name: "User controls" })[0]);
-  await waitFor(() =>
-    expect(screen.queryByText("Request answered.")).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByText("Request answered.")).not.toBeInTheDocument());
 });
 
 it("shows a loading state instead of stale detail while switching work items", async () => {
@@ -1852,11 +1623,7 @@ it("clears earlier action feedback before previewing a backward move", async () 
     disabled: boolean;
   };
   const option = await waitFor(() => {
-    const element = namedPdsHost(
-      container,
-      "p-select",
-      "request-REQ-001-option",
-    );
+    const element = namedPdsHost(container, "p-select", "request-REQ-001-option");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
@@ -1916,12 +1683,7 @@ it("requires evidence before clearing a requestless block", async () => {
   fireEvent.click(clear);
 
   await waitFor(() =>
-    expect(
-      requests.some(
-        ({ url, method }) =>
-          method === "POST" && url.includes("/blocks/BLOCK-001/clear"),
-      ),
-    ).toBe(true),
+    expect(requests.some(({ url, method }) => method === "POST" && url.includes("/blocks/BLOCK-001/clear"))).toBe(true),
   );
   expect(await screen.findByText("Block cleared.")).toBeInTheDocument();
 });
@@ -1959,15 +1721,9 @@ it("keeps block evidence available when clearing the block fails", async () => {
   fireEvent.click(clear);
 
   const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent(
-    "The Delivery operation was rejected while the confirmation was open.",
-  );
-  expect((note as HTMLElement & { value: string }).value).toBe(
-    "Verified externally",
-  );
-  expect((locator as HTMLElement & { value: string }).value).toBe(
-    "request:REQ-001",
-  );
+  expect(alert).toHaveTextContent("The Delivery operation was rejected while the confirmation was open.");
+  expect((note as HTMLElement & { value: string }).value).toBe("Verified externally");
+  expect((locator as HTMLElement & { value: string }).value).toBe("request:REQ-001");
   await waitFor(() => expect(clear.disabled).toBe(false));
 });
 
@@ -1990,12 +1746,7 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
   fireEvent.click(screen.getByText("Recover confirmed-lost claim"));
   fireEvent.click(screen.getByText("Confirm lost and recover"));
   await waitFor(() =>
-    expect(
-      requests.some(
-        ({ url, method }) =>
-          method === "POST" && url.endsWith("/claims/recover"),
-      ),
-    ).toBe(true),
+    expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/claims/recover"))).toBe(true),
   );
 
   fireEvent.click(screen.getByText("Administrative actions"));
@@ -2010,9 +1761,7 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
   selectValue(stage, "planning");
   inputValue(reason, "Authority changed");
   fireEvent.click(screen.getByText("Review backward move"));
-  const previewMessage = await screen.findByText(
-    "The following Outcomes will be reset:",
-  );
+  const previewMessage = await screen.findByText("The following Outcomes will be reset:");
   const previewModal = requirePresent(previewMessage.closest("p-modal"));
   expect(within(previewModal).getByText("OUT-002")).toBeInTheDocument();
   fireEvent.click(screen.getByText("Confirm backward move"));
@@ -2027,9 +1776,7 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
       },
     }),
   );
-  expect(
-    await screen.findByText("Moved backward. Reset: OUT-002."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Moved backward. Reset: OUT-002.")).toBeInTheDocument();
 });
 
 it("keeps claim recovery confirmation open when recovery fails", async () => {
@@ -2102,9 +1849,7 @@ it("clears a backward target that becomes invalid after a successful move", asyn
       },
     }),
   );
-  await waitFor(() =>
-    expect((stage as HTMLElement & { value: string }).value).toBe(""),
-  );
+  await waitFor(() => expect((stage as HTMLElement & { value: string }).value).toBe(""));
   expect(
     (
       screen.getByText("Review backward move") as HTMLElement & {
@@ -2126,11 +1871,7 @@ it("expires a backward preview when polling detects a newer snapshot", async () 
 
     fireEvent.click(screen.getByText("Administrative actions"));
     const stage = namedPdsHost(document.body, "p-select", "backward-stage");
-    const reason = namedPdsHost(
-      document.body,
-      "p-input-text",
-      "backward-reason",
-    );
+    const reason = namedPdsHost(document.body, "p-input-text", "backward-reason");
     expect(stage).not.toBeNull();
     expect(reason).not.toBeNull();
     selectValue(requirePresent(stage), "planning");
@@ -2140,9 +1881,7 @@ it("expires a backward preview when polling detects a newer snapshot", async () 
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(
-      screen.getByText("The following Outcomes will be reset:"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("The following Outcomes will be reset:")).toBeInTheDocument();
 
     currentDetail = detail({
       ...currentDetail.item,
@@ -2152,20 +1891,11 @@ it("expires a backward preview when polling detects a newer snapshot", async () 
       await vi.advanceTimersByTimeAsync(3_000);
     });
 
+    expect(screen.queryByText("The following Outcomes will be reset:")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("The following Outcomes will be reset:"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "The backward-move preview expired because Delivery changed. Review the move again.",
-      ),
+      screen.getByText("The backward-move preview expired because Delivery changed. Review the move again."),
     ).toBeInTheDocument();
-    expect(
-      requests.some(
-        ({ url, method }) =>
-          method === "POST" && url.endsWith("/move-backward"),
-      ),
-    ).toBe(false);
+    expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/move-backward"))).toBe(false);
   } finally {
     vi.useRealTimers();
   }
@@ -2206,9 +1936,7 @@ it("keeps backward confirmation open when the move fails", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "The Delivery frontier changed before the move was applied.",
   );
-  expect(
-    screen.getByText("The following Outcomes will be reset:"),
-  ).toBeInTheDocument();
+  expect(screen.getByText("The following Outcomes will be reset:")).toBeInTheDocument();
   expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 });
 
@@ -2234,14 +1962,8 @@ it("closes confirmation modals with Escape without performing the action", async
     key: "Escape",
   });
 
-  await waitFor(() =>
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
-  );
-  expect(
-    requests.some(
-      ({ url, method }) => method === "POST" && url.endsWith("/move-backward"),
-    ),
-  ).toBe(false);
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/move-backward"))).toBe(false);
 });
 
 it("closes the primary work-item flyout with Escape", async () => {
@@ -2250,9 +1972,7 @@ it("closes the primary work-item flyout with Escape", async () => {
 
   fireEvent.keyDown(detailView, { key: "Escape" });
 
-  await waitFor(() =>
-    expect(screen.queryByTestId("work-item-detail")).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByTestId("work-item-detail")).not.toBeInTheDocument());
 });
 
 it("reconciles a pending publication checkpoint from the Change publication view", async () => {
@@ -2317,9 +2037,7 @@ it("reconciles a pending publication checkpoint from the Change publication view
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  const publicationRow = screen.getByLabelText(
-    "Change publication for Portfolio redesign",
-  );
+  const publicationRow = screen.getByLabelText("Change publication for Portfolio redesign");
   expect(
     within(publicationRow)
       .getAllByRole("term")
@@ -2331,9 +2049,7 @@ it("reconciles a pending publication checkpoint from the Change publication view
   expect(inspector).toHaveTextContent("1".repeat(40));
   expect(inspector).toHaveTextContent("Pending head:");
   expect(inspector).toHaveTextContent("Triggered by: finalization");
-  expect(screen.getByLabelText("Delivery portfolio status")).toHaveTextContent(
-    "1Ready",
-  );
+  expect(screen.getByLabelText("Delivery portfolio status")).toHaveTextContent("1Ready");
   expect(publicationRow).toHaveTextContent("Checkpoint pending");
   expect(
     within(publicationRow).getByText("Checkpoint pending", {
@@ -2348,9 +2064,7 @@ it("reconciles a pending publication checkpoint from the Change publication view
       body: null,
     }),
   );
-  expect(
-    await screen.findByText("Publication checkpoint reconciled."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Publication checkpoint reconciled.")).toBeInTheDocument();
 });
 
 it("shows persisted checkpoint retry diagnostics and structured reconciliation errors", async () => {
@@ -2396,8 +2110,7 @@ it("shows persisted checkpoint retry diagnostics and structured reconciliation e
       pending_checkpoint_attempt_count: 2,
       pending_checkpoint_last_attempted_at: "2026-08-11T17:00:00+00:00",
       pending_checkpoint_error_code: "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING",
-      pending_checkpoint_error_detail:
-        "Checkpoint publication is waiting for a reviewed Change head.",
+      pending_checkpoint_error_detail: "Checkpoint publication is waiting for a reviewed Change head.",
       invalidated_expected_head: null,
       invalidated_observed_head: null,
       repository: null,
@@ -2419,13 +2132,11 @@ it("shows persisted checkpoint retry diagnostics and structured reconciliation e
     attempted_head: null,
     reconciled: false,
     error_code: "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING",
-    error_detail:
-      "Checkpoint publication is waiting for a reviewed Change head.",
+    error_detail: "Checkpoint publication is waiting for a reviewed Change head.",
     pending_checkpoint_attempt_count: 2,
     pending_checkpoint_last_attempted_at: "2026-08-11T17:00:00+00:00",
     pending_checkpoint_error_code: "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING",
-    pending_checkpoint_error_detail:
-      "Checkpoint publication is waiting for a reviewed Change head.",
+    pending_checkpoint_error_detail: "Checkpoint publication is waiting for a reviewed Change head.",
   };
   renderPage("/delivery/change-alpha/publication");
 
@@ -2433,9 +2144,7 @@ it("shows persisted checkpoint retry diagnostics and structured reconciliation e
   const diagnostics = within(inspector).getByTestId("checkpoint-diagnostics");
   expect(diagnostics).toHaveTextContent("2 attempts recorded");
   expect(diagnostics).toHaveTextContent("Triggered by: verified-outcome");
-  expect(diagnostics).toHaveTextContent(
-    "Last attempt: 2026-08-11T17:00:00+00:00",
-  );
+  expect(diagnostics).toHaveTextContent("Last attempt: 2026-08-11T17:00:00+00:00");
   expect(diagnostics).toHaveTextContent("ERR_DELIVERY_CHECKPOINT_HEAD_MISSING");
   fireEvent.click(within(inspector).getByText("Publish checkpoint"));
 
@@ -2528,11 +2237,7 @@ it("does not claim publication success when reconciliation remains incomplete", 
       body: null,
     }),
   );
-  await waitFor(() =>
-    expect(
-      screen.queryByText("Publication checkpoint reconciled."),
-    ).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByText("Publication checkpoint reconciled.")).not.toBeInTheDocument());
 });
 
 it("syncs the Change with the target and shows the latest sync receipt", async () => {
@@ -2608,13 +2313,9 @@ it("syncs the Change with the target and shows the latest sync receipt", async (
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector).toHaveTextContent(`Target head${"1".repeat(40)}`);
-  expect(inspector).toHaveTextContent(
-    `Target-sync merge result${"3".repeat(40)}`,
-  );
+  expect(inspector).toHaveTextContent(`Target-sync merge result${"3".repeat(40)}`);
   expect(inspector).toHaveTextContent("Last target sync: main (merge commit)");
-  fireEvent.click(
-    within(inspector).getByText("Merge latest target into Change"),
-  );
+  fireEvent.click(within(inspector).getByText("Merge latest target into Change"));
   fireEvent.click(screen.getByText("Confirm target update"));
   await waitFor(() =>
     expect(requests).toContainEqual({
@@ -2623,9 +2324,7 @@ it("syncs the Change with the target and shows the latest sync receipt", async (
       body: { operation_id: expect.stringMatching(/^cockpit-target-sync-/) },
     }),
   );
-  expect(
-    await screen.findByText("Target synchronized with the integration target."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Target synchronized with the integration target.")).toBeInTheDocument();
 });
 
 it("shows publication history and keeps ordinary attention remedies available", async () => {
@@ -2714,21 +2413,11 @@ it("shows publication history and keeps ordinary attention remedies available", 
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector).toHaveTextContent("Publication history");
-  expect(inspector).toHaveTextContent(
-    `Generation 1: owlbear/example #41 / ${"2".repeat(40)}`,
-  );
-  expect(inspector).toHaveTextContent(
-    `Generation 2: owlbear/example #42 / ${"1".repeat(40)}`,
-  );
-  expect(
-    within(inspector).getAllByText("Resolve publication attention"),
-  ).not.toHaveLength(0);
-  expect(
-    within(inspector).getByTestId("publication-supersede"),
-  ).toBeInTheDocument();
-  const evidence = within(inspector)
-    .getByText("Publication evidence", { selector: "summary" })
-    .closest("details");
+  expect(inspector).toHaveTextContent(`Generation 1: owlbear/example #41 / ${"2".repeat(40)}`);
+  expect(inspector).toHaveTextContent(`Generation 2: owlbear/example #42 / ${"1".repeat(40)}`);
+  expect(within(inspector).getAllByText("Resolve publication attention")).not.toHaveLength(0);
+  expect(within(inspector).getByTestId("publication-supersede")).toBeInTheDocument();
+  const evidence = within(inspector).getByText("Publication evidence", { selector: "summary" }).closest("details");
   expect(evidence).not.toHaveAttribute("open");
   expect(within(inspector).getByTestId("publication-supersede")).toBeVisible();
 
@@ -2742,9 +2431,7 @@ it("shows publication history and keeps ordinary attention remedies available", 
       },
     }),
   );
-  expect(
-    await screen.findByText("Publication superseded."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Publication superseded.")).toBeInTheDocument();
 });
 
 it("reuses a supersession operation identity after a retry-safe failure", async () => {
@@ -2824,22 +2511,16 @@ it("reuses a supersession operation identity after a retry-safe failure", async 
 
   const supersede = await screen.findByTestId("publication-supersede");
   fireEvent.click(supersede);
-  await waitFor(() =>
-    expect(screen.getByText("ERR_PROVIDER_UNAVAILABLE")).toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.getByText("ERR_PROVIDER_UNAVAILABLE")).toBeInTheDocument());
   fireEvent.click(supersede);
   await waitFor(() =>
     expect(
-      requests.filter(
-        ({ url, method }) =>
-          method === "POST" && url.endsWith("/publication/supersede"),
-      ),
+      requests.filter(({ url, method }) => method === "POST" && url.endsWith("/publication/supersede")),
     ).toHaveLength(2),
   );
 
   const supersessionRequests = requests.filter(
-    ({ url, method }) =>
-      method === "POST" && url.endsWith("/publication/supersede"),
+    ({ url, method }) => method === "POST" && url.endsWith("/publication/supersede"),
   );
   expect(supersessionRequests[0].body).toEqual({
     operation_id: expect.stringMatching(/^cockpit-publication-supersede-/),
@@ -2923,19 +2604,13 @@ it("offers explicit exits for a preserved target-sync conflict", async () => {
       ],
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "publication", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "publication", items: [publicationCard] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector).toHaveTextContent("Target sync conflict");
   expect(inspector).toHaveTextContent("src/app.py");
-  expect(
-    within(inspector).getByLabelText(
-      "Copy command /resolve-target-conflict change-alpha",
-    ),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByLabelText("Copy command /resolve-target-conflict change-alpha")).toBeInTheDocument();
   expect(within(inspector).queryByText("Resolve attention")).toBeNull();
   expect(within(inspector).queryByTestId("publication-supersede")).toBeNull();
 
@@ -2952,9 +2627,7 @@ it("offers explicit exits for a preserved target-sync conflict", async () => {
       },
     }),
   );
-  expect(
-    await screen.findByText("Target sync conflict aborted."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Target sync conflict aborted.")).toBeInTheDocument();
 
   fireEvent.click(screen.getByTestId("target-sync-conflict-resolve"));
   await waitFor(() =>
@@ -3031,18 +2704,10 @@ it("offers the finalization command from the Change publication row and detail v
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
+  expect(within(inspector).getByLabelText("Copy command /finalize-change change-alpha")).toBeInTheDocument();
+  expect(screen.getAllByLabelText("Copy command /finalize-change change-alpha")).toHaveLength(1);
   expect(
-    within(inspector).getByLabelText(
-      "Copy command /finalize-change change-alpha",
-    ),
-  ).toBeInTheDocument();
-  expect(
-    screen.getAllByLabelText("Copy command /finalize-change change-alpha"),
-  ).toHaveLength(1);
-  expect(
-    within(screen.getByTestId("portfolio-commands")).queryByLabelText(
-      "Copy command /finalize-change change-alpha",
-    ),
+    within(screen.getByTestId("portfolio-commands")).queryByLabelText("Copy command /finalize-change change-alpha"),
   ).not.toBeInTheDocument();
 });
 
@@ -3100,23 +2765,12 @@ it("keeps invalidated finalization heads distinct and offers re-finalization", a
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByRole("region", { name: "Finalization invalidated" }),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByRole("region", { name: "Finalization invalidated" })).toBeInTheDocument();
   expect(inspector).toHaveTextContent(`Expected head${"1".repeat(40)}`);
   expect(inspector).toHaveTextContent(`Observed head${"2".repeat(40)}`);
-  expect(inspector).toHaveTextContent(
-    "Next: Re-finalize the current Change head",
-  );
-  expect(
-    within(inspector).getByLabelText(
-      "Copy command /finalize-change change-alpha",
-    ),
-  ).toBeInTheDocument();
-  expect(inspector.querySelector("[data-section-tone]")).toHaveAttribute(
-    "data-section-tone",
-    "warning",
-  );
+  expect(inspector).toHaveTextContent("Next: Re-finalize the current Change head");
+  expect(within(inspector).getByLabelText("Copy command /finalize-change change-alpha")).toBeInTheDocument();
+  expect(inspector.querySelector("[data-section-tone]")).toHaveAttribute("data-section-tone", "warning");
 });
 
 it("shows GitHub merge as user-owned work with observation as the only Cockpit control", async () => {
@@ -3180,9 +2834,7 @@ it("shows GitHub merge as user-owned work with observation as the only Cockpit c
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByRole("region", { name: "Awaiting merge in GitHub" }),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByRole("region", { name: "Awaiting merge in GitHub" })).toBeInTheDocument();
   expect(inspector).toHaveTextContent("owlbear/example");
   expect(inspector).toHaveTextContent("42");
   expect(within(inspector).queryByText(/merge now/i)).not.toBeInTheDocument();
@@ -3250,11 +2902,7 @@ it("keeps conflict guidance and merge-status control for a ready conflicted pull
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByLabelText(
-      "Copy command /resolve-target-conflict change-alpha",
-    ),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByLabelText("Copy command /resolve-target-conflict change-alpha")).toBeInTheDocument();
   fireEvent.click(within(inspector).getByText("Check merge status"));
   await waitFor(() =>
     expect(requests).toContainEqual({
@@ -3294,32 +2942,20 @@ it("surfaces acceptance-reconciliation provider failure with an immediate retry"
       command: null,
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "awaiting-merge", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "awaiting-merge", items: [publicationCard] })]);
   acceptanceReconciliationProviderUnavailable = true;
   renderPage();
 
   const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent(
-    "GitHub acceptance checks are unavailable for change-alpha.",
-  );
+  expect(alert).toHaveTextContent("GitHub acceptance checks are unavailable for change-alpha.");
   expect(alert).toHaveTextContent("GitHub acceptance provider unavailable");
 
   acceptanceReconciliationProviderUnavailable = false;
   fireEvent.click(within(alert).getByText("Retry acceptance check"));
   await waitFor(() =>
-    expect(
-      screen.queryByText(
-        "GitHub acceptance checks are unavailable for change-alpha.",
-      ),
-    ).not.toBeInTheDocument(),
+    expect(screen.queryByText("GitHub acceptance checks are unavailable for change-alpha.")).not.toBeInTheDocument(),
   );
-  expect(
-    requests.filter(
-      (request) => request.url === "/api/work-items/acceptance/reconcile",
-    ),
-  ).toHaveLength(2);
+  expect(requests.filter((request) => request.url === "/api/work-items/acceptance/reconcile")).toHaveLength(2);
 });
 
 it("shows Change attention diagnostics and resolves the selected disposition", async () => {
@@ -3402,16 +3038,10 @@ it("shows Change attention diagnostics and resolves the selected disposition", a
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector).toHaveTextContent("Change attention");
-  expect(inspector).toHaveTextContent(
-    "Pull request was closed without a merge commit.",
-  );
+  expect(inspector).toHaveTextContent("Pull request was closed without a merge commit.");
   expect(inspector).toHaveTextContent(`Disposition: ${attentionId}`);
   expect(within(inspector).queryByTestId("publication-supersede")).toBeNull();
-  fireEvent.click(
-    requirePresent(
-      within(inspector).getAllByText("Resolve acceptance attention").at(-1),
-    ),
-  );
+  fireEvent.click(requirePresent(within(inspector).getAllByText("Resolve acceptance attention").at(-1)));
   await waitFor(() =>
     expect(requests).toContainEqual({
       url: "/api/changes/change-alpha/attention/resolve",
@@ -3422,9 +3052,7 @@ it("shows Change attention diagnostics and resolves the selected disposition", a
       },
     }),
   );
-  expect(
-    await screen.findByText("Change attention resolved."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Change attention resolved.")).toBeInTheDocument();
 });
 
 it("posts reasoned Change dispositions and resumes a deferred Change", async () => {
@@ -3488,11 +3116,7 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
   const initialRender = renderPage("/delivery/change-alpha/publication");
   const inspector = await screen.findByTestId("work-item-detail");
   const reason = await waitFor(() => {
-    const element = namedPdsHost(
-      inspector,
-      "p-input-text",
-      "change-disposition-reason",
-    );
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
@@ -3585,9 +3209,7 @@ it("posts reasoned Change dispositions and resumes a deferred Change", async () 
       merged_at: null,
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "deferred", items: [deferredCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "deferred", items: [deferredCard] })]);
   renderPage("/delivery/change-alpha/publication");
   const deferredInspector = await screen.findByTestId("work-item-detail");
   fireEvent.click(within(deferredInspector).getByText("Resume Change"));
@@ -3614,19 +3236,13 @@ it("keeps Change abandonment confirmation open when abandonment fails", async ()
     card: publicationCard,
     publication: publicationForChecks("ready-for-finalization"),
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "finalization", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "finalization", items: [publicationCard] })]);
   mutationFailurePath = "/abandon";
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
   const reason = await waitFor(() => {
-    const element = namedPdsHost(
-      inspector,
-      "p-input-text",
-      "change-disposition-reason",
-    );
+    const element = namedPdsHost(inspector, "p-input-text", "change-disposition-reason");
     expect(element).not.toBeNull();
     return requirePresent(element);
   });
@@ -3656,9 +3272,7 @@ it("keeps Change abandonment confirmation open when abandonment fails", async ()
   expect(within(dialog).getByRole("alert")).toHaveTextContent(
     "The Delivery operation was rejected while the confirmation was open.",
   );
-  expect(
-    within(dialog).getByText("Confirm Change abandonment"),
-  ).toBeInTheDocument();
+  expect(within(dialog).getByText("Confirm Change abandonment")).toBeInTheDocument();
 });
 
 it("does not show Change disposition controls on an Outcome detail", async () => {
@@ -3668,9 +3282,7 @@ it("does not show Change disposition controls on an Outcome detail", async () =>
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).queryByText("Defer Change")).not.toBeInTheDocument();
-  expect(
-    within(inspector).queryByText("Abandon Change"),
-  ).not.toBeInTheDocument();
+  expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
 });
 
 it("does not show Change disposition controls for an abandoned Change", async () => {
@@ -3716,16 +3328,12 @@ it("does not show Change disposition controls for an abandoned Change", async ()
       merged_at: null,
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "abandoned", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "abandoned", items: [publicationCard] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(within(inspector).queryByText("Defer Change")).not.toBeInTheDocument();
-  expect(
-    within(inspector).queryByText("Abandon Change"),
-  ).not.toBeInTheDocument();
+  expect(within(inspector).queryByText("Abandon Change")).not.toBeInTheDocument();
 });
 
 it("confirms discard and cleanup for an abandoned target-sync conflict from Change detail", async () => {
@@ -3785,15 +3393,11 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
       },
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "abandoned", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "abandoned", items: [publicationCard] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  fireEvent.click(
-    within(inspector).getByText("Discard merge and clean worktree"),
-  );
+  fireEvent.click(within(inspector).getByText("Discard merge and clean worktree"));
   fireEvent.click(await screen.findByText("Confirm discard and cleanup"));
 
   await waitFor(() =>
@@ -3808,9 +3412,7 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
     }),
   );
   expect(
-    await screen.findByText(
-      "Target merge discarded and abandoned Change worktree cleaned up.",
-    ),
+    await screen.findByText("Target merge discarded and abandoned Change worktree cleaned up."),
   ).toBeInTheDocument();
 });
 
@@ -3821,9 +3423,7 @@ it("confirms and cleans an eligible abandoned Change from Change history", async
 
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
-  fireEvent.click(
-    within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }));
   const detailView = await screen.findByTestId("completed-change-detail");
   fireEvent.click(within(detailView).getByText("Clean abandoned worktree"));
   fireEvent.click(await screen.findByText("Confirm cleanup"));
@@ -3835,9 +3435,7 @@ it("confirms and cleans an eligible abandoned Change from Change history", async
       body: null,
     }),
   );
-  expect(
-    await screen.findByText("Abandoned Change worktree cleaned up."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Abandoned Change worktree cleaned up.")).toBeInTheDocument();
 });
 
 it("keeps abandoned history cleanup confirmation open when cleanup fails", async () => {
@@ -3848,9 +3446,7 @@ it("keeps abandoned history cleanup confirmation open when cleanup fails", async
 
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
-  fireEvent.click(
-    within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }));
   const detailView = await screen.findByTestId("completed-change-detail");
   fireEvent.click(within(detailView).getByText("Clean abandoned worktree"));
   fireEvent.click(await screen.findByText("Confirm cleanup"));
@@ -3866,9 +3462,7 @@ it("keeps abandoned history cleanup confirmation open when cleanup fails", async
   expect(within(dialog).getByRole("alert")).toHaveTextContent(
     "The Delivery operation was rejected while the confirmation was open.",
   );
-  expect(
-    within(dialog).getByText("Clean abandoned worktree"),
-  ).toBeInTheDocument();
+  expect(within(dialog).getByText("Clean abandoned worktree")).toBeInTheDocument();
 });
 
 it("confirms discard and cleanup for an abandoned target-sync conflict from Change history", async () => {
@@ -3883,13 +3477,9 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
 
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
-  fireEvent.click(
-    within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: `Inspect ${abandoned.title}` }));
   const detailView = await screen.findByTestId("completed-change-detail");
-  fireEvent.click(
-    within(detailView).getByText("Discard conflict and clean worktree"),
-  );
+  fireEvent.click(within(detailView).getByText("Discard conflict and clean worktree"));
   fireEvent.click(await screen.findByText("Confirm cleanup"));
 
   await waitFor(() =>
@@ -3904,9 +3494,7 @@ it("confirms discard and cleanup for an abandoned target-sync conflict from Chan
     }),
   );
   expect(
-    await screen.findByText(
-      "Target merge discarded and abandoned Change worktree cleaned up.",
-    ),
+    await screen.findByText("Target merge discarded and abandoned Change worktree cleaned up."),
   ).toBeInTheDocument();
 });
 
@@ -3959,9 +3547,7 @@ it("cleans an eligible completed Change worktree with its exact completion ident
       },
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "acceptance", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "acceptance", items: [publicationCard] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -3974,9 +3560,7 @@ it("cleans an eligible completed Change worktree with its exact completion ident
       body: { completion_id: completionId },
     }),
   );
-  expect(
-    await screen.findByText("Completed Change worktree cleaned up."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Completed Change worktree cleaned up.")).toBeInTheDocument();
 });
 
 it("confirms and recovers a missing Change worktree from its exact reviewed head", async () => {
@@ -4028,15 +3612,11 @@ it("confirms and recovers a missing Change worktree from its exact reviewed head
       },
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "abandoned", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "abandoned", items: [publicationCard] })]);
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByText(`Reviewed head: ${reviewedHead}`),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByText(`Reviewed head: ${reviewedHead}`)).toBeInTheDocument();
   fireEvent.click(within(inspector).getByText("Recover missing worktree"));
   fireEvent.click(await screen.findByText("Confirm worktree recovery"));
   await waitFor(() =>
@@ -4046,9 +3626,7 @@ it("confirms and recovers a missing Change worktree from its exact reviewed head
       body: { confirmed_recovery: true, recovery_reviewed_head: reviewedHead },
     }),
   );
-  expect(
-    await screen.findByText("Missing Change worktree recovered."),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Missing Change worktree recovered.")).toBeInTheDocument();
 });
 
 it("keeps missing worktree recovery confirmation open when recovery fails", async () => {
@@ -4085,9 +3663,7 @@ it("keeps missing worktree recovery confirmation open when recovery fails", asyn
       },
     },
   });
-  currentPortfolio = portfolio([
-    group({ lifecycle: "abandoned", items: [publicationCard] }),
-  ]);
+  currentPortfolio = portfolio([group({ lifecycle: "abandoned", items: [publicationCard] })]);
   mutationFailurePath = "/worktree/recover";
   renderPage("/delivery/change-alpha/publication");
 
@@ -4105,9 +3681,7 @@ it("keeps missing worktree recovery confirmation open when recovery fails", asyn
   expect(within(dialog).getByRole("alert")).toHaveTextContent(
     "The Delivery operation was rejected while the confirmation was open.",
   );
-  expect(
-    within(dialog).getByText("Recover missing worktree"),
-  ).toBeInTheDocument();
+  expect(within(dialog).getByText("Recover missing worktree")).toBeInTheDocument();
 });
 
 it("uses the Complete status tag without leaking the internal Stage field", async () => {
@@ -4181,19 +3755,13 @@ it("presents a draft pull request as publication work", async () => {
   expect(table).toHaveTextContent("Change: Portfolio redesign");
   expect(table).toHaveTextContent("Delivery ready state not recorded");
   expect(table).toHaveTextContent("Make PR ready for review");
-  const publicationRow = screen.getByLabelText(
-    "Change publication for Portfolio redesign",
-  );
-  expect(publicationRow.querySelector("[data-status-tone]")).toHaveTextContent(
-    "Delivery ready state not recorded",
-  );
-  const readyLink = within(table)
-    .getByText("Make PR ready for review")
-    .closest("p-link-pure") as HTMLElement & { href: string };
+  const publicationRow = screen.getByLabelText("Change publication for Portfolio redesign");
+  expect(publicationRow.querySelector("[data-status-tone]")).toHaveTextContent("Delivery ready state not recorded");
+  const readyLink = within(table).getByText("Make PR ready for review").closest("p-link-pure") as HTMLElement & {
+    href: string;
+  };
   expect(readyLink.href).toBe("/delivery/change-alpha/publication");
-  expect(
-    screen.getByLabelText("Delivery portfolio status"),
-  ).not.toHaveTextContent("need you");
+  expect(screen.getByLabelText("Delivery portfolio status")).not.toHaveTextContent("need you");
 });
 
 it("warns before making a conflicted pull request ready and offers the resolution prompt", async () => {
@@ -4245,27 +3813,14 @@ it("warns before making a conflicted pull request ready and offers the resolutio
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByLabelText(
-      "Copy command /resolve-target-conflict change-alpha",
-    ),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByLabelText("Copy command /resolve-target-conflict change-alpha")).toBeInTheDocument();
   fireEvent.click(within(inspector).getByText("Make PR ready for review"));
 
   const dialog = await screen.findByRole("alertdialog");
-  expect(dialog).toHaveTextContent(
-    "GitHub reports conflicts with the integration target.",
-  );
-  expect(dialog).toHaveTextContent(
-    "Making the pull request ready will not resolve them",
-  );
+  expect(dialog).toHaveTextContent("GitHub reports conflicts with the integration target.");
+  expect(dialog).toHaveTextContent("Making the pull request ready will not resolve them");
   expect(dialog).toHaveTextContent("/resolve-target-conflict change-alpha");
-  expect(
-    requests.some(
-      ({ url, method }) =>
-        url.endsWith("/publication/ready") && method === "POST",
-    ),
-  ).toBe(false);
+  expect(requests.some(({ url, method }) => url.endsWith("/publication/ready") && method === "POST")).toBe(false);
 
   fireEvent.click(within(dialog).getByText("Keep PR in draft"));
   expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
@@ -4297,26 +3852,18 @@ it("keeps check observation discoverable but unavailable for a draft", async () 
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  const observe = within(inspector).getByTestId(
-    "publication-checks-observe",
-  ) as HTMLElement & { disabled: boolean };
+  const observe = within(inspector).getByTestId("publication-checks-observe") as HTMLElement & { disabled: boolean };
   expect(observe).toBeInTheDocument();
   expect(observe.disabled).toBe(true);
-  expect(
-    within(inspector).getByTestId("publication-checks-draft-guidance"),
-  ).toHaveTextContent(
+  expect(within(inspector).getByTestId("publication-checks-draft-guidance")).toHaveTextContent(
     "You can observe check results here once this pull request is ready for review.",
   );
-  expect(
-    within(inspector).queryByTestId("publication-checks-status"),
-  ).not.toBeInTheDocument();
+  expect(within(inspector).queryByTestId("publication-checks-status")).not.toBeInTheDocument();
 
   fireEvent.click(observe);
   expect(
     requests.filter(
-      ({ url, method }) =>
-        url === "/api/changes/change-alpha/publication/checks/observe" &&
-        method === "POST",
+      ({ url, method }) => url === "/api/changes/change-alpha/publication/checks/observe" && method === "POST",
     ),
   ).toHaveLength(0);
 });
@@ -4344,9 +3891,7 @@ it("does not offer publication-check observation outside draft and awaiting-merg
   renderPage("/delivery/change-alpha/publication");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).queryByTestId("publication-checks-observe"),
-  ).not.toBeInTheDocument();
+  expect(within(inspector).queryByTestId("publication-checks-observe")).not.toBeInTheDocument();
 });
 
 it("clears publication-check results when the polled published head changes", async () => {
@@ -4371,9 +3916,7 @@ it("clears publication-check results when the polled published head changes", as
     });
 
     const inspector = screen.getByTestId("work-item-detail");
-    fireEvent.click(
-      within(inspector).getByTestId("publication-checks-observe"),
-    );
+    fireEvent.click(within(inspector).getByTestId("publication-checks-observe"));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -4387,9 +3930,9 @@ it("clears publication-check results when the polled published head changes", as
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3_000);
     });
-    expect(
-      within(inspector).getByTestId("publication-checks-status"),
-    ).toHaveTextContent("Previous check results were cleared");
+    expect(within(inspector).getByTestId("publication-checks-status")).toHaveTextContent(
+      "Previous check results were cleared",
+    );
     expect(within(inspector).queryByText("Unit tests")).not.toBeInTheDocument();
   } finally {
     vi.useRealTimers();
@@ -4418,9 +3961,7 @@ it("keeps observed publication checks visible across a phase change with the sam
     });
 
     const inspector = screen.getByTestId("work-item-detail");
-    fireEvent.click(
-      within(inspector).getByTestId("publication-checks-observe"),
-    );
+    fireEvent.click(within(inspector).getByTestId("publication-checks-observe"));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -4439,12 +3980,8 @@ it("keeps observed publication checks visible across a phase change with the sam
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3_000);
     });
-    expect(
-      within(inspector).getByText("Checkpoint pending"),
-    ).toBeInTheDocument();
-    expect(
-      within(inspector).queryByTestId("publication-checks-observe"),
-    ).not.toBeInTheDocument();
+    expect(within(inspector).getByText("Checkpoint pending")).toBeInTheDocument();
+    expect(within(inspector).queryByTestId("publication-checks-observe")).not.toBeInTheDocument();
     expect(within(inspector).getByText("Unit tests")).toBeInTheDocument();
   } finally {
     vi.useRealTimers();
@@ -4469,13 +4006,9 @@ it("disables publication-check observation while another publication action is p
   const inspector = await screen.findByTestId("work-item-detail");
 
   try {
-    fireEvent.click(
-      within(inspector).getByText("Merge latest target into Change"),
-    );
+    fireEvent.click(within(inspector).getByText("Merge latest target into Change"));
     fireEvent.click(screen.getByText("Confirm target update"));
-    const observe = within(inspector).getByTestId(
-      "publication-checks-observe",
-    ) as HTMLElement & { disabled: boolean };
+    const observe = within(inspector).getByTestId("publication-checks-observe") as HTMLElement & { disabled: boolean };
     await waitFor(() => expect(observe.disabled).toBe(true));
   } finally {
     pendingMutationRelease?.();
@@ -4502,18 +4035,10 @@ it("disables publication actions while publication-check observation is pending"
   const inspector = await screen.findByTestId("work-item-detail");
 
   try {
-    fireEvent.click(
-      within(inspector).getByTestId("publication-checks-observe"),
-    );
-    const sync = within(inspector).getByText(
-      "Merge latest target into Change",
-    ) as HTMLElement & { disabled: boolean };
+    fireEvent.click(within(inspector).getByTestId("publication-checks-observe"));
+    const sync = within(inspector).getByText("Merge latest target into Change") as HTMLElement & { disabled: boolean };
     await waitFor(() => expect(sync.disabled).toBe(true));
-    expect(
-      requests.filter(
-        ({ url, method }) => method === "POST" && url.endsWith("/target/sync"),
-      ),
-    ).toHaveLength(0);
+    expect(requests.filter(({ url, method }) => method === "POST" && url.endsWith("/target/sync"))).toHaveLength(0);
   } finally {
     pendingPublicationChecksRelease?.();
     pendingPublicationChecksObservation = false;
@@ -4545,9 +4070,7 @@ it("rejects an observation returned for a different exact head", async () => {
 
   const error = await within(inspector).findByRole("alert");
   expect(error).toHaveTextContent("ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE");
-  expect(error).toHaveTextContent(
-    "do not match the current Change published head",
-  );
+  expect(error).toHaveTextContent("do not match the current Change published head");
   expect(within(inspector).queryByText("Unit tests")).not.toBeInTheDocument();
 });
 
@@ -4573,9 +4096,7 @@ it("discloses provider checks omitted by the bounded response", async () => {
   const inspector = await screen.findByTestId("work-item-detail");
   fireEvent.click(within(inspector).getByTestId("publication-checks-observe"));
 
-  expect(
-    await within(inspector).findByText("1 additional check not shown."),
-  ).toBeInTheDocument();
+  expect(await within(inspector).findByText("1 additional check not shown.")).toBeInTheDocument();
 });
 
 it("shows typed provider failure for publication-check observation", async () => {
@@ -4616,9 +4137,7 @@ it("keeps cached routed detail visible when a background refresh fails", async (
       await vi.advanceTimersByTimeAsync(3_000);
     });
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(
-      "Showing the last successful refresh — live updates paused.",
-    );
+    expect(alert).toHaveTextContent("Showing the last successful refresh — live updates paused.");
     expect(alert).toHaveTextContent("Temporary polling failure");
     expect(alert).not.toHaveTextContent("Work portfolio is unavailable");
     expect(detailView).toBeInTheDocument();
@@ -4643,24 +4162,18 @@ it("shows stale Work Item detail state and retries the refresh in place", async 
       await vi.advanceTimersByTimeAsync(3_000);
     });
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(
-      "Showing the last successful Work Item detail; live updates paused.",
-    );
+    expect(alert).toHaveTextContent("Showing the last successful Work Item detail; live updates paused.");
     expect(alert).toHaveTextContent("Delivery runtime is absent: change-alpha");
     expect(screen.getByTestId("work-item-detail")).toBeInTheDocument();
 
     detailFailure = false;
-    fireEvent.click(
-      within(alert).getByText("Retry Work Item", { exact: true }),
-    );
+    fireEvent.click(within(alert).getByText("Retry Work Item", { exact: true }));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(
-      screen.queryByText(
-        "Showing the last successful Work Item detail; live updates paused.",
-      ),
+      screen.queryByText("Showing the last successful Work Item detail; live updates paused."),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId("work-item-detail")).toBeInTheDocument();
   } finally {
@@ -4729,9 +4242,7 @@ it("does not prescribe Design for a return to Planning", async () => {
 
   const inspector = await screen.findByTestId("work-item-detail");
   expect(inspector).toHaveTextContent("Returned to Planning");
-  expect(inspector).toHaveTextContent(
-    "The implementation plan needs revision.",
-  );
+  expect(inspector).toHaveTextContent("The implementation plan needs revision.");
   expect(inspector).not.toHaveTextContent("/design");
 });
 
@@ -4797,14 +4308,9 @@ it("shows finalized and accepted merge heads as distinct identities", async () =
 
   const detailView = await screen.findByTestId("work-item-detail");
   expect(detailView).toHaveTextContent(`Finalized head${"1".repeat(40)}`);
-  expect(detailView).toHaveTextContent(
-    `Accepted merge commit${"2".repeat(40)}`,
-  );
+  expect(detailView).toHaveTextContent(`Accepted merge commit${"2".repeat(40)}`);
   expect(detailView).not.toHaveTextContent(/ancestor|descendant|merge method/i);
-  expect(detailView.querySelector("[data-section-tone]")).toHaveAttribute(
-    "data-section-tone",
-    "success",
-  );
+  expect(detailView.querySelector("[data-section-tone]")).toHaveAttribute("data-section-tone", "success");
 });
 
 it("moves a completed selected Change into completed history instead of leaving a dead route", async () => {
@@ -4866,14 +4372,8 @@ it("moves a completed selected Change into completed history instead of leaving 
   const inspector = await screen.findByTestId("work-item-detail");
   fireEvent.click(within(inspector).getByText("Complete accepted Change"));
 
-  expect(
-    await screen.findByTestId("completed-history-workspace"),
-  ).toHaveTextContent("Change history");
-  await waitFor(() =>
-    expect(screen.getByTestId("test-location")).toHaveTextContent(
-      "/delivery/history",
-    ),
-  );
+  expect(await screen.findByTestId("completed-history-workspace")).toHaveTextContent("Change history");
+  await waitFor(() => expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/history"));
   expect(await screen.findByText("Portfolio redesign")).toBeInTheDocument();
 });
 
@@ -4881,9 +4381,7 @@ it("closes live detail before entering completed history", async () => {
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
   await screen.findByTestId("work-item-detail");
 
-  fireEvent.click(
-    screen.getByRole("button", { name: "Change history", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Change history", exact: true }));
 
   await screen.findByTestId("completed-history-workspace");
   expect(screen.queryByTestId("work-item-detail")).not.toBeInTheDocument();
@@ -4893,20 +4391,14 @@ it("closes live detail before entering completed history", async () => {
     );
     expect(openFlyout).toBeUndefined();
   });
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Change history", exact: true }),
-    ).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByRole("button", { name: "Change history", exact: true })).toHaveFocus());
 });
 
 it("presents receipt-backed completion evidence explicitly", async () => {
   renderPage();
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
-  fireEvent.click(
-    within(record).getByRole("button", { name: "Inspect Portfolio redesign" }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: "Inspect Portfolio redesign" }));
 
   const detailView = await screen.findByTestId("completed-change-detail");
   const openFlyout = Array.from(document.querySelectorAll("p-flyout")).find(
@@ -4914,9 +4406,7 @@ it("presents receipt-backed completion evidence explicitly", async () => {
   );
   expect(openFlyout).toBeInTheDocument();
   expect(detailView).toHaveTextContent("Purpose");
-  expect(detailView).toHaveTextContent(
-    "Give operators a clear view of grouped Delivery work.",
-  );
+  expect(detailView).toHaveTextContent("Give operators a clear view of grouped Delivery work.");
   expect(detailView).toHaveTextContent("Delivered outcomes");
   expect(detailView).toHaveTextContent("Ship the grouped Delivery workspace");
   expect(detailView).toHaveTextContent("Accepted delivery");
@@ -4929,18 +4419,14 @@ it("refreshes current delivery immediately after returning from completed histor
   renderPage();
   await screen.findByRole("heading", { name: "Initial delivery", exact: true });
 
-  fireEvent.click(
-    screen.getByRole("button", { name: "Change history", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Change history", exact: true }));
   await screen.findByTestId("completed-history-workspace");
   currentPortfolio = portfolio([group({ title: "Refreshed delivery" })]);
   const requestsBeforeReturn = requests.filter(
     ({ method, url }) => method === "GET" && url === "/api/work-items",
   ).length;
 
-  fireEvent.click(
-    screen.getByRole("button", { name: "Current delivery", exact: true }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Current delivery", exact: true }));
   await screen.findByRole("heading", {
     name: "Refreshed delivery",
     exact: true,
@@ -4976,16 +4462,10 @@ it("distinguishes no matching completed history and clears the search", async ()
 
   const emptyState = await screen.findByTestId("completed-history-empty-state");
   expect(emptyState).toHaveTextContent('No changes match "unmatched history"');
-  expect(emptyState).toHaveTextContent(
-    "Try a different search or clear the current search.",
-  );
-  fireEvent.click(
-    within(emptyState).getByText("Clear search", { exact: true }),
-  );
+  expect(emptyState).toHaveTextContent("Try a different search or clear the current search.");
+  fireEvent.click(within(emptyState).getByText("Clear search", { exact: true }));
 
-  await waitFor(() =>
-    expect(screen.getByTestId("completed-change-record")).toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.getByTestId("completed-change-record")).toBeInTheDocument());
 });
 
 it("marks previous completed history results while a search is pending", async () => {
@@ -4993,30 +4473,18 @@ it("marks previous completed history results while a search is pending", async (
   completedHistorySearchPending = true;
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2));
 
   try {
     const search = container.querySelector("p-input-search");
     expect(search).not.toBeNull();
     inputValue(search as Element, "unmatched history");
 
-    const staleStatus = await screen.findByTestId(
-      "completed-history-stale-status",
-    );
-    expect(staleStatus).toHaveTextContent(
-      "Previous results are shown until the search finishes.",
-    );
-    expect(screen.getByTestId("completed-history-results")).toHaveAttribute(
-      "aria-busy",
-      "true",
-    );
+    const staleStatus = await screen.findByTestId("completed-history-stale-status");
+    expect(staleStatus).toHaveTextContent("Previous results are shown until the search finishes.");
+    expect(screen.getByTestId("completed-history-results")).toHaveAttribute("aria-busy", "true");
     expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2);
-    expect(screen.getAllByTestId("completed-change-record")[0]).toHaveAttribute(
-      "data-stale",
-      "true",
-    );
+    expect(screen.getAllByTestId("completed-change-record")[0]).toHaveAttribute("data-stale", "true");
   } finally {
     completedHistorySearchRelease?.();
     completedHistorySearchPending = false;
@@ -5033,9 +4501,7 @@ it("retains previous completed history when a search fails", async () => {
   completedHistorySearchRecords = [receiptCompleted];
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2));
 
   const search = container.querySelector("p-input-search");
   expect(search).not.toBeNull();
@@ -5044,22 +4510,18 @@ it("retains previous completed history when a search fails", async () => {
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("Change history is unavailable.");
   expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2);
-  expect(
-    screen.getByTestId("completed-history-stale-status"),
-  ).toHaveTextContent(
+  expect(screen.getByTestId("completed-history-stale-status")).toHaveTextContent(
     "Previous results are shown while this search is retried.",
   );
-  const loadMore = screen
-    .getByText("Load more", { exact: true })
-    .closest("p-button") as HTMLElement & { disabled?: boolean };
+  const loadMore = screen.getByText("Load more", { exact: true }).closest("p-button") as HTMLElement & {
+    disabled?: boolean;
+  };
   expect(loadMore.disabled).toBe(true);
 
   fireEvent.click(within(alert).getByText("Retry history", { exact: true }));
   await screen.findByText("Receipt-backed delivery", { exact: true });
   expect(screen.getAllByTestId("completed-change-record")).toHaveLength(1);
-  expect(
-    screen.queryByTestId("completed-history-stale-status"),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByTestId("completed-history-stale-status")).not.toBeInTheDocument();
 });
 
 it("disables load more while a completed history search is pending", async () => {
@@ -5068,9 +4530,7 @@ it("disables load more while a completed history search is pending", async () =>
   completedHistorySearchPending = true;
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2));
 
   try {
     const search = container.querySelector("p-input-search");
@@ -5078,9 +4538,9 @@ it("disables load more while a completed history search is pending", async () =>
     inputValue(search as Element, "Beta");
     await screen.findByTestId("completed-history-stale-status");
 
-    const loadMore = screen
-      .getByTestId("completed-history-load-more")
-      .closest("p-button") as HTMLElement & { disabled?: boolean };
+    const loadMore = screen.getByTestId("completed-history-load-more").closest("p-button") as HTMLElement & {
+      disabled?: boolean;
+    };
     expect(loadMore.disabled).toBe(true);
   } finally {
     completedHistorySearchRelease?.();
@@ -5095,9 +4555,7 @@ it("appends paginated results for a completed history search", async () => {
   completedHistorySearchPageRecords = [receiptCompleted];
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(1),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(1));
 
   const search = container.querySelector("p-input-search");
   expect(search).not.toBeNull();
@@ -5110,14 +4568,10 @@ it("appends paginated results for a completed history search", async () => {
   expect(
     requests.filter(
       ({ url, method }) =>
-        method === "GET" &&
-        url ===
-          "/api/work-items/completed/search?query=Beta&cursor=search-page-2",
+        method === "GET" && url === "/api/work-items/completed/search?query=Beta&cursor=search-page-2",
     ),
   ).toHaveLength(1);
-  await waitFor(() =>
-    expect(screen.getByTestId("completed-history-workspace")).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByTestId("completed-history-workspace")).toHaveFocus());
 });
 
 it("closes completed history detail when a settled search removes the selected record", async () => {
@@ -5125,9 +4579,7 @@ it("closes completed history detail when a settled search removes the selected r
   completedHistorySearchPending = true;
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2));
 
   try {
     const search = container.querySelector("p-input-search");
@@ -5137,9 +4589,7 @@ it("closes completed history detail when a settled search removes the selected r
 
     const record = screen
       .getAllByTestId("completed-change-record")
-      .find((candidate) =>
-        candidate.textContent?.includes("Portfolio redesign"),
-      );
+      .find((candidate) => candidate.textContent?.includes("Portfolio redesign"));
     expect(record).toBeDefined();
     fireEvent.click(
       within(requirePresent(record)).getByRole("button", {
@@ -5168,20 +4618,14 @@ it("debounces completed history search requests while typing", async () => {
   completedRecords = [completed, receiptCompleted];
   const { container } = renderPage();
   fireEvent.click(screen.getByText("Change history"));
-  await waitFor(() =>
-    expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2),
-  );
+  await waitFor(() => expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2));
 
   const search = container.querySelector("p-input-search");
   expect(search).not.toBeNull();
-  for (const value of ["a", "al", "alp", "alph", "alpha"])
-    inputValue(search as Element, value);
+  for (const value of ["a", "al", "alp", "alph", "alpha"]) inputValue(search as Element, value);
 
   const searchRequests = () =>
-    requests.filter(
-      ({ url, method }) =>
-        method === "GET" && url.startsWith("/api/work-items/completed/search?"),
-    );
+    requests.filter(({ url, method }) => method === "GET" && url.startsWith("/api/work-items/completed/search?"));
   await waitFor(() => expect(searchRequests()).toHaveLength(1), {
     timeout: 2_000,
   });
@@ -5194,26 +4638,17 @@ it("retries failed completed history detail in place", async () => {
   renderPage();
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
-  fireEvent.click(
-    within(record).getByRole("button", { name: "Inspect Portfolio redesign" }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: "Inspect Portfolio redesign" }));
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("Completion detail is unavailable.");
-  fireEvent.click(
-    within(alert).getByText("Retry completion detail", { exact: true }),
-  );
+  fireEvent.click(within(alert).getByText("Retry completion detail", { exact: true }));
 
   await screen.findByTestId("completed-change-detail");
-  expect(screen.getByTestId("completed-change-detail")).toHaveTextContent(
-    "Accepted delivery",
-  );
+  expect(screen.getByTestId("completed-change-detail")).toHaveTextContent("Accepted delivery");
   expect(
-    requests.filter(
-      ({ url, method }) =>
-        method === "GET" &&
-        url.includes("/api/work-items/completed/change-alpha?"),
-    ).length,
+    requests.filter(({ url, method }) => method === "GET" && url.includes("/api/work-items/completed/change-alpha?"))
+      .length,
   ).toBe(2);
 });
 
@@ -5278,18 +4713,14 @@ it("returns focus to history after appending the final page", async () => {
 
   fireEvent.click(screen.getByTestId("completed-history-load-more"));
   await screen.findByText("Second historical change", { exact: true });
-  await waitFor(() =>
-    expect(screen.getByTestId("completed-history-workspace")).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByTestId("completed-history-workspace")).toHaveFocus());
 });
 
 it("keeps a valid later-page completion deep link open", async () => {
   completedRecords = [completed];
   completedDetailRecord = receiptCompleted;
   completedHistoryNextCursor = "page-2";
-  renderPage(
-    `/delivery/history/${receiptCompleted.change_id}/${receiptCompleted.completion_id}`,
-  );
+  renderPage(`/delivery/history/${receiptCompleted.change_id}/${receiptCompleted.completion_id}`);
 
   const detailView = await screen.findByTestId("completed-change-detail");
   expect(detailView).toHaveTextContent("Receipt-backed delivery");
@@ -5298,9 +4729,7 @@ it("keeps a valid later-page completion deep link open", async () => {
 
 it("keeps a deep-linked completion open while the initial history list fails", async () => {
   completedHistoryFailuresRemaining = 1;
-  renderPage(
-    `/delivery/history/${completed.change_id}/${completed.completion_id}`,
-  );
+  renderPage(`/delivery/history/${completed.change_id}/${completed.completion_id}`);
 
   const detailView = await screen.findByTestId("completed-change-detail");
   expect(detailView).toHaveTextContent("Accepted delivery");
@@ -5308,22 +4737,16 @@ it("keeps a deep-linked completion open while the initial history list fails", a
   expect(alert).toHaveTextContent("Change history is unavailable.");
 
   fireEvent.click(within(alert).getByText("Retry history", { exact: true }));
-  await waitFor(() =>
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   expect(screen.getByTestId("completed-change-detail")).toBe(detailView);
 
   fireEvent.click(within(detailView).getByText("Close", { exact: true }));
-  await waitFor(() =>
-    expect(screen.getByTestId("completed-history-workspace")).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByTestId("completed-history-workspace")).toHaveFocus());
 });
 
 it("rejects a completion detail response with the wrong identity", async () => {
   completedDetailMismatch = receiptCompleted;
-  renderPage(
-    `/delivery/history/${completed.change_id}/${completed.completion_id}`,
-  );
+  renderPage(`/delivery/history/${completed.change_id}/${completed.completion_id}`);
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("Completion detail is unavailable.");
@@ -5331,9 +4754,7 @@ it("rejects a completion detail response with the wrong identity", async () => {
   expect(screen.queryByText("Receipt-backed delivery")).not.toBeInTheDocument();
 
   completedDetailMismatch = null;
-  fireEvent.click(
-    within(alert).getByText("Retry completion detail", { exact: true }),
-  );
+  fireEvent.click(within(alert).getByText("Retry completion detail", { exact: true }));
   const detailView = await screen.findByTestId("completed-change-detail");
   expect(detailView).toHaveTextContent("Accepted delivery");
 });
@@ -5357,21 +4778,14 @@ it("retries a failed completed history page without resetting loaded records", a
   fireEvent.click(screen.getByText("Load more", { exact: true }));
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("Could not load more Change history.");
-  expect(
-    within(alert).getByText("Retry loading more", { exact: true }),
-  ).toBeInTheDocument();
+  expect(within(alert).getByText("Retry loading more", { exact: true })).toBeInTheDocument();
   expect(screen.getAllByTestId("completed-change-record")).toHaveLength(1);
 
-  fireEvent.click(
-    within(alert).getByText("Retry loading more", { exact: true }),
-  );
+  fireEvent.click(within(alert).getByText("Retry loading more", { exact: true }));
   await screen.findByText("Second historical change", { exact: true });
   expect(screen.getAllByTestId("completed-change-record")).toHaveLength(2);
   expect(
-    requests.filter(
-      ({ url, method }) =>
-        method === "GET" && url === "/api/work-items/completed?cursor=page-2",
-    ),
+    requests.filter(({ url, method }) => method === "GET" && url === "/api/work-items/completed?cursor=page-2"),
   ).toHaveLength(2);
 });
 
@@ -5381,19 +4795,14 @@ it("presents receipt completion identities without graph claims", async () => {
   fireEvent.click(screen.getByText("Change history"));
   const record = await screen.findByTestId("completed-change-record");
   const pullRequest = within(record).getByRole("link", { name: "PR #42" });
-  expect(pullRequest).toHaveAttribute(
-    "href",
-    "https://github.com/owlbear/example/pull/42",
-  );
+  expect(pullRequest).toHaveAttribute("href", "https://github.com/owlbear/example/pull/42");
   expect(within(record).getByText(/Aug 11, 2026/)).toBeInTheDocument();
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: { writeText },
   });
-  fireEvent.click(
-    within(record).getByRole("button", { name: "Copy accepted merge commit" }),
-  );
+  fireEvent.click(within(record).getByRole("button", { name: "Copy accepted merge commit" }));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("4".repeat(40)));
   fireEvent.click(
     within(record).getByRole("button", {
@@ -5403,9 +4812,7 @@ it("presents receipt completion identities without graph claims", async () => {
 
   const detailView = await screen.findByTestId("completed-change-detail");
   expect(detailView).toHaveTextContent("Purpose");
-  expect(detailView).toHaveTextContent(
-    "Record the accepted change with durable evidence.",
-  );
+  expect(detailView).toHaveTextContent("Record the accepted change with durable evidence.");
   expect(detailView).toHaveTextContent("Delivered outcomes");
   expect(detailView).toHaveTextContent("Accept the merged Delivery change");
   expect(detailView).toHaveTextContent("Accepted delivery");
@@ -5417,17 +4824,13 @@ it("presents receipt completion identities without graph claims", async () => {
   expect(detailView).toHaveTextContent("3".repeat(40));
   expect(detailView).toHaveTextContent("Accepted merge commit");
   expect(detailView).toHaveTextContent("4".repeat(40));
-  expect(
-    within(detailView).getByRole("button", { name: "Copy completion ID" }),
-  ).toBeInTheDocument();
+  expect(within(detailView).getByRole("button", { name: "Copy completion ID" })).toBeInTheDocument();
   expect(
     within(detailView).getByRole("button", {
       name: "Copy finalized Change head",
     }),
   ).toBeInTheDocument();
-  expect(detailView).not.toHaveTextContent(
-    /ancestor|descendant|merged into|merge method/i,
-  );
+  expect(detailView).not.toHaveTextContent(/ancestor|descendant|merged into|merge method/i);
 });
 
 it("keeps current delivery open when only the selected publication card disappears", async () => {
@@ -5484,19 +4887,13 @@ it("keeps current delivery open when only the selected publication card disappea
       merged_at: "2026-08-11T12:00:00Z",
     },
   });
-  portfolioAfterPublication = portfolio([
-    group({ items: [card({ title: "Returned outcome" })] }),
-  ]);
+  portfolioAfterPublication = portfolio([group({ items: [card({ title: "Returned outcome" })] })]);
   renderPage("/delivery/change-alpha/publication");
   const inspector = await screen.findByTestId("work-item-detail");
   fireEvent.click(within(inspector).getByText("Complete accepted Change"));
 
-  expect(await screen.findByTestId("work-portfolio-table")).toHaveTextContent(
-    "Returned outcome",
-  );
-  expect(
-    screen.queryByTestId("completed-history-workspace"),
-  ).not.toBeInTheDocument();
+  expect(await screen.findByTestId("work-portfolio-table")).toHaveTextContent("Returned outcome");
+  expect(screen.queryByTestId("completed-history-workspace")).not.toBeInTheDocument();
 });
 
 it("renders engine readiness without recomputing eligibility", async () => {
@@ -5510,24 +4907,14 @@ it("renders engine readiness without recomputing eligibility", async () => {
   });
   renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
   const inspector = await screen.findByTestId("work-item-detail");
   const readinessPanel = within(inspector).getByTestId("delivery-readiness");
-  expect(
-    within(readinessPanel).getByTestId("readiness-status"),
-  ).toHaveTextContent("Blocked");
-  expect(
-    within(readinessPanel).getByTestId("readiness-checks-state"),
-  ).toHaveTextContent("Checks: Not run");
-  expect(readinessPanel).toHaveTextContent(
-    "Managed workspace preflight is blocked by local changes.",
-  );
-  expect(
-    within(readinessPanel).getByTestId("readiness-not-executable"),
-  ).toBeInTheDocument();
+  expect(within(readinessPanel).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+  expect(within(readinessPanel).getByTestId("readiness-checks-state")).toHaveTextContent("Checks: Not run");
+  expect(readinessPanel).toHaveTextContent("Managed workspace preflight is blocked by local changes.");
+  expect(within(readinessPanel).getByTestId("readiness-not-executable")).toBeInTheDocument();
   expect(readinessPanel).toHaveTextContent("1".repeat(40));
 });
 
@@ -5541,16 +4928,10 @@ it("reports checks that have not run without implying a pass", async () => {
   });
   renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
-  const readinessPanel = within(
-    await screen.findByTestId("work-item-detail"),
-  ).getByTestId("delivery-readiness");
-  expect(
-    within(readinessPanel).getByTestId("readiness-checks-state"),
-  ).toHaveTextContent("Not run");
+  const readinessPanel = within(await screen.findByTestId("work-item-detail")).getByTestId("delivery-readiness");
+  expect(within(readinessPanel).getByTestId("readiness-checks-state")).toHaveTextContent("Not run");
   expect(readinessPanel).not.toHaveTextContent("Passed");
 });
 
@@ -5584,19 +4965,11 @@ it("shows the applicable finalization attempt retained by readiness", async () =
   });
   renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
-  const attempt = within(
-    await screen.findByTestId("work-item-detail"),
-  ).getByTestId("readiness-last-attempt");
-  expect(
-    within(attempt).getByTestId("readiness-attempt-applicability"),
-  ).toHaveTextContent("Applies to this candidate");
-  expect(attempt).toHaveTextContent(
-    "Managed workspace preflight did not pass.",
-  );
+  const attempt = within(await screen.findByTestId("work-item-detail")).getByTestId("readiness-last-attempt");
+  expect(within(attempt).getByTestId("readiness-attempt-applicability")).toHaveTextContent("Applies to this candidate");
+  expect(attempt).toHaveTextContent("Managed workspace preflight did not pass.");
   expect(attempt).toHaveTextContent("workspace-preflight-failed");
   expect(attempt).toHaveTextContent("Not run");
 });
@@ -5631,19 +5004,11 @@ it("reports the historical applicability of a finalization attempt from an earli
   });
   renderPage();
   const table = await screen.findByTestId("work-portfolio-table");
-  fireEvent.click(
-    within(table).getAllByRole("link", { name: /Delivery foundation/ })[0],
-  );
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
 
-  const attempt = within(
-    await screen.findByTestId("work-item-detail"),
-  ).getByTestId("readiness-last-attempt");
-  expect(
-    within(attempt).getByTestId("readiness-attempt-applicability"),
-  ).toHaveTextContent("Historical");
-  expect(attempt).toHaveTextContent(
-    "Maintained checks failed on an earlier candidate.",
-  );
+  const attempt = within(await screen.findByTestId("work-item-detail")).getByTestId("readiness-last-attempt");
+  expect(within(attempt).getByTestId("readiness-attempt-applicability")).toHaveTextContent("Historical");
+  expect(attempt).toHaveTextContent("Maintained checks failed on an earlier candidate.");
   expect(attempt).toHaveTextContent("Failed");
 });
 
@@ -5683,24 +5048,16 @@ it("reports engine readiness rather than the publication phase for a dirty candi
   });
   renderPage();
 
-  const row = await screen.findByLabelText(
-    "Change publication for Portfolio redesign",
-  );
+  const row = await screen.findByLabelText("Change publication for Portfolio redesign");
   expect(row.querySelector("[data-status-tone]")).toHaveTextContent("Blocked");
   expect(row).toHaveTextContent("Ready for finalization");
 
   fireEvent.click(within(row).getByRole("link", { name: "Publication" }));
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByTestId("publication-readiness-status"),
-  ).toHaveTextContent("Blocked");
+  expect(within(inspector).getByTestId("publication-readiness-status")).toHaveTextContent("Blocked");
   expect(inspector).toHaveTextContent("Ready for finalization");
-  expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(
-    "Blocked",
-  );
-  expect(
-    within(inspector).getByTestId("readiness-not-executable"),
-  ).toBeInTheDocument();
+  expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+  expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
 });
 
 it("reports a clean finalization candidate as ready and a running one as running", async () => {
@@ -5727,12 +5084,8 @@ it("reports a clean finalization candidate as ready and a running one as running
     }),
   ]);
   const { unmount } = renderPage();
-  const readyRow = await screen.findByLabelText(
-    "Change publication for Portfolio redesign",
-  );
-  expect(readyRow.querySelector("[data-status-tone]")).toHaveTextContent(
-    "Ready",
-  );
+  const readyRow = await screen.findByLabelText("Change publication for Portfolio redesign");
+  expect(readyRow.querySelector("[data-status-tone]")).toHaveTextContent("Ready");
   expect(readyRow).toHaveTextContent("Ready for finalization");
   unmount();
 
@@ -5753,12 +5106,8 @@ it("reports a clean finalization candidate as ready and a running one as running
     }),
   ]);
   renderPage();
-  const runningRow = await screen.findByLabelText(
-    "Change publication for Portfolio redesign",
-  );
-  expect(runningRow.querySelector("[data-status-tone]")).toHaveTextContent(
-    "Running",
-  );
+  const runningRow = await screen.findByLabelText("Change publication for Portfolio redesign");
+  expect(runningRow.querySelector("[data-status-tone]")).toHaveTextContent("Running");
   expect(runningRow).toHaveTextContent("Ready for finalization");
 });
 
@@ -5952,8 +5301,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       lifecycle: "publication",
       publication: publicationForChecks("ready-for-finalization"),
       chip: "Ready",
-      reason:
-        "The Change must be synchronized with its integration target first.",
+      reason: "The Change must be synchronized with its integration target first.",
       actor: "Agent",
       command: null,
     },
@@ -5994,9 +5342,7 @@ it("maps every coherent engine readiness response to its portfolio state and con
       ...scenario.item,
       readiness: scenario.state,
     };
-    currentPortfolio = portfolio([
-      group({ lifecycle: scenario.lifecycle, items: [item] }),
-    ]);
+    currentPortfolio = portfolio([group({ lifecycle: scenario.lifecycle, items: [item] })]);
     currentDetail = detail({
       card: item,
       readiness: scenario.state,
@@ -6005,45 +5351,29 @@ it("maps every coherent engine readiness response to its portfolio state and con
     const { unmount } = renderPage(`/delivery/change-alpha/${item.item_key}`);
 
     const table = await screen.findByTestId("work-portfolio-table");
-    const row = table.querySelector(
-      `[data-work-item="change-alpha:${item.item_key}"]`,
-    ) as HTMLElement;
-    expect(row.querySelector("[data-status-tone]")).toHaveTextContent(
-      scenario.chip,
-    );
+    const row = table.querySelector(`[data-work-item="change-alpha:${item.item_key}"]`) as HTMLElement;
+    expect(row.querySelector("[data-status-tone]")).toHaveTextContent(scenario.chip);
 
     const inspector = await screen.findByTestId("work-item-detail");
-    expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(
-      scenario.chip,
+    expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(scenario.chip);
+    expect(inspector.querySelector(`[data-readiness-reason="${scenario.state.reason_code}"]`)).toHaveTextContent(
+      scenario.reason,
     );
-    expect(
-      inspector.querySelector(
-        `[data-readiness-reason="${scenario.state.reason_code}"]`,
-      ),
-    ).toHaveTextContent(scenario.reason);
-    expect(
-      inspector.querySelector(
-        `[data-readiness-actor="${scenario.state.next_actor}"]`,
-      ),
-    ).toHaveTextContent(`Next: ${scenario.actor}`);
+    expect(inspector.querySelector(`[data-readiness-actor="${scenario.state.next_actor}"]`)).toHaveTextContent(
+      `Next: ${scenario.actor}`,
+    );
     if (scenario.command) {
-      expect(
-        within(inspector).queryByTestId("readiness-not-executable"),
-      ).not.toBeInTheDocument();
+      expect(within(inspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
       expect(
         within(inspector).getByRole("button", {
           name: `Copy command ${scenario.command}`,
         }),
       ).toBeInTheDocument();
     } else {
-      expect(
-        within(inspector).getByTestId("readiness-not-executable"),
-      ).toHaveTextContent(
+      expect(within(inspector).getByTestId("readiness-not-executable")).toHaveTextContent(
         "Delivery offers no runnable operation for this Work Item right now.",
       );
-      expect(
-        within(inspector).queryByRole("button", { name: /^Copy command/ }),
-      ).not.toBeInTheDocument();
+      expect(within(inspector).queryByRole("button", { name: /^Copy command/ })).not.toBeInTheDocument();
     }
     expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
     unmount();
@@ -6080,9 +5410,7 @@ it("offers the finalize command only while engine readiness is executable", asyn
       name: `Copy command ${executableAction.command}`,
     }),
   ).toBeInTheDocument();
-  expect(
-    within(executableInspector).queryByTestId("readiness-not-executable"),
-  ).not.toBeInTheDocument();
+  expect(within(executableInspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
 
   currentDetail = detail({
     card: publicationCardForChecks({
@@ -6108,19 +5436,14 @@ it("offers the finalize command only while engine readiness is executable", asyn
     { timeout: 6000 },
   );
   const blockedInspector = screen.getByTestId("work-item-detail");
-  expect(
-    within(blockedInspector).getByTestId("finalization-readiness"),
-  ).toHaveTextContent("Delivery cannot finalize the current Change yet.");
-  expect(
-    within(blockedInspector).getByTestId("readiness-not-executable"),
-  ).toBeInTheDocument();
+  expect(within(blockedInspector).getByTestId("finalization-readiness")).toHaveTextContent(
+    "Delivery cannot finalize the current Change yet.",
+  );
+  expect(within(blockedInspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
 });
 
 it("offers read-only inspection for an unavailable Change without controls", async () => {
-  currentUnavailableDetail = unavailableChange(
-    "change-alpha",
-    "Portfolio redesign",
-  );
+  currentUnavailableDetail = unavailableChange("change-alpha", "Portfolio redesign");
   renderPage("/delivery/change-alpha/outcome:OUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -6128,15 +5451,9 @@ it("offers read-only inspection for an unavailable Change without controls", asy
   expect(inspector).toHaveTextContent(
     "This view is read-only inspection evidence; no Change operation is offered here.",
   );
-  expect(
-    within(inspector).getByTestId("unavailable-change-diagnostics"),
-  ).toHaveTextContent("runtime-unavailable");
-  expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent(
-    "Unavailable",
-  );
-  expect(
-    within(inspector).getByTestId("readiness-checks-state"),
-  ).toHaveTextContent("Unknown");
+  expect(within(inspector).getByTestId("unavailable-change-diagnostics")).toHaveTextContent("runtime-unavailable");
+  expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Unavailable");
+  expect(within(inspector).getByTestId("readiness-checks-state")).toHaveTextContent("Unknown");
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
 
@@ -6151,11 +5468,9 @@ it("labels every continuation readiness reason without blanking a new engine sta
     "target-sync-required",
     "claim-custody-unreconciled",
   ];
-  expect(
-    new Set(
-      continuationReasons.map((reason) => READINESS_REASON_LABELS[reason]),
-    ).size,
-  ).toBe(continuationReasons.length);
+  expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
+    continuationReasons.length,
+  );
 
   for (const reason of continuationReasons) {
     const state = readiness({
@@ -6167,9 +5482,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
     const { unmount } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
     const inspector = await screen.findByTestId("work-item-detail");
-    const rendered = inspector.querySelector(
-      `[data-readiness-reason="${reason}"]`,
-    );
+    const rendered = inspector.querySelector(`[data-readiness-reason="${reason}"]`);
     expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason]);
     expect(rendered?.textContent?.trim()).not.toBe("");
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
@@ -6194,18 +5507,14 @@ it("reports engine continuation custody as provenance without offering caller-co
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(
-    within(inspector).getByTestId("claim-continuation-custody"),
-  ).toHaveTextContent("Caller-confirmed recovery is not supported for it.");
+  expect(within(inspector).getByTestId("claim-continuation-custody")).toHaveTextContent(
+    "Caller-confirmed recovery is not supported for it.",
+  );
   expect(inspector).toHaveTextContent("Engine continuation");
   expect(inspector).toHaveTextContent("cockpit-host");
   expect(inspector).toHaveTextContent("cockpit-session");
-  expect(inspector).toHaveTextContent(
-    "not evidence that the worker is still running",
-  );
-  expect(
-    within(inspector).queryByText("Recover confirmed-lost claim"),
-  ).not.toBeInTheDocument();
+  expect(inspector).toHaveTextContent("not evidence that the worker is still running");
+  expect(within(inspector).queryByText("Recover confirmed-lost claim")).not.toBeInTheDocument();
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
 });
 
@@ -6224,52 +5533,37 @@ it("exposes the coordination status behind an unreadable Change record", async (
   renderPage("/delivery/change-alpha/outcome:OUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
-  const diagnostics = within(inspector).getByTestId(
-    "unavailable-change-diagnostics",
-  );
+  const diagnostics = within(inspector).getByTestId("unavailable-change-diagnostics");
   expect(diagnostics).toHaveTextContent("runtime-unavailable");
   expect(diagnostics).toHaveTextContent("coordination-unavailable");
   expect(diagnostics).toHaveTextContent("Coordination record: unreadable");
-  expect(
-    inspector.querySelector(
-      '[data-readiness-reason="coordination-unavailable"]',
-    ),
-  ).toHaveTextContent("This Change has no readable coordination record.");
+  expect(inspector.querySelector('[data-readiness-reason="coordination-unavailable"]')).toHaveTextContent(
+    "This Change has no readable coordination record.",
+  );
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
 
 it("lists engine-reported unavailable Changes that no operating status covers", async () => {
   currentPortfolio = {
     ...portfolio(),
-    unavailable_changes: [
-      unavailableChange("quarantined-change", "Quarantined work"),
-    ],
+    unavailable_changes: [unavailableChange("quarantined-change", "Quarantined work")],
   };
   renderPage();
 
   const issues = await screen.findByTestId("delivery-issues-section");
   expect(issues).toHaveTextContent("1 Change unavailable to Delivery.");
-  const row = issues.querySelector(
-    '[data-delivery-unavailable="quarantined-change"]',
-  ) as HTMLElement;
+  const row = issues.querySelector('[data-delivery-unavailable="quarantined-change"]') as HTMLElement;
   expect(row).toHaveTextContent("Quarantined work");
-  expect(row).toHaveTextContent(
-    "Delivery could not compose this Change runtime.",
-  );
+  expect(row).toHaveTextContent("Delivery could not compose this Change runtime.");
   expect(row).toHaveTextContent("Read-only inspection only. Checks: Unknown.");
 });
 
 it("opens read-only inspection for a listed unavailable Change from the keyboard", async () => {
   currentPortfolio = {
     ...portfolio([]),
-    unavailable_changes: [
-      unavailableChange("change-alpha", "Quarantined work"),
-    ],
+    unavailable_changes: [unavailableChange("change-alpha", "Quarantined work")],
   };
-  currentUnavailableDetail = unavailableChange(
-    "change-alpha",
-    "Quarantined work",
-  );
+  currentUnavailableDetail = unavailableChange("change-alpha", "Quarantined work");
   renderPage();
 
   const issues = await screen.findByTestId("delivery-issues-section");
@@ -6281,9 +5575,7 @@ it("opens read-only inspection for a listed unavailable Change from the keyboard
   fireEvent.click(trigger);
 
   const inspector = await screen.findByTestId("work-item-detail");
-  expect(screen.getByTestId("test-location")).toHaveTextContent(
-    "/delivery/change-alpha/publication",
-  );
+  expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/change-alpha/publication");
   expect(inspector).toHaveTextContent(
     "This view is read-only inspection evidence; no Change operation is offered here.",
   );
@@ -6296,9 +5588,7 @@ it("opens read-only inspection for a listed unavailable Change from the keyboard
 it("counts listed unavailable Changes in portfolio accounting and filters", async () => {
   currentPortfolio = {
     ...portfolio(),
-    unavailable_changes: [
-      unavailableChange("quarantined-change", "Quarantined work"),
-    ],
+    unavailable_changes: [unavailableChange("quarantined-change", "Quarantined work")],
   };
   const { container } = renderPage();
 
@@ -6307,85 +5597,48 @@ it("counts listed unavailable Changes in portfolio accounting and filters", asyn
   const selects = container.querySelectorAll("p-select");
   selectValue(selects[0], "quarantined-change");
 
-  await waitFor(() =>
-    expect(screen.getByTestId("work-shown-count")).toHaveTextContent("1 of 3"),
-  );
-  expect(screen.getByTestId("delivery-issues-section")).toHaveTextContent(
-    "Quarantined work",
-  );
+  await waitFor(() => expect(screen.getByTestId("work-shown-count")).toHaveTextContent("1 of 3"));
+  expect(screen.getByTestId("delivery-issues-section")).toHaveTextContent("Quarantined work");
   expect(screen.queryByTestId("work-empty-state")).not.toBeInTheDocument();
 });
 
 it("keeps the inspector on a Change that becomes unavailable and restores it when available again", async () => {
   renderPage("/delivery/change-alpha/outcome:OUT-001");
-  expect(await screen.findByTestId("work-item-detail")).toHaveTextContent(
-    "Delivery foundation",
-  );
+  expect(await screen.findByTestId("work-item-detail")).toHaveTextContent("Delivery foundation");
 
   currentPortfolio = {
     ...portfolio([]),
-    unavailable_changes: [
-      unavailableChange("change-alpha", "Portfolio redesign"),
-    ],
+    unavailable_changes: [unavailableChange("change-alpha", "Portfolio redesign")],
   };
-  currentUnavailableDetail = unavailableChange(
-    "change-alpha",
-    "Portfolio redesign",
-  );
+  currentUnavailableDetail = unavailableChange("change-alpha", "Portfolio redesign");
 
-  await waitFor(
-    () =>
-      expect(screen.getByTestId("work-item-detail")).toHaveTextContent(
-        "Runtime unavailable",
-      ),
-    { timeout: 6000 },
-  );
+  await waitFor(() => expect(screen.getByTestId("work-item-detail")).toHaveTextContent("Runtime unavailable"), {
+    timeout: 6000,
+  });
   const unavailableInspector = screen.getByTestId("work-item-detail");
   expect(unavailableInspector).toHaveTextContent(
     "This view is read-only inspection evidence; no Change operation is offered here.",
   );
-  expect(
-    within(unavailableInspector).getByTestId("unavailable-change-diagnostics"),
-  ).toHaveTextContent("runtime-unavailable");
-  expect(
-    within(unavailableInspector).getByTestId("readiness-status"),
-  ).toHaveTextContent("Unavailable");
-  expect(
-    within(unavailableInspector).queryByRole("button"),
-  ).not.toBeInTheDocument();
+  expect(within(unavailableInspector).getByTestId("unavailable-change-diagnostics")).toHaveTextContent(
+    "runtime-unavailable",
+  );
+  expect(within(unavailableInspector).getByTestId("readiness-status")).toHaveTextContent("Unavailable");
+  expect(within(unavailableInspector).queryByRole("button")).not.toBeInTheDocument();
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
-  expect(screen.getByTestId("delivery-issues-section")).toHaveTextContent(
-    "Portfolio redesign",
-  );
-  expect(screen.getByTestId("test-location")).toHaveTextContent(
-    "/delivery/change-alpha/outcome:OUT-001",
-  );
-  expect(
-    screen.queryByTestId("completed-history-workspace"),
-  ).not.toBeInTheDocument();
+  expect(screen.getByTestId("delivery-issues-section")).toHaveTextContent("Portfolio redesign");
+  expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/change-alpha/outcome:OUT-001");
+  expect(screen.queryByTestId("completed-history-workspace")).not.toBeInTheDocument();
 
   currentPortfolio = portfolio();
   currentUnavailableDetail = null;
-  await waitFor(
-    () =>
-      expect(screen.getByTestId("work-item-detail")).toHaveTextContent(
-        "Delivery foundation",
-      ),
-    { timeout: 6000 },
-  );
+  await waitFor(() => expect(screen.getByTestId("work-item-detail")).toHaveTextContent("Delivery foundation"), {
+    timeout: 6000,
+  });
   const restoredInspector = screen.getByTestId("work-item-detail");
-  expect(restoredInspector).toHaveTextContent(
-    "Make Delivery supervision coherent.",
-  );
-  expect(
-    within(restoredInspector).queryByTestId("unavailable-change-diagnostics"),
-  ).not.toBeInTheDocument();
-  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent(
-    "Delivery foundation",
-  );
-  expect(screen.getByTestId("test-location")).toHaveTextContent(
-    "/delivery/change-alpha/outcome:OUT-001",
-  );
+  expect(restoredInspector).toHaveTextContent("Make Delivery supervision coherent.");
+  expect(within(restoredInspector).queryByTestId("unavailable-change-diagnostics")).not.toBeInTheDocument();
+  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("Delivery foundation");
+  expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/change-alpha/outcome:OUT-001");
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
 });
 
@@ -6409,11 +5662,7 @@ it("does not duplicate an unavailable Change already carried by an operating sta
   renderPage();
 
   const issues = await screen.findByTestId("delivery-issues-section");
-  expect(
-    issues.querySelectorAll('[data-delivery-unavailable="unavailable-change"]'),
-  ).toHaveLength(0);
-  expect(
-    issues.querySelectorAll('[data-delivery-status="unavailable-change"]'),
-  ).toHaveLength(1);
+  expect(issues.querySelectorAll('[data-delivery-unavailable="unavailable-change"]')).toHaveLength(0);
+  expect(issues.querySelectorAll('[data-delivery-status="unavailable-change"]')).toHaveLength(1);
   expect(issues).toHaveTextContent("1 Change unavailable to Delivery.");
 });

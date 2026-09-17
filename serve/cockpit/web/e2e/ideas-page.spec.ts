@@ -27,14 +27,11 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 
 async function stubApis(page: Page): Promise<{ puts: string[] }> {
   const state = {
-    content:
-      "# Morning shape\n\n- [ ] Review inbox\n- [x] Keep the board moving",
+    content: "# Morning shape\n\n- [ ] Review inbox\n- [x] Keep the board moving",
     puts: [] as string[],
   };
 
-  await page.route("/api/**", (route) =>
-    route.fulfill({ status: 200, json: {} }),
-  );
+  await page.route("/api/**", (route) => route.fulfill({ status: 200, json: {} }));
   await page.route("/api/events", (route) =>
     route.fulfill({
       status: 200,
@@ -47,15 +44,9 @@ async function stubApis(page: Page): Promise<{ puts: string[] }> {
     }),
   );
   await page.route("/api/board", (route) => route.fulfill({ json: BOARD }));
-  await page.route("/api/tasks", (route) =>
-    route.fulfill({ json: { tasks: [], mtime: 1_716_000_000 } }),
-  );
-  await page.route("/api/sessions", (route) =>
-    route.fulfill({ json: { sessions: [] } }),
-  );
-  await page.route("/api/memories", (route) =>
-    route.fulfill({ json: { entries: [] } }),
-  );
+  await page.route("/api/tasks", (route) => route.fulfill({ json: { tasks: [], mtime: 1_716_000_000 } }));
+  await page.route("/api/sessions", (route) => route.fulfill({ json: { sessions: [] } }));
+  await page.route("/api/memories", (route) => route.fulfill({ json: { entries: [] } }));
   await page.route("/health", (route) =>
     route.fulfill({
       json: {
@@ -97,9 +88,7 @@ async function openIdeas(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="ideas-preview"]')).toBeVisible({
     timeout: 8_000,
   });
-  await expect(page.locator('textarea[aria-label="Ideas draft"]')).toHaveCount(
-    0,
-  );
+  await expect(page.locator('textarea[aria-label="Ideas draft"]')).toHaveCount(0);
 }
 
 async function expectPButtonDisabled(locator: Locator): Promise<void> {
@@ -139,42 +128,28 @@ for (const theme of ["light", "dark"] as const) {
       }, theme);
     });
 
-    test("loads, edits, saves, previews, and passes WCAG checks", async ({
-      page,
-    }) => {
+    test("loads, edits, saves, previews, and passes WCAG checks", async ({ page }) => {
       const state = await stubApis(page);
       await openIdeas(page);
 
       await expect(page.getByRole("heading", { name: "Ideas" })).toBeVisible();
       const saveButton = page.locator('[data-testid="ideas-save"]');
       await expectPButtonDisabled(saveButton);
-      await expect(
-        page.locator('[data-testid="ideas-preview-toggle"]'),
-      ).toContainText("Edit");
+      await expect(page.locator('[data-testid="ideas-preview-toggle"]')).toContainText("Edit");
       await page.locator('[data-testid="ideas-preview-toggle"]').click();
-      await page
-        .locator('textarea[aria-label="Ideas draft"]')
-        .fill("# Polished morning\n\nA calm cockpit surface.");
+      await page.locator('textarea[aria-label="Ideas draft"]').fill("# Polished morning\n\nA calm cockpit surface.");
       await expect(page.locator('[data-testid="ideas-dirty"]')).toBeVisible();
       await expectPButtonEnabled(saveButton);
 
       await saveButton.click();
       await expect(page.locator('[data-testid="ideas-dirty"]')).toHaveCount(0);
-      expect(state.puts).toEqual([
-        "# Polished morning\n\nA calm cockpit surface.",
-      ]);
+      expect(state.puts).toEqual(["# Polished morning\n\nA calm cockpit surface."]);
 
       await page.locator('[data-testid="ideas-preview-toggle"]').click();
-      await expect(page.locator('[data-testid="ideas-preview"] h1')).toHaveText(
-        "Polished morning",
-      );
+      await expect(page.locator('[data-testid="ideas-preview"] h1')).toHaveText("Polished morning");
 
-      const results = await new AxeBuilder({ page })
-        .withTags([...WCAG_TAGS])
-        .analyze();
-      expect(results.violations, formatViolations(results.violations)).toEqual(
-        [],
-      );
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+      expect(results.violations, formatViolations(results.violations)).toEqual([]);
     });
   });
 }

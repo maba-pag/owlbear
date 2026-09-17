@@ -41,10 +41,7 @@ vi.mock("./routes", () => {
       routeConfig.find((route) => {
         if (route.path !== "/delivery") return pathname === route.path;
         const segments = pathname.split("/").filter(Boolean);
-        return (
-          segments[0] === "delivery" &&
-          (segments.length === 1 || segments.length === 3)
-        );
+        return segments[0] === "delivery" && (segments.length === 1 || segments.length === 3);
       }),
   };
 });
@@ -58,19 +55,12 @@ it("navigates between the target product areas", async () => {
 
   expect(screen.getByText("Work portfolio")).toBeInTheDocument();
   const desktopNavigation = screen.getByTestId("desktop-product-navigation");
-  expect(
-    desktopNavigation.querySelector('a[title="Delivery"]'),
-  ).toHaveAttribute("aria-current", "page");
+  expect(desktopNavigation.querySelector('a[title="Delivery"]')).toHaveAttribute("aria-current", "page");
 
-  fireEvent.click(
-    requirePresent(desktopNavigation.querySelector('a[title="Memory"]')),
-  );
+  fireEvent.click(requirePresent(desktopNavigation.querySelector('a[title="Memory"]')));
 
   expect(await screen.findByText("Memory workspace")).toBeInTheDocument();
-  expect(desktopNavigation.querySelector('a[title="Memory"]')).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  expect(desktopNavigation.querySelector('a[title="Memory"]')).toHaveAttribute("aria-current", "page");
 });
 
 it("opens labeled product navigation from the compact mobile header", () => {

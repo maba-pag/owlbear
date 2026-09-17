@@ -25,8 +25,7 @@ export const MARKDOWN_PREVIEW_CLASSNAME = [
   "[&_ul]:my-static-xs [&_ul]:list-disc [&_ul]:pl-static-md",
 ].join(" ");
 
-export interface MarkdownPreviewProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
+export interface MarkdownPreviewProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
   children: string;
   remarkPlugins?: ReactMarkdownProps["remarkPlugins"];
   rehypePlugins?: ReactMarkdownProps["rehypePlugins"];
@@ -40,14 +39,8 @@ export default function MarkdownPreview({
   ...rest
 }: MarkdownPreviewProps) {
   return (
-    <div
-      {...rest}
-      className={`${className} ${MARKDOWN_PREVIEW_CLASSNAME}`.trim()}
-    >
-      <ReactMarkdown
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={rehypePlugins}
-      >
+    <div {...rest} className={`${className} ${MARKDOWN_PREVIEW_CLASSNAME}`.trim()}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
         {children}
       </ReactMarkdown>
     </div>

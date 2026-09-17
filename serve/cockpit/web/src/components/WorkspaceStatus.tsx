@@ -1,10 +1,5 @@
 import { PButtonPure } from "@porsche-design-system/components-react";
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   type UseWorkspaceHealthResult,
@@ -63,24 +58,12 @@ function StatusDot({
   variant?: "semantic" | "trigger";
   className?: string;
 }) {
-  const color =
-    variant === "trigger" && status === "healthy"
-      ? "bg-primary"
-      : DOT_CLASSES[status];
-  return (
-    <span
-      aria-hidden="true"
-      className={`inline-block size-2.5 shrink-0 rounded-full ${color} ${className}`}
-    />
-  );
+  const color = variant === "trigger" && status === "healthy" ? "bg-primary" : DOT_CLASSES[status];
+  return <span aria-hidden="true" className={`inline-block size-2.5 shrink-0 rounded-full ${color} ${className}`} />;
 }
 
 /** Health control for persisted workspace surfaces. */
-export default function WorkspaceStatus({
-  health,
-}: {
-  health: UseWorkspaceHealthResult;
-}) {
+export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult }) {
   const { status, modules, isChecking, lastCheckedAt, refresh } = health;
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: "0px", left: "0px" });
@@ -108,11 +91,7 @@ export default function WorkspaceStatus({
     const closeOnPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
-      if (
-        triggerRef.current?.contains(target) ||
-        panelRef.current?.contains(target)
-      )
-        return;
+      if (triggerRef.current?.contains(target) || panelRef.current?.contains(target)) return;
       setIsOpen(false);
     };
 
@@ -158,13 +137,7 @@ export default function WorkspaceStatus({
       return;
     }
     if (triggerRef.current) {
-      setPosition(
-        getRailPanelPosition(
-          triggerRef.current,
-          PANEL_WIDTH,
-          ESTIMATED_PANEL_HEIGHT,
-        ),
-      );
+      setPosition(getRailPanelPosition(triggerRef.current, PANEL_WIDTH, ESTIMATED_PANEL_HEIGHT));
     }
     setIsOpen(true);
   }
@@ -187,9 +160,7 @@ export default function WorkspaceStatus({
           onKeyDown={handlePanelKeyDown}
         >
           <header className="grid min-w-0 gap-1">
-            <strong className="truncate text-base leading-tight">
-              {PANEL_TITLE}
-            </strong>
+            <strong className="truncate text-base leading-tight">{PANEL_TITLE}</strong>
             <span className="text-xs text-contrast-medium">{PANEL_SCOPE}</span>
           </header>
 
@@ -202,17 +173,13 @@ export default function WorkspaceStatus({
               >
                 <span className="flex min-w-0 items-center gap-static-xs text-sm">
                   <StatusDot status={module.status} />
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {module.label}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">{module.label}</span>
                   {/* Only healthy is dropped from view: the green dot already says it. Every problem
                   state keeps visible text, because colour must never carry it alone. */}
                   <span
                     data-testid={`workspace-status-module-${module.id}-state`}
                     className={
-                      module.status === "healthy"
-                        ? "sr-only"
-                        : `shrink-0 text-xs ${STATUS_TEXT_CLASSES[module.status]}`
+                      module.status === "healthy" ? "sr-only" : `shrink-0 text-xs ${STATUS_TEXT_CLASSES[module.status]}`
                     }
                   >
                     {WORKSPACE_HEALTH_LABELS[module.status]}
@@ -236,10 +203,7 @@ export default function WorkspaceStatus({
                     ].join(" ")}
                   >
                     {module.findings.slice(0, 8).map((finding) => (
-                      <li
-                        key={finding}
-                        className="break-words font-mono text-error"
-                      >
+                      <li key={finding} className="break-words font-mono text-error">
                         {finding}
                       </li>
                     ))}
@@ -250,10 +214,7 @@ export default function WorkspaceStatus({
           </ul>
 
           <div className="flex flex-wrap items-center justify-between gap-static-xs">
-            <span
-              className="text-xs text-contrast-medium"
-              data-testid="workspace-status-freshness"
-            >
+            <span className="text-xs text-contrast-medium" data-testid="workspace-status-freshness">
               {isChecking ? "Checking..." : checkAge(lastCheckedAt, now)}
             </span>
             <PButtonPure

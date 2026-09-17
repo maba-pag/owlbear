@@ -9,7 +9,7 @@ name: MegaLinter
         type: boolean
         default: false
       unsafe_fixes:
-        description: "Allow Ruff unsafe and Zizmor unsafe fixes"
+        description: "Allow Ruff, Biome, and Zizmor unsafe fixes"
         type: boolean
         default: false
       fix_mode:
@@ -77,6 +77,9 @@ jobs:
         run: |
           {
             echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes"
+            for descriptor in CSS JAVASCRIPT JSON JSX TYPESCRIPT; do
+              echo "${descriptor}_BIOME_ARGUMENTS=--unsafe"
+            done
             echo "ACTION_ZIZMOR_COMMAND_REMOVE_ARGUMENTS=--fix"
             echo "ACTION_ZIZMOR_ARGUMENTS=--fix=all"
           } >> "$GITHUB_ENV"

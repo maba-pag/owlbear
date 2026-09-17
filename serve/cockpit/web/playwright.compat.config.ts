@@ -1,39 +1,36 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from "@playwright/test";
 
-const compatibilitySpecs = /(?:smoke|pds-runtime-csp|pds-scheme-dark|memory-conflict)\.spec\.ts/
+const compatibilitySpecs = /(?:smoke|pds-runtime-csp|pds-scheme-dark|memory-conflict)\.spec\.ts/;
 
 export default defineConfig({
-  testDir: 'e2e',
+  testDir: "e2e",
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: "http://localhost:4173",
     headless: true,
-    trace: 'retain-on-failure',
+    trace: "retain-on-failure",
   },
-  reporter: [
-    ['line'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-  ],
+  reporter: [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   projects: [
     {
-      name: 'compatibility-chromium',
+      name: "compatibility-chromium",
       testMatch: compatibilitySpecs,
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices["Desktop Chrome"] },
     },
     {
-      name: 'compatibility-firefox',
+      name: "compatibility-firefox",
       testMatch: compatibilitySpecs,
-      use: { ...devices['Desktop Firefox'] },
+      use: { ...devices["Desktop Firefox"] },
     },
     {
-      name: 'compatibility-webkit',
+      name: "compatibility-webkit",
       testMatch: compatibilitySpecs,
-      use: { ...devices['Desktop Safari'] },
+      use: { ...devices["Desktop Safari"] },
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env['CI'],
+    command: "npm run build && npm run preview",
+    url: "http://localhost:4173",
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-})
+});

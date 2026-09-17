@@ -54,10 +54,7 @@ function findLegacyTokenViolations(filePath: string): string[] {
 describe("TestFromAC_ThemeLightTokenScan_1552", () => {
   it("AC-1/AC-3: src production files contain no --pds-theme-light-* tokens", () => {
     const files = findSourceFiles(SRC_DIR);
-    expect(
-      files.length,
-      "source tree should contain files to scan",
-    ).toBeGreaterThan(0);
+    expect(files.length, "source tree should contain files to scan").toBeGreaterThan(0);
 
     const violations: string[] = [];
     for (const filePath of files) {

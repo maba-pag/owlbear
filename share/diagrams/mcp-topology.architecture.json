@@ -100,24 +100,12 @@
     {
       "kind": "region",
       "label": "MCP server processes",
-      "wraps": [
-        "delivery_mcp",
-        "knowledge_mcp",
-        "memory_mcp",
-        "browser_mcp",
-        "markitdown_mcp"
-      ]
+      "wraps": ["delivery_mcp", "knowledge_mcp", "memory_mcp", "browser_mcp", "markitdown_mcp"]
     },
     {
       "kind": "region",
       "label": "OwlBear backing surfaces",
-      "wraps": [
-        "delivery_core",
-        "knowledge_core",
-        "memory_core",
-        "browser_core",
-        "markitdown_core"
-      ]
+      "wraps": ["delivery_core", "knowledge_core", "memory_core", "browser_core", "markitdown_core"]
     }
   ],
   "connections": [

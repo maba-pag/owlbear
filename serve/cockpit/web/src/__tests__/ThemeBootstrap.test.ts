@@ -65,11 +65,9 @@ function createSpiedMQL(initialMatches: boolean): SpiedMQL {
     },
     media: "(prefers-color-scheme: dark)",
     onchange: null,
-    addEventListener: vi.fn(
-      (type: string, handler: (e: MediaQueryListEvent) => void) => {
-        if (type === "change") changeListeners.push(handler);
-      },
-    ),
+    addEventListener: vi.fn((type: string, handler: (e: MediaQueryListEvent) => void) => {
+      if (type === "change") changeListeners.push(handler);
+    }),
     removeEventListener: vi.fn(),
     addListener: vi.fn(),
     removeListener: vi.fn(),
@@ -225,9 +223,7 @@ describe("TestFromAC_IndexHtmlBootstrap_1545", () => {
 
   it('AC-1: theme-bootstrap.js script tag does not carry type="module" attribute', () => {
     const lines = indexHtml.split("\n");
-    const bootstrapLine = lines.find((line) =>
-      line.includes("theme-bootstrap.js"),
-    );
+    const bootstrapLine = lines.find((line) => line.includes("theme-bootstrap.js"));
 
     expect(bootstrapLine).toBeDefined();
     expect(bootstrapLine).not.toContain('type="module"');
@@ -267,10 +263,7 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
   it('AC-4 happy: when theme=auto, addEventListener("change") is called on the matchMedia result', () => {
     const { unmount } = renderHook(() => useTheme());
 
-    expect(mql.addEventListener).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function),
-    );
+    expect(mql.addEventListener).toHaveBeenCalledWith("change", expect.any(Function));
 
     unmount();
   });
@@ -337,11 +330,7 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
 
       const { unmount } = renderHook(() => useTheme());
 
-      const addInstance = instances.find(
-        (i) =>
-          (i.addEventListener as ReturnType<typeof vi.fn>).mock.calls.length >
-          0,
-      );
+      const addInstance = instances.find((i) => (i.addEventListener as ReturnType<typeof vi.fn>).mock.calls.length > 0);
       expect(addInstance).toBeDefined();
 
       unmount();
@@ -351,10 +340,9 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
   );
 
   it(
-    [
-      "AC-4 edge: when theme transitions from auto to dark, ",
-      "removeEventListener is called on the MQL instance",
-    ].join(""),
+    ["AC-4 edge: when theme transitions from auto to dark, ", "removeEventListener is called on the MQL instance"].join(
+      "",
+    ),
     async () => {
       const { result, unmount } = renderHook(() => useTheme());
 
@@ -371,19 +359,13 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
       });
 
       // Listener must be registered now (theme=auto)
-      expect(mql.addEventListener).toHaveBeenCalledWith(
-        "change",
-        expect.any(Function),
-      );
+      expect(mql.addEventListener).toHaveBeenCalledWith("change", expect.any(Function));
 
       await act(async () => {
         result.current.toggle(); // auto → light: listener must be removed
       });
 
-      expect(mql.removeEventListener).toHaveBeenCalledWith(
-        "change",
-        expect.any(Function),
-      );
+      expect(mql.removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
 
       unmount();
     },
@@ -394,10 +376,7 @@ describe("TestFromAC_OsListenerBehavior_1545", () => {
 
     unmount();
 
-    expect(mql.removeEventListener).toHaveBeenCalledWith(
-      "change",
-      expect.any(Function),
-    );
+    expect(mql.removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
   });
 
   // Negative proof — no listener for explicit themes (AC-4p1)

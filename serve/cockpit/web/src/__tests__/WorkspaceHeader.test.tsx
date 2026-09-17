@@ -1,10 +1,6 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import {
-  WorkspaceHeader,
-  WorkspaceHeaderMetric,
-  WorkspaceHeaderPill,
-} from "../components/WorkspaceHeader";
+import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from "../components/WorkspaceHeader";
 
 describe("WorkspaceHeader", () => {
   it("renders a route title and summary with shared header test ids", () => {
@@ -17,28 +13,12 @@ describe("WorkspaceHeader", () => {
       />,
     );
 
-    expect(
-      container.querySelector('[data-testid="workspace-header"]'),
-    ).not.toBeNull();
-    expect(container.querySelector("#decisions-title")?.textContent).toBe(
-      "Decisions",
-    );
-    expect(
-      container.querySelector('[data-testid="workspace-header-summary"]')
-        ?.textContent,
-    ).toContain("3");
-    expect(
-      container.querySelector('[data-testid="workspace-header-summary"]')
-        ?.textContent,
-    ).toContain("waiting");
-    expect(
-      container.querySelector('[data-testid="workspace-header-metric"]')
-        ?.className,
-    ).not.toContain("border-l");
-    expect(
-      container.querySelector('[data-testid="workspace-header-metric"] strong')
-        ?.className,
-    ).toContain("text-lg");
+    expect(container.querySelector('[data-testid="workspace-header"]')).not.toBeNull();
+    expect(container.querySelector("#decisions-title")?.textContent).toBe("Decisions");
+    expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain("3");
+    expect(container.querySelector('[data-testid="workspace-header-summary"]')?.textContent).toContain("waiting");
+    expect(container.querySelector('[data-testid="workspace-header-metric"]')?.className).not.toContain("border-l");
+    expect(container.querySelector('[data-testid="workspace-header-metric"] strong')?.className).toContain("text-lg");
   });
 
   it("can render a secondary heading and route actions", () => {
@@ -51,13 +31,8 @@ describe("WorkspaceHeader", () => {
       />,
     );
 
-    expect(
-      container.querySelector("h2#delivery-board-title")?.textContent,
-    ).toBe("Delivery");
-    expect(
-      container.querySelector('[data-testid="workspace-header-actions"]')
-        ?.textContent,
-    ).toContain("Filters");
+    expect(container.querySelector("h2#delivery-board-title")?.textContent).toBe("Delivery");
+    expect(container.querySelector('[data-testid="workspace-header-actions"]')?.textContent).toContain("Filters");
   });
 
   it("renders route state pills without changing metric text", () => {
@@ -74,9 +49,7 @@ describe("WorkspaceHeader", () => {
       />,
     );
 
-    const summary = container.querySelector(
-      '[data-testid="workspace-header-summary"]',
-    );
+    const summary = container.querySelector('[data-testid="workspace-header-summary"]');
     expect(summary?.textContent).toContain("Unsaved");
     expect(summary?.textContent).toContain("10");
     expect(summary?.textContent).toContain("words");
@@ -96,16 +69,10 @@ describe("WorkspaceHeader", () => {
       />,
     );
 
-    const summary = container.querySelector(
-      '[data-testid="workspace-header-summary"]',
-    );
-    const metrics = container.querySelectorAll(
-      '[data-testid="workspace-header-metric"]',
-    );
+    const summary = container.querySelector('[data-testid="workspace-header-summary"]');
+    const metrics = container.querySelectorAll('[data-testid="workspace-header-metric"]');
 
-    expect(summary?.className).toContain(
-      "[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l",
-    );
+    expect(summary?.className).toContain("[&>[data-workspace-header-metric]~[data-workspace-header-metric]]:border-l");
     expect(metrics).toHaveLength(2);
     expect(metrics[0]?.className).not.toContain("border-l");
     expect(metrics[1]?.className).not.toContain("border-l");

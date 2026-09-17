@@ -1,10 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    "security:minimumReleaseAgeNpm",
-    "security:minimumReleaseAgePypi"
-  ],
+  "extends": ["config:best-practices", "security:minimumReleaseAgeNpm", "security:minimumReleaseAgePypi"],
   "baseBranchPatterns": ["dev"],
   "timezone": "Europe/Berlin",
   "prConcurrentLimit": 0,
@@ -12,9 +8,7 @@
   "minimumReleaseAgeBehaviour": "timestamp-optional",
   "updateNotScheduled": true,
   "labels": ["dependencies", "renovate"],
-  "gitIgnoredAuthors": [
-    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-  ],
+  "gitIgnoredAuthors": ["github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"],
   "vulnerabilityAlerts": {
     "enabled": true,
     "groupName": "{{datasource}} security updates",
@@ -46,12 +40,7 @@
     {
       "description": "Prefer lockfile-only updates for in-range npm dependency updates",
       "matchManagers": ["npm"],
-      "matchDepTypes": [
-        "dependencies",
-        "devDependencies",
-        "optionalDependencies",
-        "peerDependencies"
-      ],
+      "matchDepTypes": ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"],
       "rangeStrategy": "update-lockfile"
     },
     {
@@ -97,11 +86,7 @@
     },
     {
       "description": "Derive Ruff and Biome pins from the proposed MegaLinter release in CI",
-      "matchPackageNames": [
-        "ruff",
-        "astral-sh/ruff-pre-commit",
-        "@biomejs/biome"
-      ],
+      "matchPackageNames": ["ruff", "astral-sh/ruff-pre-commit", "@biomejs/biome"],
       "enabled": false
     },
     {
@@ -114,10 +99,7 @@
     {
       "description": "Review Porsche Design System updates with refreshed self-hosted assets",
       "matchManagers": ["npm"],
-      "matchPackageNames": [
-        "@porsche-design-system/components-js",
-        "@porsche-design-system/components-react"
-      ],
+      "matchPackageNames": ["@porsche-design-system/components-js", "@porsche-design-system/components-react"],
       "addLabels": ["cockpit", "pds"],
       "automerge": false
     },
@@ -140,22 +122,14 @@
     {
       "description": "Keep Porsche Design System major versions coupled",
       "matchManagers": ["npm"],
-      "matchPackageNames": [
-        "@porsche-design-system/components-js",
-        "@porsche-design-system/components-react"
-      ],
+      "matchPackageNames": ["@porsche-design-system/components-js", "@porsche-design-system/components-react"],
       "matchUpdateTypes": ["major"],
       "groupName": "Porsche Design System major updates"
     },
     {
       "description": "Keep Vite and its build plugins coupled on major updates",
       "matchManagers": ["npm"],
-      "matchPackageNames": [
-        "vite",
-        "@vitejs/plugin-react",
-        "@rolldown/plugin-babel",
-        "babel-plugin-react-compiler"
-      ],
+      "matchPackageNames": ["vite", "@vitejs/plugin-react", "@rolldown/plugin-babel", "babel-plugin-react-compiler"],
       "matchUpdateTypes": ["major"],
       "groupName": "Vite major updates"
     }
@@ -181,12 +155,8 @@
     {
       "customType": "regex",
       "description": "Archify release asset and SHA-256 pin",
-      "managerFilePatterns": [
-        "/^\\.owlbear/scripts/diagrams/archify\\.lock\\.json$/"
-      ],
-      "matchStrings": [
-        "version\\D*(?<currentValue>v[\\d.]+)[\\s\\S]*?sha256\\D*(?<currentDigest>[a-f0-9]{64})"
-      ],
+      "managerFilePatterns": ["/^\\.owlbear/scripts/diagrams/archify\\.lock\\.json$/"],
+      "matchStrings": ["version\\D*(?<currentValue>v[\\d.]+)[\\s\\S]*?sha256\\D*(?<currentDigest>[a-f0-9]{64})"],
       "depNameTemplate": "tt-a1i/archify",
       "datasourceTemplate": "github-release-attachments",
       "versioningTemplate": "semver"

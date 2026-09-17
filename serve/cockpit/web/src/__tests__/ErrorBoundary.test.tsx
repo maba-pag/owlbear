@@ -31,9 +31,7 @@ describe("ErrorBoundary", () => {
 
   it("renders a PDS heading and retry control for page failures", () => {
     const { container } = renderErrorBoundary();
-    expect(container.querySelector('p-heading[tag="h3"]')).toHaveTextContent(
-      "Something went wrong in Cockpit",
-    );
+    expect(container.querySelector('p-heading[tag="h3"]')).toHaveTextContent("Something went wrong in Cockpit");
     expect(container.querySelector("p-button")).not.toBeNull();
     expect(container.querySelector("button")).toBeNull();
   });

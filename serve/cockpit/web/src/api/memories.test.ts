@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  editMemory,
-  type MemoryEditPayload,
-  MemoryMutationError,
-} from "./memories";
+import { editMemory, type MemoryEditPayload, MemoryMutationError } from "./memories";
 
 function response(body: unknown, status: number): Response {
   return {
@@ -26,11 +22,7 @@ describe("memory mutation errors", () => {
   it("preserves structured API error codes separately from messages", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          response({ code: "MEM_CONFLICT", message: "Entry changed" }, 409),
-        ),
+      vi.fn().mockResolvedValue(response({ code: "MEM_CONFLICT", message: "Entry changed" }, 409)),
     );
 
     await expect(editMemory("entry-1", payload)).rejects.toMatchObject({
@@ -43,14 +35,9 @@ describe("memory mutation errors", () => {
   });
 
   it("keeps generic conflict responses usable without inventing a code", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(response({ message: "Conflict" }, 409)),
-    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ message: "Conflict" }, 409)));
 
-    const failure = await editMemory("entry-1", payload).catch(
-      (caught: unknown) => caught,
-    );
+    const failure = await editMemory("entry-1", payload).catch((caught: unknown) => caught);
 
     expect(failure).toBeInstanceOf(MemoryMutationError);
     expect((failure as MemoryMutationError).apiError).toMatchObject({

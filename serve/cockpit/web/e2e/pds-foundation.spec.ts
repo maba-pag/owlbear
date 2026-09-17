@@ -7,29 +7,12 @@
  */
 import { expect, type Page, test } from "@playwright/test";
 import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
-import {
-  trackPageErrors,
-  waitForWorkspaceWithoutPageErrors,
-} from "./support/page-errors";
+import { trackPageErrors, waitForWorkspaceWithoutPageErrors } from "./support/page-errors";
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
 
-const STATUSES = [
-  "research",
-  "backlog",
-  "todo",
-  "in-progress",
-  "review",
-  "docs",
-  "done",
-];
-const PRIORITIES = [
-  "critical",
-  "needed",
-  "important",
-  "nice-to-have",
-  "someday",
-];
+const STATUSES = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"];
+const PRIORITIES = ["critical", "needed", "important", "nice-to-have", "someday"];
 
 const BOARD = {
   statuses: STATUSES.map((name) => ({ name })),
@@ -70,9 +53,7 @@ async function stubApis(page: Page) {
 
   // Catch-all fallback for remaining /api/* routes (decisions, scan, sessions, etc.)
   // Must be registered FIRST so specific routes (registered after) take precedence.
-  await page.route("/api/**", (route) =>
-    route.fulfill({ status: 200, json: {} }),
-  );
+  await page.route("/api/**", (route) => route.fulfill({ status: 200, json: {} }));
 
   // SSE endpoint — return empty stream so EventSourceProvider connects cleanly
   await page.route("/api/events", (route) =>
@@ -90,9 +71,7 @@ async function stubApis(page: Page) {
   // Core data routes — registered last so they take priority over catch-all
   await page.route("/api/tasks", (route) => route.fulfill({ json: TASKS }));
   await page.route("/api/board", (route) => route.fulfill({ json: BOARD }));
-  await page.route("/api/work-items", (route) =>
-    route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }),
-  );
+  await page.route("/api/work-items", (route) => route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }));
 
   return pageErrors;
 }
@@ -113,54 +92,31 @@ test.describe("TestFromAC_PDSCSSCustomProperties", () => {
   });
 
   // Happy path: --p-color-canvas resolves to a non-empty value on :root
-  test("--p-color-canvas resolves to non-empty value on document.documentElement", async ({
-    page,
-  }) => {
+  test("--p-color-canvas resolves to non-empty value on document.documentElement", async ({ page }) => {
     const value = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--p-color-canvas")
-        .trim(),
+      getComputedStyle(document.documentElement).getPropertyValue("--p-color-canvas").trim(),
     );
-    expect(
-      value,
-      "--p-color-canvas must resolve to a non-empty string on :root",
-    ).not.toBe("");
+    expect(value, "--p-color-canvas must resolve to a non-empty string on :root").not.toBe("");
   });
 
   // Happy path: --p-spacing-static-md resolves to a non-empty value (e.g. "16px")
-  test("--p-spacing-static-md resolves to non-empty value on document.documentElement", async ({
-    page,
-  }) => {
+  test("--p-spacing-static-md resolves to non-empty value on document.documentElement", async ({ page }) => {
     const value = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--p-spacing-static-md")
-        .trim(),
+      getComputedStyle(document.documentElement).getPropertyValue("--p-spacing-static-md").trim(),
     );
-    expect(
-      value,
-      "--p-spacing-static-md must resolve to a non-empty string on :root",
-    ).not.toBe("");
+    expect(value, "--p-spacing-static-md must resolve to a non-empty string on :root").not.toBe("");
   });
 
   // Happy path: --p-font-porsche-next resolves to a non-empty value (e.g. '"Porsche Next",...')
-  test("--p-font-porsche-next resolves to non-empty value on document.documentElement", async ({
-    page,
-  }) => {
+  test("--p-font-porsche-next resolves to non-empty value on document.documentElement", async ({ page }) => {
     const value = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--p-font-porsche-next")
-        .trim(),
+      getComputedStyle(document.documentElement).getPropertyValue("--p-font-porsche-next").trim(),
     );
-    expect(
-      value,
-      "--p-font-porsche-next must resolve to a non-empty string on :root",
-    ).not.toBe("");
+    expect(value, "--p-font-porsche-next must resolve to a non-empty string on :root").not.toBe("");
   });
 
   // Boundary: all three AC1 properties resolve simultaneously — guards partial import
-  test("all three AC1 CSS custom properties are non-empty in a single evaluation", async ({
-    page,
-  }) => {
+  test("all three AC1 CSS custom properties are non-empty in a single evaluation", async ({ page }) => {
     const values = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       return {
@@ -170,14 +126,8 @@ test.describe("TestFromAC_PDSCSSCustomProperties", () => {
       };
     });
     expect(values.canvas, "--p-color-canvas must be non-empty").not.toBe("");
-    expect(
-      values.spacingMd,
-      "--p-spacing-static-md must be non-empty",
-    ).not.toBe("");
-    expect(
-      values.fontFamily,
-      "--p-font-porsche-next must be non-empty",
-    ).not.toBe("");
+    expect(values.spacingMd, "--p-spacing-static-md must be non-empty").not.toBe("");
+    expect(values.fontFamily, "--p-font-porsche-next must be non-empty").not.toBe("");
   });
 });
 
@@ -200,10 +150,7 @@ test.describe("TestFromAC_CSPFontSrc", () => {
   // Helper: read the CSP meta tag content attribute
   async function getCspContent(page: Page): Promise<string> {
     return page.evaluate(
-      () =>
-        document
-          .querySelector('meta[http-equiv="Content-Security-Policy"]')
-          ?.getAttribute("content") ?? "",
+      () => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content") ?? "",
     );
   }
 
@@ -225,39 +172,29 @@ test.describe("TestFromAC_CSPFontSrc", () => {
   // Happy path: CSP contains a font-src directive
   test("CSP content includes a font-src directive", async ({ page }) => {
     const content = await getCspContent(page);
-    expect(content, "CSP content must include 'font-src'").toContain(
-      "font-src",
-    );
+    expect(content, "CSP content must include 'font-src'").toContain("font-src");
   });
 
   // Boundary: font-src directive tokens include https://cdn.ui.porsche.com as exact token (D6 decision)
   // Splits directive by whitespace so 'https://cdn.ui.porsche.com.evil.com' cannot satisfy this check.
-  test("font-src directive tokens include 'https://cdn.ui.porsche.com' as exact token", async ({
-    page,
-  }) => {
+  test("font-src directive tokens include 'https://cdn.ui.porsche.com' as exact token", async ({ page }) => {
     const content = await getCspContent(page);
     const fontSrc = extractFontSrcDirective(content);
     expect(fontSrc, "font-src directive must be present in CSP").not.toBeNull();
     const tokens = requirePresent(fontSrc).split(/\s+/);
-    expect(
-      tokens,
-      "font-src directive must contain 'https://cdn.ui.porsche.com' as an exact token",
-    ).toContain("https://cdn.ui.porsche.com");
+    expect(tokens, "font-src directive must contain 'https://cdn.ui.porsche.com' as an exact token").toContain(
+      "https://cdn.ui.porsche.com",
+    );
   });
 
   // Boundary: font-src directive tokens include 'self' as exact token alongside the CDN origin
   // Splits directive by whitespace — exact token membership, not substring check.
-  test("font-src directive tokens include 'self' as exact token", async ({
-    page,
-  }) => {
+  test("font-src directive tokens include 'self' as exact token", async ({ page }) => {
     const content = await getCspContent(page);
     const fontSrc = extractFontSrcDirective(content);
     expect(fontSrc, "font-src directive must be present in CSP").not.toBeNull();
     const tokens = requirePresent(fontSrc).split(/\s+/);
-    expect(
-      tokens,
-      "font-src directive must contain \"'self'\" as an exact token",
-    ).toContain("'self'");
+    expect(tokens, "font-src directive must contain \"'self'\" as an exact token").toContain("'self'");
   });
 });
 
@@ -272,16 +209,11 @@ test.describe("TestFromAC_CSPFontSrc", () => {
 
 test.describe("TestFromAC_PDSConsoleClean", () => {
   // Happy path: shell load produces no console errors or warnings mentioning 'porsche'
-  test('no console errors or warnings containing "porsche" during shell load', async ({
-    page,
-  }) => {
+  test('no console errors or warnings containing "porsche" during shell load', async ({ page }) => {
     const porschemessages: string[] = [];
     // Register BEFORE stubApis/goto — listener must be active from the first page event.
     page.on("console", (msg) => {
-      if (
-        (msg.type() === "error" || msg.type() === "warning") &&
-        msg.text().toLowerCase().includes("porsche")
-      ) {
+      if ((msg.type() === "error" || msg.type() === "warning") && msg.text().toLowerCase().includes("porsche")) {
         porschemessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });

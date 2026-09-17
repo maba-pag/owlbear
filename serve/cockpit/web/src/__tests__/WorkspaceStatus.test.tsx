@@ -1,11 +1,4 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import WorkspaceStatus from "../components/WorkspaceStatus";
 import { useWorkspaceHealth } from "../hooks/useWorkspaceHealth";
@@ -74,23 +67,17 @@ it("states healthy persisted-data modules without prose, repair, or a Memory det
   const trigger = triggers[0];
   expect(trigger).toHaveAttribute("data-status", "unknown");
   expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
-  expect(trigger).toHaveAccessibleName(
-    "Workspace health: Not checked; open health details",
-  );
+  expect(trigger).toHaveAccessibleName("Workspace health: Not checked; open health details");
   expect(fetchMock).not.toHaveBeenCalled();
 
   fireEvent.click(trigger);
   const panel = await screen.findByTestId("workspace-status-panel");
   expect(fetchMock).not.toHaveBeenCalled();
   fireEvent.click(screen.getByTestId("workspace-status-recheck"));
-  await waitFor(() =>
-    expect(trigger).toHaveAttribute("data-status", "healthy"),
-  );
+  await waitFor(() => expect(trigger).toHaveAttribute("data-status", "healthy"));
   expect(triggers[1]).toHaveAttribute("data-status", "healthy");
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(fetchMock.mock.calls.every(([, init]) => init === undefined)).toBe(
-    true,
-  );
+  expect(fetchMock.mock.calls.every(([, init]) => init === undefined)).toBe(true);
   expect(panel).toHaveAttribute("role", "dialog");
   expect(panel).toHaveAccessibleName("Workspace health");
   const memoryModule = screen.getByTestId("workspace-status-module-memory");
@@ -111,14 +98,8 @@ it("states healthy persisted-data modules without prose, repair, or a Memory det
   expect(screen.queryByTestId("workspace-status-maintenance")).toBeNull();
   expect(panel).not.toHaveTextContent("Memory lists entries");
   expect(panel).not.toHaveTextContent("repair");
-  await waitFor(() =>
-    expect(screen.getByTestId("workspace-status-freshness")).toHaveTextContent(
-      "Checked just now",
-    ),
-  );
-  expect(screen.getByTestId("workspace-status-recheck")).toHaveTextContent(
-    "Re-check",
-  );
+  await waitFor(() => expect(screen.getByTestId("workspace-status-freshness")).toHaveTextContent("Checked just now"));
+  expect(screen.getByTestId("workspace-status-recheck")).toHaveTextContent("Re-check");
 });
 
 it("presents workspace health, check scope, and checked surfaces in hierarchy order", async () => {
@@ -132,10 +113,7 @@ it("presents workspace health, check scope, and checked surfaces in hierarchy or
   const panel = await screen.findByTestId("workspace-status-panel");
 
   // The header names the control and its check scope before the rows name individual surfaces.
-  const heading = visibleText(panel).slice(
-    0,
-    visibleText(panel).indexOf("Memory store"),
-  );
+  const heading = visibleText(panel).slice(0, visibleText(panel).indexOf("Memory store"));
   expect(heading).toBe("Workspace healthPersisted data integrity");
   expect(panel).toHaveAccessibleName("Workspace health");
   expect(visibleText(panel)).toContain("Ideas file");
@@ -194,29 +172,19 @@ it("ranks the worst module status and lists memory storage findings without clai
   const trigger = screen.getByTestId("workspace-status");
   fireEvent.click(trigger);
   fireEvent.click(screen.getByTestId("workspace-status-recheck"));
-  await waitFor(() =>
-    expect(trigger).toHaveAttribute("data-status", "attention"),
-  );
+  await waitFor(() => expect(trigger).toHaveAttribute("data-status", "attention"));
 
-  const memoryModule = await screen.findByTestId(
-    "workspace-status-module-memory",
-  );
+  const memoryModule = await screen.findByTestId("workspace-status-module-memory");
   // A problem state is never left to colour alone: the word stays on screen.
   expect(visibleText(memoryModule)).toContain("Needs attention");
   expect(memoryModule).toHaveTextContent("1 storage issue found");
   expect(memoryModule).not.toHaveTextContent("repair");
-  expect(
-    screen.getByText("store/memory/x.md — missing-scope — scope is absent"),
-  ).toBeInTheDocument();
+  expect(screen.getByText("store/memory/x.md — missing-scope — scope is absent")).toBeInTheDocument();
 
   fireEvent.keyDown(screen.getByTestId("workspace-status-panel"), {
     key: "Escape",
   });
-  await waitFor(() =>
-    expect(
-      screen.queryByTestId("workspace-status-panel"),
-    ).not.toBeInTheDocument(),
-  );
+  await waitFor(() => expect(screen.queryByTestId("workspace-status-panel")).not.toBeInTheDocument());
   expect(document.activeElement).toBe(trigger);
 });
 
@@ -227,16 +195,10 @@ it("reports an unreachable health check instead of claiming health", async () =>
   const trigger = screen.getByTestId("workspace-status");
   fireEvent.click(trigger);
   fireEvent.click(screen.getByTestId("workspace-status-recheck"));
-  await waitFor(() =>
-    expect(trigger).toHaveAttribute("data-status", "unavailable"),
-  );
-  expect(trigger).toHaveAccessibleName(
-    "Workspace health: Cannot be checked; open health details",
-  );
+  await waitFor(() => expect(trigger).toHaveAttribute("data-status", "unavailable"));
+  expect(trigger).toHaveAccessibleName("Workspace health: Cannot be checked; open health details");
 
-  const memoryModule = await screen.findByTestId(
-    "workspace-status-module-memory",
-  );
+  const memoryModule = await screen.findByTestId("workspace-status-module-memory");
   expect(memoryModule).toHaveTextContent("Failed to fetch");
   expect(visibleText(memoryModule)).toContain("Cannot be checked");
 });

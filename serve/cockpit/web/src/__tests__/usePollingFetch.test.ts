@@ -85,9 +85,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       vi.stubGlobal("fetch", fetchMock);
       const onSuccess = vi.fn();
 
-      renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 5_000, onSuccess }),
-      );
+      renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 5_000, onSuccess }));
       await act(async () => {});
 
       expect(onSuccess).toHaveBeenCalledTimes(1);
@@ -101,9 +99,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       vi.stubGlobal("fetch", makeErrorFetch(503));
       const onError = vi.fn();
 
-      renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 5_000, onError }),
-      );
+      renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 5_000, onError }));
       await act(async () => {});
 
       expect(onError).toHaveBeenCalledTimes(1);
@@ -113,9 +109,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       vi.stubGlobal("fetch", makeNetworkErrorFetch());
       const onError = vi.fn();
 
-      renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 5_000, onError }),
-      );
+      renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 5_000, onError }));
       await act(async () => {});
 
       expect(onError).toHaveBeenCalledTimes(1);
@@ -125,9 +119,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       vi.stubGlobal("fetch", makeErrorFetch(500));
       const onSuccess = vi.fn();
 
-      renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 5_000, onSuccess }),
-      );
+      renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 5_000, onSuccess }));
       await act(async () => {});
 
       expect(onSuccess).not.toHaveBeenCalled();
@@ -138,8 +130,7 @@ describe("TestFromAC_UsePollingFetch", () => {
 
   describe("edge cases: inFlight guard", () => {
     it(
-      "inFlight guard: a concurrent poll call while the first is in-flight " +
-        "does not fire a duplicate fetch",
+      "inFlight guard: a concurrent poll call while the first is in-flight " + "does not fire a duplicate fetch",
       async () => {
         let resolveFetch!: () => void;
         const slowFetch = vi.fn(
@@ -224,9 +215,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       });
       vi.stubGlobal("fetch", mockFetch);
 
-      const { unmount } = renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 5_000 }),
-      );
+      const { unmount } = renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 5_000 }));
 
       // Unmount before fetch resolves — should trigger abort
       act(() => {
@@ -240,9 +229,7 @@ describe("TestFromAC_UsePollingFetch", () => {
       const fetchMock = makeOkFetch();
       vi.stubGlobal("fetch", fetchMock);
 
-      const { unmount } = renderHook(() =>
-        usePollingFetch("/api/tasks", { intervalMs: 1_000 }),
-      );
+      const { unmount } = renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 1_000 }));
       await act(async () => {});
       expect(fetchMock).toHaveBeenCalledTimes(1);
 

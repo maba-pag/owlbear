@@ -13,13 +13,7 @@ interface WorkspaceViewHeaderProps {
  * Content header for one workspace view. Both Delivery views use it, and its single row keeps a
  * constant height so switching views or revealing a count never shifts the content below.
  */
-export default function WorkspaceViewHeader({
-  headingId,
-  title,
-  meta,
-  metaTestId,
-  tools,
-}: WorkspaceViewHeaderProps) {
+export default function WorkspaceViewHeader({ headingId, title, meta, metaTestId, tools }: WorkspaceViewHeaderProps) {
   return (
     <div
       className={[
@@ -28,10 +22,7 @@ export default function WorkspaceViewHeader({
       ].join(" ")}
     >
       <div className="flex min-w-0 items-center gap-static-xs">
-        <h2
-          id={headingId}
-          className="m-0 min-w-0 truncate text-md font-semibold leading-tight text-primary"
-        >
+        <h2 id={headingId} className="m-0 min-w-0 truncate text-md font-semibold leading-tight text-primary">
           {title}
         </h2>
         <span
@@ -43,9 +34,7 @@ export default function WorkspaceViewHeader({
         </span>
       </div>
       {tools ? (
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-static-sm gap-y-static-xs">
-          {tools}
-        </div>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-static-sm gap-y-static-xs">{tools}</div>
       ) : null}
     </div>
   );
@@ -60,8 +49,7 @@ export function WorkspaceViewCount({
   unit: string;
   separator?: boolean;
 }) {
-  const filteredCount =
-    typeof value === "string" ? value.match(/^(\d+) of (\d+)$/) : null;
+  const filteredCount = typeof value === "string" ? value.match(/^(\d+) of (\d+)$/) : null;
   return (
     <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs">
       {separator ? (
@@ -69,21 +57,14 @@ export function WorkspaceViewCount({
           ·
         </span>
       ) : null}
-      <strong className="font-semibold text-primary">
-        {filteredCount?.[1] ?? value}
-      </strong>
+      <strong className="font-semibold text-primary">{filteredCount?.[1] ?? value}</strong>
       {filteredCount ? (
         <>
           {" "}
-          <span className="text-contrast-medium">
-            of {filteredCount[2]} shown
-          </span>
+          <span className="text-contrast-medium">of {filteredCount[2]} shown</span>
         </>
       ) : null}
-      <span className="sr-only">
-        {" "}
-        {filteredCount ? unit.replace(/ shown$/, "") : unit}
-      </span>
+      <span className="sr-only"> {filteredCount ? unit.replace(/ shown$/, "") : unit}</span>
     </span>
   );
 }

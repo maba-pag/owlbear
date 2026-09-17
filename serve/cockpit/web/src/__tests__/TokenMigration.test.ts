@@ -12,11 +12,7 @@ const TESTS_DIR = resolve(__dirname);
 
 // ─── File collection helpers ───────────────────────────────────────────────────
 
-function collectSourceFiles(
-  dir: string,
-  extensions: string[],
-  excludeDirs: Set<string>,
-): string[] {
+function collectSourceFiles(dir: string, extensions: string[], excludeDirs: Set<string>): string[] {
   const result: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const fullPath = join(dir, entry.name);
@@ -47,26 +43,14 @@ function findPdsViolations(files: string[]): string[] {
 }
 
 // Directories excluded from production-source scans
-const EXCLUDE_FROM_SRC_SCAN = new Set([
-  "__tests__",
-  "node_modules",
-  "dist",
-  "build",
-]);
+const EXCLUDE_FROM_SRC_SCAN = new Set(["__tests__", "node_modules", "dist", "build"]);
 
 // ─── AC-1: Zero --pds-* references in source CSS and TSX/TS component files ──
 
 describe("PDS token namespace cleanup", () => {
   it("AC-1: all authored CSS files in src/ contain zero --pds-* references after migration", () => {
-    const cssFiles = collectSourceFiles(
-      SRC_DIR,
-      [".css"],
-      EXCLUDE_FROM_SRC_SCAN,
-    );
-    expect(
-      cssFiles.length,
-      "src/ must contain CSS files to scan",
-    ).toBeGreaterThan(0);
+    const cssFiles = collectSourceFiles(SRC_DIR, [".css"], EXCLUDE_FROM_SRC_SCAN);
+    expect(cssFiles.length, "src/ must contain CSS files to scan").toBeGreaterThan(0);
     const violations = findPdsViolations(cssFiles);
     expect(
       violations,
@@ -75,15 +59,8 @@ describe("PDS token namespace cleanup", () => {
   });
 
   it("AC-1: all authored TSX/TS component files in src/ contain zero --pds-* references after migration", () => {
-    const tsxFiles = collectSourceFiles(
-      SRC_DIR,
-      [".tsx", ".ts"],
-      EXCLUDE_FROM_SRC_SCAN,
-    );
-    expect(
-      tsxFiles.length,
-      "src/ must contain TSX/TS files to scan",
-    ).toBeGreaterThan(0);
+    const tsxFiles = collectSourceFiles(SRC_DIR, [".tsx", ".ts"], EXCLUDE_FROM_SRC_SCAN);
+    expect(tsxFiles.length, "src/ must contain TSX/TS files to scan").toBeGreaterThan(0);
     const violations = findPdsViolations(tsxFiles);
     expect(
       violations,
@@ -99,41 +76,30 @@ describe("token file migration", () => {
   const CUSTOM_TOKENS_CSS_PATH = resolve(SRC_DIR, "custom-tokens.css");
 
   it("AC-2: tokens.css is deleted from src/ (file must not exist)", () => {
-    expect(
-      existsSync(TOKENS_CSS_PATH),
-      `tokens.css must be deleted but was found at ${TOKENS_CSS_PATH}`,
-    ).toBe(false);
+    expect(existsSync(TOKENS_CSS_PATH), `tokens.css must be deleted but was found at ${TOKENS_CSS_PATH}`).toBe(false);
   });
 
   it("AC-2: custom-tokens.css exists in src/ (created by builder)", () => {
-    expect(
-      existsSync(CUSTOM_TOKENS_CSS_PATH),
-      `custom-tokens.css must be created at ${CUSTOM_TOKENS_CSS_PATH}`,
-    ).toBe(true);
+    expect(existsSync(CUSTOM_TOKENS_CSS_PATH), `custom-tokens.css must be created at ${CUSTOM_TOKENS_CSS_PATH}`).toBe(
+      true,
+    );
   });
 
   it("AC-2: custom-tokens.css declares the --custom-signal-deps-unmet property", () => {
-    expect(
-      existsSync(CUSTOM_TOKENS_CSS_PATH),
-      "custom-tokens.css must exist",
-    ).toBe(true);
+    expect(existsSync(CUSTOM_TOKENS_CSS_PATH), "custom-tokens.css must exist").toBe(true);
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, "utf-8");
-    expect(
-      css,
-      "custom-tokens.css must declare --custom-signal-deps-unmet (sole custom property)",
-    ).toMatch(/--custom-signal-deps-unmet\s*:/);
+    expect(css, "custom-tokens.css must declare --custom-signal-deps-unmet (sole custom property)").toMatch(
+      /--custom-signal-deps-unmet\s*:/,
+    );
   });
 
   it("AC-2: custom-tokens.css declares exactly one custom property", () => {
-    expect(
-      existsSync(CUSTOM_TOKENS_CSS_PATH),
-      "custom-tokens.css must exist",
-    ).toBe(true);
+    expect(existsSync(CUSTOM_TOKENS_CSS_PATH), "custom-tokens.css must exist").toBe(true);
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, "utf-8");
     const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
-    const declarations = [
-      ...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g),
-    ].map((match) => match[0].replace(/\s*:/, ""));
+    const declarations = [...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g)].map((match) =>
+      match[0].replace(/\s*:/, ""),
+    );
     const uniqueDeclarations = [...new Set(declarations)];
     expect(
       uniqueDeclarations.length,
@@ -143,10 +109,7 @@ describe("token file migration", () => {
   });
 
   it("AC-2: custom-tokens.css contains no --pds-* declarations (old namespace fully replaced)", () => {
-    expect(
-      existsSync(CUSTOM_TOKENS_CSS_PATH),
-      "custom-tokens.css must exist",
-    ).toBe(true);
+    expect(existsSync(CUSTOM_TOKENS_CSS_PATH), "custom-tokens.css must exist").toBe(true);
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, "utf-8");
     expect(
       css,
@@ -159,11 +122,7 @@ describe("token file migration", () => {
 
 describe("dark-mode override removal", () => {
   it('AC-3: no authored CSS file in src/ contains a [data-theme="dark"] selector block', () => {
-    const cssFiles = collectSourceFiles(
-      SRC_DIR,
-      [".css"],
-      EXCLUDE_FROM_SRC_SCAN,
-    );
+    const cssFiles = collectSourceFiles(SRC_DIR, [".css"], EXCLUDE_FROM_SRC_SCAN);
     const violations: string[] = [];
     for (const filePath of cssFiles) {
       const content = readFileSync(filePath, "utf-8");
@@ -178,11 +137,7 @@ describe("dark-mode override removal", () => {
   });
 
   it("AC-3: no authored CSS file in src/ contains a @media (prefers-color-scheme) block", () => {
-    const cssFiles = collectSourceFiles(
-      SRC_DIR,
-      [".css"],
-      EXCLUDE_FROM_SRC_SCAN,
-    );
+    const cssFiles = collectSourceFiles(SRC_DIR, [".css"], EXCLUDE_FROM_SRC_SCAN);
     const violations: string[] = [];
     for (const filePath of cssFiles) {
       const content = readFileSync(filePath, "utf-8");

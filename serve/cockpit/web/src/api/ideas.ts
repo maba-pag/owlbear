@@ -39,10 +39,7 @@ export async function fetchIdeas(): Promise<IdeasResponse> {
   return (await response.json()) as IdeasResponse;
 }
 
-export async function saveIdeas(
-  content: string,
-  options: IdeasSaveOptions = {},
-): Promise<string | null> {
+export async function saveIdeas(content: string, options: IdeasSaveOptions = {}): Promise<string | null> {
   const body: {
     content: string;
     expected_updated_at?: string | null;
@@ -90,7 +87,5 @@ export async function saveIdeas(
     throw new ApiError(response.status, errorMessage);
   }
 
-  return typeof response.headers?.get === "function"
-    ? response.headers.get("x-ideas-updated-at")
-    : null;
+  return typeof response.headers?.get === "function" ? response.headers.get("x-ideas-updated-at") : null;
 }

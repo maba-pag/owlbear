@@ -1,10 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { checkChromium } from "./check-playwright-browser.mjs";
 
-const fastGateSpecs = [
-  "e2e/smoke.spec.ts",
-  "e2e/pds-runtime-csp.spec.ts",
-];
+const fastGateSpecs = ["e2e/smoke.spec.ts", "e2e/pds-runtime-csp.spec.ts"];
 
 const forwardedArgs = process.argv.slice(2);
 const playwrightArgs = forwardedArgs.length === 0 ? fastGateSpecs : forwardedArgs;

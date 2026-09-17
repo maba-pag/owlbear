@@ -30,9 +30,7 @@ describe("useMemoryPurgeFlow", () => {
             resolveFirst = resolve;
           }),
       )
-      .mockResolvedValueOnce(
-        response({ deleted_total: 2, eligible: 2, too_recent: 0 }),
-      )
+      .mockResolvedValueOnce(response({ deleted_total: 2, eligible: 2, too_recent: 0 }))
       .mockResolvedValueOnce(response({ purged: 2, skipped: 0, failed: 0 }));
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useMemoryPurgeFlow({ onSuccess }));
@@ -82,17 +80,13 @@ describe("useMemoryPurgeFlow", () => {
       await act(async () => {
         await result.current.requestPreview();
       });
-      expect(result.current.error).toBe(
-        "Threshold must be a nonnegative whole number",
-      );
+      expect(result.current.error).toBe("Threshold must be a nonnegative whole number");
     }
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("exposes preview and execution errors without completion", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(response({ detail: "unavailable" }, false));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ detail: "unavailable" }, false));
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useMemoryPurgeFlow({ onSuccess }));
     await act(async () => {
@@ -106,9 +100,7 @@ describe("useMemoryPurgeFlow", () => {
   it("returns to the error phase when the confirmed purge fails", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        response({ deleted_total: 2, eligible: 2, too_recent: 0 }),
-      )
+      .mockResolvedValueOnce(response({ deleted_total: 2, eligible: 2, too_recent: 0 }))
       .mockResolvedValueOnce(response({ detail: "purge unavailable" }, false));
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useMemoryPurgeFlow({ onSuccess }));
@@ -137,9 +129,7 @@ describe("useMemoryPurgeFlow", () => {
             rejectFirst = reject;
           }),
       )
-      .mockResolvedValueOnce(
-        response({ deleted_total: 2, eligible: 2, too_recent: 0 }),
-      );
+      .mockResolvedValueOnce(response({ deleted_total: 2, eligible: 2, too_recent: 0 }));
     const { result } = renderHook(() => useMemoryPurgeFlow());
 
     act(() => {
@@ -166,9 +156,7 @@ describe("useMemoryPurgeFlow", () => {
   it("cancels a confirmed preview and prevents a purge from using it", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        response({ deleted_total: 2, eligible: 2, too_recent: 0 }),
-      );
+      .mockResolvedValue(response({ deleted_total: 2, eligible: 2, too_recent: 0 }));
     const { result } = renderHook(() => useMemoryPurgeFlow());
 
     await act(async () => {

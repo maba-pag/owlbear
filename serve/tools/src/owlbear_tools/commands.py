@@ -98,6 +98,8 @@ COMMANDS = (
         includes=("lint-cockpit-biome", "lint-cockpit-html"),
         development_only=True,
         supports_staged=True,
+        supports_safe_fixes=True,
+        supports_unsafe_fixes=True,
     ),
     Command(
         "lint-python",
@@ -153,10 +155,12 @@ COMMANDS = (
     Command(
         "lint-cockpit-biome",
         "uv run lint-cockpit-biome",
-        "Cockpit Biome lint.",
+        "Frontend and JSON checks.",
         "Quality",
         development_only=True,
         supports_staged=True,
+        supports_safe_fixes=True,
+        supports_unsafe_fixes=True,
     ),
     Command(
         "lint-cockpit-html",
@@ -185,6 +189,15 @@ COMMANDS = (
         supports_safe_fixes=True,
     ),
     Command(
+        "format-biome",
+        "uv run format-biome",
+        "Frontend and JSON format.",
+        "Quality",
+        development_only=True,
+        supports_staged=True,
+        supports_safe_fixes=True,
+    ),
+    Command(
         "format-whitespace",
         "uv run format-whitespace",
         "Trailing whitespace.",
@@ -207,7 +220,7 @@ COMMANDS = (
         "uv run format",
         "All formatters.",
         "Quality",
-        includes=("format-python", "format-whitespace", "format-eof"),
+        includes=("format-python", "format-biome", "format-whitespace", "format-eof"),
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,

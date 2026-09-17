@@ -23,15 +23,9 @@ vi.mock("@rolldown/plugin-babel", () => ({
 import config from "../../vite.config";
 
 // Flatten nested plugin arrays (e.g. react() returns Plugin[])
-function findCspPlugin(
-  plugins: unknown[],
-): Record<string, unknown> | undefined {
+function findCspPlugin(plugins: unknown[]): Record<string, unknown> | undefined {
   for (const p of (plugins as unknown[]).flat(2)) {
-    if (
-      p &&
-      typeof p === "object" &&
-      (p as Record<string, unknown>).name === "csp-meta"
-    ) {
+    if (p && typeof p === "object" && (p as Record<string, unknown>).name === "csp-meta") {
       return p as Record<string, unknown>;
     }
   }
@@ -52,9 +46,7 @@ describe("TestFromAC_CSP", () => {
   const rawConfig = config as { plugins?: unknown[] };
   const plugins = rawConfig.plugins ?? [];
   const csp = findCspPlugin(plugins);
-  const transform = csp?.transformIndexHtml as
-    | ((html: string) => string)
-    | undefined;
+  const transform = csp?.transformIndexHtml as ((html: string) => string) | undefined;
 
   // ─── Plugin registration and dev guard ────────────────────────────────────
 

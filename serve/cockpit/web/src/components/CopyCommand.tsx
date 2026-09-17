@@ -1,7 +1,4 @@
-import {
-  PIcon,
-  useToastManager,
-} from "@porsche-design-system/components-react";
+import { PIcon, useToastManager } from "@porsche-design-system/components-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 interface CopyCommandProps {
@@ -23,10 +20,7 @@ export function useCopyToClipboard() {
     [],
   );
 
-  const copy = async (
-    value: string,
-    messages: { success: string; failure: string },
-  ): Promise<boolean> => {
+  const copy = async (value: string, messages: { success: string; failure: string }): Promise<boolean> => {
     let copied = false;
     try {
       await navigator.clipboard.writeText(value);
@@ -45,13 +39,9 @@ export function useCopyToClipboard() {
   return { copyState, copy };
 }
 
-export default function CopyCommand({
-  command,
-  className = "",
-}: CopyCommandProps) {
+export default function CopyCommand({ command, className = "" }: CopyCommandProps) {
   const { copyState, copy } = useCopyToClipboard();
-  const stateIcon =
-    copyState === "copied" ? "check" : copyState === "failed" ? "error" : null;
+  const stateIcon = copyState === "copied" ? "check" : copyState === "failed" ? "error" : null;
 
   const copyCommand = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -86,24 +76,10 @@ export default function CopyCommand({
       }
       onClick={(event) => void copyCommand(event)}
     >
-      <PIcon
-        className="shrink-0"
-        name="ai-code"
-        size="inherit"
-        color="inherit"
-        aria-hidden="true"
-      />
-      <code className="min-w-0 max-w-full break-words text-inherit leading-5">
-        {command}
-      </code>
+      <PIcon className="shrink-0" name="ai-code" size="inherit" color="inherit" aria-hidden="true" />
+      <code className="min-w-0 max-w-full break-words text-inherit leading-5">{command}</code>
       {stateIcon ? (
-        <PIcon
-          className="shrink-0"
-          name={stateIcon}
-          size="inherit"
-          color="inherit"
-          aria-hidden="true"
-        />
+        <PIcon className="shrink-0" name={stateIcon} size="inherit" color="inherit" aria-hidden="true" />
       ) : null}
     </button>
   );

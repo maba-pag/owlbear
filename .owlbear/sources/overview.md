@@ -17,11 +17,11 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Biome linter | <https://biomejs.dev/linter/> | Recommended rule presets, diagnostic severities, safe versus unsafe fixes, and the distinction between linting and formatting | `serve/cockpit/web/biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
-| Biome configuration | <https://biomejs.dev/guides/configure-biome/> | Package-local configuration, explicit `files.includes` scopes, and configuration resolution | `serve/cockpit/web/biome.json` | 2026-09-16 |
-| Biome VCS integration | <https://biomejs.dev/guides/integrate-in-vcs/> | `--staged` and `--changed` rollout checks plus Git ignore integration | `serve/cockpit/web/biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
+| Biome linter | <https://biomejs.dev/linter/> | Recommended rule presets, diagnostic severities, safe versus unsafe fixes, and the distinction between linting and formatting | `biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
+| Biome configuration | <https://biomejs.dev/guides/configure-biome/> | Package-local configuration, explicit `files.includes` scopes, and configuration resolution | `biome.json` | 2026-09-16 |
+| Biome VCS integration | <https://biomejs.dev/guides/integrate-vcs/> | `--staged` and `--changed` rollout checks plus Git ignore integration | `biome.json`; `serve/cockpit/web/package.json` | 2026-09-16 |
 | Biome continuous integration | <https://biomejs.dev/recipes/continuous-integration/> | `biome ci` as the non-mutating CI command | `.github/workflows/cockpit-verification.yml`; `serve/cockpit/web/package.json` | 2026-09-16 |
-| Biome ESLint migration | <https://biomejs.dev/guides/migrate-eslint-prettier/> | Migration behavior, explicit rule translation, and the warning that Biome behavior is not exact ESLint parity | `serve/cockpit/web/biome.json` | 2026-09-16 |
+| Biome ESLint migration | <https://biomejs.dev/guides/migrate-eslint-prettier/> | Migration behavior, explicit rule translation, and the warning that Biome behavior is not exact ESLint parity | `biome.json` | 2026-09-16 |
 | Biome GritQL plugins | <https://biomejs.dev/linter/plugins/> | Custom diagnostics, JavaScript/TypeScript plugin syntax, and project-specific rule extension | `serve/cockpit/web/plugins/pds-component-wrappers.grit`; `serve/cockpit/web/scripts/test-biome-pds.mjs` | 2026-09-16 |
 
 ## Intermittent-Connectivity Cloud Delivery

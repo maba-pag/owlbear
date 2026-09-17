@@ -4,9 +4,7 @@ export function designWorkTitle(changeId: string): string {
   return changeId
     .split("-")
     .map((word, index) =>
-      index > 0 && MINOR_WORDS.has(word)
-        ? word
-        : `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
+      index > 0 && MINOR_WORDS.has(word) ? word : `${word.charAt(0).toUpperCase()}${word.slice(1)}`,
     )
     .join(" ");
 }

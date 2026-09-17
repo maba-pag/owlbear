@@ -55,11 +55,9 @@ function createSpiedMQL(initialMatches: boolean): SpiedMQL {
     },
     media: "(prefers-color-scheme: dark)",
     onchange: null,
-    addEventListener: vi.fn(
-      (type: string, handler: (e: MediaQueryListEvent) => void) => {
-        if (type === "change") changeListeners.push(handler);
-      },
-    ),
+    addEventListener: vi.fn((type: string, handler: (e: MediaQueryListEvent) => void) => {
+      if (type === "change") changeListeners.push(handler);
+    }),
     removeEventListener: vi.fn(),
     addListener: vi.fn(),
     removeListener: vi.fn(),
@@ -105,9 +103,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
 
     runBootstrapScript();
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
   });
 
   it("AC-3 happy: stored=light → .scheme-light class added to documentElement", () => {
@@ -115,9 +111,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
 
     runBootstrapScript();
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
   });
 
   it("AC-3 happy: stored=dark → data-theme=dark AND .scheme-dark are set together", () => {
@@ -126,9 +120,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
     runBootstrapScript();
 
     expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
   });
 
   it("AC-3 happy: stored=light → data-theme=light AND .scheme-light are set together", () => {
@@ -137,9 +129,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
     runBootstrapScript();
 
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
   });
 
   // Edge cases — OS preference fallback
@@ -149,9 +139,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
 
     runBootstrapScript();
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
   });
 
   it("AC-3 edge: OS prefers light, no localStorage → .scheme-light added", () => {
@@ -159,9 +147,7 @@ describe("ThemeBootstrapSchemeClasses", () => {
 
     runBootstrapScript();
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
   });
 
   // Boundary — no class accumulation across runs
@@ -173,12 +159,8 @@ describe("ThemeBootstrapSchemeClasses", () => {
     localStorage.setItem(THEME_STORAGE_KEY, "light");
     runBootstrapScript();
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      false,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(false);
   });
 });
 // ─── AC-4 (site 1): applyTheme() exported function ───────────────────────────
@@ -198,9 +180,7 @@ describe("ApplyThemeSchemeClasses", () => {
 
     applyTheme();
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
   });
 
   it("AC-4 site1 happy: applyTheme() with light localStorage → .scheme-light added to documentElement", () => {
@@ -208,9 +188,7 @@ describe("ApplyThemeSchemeClasses", () => {
 
     applyTheme();
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
   });
 
   it("AC-4 site1 boundary: applyTheme() called twice with flipped theme → no accumulation", () => {
@@ -220,12 +198,8 @@ describe("ApplyThemeSchemeClasses", () => {
     localStorage.setItem(THEME_STORAGE_KEY, "light");
     applyTheme();
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      false,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(false);
   });
 });
 // ─── AC-4 (site 2): useTheme hook effect (theme / systemPrefersDark change) ───
@@ -245,9 +219,7 @@ describe("UseThemeSchemeClasses", () => {
 
     const { unmount } = renderHook(() => useTheme());
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
     unmount();
   });
 
@@ -256,9 +228,7 @@ describe("UseThemeSchemeClasses", () => {
 
     const { unmount } = renderHook(() => useTheme());
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
     unmount();
   });
 
@@ -271,9 +241,7 @@ describe("UseThemeSchemeClasses", () => {
       result.current.toggle();
     });
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
     unmount();
   });
 
@@ -292,12 +260,8 @@ describe("UseThemeSchemeClasses", () => {
         result.current.toggle(); // dark → auto (OS light)
       });
 
-      expect(document.documentElement.classList.contains("scheme-light")).toBe(
-        true,
-      );
-      expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-        false,
-      );
+      expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
+      expect(document.documentElement.classList.contains("scheme-dark")).toBe(false);
       unmount();
     },
   );
@@ -326,9 +290,7 @@ describe("MediaChangeSchemeClasses", () => {
       mql.simulateChange(true);
     });
 
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(true);
     unmount();
   });
 
@@ -342,9 +304,7 @@ describe("MediaChangeSchemeClasses", () => {
       mql.simulateChange(false);
     });
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
     unmount();
   });
 
@@ -359,12 +319,8 @@ describe("MediaChangeSchemeClasses", () => {
       mql.simulateChange(false); // → light, remove dark
     });
 
-    expect(document.documentElement.classList.contains("scheme-light")).toBe(
-      true,
-    );
-    expect(document.documentElement.classList.contains("scheme-dark")).toBe(
-      false,
-    );
+    expect(document.documentElement.classList.contains("scheme-light")).toBe(true);
+    expect(document.documentElement.classList.contains("scheme-dark")).toBe(false);
     unmount();
   });
 });

@@ -1,9 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  type UsePollingFetchOptions,
-  usePollingFetch,
-} from "../hooks/usePollingFetch";
+import { type UsePollingFetchOptions, usePollingFetch } from "../hooks/usePollingFetch";
 
 function makeOkFetch(body: unknown = {}) {
   return vi.fn(() =>
@@ -24,8 +21,7 @@ function makeSlowFetch() {
         status: number;
         json: () => Promise<unknown>;
       }>((res) => {
-        resolve = () =>
-          res({ ok: true, status: 200, json: () => Promise.resolve({}) });
+        resolve = () => res({ ok: true, status: 200, json: () => Promise.resolve({}) });
       }),
   );
   return { fn, resolve: () => resolve() };
@@ -46,9 +42,7 @@ describe("usePollingFetch paused polling", () => {
     const fetchMock = makeOkFetch();
     vi.stubGlobal("fetch", fetchMock);
 
-    renderHook(() =>
-      usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }),
-    );
+    renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }));
     await act(async () => {});
     await act(async () => {
       vi.advanceTimersByTime(2_000);
@@ -61,9 +55,7 @@ describe("usePollingFetch paused polling", () => {
     const fetchMock = makeOkFetch();
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() =>
-      usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }),
-    );
+    const { result } = renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }));
     await act(async () => {});
     await act(async () => {
       result.current.refetch();
@@ -79,8 +71,7 @@ describe("usePollingFetch paused polling", () => {
       status: number;
       json: () => Promise<unknown>;
     }>((resolve) => {
-      releaseFirst = () =>
-        resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      releaseFirst = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
     });
     const fetchMock = vi
       .fn()
@@ -92,9 +83,7 @@ describe("usePollingFetch paused polling", () => {
       });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() =>
-      usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }),
-    );
+    const { result } = renderHook(() => usePollingFetch("/api/tasks", { intervalMs: 1_000, paused: true }));
     await act(async () => {});
     await act(async () => {
       result.current.refetch();
@@ -114,16 +103,12 @@ describe("usePollingFetch paused polling", () => {
     const { fn: slowFetch, resolve } = makeSlowFetch();
     vi.stubGlobal("fetch", slowFetch);
 
-    const { rerender } = renderHook(
-      (props: UsePollingFetchOptions<unknown>) =>
-        usePollingFetch("/api/tasks", props),
-      {
-        initialProps: {
-          intervalMs: 500,
-          paused: false,
-        } as UsePollingFetchOptions<unknown>,
-      },
-    );
+    const { rerender } = renderHook((props: UsePollingFetchOptions<unknown>) => usePollingFetch("/api/tasks", props), {
+      initialProps: {
+        intervalMs: 500,
+        paused: false,
+      } as UsePollingFetchOptions<unknown>,
+    });
     await act(async () => {
       vi.advanceTimersByTime(500);
     });
@@ -139,16 +124,12 @@ describe("usePollingFetch paused polling", () => {
     const fetchMock = makeOkFetch();
     vi.stubGlobal("fetch", fetchMock);
 
-    const { rerender } = renderHook(
-      (props: UsePollingFetchOptions<unknown>) =>
-        usePollingFetch("/api/tasks", props),
-      {
-        initialProps: {
-          intervalMs: 1_000,
-          paused: true,
-        } as UsePollingFetchOptions<unknown>,
-      },
-    );
+    const { rerender } = renderHook((props: UsePollingFetchOptions<unknown>) => usePollingFetch("/api/tasks", props), {
+      initialProps: {
+        intervalMs: 1_000,
+        paused: true,
+      } as UsePollingFetchOptions<unknown>,
+    });
     await act(async () => {});
     await act(async () => {
       vi.advanceTimersByTime(500);

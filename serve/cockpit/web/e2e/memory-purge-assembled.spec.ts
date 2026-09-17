@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -9,8 +10,8 @@ const runFile = promisify(execFile);
 
 async function box(page: Page, testId: string) {
   const found = await page.getByTestId(testId).boundingBox();
-  expect(found, `${testId} must have rendered geometry`).not.toBeNull();
-  return requirePresent(found);
+  assert(found !== null, `${testId} must have rendered geometry`);
+  return found;
 }
 
 /**
@@ -18,16 +19,8 @@ async function box(page: Page, testId: string) {
  * button in a blank band, and never back in the page headline. Enabled and disabled look alike.
  */
 async function expectPurgeOwnsEntriesRegion(page: Page): Promise<void> {
-  await expect(
-    page
-      .getByTestId("memory-entries-region")
-      .getByTestId("memory-purge-open-button"),
-  ).toHaveCount(1);
-  await expect(
-    page
-      .getByTestId("workspace-header")
-      .getByTestId("memory-purge-open-button"),
-  ).toHaveCount(0);
+  await expect(page.getByTestId("memory-entries-region").getByTestId("memory-purge-open-button")).toHaveCount(1);
+  await expect(page.getByTestId("workspace-header").getByTestId("memory-purge-open-button")).toHaveCount(0);
   await expect(page.getByTestId("memory-purge-open-button")).toBeVisible();
 
   const region = await box(page, "memory-entries-region");
@@ -36,77 +29,46 @@ async function expectPurgeOwnsEntriesRegion(page: Page): Promise<void> {
 
   expect(toolbar.y - region.y).toBeLessThanOrEqual(1);
   expect(toolbar.height - control.height).toBeLessThanOrEqual(12);
-  expect(
-    Math.abs(toolbar.x + toolbar.width - (region.x + region.width)),
-  ).toBeLessThanOrEqual(1);
-  expect(
-    region.x + region.width - (control.x + control.width),
-  ).toBeLessThanOrEqual(12);
+  expect(Math.abs(toolbar.x + toolbar.width - (region.x + region.width))).toBeLessThanOrEqual(1);
+  expect(region.x + region.width - (control.x + control.width)).toBeLessThanOrEqual(12);
 
   const followingTop = await page.evaluate(() => {
-    const toolbarElement = document.querySelector(
-      '[data-testid="memory-entries-toolbar"]',
-    );
+    const toolbarElement = document.querySelector('[data-testid="memory-entries-toolbar"]');
     const next = toolbarElement?.nextElementSibling;
     return next ? next.getBoundingClientRect().top : null;
   });
-  expect(
-    followingTop,
-    "entries content must follow the purge toolbar",
-  ).not.toBeNull();
-  expect(
-    requirePresent(followingTop) - (toolbar.y + toolbar.height),
-  ).toBeLessThanOrEqual(24);
+  assert(followingTop !== null, "entries content must follow the purge toolbar");
+  expect(followingTop - (toolbar.y + toolbar.height)).toBeLessThanOrEqual(24);
 }
 
 test.describe("assembled Memory purge", () => {
-  test("previews, cancels, and executes project-wide tombstone cleanup through production HTTP", async ({
-    page,
-  }) => {
+  test("previews, cancels, and executes project-wide tombstone cleanup through production HTTP", async ({ page }) => {
     await page.goto("/memory");
     await expect(page.getByTestId("memory-tab")).toBeVisible();
-    await expect(page.getByTestId("memory-purge-open-button")).toHaveText(
-      "Purge deleted (3)",
-    );
+    await expect(page.getByTestId("memory-purge-open-button")).toHaveText("Purge deleted (3)");
     await expectPurgeOwnsEntriesRegion(page);
     await expect(page.getByText("Eligible deleted")).toHaveCount(0);
-    await page
-      .locator('p-multi-select[name="state-filter"]')
-      .evaluate((element) => {
-        element.dispatchEvent(
-          new CustomEvent("change", {
-            detail: { value: ["approved"] },
-            bubbles: true,
-          }),
-        );
-      });
-    await expect(page.getByTestId("memory-purge-open-button")).toHaveText(
-      "Purge deleted (3)",
-    );
+    await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
+      element.dispatchEvent(
+        new CustomEvent("change", {
+          detail: { value: ["approved"] },
+          bubbles: true,
+        }),
+      );
+    });
+    await expect(page.getByTestId("memory-purge-open-button")).toHaveText("Purge deleted (3)");
 
     await page.getByTestId("memory-purge-open-button").click();
     const purgeDialog = page.getByTestId("memory-purge-dialog");
     await expect(purgeDialog).toBeVisible();
-    await purgeDialog
-      .locator("p-button")
-      .filter({ hasText: "Cancel" })
-      .dispatchEvent("click");
-    await expect(page.getByTestId("memory-purge-open-button")).toHaveText(
-      "Purge deleted (3)",
-    );
+    await purgeDialog.locator("p-button").filter({ hasText: "Cancel" }).dispatchEvent("click");
+    await expect(page.getByTestId("memory-purge-open-button")).toHaveText("Purge deleted (3)");
 
     await page.getByTestId("memory-purge-open-button").click();
-    await page
-      .locator('p-input-number[name="memory-purge-threshold"]')
-      .evaluate((element) => {
-        element.dispatchEvent(
-          new CustomEvent("input", { detail: { value: "1" }, bubbles: true }),
-        );
-      });
-    await purgeDialog
-      .locator("p-button")
-      .filter({ hasText: "Preview" })
-      .dispatchEvent("click");
+    await page.locator('p-input-number[name="memory-purge-threshold"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent("input", { detail: { value: "1" }, bubbles: true }));
+    });
+    await purgeDialog.locator("p-button").filter({ hasText: "Preview" }).dispatchEvent("click");
     const positivePreview = page.getByTestId("memory-purge-preview");
     await expect(
       positivePreview
@@ -120,51 +82,33 @@ test.describe("assembled Memory purge", () => {
         .filter({ has: page.getByText("Too recent") })
         .locator("dd"),
     ).toHaveText("1");
-    const fixture = JSON.parse(
-      await readFile("test-results/memory-purge-fixture.json", "utf8"),
-    ) as {
+    const fixture = JSON.parse(await readFile("test-results/memory-purge-fixture.json", "utf8")) as {
       memoryDir: string;
     };
     const failedEntryPath = join(fixture.memoryDir, `${failedEntryId}.md`);
     await runFile("chflags", ["uchg", failedEntryPath]);
-    await purgeDialog
-      .locator("p-button")
-      .filter({ hasText: "Purge" })
-      .dispatchEvent("click");
+    await purgeDialog.locator("p-button").filter({ hasText: "Purge" }).dispatchEvent("click");
 
-    await expect(page.getByTestId("memory-purge-receipt")).toContainText(
-      "Purged 1; skipped 1; failed 1",
-    );
+    await expect(page.getByTestId("memory-purge-receipt")).toContainText("Purged 1; skipped 1; failed 1");
     await runFile("chflags", ["nouchg", failedEntryPath]);
-    await page
-      .locator('p-multi-select[name="state-filter"]')
-      .evaluate((element) => {
-        element.dispatchEvent(
-          new CustomEvent("change", {
-            detail: { value: ["deleted"] },
-            bubbles: true,
-          }),
-        );
-      });
-    await expect(page.getByTestId("memory-purge-open-button")).toHaveText(
-      "Purge deleted (2)",
-    );
+    await page.locator('p-multi-select[name="state-filter"]').evaluate((element) => {
+      element.dispatchEvent(
+        new CustomEvent("change", {
+          detail: { value: ["deleted"] },
+          bubbles: true,
+        }),
+      );
+    });
+    await expect(page.getByTestId("memory-purge-open-button")).toHaveText("Purge deleted (2)");
     await expect(page.getByText("Eligible deleted")).toBeVisible();
     await expect(page.getByText("Recent deleted")).toBeVisible();
     await expect(page.getByText("Exact cutoff deleted")).toHaveCount(0);
 
     await page.getByTestId("memory-purge-open-button").click();
-    await page
-      .locator('p-input-number[name="memory-purge-threshold"]')
-      .evaluate((element) => {
-        element.dispatchEvent(
-          new CustomEvent("input", { detail: { value: "0" }, bubbles: true }),
-        );
-      });
-    await purgeDialog
-      .locator("p-button")
-      .filter({ hasText: "Preview" })
-      .dispatchEvent("click");
+    await page.locator('p-input-number[name="memory-purge-threshold"]').evaluate((element) => {
+      element.dispatchEvent(new CustomEvent("input", { detail: { value: "0" }, bubbles: true }));
+    });
+    await purgeDialog.locator("p-button").filter({ hasText: "Preview" }).dispatchEvent("click");
     const zeroDayPreview = page.getByTestId("memory-purge-preview");
     await expect(
       zeroDayPreview
@@ -178,20 +122,11 @@ test.describe("assembled Memory purge", () => {
         .filter({ has: page.getByText("Too recent") })
         .locator("dd"),
     ).toHaveText("0");
-    await purgeDialog
-      .locator("p-button")
-      .filter({ hasText: "Purge" })
-      .dispatchEvent("click");
+    await purgeDialog.locator("p-button").filter({ hasText: "Purge" }).dispatchEvent("click");
 
-    await expect(page.getByTestId("memory-purge-receipt")).toContainText(
-      "Purged 2; skipped 0; failed 0",
-    );
-    await expect(page.getByTestId("memory-purge-open-button")).toHaveText(
-      "Purge deleted (0)",
-    );
-    await expect(
-      page.getByTestId("memory-purge-open-button").locator("button"),
-    ).toBeDisabled();
+    await expect(page.getByTestId("memory-purge-receipt")).toContainText("Purged 2; skipped 0; failed 0");
+    await expect(page.getByTestId("memory-purge-open-button")).toHaveText("Purge deleted (0)");
+    await expect(page.getByTestId("memory-purge-open-button").locator("button")).toBeDisabled();
     await expectPurgeOwnsEntriesRegion(page);
     await page.setViewportSize({ width: 1100, height: 800 });
     await expectPurgeOwnsEntriesRegion(page);

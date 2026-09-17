@@ -45,8 +45,7 @@ function readMessageField(payload: unknown): string | null {
   }
 
   const record = payload as Record<string, unknown>;
-  const message =
-    typeof record.message === "string" ? record.message.trim() : "";
+  const message = typeof record.message === "string" ? record.message.trim() : "";
   if (message.length > 0) {
     return message;
   }
@@ -64,10 +63,7 @@ function readMessageField(payload: unknown): string | null {
   return null;
 }
 
-export async function getResponseErrorMessage(
-  response: Response,
-  fallbackMessage: string,
-): Promise<string> {
+export async function getResponseErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
   try {
     const payload = (await response.json()) as unknown;
     const fromBody = readMessageField(payload);

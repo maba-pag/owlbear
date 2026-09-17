@@ -1,10 +1,4 @@
-import {
-  PButtonPure,
-  PFlyout,
-  PHeading,
-  PIcon,
-  PLinkPure,
-} from "@porsche-design-system/components-react";
+import { PButtonPure, PFlyout, PHeading, PIcon, PLinkPure } from "@porsche-design-system/components-react";
 import { Suspense, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import ThemeToggle from "./components/ThemeToggle";
@@ -24,19 +18,11 @@ interface ProductNavigationProps {
   onNavigate: (path: string) => void;
 }
 
-function ProductNavigation({
-  activePath,
-  compact = false,
-  onNavigate,
-}: ProductNavigationProps) {
+function ProductNavigation({ activePath, compact = false, onNavigate }: ProductNavigationProps) {
   return (
     <nav
       aria-label="Product areas"
-      className={
-        compact
-          ? "grid w-full justify-items-center gap-static-sm"
-          : "grid gap-static-lg"
-      }
+      className={compact ? "grid w-full justify-items-center gap-static-sm" : "grid gap-static-lg"}
     >
       {routeConfig.map((route) =>
         compact ? (
@@ -59,10 +45,7 @@ function ProductNavigation({
               onNavigate(route.path);
             }}
           >
-            <PIcon
-              name={ICONS[route.icon as keyof typeof ICONS] ?? "grid"}
-              aria-hidden="true"
-            />
+            <PIcon name={ICONS[route.icon as keyof typeof ICONS] ?? "grid"} aria-hidden="true" />
           </a>
         ) : (
           <PLinkPure
@@ -127,25 +110,15 @@ export default function CockpitShell() {
           aria-label="OwlBear Cockpit"
           title="OwlBear Cockpit"
         >
-          <span
-            aria-hidden="true"
-            className="text-[0.5625rem] font-semibold uppercase tracking-[0.14em] text-primary"
-          >
+          <span aria-hidden="true" className="text-[0.5625rem] font-semibold uppercase tracking-[0.14em] text-primary">
             OwlBear
           </span>
-          <span
-            aria-hidden="true"
-            className="text-[0.5625rem] uppercase tracking-[0.14em] text-contrast-medium"
-          >
+          <span aria-hidden="true" className="text-[0.5625rem] uppercase tracking-[0.14em] text-contrast-medium">
             Cockpit
           </span>
         </div>
         <div className="mt-static-lg flex w-full flex-1 items-start justify-center">
-          <ProductNavigation
-            activePath={activeRoute?.path ?? ""}
-            compact
-            onNavigate={goTo}
-          />
+          <ProductNavigation activePath={activeRoute?.path ?? ""} compact onNavigate={goTo} />
         </div>
         <div className="grid justify-items-center gap-1.5">
           <WorkspaceStatus health={workspaceHealth} />
@@ -153,10 +126,7 @@ export default function CockpitShell() {
         </div>
       </aside>
 
-      <div
-        className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden"
-        data-region="workspace"
-      >
+      <div className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden" data-region="workspace">
         <header
           className={[
             "sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md",
@@ -197,10 +167,7 @@ export default function CockpitShell() {
               <strong className="block text-lg">OwlBear</strong>
               <span className="text-sm text-contrast-medium">Cockpit</span>
             </div>
-            <ProductNavigation
-              activePath={activeRoute?.path ?? ""}
-              onNavigate={goTo}
-            />
+            <ProductNavigation activePath={activeRoute?.path ?? ""} onNavigate={goTo} />
           </div>
         </PFlyout>
 
@@ -216,10 +183,7 @@ export default function CockpitShell() {
             {ActivePage ? (
               <ActivePage />
             ) : (
-              <main
-                className="grid min-h-full place-items-center p-static-xl"
-                data-testid="not-found-view"
-              >
+              <main className="grid min-h-full place-items-center p-static-xl" data-testid="not-found-view">
                 <section className="grid max-w-lg gap-static-sm text-center">
                   <PHeading tag="h1" size="xl">
                     Page not found

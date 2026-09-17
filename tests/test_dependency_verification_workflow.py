@@ -344,8 +344,8 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     }
     assert proof_python["needs"] == ["classify", "resolve_runtimes"]
     assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
-    assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
-    assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
+    assert 'uv sync --locked --python "${MATRIX_PYTHON}" --all-packages --all-extras --all-groups' in text
+    assert 'uv run --python "${MATRIX_PYTHON}" pytest tests serve \\' in text
     assert '            -m "not api and not e2e and not browser and not cockpit and not model"' in text
     assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
@@ -994,6 +994,12 @@ def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
     package = json.loads((ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
 
     assert workflow["on"]["pull_request"]["paths"] == [
+        "**/*.json",
+        "**/*.jsonc",
+        "**/.editorconfig",
+        "**/.gitignore",
+        ".mega-linter.yml",
+        ".pre-commit-config.yaml",
         "serve/cockpit/web/**",
         "serve/cockpit/README.md",
         ".github/scripts/check_node_runtime.py",
@@ -1037,8 +1043,8 @@ def test_cockpit_compatibility_retains_failure_diagnostics() -> None:
     workflow = _workflow(COCKPIT_VERIFY_PATH)
     browser = _job(workflow, "browser_compatibility")
 
-    assert "trace: 'retain-on-failure'" in config
-    assert "outputFolder: 'playwright-report'" in config
+    assert re.search(r"trace:\s*['\"]retain-on-failure['\"]", config)
+    assert re.search(r"outputFolder:\s*['\"]playwright-report['\"]", config)
 
     upload_steps = [step for step in browser["steps"] if step.get("name") == "Upload browser compatibility diagnostics"]
     assert upload_steps == [

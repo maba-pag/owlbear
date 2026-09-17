@@ -1,19 +1,5 @@
-import {
-  PButton,
-  PFlyout,
-  PHeading,
-  PIcon,
-  PInputSearch,
-  PModal,
-  PTag,
-} from "@porsche-design-system/components-react";
-import {
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { PButton, PFlyout, PHeading, PIcon, PInputSearch, PModal, PTag } from "@porsche-design-system/components-react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
   type AbandonedChangeRecord,
@@ -40,8 +26,7 @@ interface CompletedHistorySelection {
 
 function parseSelection(pathname: string): CompletedHistorySelection | null {
   const parts = pathname.split("/").filter(Boolean);
-  if (parts.length !== 4 || parts[0] !== "delivery" || parts[1] !== "history")
-    return null;
+  if (parts.length !== 4 || parts[0] !== "delivery" || parts[1] !== "history") return null;
   try {
     return {
       changeId: decodeURIComponent(parts[2]),
@@ -68,18 +53,13 @@ function fieldValue(event: FieldValueEvent): string {
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
-    const timeoutId = window.setTimeout(
-      () => setDebouncedValue(value),
-      delayMs,
-    );
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs);
     return () => window.clearTimeout(timeoutId);
   }, [delayMs, value]);
   return debouncedValue;
 }
 
-function isAbandoned(
-  record: CompletedChangeRecord,
-): record is AbandonedChangeRecord {
+function isAbandoned(record: CompletedChangeRecord): record is AbandonedChangeRecord {
   return record.record_kind === "abandoned-change";
 }
 
@@ -103,10 +83,7 @@ function PullRequestLink({ record }: { record: ReceiptCompletedChangeRecord }) {
   return (
     <a
       className="font-medium text-primary underline decoration-contrast-low underline-offset-2 hover:decoration-primary"
-      href={pullRequestUrl(
-        record.repository_identity,
-        record.pull_request_identity.number,
-      )}
+      href={pullRequestUrl(record.repository_identity, record.pull_request_identity.number)}
       target="_blank"
       rel="noreferrer"
     >
@@ -115,18 +92,9 @@ function PullRequestLink({ record }: { record: ReceiptCompletedChangeRecord }) {
   );
 }
 
-function CopyValue({
-  label,
-  value,
-  truncate = false,
-}: {
-  label: string;
-  value: string;
-  truncate?: boolean;
-}) {
+function CopyValue({ label, value, truncate = false }: { label: string; value: string; truncate?: boolean }) {
   const { copyState, copy } = useCopyToClipboard();
-  const displayValue =
-    truncate && value.length > 12 ? `${value.slice(0, 12)}...` : value;
+  const displayValue = truncate && value.length > 12 ? `${value.slice(0, 12)}...` : value;
   return (
     <button
       type="button"
@@ -149,9 +117,7 @@ function CopyValue({
       }
     >
       <PIcon name="copy" size="inherit" color="inherit" aria-hidden="true" />
-      <code className="min-w-0 break-all font-mono text-inherit">
-        {displayValue}
-      </code>
+      <code className="min-w-0 break-all font-mono text-inherit">{displayValue}</code>
     </button>
   );
 }
@@ -199,9 +165,7 @@ function CompletedRecord({
         <p className="mt-1 text-xs text-contrast-medium">{record.change_id}</p>
       </div>
       <div className="relative z-[1] min-w-0">
-        <p className="max-w-[70ch] text-sm leading-relaxed">
-          {record.semantic_summary}
-        </p>
+        <p className="max-w-[70ch] text-sm leading-relaxed">{record.semantic_summary}</p>
         {!isAbandoned(record) ? (
           <div
             className={[
@@ -210,14 +174,8 @@ function CompletedRecord({
             ].join(" ")}
           >
             <PullRequestLink record={record} />
-            <CopyValue
-              label="accepted merge commit"
-              value={record.accepted_merge_commit}
-              truncate
-            />
-            <time dateTime={record.completed_at}>
-              {formatCompletedAt(record.completed_at)}
-            </time>
+            <CopyValue label="accepted merge commit" value={record.accepted_merge_commit} truncate />
+            <time dateTime={record.completed_at}>{formatCompletedAt(record.completed_at)}</time>
           </div>
         ) : isAbandoned(record) ? (
           <div
@@ -227,9 +185,7 @@ function CompletedRecord({
             ].join(" ")}
           >
             <StatusChip label="Abandoned" tone="neutral" />
-            <time dateTime={record.abandoned_at}>
-              {formatCompletedAt(record.abandoned_at)}
-            </time>
+            <time dateTime={record.abandoned_at}>{formatCompletedAt(record.abandoned_at)}</time>
           </div>
         ) : null}
       </div>
@@ -276,14 +232,7 @@ function CompletedDetail({
               : "What this Change delivered and the evidence retained for its completion."}
           </p>
         </div>
-        <PButton
-          type="button"
-          variant="secondary"
-          icon="close"
-          hideLabel
-          compact
-          onClick={onClose}
-        >
+        <PButton type="button" variant="secondary" icon="close" hideLabel compact onClick={onClose}>
           Close
         </PButton>
       </div>
@@ -291,9 +240,7 @@ function CompletedDetail({
         {record.title}
       </PHeading>
       <section className="mt-static-lg grid gap-static-xs">
-        <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">
-          Purpose
-        </h4>
+        <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Purpose</h4>
         {outcomePromises.length > 0 ? (
           <ul className="m-0 grid gap-static-xs pl-static-md text-sm leading-relaxed">
             {outcomePromises.map((promise) => (
@@ -307,9 +254,7 @@ function CompletedDetail({
         )}
       </section>
       <section className="mt-static-lg grid gap-static-xs">
-        <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">
-          Delivered outcomes
-        </h4>
+        <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Delivered outcomes</h4>
         <ul className="m-0 grid gap-static-xs pl-static-md text-sm leading-relaxed">
           {record.outcome_titles.map((title) => (
             <li key={title}>{title}</li>
@@ -317,15 +262,11 @@ function CompletedDetail({
         </ul>
       </section>
       <PTag compact className="mt-static-md">
-        {record.record_kind === "completion-receipt"
-          ? "Completion receipt"
-          : "Abandonment record"}
+        {record.record_kind === "completion-receipt" ? "Completion receipt" : "Abandonment record"}
       </PTag>
       {!abandoned ? (
         <section className="mt-static-lg grid gap-static-xs">
-          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">
-            Accepted delivery
-          </h4>
+          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Accepted delivery</h4>
           <dl className="grid gap-static-sm text-sm">
             <div>
               <dt className="font-semibold">Pull request</dt>
@@ -335,39 +276,29 @@ function CompletedDetail({
             </div>
             <div>
               <dt className="font-semibold">Repository</dt>
-              <dd className="break-words text-contrast-medium">
-                {record.repository_identity}
-              </dd>
+              <dd className="break-words text-contrast-medium">{record.repository_identity}</dd>
             </div>
             <div>
               <dt className="font-semibold">Target</dt>
-              <dd className="break-words font-mono text-xs text-contrast-medium">
-                {record.accepted_target_ref}
-              </dd>
+              <dd className="break-words font-mono text-xs text-contrast-medium">{record.accepted_target_ref}</dd>
             </div>
             <div>
               <dt className="font-semibold">Merged</dt>
               <dd className="break-words text-contrast-medium">
-                <time dateTime={record.merged_at}>
-                  {formatCompletedAt(record.merged_at)}
-                </time>
+                <time dateTime={record.merged_at}>{formatCompletedAt(record.merged_at)}</time>
               </dd>
             </div>
             <div>
               <dt className="font-semibold">Completed</dt>
               <dd className="break-words text-contrast-medium">
-                <time dateTime={record.completed_at}>
-                  {formatCompletedAt(record.completed_at)}
-                </time>
+                <time dateTime={record.completed_at}>{formatCompletedAt(record.completed_at)}</time>
               </dd>
             </div>
           </dl>
         </section>
       ) : abandoned ? (
         <section className="mt-static-lg grid gap-static-xs">
-          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">
-            Abandonment
-          </h4>
+          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Abandonment</h4>
           <dl className="grid gap-static-sm text-sm">
             <div>
               <dt className="font-semibold">Prior stage</dt>
@@ -375,28 +306,20 @@ function CompletedDetail({
             </div>
             <div>
               <dt className="font-semibold">Reason</dt>
-              <dd className="break-words text-contrast-medium">
-                {record.reason}
-              </dd>
+              <dd className="break-words text-contrast-medium">{record.reason}</dd>
             </div>
             <div>
               <dt className="font-semibold">Abandoned</dt>
               <dd className="text-contrast-medium">
-                <time dateTime={record.abandoned_at}>
-                  {formatCompletedAt(record.abandoned_at)}
-                </time>
+                <time dateTime={record.abandoned_at}>{formatCompletedAt(record.abandoned_at)}</time>
               </dd>
             </div>
           </dl>
         </section>
       ) : (
         <section className="mt-static-lg grid gap-static-xs">
-          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">
-            Historical delivery
-          </h4>
-          <p className="text-sm leading-relaxed text-contrast-medium">
-            Verified from the retained completion package.
-          </p>
+          <h4 className="text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">Historical delivery</h4>
+          <p className="text-sm leading-relaxed text-contrast-medium">Verified from the retained completion package.</p>
         </section>
       )}
       <details className="mt-static-lg border-t border-contrast-low pt-static-sm">
@@ -406,18 +329,13 @@ function CompletedDetail({
         <dl className="mt-static-md grid gap-static-sm text-sm">
           <div>
             <dt className="font-semibold">Change</dt>
-            <dd className="break-words text-contrast-medium">
-              {record.change_id}
-            </dd>
+            <dd className="break-words text-contrast-medium">{record.change_id}</dd>
           </div>
           {isAbandoned(record) ? (
             <div>
               <dt className="font-semibold">Abandonment ID</dt>
               <dd>
-                <CopyValue
-                  label="abandonment ID"
-                  value={record.abandonment_id}
-                />
+                <CopyValue label="abandonment ID" value={record.abandonment_id} />
               </dd>
             </div>
           ) : !abandoned ? (
@@ -425,28 +343,19 @@ function CompletedDetail({
               <div>
                 <dt className="font-semibold">Completion</dt>
                 <dd>
-                  <CopyValue
-                    label="completion ID"
-                    value={record.completion_id}
-                  />
+                  <CopyValue label="completion ID" value={record.completion_id} />
                 </dd>
               </div>
               <div>
                 <dt className="font-semibold">Finalized Change head</dt>
                 <dd>
-                  <CopyValue
-                    label="finalized Change head"
-                    value={record.finalized_change_head}
-                  />
+                  <CopyValue label="finalized Change head" value={record.finalized_change_head} />
                 </dd>
               </div>
               <div>
                 <dt className="font-semibold">Accepted merge commit</dt>
                 <dd>
-                  <CopyValue
-                    label="accepted merge commit"
-                    value={record.accepted_merge_commit}
-                  />
+                  <CopyValue label="accepted merge commit" value={record.accepted_merge_commit} />
                 </dd>
               </div>
             </>
@@ -456,10 +365,7 @@ function CompletedDetail({
       {abandoned && record.cleanup_available ? (
         <>
           {cleanupComplete ? (
-            <p
-              className="mt-static-lg border-l-4 border-success bg-surface p-static-sm text-sm"
-              role="status"
-            >
+            <p className="mt-static-lg border-l-4 border-success bg-surface p-static-sm text-sm" role="status">
               {record.target_sync_conflict
                 ? "Target merge discarded and abandoned Change worktree cleaned up."
                 : "Abandoned Change worktree cleaned up."}
@@ -475,9 +381,7 @@ function CompletedDetail({
               setConfirmOpen(true);
             }}
           >
-            {record.target_sync_conflict
-              ? "Discard conflict and clean worktree"
-              : "Clean abandoned worktree"}
+            {record.target_sync_conflict ? "Discard conflict and clean worktree" : "Clean abandoned worktree"}
           </PButton>
           {confirmOpen ? (
             <PModal
@@ -494,9 +398,7 @@ function CompletedDetail({
             >
               <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
                 <PHeading tag="h2" size="lg">
-                  {record.target_sync_conflict
-                    ? "Discard conflict and clean worktree"
-                    : "Clean abandoned worktree"}
+                  {record.target_sync_conflict ? "Discard conflict and clean worktree" : "Clean abandoned worktree"}
                 </PHeading>
                 <p className="text-sm">
                   {record.target_sync_conflict
@@ -504,19 +406,12 @@ function CompletedDetail({
                     : "Delivery will remove the abandoned worktree while retaining the branch and abandonment record."}
                 </p>
                 {cleanupError ? (
-                  <p
-                    className="border-l-4 border-danger bg-surface p-static-sm text-sm"
-                    role="alert"
-                  >
+                  <p className="border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">
                     {cleanupError.message}
                   </p>
                 ) : null}
                 <div className="flex flex-wrap justify-end gap-static-xs">
-                  <PButton
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setConfirmOpen(false)}
-                  >
+                  <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
                     Cancel
                   </PButton>
                   <PButton type="button" onClick={() => void cleanup()}>
@@ -541,25 +436,16 @@ export default function CompletedHistoryWorkspace() {
   const canRetryLoadMore = history.canRetryLoadMore;
   const isQueryLoading = history.isLoading && !history.isLoadingMore;
   const showingStaleResults =
-    (isQueryLoading || (history.error !== null && !canRetryLoadMore)) &&
-    history.page.records.length > 0;
+    (isQueryLoading || (history.error !== null && !canRetryLoadMore)) && history.page.records.length > 0;
   const selected = parseSelection(location.pathname);
-  const detail = useCompletedChange(
-    selected
-      ? { changeId: selected.changeId, recordId: selected.completionId }
-      : null,
-  );
+  const detail = useCompletedChange(selected ? { changeId: selected.changeId, recordId: selected.completionId } : null);
   const lastTrigger = useRef<HTMLElement | null>(null);
   const historyWorkspace = useRef<HTMLElement | null>(null);
   const restoreFocusAfterClose = useRef(false);
   const loadMoreFocusPending = useRef(false);
   const loadMoreQuery = useRef<string | null>(null);
-  const previousSelectedKey = useRef<string | null>(
-    selected ? `${selected.changeId}:${selected.completionId}` : null,
-  );
-  const selectedKey = selected
-    ? `${selected.changeId}:${selected.completionId}`
-    : null;
+  const previousSelectedKey = useRef<string | null>(selected ? `${selected.changeId}:${selected.completionId}` : null);
+  const selectedKey = selected ? `${selected.changeId}:${selected.completionId}` : null;
 
   const closeSelected = () => {
     if (!selected) return;
@@ -568,26 +454,20 @@ export default function CompletedHistoryWorkspace() {
   };
 
   useEffect(() => {
-    if (previousSelectedKey.current && !selectedKey)
-      restoreFocusAfterClose.current = true;
+    if (previousSelectedKey.current && !selectedKey) restoreFocusAfterClose.current = true;
     previousSelectedKey.current = selectedKey;
   }, [selectedKey]);
 
   useEffect(() => {
     if (!selected) return;
-    if (
-      detail.error instanceof WorkItemApiError &&
-      detail.error.status === 404
-    ) {
+    if (detail.error instanceof WorkItemApiError && detail.error.status === 404) {
       restoreFocusAfterClose.current = true;
       navigate("/delivery/history", { replace: true });
       return;
     }
     if (isQueryLoading || history.error || detail.isLoading) return;
     const present = history.page.records.some(
-      (record) =>
-        record.change_id === selected.changeId &&
-        completedChangeRecordId(record) === selected.completionId,
+      (record) => record.change_id === selected.changeId && completedChangeRecordId(record) === selected.completionId,
     );
     if (present) return;
     if (searchQuery) {
@@ -689,9 +569,7 @@ export default function CompletedHistoryWorkspace() {
           role="alert"
         >
           <span className="min-w-0 flex-1">
-            {canRetryLoadMore
-              ? "Could not load more Change history."
-              : "Change history is unavailable."}{" "}
+            {canRetryLoadMore ? "Could not load more Change history." : "Change history is unavailable."}{" "}
             {history.error.message}
           </span>
           <PButton
@@ -721,9 +599,7 @@ export default function CompletedHistoryWorkspace() {
             : "Updating Change history results. Previous results are shown until the search finishes."}
         </p>
       ) : null}
-      {!history.isLoading &&
-      !history.error &&
-      history.page.records.length === 0 ? (
+      {!history.isLoading && !history.error && history.page.records.length === 0 ? (
         <section
           className={[
             "mt-static-lg grid min-h-40 place-items-center border border-dashed",
@@ -733,9 +609,7 @@ export default function CompletedHistoryWorkspace() {
         >
           <div className="grid max-w-[44rem] gap-static-xs">
             <PHeading tag="h3" size="small">
-              {searchQuery
-                ? `No changes match "${searchQuery}"`
-                : "No changes in history yet"}
+              {searchQuery ? `No changes match "${searchQuery}"` : "No changes in history yet"}
             </PHeading>
             <p className="text-sm leading-relaxed text-contrast-medium">
               {searchQuery
@@ -743,12 +617,7 @@ export default function CompletedHistoryWorkspace() {
                 : "Completed and abandoned Changes will appear here with their retained evidence."}
             </p>
             {searchQuery ? (
-              <PButton
-                type="button"
-                variant="secondary"
-                className="mx-auto"
-                onClick={() => setQuery("")}
-              >
+              <PButton type="button" variant="secondary" className="mx-auto" onClick={() => setQuery("")}>
                 Clear search
               </PButton>
             ) : null}
@@ -760,9 +629,7 @@ export default function CompletedHistoryWorkspace() {
         <div
           className="min-w-0"
           aria-busy={history.isLoading}
-          aria-describedby={
-            showingStaleResults ? "completed-history-stale-status" : undefined
-          }
+          aria-describedby={showingStaleResults ? "completed-history-stale-status" : undefined}
           data-testid="completed-history-results"
         >
           <div className="grid min-w-0 gap-static-sm">
@@ -818,50 +685,33 @@ export default function CompletedHistoryWorkspace() {
                   record={detail.data}
                   onClose={closeSelected}
                   onCleanup={async () => {
-                    if (detail.data?.record_kind !== "abandoned-change")
-                      return null;
+                    if (detail.data?.record_kind !== "abandoned-change") return null;
                     try {
                       if (detail.data.target_sync_conflict) {
-                        const targetHead =
-                          detail.data.target_sync_conflict_target_head;
-                        const operationId =
-                          detail.data.target_sync_conflict_operation_id;
+                        const targetHead = detail.data.target_sync_conflict_target_head;
+                        const operationId = detail.data.target_sync_conflict_operation_id;
                         if (!targetHead || !operationId) {
-                          throw new Error(
-                            "Target-sync conflict identity is unavailable for cleanup",
-                          );
+                          throw new Error("Target-sync conflict identity is unavailable for cleanup");
                         }
-                        await discardAbandonedTargetSyncAndCleanup(
-                          detail.data.change_id,
-                          targetHead,
-                          operationId,
-                        );
+                        await discardAbandonedTargetSyncAndCleanup(detail.data.change_id, targetHead, operationId);
                       } else {
-                        await cleanupAbandonedWorkItemChange(
-                          detail.data.change_id,
-                        );
+                        await cleanupAbandonedWorkItemChange(detail.data.change_id);
                       }
                       history.retry();
                       return null;
                     } catch (caught: unknown) {
-                      return caught instanceof Error
-                        ? caught
-                        : new Error("Abandoned worktree cleanup failed");
+                      return caught instanceof Error ? caught : new Error("Abandoned worktree cleanup failed");
                     }
                   }}
                 />
               ) : null}
-              {detail.isLoading ? (
-                <p role="status">Loading completion detail...</p>
-              ) : null}
+              {detail.isLoading ? <p role="status">Loading completion detail...</p> : null}
               {detail.error ? (
                 <div
                   className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md"
                   role="alert"
                 >
-                  <span className="min-w-0 flex-1">
-                    Completion detail is unavailable. {detail.error.message}
-                  </span>
+                  <span className="min-w-0 flex-1">Completion detail is unavailable. {detail.error.message}</span>
                   <PButton
                     type="button"
                     variant="secondary"

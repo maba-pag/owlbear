@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const packageRoot = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const fixtureRoot = await mkdtemp(join(packageRoot, "src/biome-pds-"));
 const invalidFixture = join(fixtureRoot, "invalid.tsx");
 const validFixture = join(fixtureRoot, "valid.tsx");
@@ -10,16 +11,16 @@ const wrapperMessage = "Use the corresponding Porsche Design System React wrappe
 const invalidSource = [
   "export const Invalid = () => (",
   "  <>",
-  "    <p-select data-testid=\"select\" />",
-  "    <p-button aria-label=\"button\" />",
-  "    <p-input-search value=\"query\" />",
-  "    <p-input-text value=\"text\" />",
-  "    <p-tag variant=\"info\" />",
-  "    <p-select value=\"one\">Choose one</p-select>",
-  "    <p-button type=\"submit\">Continue</p-button>",
-  "    <p-input-search name=\"query\">Search</p-input-search>",
-  "    <p-input-text name=\"text\">Text</p-input-text>",
-  "    <p-tag variant=\"success\">Tag</p-tag>",
+  '    <p-select data-testid="select" />',
+  '    <p-button aria-label="button" />',
+  '    <p-input-search value="query" />',
+  '    <p-input-text value="text" />',
+  '    <p-tag variant="info" />',
+  '    <p-select value="one">Choose one</p-select>',
+  '    <p-button type="submit">Continue</p-button>',
+  '    <p-input-search name="query">Search</p-input-search>',
+  '    <p-input-text name="text">Text</p-input-text>',
+  '    <p-tag variant="success">Tag</p-tag>',
   "  </>",
   ");",
   "",
@@ -27,22 +28,14 @@ const invalidSource = [
 
 const runBiome = (fixture) =>
   spawnSync(
-    join(packageRoot, "node_modules/.bin/biome"),
-    ["lint", "--only=plugin", relative(packageRoot, fixture), "--reporter=json"],
+    process.execPath,
+    [join(packageRoot, "scripts/run-biome-check.mjs"), "lint", "--only=plugin", fixture, "--reporter=json"],
     { cwd: packageRoot, encoding: "utf8" },
   );
 
 try {
-  await writeFile(
-    invalidFixture,
-    invalidSource,
-    "utf8",
-  );
-  await writeFile(
-    validFixture,
-    `const PSelect = () => null;\nexport const Valid = () => <PSelect />;\n`,
-    "utf8",
-  );
+  await writeFile(invalidFixture, invalidSource, "utf8");
+  await writeFile(validFixture, `const PSelect = () => null;\nexport const Valid = () => <PSelect />;\n`, "utf8");
 
   const invalidResult = runBiome(invalidFixture);
   const invalidOutput = `${invalidResult.stdout}${invalidResult.stderr}`;

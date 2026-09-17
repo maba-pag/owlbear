@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
 import type { WorkItemNeed } from "../api/workItems";
-import {
-  type WorkItemStatusTone,
-  workItemStatusClassName,
-} from "./workItemPresentation";
+import { type WorkItemStatusTone, workItemStatusClassName } from "./workItemPresentation";
 
 interface StatusChipProps {
   label: string;
@@ -43,10 +40,7 @@ export function WorkRow({
   dataWorkItem,
   className = "",
 }: WorkRowProps) {
-  const attentionClass =
-    needs === "you"
-      ? "border-l-4 border-l-error"
-      : "border-l-4 border-l-contrast-low";
+  const attentionClass = needs === "you" ? "border-l-4 border-l-error" : "border-l-4 border-l-contrast-low";
   return (
     <article
       className={[

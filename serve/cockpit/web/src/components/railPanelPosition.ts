@@ -11,28 +11,15 @@ export function getRailPanelPosition(
   height: number,
 ): { top: string; left: string } {
   const rect = trigger.getBoundingClientRect();
-  const maxLeft = Math.max(
-    VIEWPORT_PADDING,
-    window.innerWidth - width - VIEWPORT_PADDING,
-  );
+  const maxLeft = Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING);
   const preferredLeft =
-    rect.right + GAP + width <= window.innerWidth - VIEWPORT_PADDING
-      ? rect.right + GAP
-      : rect.right - width;
-  const left = Math.round(
-    Math.min(Math.max(VIEWPORT_PADDING, preferredLeft), maxLeft),
-  );
+    rect.right + GAP + width <= window.innerWidth - VIEWPORT_PADDING ? rect.right + GAP : rect.right - width;
+  const left = Math.round(Math.min(Math.max(VIEWPORT_PADDING, preferredLeft), maxLeft));
 
-  const fitsBelow =
-    rect.bottom + GAP + height <= window.innerHeight - VIEWPORT_PADDING;
-  const maxTop = Math.max(
-    VIEWPORT_PADDING,
-    window.innerHeight - height - VIEWPORT_PADDING,
-  );
+  const fitsBelow = rect.bottom + GAP + height <= window.innerHeight - VIEWPORT_PADDING;
+  const maxTop = Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING);
   const preferredTop = fitsBelow ? rect.bottom + GAP : rect.top - GAP - height;
-  const top = Math.round(
-    Math.min(Math.max(VIEWPORT_PADDING, preferredTop), maxTop),
-  );
+  const top = Math.round(Math.min(Math.max(VIEWPORT_PADDING, preferredTop), maxTop));
 
   return { top: `${top}px`, left: `${left}px` };
 }

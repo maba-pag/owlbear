@@ -6,27 +6,14 @@ import { designWorkTitle } from "./designWorkPresentation";
 interface DesignWorkSectionProps {
   statuses: PortfolioChangeLifecycleStatus[];
   selectedChangeId: string | null;
-  onSelect: (
-    identity: { changeId: string; itemKey: string },
-    trigger: HTMLElement,
-  ) => void;
+  onSelect: (identity: { changeId: string; itemKey: string }, trigger: HTMLElement) => void;
 }
 
-export default function DesignWorkSection({
-  statuses,
-  selectedChangeId,
-  onSelect,
-}: DesignWorkSectionProps) {
-  const designStatuses = statuses.filter(
-    (status) => status.admission === "unadmitted" && status.stage === "design",
-  );
+export default function DesignWorkSection({ statuses, selectedChangeId, onSelect }: DesignWorkSectionProps) {
+  const designStatuses = statuses.filter((status) => status.admission === "unadmitted" && status.stage === "design");
   if (designStatuses.length === 0) return null;
   return (
-    <section
-      className="min-w-0"
-      aria-labelledby="design-work-heading"
-      data-testid="design-work-section"
-    >
+    <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
       <h2
         id="design-work-heading"
         className={[
@@ -62,29 +49,18 @@ export default function DesignWorkSection({
                         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
                       ].join(" ")}
                       aria-current={selected ? "location" : undefined}
-                      onClick={(event) =>
-                        onSelect(
-                          { changeId, itemKey: "design" },
-                          event.currentTarget,
-                        )
-                      }
+                      onClick={(event) => onSelect({ changeId, itemKey: "design" }, event.currentTarget)}
                     >
                       {designWorkTitle(changeId)}
                     </Link>
-                    <code className="text-xs text-contrast-medium">
-                      {changeId}
-                    </code>
+                    <code className="text-xs text-contrast-medium">{changeId}</code>
                   </dd>
                 </div>
                 <div className="md:pl-static-sm">
                   <dt className="sr-only">State</dt>
                   <dd>
-                    <strong className="block font-medium text-primary">
-                      Design
-                    </strong>
-                    <span className="block text-xs text-contrast-medium">
-                      Not admitted to Delivery
-                    </span>
+                    <strong className="block font-medium text-primary">Design</strong>
+                    <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
                     <StatusChip label="Needs design" tone="ready" />
                   </dd>
                 </div>

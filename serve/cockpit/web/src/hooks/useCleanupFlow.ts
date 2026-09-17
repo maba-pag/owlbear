@@ -6,14 +6,7 @@ import {
   purgeMemories,
 } from "../api/memoryPurge";
 
-export type MemoryPurgePhase =
-  | "idle"
-  | "configuring"
-  | "previewing"
-  | "confirming"
-  | "running"
-  | "done"
-  | "error";
+export type MemoryPurgePhase = "idle" | "configuring" | "previewing" | "confirming" | "running" | "done" | "error";
 
 export interface UseMemoryPurgeFlowOptions {
   onSuccess?: () => void;
@@ -37,9 +30,7 @@ function parseThreshold(value: string): number | null {
   return Number.isSafeInteger(threshold) ? threshold : null;
 }
 
-export function useMemoryPurgeFlow(
-  options?: UseMemoryPurgeFlowOptions,
-): UseMemoryPurgeFlowResult {
+export function useMemoryPurgeFlow(options?: UseMemoryPurgeFlowOptions): UseMemoryPurgeFlowResult {
   const [phase, setPhase] = useState<MemoryPurgePhase>("idle");
   const [threshold, setThreshold] = useState("30");
   const [preview, setPreview] = useState<MemoryPurgePreview | null>(null);
@@ -74,11 +65,7 @@ export function useMemoryPurgeFlow(
     setPhase("previewing");
     try {
       const response = await previewMemoryPurge(parsed);
-      if (
-        requestId !== previewRequest.current ||
-        acceptedThreshold.current !== parsed
-      )
-        return;
+      if (requestId !== previewRequest.current || acceptedThreshold.current !== parsed) return;
       setPreview(response);
       setPhase("confirming");
     } catch (caught: unknown) {

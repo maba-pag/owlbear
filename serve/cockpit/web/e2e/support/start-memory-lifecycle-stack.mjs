@@ -7,60 +7,18 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "../../../../..");
 const fixture = await mkdtemp(join(tmpdir(), "owlbear-memory-lifecycle-"));
 const memoryDir = join(fixture, ".owlbear/memory");
-const fixtureManifest = resolve(
-  import.meta.dirname,
-  "../../test-results/memory-lifecycle-fixture.json",
-);
-const mcpProof = resolve(
-  import.meta.dirname,
-  "../../test-results/memory-lifecycle-mcp.json",
-);
+const fixtureManifest = resolve(import.meta.dirname, "../../test-results/memory-lifecycle-fixture.json");
+const mcpProof = resolve(import.meta.dirname, "../../test-results/memory-lifecycle-mcp.json");
 await mkdir(memoryDir, { recursive: true });
 
 const entries = [
-  [
-    "11111111-1111-4111-8111-111111111111",
-    "Approved memory",
-    "approved",
-    0.95,
-    null,
-  ],
-  [
-    "66666666-6666-4666-8666-666666666666",
-    "Pending memory",
-    "pending",
-    0.88,
-    null,
-  ],
-  [
-    "77777777-7777-4777-8777-777777777777",
-    "Curated memory",
-    "curated",
-    0.84,
-    null,
-  ],
-  [
-    "22222222-2222-4222-8222-222222222222",
-    "Contested memory",
-    "contested",
-    0.82,
-    "1960",
-  ],
-  [
-    "33333333-3333-4333-8333-333333333333",
-    "Disputed memory",
-    "disputed",
-    0.71,
-    "1956",
-  ],
+  ["11111111-1111-4111-8111-111111111111", "Approved memory", "approved", 0.95, null],
+  ["66666666-6666-4666-8666-666666666666", "Pending memory", "pending", 0.88, null],
+  ["77777777-7777-4777-8777-777777777777", "Curated memory", "curated", 0.84, null],
+  ["22222222-2222-4222-8222-222222222222", "Contested memory", "contested", 0.82, "1960"],
+  ["33333333-3333-4333-8333-333333333333", "Disputed memory", "disputed", 0.71, "1956"],
   ["44444444-4444-4444-8444-444444444444", "Stale memory", "stale", 0.61, null],
-  [
-    "55555555-5555-4555-8555-555555555555",
-    "Deleted memory",
-    "deleted",
-    0.2,
-    null,
-  ],
+  ["55555555-5555-4555-8555-555555555555", "Deleted memory", "deleted", 0.2, null],
 ];
 for (const [id, title, state, score, contestedByTask] of entries) {
   const frontmatter = [
@@ -136,19 +94,15 @@ if (mcpProbeExit !== 0) {
   process.exit(mcpProbeExit ?? 1);
 }
 
-const server = spawn(
-  "uv",
-  ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"],
-  {
-    cwd: fixture,
-    env: {
-      ...process.env,
-      COCKPIT_PORT: "8422",
-      COCKPIT_NO_OPEN: "1",
-    },
-    stdio: "inherit",
+const server = spawn("uv", ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"], {
+  cwd: fixture,
+  env: {
+    ...process.env,
+    COCKPIT_PORT: "8422",
+    COCKPIT_NO_OPEN: "1",
   },
-);
+  stdio: "inherit",
+});
 const cleanup = async () => {
   if (!server.killed) server.kill("SIGTERM");
   await rm(fixtureManifest, { force: true });

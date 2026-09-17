@@ -29,19 +29,13 @@ export type WorkspaceReadinessSnapshot = RawWorkspaceSnapshot & {
 const workspaceSelector = '[data-region="workspace"]';
 const routeLoadingSelector = '[data-testid="route-loading"]';
 
-export async function waitForWorkspaceReady(
-  page: Page,
-  options: WorkspaceReadinessOptions = {},
-): Promise<void> {
+export async function waitForWorkspaceReady(page: Page, options: WorkspaceReadinessOptions = {}): Promise<void> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeout;
 
   await page.locator(workspaceSelector).waitFor({ state: "visible", timeout });
   if (options.routeContentSelector) {
-    await page
-      .locator(options.routeContentSelector)
-      .first()
-      .waitFor({ state: "visible", timeout });
+    await page.locator(options.routeContentSelector).first().waitFor({ state: "visible", timeout });
   }
 
   let latestSnapshot: WorkspaceReadinessSnapshot | null = null;
@@ -80,10 +74,7 @@ async function waitForNextAnimationFrame(page: Page): Promise<void> {
   );
 }
 
-async function readWorkspaceSnapshot(
-  page: Page,
-  options: WorkspaceReadinessOptions,
-): Promise<RawWorkspaceSnapshot> {
+async function readWorkspaceSnapshot(page: Page, options: WorkspaceReadinessOptions): Promise<RawWorkspaceSnapshot> {
   return page.evaluate(
     ({
       routeContentSelector,
@@ -107,13 +98,9 @@ async function readWorkspaceSnapshot(
         );
       };
 
-      const parseTransform = (
-        transform: string,
-      ): { translateX: number | null; translateY: number | null } => {
+      const parseTransform = (transform: string): { translateX: number | null; translateY: number | null } => {
         try {
-          const matrix = new DOMMatrixReadOnly(
-            transform === "none" ? undefined : transform,
-          );
+          const matrix = new DOMMatrixReadOnly(transform === "none" ? undefined : transform);
           return { translateX: matrix.m41, translateY: matrix.m42 };
         } catch {
           return { translateX: null, translateY: null };
@@ -123,20 +110,14 @@ async function readWorkspaceSnapshot(
       const workspace = document.querySelector(rootSelector);
       const panels =
         workspace instanceof HTMLElement
-          ? Array.from(workspace.children).filter(
-              (child): child is HTMLElement => child instanceof HTMLElement,
-            )
+          ? Array.from(workspace.children).filter((child): child is HTMLElement => child instanceof HTMLElement)
           : [];
       const panel = panels.length === 1 ? panels[0] : null;
       const panelStyles = panel ? window.getComputedStyle(panel) : null;
       const panelRect = panel ? panel.getBoundingClientRect() : null;
-      const panelOpacity = panelStyles
-        ? Number.parseFloat(panelStyles.opacity)
-        : null;
+      const panelOpacity = panelStyles ? Number.parseFloat(panelStyles.opacity) : null;
       const panelTransform = panelStyles?.transform ?? null;
-      const transformParts = panelTransform
-        ? parseTransform(panelTransform)
-        : { translateX: null, translateY: null };
+      const transformParts = panelTransform ? parseTransform(panelTransform) : { translateX: null, translateY: null };
       const transformSettled =
         transformParts.translateX !== null &&
         transformParts.translateY !== null &&
@@ -148,14 +129,9 @@ async function readWorkspaceSnapshot(
             ? panel
             : panel.querySelector(routeContentSelector)
           : null;
-      const routeContentVisible = routeContentSelector
-        ? isVisible(routeContent)
-        : true;
-      const routeLoadingVisible = isVisible(
-        workspace?.querySelector(loadingSelector) ?? null,
-      );
-      const opacitySettled =
-        panelOpacity !== null && Math.abs(panelOpacity - 1) <= 0.001;
+      const routeContentVisible = routeContentSelector ? isVisible(routeContent) : true;
+      const routeLoadingVisible = isVisible(workspace?.querySelector(loadingSelector) ?? null);
+      const opacitySettled = panelOpacity !== null && Math.abs(panelOpacity - 1) <= 0.001;
 
       return {
         panelCount: panels.length,
@@ -168,12 +144,7 @@ async function readWorkspaceSnapshot(
         routeContentVisible,
         routeLoadingVisible,
         transformSettled,
-        ready:
-          panels.length === 1 &&
-          opacitySettled &&
-          transformSettled &&
-          routeContentVisible &&
-          !routeLoadingVisible,
+        ready: panels.length === 1 && opacitySettled && transformSettled && routeContentVisible && !routeLoadingVisible,
       };
     },
     {
@@ -185,33 +156,20 @@ async function readWorkspaceSnapshot(
   );
 }
 
-function snapshotsAreStable(
-  firstSnapshot: RawWorkspaceSnapshot,
-  secondSnapshot: RawWorkspaceSnapshot,
-): boolean {
+function snapshotsAreStable(firstSnapshot: RawWorkspaceSnapshot, secondSnapshot: RawWorkspaceSnapshot): boolean {
   return (
     firstSnapshot.ready &&
     secondSnapshot.ready &&
     firstSnapshot.panelTransform === secondSnapshot.panelTransform &&
     nearlyEqual(firstSnapshot.panelOpacity, secondSnapshot.panelOpacity) &&
-    nearlyEqual(
-      firstSnapshot.panelTranslateX,
-      secondSnapshot.panelTranslateX,
-    ) &&
-    nearlyEqual(
-      firstSnapshot.panelTranslateY,
-      secondSnapshot.panelTranslateY,
-    ) &&
+    nearlyEqual(firstSnapshot.panelTranslateX, secondSnapshot.panelTranslateX) &&
+    nearlyEqual(firstSnapshot.panelTranslateY, secondSnapshot.panelTranslateY) &&
     nearlyEqual(firstSnapshot.panelTop, secondSnapshot.panelTop) &&
     nearlyEqual(firstSnapshot.panelLeft, secondSnapshot.panelLeft)
   );
 }
 
-function nearlyEqual(
-  firstValue: number | null,
-  secondValue: number | null,
-): boolean {
-  if (firstValue === null || secondValue === null)
-    return firstValue === secondValue;
+function nearlyEqual(firstValue: number | null, secondValue: number | null): boolean {
+  if (firstValue === null || secondValue === null) return firstValue === secondValue;
   return Math.abs(firstValue - secondValue) <= TRANSFORM_EPSILON;
 }

@@ -1,11 +1,11 @@
-import { defineConfig } from 'vitest/config'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import babel from '@rolldown/plugin-babel'
-import * as fs from 'node:fs'
-import { join } from 'node:path'
+import * as fs from "node:fs";
+import { join } from "node:path";
+import babel from "@rolldown/plugin-babel";
+import tailwindcss from "@tailwindcss/vite";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import { defineConfig } from "vitest/config";
 
-const BROWSER_TARGET = ['chrome123', 'edge123', 'firefox120', 'safari17.5', 'ios17.5']
+const BROWSER_TARGET = ["chrome123", "edge123", "firefox120", "safari17.5", "ios17.5"];
 
 function cspPlugin() {
   const policy = [
@@ -15,83 +15,75 @@ function cspPlugin() {
     "font-src 'self' https://cdn.ui.porsche.com",
     "img-src 'self' data:",
     "connect-src 'self'",
-  ].join('; ')
+  ].join("; ");
   return {
-    name: 'csp-meta',
-    apply: 'build' as const,
+    name: "csp-meta",
+    apply: "build" as const,
     transformIndexHtml(html: string): string {
-      return html.replace('</head>', `  <meta http-equiv="Content-Security-Policy" content="${policy}">\n  </head>`)
+      return html.replace("</head>", `  <meta http-equiv="Content-Security-Policy" content="${policy}">\n  </head>`);
     },
-  }
+  };
 }
 
 function pdsVersionCheckPlugin() {
-  let rootDir = ''
+  let rootDir = "";
 
   return {
-    name: 'pds-version-check',
+    name: "pds-version-check",
     configResolved(config: { root: string }) {
-      rootDir = config.root
+      rootDir = config.root;
     },
     buildStart() {
       try {
-        const packageJsonPath = join(rootDir, 'node_modules/@porsche-design-system/components-js/package.json')
-        const packageVersion = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as { version?: string }
-        const npmVersion = packageVersion.version ?? ''
+        const packageJsonPath = join(rootDir, "node_modules/@porsche-design-system/components-js/package.json");
+        const packageVersion = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as { version?: string };
+        const npmVersion = packageVersion.version ?? "";
 
-        const assetsDir = join(rootDir, 'public/porsche-design-system/components')
-        const files = fs.readdirSync(assetsDir)
-        const coreChunk = files.find((file) => /^porsche-design-system\.v(\d+\.\d+\.\d+)\./.test(file))
+        const assetsDir = join(rootDir, "public/porsche-design-system/components");
+        const files = fs.readdirSync(assetsDir);
+        const coreChunk = files.find((file) => /^porsche-design-system\.v(\d+\.\d+\.\d+)\./.test(file));
 
         if (!coreChunk) {
-          console.warn('PDS version check: no matching core asset found. Run npm run sync:pds')
-          return
+          console.warn("PDS version check: no matching core asset found. Run npm run sync:pds");
+          return;
         }
 
-        const match = coreChunk.match(/^porsche-design-system\.v(\d+\.\d+\.\d+)\./)
-        const assetVersion = match?.[1] ?? ''
+        const match = coreChunk.match(/^porsche-design-system\.v(\d+\.\d+\.\d+)\./);
+        const assetVersion = match?.[1] ?? "";
 
         if (assetVersion !== npmVersion) {
-          console.warn(
-            `PDS version mismatch: assets=${assetVersion}, npm=${npmVersion}. Run npm run sync:pds`,
-          )
+          console.warn(`PDS version mismatch: assets=${assetVersion}, npm=${npmVersion}. Run npm run sync:pds`);
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn(`PDS version check skipped: ${message}`)
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`PDS version check skipped: ${message}`);
       }
     },
-  }
+  };
 }
 
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    react(),
-    babel({ presets: [reactCompilerPreset()] }),
-    pdsVersionCheckPlugin(),
-    cspPlugin(),
-  ],
+  plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] }), pdsVersionCheckPlugin(), cspPlugin()],
   build: {
-    outDir: '../dist',
+    outDir: "../dist",
     emptyOutDir: true,
     target: BROWSER_TARGET,
     cssTarget: BROWSER_TARGET,
   },
   css: {
-    transformer: 'lightningcss',
+    transformer: "lightningcss",
   },
   test: {
-    environment: 'jsdom',
-    setupFiles: ['./vitest.setup.ts'],
+    environment: "jsdom",
+    setupFiles: ["./vitest.setup.ts"],
     globals: true,
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
     testTimeout: 20_000,
     teardownTimeout: 3_000,
     // Suppress React act() warnings — thousands of these drown real errors.
     // Keep all other console output for debugging.
     onConsoleLog(log) {
-      if (log.includes('not wrapped in act')) return false
+      if (log.includes("not wrapped in act")) return false;
     },
   },
-})
+});

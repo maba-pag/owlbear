@@ -77,6 +77,26 @@ target but does not polyfill missing Web APIs. The browser floor includes native
 support; TypeScript's `ES2020` target is a type-checking configuration here because the project
 uses `noEmit`.
 
+## Frontend Quality
+
+From the development checkout root, `uv run lint-cockpit` applies safe Biome fixes and runs
+HTMLHint. Use `--no-fix` for check-only runs or `--unsafe-fix` to opt into unsafe Biome fixes.
+`uv run format-biome` formats without lint fixes; `uv run format` includes it. Both commands
+support `--staged`. `uv run help quality` lists the complete command tree and options.
+`uv run typecheck-cockpit` checks both the application and all E2E TypeScript inputs.
+
+The root [Biome configuration](../../biome.json) owns frontend code, configuration, scripts,
+CSS, and repository JSON/JSONC. Git ignores and explicit exclusions protect generated, vendored,
+and machine-managed files. Biome natively skips npm lockfiles. The PDS plugin retains the ban on
+raw interactive PDS elements. Other lint rules use Biome's recommended preset.
+
+Formatting imports [EditorConfig](../../.editorconfig). `lineWidth: 120` is also explicit because
+Biome 2.5.11 did not reliably inherit that value in this checkout; 120 is a wrapping target, not
+a hard limit for unsplittable strings. VS Code selects Biome for supported owned languages while
+format-on-save remains off. CI runs the complete `npm run lint:biome:ci` scope, including on
+configuration-only changes and manual dispatch. Package scripts anchor Biome at the repository
+root regardless of the caller's working directory.
+
 ## Browser-backed tests
 
 These tests run from the OwlBear development checkout, not from a consumer project. Install the

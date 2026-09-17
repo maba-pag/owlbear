@@ -21,30 +21,18 @@ export function trackPageErrors(page: Page): PageErrorTracker {
 
   page.on("pageerror", (error) => recordError(error.stack ?? error.message));
   page.on("console", (message) => {
-    if (message.type() === "error")
-      recordError(`Browser console error: ${message.text()}`);
+    if (message.type() === "error") recordError(`Browser console error: ${message.text()}`);
   });
 
   return { messages, firstError };
 }
 
-export async function waitForWorkspaceWithoutPageErrors(
-  page: Page,
-  tracker: PageErrorTracker,
-): Promise<void> {
+export async function waitForWorkspaceWithoutPageErrors(page: Page, tracker: PageErrorTracker): Promise<void> {
   const pageError = tracker.firstError.then((error) => {
-    throw new Error(
-      `Browser page error before workspace was ready: ${error.stack ?? error.message}`,
-    );
+    throw new Error(`Browser page error before workspace was ready: ${error.stack ?? error.message}`);
   });
 
-  await Promise.race([
-    page.locator(WORKSPACE_SELECTOR).waitFor({ state: "visible" }),
-    pageError,
-  ]);
+  await Promise.race([page.locator(WORKSPACE_SELECTOR).waitFor({ state: "visible" }), pageError]);
 
-  expect(
-    tracker.messages,
-    "Browser page must not emit errors during workspace startup",
-  ).toHaveLength(0);
+  expect(tracker.messages, "Browser page must not emit errors during workspace startup").toHaveLength(0);
 }

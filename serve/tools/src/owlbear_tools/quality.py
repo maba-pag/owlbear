@@ -28,8 +28,6 @@ from owlbear_tools.todo import run_todo
 
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
-_JSON_SUFFIXES = frozenset({".json", ".jsonc"})
-_BIOME_SOURCE_SUFFIXES = frozenset({".css", ".js", ".mjs", ".ts", ".tsx"})
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
@@ -56,7 +54,7 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
         "lint-cockpit",
     ),
     "lint-cockpit": ("lint-cockpit-biome", "lint-cockpit-html"),
-    "format": ("format-python", "format-whitespace", "format-eof"),
+    "format": ("format-python", "format-biome", "format-whitespace", "format-eof"),
     "quality": ("format", "lint", "megalint", "typecheck-cockpit", "todo"),
 }
 
@@ -160,25 +158,18 @@ def _run_cockpit_html(*, staged: bool) -> int:
     return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
-def _is_biome_staged_path(path: str) -> bool:
-    if Path(path).suffix in _JSON_SUFFIXES:
-        return True
-    return (
-        path.startswith("serve/cockpit/web/")
-        and Path(path).relative_to("serve/cockpit/web").parts[0] in {"src", "e2e"}
-        and Path(path).suffix in _BIOME_SOURCE_SUFFIXES
-    )
-
-
-def _run_cockpit_biome(*, staged: bool) -> int:
-    if staged and not any(_is_biome_staged_path(path) for path in _git_paths(staged=True)):
-        return 0
-    script = "lint:biome:staged" if staged else "lint:biome"
-    return _call(["npm", "run", script], cwd=COCKPIT_WEB)
+def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int:
+    command = ["node", str(COCKPIT_WEB / "scripts/run-biome-check.mjs"), "format" if format_only else "check"]
+    command.extend(["--staged", "--no-errors-on-unmatched"] if staged else ["."])
+    if fix_mode is not FixMode.NONE:
+        command.append("--write")
+    if fix_mode is FixMode.UNSAFE and not format_only:
+        command.append("--unsafe")
+    return _call(command)
 
 
 def _run_typecheck_cockpit() -> int:
-    return _call(
+    app_result = _call(
         [
             "npx",
             "--prefix",
@@ -189,6 +180,8 @@ def _run_typecheck_cockpit() -> int:
             str(COCKPIT_WEB / "tsconfig.json"),
         ]
     )
+    e2e_result = _call(["npm", "run", "typecheck:e2e"], cwd=COCKPIT_WEB)
+    return int(bool(app_result or e2e_result))
 
 
 def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
@@ -196,8 +189,8 @@ def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
-    elif name == "lint-cockpit-biome":
-        result = _run_cockpit_biome(staged=staged)
+    elif name in {"lint-cockpit-biome", "format-biome"}:
+        result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
     elif name == "lint-cockpit-html":
         result = _run_cockpit_html(staged=staged)
     elif name == "megalint":
@@ -320,7 +313,7 @@ def _run_public_leaf(name: str, *, fixes: bool, allow_unsafe: bool, staged: bool
 
 def lint_cockpit() -> None:
     """Run the Cockpit frontend lint suite."""
-    _run_public_leaf("lint-cockpit", fixes=False, allow_unsafe=False, staged=True)
+    _run_public_leaf("lint-cockpit", fixes=True, allow_unsafe=True, staged=True)
 
 
 def lint_python() -> None:
@@ -355,7 +348,7 @@ def lint_editorconfig() -> None:
 
 def lint_cockpit_biome() -> None:
     """Run Biome checks for the Cockpit and owned repository frontend files."""
-    _run_public_leaf("lint-cockpit-biome", fixes=False, allow_unsafe=False, staged=True)
+    _run_public_leaf("lint-cockpit-biome", fixes=True, allow_unsafe=True, staged=True)
 
 
 def lint_cockpit_html() -> None:
@@ -366,6 +359,11 @@ def lint_cockpit_html() -> None:
 def format_python() -> None:
     """Format Python with Ruff."""
     _run_public_leaf("format-python", fixes=True, allow_unsafe=False, staged=True)
+
+
+def format_biome() -> None:
+    """Format owned frontend and JSON files with Biome."""
+    _run_public_leaf("format-biome", fixes=True, allow_unsafe=False, staged=True)
 
 
 def format_whitespace() -> None:

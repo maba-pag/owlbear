@@ -1,9 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type {
-  AcceptanceReconciliationResponse,
-  WorkItemPortfolioResponse,
-} from "../api/workItems";
+import type { AcceptanceReconciliationResponse, WorkItemPortfolioResponse } from "../api/workItems";
 import { useAcceptanceReconciliation } from "../hooks/useWorkItems";
 
 function portfolio(
@@ -73,10 +70,7 @@ function portfolio(
   };
 }
 
-function outcome(
-  changeId: string,
-  status: AcceptanceReconciliationResponse["outcomes"][number]["status"],
-) {
+function outcome(changeId: string, status: AcceptanceReconciliationResponse["outcomes"][number]["status"]) {
   return {
     change_id: changeId,
     status,
@@ -138,9 +132,7 @@ beforeEach(() => {
     retry: vi.fn(),
   };
   vi.useFakeTimers();
-  vi.spyOn(document, "visibilityState", "get").mockImplementation(() =>
-    visible ? "visible" : "hidden",
-  );
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => (visible ? "visible" : "hidden"));
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -166,9 +158,7 @@ afterEach(() => {
 
 it("stays silent while hidden and reconciles immediately on visible activation", async () => {
   setVisibility("hidden");
-  render(
-    <Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />,
-  );
+  render(<Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(0);
 
@@ -179,21 +169,11 @@ it("stays silent while hidden and reconciles immediately on visible activation",
 });
 
 it("keeps the provider poll stable across equivalent portfolio replacements", async () => {
-  const { rerender } = render(
-    <Harness
-      portfolioData={portfolio(["change-b", "change-a"])}
-      onChanged={vi.fn()}
-    />,
-  );
+  const { rerender } = render(<Harness portfolioData={portfolio(["change-b", "change-a"])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(1);
 
-  rerender(
-    <Harness
-      portfolioData={portfolio(["change-a", "change-b"])}
-      onChanged={vi.fn()}
-    />,
-  );
+  rerender(<Harness portfolioData={portfolio(["change-a", "change-b"])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(1);
 
@@ -213,9 +193,7 @@ it("serializes visibility-triggered polls while one provider request is in fligh
         }),
     ),
   );
-  render(
-    <Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />,
-  );
+  render(<Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />);
   await settle();
   expect(release).toBeDefined();
 
@@ -223,12 +201,7 @@ it("serializes visibility-triggered polls while one provider request is in fligh
   await settle();
   expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
 
-  release?.(
-    new Response(
-      JSON.stringify({ outcomes: [outcome("change-a", "waiting")] }),
-      { status: 200 },
-    ),
-  );
+  release?.(new Response(JSON.stringify({ outcomes: [outcome("change-a", "waiting")] }), { status: 200 }));
   await settle();
 });
 
@@ -251,9 +224,7 @@ it("backs off locally after provider-unavailable outcomes", async () => {
   expect(requests).toHaveLength(1);
   expect(onChanged).toHaveBeenCalledTimes(1);
   expect(latestStatus.providerChangeIds).toEqual(["change-a"]);
-  expect(latestStatus.providerError?.message).toBe(
-    "The provider was unavailable while checking GitHub acceptance.",
-  );
+  expect(latestStatus.providerError?.message).toBe("The provider was unavailable while checking GitHub acceptance.");
 
   await advance(30_000);
   expect(requests).toHaveLength(1);
@@ -295,9 +266,7 @@ it("preserves provider backoff across a workspace pause and resume", async () =>
     { outcomes: [outcome("change-a", "waiting")] },
   ];
   const portfolioData = portfolio(["change-a"]);
-  const { rerender } = render(
-    <Harness portfolioData={portfolioData} onChanged={vi.fn()} />,
-  );
+  const { rerender } = render(<Harness portfolioData={portfolioData} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(1);
 
@@ -306,9 +275,7 @@ it("preserves provider backoff across a workspace pause and resume", async () =>
   await advance(120_000);
   expect(requests).toHaveLength(3);
 
-  rerender(
-    <Harness portfolioData={portfolioData} onChanged={vi.fn()} paused />,
-  );
+  rerender(<Harness portfolioData={portfolioData} onChanged={vi.fn()} paused />);
   await settle();
   rerender(<Harness portfolioData={portfolioData} onChanged={vi.fn()} />);
   await settle();
@@ -321,34 +288,23 @@ it("preserves provider backoff across a workspace pause and resume", async () =>
 });
 
 it("reconciles immediately when a resumed Change re-enters the observed set", async () => {
-  const { rerender } = render(
-    <Harness portfolioData={portfolio([])} onChanged={vi.fn()} />,
-  );
+  const { rerender } = render(<Harness portfolioData={portfolio([])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(0);
 
-  rerender(
-    <Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />,
-  );
+  rerender(<Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(1);
 
   rerender(<Harness portfolioData={portfolio([])} onChanged={vi.fn()} />);
   await settle();
-  rerender(
-    <Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />,
-  );
+  rerender(<Harness portfolioData={portfolio(["change-a"])} onChanged={vi.fn()} />);
   await settle();
   expect(requests).toHaveLength(2);
 });
 
 it("does not poll Changes whose acceptance was already observed", async () => {
-  render(
-    <Harness
-      portfolioData={portfolio(["change-a"], "acceptance")}
-      onChanged={vi.fn()}
-    />,
-  );
+  render(<Harness portfolioData={portfolio(["change-a"], "acceptance")} onChanged={vi.fn()} />);
   await settle();
 
   expect(requests).toHaveLength(0);

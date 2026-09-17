@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint:biome": "node scripts/run-biome-check.mjs",
-    "lint:biome:ci": "biome ci --changed --no-errors-on-unmatched",
-    "lint:biome:staged": "biome check --staged",
+    "lint:biome": "node scripts/run-biome-check.mjs check .",
+    "lint:biome:ci": "node scripts/run-biome-check.mjs ci .",
+    "lint:biome:staged": "node scripts/run-biome-check.mjs check --staged --no-errors-on-unmatched",
+    "format:biome": "node scripts/run-biome-check.mjs format .",
     "sync:pds": "node scripts/sync-pds-assets.mjs",
     "test:biome-pds": "node scripts/test-biome-pds.mjs",
     "lint:html": "htmlhint --config .htmlhintrc index.html",

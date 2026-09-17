@@ -22,9 +22,7 @@ const memories = [
 
 async function seed(page: Page) {
   // Playwright matches routes in reverse registration order, so the catch-all must be registered first.
-  await page.route("**/api/**", (route) =>
-    route.fulfill({ status: 200, json: {} }),
-  );
+  await page.route("**/api/**", (route) => route.fulfill({ status: 200, json: {} }));
   await page.route("**/api/changes", (route) =>
     route.fulfill({
       json: {
@@ -51,59 +49,36 @@ async function seed(page: Page) {
       json: { content: "# Morning shape\n\n- [ ] Refine cockpit surfaces" },
     }),
   );
-  await page.route("**/api/memories", (route) =>
-    route.fulfill({ json: { entries: memories, parse_errors: 0 } }),
-  );
+  await page.route("**/api/memories", (route) => route.fulfill({ json: { entries: memories, parse_errors: 0 } }));
 }
 
-function formatViolations(
-  violations: Array<{ id: string; impact?: string | null; help: string }>,
-) {
-  return violations
-    .map((item) => `[${item.impact ?? "unknown"} ${item.id}] ${item.help}`)
-    .join("\n");
+function formatViolations(violations: Array<{ id: string; impact?: string | null; help: string }>) {
+  return violations.map((item) => `[${item.impact ?? "unknown"} ${item.id}] ${item.help}`).join("\n");
 }
 
 for (const theme of ["light", "dark"] as const) {
   test.describe(`preserved workflows: ${theme}`, () => {
     test.beforeEach(async ({ page }) => {
-      await page.addInitScript(
-        (value) => localStorage.setItem("owlbear-theme", value),
-        theme,
-      );
+      await page.addInitScript((value) => localStorage.setItem("owlbear-theme", value), theme);
       await seed(page);
     });
 
     test(`Memory remains accessible under ${theme}`, async ({ page }) => {
       await page.goto("/memory?change=change");
-      await expect(page.locator("html")).toHaveClass(
-        new RegExp(`scheme-${theme}`),
-      );
+      await expect(page.locator("html")).toHaveClass(new RegExp(`scheme-${theme}`));
       await expect(page.getByTestId("memory-entry").first()).toBeVisible();
-      const results = await new AxeBuilder({ page })
-        .withTags([...WCAG_TAGS])
-        .analyze();
-      expect(results.violations, formatViolations(results.violations)).toEqual(
-        [],
-      );
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+      expect(results.violations, formatViolations(results.violations)).toEqual([]);
     });
 
     test(`Ideas remains accessible under ${theme}`, async ({ page }) => {
       await page.goto("/ideas?change=change");
-      await expect(page.locator("html")).toHaveClass(
-        new RegExp(`scheme-${theme}`),
-      );
+      await expect(page.locator("html")).toHaveClass(new RegExp(`scheme-${theme}`));
       await expect(page.getByTestId("ideas-preview-toggle")).toBeVisible();
       await page.getByTestId("ideas-preview-toggle").click();
-      await expect(
-        page.locator('textarea[aria-label="Ideas draft"]'),
-      ).toBeVisible();
-      const results = await new AxeBuilder({ page })
-        .withTags([...WCAG_TAGS])
-        .analyze();
-      expect(results.violations, formatViolations(results.violations)).toEqual(
-        [],
-      );
+      await expect(page.locator('textarea[aria-label="Ideas draft"]')).toBeVisible();
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+      expect(results.violations, formatViolations(results.violations)).toEqual([]);
     });
   });
 }

@@ -1,7 +1,4 @@
-import {
-  PorscheDesignSystemProvider,
-  PToast,
-} from "@porsche-design-system/components-react";
+import { PorscheDesignSystemProvider, PToast } from "@porsche-design-system/components-react";
 import { useMemo } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import CockpitShell from "./CockpitShell";

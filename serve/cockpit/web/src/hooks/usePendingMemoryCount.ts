@@ -29,33 +29,29 @@ export function usePendingMemoryCount(): UsePendingMemoryCountResult {
   const [error, setError] = useState<Error | null>(null);
   const isMountedRef = useRef(true);
 
-  const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>(
-    "/api/memories",
-    {
-      intervalMs: 60_000,
-      onSuccess: async (payload) => {
-        if (!isMountedRef.current) {
-          return;
-        }
+  const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>("/api/memories", {
+    intervalMs: 60_000,
+    onSuccess: async (payload) => {
+      if (!isMountedRef.current) {
+        return;
+      }
 
-        const entries = Array.isArray(payload.entries) ? payload.entries : [];
-        setCount(entries.filter((entry) => entry.state === "pending").length);
-        setError(null);
-      },
-      onError: async (caught) => {
-        if (!isMountedRef.current) {
-          return;
-        }
-        setCount(0);
-        setError(caught);
-      },
+      const entries = Array.isArray(payload.entries) ? payload.entries : [];
+      setCount(entries.filter((entry) => entry.state === "pending").length);
+      setError(null);
     },
-  );
+    onError: async (caught) => {
+      if (!isMountedRef.current) {
+        return;
+      }
+      setCount(0);
+      setError(caught);
+    },
+  });
 
   useEffect(() => {
     function handlePendingCountChange(event: Event) {
-      const detail = (event as CustomEvent<MemoryPendingCountEventDetail>)
-        .detail;
+      const detail = (event as CustomEvent<MemoryPendingCountEventDetail>).detail;
       const delta = typeof detail?.delta === "number" ? detail.delta : 0;
       if (delta !== 0) {
         setCount((current) => Math.max(0, current + delta));
@@ -63,15 +59,9 @@ export function usePendingMemoryCount(): UsePendingMemoryCountResult {
       refetch();
     }
 
-    window.addEventListener(
-      MEMORY_PENDING_COUNT_EVENT,
-      handlePendingCountChange,
-    );
+    window.addEventListener(MEMORY_PENDING_COUNT_EVENT, handlePendingCountChange);
     return () => {
-      window.removeEventListener(
-        MEMORY_PENDING_COUNT_EVENT,
-        handlePendingCountChange,
-      );
+      window.removeEventListener(MEMORY_PENDING_COUNT_EVENT, handlePendingCountChange);
     };
   }, [refetch]);
 

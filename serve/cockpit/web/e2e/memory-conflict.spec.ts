@@ -25,9 +25,7 @@ const CURRENT_ENTRY = {
 };
 
 async function stubCockpitApis(page: Page): Promise<void> {
-  await page.route("/api/**", (route) =>
-    route.fulfill({ status: 200, json: {} }),
-  );
+  await page.route("/api/**", (route) => route.fulfill({ status: 200, json: {} }));
   await page.route("/api/events", (route) =>
     route.fulfill({
       status: 200,
@@ -42,23 +40,13 @@ async function stubCockpitApis(page: Page): Promise<void> {
     route.fulfill({
       json: {
         statuses: [{ name: "todo" }],
-        priorities: [
-          "someday",
-          "nice-to-have",
-          "important",
-          "needed",
-          "critical",
-        ],
+        priorities: ["someday", "nice-to-have", "important", "needed", "critical"],
         valid_transitions: { todo: [] },
       },
     }),
   );
-  await page.route("/api/tasks", (route) =>
-    route.fulfill({ json: { tasks: [], mtime: 1 } }),
-  );
-  await page.route("/health", (route) =>
-    route.fulfill({ json: { status: "healthy", modules: {} } }),
-  );
+  await page.route("/api/tasks", (route) => route.fulfill({ json: { tasks: [], mtime: 1 } }));
+  await page.route("/health", (route) => route.fulfill({ json: { status: "healthy", modules: {} } }));
 
   let listRequests = 0;
   let editRequests = 0;
@@ -93,9 +81,7 @@ async function openEntry(page: Page): Promise<ReturnType<Page["getByTestId"]>> {
   const entry = page.getByTestId("memory-entry").first();
   await entry.locator("p-accordion").evaluate((element) => {
     (element as HTMLElement & { open: boolean }).open = true;
-    element.dispatchEvent(
-      new CustomEvent("update", { detail: { open: true }, bubbles: true }),
-    );
+    element.dispatchEvent(new CustomEvent("update", { detail: { open: true }, bubbles: true }));
   });
   await expect(entry.getByTestId("memory-accordion-detail")).toBeVisible();
   return entry;
@@ -106,9 +92,7 @@ test.describe("Memory conflict recovery", () => {
     { name: "desktop", width: 1440, height: 900 },
     { name: "mobile", width: 390, height: 844 },
   ]) {
-    test(`${viewport.name} conflict actions are keyboard reachable`, async ({
-      page,
-    }) => {
+    test(`${viewport.name} conflict actions are keyboard reachable`, async ({ page }) => {
       await page.setViewportSize({
         width: viewport.width,
         height: viewport.height,
@@ -120,9 +104,7 @@ test.describe("Memory conflict recovery", () => {
       await entry.getByTestId("memory-edit-btn").click();
       await entry.getByTestId("memory-edit-save-btn").click();
       await expect(entry.getByTestId("memory-conflict-panel")).toBeVisible();
-      await expect(
-        entry.getByTestId("memory-conflict-current-content"),
-      ).toHaveText("Server content");
+      await expect(entry.getByTestId("memory-conflict-current-content")).toHaveText("Server content");
 
       const panel = entry.getByTestId("memory-conflict-panel");
       const reapply = entry.getByTestId("memory-conflict-reapply");
@@ -133,11 +115,7 @@ test.describe("Memory conflict recovery", () => {
       await page.keyboard.press("Tab");
       await expect(reapply).toBeFocused();
       expect(
-        await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth <=
-            document.documentElement.clientWidth,
-        ),
+        await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
       ).toBe(true);
       await page.keyboard.press("Enter");
       await expect(entry.getByTestId("memory-conflict-panel")).toHaveCount(0);

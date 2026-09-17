@@ -30,20 +30,12 @@ import {
   type ValidationMessage,
 } from "../api/memories";
 import MarkdownPreview from "../components/MarkdownPreview";
-import {
-  WorkspaceHeader,
-  WorkspaceHeaderMetric,
-  WorkspaceHeaderPill,
-} from "../components/WorkspaceHeader";
+import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from "../components/WorkspaceHeader";
 import { useMemoryPurgeFlow } from "../hooks/useCleanupFlow";
 import { MEMORY_PENDING_COUNT_EVENT } from "../hooks/usePendingMemoryCount";
 import { usePollingFetch } from "../hooks/usePollingFetch";
 
-type AgentFilter =
-  | { mode: "any" }
-  | { mode: "all" }
-  | { mode: "unscoped" }
-  | { mode: "named"; agent: string };
+type AgentFilter = { mode: "any" } | { mode: "all" } | { mode: "unscoped" } | { mode: "named"; agent: string };
 
 interface MemoryFilterState {
   states: MemoryState[];
@@ -63,14 +55,7 @@ interface MemoryConflictState {
   refreshError: string | null;
 }
 
-const DEFAULT_STATES: MemoryState[] = [
-  "pending",
-  "curated",
-  "approved",
-  "contested",
-  "disputed",
-  "stale",
-];
+const DEFAULT_STATES: MemoryState[] = ["pending", "curated", "approved", "contested", "disputed", "stale"];
 const ALL_AGENTS_SCOPE = "*";
 const AGENT_FILTER_VALUES = {
   any: "mode:any",
@@ -134,9 +119,7 @@ function readStringValue(event: Event): string {
     return target.value;
   }
 
-  const currentTarget = genericEvent.currentTarget as
-    | { value?: unknown }
-    | undefined;
+  const currentTarget = genericEvent.currentTarget as { value?: unknown } | undefined;
   if (typeof currentTarget?.value === "string") {
     return currentTarget.value;
   }
@@ -147,9 +130,7 @@ function readStringValue(event: Event): string {
 function readStringArrayValue(event: Event): string[] {
   const customEvent = event as CustomEvent<{ value?: unknown }>;
   const { value } = customEvent.detail ?? {};
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function formatConfidence(value: number): string {
@@ -184,10 +165,7 @@ function compareAscending(left: number, right: number): number {
 
 function sortEntries(entries: MemoryEntry[]): MemoryEntry[] {
   return [...entries].sort((left, right) => {
-    const scoreDelta = compareDescending(
-      normalizeConfidence(left.score),
-      normalizeConfidence(right.score),
-    );
+    const scoreDelta = compareDescending(normalizeConfidence(left.score), normalizeConfidence(right.score));
     if (scoreDelta !== 0) {
       return scoreDelta;
     }
@@ -197,10 +175,7 @@ function sortEntries(entries: MemoryEntry[]): MemoryEntry[] {
       return stateDelta;
     }
 
-    const createdDelta = compareAscending(
-      normalizeTimestamp(left.created_at),
-      normalizeTimestamp(right.created_at),
-    );
+    const createdDelta = compareAscending(normalizeTimestamp(left.created_at), normalizeTimestamp(right.created_at));
     if (createdDelta !== 0) {
       return createdDelta;
     }
@@ -213,10 +188,7 @@ function includesText(entry: MemoryEntry, loweredSearch: string): boolean {
   if (!loweredSearch) {
     return true;
   }
-  return (
-    entry.title.toLowerCase().includes(loweredSearch) ||
-    entry.content.toLowerCase().includes(loweredSearch)
-  );
+  return entry.title.toLowerCase().includes(loweredSearch) || entry.content.toLowerCase().includes(loweredSearch);
 }
 
 function formatScopeAgents(scopeAgents: string[]): string {
@@ -250,9 +222,7 @@ function parseAgentFilterValue(value: string): AgentFilter {
     try {
       return {
         mode: "named",
-        agent: decodeURIComponent(
-          value.slice(AGENT_FILTER_VALUES.namedPrefix.length),
-        ),
+        agent: decodeURIComponent(value.slice(AGENT_FILTER_VALUES.namedPrefix.length)),
       };
     } catch {
       return { mode: "any" };
@@ -275,10 +245,7 @@ function matchesAgent(entry: MemoryEntry, filter: AgentFilter): boolean {
   if (filter.mode === "unscoped") {
     return entry.scope_agents.length === 0;
   }
-  return (
-    entry.scope_agents.includes(ALL_AGENTS_SCOPE) ||
-    entry.scope_agents.includes(filter.agent)
-  );
+  return entry.scope_agents.includes(ALL_AGENTS_SCOPE) || entry.scope_agents.includes(filter.agent);
 }
 
 function toDistinctSortedValues(values: string[]): string[] {
@@ -308,17 +275,12 @@ function pendingValue(entry: MemoryEntry | null): number {
   return entry?.state === "pending" ? 1 : 0;
 }
 
-function emitPendingCountDelta(
-  before: MemoryEntry,
-  after: MemoryEntry | null,
-): void {
+function emitPendingCountDelta(before: MemoryEntry, after: MemoryEntry | null): void {
   const delta = pendingValue(after) - pendingValue(before);
   if (delta === 0) {
     return;
   }
-  window.dispatchEvent(
-    new CustomEvent(MEMORY_PENDING_COUNT_EVENT, { detail: { delta } }),
-  );
+  window.dispatchEvent(new CustomEvent(MEMORY_PENDING_COUNT_EVENT, { detail: { delta } }));
 }
 
 function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
@@ -332,14 +294,9 @@ function makeInitialDraft(entry: MemoryEntry): MemoryEditPayload {
   };
 }
 
-async function parseMemoriesResponse(
-  response: Response,
-): Promise<MemoriesResponse> {
+async function parseMemoriesResponse(response: Response): Promise<MemoriesResponse> {
   const payload = (await response.json()) as Partial<MemoriesResponse>;
-  if (
-    !Array.isArray(payload.entries) ||
-    typeof payload.parse_errors !== "number"
-  ) {
+  if (!Array.isArray(payload.entries) || typeof payload.parse_errors !== "number") {
     throw new Error("Malformed memory response");
   }
   return payload as MemoriesResponse;
@@ -355,26 +312,13 @@ function MemoryTab() {
   const [editDraft, setEditDraft] = useState<MemoryEditPayload | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [newScopeAgent, setNewScopeAgent] = useState("");
-  const [deleteConfirmEntryId, setDeleteConfirmEntryId] = useState<
-    string | null
-  >(null);
-  const [mutationErrorByEntryId, setMutationErrorByEntryId] = useState<
-    Record<string, string>
-  >({});
-  const [memoryConflict, setMemoryConflict] =
-    useState<MemoryConflictState | null>(null);
-  const [mutationPendingByEntryId, setMutationPendingByEntryId] = useState<
-    Record<string, boolean>
-  >({});
-  const [validationMessages, setValidationMessages] = useState<
-    ValidationMessage[]
-  >([]);
-  const [promotionMessageByEntryId, setPromotionMessageByEntryId] = useState<
-    Record<string, string>
-  >({});
-  const [globalMutationMessage, setGlobalMutationMessage] = useState<
-    string | null
-  >(null);
+  const [deleteConfirmEntryId, setDeleteConfirmEntryId] = useState<string | null>(null);
+  const [mutationErrorByEntryId, setMutationErrorByEntryId] = useState<Record<string, string>>({});
+  const [memoryConflict, setMemoryConflict] = useState<MemoryConflictState | null>(null);
+  const [mutationPendingByEntryId, setMutationPendingByEntryId] = useState<Record<string, boolean>>({});
+  const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([]);
+  const [promotionMessageByEntryId, setPromotionMessageByEntryId] = useState<Record<string, string>>({});
+  const [globalMutationMessage, setGlobalMutationMessage] = useState<string | null>(null);
   const [memoryListCanScrollDown, setMemoryListCanScrollDown] = useState(false);
 
   const stateFilterRef = useRef<HTMLElement | null>(null);
@@ -388,30 +332,24 @@ function MemoryTab() {
   const restoreConflictFocusRef = useRef<string | null>(null);
   const pendingMutationIdsRef = useRef(new Set<string>());
 
-  const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>(
-    "/api/memories",
-    {
-      paused: true,
-      parse: parseMemoriesResponse,
-      onSuccess: async (payload) => {
-        setLoadError(null);
-        setEntries(payload.entries);
-        setParseErrors(payload.parse_errors);
-      },
-      onError: async (error) => {
-        setLoadError(error);
-      },
+  const { isFetching, hasFetched, refetch } = usePollingFetch<MemoriesResponse>("/api/memories", {
+    paused: true,
+    parse: parseMemoriesResponse,
+    onSuccess: async (payload) => {
+      setLoadError(null);
+      setEntries(payload.entries);
+      setParseErrors(payload.parse_errors);
     },
-  );
+    onError: async (error) => {
+      setLoadError(error);
+    },
+  });
 
   const refreshConflictEntry = async (entryId: string): Promise<void> => {
     try {
       const response = await fetch("/api/memories");
       if (!response.ok) {
-        const message = await getResponseErrorMessage(
-          response,
-          `Memory refresh failed with status ${response.status}`,
-        );
+        const message = await getResponseErrorMessage(response, `Memory refresh failed with status ${response.status}`);
         throw new Error(message);
       }
 
@@ -424,8 +362,7 @@ function MemoryTab() {
           return current;
         }
 
-        const currentEntry =
-          payload.entries.find((entry) => entry.id === entryId) ?? null;
+        const currentEntry = payload.entries.find((entry) => entry.id === entryId) ?? null;
         if (!currentEntry) {
           return {
             ...current,
@@ -443,8 +380,7 @@ function MemoryTab() {
         };
       });
     } catch (caught) {
-      const error =
-        caught instanceof Error ? caught : new Error("Memory refresh failed");
+      const error = caught instanceof Error ? caught : new Error("Memory refresh failed");
       setLoadError(error);
       setMemoryConflict((current) =>
         current && current.entryId === entryId
@@ -489,9 +425,7 @@ function MemoryTab() {
     }
 
     restoreConflictFocusRef.current = null;
-    memoryEditActionsRef.current
-      ?.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')
-      ?.focus();
+    memoryEditActionsRef.current?.querySelector<HTMLElement>('[data-testid="memory-edit-save-btn"]')?.focus();
   }, [editingEntryId, memoryConflict]);
 
   useEffect(() => {
@@ -501,9 +435,7 @@ function MemoryTab() {
     }
 
     const onUpdate = (event: Event) => {
-      const values = readStringArrayValue(event).filter(
-        (value): value is MemoryState => value in STATE_PRIORITY,
-      );
+      const values = readStringArrayValue(event).filter((value): value is MemoryState => value in STATE_PRIORITY);
       setFilter((previous) => ({ ...previous, states: values }));
     };
 
@@ -584,10 +516,7 @@ function MemoryTab() {
     [deleteConfirmEntryId, entries],
   );
   const agentOptions = useMemo(
-    () =>
-      toDistinctSortedValues(
-        entries.flatMap((entry) => toFilterableScopeAgents(entry.scope_agents)),
-      ),
+    () => toDistinctSortedValues(entries.flatMap((entry) => toFilterableScopeAgents(entry.scope_agents))),
     [entries],
   );
 
@@ -595,73 +524,42 @@ function MemoryTab() {
     if (!memoryConflict || editingEntryId !== memoryConflict.entryId) {
       return null;
     }
-    return (
-      entries.find((entry) => entry.id === memoryConflict.entryId) ??
-      memoryConflict.baseEntry
-    );
+    return entries.find((entry) => entry.id === memoryConflict.entryId) ?? memoryConflict.baseEntry;
   }, [editingEntryId, entries, memoryConflict]);
 
   const visibleEntries = useMemo(() => {
     const loweredSearch = filter.text.trim().toLowerCase();
 
     const filteredEntries = sortEntries(entries).filter((entry) => {
-      const matchesState =
-        filter.states.length === 0 || filter.states.includes(entry.state);
+      const matchesState = filter.states.length === 0 || filter.states.includes(entry.state);
       const matchesCategory =
-        filter.categories.length === 0 ||
-        filter.categories.every((category) =>
-          entry.categories.includes(category),
-        );
+        filter.categories.length === 0 || filter.categories.every((category) => entry.categories.includes(category));
       const matchesAgentFilter = matchesAgent(entry, filter.agent);
       const matchesTextSearch = includesText(entry, loweredSearch);
 
-      return (
-        matchesState &&
-        matchesCategory &&
-        matchesAgentFilter &&
-        matchesTextSearch
-      );
+      return matchesState && matchesCategory && matchesAgentFilter && matchesTextSearch;
     });
-    if (
-      !activeConflictEntry ||
-      filteredEntries.some((entry) => entry.id === activeConflictEntry.id)
-    ) {
+    if (!activeConflictEntry || filteredEntries.some((entry) => entry.id === activeConflictEntry.id)) {
       return filteredEntries;
     }
     return sortEntries([...filteredEntries, activeConflictEntry]);
   }, [activeConflictEntry, entries, filter]);
 
   const totalEntryCount =
-    entries.length +
-    (activeConflictEntry &&
-    !entries.some((entry) => entry.id === activeConflictEntry.id)
-      ? 1
-      : 0);
+    entries.length + (activeConflictEntry && !entries.some((entry) => entry.id === activeConflictEntry.id) ? 1 : 0);
   const hasEntries = totalEntryCount > 0;
   const hasVisibleEntries = visibleEntries.length > 0;
-  const deletedCount = entries.filter(
-    (entry) => entry.state === "deleted",
-  ).length;
+  const deletedCount = entries.filter((entry) => entry.state === "deleted").length;
   const memoryCountMetric =
     visibleEntries.length === totalEntryCount ? (
-      <WorkspaceHeaderMetric
-        value={totalEntryCount}
-        label={totalEntryCount === 1 ? "entry" : "entries"}
-      />
+      <WorkspaceHeaderMetric value={totalEntryCount} label={totalEntryCount === 1 ? "entry" : "entries"} />
     ) : (
-      <WorkspaceHeaderMetric
-        value={`${visibleEntries.length} of ${totalEntryCount}`}
-        label="shown"
-      />
+      <WorkspaceHeaderMetric value={`${visibleEntries.length} of ${totalEntryCount}`} label="shown" />
     );
 
   const updateMemoryListScrollCue = useCallback(() => {
     const list = memoryListRef.current;
-    setMemoryListCanScrollDown(
-      Boolean(
-        list && list.scrollHeight - list.scrollTop - list.clientHeight > 1,
-      ),
-    );
+    setMemoryListCanScrollDown(Boolean(list && list.scrollHeight - list.scrollTop - list.clientHeight > 1));
   }, []);
 
   useEffect(() => {
@@ -675,9 +573,7 @@ function MemoryTab() {
     const observer = new ResizeObserver(updateMemoryListScrollCue);
     observer.observe(list);
     const mutationObserver =
-      typeof MutationObserver === "undefined"
-        ? null
-        : new MutationObserver(updateMemoryListScrollCue);
+      typeof MutationObserver === "undefined" ? null : new MutationObserver(updateMemoryListScrollCue);
     mutationObserver?.observe(list, {
       childList: true,
       subtree: true,
@@ -701,10 +597,7 @@ function MemoryTab() {
       if (list && editActions) {
         const listRect = list.getBoundingClientRect();
         const actionsRect = editActions.getBoundingClientRect();
-        const top = Math.max(
-          0,
-          list.scrollTop + actionsRect.top - listRect.top,
-        );
+        const top = Math.max(0, list.scrollTop + actionsRect.top - listRect.top);
 
         if (typeof list.scrollTo === "function") {
           list.scrollTo({ top, left: 0 });
@@ -719,9 +612,7 @@ function MemoryTab() {
 
   useEffect(() => {
     const visibleEntryIds = new Set(visibleEntries.map((entry) => entry.id));
-    const entriesToBind = Object.entries(accordionRefs.current).filter(
-      ([entryId]) => visibleEntryIds.has(entryId),
-    );
+    const entriesToBind = Object.entries(accordionRefs.current).filter(([entryId]) => visibleEntryIds.has(entryId));
     if (entriesToBind.length === 0) {
       return;
     }
@@ -752,9 +643,7 @@ function MemoryTab() {
   }, [visibleEntries]);
 
   const applyEntryReplace = (nextEntry: MemoryEntry) => {
-    setEntries((previous) =>
-      previous.map((entry) => (entry.id === nextEntry.id ? nextEntry : entry)),
-    );
+    setEntries((previous) => previous.map((entry) => (entry.id === nextEntry.id ? nextEntry : entry)));
   };
 
   const removeEntry = (entryId: string) => {
@@ -766,12 +655,8 @@ function MemoryTab() {
       setEditingEntryId(null);
       setEditDraft(null);
     }
-    setMemoryConflict((current) =>
-      current?.entryId === entryId ? null : current,
-    );
-    setDeleteConfirmEntryId((current) =>
-      current === entryId ? null : current,
-    );
+    setMemoryConflict((current) => (current?.entryId === entryId ? null : current));
+    setDeleteConfirmEntryId((current) => (current === entryId ? null : current));
   };
 
   const clearEntryErrors = (entryId: string) => {
@@ -818,8 +703,7 @@ function MemoryTab() {
     });
   };
 
-  const isMutationPending = (entryId: string): boolean =>
-    Boolean(mutationPendingByEntryId[entryId]);
+  const isMutationPending = (entryId: string): boolean => Boolean(mutationPendingByEntryId[entryId]);
 
   const retryConflictRefresh = (): void => {
     const entryId = memoryConflict?.entryId;
@@ -854,19 +738,12 @@ function MemoryTab() {
     }
     restoreConflictFocusRef.current = entryId;
     const currentUpdatedAt = memoryConflict.currentEntry.updated_at;
-    setEditDraft((previous) =>
-      previous
-        ? { ...previous, expected_updated_at: currentUpdatedAt }
-        : previous,
-    );
+    setEditDraft((previous) => (previous ? { ...previous, expected_updated_at: currentUpdatedAt } : previous));
     clearEntryErrors(entryId);
     setMemoryConflict(null);
   };
 
-  const handleMutationFailure = async (
-    entry: MemoryEntry,
-    caught: unknown,
-  ): Promise<void> => {
+  const handleMutationFailure = async (entry: MemoryEntry, caught: unknown): Promise<void> => {
     const mutationError = caught instanceof MemoryMutationError ? caught : null;
     const apiError = mutationError?.apiError ?? null;
     const parsedValidationMessages = mutationError?.validationMessages ?? [];
@@ -877,8 +754,7 @@ function MemoryTab() {
           entryId: entry.id,
           baseEntry: entry,
           status: "refreshing",
-          message:
-            "Entry was modified on the server. Review the latest version before saving again.",
+          message: "Entry was modified on the server. Review the latest version before saving again.",
           currentEntry: null,
           refreshError: null,
         });
@@ -984,19 +860,14 @@ function MemoryTab() {
     setValidationMessages([]);
   };
 
-  const addDraftListValues = (
-    field: "categories" | "scope_agents",
-    rawValue: string,
-  ) => {
+  const addDraftListValues = (field: "categories" | "scope_agents", rawValue: string) => {
     const additions = splitCSV(rawValue);
     if (additions.length === 0) {
       return;
     }
 
     setEditDraft((previous) =>
-      previous
-        ? { ...previous, [field]: mergeListValues(previous[field], additions) }
-        : previous,
+      previous ? { ...previous, [field]: mergeListValues(previous[field], additions) } : previous,
     );
 
     if (field === "categories") {
@@ -1006,10 +877,7 @@ function MemoryTab() {
     }
   };
 
-  const removeDraftListValue = (
-    field: "categories" | "scope_agents",
-    value: string,
-  ) => {
+  const removeDraftListValue = (field: "categories" | "scope_agents", value: string) => {
     setEditDraft((previous) =>
       previous
         ? {
@@ -1021,11 +889,7 @@ function MemoryTab() {
   };
 
   const handleEditSave = async (entry: MemoryEntry): Promise<void> => {
-    if (
-      !editDraft ||
-      memoryConflict?.entryId === entry.id ||
-      !beginMutation(entry.id)
-    ) {
+    if (!editDraft || memoryConflict?.entryId === entry.id || !beginMutation(entry.id)) {
       return;
     }
 
@@ -1036,21 +900,14 @@ function MemoryTab() {
     try {
       const draftForSave = {
         ...editDraft,
-        categories: mergeListValues(
-          editDraft.categories,
-          splitCSV(newCategory),
-        ),
-        scope_agents: mergeListValues(
-          editDraft.scope_agents,
-          splitCSV(newScopeAgent),
-        ),
+        categories: mergeListValues(editDraft.categories, splitCSV(newCategory)),
+        scope_agents: mergeListValues(editDraft.scope_agents, splitCSV(newScopeAgent)),
       };
       const payload = await editMemory(entry.id, draftForSave);
       if (payload.entry) {
         applyEntryReplace(payload.entry);
         emitPendingCountDelta(entry, payload.entry);
-        const promoted =
-          previousState === "pending" && payload.entry.state === "curated";
+        const promoted = previousState === "pending" && payload.entry.state === "curated";
         setPromotionMessageByEntryId((previous) => {
           if (!promoted) {
             const next = { ...previous };
@@ -1092,11 +949,7 @@ function MemoryTab() {
         summary={
           <>
             {memoryCountMetric}
-            {parseErrors > 0 ? (
-              <WorkspaceHeaderPill tone="error">
-                {parseErrors} unreadable
-              </WorkspaceHeaderPill>
-            ) : null}
+            {parseErrors > 0 ? <WorkspaceHeaderPill tone="error">{parseErrors} unreadable</WorkspaceHeaderPill> : null}
           </>
         }
       />
@@ -1110,8 +963,7 @@ function MemoryTab() {
           data-testid="memory-purge-receipt"
         >
           <span>
-            Purged {purgeFlow.receipt.purged}; skipped{" "}
-            {purgeFlow.receipt.skipped}; failed {purgeFlow.receipt.failed}
+            Purged {purgeFlow.receipt.purged}; skipped {purgeFlow.receipt.skipped}; failed {purgeFlow.receipt.failed}
           </span>
           <PButton
             type="button"
@@ -1159,8 +1011,7 @@ function MemoryTab() {
             className="block w-full min-w-0 max-w-full"
             value={filter.categories}
             ref={(element) => {
-              categoryFilterRef.current =
-                element as unknown as HTMLElement | null;
+              categoryFilterRef.current = element as unknown as HTMLElement | null;
             }}
           >
             {categoryOptions.map((category) => (
@@ -1180,20 +1031,11 @@ function MemoryTab() {
               agentFilterRef.current = element as unknown as HTMLElement | null;
             }}
           >
-            <PSelectOption value={AGENT_FILTER_VALUES.any}>
-              Any agent
-            </PSelectOption>
-            <PSelectOption value={AGENT_FILTER_VALUES.all}>
-              All agents
-            </PSelectOption>
-            <PSelectOption value={AGENT_FILTER_VALUES.unscoped}>
-              Unscoped
-            </PSelectOption>
+            <PSelectOption value={AGENT_FILTER_VALUES.any}>Any agent</PSelectOption>
+            <PSelectOption value={AGENT_FILTER_VALUES.all}>All agents</PSelectOption>
+            <PSelectOption value={AGENT_FILTER_VALUES.unscoped}>Unscoped</PSelectOption>
             {agentOptions.map((agent) => (
-              <PSelectOption
-                key={agent}
-                value={agentFilterValue({ mode: "named", agent })}
-              >
+              <PSelectOption key={agent} value={agentFilterValue({ mode: "named", agent })}>
                 {agent}
               </PSelectOption>
             ))}
@@ -1206,8 +1048,7 @@ function MemoryTab() {
             className="block w-full min-w-0 max-w-full"
             value={filter.text}
             ref={(element) => {
-              searchFilterRef.current =
-                element as unknown as HTMLElement | null;
+              searchFilterRef.current = element as unknown as HTMLElement | null;
             }}
           />
         </div>
@@ -1299,8 +1140,7 @@ function MemoryTab() {
                   No memory entries yet
                 </PHeading>
                 <p className="text-sm leading-relaxed text-contrast-medium">
-                  Entries saved to Memory will appear here for review and
-                  curation.
+                  Entries saved to Memory will appear here for review and curation.
                 </p>
               </div>
             </section>
@@ -1309,22 +1149,14 @@ function MemoryTab() {
           {hasEntries && !hasVisibleEntries ? (
             <div className="rounded-lg border border-contrast-low bg-canvas p-static-md text-center">
               <p>No entries match your filters</p>
-              <PButton
-                data-testid="clear-filters"
-                variant="secondary"
-                compact
-                onClick={resetFilters}
-              >
+              <PButton data-testid="clear-filters" variant="secondary" compact onClick={resetFilters}>
                 Clear filters
               </PButton>
             </div>
           ) : null}
 
           {hasVisibleEntries ? (
-            <div
-              data-testid="memory-list-scroll-shell"
-              className="relative min-h-0 flex-1 overflow-hidden"
-            >
+            <div data-testid="memory-list-scroll-shell" className="relative min-h-0 flex-1 overflow-hidden">
               <ul
                 ref={memoryListRef}
                 onScroll={updateMemoryListScrollCue}
@@ -1347,8 +1179,7 @@ function MemoryTab() {
                       open={openEntryId === entry.id ? true : undefined}
                       ref={(element) => {
                         if (element) {
-                          accordionRefs.current[entry.id] =
-                            element as unknown as HTMLElement;
+                          accordionRefs.current[entry.id] = element as unknown as HTMLElement;
                           return;
                         }
                         delete accordionRefs.current[entry.id];
@@ -1362,17 +1193,11 @@ function MemoryTab() {
                         ].join(" ")}
                       >
                         <div className="min-w-0">
-                          <strong
-                            data-testid="memory-entry-title"
-                            className="block truncate text-base text-primary"
-                          >
+                          <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">
                             {entry.title}
                           </strong>
                           <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-static-sm gap-y-static-xs">
-                            <span
-                              data-testid="memory-entry-agents"
-                              className="text-sm text-contrast-high"
-                            >
+                            <span data-testid="memory-entry-agents" className="text-sm text-contrast-high">
                               {formatScopeAgents(entry.scope_agents)}
                             </span>
                             <span
@@ -1424,9 +1249,7 @@ function MemoryTab() {
                           >
                             <MarkdownPreview
                               className="text-base"
-                              rehypePlugins={[
-                                [rehypeSanitize, MEMORY_SANITIZE_SCHEMA],
-                              ]}
+                              rehypePlugins={[[rehypeSanitize, MEMORY_SANITIZE_SCHEMA]]}
                             >
                               {entry.content}
                             </MarkdownPreview>
@@ -1448,111 +1271,62 @@ function MemoryTab() {
                               ].join(" ")}
                             >
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  ID
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.id}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">ID</dt>
+                                <dd className="m-0 break-words text-primary">{entry.id}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Source agent
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.source_agent}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Source agent</dt>
+                                <dd className="m-0 break-words text-primary">{entry.source_agent}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Scope agents
-                                </dt>
+                                <dt className="font-semibold text-contrast-high">Scope agents</dt>
                                 <dd className="m-0 break-words text-primary">
                                   {formatScopeAgents(entry.scope_agents)}
                                 </dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Categories
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.categories.join(", ")}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Categories</dt>
+                                <dd className="m-0 break-words text-primary">{entry.categories.join(", ")}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Confidence
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {formatConfidence(entry.confidence)}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Confidence</dt>
+                                <dd className="m-0 break-words text-primary">{formatConfidence(entry.confidence)}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  State
-                                </dt>
-                                <dd
-                                  data-testid="memory-entry-state"
-                                  className="m-0 break-words text-primary"
-                                >
+                                <dt className="font-semibold text-contrast-high">State</dt>
+                                <dd data-testid="memory-entry-state" className="m-0 break-words text-primary">
                                   {entry.state}
                                 </dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Outstanding marks
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  ★ {entry.outstanding_count}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Outstanding marks</dt>
+                                <dd className="m-0 break-words text-primary">★ {entry.outstanding_count}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Score
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {formatConfidence(entry.score)}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Score</dt>
+                                <dd className="m-0 break-words text-primary">{formatConfidence(entry.score)}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Contested task
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.contested_by_task ?? "—"}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Contested task</dt>
+                                <dd className="m-0 break-words text-primary">{entry.contested_by_task ?? "—"}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Created
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.created_at}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Created</dt>
+                                <dd className="m-0 break-words text-primary">{entry.created_at}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Updated
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.updated_at}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Updated</dt>
+                                <dd className="m-0 break-words text-primary">{entry.updated_at}</dd>
                               </div>
                               <div className="min-w-0">
-                                <dt className="font-semibold text-contrast-high">
-                                  Approved
-                                </dt>
-                                <dd className="m-0 break-words text-primary">
-                                  {entry.approved_at ?? "-"}
-                                </dd>
+                                <dt className="font-semibold text-contrast-high">Approved</dt>
+                                <dd className="m-0 break-words text-primary">{entry.approved_at ?? "-"}</dd>
                               </div>
                             </dl>
                           </section>
 
                           {entry.state === "approved" ? (
-                            <p className="text-sm text-primary">
-                              Editing will require re-approval
-                            </p>
+                            <p className="text-sm text-primary">Editing will require re-approval</p>
                           ) : null}
 
                           {mutationErrorByEntryId[entry.id] ? (
@@ -1568,8 +1342,7 @@ function MemoryTab() {
                             <section
                               data-testid="memory-conflict-panel"
                               ref={(element) => {
-                                conflictPanelRef.current =
-                                  element as unknown as HTMLElement | null;
+                                conflictPanelRef.current = element as unknown as HTMLElement | null;
                               }}
                               aria-labelledby={`memory-conflict-title-${entry.id}`}
                               tabIndex={-1}
@@ -1579,38 +1352,24 @@ function MemoryTab() {
                               ].join(" ")}
                             >
                               <div className="grid gap-static-xs">
-                                <h3
-                                  id={`memory-conflict-title-${entry.id}`}
-                                  className="m-0 text-base font-semibold"
-                                >
+                                <h3 id={`memory-conflict-title-${entry.id}`} className="m-0 text-base font-semibold">
                                   This memory changed while you were editing.
                                 </h3>
                                 <p className="m-0 text-sm">
-                                  Your draft is preserved. Review the latest
-                                  server version before saving again.
+                                  Your draft is preserved. Review the latest server version before saving again.
                                 </p>
-                                <p className="m-0 break-words text-sm">
-                                  {memoryConflict.message}
-                                </p>
+                                <p className="m-0 break-words text-sm">{memoryConflict.message}</p>
                               </div>
-                              <span
-                                className="sr-only"
-                                role="status"
-                                aria-live="polite"
-                              >
+                              <span className="sr-only" role="status" aria-live="polite">
                                 {memoryConflict.status === "refreshing"
                                   ? "Loading the latest server version."
                                   : memoryConflict.status === "error"
-                                    ? (memoryConflict.refreshError ??
-                                      "The latest server version could not be loaded.")
+                                    ? (memoryConflict.refreshError ?? "The latest server version could not be loaded.")
                                     : "The latest server version is ready. Choose whether to discard " +
                                       "the draft or reapply it."}
                               </span>
                               {memoryConflict.status === "refreshing" ? (
-                                <p
-                                  data-testid="memory-conflict-refreshing"
-                                  className="m-0 text-sm"
-                                >
+                                <p data-testid="memory-conflict-refreshing" className="m-0 text-sm">
                                   Loading the latest server version...
                                 </p>
                               ) : null}
@@ -1620,8 +1379,7 @@ function MemoryTab() {
                                     data-testid="memory-conflict-refresh-error"
                                     className="m-0 min-w-0 flex-1 break-words text-sm"
                                   >
-                                    {memoryConflict.refreshError ??
-                                      "The latest server version could not be loaded."}
+                                    {memoryConflict.refreshError ?? "The latest server version could not be loaded."}
                                   </p>
                                   <PButton
                                     type="button"
@@ -1634,36 +1392,23 @@ function MemoryTab() {
                                   </PButton>
                                 </div>
                               ) : null}
-                              {memoryConflict.status === "ready" &&
-                              memoryConflict.currentEntry ? (
+                              {memoryConflict.status === "ready" && memoryConflict.currentEntry ? (
                                 <>
                                   <dl className="grid min-w-0 gap-static-sm text-sm sm:grid-cols-2">
                                     <div className="min-w-0">
-                                      <dt className="font-semibold">
-                                        Latest server title
-                                      </dt>
-                                      <dd
-                                        data-testid="memory-conflict-current-title"
-                                        className="m-0 break-words"
-                                      >
+                                      <dt className="font-semibold">Latest server title</dt>
+                                      <dd data-testid="memory-conflict-current-title" className="m-0 break-words">
                                         {memoryConflict.currentEntry.title}
                                       </dd>
                                     </div>
                                     <div className="min-w-0">
-                                      <dt className="font-semibold">
-                                        Your draft title
-                                      </dt>
-                                      <dd
-                                        data-testid="memory-conflict-draft-title"
-                                        className="m-0 break-words"
-                                      >
+                                      <dt className="font-semibold">Your draft title</dt>
+                                      <dd data-testid="memory-conflict-draft-title" className="m-0 break-words">
                                         {editDraft?.title ?? ""}
                                       </dd>
                                     </div>
                                     <div className="min-w-0">
-                                      <dt className="font-semibold">
-                                        Latest server content
-                                      </dt>
+                                      <dt className="font-semibold">Latest server content</dt>
                                       <dd
                                         data-testid="memory-conflict-current-content"
                                         className="m-0 whitespace-pre-wrap break-words"
@@ -1672,9 +1417,7 @@ function MemoryTab() {
                                       </dd>
                                     </div>
                                     <div className="min-w-0">
-                                      <dt className="font-semibold">
-                                        Your draft content
-                                      </dt>
+                                      <dt className="font-semibold">Your draft content</dt>
                                       <dd
                                         data-testid="memory-conflict-draft-content"
                                         className="m-0 whitespace-pre-wrap break-words"
@@ -1690,9 +1433,7 @@ function MemoryTab() {
                                       compact
                                       variant="secondary"
                                       disabled={isMutationPending(entry.id)}
-                                      onClick={() =>
-                                        reloadConflictEntry(entry.id)
-                                      }
+                                      onClick={() => reloadConflictEntry(entry.id)}
                                     >
                                       Discard draft and load latest
                                     </PButton>
@@ -1701,9 +1442,7 @@ function MemoryTab() {
                                       data-testid="memory-conflict-reapply"
                                       compact
                                       disabled={isMutationPending(entry.id)}
-                                      onClick={() =>
-                                        reapplyConflictDraft(entry.id)
-                                      }
+                                      onClick={() => reapplyConflictDraft(entry.id)}
                                     >
                                       Reapply draft
                                     </PButton>
@@ -1723,9 +1462,7 @@ function MemoryTab() {
                             data-testid="memory-detail-actions"
                             className="flex flex-wrap items-center gap-static-xs"
                           >
-                            {entry.state === "contested" ||
-                            entry.state === "disputed" ||
-                            entry.state === "stale" ? (
+                            {entry.state === "contested" || entry.state === "disputed" || entry.state === "stale" ? (
                               <PButton
                                 type="button"
                                 data-testid="memory-resolve-btn"
@@ -1769,9 +1506,7 @@ function MemoryTab() {
                                   disabled={isMutationPending(entry.id)}
                                   aria-busy={isMutationPending(entry.id)}
                                   variant="secondary"
-                                  onClick={() =>
-                                    setDeleteConfirmEntryId(entry.id)
-                                  }
+                                  onClick={() => setDeleteConfirmEntryId(entry.id)}
                                 >
                                   Delete
                                 </PButton>
@@ -1794,9 +1529,7 @@ function MemoryTab() {
                                 ].join(" ")}
                               >
                                 <div className="flex min-w-0 flex-wrap items-center gap-static-sm">
-                                  <span className="text-sm font-semibold text-primary">
-                                    Edit memory
-                                  </span>
+                                  <span className="text-sm font-semibold text-primary">Edit memory</span>
                                 </div>
                                 <div className="flex min-w-0 flex-wrap items-center gap-static-xs">
                                   <PButton
@@ -1813,10 +1546,7 @@ function MemoryTab() {
                                     type="button"
                                     data-testid="memory-edit-save-btn"
                                     compact
-                                    disabled={
-                                      isMutationPending(entry.id) ||
-                                      memoryConflict?.entryId === entry.id
-                                    }
+                                    disabled={isMutationPending(entry.id) || memoryConflict?.entryId === entry.id}
                                     aria-busy={isMutationPending(entry.id)}
                                     onClick={() => void handleEditSave(entry)}
                                   >
@@ -1838,19 +1568,11 @@ function MemoryTab() {
                                   value={editDraft.title}
                                   onChange={(event) => {
                                     const value = readStringValue(event);
-                                    setEditDraft((previous) =>
-                                      previous
-                                        ? { ...previous, title: value }
-                                        : previous,
-                                    );
+                                    setEditDraft((previous) => (previous ? { ...previous, title: value } : previous));
                                   }}
                                   onInput={(event) => {
                                     const value = readStringValue(event);
-                                    setEditDraft((previous) =>
-                                      previous
-                                        ? { ...previous, title: value }
-                                        : previous,
-                                    );
+                                    setEditDraft((previous) => (previous ? { ...previous, title: value } : previous));
                                   }}
                                 />
                                 <PInputNumber
@@ -1863,31 +1585,23 @@ function MemoryTab() {
                                   max={1}
                                   value={String(editDraft.confidence)}
                                   onChange={(event) => {
-                                    const value = Number.parseFloat(
-                                      readStringValue(event),
-                                    );
+                                    const value = Number.parseFloat(readStringValue(event));
                                     setEditDraft((previous) =>
                                       previous
                                         ? {
                                             ...previous,
-                                            confidence: Number.isFinite(value)
-                                              ? value
-                                              : previous.confidence,
+                                            confidence: Number.isFinite(value) ? value : previous.confidence,
                                           }
                                         : previous,
                                     );
                                   }}
                                   onInput={(event) => {
-                                    const value = Number.parseFloat(
-                                      readStringValue(event),
-                                    );
+                                    const value = Number.parseFloat(readStringValue(event));
                                     setEditDraft((previous) =>
                                       previous
                                         ? {
                                             ...previous,
-                                            confidence: Number.isFinite(value)
-                                              ? value
-                                              : previous.confidence,
+                                            confidence: Number.isFinite(value) ? value : previous.confidence,
                                           }
                                         : previous,
                                     );
@@ -1895,10 +1609,7 @@ function MemoryTab() {
                                 />
                               </div>
                               <div className="grid gap-static-sm md:grid-cols-2">
-                                <section
-                                  className="grid min-w-0 gap-static-xs"
-                                  data-testid="memory-category-editor"
-                                >
+                                <section className="grid min-w-0 gap-static-xs" data-testid="memory-category-editor">
                                   <div className="grid min-w-0 gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
                                     <PInputText
                                       name="new-memory-category"
@@ -1907,19 +1618,12 @@ function MemoryTab() {
                                       compact
                                       className="min-w-0"
                                       value={newCategory}
-                                      onChange={(event) =>
-                                        setNewCategory(readStringValue(event))
-                                      }
-                                      onInput={(event) =>
-                                        setNewCategory(readStringValue(event))
-                                      }
+                                      onChange={(event) => setNewCategory(readStringValue(event))}
+                                      onInput={(event) => setNewCategory(readStringValue(event))}
                                       onKeyDown={(event) => {
                                         if (event.key === "Enter") {
                                           event.preventDefault();
-                                          addDraftListValues(
-                                            "categories",
-                                            newCategory,
-                                          );
+                                          addDraftListValues("categories", newCategory);
                                         }
                                       }}
                                     />
@@ -1931,12 +1635,7 @@ function MemoryTab() {
                                       className="min-w-0 self-end"
                                       compact
                                       disabled={newCategory.trim().length === 0}
-                                      onClick={() =>
-                                        addDraftListValues(
-                                          "categories",
-                                          newCategory,
-                                        )
-                                      }
+                                      onClick={() => addDraftListValues("categories", newCategory)}
                                     >
                                       Add
                                     </PButton>
@@ -1956,29 +1655,18 @@ function MemoryTab() {
                                           aria={{
                                             "aria-label": `Remove category ${category}`,
                                           }}
-                                          onClick={() =>
-                                            removeDraftListValue(
-                                              "categories",
-                                              category,
-                                            )
-                                          }
+                                          onClick={() => removeDraftListValue("categories", category)}
                                         />
                                       ))}
                                     </div>
                                   ) : (
-                                    <span
-                                      data-testid="memory-no-categories"
-                                      className="text-sm text-contrast-high"
-                                    >
+                                    <span data-testid="memory-no-categories" className="text-sm text-contrast-high">
                                       No categories
                                     </span>
                                   )}
                                 </section>
 
-                                <section
-                                  className="grid min-w-0 gap-static-xs"
-                                  data-testid="memory-scope-agent-editor"
-                                >
+                                <section className="grid min-w-0 gap-static-xs" data-testid="memory-scope-agent-editor">
                                   <div className="grid min-w-0 gap-static-xs sm:grid-cols-[minmax(0,1fr)_auto]">
                                     <PInputText
                                       name="new-memory-scope-agent"
@@ -1987,19 +1675,12 @@ function MemoryTab() {
                                       compact
                                       className="min-w-0"
                                       value={newScopeAgent}
-                                      onChange={(event) =>
-                                        setNewScopeAgent(readStringValue(event))
-                                      }
-                                      onInput={(event) =>
-                                        setNewScopeAgent(readStringValue(event))
-                                      }
+                                      onChange={(event) => setNewScopeAgent(readStringValue(event))}
+                                      onInput={(event) => setNewScopeAgent(readStringValue(event))}
                                       onKeyDown={(event) => {
                                         if (event.key === "Enter") {
                                           event.preventDefault();
-                                          addDraftListValues(
-                                            "scope_agents",
-                                            newScopeAgent,
-                                          );
+                                          addDraftListValues("scope_agents", newScopeAgent);
                                         }
                                       }}
                                     />
@@ -2010,15 +1691,8 @@ function MemoryTab() {
                                       icon="plus"
                                       className="min-w-0 self-end"
                                       compact
-                                      disabled={
-                                        newScopeAgent.trim().length === 0
-                                      }
-                                      onClick={() =>
-                                        addDraftListValues(
-                                          "scope_agents",
-                                          newScopeAgent,
-                                        )
-                                      }
+                                      disabled={newScopeAgent.trim().length === 0}
+                                      onClick={() => addDraftListValues("scope_agents", newScopeAgent)}
                                     >
                                       Add
                                     </PButton>
@@ -2038,20 +1712,12 @@ function MemoryTab() {
                                           aria={{
                                             "aria-label": `Remove scope agent ${agent}`,
                                           }}
-                                          onClick={() =>
-                                            removeDraftListValue(
-                                              "scope_agents",
-                                              agent,
-                                            )
-                                          }
+                                          onClick={() => removeDraftListValue("scope_agents", agent)}
                                         />
                                       ))}
                                     </div>
                                   ) : (
-                                    <span
-                                      data-testid="memory-no-scope-agents"
-                                      className="text-sm text-contrast-high"
-                                    >
+                                    <span data-testid="memory-no-scope-agents" className="text-sm text-contrast-high">
                                       No scope agents
                                     </span>
                                   )}
@@ -2064,26 +1730,12 @@ function MemoryTab() {
                                 counter
                                 maxLength={MEMORY_CONTENT_LIMIT}
                                 onChange={(event) => {
-                                  const value = readStringValue(event).slice(
-                                    0,
-                                    MEMORY_CONTENT_LIMIT,
-                                  );
-                                  setEditDraft((previous) =>
-                                    previous
-                                      ? { ...previous, content: value }
-                                      : previous,
-                                  );
+                                  const value = readStringValue(event).slice(0, MEMORY_CONTENT_LIMIT);
+                                  setEditDraft((previous) => (previous ? { ...previous, content: value } : previous));
                                 }}
                                 onInput={(event) => {
-                                  const value = readStringValue(event).slice(
-                                    0,
-                                    MEMORY_CONTENT_LIMIT,
-                                  );
-                                  setEditDraft((previous) =>
-                                    previous
-                                      ? { ...previous, content: value }
-                                      : previous,
-                                  );
+                                  const value = readStringValue(event).slice(0, MEMORY_CONTENT_LIMIT);
+                                  setEditDraft((previous) => (previous ? { ...previous, content: value } : previous));
                                 }}
                               />
                               {validationMessages.length > 0 ? (
@@ -2094,17 +1746,15 @@ function MemoryTab() {
                                     "p-static-sm text-sm text-primary",
                                   ].join(" ")}
                                 >
-                                  {validationMessages.map(
-                                    ({ field, message }) => (
-                                      <li
-                                        key={`${field}:${message}`}
-                                        data-testid="memory-validation-message"
-                                        data-field={field}
-                                      >
-                                        <strong>{field}</strong>: {message}
-                                      </li>
-                                    ),
-                                  )}
+                                  {validationMessages.map(({ field, message }) => (
+                                    <li
+                                      key={`${field}:${message}`}
+                                      data-testid="memory-validation-message"
+                                      data-field={field}
+                                    >
+                                      <strong>{field}</strong>: {message}
+                                    </li>
+                                  ))}
                                 </ul>
                               ) : null}
                             </div>
@@ -2141,9 +1791,7 @@ function MemoryTab() {
           >
             <div className="grid max-w-[520px] gap-static-md">
               <div className="grid gap-static-xs rounded-lg bg-frosted-soft p-static-md text-primary">
-                <span className="text-xs font-semibold uppercase text-primary">
-                  Delete memory
-                </span>
+                <span className="text-xs font-semibold uppercase text-primary">Delete memory</span>
                 <p className="m-0 text-sm leading-normal">
                   {deleteConfirmEntry.state === "pending"
                     ? "This is a permanent hard-delete and cannot be undone."
@@ -2164,16 +1812,8 @@ function MemoryTab() {
                   type="button"
                   data-testid="memory-delete-confirm-btn"
                   compact
-                  disabled={
-                    deleteConfirmEntry
-                      ? isMutationPending(deleteConfirmEntry.id)
-                      : false
-                  }
-                  aria-busy={
-                    deleteConfirmEntry
-                      ? isMutationPending(deleteConfirmEntry.id)
-                      : false
-                  }
+                  disabled={deleteConfirmEntry ? isMutationPending(deleteConfirmEntry.id) : false}
+                  aria-busy={deleteConfirmEntry ? isMutationPending(deleteConfirmEntry.id) : false}
                   onClick={() => void handleDelete(deleteConfirmEntry)}
                 >
                   Confirm delete
@@ -2198,8 +1838,7 @@ function MemoryTab() {
                   Purge deleted memories
                 </PHeading>
                 <p className="m-0 text-sm text-contrast-high">
-                  This action ignores active filters and applies across the
-                  project.
+                  This action ignores active filters and applies across the project.
                 </p>
               </div>
               <PInputNumber
@@ -2211,12 +1850,8 @@ function MemoryTab() {
                 value={purgeFlow.threshold}
                 state={purgeFlow.error ? "error" : undefined}
                 message={purgeFlow.error ?? undefined}
-                onChange={(event) =>
-                  purgeFlow.setThreshold(readStringValue(event))
-                }
-                onInput={(event) =>
-                  purgeFlow.setThreshold(readStringValue(event))
-                }
+                onChange={(event) => purgeFlow.setThreshold(readStringValue(event))}
+                onInput={(event) => purgeFlow.setThreshold(readStringValue(event))}
               />
               {purgeFlow.preview ? (
                 <dl
@@ -2228,49 +1863,31 @@ function MemoryTab() {
                 >
                   <div>
                     <dt className="text-contrast-high">Total deleted</dt>
-                    <dd className="m-0 font-semibold">
-                      {purgeFlow.preview.deleted_total}
-                    </dd>
+                    <dd className="m-0 font-semibold">{purgeFlow.preview.deleted_total}</dd>
                   </div>
                   <div>
                     <dt className="text-contrast-high">Eligible</dt>
-                    <dd className="m-0 font-semibold">
-                      {purgeFlow.preview.eligible}
-                    </dd>
+                    <dd className="m-0 font-semibold">{purgeFlow.preview.eligible}</dd>
                   </div>
                   <div>
                     <dt className="text-contrast-high">Too recent</dt>
-                    <dd className="m-0 font-semibold">
-                      {purgeFlow.preview.too_recent}
-                    </dd>
+                    <dd className="m-0 font-semibold">{purgeFlow.preview.too_recent}</dd>
                   </div>
                 </dl>
               ) : null}
               <div className="flex flex-wrap justify-end gap-static-xs">
-                <PButton
-                  type="button"
-                  compact
-                  variant="secondary"
-                  onClick={purgeFlow.cancelPurge}
-                >
+                <PButton type="button" compact variant="secondary" onClick={purgeFlow.cancelPurge}>
                   Cancel
                 </PButton>
                 {purgeFlow.phase === "confirming" ? (
-                  <PButton
-                    type="button"
-                    compact
-                    onClick={() => void purgeFlow.confirmPurge()}
-                  >
+                  <PButton type="button" compact onClick={() => void purgeFlow.confirmPurge()}>
                     Purge
                   </PButton>
                 ) : (
                   <PButton
                     type="button"
                     compact
-                    disabled={
-                      purgeFlow.phase === "previewing" ||
-                      purgeFlow.phase === "running"
-                    }
+                    disabled={purgeFlow.phase === "previewing" || purgeFlow.phase === "running"}
                     onClick={() => void purgeFlow.requestPreview()}
                   >
                     Preview

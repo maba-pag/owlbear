@@ -42,10 +42,7 @@ export function WorkspaceHeader({
         flush ? "" : "border-b border-contrast-low",
       ].join(" ")}
     >
-      <Heading
-        id={titleId}
-        className="m-0 min-w-0 text-xl font-semibold leading-none text-primary"
-      >
+      <Heading id={titleId} className="m-0 min-w-0 text-xl font-semibold leading-none text-primary">
         {title}
       </Heading>
       {summary || actions ? (
@@ -78,11 +75,7 @@ export function WorkspaceHeader({
   );
 }
 
-export function WorkspaceHeaderMetric({
-  value,
-  label,
-  tone = "neutral",
-}: WorkspaceHeaderMetricProps) {
+export function WorkspaceHeaderMetric({ value, label, tone = "neutral" }: WorkspaceHeaderMetricProps) {
   return (
     <span
       data-testid="workspace-header-metric"
@@ -93,10 +86,7 @@ export function WorkspaceHeaderMetric({
       ].join(" ")}
     >
       <strong
-        className={[
-          "text-lg font-semibold leading-none",
-          tone === "error" ? "text-error" : "text-primary",
-        ].join(" ")}
+        className={["text-lg font-semibold leading-none", tone === "error" ? "text-error" : "text-primary"].join(" ")}
       >
         {value}
       </strong>
@@ -105,10 +95,7 @@ export function WorkspaceHeaderMetric({
   );
 }
 
-export function WorkspaceHeaderPill({
-  children,
-  tone = "neutral",
-}: WorkspaceHeaderPillProps) {
+export function WorkspaceHeaderPill({ children, tone = "neutral" }: WorkspaceHeaderPillProps) {
   return (
     <span
       className={[

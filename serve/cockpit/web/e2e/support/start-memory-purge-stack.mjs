@@ -9,40 +9,16 @@ const runFile = promisify(execFile);
 const root = resolve(import.meta.dirname, "../../../../..");
 const fixture = await mkdtemp(join(tmpdir(), "owlbear-memory-purge-"));
 const memoryDir = join(fixture, ".owlbear/memory");
-const fixtureManifest = resolve(
-  import.meta.dirname,
-  "../../test-results/memory-purge-fixture.json",
-);
+const fixtureManifest = resolve(import.meta.dirname, "../../test-results/memory-purge-fixture.json");
 await mkdir(memoryDir, { recursive: true });
 
 const now = Date.now();
-const daysAgo = (days) =>
-  new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+const daysAgo = (days) => new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
 const entries = [
-  [
-    "11111111-1111-4111-8111-111111111111",
-    "Eligible deleted",
-    "deleted",
-    daysAgo(30),
-  ],
-  [
-    "22222222-2222-4222-8222-222222222222",
-    "Exact cutoff deleted",
-    "deleted",
-    daysAgo(1),
-  ],
-  [
-    "33333333-3333-4333-8333-333333333333",
-    "Recent deleted",
-    "deleted",
-    daysAgo(0),
-  ],
-  [
-    "44444444-4444-4444-8444-444444444444",
-    "Active memory",
-    "approved",
-    daysAgo(30),
-  ],
+  ["11111111-1111-4111-8111-111111111111", "Eligible deleted", "deleted", daysAgo(30)],
+  ["22222222-2222-4222-8222-222222222222", "Exact cutoff deleted", "deleted", daysAgo(1)],
+  ["33333333-3333-4333-8333-333333333333", "Recent deleted", "deleted", daysAgo(0)],
+  ["44444444-4444-4444-8444-444444444444", "Active memory", "approved", daysAgo(30)],
 ];
 for (const [id, title, state, updatedAt] of entries) {
   const frontmatter = [
@@ -86,28 +62,20 @@ await runFile(
   { cwd: root },
 );
 
-const server = spawn(
-  "uv",
-  ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"],
-  {
-    cwd: fixture,
-    env: {
-      ...process.env,
-      COCKPIT_PORT: "8421",
-      COCKPIT_NO_OPEN: "1",
-    },
-    stdio: "inherit",
+const server = spawn("uv", ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"], {
+  cwd: fixture,
+  env: {
+    ...process.env,
+    COCKPIT_PORT: "8421",
+    COCKPIT_NO_OPEN: "1",
   },
-);
+  stdio: "inherit",
+});
 const cleanup = async () => {
   if (!server.killed) server.kill("SIGTERM");
   await rm(fixtureManifest, { force: true });
   await Promise.all(
-    entries.map(([id]) =>
-      runFile("chflags", ["nouchg", join(memoryDir, `${id}.md`)]).catch(
-        () => undefined,
-      ),
-    ),
+    entries.map(([id]) => runFile("chflags", ["nouchg", join(memoryDir, `${id}.md`)]).catch(() => undefined)),
   );
   await rm(fixture, { recursive: true, force: true });
 };

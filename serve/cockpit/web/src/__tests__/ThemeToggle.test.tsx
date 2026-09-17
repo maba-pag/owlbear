@@ -19,11 +19,7 @@ function requirePresent<T>(value: T | null | undefined): T {
   return value;
 }
 
-function renderThemeToggle(
-  theme: ThemeMode = "light",
-  toggle = vi.fn(),
-  selectTheme = vi.fn(),
-) {
+function renderThemeToggle(theme: ThemeMode = "light", toggle = vi.fn(), selectTheme = vi.fn()) {
   mockedUseTheme.mockReturnValue({
     theme,
     toggle,
@@ -40,11 +36,7 @@ function renderThemeToggle(
   return { ...view, toggle, selectTheme };
 }
 
-function renderCompactThemeToggle(
-  theme: ThemeMode = "light",
-  toggle = vi.fn(),
-  selectTheme = vi.fn(),
-) {
+function renderCompactThemeToggle(theme: ThemeMode = "light", toggle = vi.fn(), selectTheme = vi.fn()) {
   mockedUseTheme.mockReturnValue({
     theme,
     toggle,
@@ -86,65 +78,41 @@ describe("TestFromAC_ThemeToggle_1540", () => {
   it("AC-2: clicking toggle button invokes useTheme().toggle exactly once", () => {
     const { container, toggle } = renderThemeToggle("light");
 
-    fireEvent.click(
-      requirePresent(container.querySelector('[data-testid="theme-toggle"]')),
-    );
+    fireEvent.click(requirePresent(container.querySelector('[data-testid="theme-toggle"]')));
 
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
   it("AC-3: button accessible name or content differs across light, dark, and auto theme states", () => {
-    const descriptors = [
-      getButtonDescriptor("light"),
-      getButtonDescriptor("dark"),
-      getButtonDescriptor("auto"),
-    ];
+    const descriptors = [getButtonDescriptor("light"), getButtonDescriptor("dark"), getButtonDescriptor("auto")];
 
     expect(new Set(descriptors).size).toBe(3);
   });
 
   it("compact mode renders a centered icon trigger", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = container.querySelector<HTMLElement>(
-      '[data-testid="theme-toggle"]',
-    );
+    const button = container.querySelector<HTMLElement>('[data-testid="theme-toggle"]');
 
     expect(requirePresent(button).tagName.toLowerCase()).toBe("button");
-    expect(button).toHaveAttribute(
-      "aria-label",
-      "Theme mode: auto (OS); open theme menu",
-    );
-    expect(button).toHaveAttribute(
-      "title",
-      "Theme mode: auto (OS); open theme menu",
-    );
+    expect(button).toHaveAttribute("aria-label", "Theme mode: auto (OS); open theme menu");
+    expect(button).toHaveAttribute("title", "Theme mode: auto (OS); open theme menu");
     expect(button).toHaveAttribute("aria-haspopup", "menu");
     expect(button).toHaveAttribute("aria-expanded", "false");
     expect(button?.className).toContain("size-8");
     expect(button?.querySelector("p-icon")).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="theme-mode-indicator"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-testid="theme-mode-indicator"]')).toBeNull();
   });
 
   it("compact mode opens a mode menu and selects an explicit theme", () => {
     const { container, toggle, selectTheme } = renderCompactThemeToggle("auto");
-    const button = requirePresent(
-      container.querySelector('[data-testid="theme-toggle"]'),
-    );
+    const button = requirePresent(container.querySelector('[data-testid="theme-toggle"]'));
 
     fireEvent.click(button);
 
     expect(toggle).not.toHaveBeenCalled();
     expect(button).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("theme-mode-menu")).toHaveAttribute(
-      "role",
-      "menu",
-    );
-    expect(screen.getByTestId("theme-mode-option-auto")).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByTestId("theme-mode-menu")).toHaveAttribute("role", "menu");
+    expect(screen.getByTestId("theme-mode-option-auto")).toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(screen.getByTestId("theme-mode-option-dark"));
 
@@ -154,9 +122,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode does not restore trigger focus after pointer option selection", () => {
     const { container, selectTheme } = renderCompactThemeToggle("auto");
-    const button = container.querySelector(
-      '[data-testid="theme-toggle"]',
-    ) as HTMLElement;
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement;
     const focusSpy = vi.spyOn(button, "focus");
 
     fireEvent.click(button);
@@ -171,9 +137,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode restores trigger focus after keyboard option activation", () => {
     const { container, selectTheme } = renderCompactThemeToggle("auto");
-    const button = container.querySelector(
-      '[data-testid="theme-toggle"]',
-    ) as HTMLElement;
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement;
     const focusSpy = vi.spyOn(button, "focus");
 
     fireEvent.click(button);
@@ -188,9 +152,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode closes the menu on Escape and restores trigger focus", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = container.querySelector(
-      '[data-testid="theme-toggle"]',
-    ) as HTMLElement;
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement;
     const focusSpy = vi.spyOn(button, "focus");
 
     fireEvent.click(button);
@@ -204,9 +166,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode closes the menu when a pointer starts outside it", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = requirePresent(
-      container.querySelector('[data-testid="theme-toggle"]'),
-    );
+    const button = requirePresent(container.querySelector('[data-testid="theme-toggle"]'));
 
     fireEvent.click(button);
     fireEvent.pointerDown(document.body);
@@ -216,9 +176,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode keeps the menu open when a pointer starts inside it", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = requirePresent(
-      container.querySelector('[data-testid="theme-toggle"]'),
-    );
+    const button = requirePresent(container.querySelector('[data-testid="theme-toggle"]'));
 
     fireEvent.click(button);
     fireEvent.pointerDown(screen.getByTestId("theme-mode-menu"));
@@ -228,9 +186,7 @@ describe("TestFromAC_ThemeToggle_1540", () => {
 
   it("compact mode closes an open menu when the trigger is clicked again", () => {
     const { container } = renderCompactThemeToggle("auto");
-    const button = requirePresent(
-      container.querySelector('[data-testid="theme-toggle"]'),
-    );
+    const button = requirePresent(container.querySelector('[data-testid="theme-toggle"]'));
 
     fireEvent.click(button);
     fireEvent.click(button);

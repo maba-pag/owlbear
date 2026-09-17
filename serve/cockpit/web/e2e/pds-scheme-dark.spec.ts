@@ -7,10 +7,7 @@
  */
 import { expect, type Page, test } from "@playwright/test";
 import { EMPTY_WORK_ITEM_PORTFOLIO } from "./support/api-fixtures";
-import {
-  trackPageErrors,
-  waitForWorkspaceWithoutPageErrors,
-} from "./support/page-errors";
+import { trackPageErrors, waitForWorkspaceWithoutPageErrors } from "./support/page-errors";
 
 function requirePresent<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) {
@@ -21,22 +18,8 @@ function requirePresent<T>(value: T | null | undefined): T {
 
 // ─── Minimal API fixtures ─────────────────────────────────────────────────────
 
-const STATUSES = [
-  "research",
-  "backlog",
-  "todo",
-  "in-progress",
-  "review",
-  "docs",
-  "done",
-];
-const PRIORITIES = [
-  "critical",
-  "needed",
-  "important",
-  "nice-to-have",
-  "someday",
-];
+const STATUSES = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"];
+const PRIORITIES = ["critical", "needed", "important", "nice-to-have", "someday"];
 
 const BOARD = {
   statuses: STATUSES.map((name) => ({ name })),
@@ -75,9 +58,7 @@ const TASKS = {
 async function stubApis(page: Page) {
   const pageErrors = trackPageErrors(page);
 
-  await page.route("/api/**", (route) =>
-    route.fulfill({ status: 200, json: {} }),
-  );
+  await page.route("/api/**", (route) => route.fulfill({ status: 200, json: {} }));
 
   await page.route("/api/events", (route) =>
     route.fulfill({
@@ -93,20 +74,14 @@ async function stubApis(page: Page) {
 
   await page.route("/api/tasks", (route) => route.fulfill({ json: TASKS }));
   await page.route("/api/board", (route) => route.fulfill({ json: BOARD }));
-  await page.route("/api/work-items", (route) =>
-    route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }),
-  );
+  await page.route("/api/work-items", (route) => route.fulfill({ json: EMPTY_WORK_ITEM_PORTFOLIO }));
 
   return pageErrors;
 }
 
-async function getRenderedPButtonTextColor(
-  page: Page,
-  mode: "dark" | "light",
-): Promise<string> {
+async function getRenderedPButtonTextColor(page: Page, mode: "dark" | "light"): Promise<string> {
   await page.evaluate(() => {
-    if (document.querySelector('p-button[data-testid="pds-color-probe"]'))
-      return;
+    if (document.querySelector('p-button[data-testid="pds-color-probe"]')) return;
 
     const probe = document.createElement("p-button");
     probe.dataset.testid = "pds-color-probe";
@@ -116,18 +91,16 @@ async function getRenderedPButtonTextColor(
 
   await page.waitForFunction(
     () => {
-      return Array.from(
-        document.querySelectorAll('p-button[data-testid="pds-color-probe"]'),
-      ).some((host) => host.shadowRoot?.querySelector("button") !== null);
+      return Array.from(document.querySelectorAll('p-button[data-testid="pds-color-probe"]')).some(
+        (host) => host.shadowRoot?.querySelector("button") !== null,
+      );
     },
     undefined,
     { timeout: 8_000 },
   );
 
   const color = await page.evaluate(() => {
-    for (const host of Array.from(
-      document.querySelectorAll('p-button[data-testid="pds-color-probe"]'),
-    )) {
+    for (const host of Array.from(document.querySelectorAll('p-button[data-testid="pds-color-probe"]'))) {
       const button = host.shadowRoot?.querySelector("button");
       if (button) {
         return window.getComputedStyle(button).color;
@@ -162,9 +135,7 @@ test.describe("TestFromAC_PdsSchemeClassE2E_1555", () => {
    *     rule → computed colorScheme falls back to browser default ('normal' or 'light dark')
    *   - FAILS if .scheme-dark class is not set by theme-bootstrap.js
    */
-  test("AC-5: computed color-scheme on <html> is dark when .scheme-dark class is active", async ({
-    page,
-  }) => {
+  test("AC-5: computed color-scheme on <html> is dark when .scheme-dark class is active", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("owlbear-theme", "dark");
     });
@@ -174,13 +145,10 @@ test.describe("TestFromAC_PdsSchemeClassE2E_1555", () => {
 
     const result = await page.evaluate(() => ({
       hasSchemeDark: document.documentElement.classList.contains("scheme-dark"),
-      computedColorScheme: window.getComputedStyle(document.documentElement)
-        .colorScheme,
+      computedColorScheme: window.getComputedStyle(document.documentElement).colorScheme,
     }));
 
-    expect(result.hasSchemeDark, "html must carry .scheme-dark class").toBe(
-      true,
-    );
+    expect(result.hasSchemeDark, "html must carry .scheme-dark class").toBe(true);
 
     expect(
       result.computedColorScheme,
@@ -221,9 +189,7 @@ test.describe("TestFromAC_PdsSchemeClassE2E_1555", () => {
    *   These values are set by color-scheme.css polyfill when light-dark() is unsupported,
    *   or resolved by the browser's native light-dark() function when supported.
    */
-  test("AC-5: p-button shadow DOM inner button has distinct computed text color in dark vs light", async ({
-    page,
-  }) => {
+  test("AC-5: p-button shadow DOM inner button has distinct computed text color in dark vs light", async ({ page }) => {
     // ── Step 1: capture dark-mode computed color ────────────────────────────
     await page.addInitScript(() => {
       localStorage.setItem("owlbear-theme", "dark");

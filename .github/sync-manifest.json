@@ -2,11 +2,7 @@
   "scopes": {
     "share": ["share"],
     "browser": ["serve/browser", "serve/browser-mcp"],
-    "delivery": [
-      "serve/delivery",
-      "serve/delivery-mcp",
-      "serve/delivery-github"
-    ],
+    "delivery": ["serve/delivery", "serve/delivery-mcp", "serve/delivery-github"],
     "knowledge": ["serve/knowledge", "serve/knowledge-mcp"],
     "cockpit": ["serve/cockpit"],
     "tools": ["serve/tools"],
@@ -34,15 +30,7 @@
   },
   "scope_groups": {
     "serve": {
-      "scopes": [
-        "browser",
-        "delivery",
-        "knowledge",
-        "cockpit",
-        "tools",
-        "memory",
-        "web-content"
-      ],
+      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory", "web-content"],
       "paths": ["serve/README.md"]
     }
   },
@@ -57,7 +45,6 @@
     "conftest.py",
     "package-lock.json",
     "package.json",
-    "pnpm-lock.yaml",
     "biome.json",
     "store",
     "tests",

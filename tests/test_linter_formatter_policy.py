@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
+import pytest
 import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -58,12 +62,12 @@ _P08_JSON_SCOPE_SAMPLES = (
     ("serve/cockpit/web/src/App.tsx", False),
 )
 _BIOME_DESCRIPTORS = {
-    "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.(js|mjs)$", [".js", ".mjs"]),
-    "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.ts$", [".ts"]),
-    "JSX_BIOME": (r"^serve/cockpit/web/(src|e2e)/.*\.tsx$", [".tsx"]),
-    "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", [".css"]),
+    "JAVASCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.(js|mjs)$", [".js", ".mjs"]),
+    "TYPESCRIPT_BIOME": (r"^serve/cockpit/web/(?!public/).*\.ts$", None),
+    "JSX_BIOME": (r"^serve/cockpit/web/(?!public/).*\.tsx$", [".tsx"]),
+    "CSS_BIOME": (r"^serve/cockpit/web/src/.*\.css$", None),
     "JSON_BIOME": (
-        r"(^|/).*\.(json|jsonc)$",
+        None,
         [".json", ".jsonc"],
     ),
 }
@@ -99,8 +103,9 @@ _M09_RESEARCH_MARKDOWN_PATHS = (
 )
 _M09_SOURCES_MARKDOWN_PATH = ".owlbear/sources/overview.md"
 _X04_FORMATTERS = {
-    "[json]": "vscode.json-language-features",
-    "[jsonc]": "vscode.json-language-features",
+    "[json]": "biomejs.biome",
+    "[jsonc]": "biomejs.biome",
+    "[javascript][javascriptreact][typescript][typescriptreact][css]": "biomejs.biome",
     "[markdown]": "DavidAnson.vscode-markdownlint",
     "[powershell]": "ms-vscode.powershell",
     "[python]": "charliermarsh.ruff",
@@ -434,10 +439,7 @@ def test_biome_replaces_frontend_and_json_scanners() -> None:
     assert "TYPESCRIPT_BIOME" in enabled
     assert "CSS_BIOME" in enabled
     assert "JSON_BIOME" in enabled
-    assert megalinter.get("JSON_BIOME_FILTER_REGEX_INCLUDE") == _P08_JSON_SCOPE
     assert megalinter.get("JSON_BIOME_FILE_EXTENSIONS") == [".json", ".jsonc"]
-    assert megalinter.get("JSON_BIOME_CONFIG_FILE") == "biome.json"
-    assert megalinter.get("JSON_BIOME_RULES_PATH") == "."
 
     root_package = json.loads((_ROOT / "package.json").read_text(encoding="utf-8"))
     assert isinstance(root_package, dict)
@@ -460,12 +462,12 @@ def test_biome_replaces_frontend_and_json_scanners() -> None:
 
     precommit_hooks = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
     biome_hook = precommit_hooks["biome-frontend-check"]
-    assert biome_hook.get("pass_filenames") is False
+    assert biome_hook.get("pass_filenames", True) is True
     assert "stages" not in biome_hook
-    assert "run lint:biome" in biome_hook.get("entry", "")
+    assert "check --write" in biome_hook.get("entry", "")
 
     workflow = (_ROOT / ".github/workflows/cockpit-verification.yml").read_text(encoding="utf-8")
-    assert "npm run lint:biome\n" in workflow
+    assert "npm run lint:biome:ci\n" in workflow
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
@@ -487,9 +489,101 @@ def test_biome_json_scope_excludes_generated_and_machine_managed_paths() -> None
         "!**/.owlbear/memory",
         "!**/.owlbear/research",
         "!**/.owlbear/sources",
-        "!**/store/audit/*.db",
-        "!**/store/knowledge/*.db",
+        "!**/.owlbear/legacy",
+        "!**/.owlbear/target",
+        "!**/scratch",
+        "!**/worktrees",
     }.issubset(includes)
+
+
+@pytest.fixture
+def biome_workspace(tmp_path: Path) -> Path:
+    package = Path("serve/cockpit/web")
+    dependencies = _ROOT / package / "node_modules"
+    if shutil.which("node") is None or not (dependencies / "@biomejs/biome/bin/biome").exists():
+        pytest.skip("Cockpit Node dependencies are required for Biome integration checks")
+    for relative in (
+        Path("biome.json"),
+        Path(".editorconfig"),
+        Path(".gitignore"),
+        Path(".owlbear/.gitignore"),
+        package / "scripts/run-biome-check.mjs",
+        package / "plugins/pds-component-wrappers.grit",
+    ):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(_ROOT / relative, destination)
+    (tmp_path / package / "node_modules").symlink_to(dependencies, target_is_directory=True)
+    hook = _read_precommit_local_hooks(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))["biome-frontend-check"]
+    (tmp_path / ".pre-commit-config.yaml").write_text(
+        yaml.safe_dump({"repos": [{"repo": "local", "hooks": [hook]}]}), encoding="utf-8"
+    )
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    return tmp_path
+
+
+def _biome_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        ["node", str(root / "serve/cockpit/web/scripts/run-biome-check.mjs"), *arguments],  # noqa: S607
+        cwd=root / "serve/cockpit/web",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.cockpit
+def test_biome_applies_width_and_excludes_generated_json(biome_workspace: Path) -> None:
+    source = biome_workspace / "serve/cockpit/web/vite.config.ts"
+    expected = "export const settings = { alpha: 123456789, beta: 123456789, gamma: 123456789, delta: 123456789 };\n"
+    source.write_text(expected.replace(" = ", "="), encoding="utf-8")
+    for relative in ("nested/build/broken.json", "scratch/broken.json", ".owlbear/research/broken.json"):
+        ignored = biome_workspace / relative
+        ignored.parent.mkdir(parents=True, exist_ok=True)
+        ignored.write_text("{broken", encoding="utf-8")
+    result = _biome_probe(biome_workspace, "format", "--write", ".")
+    assert result.returncode == 0, result.stderr
+    assert source.read_text(encoding="utf-8") == expected
+    assert _biome_probe(biome_workspace, "ci", ".").returncode == 0
+    source.write_text("export const broken = ;", encoding="utf-8")
+    assert _biome_probe(biome_workspace, "check", ".").returncode == 1
+
+
+@pytest.mark.cockpit
+def test_biome_staged_checks_handle_empty_ignored_and_invalid_files(biome_workspace: Path) -> None:
+    arguments = ("check", "--staged", "--no-errors-on-unmatched")
+    assert _biome_probe(biome_workspace, *arguments).returncode == 0
+    lockfile = biome_workspace / "serve/cockpit/web/package-lock.json"
+    lockfile.write_text("{}\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(lockfile)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    assert _biome_probe(biome_workspace, *arguments).returncode == 0
+    source = biome_workspace / "serve/cockpit/web/playwright.config.ts"
+    source.write_text("export const broken = ;", encoding="utf-8")
+    subprocess.run(["git", "add", str(source)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    assert _biome_probe(biome_workspace, *arguments).returncode == 1
+    assert source.read_text(encoding="utf-8") == "export const broken = ;"
+
+
+@pytest.mark.cockpit
+def test_biome_precommit_fixes_only_selected_files(biome_workspace: Path) -> None:
+    selected = "serve/cockpit/web/vite.config.ts"
+    other = "serve/cockpit/web/playwright.config.ts"
+    for relative in (selected, other):
+        (biome_workspace / relative).write_text("export const value=1;\n", encoding="utf-8")
+    subprocess.run(["git", "add", selected, other], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    command = [sys.executable, "-m", "pre_commit", "run", "biome-frontend-check"]
+    result = subprocess.run(  # noqa: S603
+        [*command, "--files", selected], cwd=biome_workspace, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (biome_workspace / selected).read_text(encoding="utf-8") == "export const value = 1;\n"
+    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value=1;\n"
+    subprocess.run([*command, "--all-files"], cwd=biome_workspace, capture_output=True, check=False)  # noqa: S603
+    result = subprocess.run(  # noqa: S603
+        [*command, "--all-files"], cwd=biome_workspace, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (biome_workspace / other).read_text(encoding="utf-8") == "export const value = 1;\n"
 
 
 def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
@@ -502,8 +596,6 @@ def test_megalinter_biome_descriptors_match_owned_file_scopes() -> None:
         assert megalinter.get(f"{descriptor}_CLI_LINT_MODE") == "list_of_files"
         assert megalinter.get(f"{descriptor}_FILTER_REGEX_INCLUDE") == scope
         assert megalinter.get(f"{descriptor}_FILE_EXTENSIONS") == extensions
-        assert megalinter.get(f"{descriptor}_CONFIG_FILE") == "biome.json"
-        assert megalinter.get(f"{descriptor}_RULES_PATH") == "."
 
 
 def test_editorconfig_python_indentation_delegation_is_shared() -> None:

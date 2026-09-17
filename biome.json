@@ -7,65 +7,41 @@
   },
   "files": {
     "includes": [
-      "serve/cockpit/web/src/**/*.js",
-      "serve/cockpit/web/src/**/*.mjs",
-      "serve/cockpit/web/src/**/*.ts",
-      "serve/cockpit/web/src/**/*.tsx",
-      "serve/cockpit/web/e2e/**/*.js",
-      "serve/cockpit/web/e2e/**/*.mjs",
-      "serve/cockpit/web/e2e/**/*.ts",
-      "serve/cockpit/web/e2e/**/*.tsx",
+      "serve/cockpit/web/**/*.js",
+      "serve/cockpit/web/**/*.mjs",
+      "serve/cockpit/web/**/*.ts",
+      "serve/cockpit/web/**/*.tsx",
       "serve/cockpit/web/src/**/*.css",
       "**/*.json",
       "**/*.jsonc",
+      "!serve/cockpit/web/public",
+      "!**/scratch",
+      "!**/worktrees",
       "!**/.owlbear/delivery/packages",
       "!**/.owlbear/delivery/runtime",
+      "!**/.owlbear/legacy",
       "!**/.owlbear/memory",
       "!**/.owlbear/research",
       "!**/.owlbear/sources",
-      "!**/store/audit/*.db",
-      "!**/store/knowledge/*.db"
+      "!**/.owlbear/target"
     ]
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended",
-      "suspicious": {
-        "noEmptyBlock": "error",
-        "noUnknownAtRules": {
-          "level": "error",
-          "options": {
-            "ignore": [
-              "theme",
-              "utility",
-              "apply",
-              "source",
-              "reference",
-              "variant",
-              "custom-variant",
-              "plugin"
-            ]
-          }
-        }
-      },
-      "nursery": {
-        "noDuplicateSelectors": "error"
-      }
+      "preset": "recommended"
     }
   },
   "formatter": {
     "enabled": true,
-    "useEditorconfig": true
+    "useEditorconfig": true,
+    "lineWidth": 120
   },
   "assist": {
     "enabled": true
   },
   "plugins": ["./serve/cockpit/web/plugins/pds-component-wrappers.grit"],
   "css": {
-    "linter": {
-      "enabled": true
-    },
     "parser": {
       "tailwindDirectives": true
     }

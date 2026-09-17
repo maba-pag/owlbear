@@ -22,8 +22,7 @@ vi.mock("../App", () => ({
 
 // ─── Fixture ──────────────────────────────────────────────────────────────────
 
-const SIMULATED_CDN_URL =
-  "https://cdn.ui.porsche.com/porsche-design-system/components/v4.1.0";
+const SIMULATED_CDN_URL = "https://cdn.ui.porsche.com/porsche-design-system/components/v4.1.0";
 
 describe("PdsRuntimeTrapBehavior", () => {
   beforeEach(() => {
@@ -33,9 +32,7 @@ describe("PdsRuntimeTrapBehavior", () => {
     // Reset prior namespace state without breaking delayed PDS polyfill callbacks.
     (document as Record<string, unknown>).porscheDesignSystem = {};
     // Ensure customElements.whenDefined resolves immediately (no real PDS loading)
-    vi.spyOn(customElements, "whenDefined").mockResolvedValue(
-      undefined as unknown as CustomElementConstructor,
-    );
+    vi.spyOn(customElements, "whenDefined").mockResolvedValue(undefined as unknown as CustomElementConstructor);
   });
 
   afterEach(() => {
@@ -49,9 +46,7 @@ describe("PdsRuntimeTrapBehavior", () => {
     // Arrange: mocked load() simulates PDS direct cdn assignment
     const pdsJs = await import("@porsche-design-system/components-js");
     vi.mocked(pdsJs.load).mockImplementation((): void => {
-      const ns = (document as Record<string, unknown>).porscheDesignSystem as
-        | Record<string, unknown>
-        | undefined;
+      const ns = (document as Record<string, unknown>).porscheDesignSystem as Record<string, unknown> | undefined;
       if (!ns) return;
       ns.cdn = { url: SIMULATED_CDN_URL, prefixes: [] };
     });
@@ -62,18 +57,11 @@ describe("PdsRuntimeTrapBehavior", () => {
     await new Promise<void>((res) => setTimeout(res, 50));
 
     // Assert: cdn must be an accessor property (getter installed by Object.defineProperty)
-    const pds = (document as Record<string, unknown>)
-      .porscheDesignSystem as Record<string, unknown>;
+    const pds = (document as Record<string, unknown>).porscheDesignSystem as Record<string, unknown>;
     expect(pds).toBeDefined();
     const desc = Object.getOwnPropertyDescriptor(pds, "cdn");
-    expect(
-      desc?.get,
-      "cdn must have a getter (Object.defineProperty accessor trap)",
-    ).toBeDefined();
-    expect(
-      desc?.writable,
-      "cdn must not be a plain writable data property",
-    ).toBeUndefined();
+    expect(desc?.get, "cdn must have a getter (Object.defineProperty accessor trap)").toBeDefined();
+    expect(desc?.writable, "cdn must not be a plain writable data property").toBeUndefined();
   });
 
   it("cdn.url returns window.location.origin immediately after PDS load() cdn assignment", async () => {
@@ -82,9 +70,7 @@ describe("PdsRuntimeTrapBehavior", () => {
 
     const pdsJs = await import("@porsche-design-system/components-js");
     vi.mocked(pdsJs.load).mockImplementation((): void => {
-      const pds = (document as Record<string, unknown>).porscheDesignSystem as
-        | Record<string, unknown>
-        | undefined;
+      const pds = (document as Record<string, unknown>).porscheDesignSystem as Record<string, unknown> | undefined;
       if (!pds) return;
       pds.cdn = { url: SIMULATED_CDN_URL, prefixes: [] };
       const cdn = pds.cdn as Record<string, string>;
@@ -105,12 +91,8 @@ describe("PdsRuntimeTrapBehavior", () => {
 
     const pdsJs = await import("@porsche-design-system/components-js");
     vi.mocked(pdsJs.load).mockImplementation((): void => {
-      const pds = (document as Record<string, unknown>).porscheDesignSystem as
-        | Record<string, unknown>
-        | undefined;
-      const desc = pds
-        ? Object.getOwnPropertyDescriptor(pds, "cdn")
-        : undefined;
+      const pds = (document as Record<string, unknown>).porscheDesignSystem as Record<string, unknown> | undefined;
+      const desc = pds ? Object.getOwnPropertyDescriptor(pds, "cdn") : undefined;
       trapPresentAtLoadTime = typeof desc?.get === "function";
     });
 
@@ -124,9 +106,7 @@ describe("PdsRuntimeTrapBehavior", () => {
 
   it("renders a visible fallback when required PDS elements never register", async () => {
     vi.useFakeTimers();
-    vi.mocked(customElements.whenDefined).mockImplementation(
-      () => new Promise<CustomElementConstructor>(() => {}),
-    );
+    vi.mocked(customElements.whenDefined).mockImplementation(() => new Promise<CustomElementConstructor>(() => {}));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     await import("../main");
@@ -136,9 +116,7 @@ describe("PdsRuntimeTrapBehavior", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const fallback = document.querySelector<HTMLElement>(
-      '#root [role="alert"]',
-    );
+    const fallback = document.querySelector<HTMLElement>('#root [role="alert"]');
     expect(fallback).not.toBeNull();
     expect(fallback).toHaveTextContent("OwlBear Cockpit could not load");
     expect(fallback).toHaveTextContent("Reload page");

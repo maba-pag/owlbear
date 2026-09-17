@@ -10,21 +10,12 @@ const INDEX_MJS_PATH = join(
   "index.mjs",
 );
 
-const OUTPUT_DIR = globalThis.process.env.PDS_OUTPUT_DIR
-  ?? join(globalThis.process.cwd(), "public", "porsche-design-system");
+const OUTPUT_DIR =
+  globalThis.process.env.PDS_OUTPUT_DIR ?? join(globalThis.process.cwd(), "public", "porsche-design-system");
 
-const COMPONENTS_DIR = join(
-  OUTPUT_DIR,
-  "components",
-);
-const ICONS_DIR = join(
-  OUTPUT_DIR,
-  "icons",
-);
-const CREST_DIR = join(
-  OUTPUT_DIR,
-  "crest",
-);
+const COMPONENTS_DIR = join(OUTPUT_DIR, "components");
+const ICONS_DIR = join(OUTPUT_DIR, "icons");
+const CREST_DIR = join(OUTPUT_DIR, "crest");
 
 const CREST_FILES = [
   "porsche-crest.d76137c@1x.png",
@@ -73,8 +64,7 @@ function parseComponentHashes(coreSource) {
 
   const hashes = new Map();
   const pairRegex = /(?:"([a-z0-9-]+)"|([a-z0-9-]+))\s*:\s*"([a-f0-9]+)"/gi;
-  let pair;
-  while ((pair = pairRegex.exec(mapMatch[1])) !== null) {
+  for (const pair of mapMatch[1].matchAll(pairRegex)) {
     const name = pair[1] ?? pair[2];
     const hash = pair[3];
     hashes.set(name, hash);
@@ -89,10 +79,8 @@ function parseComponentHashes(coreSource) {
 
 function parseIconFilenameMap(iconSource) {
   const entries = new Map();
-  const iconRegex =
-    /(?:"([a-z0-9-]+)"|([a-z0-9-]+))\s*:\s*"([a-z0-9-]+\.[a-f0-9]+\.svg)"/gi;
-  let iconMatch;
-  while ((iconMatch = iconRegex.exec(iconSource)) !== null) {
+  const iconRegex = /(?:"([a-z0-9-]+)"|([a-z0-9-]+))\s*:\s*"([a-z0-9-]+\.[a-f0-9]+\.svg)"/gi;
+  for (const iconMatch of iconSource.matchAll(iconRegex)) {
     const name = iconMatch[1] ?? iconMatch[2];
     const filename = iconMatch[3];
     entries.set(name, filename);
@@ -161,8 +149,8 @@ async function main() {
 
     const syncedComponentCount = componentHashes.size + 1;
     console.log(
-      `[sync-pds] synced ${syncedComponentCount} component files, `
-        + `${iconMap.size} icons, and ${CREST_FILES.length} crest assets`,
+      `[sync-pds] synced ${syncedComponentCount} component files, ` +
+        `${iconMap.size} icons, and ${CREST_FILES.length} crest assets`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

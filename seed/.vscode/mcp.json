@@ -3,50 +3,22 @@
     "owlbear-delivery": {
       "type": "stdio",
       "command": "uv",
-      "args": [
-        "--project",
-        "{{owlbear_rel_path}}",
-        "run",
-        "python",
-        "-m",
-        "owlbear_delivery_mcp"
-      ]
+      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_delivery_mcp"]
     },
     "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",
-      "args": [
-        "--project",
-        "{{owlbear_rel_path}}",
-        "run",
-        "python",
-        "-m",
-        "owlbear_knowledge_mcp"
-      ]
+      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_knowledge_mcp"]
     },
     "owlbear-memory": {
       "type": "stdio",
       "command": "uv",
-      "args": [
-        "--project",
-        "{{owlbear_rel_path}}",
-        "run",
-        "python",
-        "-m",
-        "owlbear_memory_mcp"
-      ]
+      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_memory_mcp"]
     },
     "owlbear-browser": {
       "type": "stdio",
       "command": "uv",
-      "args": [
-        "--project",
-        "{{owlbear_rel_path}}",
-        "run",
-        "python",
-        "-m",
-        "owlbear_browser_mcp"
-      ],
+      "args": ["--project", "{{owlbear_rel_path}}", "run", "python", "-m", "owlbear_browser_mcp"],
       "env": {
         "BROWSER_ALLOWED_DOMAINS": "*"
       }

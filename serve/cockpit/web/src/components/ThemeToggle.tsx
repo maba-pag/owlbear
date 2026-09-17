@@ -34,10 +34,7 @@ const THEME_OPTIONS: Theme[] = ["light", "dark", "auto"];
 const MENU_WIDTH = 196;
 const ESTIMATED_MENU_HEIGHT = 128;
 
-function getMenuPosition(
-  trigger: HTMLElement,
-  menuHeight: number,
-): { top: string; left: string } {
+function getMenuPosition(trigger: HTMLElement, menuHeight: number): { top: string; left: string } {
   return getRailPanelPosition(trigger, MENU_WIDTH, menuHeight);
 }
 
@@ -66,10 +63,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
         return;
       }
 
-      if (
-        triggerRef.current?.contains(target) ||
-        menuRef.current?.contains(target)
-      ) {
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) {
         return;
       }
 
@@ -78,12 +72,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
 
     const updatePosition = () => {
       if (triggerRef.current) {
-        setMenuPosition(
-          getMenuPosition(
-            triggerRef.current,
-            menuRef.current?.offsetHeight || ESTIMATED_MENU_HEIGHT,
-          ),
-        );
+        setMenuPosition(getMenuPosition(triggerRef.current, menuRef.current?.offsetHeight || ESTIMATED_MENU_HEIGHT));
       }
     };
 
@@ -102,9 +91,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
 
   function openMenu() {
     if (triggerRef.current) {
-      setMenuPosition(
-        getMenuPosition(triggerRef.current, ESTIMATED_MENU_HEIGHT),
-      );
+      setMenuPosition(getMenuPosition(triggerRef.current, ESTIMATED_MENU_HEIGHT));
     }
     setIsMenuOpen(true);
   }
@@ -170,14 +157,9 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
                   "hover:bg-frosted-soft focus-visible:outline focus-visible:outline-2",
                   "focus-visible:outline-offset-2 focus-visible:outline-[var(--p-color-state-focus)]",
                 ].join(" ")}
-                onClick={(event: ReactMouseEvent<HTMLButtonElement>) =>
-                  chooseTheme(option, event.detail === 0)
-                }
+                onClick={(event: ReactMouseEvent<HTMLButtonElement>) => chooseTheme(option, event.detail === 0)}
               >
-                <span
-                  className="inline-flex size-4 shrink-0 items-center justify-center"
-                  aria-hidden="true"
-                >
+                <span className="inline-flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
                   {isSelected ? <PIcon name="check" size="x-small" /> : null}
                 </span>
                 <span>{optionLabel.text}</span>

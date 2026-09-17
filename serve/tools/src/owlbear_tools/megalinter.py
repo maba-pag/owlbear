@@ -291,6 +291,8 @@ def run_megalint(fix_mode: FixMode) -> int:
         if fix_mode is FixMode.NONE:
             command.extend(["-e", "APPLY_FIXES=none"])
         if fix_mode is FixMode.UNSAFE:
+            for descriptor in ("CSS", "JAVASCRIPT", "JSON", "JSX", "TYPESCRIPT"):
+                command.extend(["-e", f"{descriptor}_BIOME_ARGUMENTS=--unsafe"])
             command.extend(
                 [
                     "-e",

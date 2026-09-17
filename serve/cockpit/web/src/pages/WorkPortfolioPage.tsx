@@ -31,21 +31,13 @@ import type {
 import CompletedHistoryWorkspace from "../components/CompletedHistoryWorkspace";
 import DesignWorkDetail from "../components/DesignWorkDetail";
 import DesignWorkSection from "../components/DesignWorkSection";
-import {
-  designCommand,
-  designWorkTitle,
-} from "../components/designWorkPresentation";
-import PortfolioOperatingSummary, {
-  PortfolioHeaderSummary,
-} from "../components/PortfolioOperatingSummary";
+import { designCommand, designWorkTitle } from "../components/designWorkPresentation";
+import PortfolioOperatingSummary, { PortfolioHeaderSummary } from "../components/PortfolioOperatingSummary";
 import WorkItemDetail from "../components/WorkItemDetail";
 import WorkPortfolioTable from "../components/WorkPortfolioTable";
 import { WorkspaceHeader } from "../components/WorkspaceHeader";
 import { WorkspaceViewCount } from "../components/WorkspaceViewHeader";
-import {
-  READINESS_CHECKS_LABELS,
-  READINESS_REASON_LABELS,
-} from "../components/workItemPresentation";
+import { READINESS_CHECKS_LABELS, READINESS_REASON_LABELS } from "../components/workItemPresentation";
 import {
   useAcceptanceReconciliation,
   useDesignWorkDetail,
@@ -62,12 +54,7 @@ type FocusDestination = "trigger" | "current-view" | "history-view";
 
 /** Delivery answers any item key with read-only evidence while a Change runtime is unavailable. */
 const UNAVAILABLE_ITEM_KEY = "publication";
-const PORTFOLIO_LOADING_SKELETON_KEYS = [
-  "one",
-  "two",
-  "three",
-  "four",
-] as const;
+const PORTFOLIO_LOADING_SKELETON_KEYS = ["one", "two", "three", "four"] as const;
 
 function unavailableChangePath(changeId: string): string {
   return `/delivery/${encodeURIComponent(changeId)}/${encodeURIComponent(UNAVAILABLE_ITEM_KEY)}`;
@@ -89,9 +76,7 @@ function isUnadmittedDesign(status: PortfolioChangeLifecycleStatus): boolean {
   return status.admission === "unadmitted" && status.stage === "design";
 }
 
-function isUnavailableAdmitted(
-  status: PortfolioChangeLifecycleStatus,
-): boolean {
+function isUnavailableAdmitted(status: PortfolioChangeLifecycleStatus): boolean {
   return status.admission === "admitted" && !status.actionable_runtime;
 }
 
@@ -153,8 +138,7 @@ interface FilterProps {
 
 /** Collapsed trigger plus active-filter chips; the expanded surface renders separately below. */
 function PortfolioFilterTools(props: FilterProps) {
-  const activeCount =
-    (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0);
+  const activeCount = (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   return (
     <>
@@ -217,8 +201,7 @@ function PortfolioFilterTools(props: FilterProps) {
 }
 
 function PortfolioFilterPanel(props: FilterProps) {
-  const activeCount =
-    (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0);
+  const activeCount = (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0);
   return (
     <div
       id="work-filters-panel"
@@ -235,9 +218,7 @@ function PortfolioFilterPanel(props: FilterProps) {
         label="Change"
         name="work-change-filter"
         value={props.changeFilter}
-        onChange={(event) =>
-          props.onChangeFilter(selectedValue(event as SelectValueEvent))
-        }
+        onChange={(event) => props.onChangeFilter(selectedValue(event as SelectValueEvent))}
       >
         <PSelectOption value="">All changes</PSelectOption>
         {props.changes.map((change) => (
@@ -252,11 +233,7 @@ function PortfolioFilterPanel(props: FilterProps) {
         label="Attention"
         name="work-needs-filter"
         value={props.needsFilter}
-        onChange={(event) =>
-          props.onNeedsFilter(
-            selectedValue(event as SelectValueEvent) as WorkItemNeed | "",
-          )
-        }
+        onChange={(event) => props.onNeedsFilter(selectedValue(event as SelectValueEvent) as WorkItemNeed | "")}
       >
         <PSelectOption value="">Any attention state</PSelectOption>
         <PSelectOption value="you">Needs you</PSelectOption>
@@ -296,20 +273,10 @@ function parseSelection(pathname: string): WorkItemIdentity | null {
 
 function isHistoryRoute(pathname: string): boolean {
   const parts = pathname.split("/").filter(Boolean);
-  return (
-    parts[0] === "delivery" &&
-    parts[1] === "history" &&
-    (parts.length === 2 || parts.length === 4)
-  );
+  return parts[0] === "delivery" && parts[1] === "history" && (parts.length === 2 || parts.length === 4);
 }
 
-function SelectedDesignDetail({
-  changeId,
-  onClose,
-}: {
-  changeId: string;
-  onClose: () => void;
-}) {
+function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose: () => void }) {
   const detail = useDesignWorkDetail(changeId);
   if (detail.data)
     return (
@@ -323,15 +290,9 @@ function SelectedDesignDetail({
             role="alert"
           >
             <span className="min-w-0 flex-1">
-              Showing the last successful Design detail; live updates paused.{" "}
-              {detail.error.message}
+              Showing the last successful Design detail; live updates paused. {detail.error.message}
             </span>
-            <PButton
-              type="button"
-              variant="secondary"
-              disabled={detail.isRefreshing}
-              onClick={detail.retry}
-            >
+            <PButton type="button" variant="secondary" disabled={detail.isRefreshing} onClick={detail.retry}>
               {detail.isRefreshing ? "Retrying Design..." : "Retry Design"}
             </PButton>
           </div>
@@ -373,8 +334,7 @@ function SelectedWorkItemDetail({
             role="alert"
           >
             <span className="min-w-0 flex-1">
-              Showing the last successful Work Item detail; live updates paused.{" "}
-              {selectedDetail.detail.error.message}
+              Showing the last successful Work Item detail; live updates paused. {selectedDetail.detail.error.message}
             </span>
             <PButton
               type="button"
@@ -382,9 +342,7 @@ function SelectedWorkItemDetail({
               disabled={selectedDetail.detail.isRefreshing}
               onClick={selectedDetail.retry}
             >
-              {selectedDetail.detail.isRefreshing
-                ? "Retrying Work Item..."
-                : "Retry Work Item"}
+              {selectedDetail.detail.isRefreshing ? "Retrying Work Item..." : "Retry Work Item"}
             </PButton>
           </div>
         ) : null}
@@ -403,14 +361,10 @@ function SelectedWorkItemDetail({
           publicationChecks={selectedDetail.publicationChecks}
           publicationChecksError={selectedDetail.publicationChecksError}
           publicationChecksStale={selectedDetail.publicationChecksStale}
-          isObservingPublicationChecks={
-            selectedDetail.isObservingPublicationChecks
-          }
+          isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
           onObservePublicationChecks={selectedDetail.observePublicationChecks}
           onObserveAcceptance={selectedDetail.observeAcceptance}
-          onAdoptExternalHeadAfterAcceptanceAttention={
-            selectedDetail.adoptExternalHeadAfterAcceptanceAttention
-          }
+          onAdoptExternalHeadAfterAcceptanceAttention={selectedDetail.adoptExternalHeadAfterAcceptanceAttention}
           onResolveAttention={selectedDetail.resolveAttention}
           onSupersedePublication={selectedDetail.supersedePublication}
           onSyncTarget={selectedDetail.syncTarget}
@@ -420,37 +374,19 @@ function SelectedWorkItemDetail({
           onResumeChange={selectedDetail.resumeChange}
           onAbandonChange={selectedDetail.abandonChange}
           onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
-          onDiscardAbandonedTargetSync={
-            selectedDetail.discardAbandonedTargetSync
-          }
+          onDiscardAbandonedTargetSync={selectedDetail.discardAbandonedTargetSync}
           onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
           onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
         />
       </>
     );
-  if (selectedDetail.detail.isLoading)
-    return <p role="status">Loading Work Item details...</p>;
-  return (
-    <EmptyDetail
-      error={selectedDetail.detail.error}
-      retry={selectedDetail.retry}
-      onClose={onClose}
-    />
-  );
+  if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>;
+  return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />;
 }
 
-function SelectedDetail(props: {
-  identity: WorkItemIdentity;
-  onChanged: () => void;
-  onClose: () => void;
-}) {
+function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void }) {
   if (props.identity.itemKey === "design") {
-    return (
-      <SelectedDesignDetail
-        changeId={props.identity.changeId}
-        onClose={props.onClose}
-      />
-    );
+    return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />;
   }
   return <SelectedWorkItemDetail {...props} />;
 }
@@ -466,14 +402,7 @@ function PortfolioWorkspace({
   emptyMessage?: string;
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
 }) {
-  return (
-    <WorkPortfolioTable
-      groups={groups}
-      selected={selected}
-      emptyMessage={emptyMessage}
-      onSelect={onSelect}
-    />
-  );
+  return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />;
 }
 
 function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
@@ -515,11 +444,7 @@ function healthNextStep(diagnostic: DeliveryHealthDiagnostic): string {
   ].join("");
 }
 
-function HealthDiagnosticDetails({
-  diagnostic,
-}: {
-  diagnostic: DeliveryHealthDiagnostic;
-}) {
+function HealthDiagnosticDetails({ diagnostic }: { diagnostic: DeliveryHealthDiagnostic }) {
   const heads = [
     ["Expected head", diagnostic.expected_head],
     ["Observed remote head", diagnostic.observed_head],
@@ -527,12 +452,8 @@ function HealthDiagnosticDetails({
   ].filter((entry): entry is [string, string] => entry[1] !== null);
   return (
     <>
-      <p className="mt-1 text-xs text-contrast-medium">
-        Next: {healthNextStep(diagnostic)}
-      </p>
-      <p className="mt-1 text-xs text-contrast-medium">
-        Resolution: {diagnostic.resolution.replace("-", " ")}
-      </p>
+      <p className="mt-1 text-xs text-contrast-medium">Next: {healthNextStep(diagnostic)}</p>
+      <p className="mt-1 text-xs text-contrast-medium">Resolution: {diagnostic.resolution.replace("-", " ")}</p>
       {heads.length > 0 || diagnostic.head_relation ? (
         <dl className="mt-static-sm grid gap-static-xs text-xs md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
           {heads.map(([label, value]) => (
@@ -565,28 +486,18 @@ function DeliveryIssuesSection({
   onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void;
 }) {
   const statusChangeIds = new Set(statuses.map((status) => status.change_id));
-  const uncoveredUnavailable = unavailable.filter(
-    (change) => !statusChangeIds.has(change.change_id),
-  );
+  const uncoveredUnavailable = unavailable.filter((change) => !statusChangeIds.has(change.change_id));
   const unavailableCount = statuses.length + uncoveredUnavailable.length;
   const additionalDiagnostics = diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.change_id === null ||
-      !statusChangeIds.has(diagnostic.change_id),
+    (diagnostic) => diagnostic.change_id === null || !statusChangeIds.has(diagnostic.change_id),
   );
   const diagnosticByChangeId = new Map<string, DeliveryHealthDiagnostic>();
   for (const diagnostic of diagnostics) {
-    if (
-      diagnostic.change_id &&
-      !diagnosticByChangeId.has(diagnostic.change_id)
-    ) {
+    if (diagnostic.change_id && !diagnosticByChangeId.has(diagnostic.change_id)) {
       diagnosticByChangeId.set(diagnostic.change_id, diagnostic);
     }
   }
-  const issueCount =
-    statuses.length +
-    uncoveredUnavailable.length +
-    additionalDiagnostics.length;
+  const issueCount = statuses.length + uncoveredUnavailable.length + additionalDiagnostics.length;
   if (issueCount === 0) return null;
   return (
     <section
@@ -597,22 +508,13 @@ function DeliveryIssuesSection({
       <div className="flex items-center gap-static-sm px-static-sm py-static-sm">
         <PIcon name="warning" size="small" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <h2
-            id="delivery-issues-heading"
-            className="m-0 text-sm font-semibold text-primary"
-          >
+          <h2 id="delivery-issues-heading" className="m-0 text-sm font-semibold text-primary">
             Delivery issues
           </h2>
           <p className="mt-1 text-xs text-contrast-medium">
             {unavailableCount > 0
-              ? [
-                  `${unavailableCount} Change${unavailableCount === 1 ? "" : "s"} unavailable to`,
-                  " Delivery.",
-                ].join("")
-              : [
-                  `${issueCount} Delivery issue${issueCount === 1 ? "" : "s"} need`,
-                  " review.",
-                ].join("")}
+              ? [`${unavailableCount} Change${unavailableCount === 1 ? "" : "s"} unavailable to`, " Delivery."].join("")
+              : [`${issueCount} Delivery issue${issueCount === 1 ? "" : "s"} need`, " review."].join("")}
           </p>
         </div>
         <span className="ml-auto rounded-full border border-warning px-static-xs py-1 text-xs tabular-nums">
@@ -636,41 +538,25 @@ function DeliveryIssuesSection({
               data-delivery-status={status.change_id}
             >
               <div className="flex flex-wrap items-baseline justify-between gap-static-xs">
-                <strong className="font-semibold text-primary">
-                  {status.change_id}
-                </strong>
+                <strong className="font-semibold text-primary">{status.change_id}</strong>
                 <span className="text-xs text-contrast-medium">
-                  {status.stage
-                    ? CHANGE_STAGE_LABELS[status.stage]
-                    : "Delivery"}
+                  {status.stage ? CHANGE_STAGE_LABELS[status.stage] : "Delivery"}
                 </span>
               </div>
-              <p className="mt-1 font-medium text-primary">
-                Quarantined state is hidden from dispatch.
-              </p>
+              <p className="mt-1 font-medium text-primary">Quarantined state is hidden from dispatch.</p>
               <p className="mt-1 text-xs text-contrast-medium">
                 Runtime unavailable
-                {status.diagnostic_detail
-                  ? `: ${status.diagnostic_detail}`
-                  : ""}
+                {status.diagnostic_detail ? `: ${status.diagnostic_detail}` : ""}
               </p>
               {diagnosticByChangeId.get(status.change_id) ? (
                 <>
                   <p className="mt-1 break-words font-mono text-2xs text-contrast-medium">
-                    <code>
-                      {diagnosticByChangeId.get(status.change_id)?.source}
-                    </code>
+                    <code>{diagnosticByChangeId.get(status.change_id)?.source}</code>
                     <span aria-hidden="true"> / </span>
-                    <code>
-                      {diagnosticByChangeId.get(status.change_id)?.code}
-                    </code>
+                    <code>{diagnosticByChangeId.get(status.change_id)?.code}</code>
                   </p>
                   <HealthDiagnosticDetails
-                    diagnostic={
-                      diagnosticByChangeId.get(
-                        status.change_id,
-                      ) as DeliveryHealthDiagnostic
-                    }
+                    diagnostic={diagnosticByChangeId.get(status.change_id) as DeliveryHealthDiagnostic}
                   />
                 </>
               ) : null}
@@ -705,12 +591,9 @@ function DeliveryIssuesSection({
                 </Link>
                 <span className="text-xs text-contrast-medium">Delivery</span>
               </div>
-              <p className="mt-1 font-medium text-primary">
-                {READINESS_REASON_LABELS[change.readiness.reason_code]}
-              </p>
+              <p className="mt-1 font-medium text-primary">{READINESS_REASON_LABELS[change.readiness.reason_code]}</p>
               <p className="mt-1 text-xs text-contrast-medium">
-                Read-only inspection only. Checks:{" "}
-                {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.
+                Read-only inspection only. Checks: {READINESS_CHECKS_LABELS[change.readiness.checks_state]}.
               </p>
               <p className="mt-1 break-words font-mono text-2xs text-contrast-medium">
                 <code>{change.change_id}</code>
@@ -730,9 +613,7 @@ function DeliveryIssuesSection({
               ].join("-")}
               className="min-w-0 bg-surface p-static-sm text-sm"
             >
-              <p className="font-medium text-primary">
-                Quarantined state is hidden from dispatch.
-              </p>
+              <p className="font-medium text-primary">Quarantined state is hidden from dispatch.</p>
               <dl
                 className={[
                   "mt-static-sm grid gap-static-xs text-xs",
@@ -740,9 +621,7 @@ function DeliveryIssuesSection({
                 ].join(" ")}
               >
                 <dt className="text-contrast-medium">Change</dt>
-                <dd className="break-words font-mono">
-                  {diagnostic.change_id ?? "Delivery portfolio"}
-                </dd>
+                <dd className="break-words font-mono">{diagnostic.change_id ?? "Delivery portfolio"}</dd>
                 <dt className="text-contrast-medium">Source / code</dt>
                 <dd className="break-words">
                   <code>{diagnostic.source}</code>
@@ -753,9 +632,7 @@ function DeliveryIssuesSection({
                 <dd className="break-words">
                   {diagnostic.detail}
                   {diagnostic.path ? (
-                    <span className="mt-1 block break-all font-mono text-2xs">
-                      {diagnostic.path}
-                    </span>
+                    <span className="mt-1 block break-all font-mono text-2xs">{diagnostic.path}</span>
                   ) : null}
                 </dd>
               </dl>
@@ -799,17 +676,10 @@ function EmptyDetail({
   if (error)
     return (
       <div className="grid gap-static-sm" role="alert">
-        <span>
-          This {subject} is unavailable. It may have completed or the link may
-          be invalid.
-        </span>
+        <span>This {subject} is unavailable. It may have completed or the link may be invalid.</span>
         <details>
-          <summary className="cursor-pointer text-xs font-semibold">
-            Technical evidence
-          </summary>
-          <p className="mt-static-xs break-words text-xs text-contrast-medium">
-            {error.message}
-          </p>
+          <summary className="cursor-pointer text-xs font-semibold">Technical evidence</summary>
+          <p className="mt-static-xs break-words text-xs text-contrast-medium">{error.message}</p>
         </details>
         <div className="flex flex-wrap gap-static-sm">
           <PButton type="button" variant="secondary" onClick={retry}>
@@ -830,23 +700,15 @@ export default function WorkPortfolioPage() {
   const [workspace, setWorkspace] = useState<"current" | "history">(() =>
     isHistoryRoute(location.pathname) ? "history" : "current",
   );
-  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(
-    workspace === "history",
-  );
-  const acceptanceReconciliation = useAcceptanceReconciliation(
-    portfolio,
-    retry,
-    workspace === "history",
-  );
+  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === "history");
+  const acceptanceReconciliation = useAcceptanceReconciliation(portfolio, retry, workspace === "history");
   const [changeFilter, setChangeFilter] = useState("");
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | "">("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const deferredChange = useDeferredValue(changeFilter);
   const deferredNeeds = useDeferredValue(needsFilter);
   const selected = parseSelection(location.pathname);
-  const selectedIdentity = selected
-    ? `${selected.changeId}:${selected.itemKey}`
-    : null;
+  const selectedIdentity = selected ? `${selected.changeId}:${selected.itemKey}` : null;
   const lastTrigger = useRef<HTMLElement | null>(null);
   const lastTriggerIdentity = useRef<string | null>(null);
   const restoreFocusAfterClose = useRef(false);
@@ -859,38 +721,23 @@ export default function WorkPortfolioPage() {
   const designWorkIds = designWorkStatuses.map((status) => status.change_id);
   const unavailableChanges = portfolio.unavailable_changes ?? [];
   const uncoveredUnavailableChanges = unavailableChanges.filter(
-    (change) =>
-      !unavailableStatuses.some(
-        (status) => status.change_id === change.change_id,
-      ),
+    (change) => !unavailableStatuses.some((status) => status.change_id === change.change_id),
   );
   const changes = [
     ...statuses.map((status) => {
-      const group = portfolio.groups.find(
-        (candidate) => candidate.change_id === status.change_id,
-      );
+      const group = portfolio.groups.find((candidate) => candidate.change_id === status.change_id);
       return {
         id: status.change_id,
         title:
           group?.title ??
-          (isUnadmittedDesign(status)
-            ? designWorkTitle(status.change_id)
-            : `Change ${status.change_id}`),
+          (isUnadmittedDesign(status) ? designWorkTitle(status.change_id) : `Change ${status.change_id}`),
       };
     }),
     ...portfolio.groups
-      .filter(
-        (group) =>
-          !statuses.some((status) => status.change_id === group.change_id),
-      )
+      .filter((group) => !statuses.some((status) => status.change_id === group.change_id))
       .map((group) => ({ id: group.change_id, title: group.title })),
     ...uncoveredUnavailableChanges
-      .filter(
-        (change) =>
-          !portfolio.groups.some(
-            (group) => group.change_id === change.change_id,
-          ),
-      )
+      .filter((change) => !portfolio.groups.some((group) => group.change_id === change.change_id))
       .map((change) => ({
         id: change.change_id,
         title: change.title ?? `Change ${change.change_id}`,
@@ -900,49 +747,30 @@ export default function WorkPortfolioPage() {
     .filter((group) => !deferredChange || group.change_id === deferredChange)
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !deferredNeeds || item.needs === deferredNeeds,
-      ),
+      items: group.items.filter((item) => !deferredNeeds || item.needs === deferredNeeds),
     }))
     .filter((group) => group.items.length > 0);
-  const shownCount = filteredGroups.reduce(
-    (total, group) => total + group.items.length,
-    0,
-  );
+  const shownCount = filteredGroups.reduce((total, group) => total + group.items.length, 0);
   const designMatchesAttention = !deferredNeeds || deferredNeeds === "you";
   const visibleDesignWorkStatuses =
-    designMatchesAttention &&
-    (!deferredChange || designWorkIds.includes(deferredChange))
-      ? designWorkStatuses.filter(
-          (status) => !deferredChange || status.change_id === deferredChange,
-        )
+    designMatchesAttention && (!deferredChange || designWorkIds.includes(deferredChange))
+      ? designWorkStatuses.filter((status) => !deferredChange || status.change_id === deferredChange)
       : [];
   const visibleUnavailableStatuses =
     designMatchesAttention &&
-    (!deferredChange ||
-      unavailableStatuses.some((status) => status.change_id === deferredChange))
-      ? unavailableStatuses.filter(
-          (status) => !deferredChange || status.change_id === deferredChange,
-        )
+    (!deferredChange || unavailableStatuses.some((status) => status.change_id === deferredChange))
+      ? unavailableStatuses.filter((status) => !deferredChange || status.change_id === deferredChange)
       : [];
   const visibleHealthDiagnostics =
     designMatchesAttention && portfolio.health.status === "attention"
-      ? portfolio.health.diagnostics.filter(
-          (diagnostic) =>
-            !deferredChange || diagnostic.change_id === deferredChange,
-        )
+      ? portfolio.health.diagnostics.filter((diagnostic) => !deferredChange || diagnostic.change_id === deferredChange)
       : [];
   const filteredUnavailableChanges = unavailableChanges.filter(
     (change) => !deferredChange || change.change_id === deferredChange,
   );
-  const visibleUnavailableChanges = designMatchesAttention
-    ? filteredUnavailableChanges
-    : [];
+  const visibleUnavailableChanges = designMatchesAttention ? filteredUnavailableChanges : [];
   const visibleUncoveredUnavailableCount = visibleUnavailableChanges.filter(
-    (change) =>
-      !visibleUnavailableStatuses.some(
-        (status) => status.change_id === change.change_id,
-      ),
+    (change) => !visibleUnavailableStatuses.some((status) => status.change_id === change.change_id),
   ).length;
   const shownEntryCount =
     shownCount +
@@ -959,26 +787,17 @@ export default function WorkPortfolioPage() {
     new Set(
       [
         ...filteredGroups.flatMap((group) =>
-          group.items
-            .map((item) => item.action.command)
-            .filter((command): command is string => Boolean(command)),
+          group.items.map((item) => item.action.command).filter((command): command is string => Boolean(command)),
         ),
-        ...visibleDesignWorkStatuses.map((status) =>
-          designCommand(status.change_id),
-        ),
+        ...visibleDesignWorkStatuses.map((status) => designCommand(status.change_id)),
         ...portfolio.operating.guidance.flatMap(guidanceCommands),
       ].filter((command) => {
         if (!selected) return true;
-        if (selected.itemKey === "design")
-          return command !== designCommand(selected.changeId);
+        if (selected.itemKey === "design") return command !== designCommand(selected.changeId);
         return !filteredGroups.some(
           (group) =>
             group.change_id === selected.changeId &&
-            group.items.some(
-              (item) =>
-                item.item_key === selected.itemKey &&
-                item.action.command === command,
-            ),
+            group.items.some((item) => item.item_key === selected.itemKey && item.action.command === command),
         );
       }),
     ),
@@ -1015,12 +834,9 @@ export default function WorkPortfolioPage() {
     }
   };
 
-  const handleInspectorKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
+  const handleInspectorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Escape") return;
-    if (event.target instanceof HTMLElement && event.target.closest("p-modal"))
-      return;
+    if (event.target instanceof HTMLElement && event.target.closest("p-modal")) return;
     event.preventDefault();
     closeInspector();
   };
@@ -1030,44 +846,27 @@ export default function WorkPortfolioPage() {
       previousSelectedIdentity.current = selectedIdentity;
       return;
     }
-    if (!previousSelectedIdentity.current && !restoreFocusAfterClose.current)
-      return;
+    if (!previousSelectedIdentity.current && !restoreFocusAfterClose.current) return;
     previousSelectedIdentity.current = null;
     let secondFrame: number | null = null;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const primaryTrigger = Array.from(
-          document.querySelectorAll<HTMLElement>(
-            "[data-work-item-primary-trigger]",
-          ),
-        ).find(
-          (candidate) =>
-            candidate.dataset.workItemIdentity === lastTriggerIdentity.current,
-        );
+          document.querySelectorAll<HTMLElement>("[data-work-item-primary-trigger]"),
+        ).find((candidate) => candidate.dataset.workItemIdentity === lastTriggerIdentity.current);
         const destination = focusDestination.current;
         // The row action control is a shadow-DOM host that cannot hold focus, so the row's own
         // primary trigger owns restoration whenever it is still rendered.
         const triggerFocusTarget =
-          primaryTrigger ??
-          (lastTrigger.current?.isConnected ? lastTrigger.current : undefined);
+          primaryTrigger ?? (lastTrigger.current?.isConnected ? lastTrigger.current : undefined);
         const focusTarget =
           destination === "history-view"
-            ? document.querySelector<HTMLElement>(
-                '[data-workspace-view="history"]',
-              )
+            ? document.querySelector<HTMLElement>('[data-workspace-view="history"]')
             : destination === "current-view"
-              ? document.querySelector<HTMLElement>(
-                  '[data-workspace-view="current"]',
-                )
+              ? document.querySelector<HTMLElement>('[data-workspace-view="current"]')
               : (triggerFocusTarget ??
-                (isFiltered
-                  ? document.querySelector<HTMLElement>(
-                      '[data-testid="work-filters-toggle"]',
-                    )
-                  : null) ??
-                document.querySelector<HTMLElement>(
-                  '[data-workspace-view="current"]',
-                ));
+                (isFiltered ? document.querySelector<HTMLElement>('[data-testid="work-filters-toggle"]') : null) ??
+                document.querySelector<HTMLElement>('[data-workspace-view="current"]'));
         focusTarget?.focus();
         restoreFocusAfterClose.current = false;
         focusDestination.current = "trigger";
@@ -1081,12 +880,8 @@ export default function WorkPortfolioPage() {
 
   const selectedIsUnavailable =
     selected !== null &&
-    (unavailableChanges.some(
-      (change) => change.change_id === selected.changeId,
-    ) ||
-      unavailableStatuses.some(
-        (status) => status.change_id === selected.changeId,
-      ));
+    (unavailableChanges.some((change) => change.change_id === selected.changeId) ||
+      unavailableStatuses.some((status) => status.change_id === selected.changeId));
   const selectedChangeId = selected?.changeId;
   const selectedItemKey = selected?.itemKey;
   const selectedIsDesignWork = selectedItemKey === "design";
@@ -1096,8 +891,7 @@ export default function WorkPortfolioPage() {
       ? designWorkIds.includes(selectedChangeId)
       : portfolio.groups.some(
           (group) =>
-            group.change_id === selectedChangeId &&
-            group.items.some((item) => item.item_key === selectedItemKey),
+            group.change_id === selectedChangeId && group.items.some((item) => item.item_key === selectedItemKey),
         ));
 
   useEffect(() => {
@@ -1108,19 +902,12 @@ export default function WorkPortfolioPage() {
     const present = selectedIsPresent;
     if (present) selectedWasPresent.current = true;
     // A Change that became unavailable is still inspectable; it has not completed.
-    if (
-      !present &&
-      selectedWasPresent.current &&
-      !(selectedIsUnavailable && !selectedIsDesignWork)
-    ) {
+    if (!present && selectedWasPresent.current && !(selectedIsUnavailable && !selectedIsDesignWork)) {
       selectedWasPresent.current = false;
       const changeCompleted =
-        !selectedIsDesignWork &&
-        portfolio.groups.every((group) => group.change_id !== selectedChangeId);
+        !selectedIsDesignWork && portfolio.groups.every((group) => group.change_id !== selectedChangeId);
       restoreFocusAfterClose.current = true;
-      focusDestination.current = changeCompleted
-        ? "history-view"
-        : "current-view";
+      focusDestination.current = changeCompleted ? "history-view" : "current-view";
       if (changeCompleted) setWorkspace("history");
       navigate(changeCompleted ? "/delivery/history" : "/delivery", {
         replace: true,
@@ -1175,10 +962,7 @@ export default function WorkPortfolioPage() {
           "bg-canvas px-static-lg",
         ].join(" ")}
       >
-        <PortfolioViewSwitch
-          workspace={workspace}
-          onChange={handleWorkspaceChange}
-        />
+        <PortfolioViewSwitch workspace={workspace} onChange={handleWorkspaceChange} />
         {workspace === "current" ? (
           <div
             className={[
@@ -1188,10 +972,7 @@ export default function WorkPortfolioPage() {
           >
             {isFiltered ? (
               <span data-testid="work-shown-count">
-                <WorkspaceViewCount
-                  value={`${shownEntryCount} of ${totalEntryCount}`}
-                  unit="portfolio entries shown"
-                />
+                <WorkspaceViewCount value={`${shownEntryCount} of ${totalEntryCount}`} unit="portfolio entries shown" />
               </span>
             ) : null}
             <PortfolioFilterTools {...filterProps} />
@@ -1209,16 +990,9 @@ export default function WorkPortfolioPage() {
         {workspace === "current" ? (
           <>
             {isLoading ? (
-              <div
-                className="grid gap-static-sm"
-                role="status"
-                aria-label="Loading current delivery"
-              >
+              <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">
                 {PORTFOLIO_LOADING_SKELETON_KEYS.map((key) => (
-                  <span
-                    key={key}
-                    className="block h-12 animate-pulse bg-surface"
-                  />
+                  <span key={key} className="block h-12 animate-pulse bg-surface" />
                 ))}
               </div>
             ) : null}
@@ -1246,7 +1020,7 @@ export default function WorkPortfolioPage() {
               >
                 <PIcon name="warning" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
-                  GitHub acceptance checks are unavailable for{" "}
+                  {"GitHub acceptance checks are unavailable for "}
                   {acceptanceReconciliation.providerChangeIds.join(", ")}.{" "}
                   {acceptanceReconciliation.providerError.message}
                 </span>
@@ -1256,9 +1030,7 @@ export default function WorkPortfolioPage() {
                   loading={acceptanceReconciliation.isRetrying}
                   onClick={acceptanceReconciliation.retry}
                 >
-                  {acceptanceReconciliation.isRetrying
-                    ? "Retrying acceptance check..."
-                    : "Retry acceptance check"}
+                  {acceptanceReconciliation.isRetrying ? "Retrying acceptance check..." : "Retry acceptance check"}
                 </PButton>
               </section>
             ) : null}
@@ -1287,9 +1059,7 @@ export default function WorkPortfolioPage() {
                 {visibleDesignWorkStatuses.length > 0 ? (
                   <DesignWorkSection
                     statuses={visibleDesignWorkStatuses}
-                    selectedChangeId={
-                      selected?.itemKey === "design" ? selected.changeId : null
-                    }
+                    selectedChangeId={selected?.itemKey === "design" ? selected.changeId : null}
                     onSelect={(identity, trigger) => {
                       lastTrigger.current = trigger;
                       lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`;
@@ -1302,10 +1072,7 @@ export default function WorkPortfolioPage() {
                 visibleUnavailableChanges.length === 0 ? (
                   <EmptyPortfolioState filtered={isFiltered} />
                 ) : null}
-                <PortfolioOperatingSummary
-                  operating={portfolio.operating}
-                  commands={availableCommands}
-                />
+                <PortfolioOperatingSummary operating={portfolio.operating} commands={availableCommands} />
               </>
             ) : null}
           </>
@@ -1322,22 +1089,14 @@ export default function WorkPortfolioPage() {
         fullscreen={{ base: true, m: false }}
         style={{ "--p-flyout-width": "min(56rem, 100vw)" } as CSSProperties}
         aria={{
-          "aria-label":
-            selected?.itemKey === "design"
-              ? "Design detail"
-              : "Work Item detail",
+          "aria-label": selected?.itemKey === "design" ? "Design detail" : "Work Item detail",
         }}
         onDismiss={() => closeInspector()}
         onKeyDownCapture={handleInspectorKeyDown}
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? (
-            <SelectedDetail
-              key={selectedIdentity}
-              identity={selected}
-              onChanged={retry}
-              onClose={closeInspector}
-            />
+            <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} />
           ) : null}
         </div>
       </PFlyout>

@@ -21,20 +21,12 @@ describe("MarkdownPreview", () => {
       "Second paragraph.",
     ].join("\n");
 
-    const { getByTestId } = render(
-      <MarkdownPreview data-testid="markdown-preview">
-        {markdown}
-      </MarkdownPreview>,
-    );
+    const { getByTestId } = render(<MarkdownPreview data-testid="markdown-preview">{markdown}</MarkdownPreview>);
     const preview = getByTestId("markdown-preview");
 
-    expect(preview.querySelector("ol")?.textContent).toContain(
-      "First numbered item",
-    );
+    expect(preview.querySelector("ol")?.textContent).toContain("First numbered item");
     expect(preview.querySelector("ul")?.textContent).toContain("First bullet");
-    expect(preview.querySelector("pre code")?.textContent).toContain(
-      "const value = 1",
-    );
+    expect(preview.querySelector("pre code")?.textContent).toContain("const value = 1");
     expect(preview.querySelectorAll("p").length).toBeGreaterThanOrEqual(2);
     expect(preview.className).toContain("[&_ol]:list-decimal");
     expect(preview.className).toContain("[&_ul]:list-disc");
@@ -54,11 +46,7 @@ describe("MarkdownPreview", () => {
       "",
       "safe",
     ].join("\n");
-    const { getByTestId } = render(
-      <MarkdownPreview data-testid="markdown-preview">
-        {markdown}
-      </MarkdownPreview>,
-    );
+    const { getByTestId } = render(<MarkdownPreview data-testid="markdown-preview">{markdown}</MarkdownPreview>);
     const preview = getByTestId("markdown-preview");
 
     expect(preview.textContent).toContain("safe");

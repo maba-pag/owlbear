@@ -32,15 +32,9 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case "resume-design":
       return <>Continue Design for: {guidance.change_ids.join(", ")}.</>;
     case "start-orchestration":
-      return (
-        <>Process {countLabel(guidance.work_count, "queued work item")}.</>
-      );
+      return <>Process {countLabel(guidance.work_count, "queued work item")}.</>;
     case "work-underway":
-      return (
-        <>
-          An orchestration session is already working; no new session is needed.
-        </>
-      );
+      return <>An orchestration session is already working; no new session is needed.</>;
     case "wait":
       return <>No session action needed.</>;
     case "create-change":
@@ -69,14 +63,7 @@ interface AttentionMetricProps {
   onSelect: (value: WorkItemNeed | "") => void;
 }
 
-function AttentionMetric({
-  count,
-  filter,
-  icon,
-  label,
-  selected,
-  onSelect,
-}: AttentionMetricProps) {
+function AttentionMetric({ count, filter, icon, label, selected, onSelect }: AttentionMetricProps) {
   const content = (
     <>
       <PIcon name={icon} size="x-small" color="inherit" aria-hidden="true" />
@@ -84,10 +71,7 @@ function AttentionMetric({
       <span>{label}</span>
     </>
   );
-  const tone =
-    filter === "you"
-      ? "border-error bg-error-low text-error"
-      : "border-warning bg-warning-low text-primary";
+  const tone = filter === "you" ? "border-error bg-error-low text-error" : "border-warning bg-warning-low text-primary";
 
   if (count === 0) {
     return (
@@ -123,15 +107,7 @@ function AttentionMetric({
   );
 }
 
-function ActivityMetric({
-  count,
-  icon,
-  label,
-}: {
-  count: number;
-  icon: "play" | "list";
-  label: string;
-}) {
+function ActivityMetric({ count, icon, label }: { count: number; icon: "play" | "list"; label: string }) {
   return (
     <span
       data-testid={`portfolio-activity-${label.toLowerCase()}`}
@@ -147,15 +123,8 @@ function ActivityMetric({
   );
 }
 
-export function PortfolioHeaderSummary({
-  operating,
-  totals,
-  needsFilter,
-  onNeedsFilter,
-}: PortfolioHeaderSummaryProps) {
-  const designCount = operating.statuses.filter(
-    (status) => status.stage === "design",
-  ).length;
+export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter }: PortfolioHeaderSummaryProps) {
+  const designCount = operating.statuses.filter((status) => status.stage === "design").length;
   const deliveryCount = operating.statuses.filter(
     (status) => status.admission === "admitted" && status.stage !== "design",
   ).length;
@@ -170,22 +139,16 @@ export function PortfolioHeaderSummary({
         data-testid="portfolio-inventory-summary"
       >
         <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap text-xs text-primary">
-          <strong className="text-lg font-semibold leading-none tabular-nums">
-            {currentChangeCount}
-          </strong>
+          <strong className="text-lg font-semibold leading-none tabular-nums">{currentChangeCount}</strong>
           <span>Changes</span>
         </span>
         <span className="inline-flex items-baseline gap-static-xs whitespace-nowrap text-xs text-contrast-medium">
-          <strong className="font-semibold tabular-nums text-primary">
-            {designCount}
-          </strong>
+          <strong className="font-semibold tabular-nums text-primary">{designCount}</strong>
           <span>Design</span>
           <span className="text-contrast-low" aria-hidden="true">
             ·
           </span>
-          <strong className="font-semibold tabular-nums text-primary">
-            {deliveryCount}
-          </strong>
+          <strong className="font-semibold tabular-nums text-primary">{deliveryCount}</strong>
           <span>Delivery</span>
         </span>
       </section>
@@ -198,10 +161,7 @@ export function PortfolioHeaderSummary({
         aria-label="Work item status"
         data-testid="portfolio-work-summary"
       >
-        <section
-          className="flex flex-wrap items-center gap-static-xs"
-          aria-label="Attention"
-        >
+        <section className="flex flex-wrap items-center gap-static-xs" aria-label="Attention">
           <AttentionMetric
             count={totals.needs.you}
             filter="you"
@@ -219,26 +179,16 @@ export function PortfolioHeaderSummary({
             onSelect={onNeedsFilter}
           />
         </section>
-        <section
-          className="flex items-center gap-static-md"
-          aria-label="Activity"
-        >
+        <section className="flex items-center gap-static-md" aria-label="Activity">
           <ActivityMetric count={runningCount} icon="play" label="Running" />
-          <ActivityMetric
-            count={totals.activity.ready}
-            icon="list"
-            label="Ready"
-          />
+          <ActivityMetric count={totals.activity.ready} icon="list" label="Ready" />
         </section>
       </section>
     </>
   );
 }
 
-export default function PortfolioOperatingSummary({
-  operating,
-  commands = [],
-}: PortfolioOperatingSummaryProps) {
+export default function PortfolioOperatingSummary({ operating, commands = [] }: PortfolioOperatingSummaryProps) {
   if (operating.guidance.length === 0 && commands.length === 0) return null;
   return (
     <aside

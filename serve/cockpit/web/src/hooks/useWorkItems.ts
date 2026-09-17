@@ -96,34 +96,25 @@ function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
     .filter(
       (group) =>
         group.lifecycle === "awaiting-merge" &&
-        group.items.some(
-          (item) =>
-            item.scope === "change-publication" &&
-            item.action.kind === "observe-acceptance",
-        ),
+        group.items.some((item) => item.scope === "change-publication" && item.action.kind === "observe-acceptance"),
     )
     .map((group) => group.change_id)
     .sort();
 }
 
 export function useWorkPortfolio(paused = false) {
-  const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(
-    null,
-  );
+  const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const wasPaused = useRef(paused);
-  const polling = usePollingFetch<WorkItemPortfolioResponse>(
-    "/api/work-items",
-    {
-      intervalMs: 3_000,
-      paused,
-      onSuccess: (data) => {
-        setPortfolio(data);
-        setError(null);
-      },
-      onError: setError,
+  const polling = usePollingFetch<WorkItemPortfolioResponse>("/api/work-items", {
+    intervalMs: 3_000,
+    paused,
+    onSuccess: (data) => {
+      setPortfolio(data);
+      setError(null);
     },
-  );
+    onError: setError,
+  });
   useEffect(() => {
     const resumed = wasPaused.current && !paused;
     wasPaused.current = paused;
@@ -188,8 +179,7 @@ export function useAcceptanceReconciliation(
     const scheduleNext = () => {
       if (!active || !isVisible() || changeIdsRef.current.length === 0) return;
       const delay = Math.min(
-        ACCEPTANCE_RECONCILIATION_INTERVAL_MS *
-          2 ** providerFailureCountRef.current,
+        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * 2 ** providerFailureCountRef.current,
         ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS,
       );
       timer = setTimeout(() => {
@@ -199,38 +189,20 @@ export function useAcceptanceReconciliation(
     };
 
     const poll = async () => {
-      if (
-        !active ||
-        !isVisible() ||
-        inFlight ||
-        changeIdsRef.current.length === 0
-      )
-        return;
+      if (!active || !isVisible() || inFlight || changeIdsRef.current.length === 0) return;
       inFlight = true;
       controller = new AbortController();
       const requestedIds = [...changeIdsRef.current];
       let providerUnavailable = false;
       try {
-        const result = await reconcileWorkItemAcceptance(
-          requestedIds,
-          controller.signal,
-        );
-        const unavailable = result.outcomes.filter(
-          (outcome) => outcome.status === "provider-unavailable",
-        );
+        const result = await reconcileWorkItemAcceptance(requestedIds, controller.signal);
+        const unavailable = result.outcomes.filter((outcome) => outcome.status === "provider-unavailable");
         providerUnavailable = unavailable.length > 0;
         if (providerUnavailable) {
           const affectedIds = unavailable.map((outcome) => outcome.change_id);
-          const detail = unavailable
-            .map((outcome) => outcome.detail)
-            .find((value): value is string => Boolean(value));
+          const detail = unavailable.map((outcome) => outcome.detail).find((value): value is string => Boolean(value));
           setProviderChangeIds(affectedIds);
-          setProviderError(
-            new Error(
-              detail ??
-                "The provider was unavailable while checking GitHub acceptance.",
-            ),
-          );
+          setProviderError(new Error(detail ?? "The provider was unavailable while checking GitHub acceptance."));
         } else {
           setProviderChangeIds([]);
           setProviderError(null);
@@ -245,9 +217,7 @@ export function useAcceptanceReconciliation(
           setProviderError(
             caught instanceof Error
               ? caught
-              : new Error(
-                  "The provider was unavailable while checking GitHub acceptance.",
-                ),
+              : new Error("The provider was unavailable while checking GitHub acceptance."),
           );
         }
       } finally {
@@ -255,9 +225,7 @@ export function useAcceptanceReconciliation(
         controller = null;
         if (active) {
           setIsRetrying(false);
-          providerFailureCountRef.current = providerUnavailable
-            ? Math.min(providerFailureCountRef.current + 1, 4)
-            : 0;
+          providerFailureCountRef.current = providerUnavailable ? Math.min(providerFailureCountRef.current + 1, 4) : 0;
           scheduleNext();
         }
       }
@@ -300,18 +268,15 @@ export function useAcceptanceReconciliation(
 export function useDesignWorkDetail(changeId: string) {
   const [data, setData] = useState<DesignWorkDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<Error | null>(null);
-  const polling = usePollingFetch<DesignWorkDetailResponse>(
-    designWorkDetailUrl(changeId),
-    {
-      intervalMs: 3_000,
-      onSuccess: (next) => {
-        if (next.change_id !== changeId) return;
-        setData(next);
-        setDetailError(null);
-      },
-      onError: setDetailError,
+  const polling = usePollingFetch<DesignWorkDetailResponse>(designWorkDetailUrl(changeId), {
+    intervalMs: 3_000,
+    onSuccess: (next) => {
+      if (next.change_id !== changeId) return;
+      setData(next);
+      setDetailError(null);
     },
-  );
+    onError: setDetailError,
+  });
 
   useEffect(() => {
     setData((current) => (current?.change_id === changeId ? current : null));
@@ -338,10 +303,7 @@ export function useCompletedHistory(query: string) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const requestGeneration = useRef(0);
   const latestQuery = useRef(query);
-  const requestInput = useMemo(
-    () => ({ query, retryNonce }),
-    [query, retryNonce],
-  );
+  const requestInput = useMemo(() => ({ query, retryNonce }), [query, retryNonce]);
   latestQuery.current = query;
 
   useEffect(() => {
@@ -357,16 +319,11 @@ export function useCompletedHistory(query: string) {
     void request
       .then(
         (data) =>
-          active &&
-          generation === requestGeneration.current &&
-          setResource({ data, error: null, isLoading: false }),
+          active && generation === requestGeneration.current && setResource({ data, error: null, isLoading: false }),
       )
       .catch((caught: unknown) => {
         if (!active || generation !== requestGeneration.current) return;
-        const error =
-          caught instanceof Error
-            ? caught
-            : new Error("Change history is unavailable");
+        const error = caught instanceof Error ? caught : new Error("Change history is unavailable");
         setResource((current) => ({
           data: current.data,
           error,
@@ -390,14 +347,8 @@ export function useCompletedHistory(query: string) {
     setIsLoadingMore(true);
     setResource({ data: current, error: null, isLoading: true });
     try {
-      const next = query
-        ? await searchCompletedChanges(query, cursor)
-        : await listCompletedChanges(cursor);
-      if (
-        generation !== requestGeneration.current ||
-        requestedQuery !== latestQuery.current
-      )
-        return;
+      const next = query ? await searchCompletedChanges(query, cursor) : await listCompletedChanges(cursor);
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return;
       setIsLoadingMore(false);
       setResource({
         data: {
@@ -410,18 +361,11 @@ export function useCompletedHistory(query: string) {
       });
       setFailedCursor(null);
     } catch (caught: unknown) {
-      if (
-        generation !== requestGeneration.current ||
-        requestedQuery !== latestQuery.current
-      )
-        return;
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return;
       setIsLoadingMore(false);
       setResource({
         data: current,
-        error:
-          caught instanceof Error
-            ? caught
-            : new Error("Change history is unavailable"),
+        error: caught instanceof Error ? caught : new Error("Change history is unavailable"),
         isLoading: false,
       });
       setFailedCursor(cursor);
@@ -445,12 +389,8 @@ export function useCompletedHistory(query: string) {
   };
 }
 
-export function useCompletedChange(
-  identity: { changeId: string; recordId: string } | null,
-) {
-  const [resource, setResource] = useState<
-    AsyncResource<CompletedChangeRecord>
-  >({
+export function useCompletedChange(identity: { changeId: string; recordId: string } | null) {
+  const [resource, setResource] = useState<AsyncResource<CompletedChangeRecord>>({
     data: null,
     error: null,
     isLoading: false,
@@ -479,13 +419,8 @@ export function useCompletedChange(
     void showCompletedChange(requestInput.changeId, requestInput.recordId)
       .then((data) => {
         if (!active) return;
-        if (
-          data.change_id !== requestInput.changeId ||
-          completedChangeRecordId(data) !== requestInput.recordId
-        ) {
-          throw new Error(
-            "Completed change detail did not match the requested identity",
-          );
+        if (data.change_id !== requestInput.changeId || completedChangeRecordId(data) !== requestInput.recordId) {
+          throw new Error("Completed change detail did not match the requested identity");
         }
         setResource({ data, error: null, isLoading: false });
       })
@@ -493,10 +428,7 @@ export function useCompletedChange(
         if (!active) return;
         setResource({
           data: null,
-          error:
-            caught instanceof Error
-              ? caught
-              : new Error("Completed change is unavailable"),
+          error: caught instanceof Error ? caught : new Error("Completed change is unavailable"),
           isLoading: false,
         });
       });
@@ -511,26 +443,17 @@ export function useCompletedChange(
   };
 }
 
-export function useWorkItemDetail(
-  identity: WorkItemIdentity,
-  onChanged: () => void,
-) {
-  const [data, setData] = useState<WorkItemAvailableDetailResponse | null>(
-    null,
-  );
-  const [unavailable, setUnavailable] =
-    useState<WorkItemUnavailableDetailResponse | null>(null);
+export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void) {
+  const [data, setData] = useState<WorkItemAvailableDetailResponse | null>(null);
+  const [unavailable, setUnavailable] = useState<WorkItemUnavailableDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<Error | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Error | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
-  const [publicationChecks, setPublicationChecks] =
-    useState<PublicationChecksObservationResponse | null>(null);
-  const [publicationChecksError, setPublicationChecksError] =
-    useState<Error | null>(null);
+  const [publicationChecks, setPublicationChecks] = useState<PublicationChecksObservationResponse | null>(null);
+  const [publicationChecksError, setPublicationChecksError] = useState<Error | null>(null);
   const [publicationChecksStale, setPublicationChecksStale] = useState(false);
-  const [isObservingPublicationChecks, setIsObservingPublicationChecks] =
-    useState(false);
+  const [isObservingPublicationChecks, setIsObservingPublicationChecks] = useState(false);
   const targetSyncOperation = useRef<{
     changeId: string;
     operationId: string;
@@ -545,12 +468,9 @@ export function useWorkItemDetail(
   } | null>(null);
   const identityKey = `${identity.changeId}:${identity.itemKey}`;
   const publicationIdentityRef = useRef(identityKey);
-  const publicationDetailRef = useRef<WorkItemAvailableDetailResponse | null>(
-    null,
-  );
+  const publicationDetailRef = useRef<WorkItemAvailableDetailResponse | null>(null);
   const publicationHeadRef = useRef<string | null>(null);
-  const publicationChecksRef =
-    useRef<PublicationChecksObservationResponse | null>(null);
+  const publicationChecksRef = useRef<PublicationChecksObservationResponse | null>(null);
   const publicationObservationGenerationRef = useRef(0);
   const publicationObservationRequestRef = useRef(0);
   const observingPublicationChecksRef = useRef(false);
@@ -568,67 +488,53 @@ export function useWorkItemDetail(
     setPublicationChecksStale(false);
     setIsObservingPublicationChecks(false);
     setData((current) =>
-      current &&
-      `${current.item.card.change_id}:${current.item.card.item_key}` ===
-        identityKey
-        ? current
-        : null,
+      current && `${current.item.card.change_id}:${current.item.card.item_key}` === identityKey ? current : null,
     );
-    setUnavailable((current) =>
-      current?.change_id === identity.changeId ? current : null,
-    );
+    setUnavailable((current) => (current?.change_id === identity.changeId ? current : null));
     setDetailError(null);
     setPendingAction(null);
     setActionError(null);
     setActionResult(null);
   }, [identityKey, identity.changeId]);
 
-  const polling = usePollingFetch<WorkItemDetailResponse>(
-    workItemDetailUrl(identity.changeId, identity.itemKey),
-    {
-      intervalMs: 3_000,
-      onSuccess: (next) => {
-        if (isUnavailableDetail(next)) {
-          if (next.change_id !== identity.changeId) return;
-          publicationHeadRef.current = null;
-          publicationDetailRef.current = null;
-          setData(null);
-          setUnavailable(next);
-          setDetailError(null);
-          return;
-        }
-        if (
-          next.item.card.change_id !== identity.changeId ||
-          next.item.card.item_key !== identity.itemKey
-        )
-          return;
-        const nextPublishedHead = next.item.publication?.published_head ?? null;
-        const previousPublishedHead = publicationHeadRef.current;
-        if (previousPublishedHead !== nextPublishedHead) {
-          const hadObservation = publicationChecksRef.current !== null;
-          publicationObservationGenerationRef.current += 1;
-          publicationObservationRequestRef.current += 1;
-          observingPublicationChecksRef.current = false;
-          publicationChecksRef.current = null;
-          setPublicationChecks(null);
-          setPublicationChecksError(null);
-          setPublicationChecksStale(hadObservation);
-          setIsObservingPublicationChecks(false);
-        }
-        publicationHeadRef.current = nextPublishedHead;
-        publicationDetailRef.current = next;
-        setData(next);
-        setUnavailable(null);
+  const polling = usePollingFetch<WorkItemDetailResponse>(workItemDetailUrl(identity.changeId, identity.itemKey), {
+    intervalMs: 3_000,
+    onSuccess: (next) => {
+      if (isUnavailableDetail(next)) {
+        if (next.change_id !== identity.changeId) return;
+        publicationHeadRef.current = null;
+        publicationDetailRef.current = null;
+        setData(null);
+        setUnavailable(next);
         setDetailError(null);
-      },
-      onError: setDetailError,
+        return;
+      }
+      if (next.item.card.change_id !== identity.changeId || next.item.card.item_key !== identity.itemKey) return;
+      const nextPublishedHead = next.item.publication?.published_head ?? null;
+      const previousPublishedHead = publicationHeadRef.current;
+      if (previousPublishedHead !== nextPublishedHead) {
+        const hadObservation = publicationChecksRef.current !== null;
+        publicationObservationGenerationRef.current += 1;
+        publicationObservationRequestRef.current += 1;
+        observingPublicationChecksRef.current = false;
+        publicationChecksRef.current = null;
+        setPublicationChecks(null);
+        setPublicationChecksError(null);
+        setPublicationChecksStale(hadObservation);
+        setIsObservingPublicationChecks(false);
+      }
+      publicationHeadRef.current = nextPublishedHead;
+      publicationDetailRef.current = next;
+      setData(next);
+      setUnavailable(null);
+      setDetailError(null);
     },
-  );
+    onError: setDetailError,
+  });
 
   const observePublicationChecks = async (): Promise<Error | null> => {
     const requestedIdentity = identityKey;
-    const requestedHead =
-      publicationDetailRef.current?.item.publication?.published_head ?? null;
+    const requestedHead = publicationDetailRef.current?.item.publication?.published_head ?? null;
     if (!requestedHead) {
       const error = new Error("Publication checks require a published head.");
       setPublicationChecksError(error);
@@ -646,14 +552,8 @@ export function useWorkItemDetail(
       publicationIdentityRef.current === requestedIdentity &&
       publicationHeadRef.current === requestedHead;
     try {
-      const observed = await observeWorkItemPublicationChecks(
-        identity.changeId,
-      );
-      if (
-        !isCurrent() ||
-        observed.change_id !== identity.changeId ||
-        observed.exact_commit !== requestedHead
-      ) {
+      const observed = await observeWorkItemPublicationChecks(identity.changeId);
+      if (!isCurrent() || observed.change_id !== identity.changeId || observed.exact_commit !== requestedHead) {
         if (isCurrent()) {
           publicationChecksRef.current = null;
           setPublicationChecks(null);
@@ -673,10 +573,7 @@ export function useWorkItemDetail(
       return null;
     } catch (caught: unknown) {
       if (!isCurrent()) return null;
-      const error =
-        caught instanceof Error
-          ? caught
-          : new Error("Publication checks could not be observed");
+      const error = caught instanceof Error ? caught : new Error("Publication checks could not be observed");
       setPublicationChecksError(error);
       return error;
     } finally {
@@ -703,8 +600,7 @@ export function useWorkItemDetail(
       if (message !== null) setActionResult(message);
       return null;
     } catch (caught: unknown) {
-      const error =
-        caught instanceof Error ? caught : new Error("Delivery control failed");
+      const error = caught instanceof Error ? caught : new Error("Delivery control failed");
       setActionError(error);
       return error;
     } finally {
@@ -732,13 +628,7 @@ export function useWorkItemDetail(
     answerRequest: (requestId: string, resolution: DeliveryRequestResolution) =>
       mutate(
         "answer",
-        () =>
-          answerWorkItemRequest(
-            identity.changeId,
-            requestId,
-            resolution,
-            currentDetail().item.snapshot_version,
-          ),
+        () => answerWorkItemRequest(identity.changeId, requestId, resolution, currentDetail().item.snapshot_version),
         "Request answered.",
       ),
     clearBlock: (blockId: string, note: string, locators: string[]) =>
@@ -758,13 +648,7 @@ export function useWorkItemDetail(
     recoverClaim: (attemptId: string, claimId: string) =>
       mutate(
         "recover",
-        () =>
-          recoverWorkItemClaim(
-            identity.changeId,
-            currentDetail().item.card.work_item_id,
-            attemptId,
-            claimId,
-          ),
+        () => recoverWorkItemClaim(identity.changeId, currentDetail().item.card.work_item_id, attemptId, claimId),
         "Claim recovered.",
       ),
     previewBackward: async (target: WorkItemStage) => {
@@ -772,27 +656,15 @@ export function useWorkItemDetail(
       setActionError(null);
       setActionResult(null);
       try {
-        return await previewWorkItemBackward(
-          identity.changeId,
-          currentDetail().item.card.work_item_id,
-          target,
-        );
+        return await previewWorkItemBackward(identity.changeId, currentDetail().item.card.work_item_id, target);
       } catch (caught: unknown) {
-        setActionError(
-          caught instanceof Error
-            ? caught
-            : new Error("Backward move preview failed"),
-        );
+        setActionError(caught instanceof Error ? caught : new Error("Backward move preview failed"));
         return null;
       } finally {
         setPendingAction(null);
       }
     },
-    moveBackward: async (
-      target: WorkItemStage,
-      reason: string,
-      snapshotVersion: string,
-    ) => {
+    moveBackward: async (target: WorkItemStage, reason: string, snapshotVersion: string) => {
       setPendingAction("move");
       setActionError(null);
       setActionResult(null);
@@ -805,17 +677,12 @@ export function useWorkItemDetail(
           snapshotVersion,
         );
         const invalidated = moved.invalidated_outcome_ids.join(", ");
-        setActionResult(
-          invalidated
-            ? `Moved backward. Reset: ${invalidated}.`
-            : "Moved backward.",
-        );
+        setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : "Moved backward.");
         polling.refetch();
         onChanged();
         return null;
       } catch (caught: unknown) {
-        const error =
-          caught instanceof Error ? caught : new Error("Backward move failed");
+        const error = caught instanceof Error ? caught : new Error("Backward move failed");
         setActionError(error);
         return error;
       } finally {
@@ -827,30 +694,21 @@ export function useWorkItemDetail(
         "publication-reconcile",
         () => reconcileWorkItemPublication(identity.changeId),
         (reconciliation) => {
-          if (reconciliation.reconciled)
-            return "Publication checkpoint reconciled.";
+          if (reconciliation.reconciled) return "Publication checkpoint reconciled.";
           if (reconciliation.error_detail)
             return `${reconciliation.error_code ?? "Checkpoint pending"}: ${reconciliation.error_detail}`;
           return null;
         },
       ),
     markPublicationReady: () =>
-      mutate(
-        "publication-ready",
-        () => markWorkItemPublicationReady(identity.changeId),
-        "Pull request marked ready.",
-      ),
+      mutate("publication-ready", () => markWorkItemPublicationReady(identity.changeId), "Pull request marked ready."),
     publicationChecks,
     publicationChecksError,
     publicationChecksStale,
     isObservingPublicationChecks,
     observePublicationChecks,
     observeAcceptance: () =>
-      mutate(
-        "acceptance-observe",
-        () => observeWorkItemAcceptance(identity.changeId),
-        "GitHub acceptance observed.",
-      ),
+      mutate("acceptance-observe", () => observeWorkItemAcceptance(identity.changeId), "GitHub acceptance observed."),
     adoptExternalHeadAfterAcceptanceAttention: (
       expectedDispositionId: string,
       expectedHead: string,
@@ -878,13 +736,8 @@ export function useWorkItemDetail(
         },
         "Changed pull-request head adopted; re-finalization is required.",
       ).then((error) => {
-        const operationId =
-          acceptanceHeadAdoptionOperation.current?.operationId;
-        if (
-          operationId &&
-          (error === null ||
-            (error instanceof WorkItemApiError && !error.retrySafe))
-        ) {
+        const operationId = acceptanceHeadAdoptionOperation.current?.operationId;
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
           acceptanceHeadAdoptionOperation.current = null;
         }
         return error;
@@ -892,12 +745,7 @@ export function useWorkItemDetail(
     resolveAttention: (expectedDispositionId: string) =>
       mutate(
         "attention-resolve",
-        () =>
-          resolveWorkItemAttention(
-            identity.changeId,
-            expectedDispositionId,
-            currentDetail().item.snapshot_version,
-          ),
+        () => resolveWorkItemAttention(identity.changeId, expectedDispositionId, currentDetail().item.snapshot_version),
         "Change attention resolved.",
       ),
     supersedePublication: () =>
@@ -918,11 +766,7 @@ export function useWorkItemDetail(
         "Publication superseded.",
       ).then((error) => {
         const operationId = supersedePublicationOperation.current?.operationId;
-        if (
-          operationId &&
-          (error === null ||
-            (error instanceof WorkItemApiError && !error.retrySafe))
-        ) {
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
           supersedePublicationOperation.current = null;
         }
         return error;
@@ -945,80 +789,42 @@ export function useWorkItemDetail(
         "Target synchronized with the integration target.",
       ).then((error) => {
         const operationId = targetSyncOperation.current?.operationId;
-        if (
-          operationId &&
-          (error === null ||
-            (error instanceof WorkItemApiError && !error.retrySafe))
-        ) {
+        if (operationId && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))) {
           targetSyncOperation.current = null;
         }
         return error;
       }),
-    abortTargetSync: (
-      expectedDispositionId: string,
-      targetHead: string,
-      operationId: string,
-    ) =>
+    abortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) =>
       mutate(
         "target-sync-abort",
-        () =>
-          abortWorkItemTargetSync(
-            identity.changeId,
-            expectedDispositionId,
-            targetHead,
-            operationId,
-          ),
+        () => abortWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
         "Target sync conflict aborted.",
       ).then((error) => {
         if (error === null) targetSyncOperation.current = null;
         return error;
       }),
-    resolveTargetSync: (
-      expectedDispositionId: string,
-      targetHead: string,
-      operationId: string,
-    ) =>
+    resolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) =>
       mutate(
         "target-sync-resolve",
-        () =>
-          resolveWorkItemTargetSync(
-            identity.changeId,
-            expectedDispositionId,
-            targetHead,
-            operationId,
-          ),
+        () => resolveWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
         "Resolved target sync is ready for review.",
       ),
     deferChange: (reason: string) =>
       mutate(
         "change-defer",
-        () =>
-          deferWorkItemChange(
-            identity.changeId,
-            reason,
-            currentDetail().item.snapshot_version,
-          ),
+        () => deferWorkItemChange(identity.changeId, reason, currentDetail().item.snapshot_version),
         "Change deferred.",
       ),
     resumeChange: () =>
       mutate(
         "change-resume",
-        () =>
-          resumeWorkItemChange(
-            identity.changeId,
-            currentDetail().item.snapshot_version,
-          ),
+        () => resumeWorkItemChange(identity.changeId, currentDetail().item.snapshot_version),
         "Change resumed.",
       ),
     abandonChange: (reason: string) =>
       mutate(
         "change-abandon",
-        () =>
-          abandonWorkItemChange(
-            identity.changeId,
-            reason,
-            currentDetail().item.snapshot_version,
-          ),
+        () => abandonWorkItemChange(identity.changeId, reason, currentDetail().item.snapshot_version),
         "Change abandoned.",
       ),
     cleanupAbandonedChange: () =>
@@ -1027,18 +833,10 @@ export function useWorkItemDetail(
         () => cleanupAbandonedWorkItemChange(identity.changeId),
         "Abandoned Change worktree cleaned up.",
       ),
-    discardAbandonedTargetSync: (
-      expectedTargetHead: string,
-      expectedOperationId: string,
-    ) =>
+    discardAbandonedTargetSync: (expectedTargetHead: string, expectedOperationId: string) =>
       mutate(
         "change-cleanup-abandoned-target-sync",
-        () =>
-          discardAbandonedTargetSyncAndCleanup(
-            identity.changeId,
-            expectedTargetHead,
-            expectedOperationId,
-          ),
+        () => discardAbandonedTargetSyncAndCleanup(identity.changeId, expectedTargetHead, expectedOperationId),
         "Target merge discarded and abandoned Change worktree cleaned up.",
       ),
     cleanupCompletedChange: (completionId: string) =>

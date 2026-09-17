@@ -19,6 +19,7 @@ _QUALITY_TREE = (
     "  quality",
     "    format",
     "      format-python",
+    "      format-biome",
     "      format-whitespace",
     "      format-eof",
     "    lint",

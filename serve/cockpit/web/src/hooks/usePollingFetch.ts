@@ -76,19 +76,14 @@ export function usePollingFetch<TPayload = unknown>(
           throw new Error(errorMessage);
         }
 
-        const parse =
-          parseRef.current ??
-          (async (res: Response) => (await res.json()) as TPayload);
+        const parse = parseRef.current ?? (async (res: Response) => (await res.json()) as TPayload);
         const payload = await parse(response);
         await onSuccessRef.current?.(payload);
       } catch (caught) {
         if (caught instanceof DOMException && caught.name === "AbortError") {
           return;
         }
-        const error =
-          caught instanceof Error
-            ? caught
-            : new Error("Polling request failed");
+        const error = caught instanceof Error ? caught : new Error("Polling request failed");
         await onErrorRef.current?.(error);
       } finally {
         inFlightRef.current = false;
@@ -104,9 +99,7 @@ export function usePollingFetch<TPayload = unknown>(
         if (
           pendingReason !== null &&
           isMountedRef.current &&
-          (pendingReason === "initial" ||
-            pendingReason === "manual" ||
-            !pausedRef.current)
+          (pendingReason === "initial" || pendingReason === "manual" || !pausedRef.current)
         ) {
           void poll(pendingReason);
         }

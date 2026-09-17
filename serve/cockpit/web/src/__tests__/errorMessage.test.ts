@@ -7,18 +7,12 @@ function jsonResponse(body: unknown): Response {
 
 describe("getResponseErrorMessage", () => {
   it("normalizes message, detail, and validation error payloads", async () => {
-    await expect(
-      getResponseErrorMessage(
-        jsonResponse({ message: "  invalid request  " }),
-        "fallback",
-      ),
-    ).resolves.toBe("invalid request");
-    await expect(
-      getResponseErrorMessage(
-        jsonResponse({ detail: "  unavailable  " }),
-        "fallback",
-      ),
-    ).resolves.toBe("unavailable");
+    await expect(getResponseErrorMessage(jsonResponse({ message: "  invalid request  " }), "fallback")).resolves.toBe(
+      "invalid request",
+    );
+    await expect(getResponseErrorMessage(jsonResponse({ detail: "  unavailable  " }), "fallback")).resolves.toBe(
+      "unavailable",
+    );
     await expect(
       getResponseErrorMessage(
         jsonResponse({
@@ -33,18 +27,12 @@ describe("getResponseErrorMessage", () => {
         }),
         "fallback",
       ),
-    ).resolves.toBe(
-      "first error; items: invalid item; page: is required; general error",
-    );
+    ).resolves.toBe("first error; items: invalid item; page: is required; general error");
   });
 
   it("uses the fallback when the response has no readable error", async () => {
-    await expect(
-      getResponseErrorMessage(jsonResponse({ detail: [] }), "fallback"),
-    ).resolves.toBe("fallback");
-    await expect(
-      getResponseErrorMessage(jsonResponse(null), "fallback"),
-    ).resolves.toBe("fallback");
+    await expect(getResponseErrorMessage(jsonResponse({ detail: [] }), "fallback")).resolves.toBe("fallback");
+    await expect(getResponseErrorMessage(jsonResponse(null), "fallback")).resolves.toBe("fallback");
     await expect(
       getResponseErrorMessage(
         {

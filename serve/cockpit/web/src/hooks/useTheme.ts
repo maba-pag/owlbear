@@ -28,11 +28,7 @@ function setDocumentTheme(resolved: ResolvedTheme): void {
 
 export function applyTheme(): ResolvedTheme {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  const resolved = isResolvedTheme(stored)
-    ? stored
-    : prefersDark()
-      ? "dark"
-      : "light";
+  const resolved = isResolvedTheme(stored) ? stored : prefersDark() ? "dark" : "light";
 
   setDocumentTheme(resolved);
   return resolved;
@@ -46,18 +42,12 @@ interface UseThemeResult {
 }
 
 export function useTheme(): UseThemeResult {
-  const mediaQueryList = useMemo(
-    () => window.matchMedia("(prefers-color-scheme: dark)"),
-    [],
-  );
+  const mediaQueryList = useMemo(() => window.matchMedia("(prefers-color-scheme: dark)"), []);
   const [theme, setTheme] = useState<Theme>(() => readStoredTheme());
-  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(
-    () => mediaQueryList.matches,
-  );
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => mediaQueryList.matches);
 
   useEffect(() => {
-    const resolved =
-      theme === "auto" ? (systemPrefersDark ? "dark" : "light") : theme;
+    const resolved = theme === "auto" ? (systemPrefersDark ? "dark" : "light") : theme;
 
     if (theme === "auto") {
       localStorage.removeItem(THEME_STORAGE_KEY);
@@ -101,10 +91,7 @@ export function useTheme(): UseThemeResult {
     });
   };
 
-  const isDark = useMemo(
-    () => theme === "dark" || (theme === "auto" && systemPrefersDark),
-    [theme, systemPrefersDark],
-  );
+  const isDark = useMemo(() => theme === "dark" || (theme === "auto" && systemPrefersDark), [theme, systemPrefersDark]);
 
   return { theme, toggle, selectTheme: setTheme, isDark };
 }

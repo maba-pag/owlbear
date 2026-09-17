@@ -20,22 +20,14 @@ async function postPurge<T>(url: string, minAgeDays: number): Promise<T> {
   });
   if (!response.ok) {
     throw new Error(
-      await getResponseErrorMessage(
-        response,
-        `Memory purge request failed with status ${response.status}`,
-      ),
+      await getResponseErrorMessage(response, `Memory purge request failed with status ${response.status}`),
     );
   }
   return (await response.json()) as T;
 }
 
-export function previewMemoryPurge(
-  minAgeDays: number,
-): Promise<MemoryPurgePreview> {
-  return postPurge<MemoryPurgePreview>(
-    "/api/memories/purge/preview",
-    minAgeDays,
-  );
+export function previewMemoryPurge(minAgeDays: number): Promise<MemoryPurgePreview> {
+  return postPurge<MemoryPurgePreview>("/api/memories/purge/preview", minAgeDays);
 }
 
 export function purgeMemories(minAgeDays: number): Promise<MemoryPurgeReceipt> {

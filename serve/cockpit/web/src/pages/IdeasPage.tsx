@@ -1,8 +1,4 @@
-import {
-  PButton,
-  PHeading,
-  PModal,
-} from "@porsche-design-system/components-react";
+import { PButton, PHeading, PModal } from "@porsche-design-system/components-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBeforeUnload, useBlocker } from "react-router";
 import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from "../api/ideas";
@@ -52,8 +48,7 @@ function IdeasPage() {
   const [previewMode, setPreviewMode] = useState(true);
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [conflictSnapshot, setConflictSnapshot] =
-    useState<IdeasConflictSnapshot | null>(null);
+  const [conflictSnapshot, setConflictSnapshot] = useState<IdeasConflictSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -65,25 +60,16 @@ function IdeasPage() {
   const lastSavedContentRef = useRef("");
   const stayButtonRef = useRef<HTMLElement | null>(null);
 
-  const isDirty = useMemo(
-    () => content !== lastSavedContent,
-    [content, lastSavedContent],
-  );
+  const isDirty = useMemo(() => content !== lastSavedContent, [content, lastSavedContent]);
   const hasConflict = conflictSnapshot !== null;
   const navigationBlocker = useBlocker(isDirty);
-  const lineCount = useMemo(
-    () => (content.length === 0 ? 0 : content.split(/\r\n|\r|\n/).length),
-    [content],
-  );
+  const lineCount = useMemo(() => (content.length === 0 ? 0 : content.split(/\r\n|\r|\n/).length), [content]);
   const wordCount = useMemo(() => {
     const words = content.trim().match(/\S+/g);
     return words?.length ?? 0;
   }, [content]);
   const saveDisabled = !isDirty || saving || hasConflict;
-  const lastSavedLabel = useMemo(
-    () => formatLastSavedAt(lastSavedAt),
-    [lastSavedAt],
-  );
+  const lastSavedLabel = useMemo(() => formatLastSavedAt(lastSavedAt), [lastSavedAt]);
 
   const updateIdeasScrollCue = useCallback(() => {
     if (loading) {
@@ -91,12 +77,7 @@ function IdeasPage() {
       return;
     }
     const surface = previewMode ? previewRef.current : textareaRef.current;
-    setIdeasCanScrollDown(
-      Boolean(
-        surface &&
-          surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1,
-      ),
-    );
+    setIdeasCanScrollDown(Boolean(surface && surface.scrollHeight - surface.scrollTop - surface.clientHeight > 1));
   }, [loading, previewMode]);
 
   useEffect(() => {
@@ -153,8 +134,7 @@ function IdeasPage() {
         if (cancelled) {
           return;
         }
-        const message =
-          error instanceof Error ? error.message : "Failed to load ideas";
+        const message = error instanceof Error ? error.message : "Failed to load ideas";
         setErrorMessage(message);
       } finally {
         if (!cancelled) {
@@ -205,8 +185,7 @@ function IdeasPage() {
         setErrorMessage(null);
         return;
       }
-      const message =
-        error instanceof Error ? error.message : "Failed to save ideas";
+      const message = error instanceof Error ? error.message : "Failed to save ideas";
       setErrorMessage(message);
     } finally {
       setSaving(false);
@@ -223,10 +202,8 @@ function IdeasPage() {
         const response = await fetchIdeas();
 
         if (!wasDirtyAtTrigger) {
-          const isDirtyAtResolve =
-            contentRef.current !== lastSavedContentRef.current;
-          const baselineChangedSinceTrigger =
-            lastSavedContentRef.current !== triggerLastSaved;
+          const isDirtyAtResolve = contentRef.current !== lastSavedContentRef.current;
+          const baselineChangedSinceTrigger = lastSavedContentRef.current !== triggerLastSaved;
           if (isDirtyAtResolve || baselineChangedSinceTrigger) {
             return;
           }
@@ -257,8 +234,7 @@ function IdeasPage() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isSaveKey =
-        event.key.toLowerCase() === "s" && (event.metaKey || event.ctrlKey);
+      const isSaveKey = event.key.toLowerCase() === "s" && (event.metaKey || event.ctrlKey);
       if (!isSaveKey) {
         return;
       }
@@ -293,8 +269,7 @@ function IdeasPage() {
       setConflictSnapshot(null);
       setErrorMessage(null);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to save ideas";
+      const message = error instanceof Error ? error.message : "Failed to save ideas";
       setErrorMessage(message);
     } finally {
       setSaving(false);
@@ -351,10 +326,7 @@ function IdeasPage() {
 
   if (loading) {
     return (
-      <section
-        className="flex h-full min-h-0 flex-col p-static-lg text-primary"
-        data-region="ideas-workspace"
-      >
+      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
         <div
           data-testid="ideas-loading"
           role="status"
@@ -369,17 +341,9 @@ function IdeasPage() {
     );
   }
 
-  if (
-    errorMessage &&
-    !saving &&
-    content.length === 0 &&
-    lastSavedContent.length === 0
-  ) {
+  if (errorMessage && !saving && content.length === 0 && lastSavedContent.length === 0) {
     return (
-      <section
-        className="flex h-full min-h-0 flex-col p-static-lg text-primary"
-        data-region="ideas-workspace"
-      >
+      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
         <div
           data-testid="ideas-error"
           role="alert"
@@ -388,15 +352,9 @@ function IdeasPage() {
             "border-error bg-error-low p-static-lg text-primary",
           ].join(" ")}
         >
-          <span className="text-xs font-semibold uppercase text-error">
-            Ideas unavailable
-          </span>
-          <h1 className="m-0 text-2xl font-semibold leading-tight text-primary">
-            Could not open the notebook
-          </h1>
-          <p className="max-w-[56ch] text-sm leading-normal text-primary">
-            {errorMessage}
-          </p>
+          <span className="text-xs font-semibold uppercase text-error">Ideas unavailable</span>
+          <h1 className="m-0 text-2xl font-semibold leading-tight text-primary">Could not open the notebook</h1>
+          <p className="max-w-[56ch] text-sm leading-normal text-primary">{errorMessage}</p>
         </div>
       </section>
     );
@@ -422,37 +380,19 @@ function IdeasPage() {
         >
           <div className="grid w-[min(440px,calc(100vw-2rem))] gap-static-md text-primary">
             <div className="grid gap-static-xs rounded-lg border border-error bg-error-low p-static-md">
-              <span className="text-xs font-semibold uppercase text-error">
-                Unsaved draft
-              </span>
-              <h2
-                id="ideas-unsaved-title"
-                className="m-0 text-xl font-semibold leading-tight text-primary"
-              >
+              <span className="text-xs font-semibold uppercase text-error">Unsaved draft</span>
+              <h2 id="ideas-unsaved-title" className="m-0 text-xl font-semibold leading-tight text-primary">
                 Leave this notebook?
               </h2>
-              <p
-                id="ideas-unsaved-description"
-                className="m-0 text-sm leading-normal text-primary"
-              >
+              <p id="ideas-unsaved-description" className="m-0 text-sm leading-normal text-primary">
                 You have unsaved changes. Leave anyway?
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-static-xs">
-              <PButton
-                type="button"
-                data-testid="ideas-unsaved-leave"
-                variant="secondary"
-                onClick={handleLeavePage}
-              >
+              <PButton type="button" data-testid="ideas-unsaved-leave" variant="secondary" onClick={handleLeavePage}>
                 Leave
               </PButton>
-              <PButton
-                ref={stayButtonRef}
-                type="button"
-                data-testid="ideas-unsaved-cancel"
-                onClick={handleStayOnPage}
-              >
+              <PButton ref={stayButtonRef} type="button" data-testid="ideas-unsaved-cancel" onClick={handleStayOnPage}>
                 Cancel
               </PButton>
             </div>
@@ -472,12 +412,9 @@ function IdeasPage() {
             ].join(" ")}
           >
             <div className="grid gap-1">
-              <span className="text-sm font-semibold text-primary">
-                Ideas changed on disk.
-              </span>
+              <span className="text-sm font-semibold text-primary">Ideas changed on disk.</span>
               <span className="text-xs text-primary">
-                Overwrite the file, load the disk version, or cancel and keep
-                editing.
+                Overwrite the file, load the disk version, or cancel and keep editing.
               </span>
             </div>
             <div className="flex flex-wrap gap-static-xs">
@@ -501,12 +438,7 @@ function IdeasPage() {
               >
                 Load from disk
               </PButton>
-              <PButton
-                type="button"
-                data-testid="ideas-conflict-cancel"
-                compact
-                onClick={handleConflictCancel}
-              >
+              <PButton type="button" data-testid="ideas-conflict-cancel" compact onClick={handleConflictCancel}>
                 Cancel
               </PButton>
             </div>
@@ -609,12 +541,7 @@ function IdeasPage() {
                       <p className="text-sm leading-relaxed text-contrast-medium">
                         This notebook is empty. Switch to Edit to start writing.
                       </p>
-                      <PButton
-                        type="button"
-                        compact
-                        className="mx-auto"
-                        onClick={() => setPreviewMode(false)}
-                      >
+                      <PButton type="button" compact className="mx-auto" onClick={() => setPreviewMode(false)}>
                         Start writing
                       </PButton>
                     </div>
@@ -659,9 +586,7 @@ function IdeasPage() {
             ].join(" ")}
           >
             <div className="grid gap-static-sm">
-              <span className="text-xs font-semibold uppercase text-primary">
-                Notebook
-              </span>
+              <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
               <div className="grid gap-static-xs text-sm text-primary">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
                   <span className="min-w-0">Changes</span>
@@ -692,9 +617,7 @@ function IdeasPage() {
                 "text-sm leading-normal text-primary",
               ].join(" ")}
             >
-              <span className="text-xs font-semibold uppercase text-primary">
-                Writing metrics
-              </span>
+              <span className="text-xs font-semibold uppercase text-primary">Writing metrics</span>
               <div className="grid gap-static-xs">
                 <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">
                   <span className="min-w-0">Lines</span>

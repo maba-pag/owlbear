@@ -1,14 +1,7 @@
 import { getResponseErrorMessage } from "./errorMessage";
 import { ApiError } from "./errors";
 
-export type MemoryState =
-  | "pending"
-  | "curated"
-  | "approved"
-  | "contested"
-  | "disputed"
-  | "stale"
-  | "deleted";
+export type MemoryState = "pending" | "curated" | "approved" | "contested" | "disputed" | "stale" | "deleted";
 
 export interface MemoryEntry {
   id: string;
@@ -54,10 +47,7 @@ export class MemoryMutationError extends Error {
   readonly apiError: ApiError;
   readonly validationMessages: ValidationMessage[];
 
-  constructor(
-    apiError: ApiError,
-    validationMessages: ValidationMessage[] = [],
-  ) {
+  constructor(apiError: ApiError, validationMessages: ValidationMessage[] = []) {
     super(apiError.message);
     this.name = "MemoryMutationError";
     this.apiError = apiError;
@@ -70,12 +60,8 @@ function parseValidationField(loc: unknown): string {
     return "form";
   }
 
-  const field = [...loc]
-    .reverse()
-    .find((part) => typeof part === "string" && part !== "body");
-  return typeof field === "string" && field.trim().length > 0
-    ? field.trim()
-    : "form";
+  const field = [...loc].reverse().find((part) => typeof part === "string" && part !== "body");
+  return typeof field === "string" && field.trim().length > 0 ? field.trim() : "form";
 }
 
 function parseValidationErrors(payload: unknown): ValidationMessage[] {
@@ -109,9 +95,7 @@ function parseMutationErrorCode(payload: unknown): string | null {
   }
 
   const code = (payload as { code?: unknown }).code;
-  return typeof code === "string" && code.trim().length > 0
-    ? code.trim()
-    : null;
+  return typeof code === "string" && code.trim().length > 0 ? code.trim() : null;
 }
 
 function parseMutationErrorPayload(payload: unknown): {
@@ -140,10 +124,7 @@ function parseMutationErrorPayload(payload: unknown): {
   return { validationMessages: [], message: null, code };
 }
 
-async function postMemoryMutation<T>(
-  url: string,
-  body?: Record<string, unknown>,
-): Promise<T> {
+async function postMemoryMutation<T>(url: string, body?: Record<string, unknown>): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -163,59 +144,32 @@ async function postMemoryMutation<T>(
     const parsed = parseMutationErrorPayload(payload);
     const message =
       parsed.message ??
-      (await getResponseErrorMessage(
-        response,
-        `Memory mutation failed with status ${response.status}`,
-      ));
-    throw new MemoryMutationError(
-      new ApiError(response.status, message, parsed.code),
-      parsed.validationMessages,
-    );
+      (await getResponseErrorMessage(response, `Memory mutation failed with status ${response.status}`));
+    throw new MemoryMutationError(new ApiError(response.status, message, parsed.code), parsed.validationMessages);
   }
 
   return (await response.json()) as T;
 }
 
-export async function approveMemory(
-  entryId: string,
-  expectedUpdatedAt: string,
-): Promise<MemoryMutationResponse> {
-  return postMemoryMutation<MemoryMutationResponse>(
-    `/api/memories/${entryId}/approve`,
-    {
-      expected_updated_at: expectedUpdatedAt,
-    },
-  );
+export async function approveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse> {
+  return postMemoryMutation<MemoryMutationResponse>(`/api/memories/${entryId}/approve`, {
+    expected_updated_at: expectedUpdatedAt,
+  });
 }
 
-export async function resolveMemory(
-  entryId: string,
-  expectedUpdatedAt: string,
-): Promise<MemoryMutationResponse> {
-  return postMemoryMutation<MemoryMutationResponse>(
-    `/api/memories/${entryId}/resolve`,
-    {
-      expected_updated_at: expectedUpdatedAt,
-    },
-  );
+export async function resolveMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse> {
+  return postMemoryMutation<MemoryMutationResponse>(`/api/memories/${entryId}/resolve`, {
+    expected_updated_at: expectedUpdatedAt,
+  });
 }
 
-export async function deleteMemory(
-  entryId: string,
-  expectedUpdatedAt: string,
-): Promise<MemoryMutationResponse> {
-  return postMemoryMutation<MemoryMutationResponse>(
-    `/api/memories/${entryId}/delete`,
-    {
-      expected_updated_at: expectedUpdatedAt,
-    },
-  );
+export async function deleteMemory(entryId: string, expectedUpdatedAt: string): Promise<MemoryMutationResponse> {
+  return postMemoryMutation<MemoryMutationResponse>(`/api/memories/${entryId}/delete`, {
+    expected_updated_at: expectedUpdatedAt,
+  });
 }
 
-export async function editMemory(
-  entryId: string,
-  payload: MemoryEditPayload,
-): Promise<MemoryMutationResponse> {
+export async function editMemory(entryId: string, payload: MemoryEditPayload): Promise<MemoryMutationResponse> {
   return postMemoryMutation<MemoryMutationResponse>(
     `/api/memories/${entryId}/edit`,
     payload as unknown as Record<string, unknown>,

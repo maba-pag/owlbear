@@ -10,8 +10,7 @@ const fixture = await mkdtemp(join(tmpdir(), "owlbear-work-portfolio-"));
 async function run(command, arguments_) {
   const process = spawn(command, arguments_, { cwd: root, stdio: "inherit" });
   const [exitCode] = await once(process, "exit");
-  if (exitCode !== 0)
-    throw new Error(`${command} exited with ${exitCode ?? "no status"}`);
+  if (exitCode !== 0) throw new Error(`${command} exited with ${exitCode ?? "no status"}`);
 }
 
 try {
@@ -29,19 +28,15 @@ try {
   throw error;
 }
 
-const server = spawn(
-  "uv",
-  ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"],
-  {
-    cwd: fixture,
-    env: {
-      ...process.env,
-      COCKPIT_PORT: "4175",
-      COCKPIT_NO_OPEN: "1",
-    },
-    stdio: "inherit",
+const server = spawn("uv", ["run", "--project", root, "--package", "owlbear-cockpit", "cockpit"], {
+  cwd: fixture,
+  env: {
+    ...process.env,
+    COCKPIT_PORT: "4175",
+    COCKPIT_NO_OPEN: "1",
   },
-);
+  stdio: "inherit",
+});
 
 const cleanup = async () => {
   if (!server.killed) server.kill("SIGTERM");

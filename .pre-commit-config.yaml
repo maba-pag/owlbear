@@ -9,7 +9,7 @@
 #   uv run megalint [--no-fix | --unsafe-fix]
 #                     MegaLinter only
 #   uv run format [--staged] [--no-fix]
-#                     Python, whitespace, and final-newline formatters
+#                     Python, Biome, whitespace, and final-newline formatters
 #   uv run quality [--no-fix | --unsafe-fix]
 #                     Full format, lint, typecheck, and advisory checks
 #
@@ -131,11 +131,10 @@ repos:
   - repo: local
     hooks:
       - id: biome-frontend-check
-        name: Biome (Cockpit frontend and owned JSON)
+        name: Biome (Cockpit frontend and repository JSON)
         language: system
-        entry: npm --prefix serve/cockpit/web run lint:biome
-        files: ^(serve/cockpit/web/(src|e2e)/.*\.(css|js|mjs|ts|tsx)|.*\.(json|jsonc))$
-        pass_filenames: false
+        entry: node serve/cockpit/web/scripts/run-biome-check.mjs check --write --no-errors-on-unmatched
+        files: ^(serve/cockpit/web/.*\.(css|js|mjs|ts|tsx)|.*\.(json|jsonc))$
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to
       # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual

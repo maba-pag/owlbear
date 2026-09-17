@@ -25,7 +25,7 @@ ENABLE_LINTERS:
   - YAML_YAMLLINT
 
 # Allow all fixer-capable linters to apply their standard fixes by default.
-# The CLI's --no-fix mode disables fixes; --unsafe-fix adds Ruff unsafe fixes.
+# The CLI's --no-fix mode disables fixes; --unsafe-fix adds unsafe fixes.
 APPLY_FIXES: all
 
 # Reporters
@@ -43,7 +43,7 @@ FILTER_REGEX_EXCLUDE: "(\
   \\.egg-info/|\
   \\.owlbear/(\
     delivery/(packages|runtime)/|(doc|py|ts)-index\\.md$|\
-    memory/|research/|target/\
+    legacy/|memory/|research/|target/\
   )|\
   store/(audit|knowledge)/.*\\.db$\
  )"
@@ -89,41 +89,26 @@ PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 # Biome — use the repository-owned biome.json and split descriptors by syntax
 # so MegaLinter does not run the same project-wide Biome check five times.
 JAVASCRIPT_BIOME_CLI_LINT_MODE: list_of_files
-JAVASCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.(js|mjs)$'
+JAVASCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(?!public/).*\.(js|mjs)$'
 JAVASCRIPT_BIOME_FILE_EXTENSIONS:
   - .js
   - .mjs
-JAVASCRIPT_BIOME_CONFIG_FILE: biome.json
-JAVASCRIPT_BIOME_RULES_PATH: .
 
 TYPESCRIPT_BIOME_CLI_LINT_MODE: list_of_files
-TYPESCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.ts$'
-TYPESCRIPT_BIOME_FILE_EXTENSIONS:
-  - .ts
-TYPESCRIPT_BIOME_CONFIG_FILE: biome.json
-TYPESCRIPT_BIOME_RULES_PATH: .
+TYPESCRIPT_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(?!public/).*\.ts$'
 
 JSX_BIOME_CLI_LINT_MODE: list_of_files
-JSX_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(src|e2e)/.*\.tsx$'
+JSX_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/(?!public/).*\.tsx$'
 JSX_BIOME_FILE_EXTENSIONS:
   - .tsx
-JSX_BIOME_CONFIG_FILE: biome.json
-JSX_BIOME_RULES_PATH: .
 
 CSS_BIOME_CLI_LINT_MODE: list_of_files
 CSS_BIOME_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/src/.*\.css$'
-CSS_BIOME_FILE_EXTENSIONS:
-  - .css
-CSS_BIOME_CONFIG_FILE: biome.json
-CSS_BIOME_RULES_PATH: .
 
 JSON_BIOME_CLI_LINT_MODE: list_of_files
-JSON_BIOME_FILTER_REGEX_INCLUDE: '(^|/).*\.(json|jsonc)$'
 JSON_BIOME_FILE_EXTENSIONS:
   - .json
   - .jsonc
-JSON_BIOME_CONFIG_FILE: biome.json
-JSON_BIOME_RULES_PATH: .
 
 # HTML — use the Cockpit web policy instead of MegaLinter defaults.
 HTML_HTMLHINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.html$'

@@ -1,8 +1,4 @@
-export type WorkItemStage =
-  | "design"
-  | "planning"
-  | "implementation"
-  | "completed";
+export type WorkItemStage = "design" | "planning" | "implementation" | "completed";
 export type WorkItemScope = "outcome" | "change-publication";
 export type WorkItemNeed = "you" | "dependency" | "none";
 export type WorkItemNextActor = "you" | "agent" | "dependency" | "none";
@@ -22,11 +18,7 @@ export type WorkItemActionKind =
   | "adopt-external-head"
   | "resume-change"
   | "start-orchestration";
-export type WorkItemProgressKind =
-  | "tasks"
-  | "design-return"
-  | "plan"
-  | "publication";
+export type WorkItemProgressKind = "tasks" | "design-return" | "plan" | "publication";
 export type WorkItemChangeLifecycle =
   | "in-delivery"
   | "finalization"
@@ -70,18 +62,8 @@ export interface WorkItemProgress {
   total: number | null;
 }
 
-export type DeliveryReadinessStatus =
-  | "ready"
-  | "running"
-  | "waiting"
-  | "blocked"
-  | "unavailable"
-  | "complete";
-export type DeliveryReadinessChecksState =
-  | "not-run"
-  | "failed"
-  | "passed"
-  | "unknown";
+export type DeliveryReadinessStatus = "ready" | "running" | "waiting" | "blocked" | "unavailable" | "complete";
+export type DeliveryReadinessChecksState = "not-run" | "failed" | "passed" | "unknown";
 export type DeliveryReadinessReasonCode =
   | "ready"
   | "active-custody"
@@ -113,10 +95,7 @@ export type FinalizationFailureCode =
   | "maintained-check-unavailable"
   | "independent-review-failed"
   | "independent-review-unavailable";
-export type FinalizationFailureCategory =
-  | "custody-preflight"
-  | "maintained-check"
-  | "independent-review";
+export type FinalizationFailureCategory = "custody-preflight" | "maintained-check" | "independent-review";
 
 export interface DeliveryReadinessBasis {
   contract_digest: string | null;
@@ -282,11 +261,7 @@ export type DeliveryHealthReason =
   | "state-publication-invalid"
   | "state-publication-pending"
   | "runtime-reconciliation-required";
-export type DeliveryHealthHeadRelation =
-  | "equal"
-  | "descendant"
-  | "ancestor"
-  | "divergent";
+export type DeliveryHealthHeadRelation = "equal" | "descendant" | "ancestor" | "divergent";
 
 export interface DeliveryHealthDiagnostic {
   source: string;
@@ -308,9 +283,7 @@ export interface DeliveryHealthResponse {
   diagnostics: DeliveryHealthDiagnostic[];
 }
 
-export type DeliveryUnavailableDiagnostic =
-  | "runtime-unavailable"
-  | "coordination-unavailable";
+export type DeliveryUnavailableDiagnostic = "runtime-unavailable" | "coordination-unavailable";
 export type DeliveryCoordinationStatus = "missing" | "unreadable";
 
 export interface DeliveryUnavailableChangeResponse {
@@ -414,10 +387,7 @@ export interface WorkItemPublicationGeneration {
 }
 
 export type PublicationCheckKind = "check_run" | "status_context";
-export type PublicationCheckBlockingState =
-  | "blocking"
-  | "required-pending"
-  | "not-blocking";
+export type PublicationCheckBlockingState = "blocking" | "required-pending" | "not-blocking";
 
 export interface PublicationCheckView {
   check_id: string;
@@ -651,13 +621,9 @@ export interface WorkItemUnavailableDetailResponse {
   readiness: DeliveryReadiness;
 }
 
-export type WorkItemDetailResponse =
-  | WorkItemAvailableDetailResponse
-  | WorkItemUnavailableDetailResponse;
+export type WorkItemDetailResponse = WorkItemAvailableDetailResponse | WorkItemUnavailableDetailResponse;
 
-export function isUnavailableDetail(
-  detail: WorkItemDetailResponse,
-): detail is WorkItemUnavailableDetailResponse {
+export function isUnavailableDetail(detail: WorkItemDetailResponse): detail is WorkItemUnavailableDetailResponse {
   return detail.kind === "unavailable";
 }
 
@@ -694,8 +660,7 @@ export interface CompletionPullRequestIdentity {
   node_id: string;
 }
 
-export interface ReceiptCompletedChangeRecord
-  extends CompletedChangeRecordBase {
+export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase {
   record_kind: "completion-receipt";
   finalization_receipt_id: string;
   finalized_change_head: string;
@@ -736,9 +701,7 @@ export interface AbandonedChangeRecord {
   target_sync_conflict_operation_id: string | null;
 }
 
-export type CompletedChangeRecord =
-  | ReceiptCompletedChangeRecord
-  | AbandonedChangeRecord;
+export type CompletedChangeRecord = ReceiptCompletedChangeRecord | AbandonedChangeRecord;
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[];
@@ -756,13 +719,7 @@ export class WorkItemApiError extends Error {
   readonly authority: string | null;
   readonly retrySafe: boolean;
 
-  constructor(
-    status: number,
-    code: string,
-    detail: string,
-    authority: string | null,
-    retrySafe: boolean,
-  ) {
+  constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean) {
     super(detail);
     this.name = "WorkItemApiError";
     this.status = status;
@@ -772,16 +729,10 @@ export class WorkItemApiError extends Error {
   }
 }
 
-async function workItemRequest<T>(
-  url: string,
-  options: WorkItemRequestOptions,
-): Promise<T> {
+async function workItemRequest<T>(url: string, options: WorkItemRequestOptions): Promise<T> {
   const response = await fetch(url, options);
   if (response.ok) return response.json() as Promise<T>;
-  const payload = (await response.json().catch(() => ({}))) as Record<
-    string,
-    unknown
-  >;
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   const nested =
     typeof payload.detail === "object" && payload.detail !== null
       ? (payload.detail as Record<string, unknown>)
@@ -789,20 +740,13 @@ async function workItemRequest<T>(
   throw new WorkItemApiError(
     response.status,
     typeof nested.code === "string" ? nested.code : options.fallbackCode,
-    typeof nested.detail === "string"
-      ? nested.detail
-      : `Delivery request failed with status ${response.status}`,
+    typeof nested.detail === "string" ? nested.detail : `Delivery request failed with status ${response.status}`,
     typeof nested.authority === "string" ? nested.authority : null,
     nested.retry_safe === true,
   );
 }
 
-function controlRequest<T>(
-  url: string,
-  fallbackCode: string,
-  body?: object,
-  signal?: AbortSignal,
-): Promise<T> {
+function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T> {
   return workItemRequest(url, {
     method: "POST",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -818,10 +762,7 @@ export function listWorkItems(): Promise<WorkItemPortfolioResponse> {
   });
 }
 
-export function listCompletedChanges(
-  cursor?: string,
-  signal?: AbortSignal,
-): Promise<CompletedChangePage> {
+export function listCompletedChanges(cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage> {
   const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : "";
   return workItemRequest(`/api/work-items/completed${query}`, {
     fallbackCode: "ERR_COMPLETED_HISTORY",
@@ -836,37 +777,28 @@ export function searchCompletedChanges(
 ): Promise<CompletedChangePage> {
   const parameters = new URLSearchParams({ query });
   if (cursor) parameters.set("cursor", cursor);
-  return workItemRequest(
-    `/api/work-items/completed/search?${parameters.toString()}`,
-    { fallbackCode: "ERR_COMPLETED_HISTORY_SEARCH", signal },
-  );
+  return workItemRequest(`/api/work-items/completed/search?${parameters.toString()}`, {
+    fallbackCode: "ERR_COMPLETED_HISTORY_SEARCH",
+    signal,
+  });
 }
 
 export function completedChangeRecordId(record: CompletedChangeRecord): string {
-  return record.record_kind === "abandoned-change"
-    ? record.abandonment_id
-    : record.completion_id;
+  return record.record_kind === "abandoned-change" ? record.abandonment_id : record.completion_id;
 }
 
-export function showCompletedChange(
-  changeId: string,
-  recordId: string,
-): Promise<CompletedChangeRecord> {
+export function showCompletedChange(changeId: string, recordId: string): Promise<CompletedChangeRecord> {
   const query = new URLSearchParams({ completion_id: recordId });
-  return workItemRequest(
-    `/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`,
-    { fallbackCode: "ERR_COMPLETED_HISTORY_DETAIL" },
-  );
+  return workItemRequest(`/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`, {
+    fallbackCode: "ERR_COMPLETED_HISTORY_DETAIL",
+  });
 }
 
 export function workItemDetailUrl(changeId: string, itemKey: string): string {
   return `/api/changes/${encodeURIComponent(changeId)}/work-items/${encodeURIComponent(itemKey)}`;
 }
 
-export function showWorkItem(
-  changeId: string,
-  itemKey: string,
-): Promise<WorkItemDetailResponse> {
+export function showWorkItem(changeId: string, itemKey: string): Promise<WorkItemDetailResponse> {
   return workItemRequest(workItemDetailUrl(changeId, itemKey), {
     fallbackCode: "ERR_WORK_ITEM_DETAIL",
   });
@@ -876,9 +808,7 @@ export function designWorkDetailUrl(changeId: string): string {
   return `/api/design-work/${encodeURIComponent(changeId)}`;
 }
 
-export function showDesignWork(
-  changeId: string,
-): Promise<DesignWorkDetailResponse> {
+export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse> {
   return workItemRequest(designWorkDetailUrl(changeId), {
     fallbackCode: "ERR_DESIGN_WORK_DETAIL",
   });
@@ -960,27 +890,21 @@ export function previewWorkItemBackward(
   );
 }
 
-export function reconcileWorkItemPublication(
-  changeId: string,
-): Promise<WorkItemPublicationReconciliationResponse> {
+export function reconcileWorkItemPublication(changeId: string): Promise<WorkItemPublicationReconciliationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/reconcile`,
     "ERR_WORK_ITEM_PUBLICATION_RECONCILE",
   );
 }
 
-export function markWorkItemPublicationReady(
-  changeId: string,
-): Promise<unknown> {
+export function markWorkItemPublicationReady(changeId: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/ready`,
     "ERR_WORK_ITEM_PUBLICATION_READY",
   );
 }
 
-export function observeWorkItemPublicationChecks(
-  changeId: string,
-): Promise<PublicationChecksObservationResponse> {
+export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/checks/observe`,
     "ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE",
@@ -1051,15 +975,10 @@ export function supersedeWorkItemPublication(
   );
 }
 
-export function syncWorkItemTarget(
-  changeId: string,
-  operationId: string,
-): Promise<TargetSyncResponse> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/target/sync`,
-    "ERR_WORK_ITEM_TARGET_SYNC",
-    { operation_id: operationId },
-  );
+export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse> {
+  return controlRequest(`/api/changes/${encodeURIComponent(changeId)}/target/sync`, "ERR_WORK_ITEM_TARGET_SYNC", {
+    operation_id: operationId,
+  });
 }
 
 export function abortWorkItemTargetSync(
@@ -1101,22 +1020,16 @@ export function deferWorkItemChange(
   reason: string,
   expectedFrontierDigest: string,
 ): Promise<unknown> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/defer`,
-    "ERR_WORK_ITEM_CHANGE_DEFER",
-    { reason, expected_frontier_digest: expectedFrontierDigest },
-  );
+  return controlRequest(`/api/changes/${encodeURIComponent(changeId)}/defer`, "ERR_WORK_ITEM_CHANGE_DEFER", {
+    reason,
+    expected_frontier_digest: expectedFrontierDigest,
+  });
 }
 
-export function resumeWorkItemChange(
-  changeId: string,
-  expectedFrontierDigest: string,
-): Promise<unknown> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/resume`,
-    "ERR_WORK_ITEM_CHANGE_RESUME",
-    { expected_frontier_digest: expectedFrontierDigest },
-  );
+export function resumeWorkItemChange(changeId: string, expectedFrontierDigest: string): Promise<unknown> {
+  return controlRequest(`/api/changes/${encodeURIComponent(changeId)}/resume`, "ERR_WORK_ITEM_CHANGE_RESUME", {
+    expected_frontier_digest: expectedFrontierDigest,
+  });
 }
 
 export function abandonWorkItemChange(
@@ -1124,20 +1037,14 @@ export function abandonWorkItemChange(
   reason: string,
   expectedFrontierDigest: string,
 ): Promise<unknown> {
-  return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/abandon`,
-    "ERR_WORK_ITEM_CHANGE_ABANDON",
-    {
-      confirmed_abandonment: true,
-      reason,
-      expected_frontier_digest: expectedFrontierDigest,
-    },
-  );
+  return controlRequest(`/api/changes/${encodeURIComponent(changeId)}/abandon`, "ERR_WORK_ITEM_CHANGE_ABANDON", {
+    confirmed_abandonment: true,
+    reason,
+    expected_frontier_digest: expectedFrontierDigest,
+  });
 }
 
-export function cleanupAbandonedWorkItemChange(
-  changeId: string,
-): Promise<ChangeWorktreeCleanupResponse> {
+export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned`,
     "ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP",

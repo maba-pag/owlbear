@@ -205,8 +205,7 @@ describe("TestFromAC_UseThemeHook_1537", () => {
     expect(result.current.isDark).toBe(true);
     expect(result.current.isDark).toBe(
       result.current.theme === "dark" ||
-        (result.current.theme === "auto" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches),
+        (result.current.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches),
     );
   });
 
@@ -219,8 +218,7 @@ describe("TestFromAC_UseThemeHook_1537", () => {
     expect(result.current.isDark).toBe(true);
     expect(result.current.isDark).toBe(
       result.current.theme === "dark" ||
-        (result.current.theme === "auto" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches),
+        (result.current.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches),
     );
   });
 
@@ -232,8 +230,7 @@ describe("TestFromAC_UseThemeHook_1537", () => {
     expect(result.current.isDark).toBe(false);
     expect(result.current.isDark).toBe(
       result.current.theme === "dark" ||
-        (result.current.theme === "auto" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches),
+        (result.current.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches),
     );
   });
 
@@ -246,8 +243,7 @@ describe("TestFromAC_UseThemeHook_1537", () => {
     expect(result.current.isDark).toBe(false);
     expect(result.current.isDark).toBe(
       result.current.theme === "dark" ||
-        (result.current.theme === "auto" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches),
+        (result.current.theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches),
     );
   });
 });

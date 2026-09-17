@@ -38,28 +38,19 @@ it("copies the complete command and confirms success", async () => {
     }),
   );
 
-  await waitFor(() =>
-    expect(writeText).toHaveBeenCalledWith(
-      "/design website-to-knowledge-vertical",
-    ),
-  );
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("/design website-to-knowledge-vertical"));
   expect(addMessage).toHaveBeenCalledWith({
     text: "Copied /design website-to-knowledge-vertical",
     state: "success",
   });
-  expect(screen.getByRole("button")).toHaveAttribute(
-    "title",
-    "Copied /design website-to-knowledge-vertical",
-  );
+  expect(screen.getByRole("button")).toHaveAttribute("title", "Copied /design website-to-knowledge-vertical");
 });
 
 it("reports a clipboard failure without navigating", async () => {
   stubClipboard(vi.fn().mockRejectedValue(new Error("Clipboard denied")));
   const addMessage = renderCommand("/orchestrate");
 
-  fireEvent.click(
-    screen.getByRole("button", { name: "Copy command /orchestrate" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Copy command /orchestrate" }));
 
   await waitFor(() =>
     expect(addMessage).toHaveBeenCalledWith({
@@ -67,8 +58,5 @@ it("reports a clipboard failure without navigating", async () => {
       state: "error",
     }),
   );
-  expect(screen.getByRole("button")).toHaveAttribute(
-    "title",
-    "Could not copy /orchestrate",
-  );
+  expect(screen.getByRole("button")).toHaveAttribute("title", "Could not copy /orchestrate");
 });
