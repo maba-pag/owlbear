@@ -34,9 +34,9 @@
     "uv run lint": true,
     "uv run lint-cockpit": true,
     "uv run megalint": true,
-    "uv run quality": true,
     "uv run pytest": true,
     "uv run python": true,
+    "uv run quality": true,
     "uv run ruff": true,
     "uv run todo": true
   },
@@ -64,7 +64,9 @@
     ".owlbear/delivery/worktrees/**": true
   },
   "git.autorefresh": false,
-  "github.copilot.chat.additionalReadAccessPaths": ["{{owlbear_abs_path}}"],
+  "github.copilot.chat.additionalReadAccessPaths": [
+    "{{owlbear_abs_path}}"
+  ],
   "github.copilot.chat.agent.autoFix": true,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.cli.sessionController.enabled": true,
@@ -92,7 +94,9 @@
     "implementAbstractClasses": true
   },
   "python.analysis.aiHoverSummaries": true,
-  "python.analysis.fixAll": ["source.unusedImports"],
+  "python.analysis.fixAll": [
+    "source.unusedImports"
+  ],
   "python.analysis.typeCheckingMode": "standard",
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
