@@ -27,6 +27,14 @@ from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
 )
+from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
+    RecoveryIntent,
+    RecoveryReceipt,
+    digest,
+    encoded,
+    journal_path,
+)
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -1441,6 +1449,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "reconcile_finalization_head",
         "remove_integration_repair_claim",
         "remove_active_claim",
+        "complete_recovery",
         "publish_recovery_attention",
         "activate_claim",
         "publish_output",
@@ -2934,14 +2943,13 @@ class DeliveryRuntime:
         return claim
 
     def remove_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
-        """Remove one exact failed Integration repair claim without clearing attention."""
-        frontier, previous = self._read()
+        """Validate identity but refuse unsupported Integration custody release."""
+        frontier, _previous = self._read()
         _require_change_mutable(frontier, "remove_integration_repair_claim")
         claim = frontier.integration_repair_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
             _conflict("claim removal does not match the active Integration repair identity")
-        self._replace(previous, frontier.model_copy(update={"integration_repair_claim": None}))
-        return claim
+        raise DeliveryWorkerExclusionRequiredError
 
     def require_active_claim(
         self,
@@ -2962,24 +2970,49 @@ class DeliveryRuntime:
         attempt_id: str,
         claim_id: str,
     ) -> OutcomeAuthorityBinding:
-        """Remove one exact failed claim without changing its canonical stage authority."""
-        frontier, previous = self._read()
+        """Validate identity but refuse unsupported failed-claim custody release."""
+        frontier, _previous = self._read()
         _require_change_mutable(frontier, "remove_active_claim")
         binding = _find_binding(frontier, outcome_id)
         claim = binding.active_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
             _conflict("claim removal does not match the active execution identity")
-        recovered = binding.model_copy(
-            update={
-                "active_claim": None,
-                "output": None,
-                "candidate": None,
-                "result_candidate": None,
-                "recovery_attention": None,
-            }
+        raise DeliveryWorkerExclusionRequiredError
+
+    def complete_recovery(self, intent: RecoveryIntent, receipt: RecoveryReceipt) -> None:
+        """Atomically publish a verified recovery receipt and retire only its exact owner."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "complete_recovery")
+        request = intent.invocation.request
+        if request.change_id != self._contract.change_id or digest(previous) != intent.frontier_digest:
+            raise DeliveryWorkerExclusionRequiredError
+        replacement = frontier
+        if intent.kind == "clean-claim":
+            binding = self.require_active_claim(request.outcome_id, request.attempt_id, request.owner_id)
+            if binding.output is not None or binding.result_candidate is not None or binding.candidate is not None:
+                raise DeliveryWorkerExclusionRequiredError
+            replacement = _replace_binding(
+                frontier, binding, binding.model_copy(update={"active_claim": None, "recovery_attention": None})
+            )
+        elif any(binding.active_claim is not None for binding in frontier.bindings):
+            raise DeliveryWorkerExclusionRequiredError
+        if frontier.integration_repair_claim is not None:
+            raise DeliveryWorkerExclusionRequiredError
+        custody = self._require_workspace().prepare_recovery_release(intent, receipt)
+        participants = (
+            TransactionParticipant(
+                self._target_root, journal_path(request.change_id, intent.recovery_id, "receipt"), encoded(receipt)
+            ),
+            custody,
         )
-        self._replace(previous, _replace_binding(frontier, binding, recovered))
-        return recovered
+        # The exact custody replacement and completed receipt replace the ordinary no-change
+        # guard. They cannot be split from this centrally admitted frontier mutation.
+        self._replace_content(
+            previous,
+            _model_content(replacement),
+            record_pending_publication=replacement != frontier,
+            additional_participants=participants,
+        )
 
     def publish_recovery_attention(
         self,
@@ -3169,6 +3202,8 @@ class DeliveryRuntime:
         ):
             return binding
         _require_claim(binding, request.claim_id)
+        if self._workspace_manager is not None:
+            self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
         if isinstance(request, AdvanceDelivery):
             updated = self._advance(binding, request)
         elif isinstance(request, RetryDelivery):
@@ -3405,22 +3440,6 @@ class DeliveryRuntime:
         claim = binding.active_claim
         if claim is None:
             _conflict("retry requires an active claim")
-        retry_fingerprint = _retry_fingerprint(
-            self._contract.change_id,
-            binding.outcome_id,
-            claim.worker_role,
-            request.failure_code,
-        )
-        retry_count = binding.retry_count + 1 if binding.retry_fingerprint == retry_fingerprint else 1
-        retry_block = None
-        if retry_count >= _MAX_WORKER_RETRIES:
-            retry_block = DeliveryBlock(
-                block_id=f"retry-budget-{retry_fingerprint[:24]}",
-                reason="Repeated identical worker failures exhausted the automatic retry budget.",
-                unblock_condition="Provide evidence that the failure cause has changed or been repaired.",
-                expected_evidence=(f"retry-fingerprint:{retry_fingerprint}",),
-                locators=(f"outcome:{binding.outcome_id}",),
-            )
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.abandoned_commit is None or request.attempt_id is None:
                 _conflict("Implementation retry requires attempt and abandoned-commit identity")
@@ -3434,26 +3453,9 @@ class DeliveryRuntime:
                 )
                 if coordination.writer.attempt_id != request.attempt_id:
                     _conflict("Implementation retry attempt does not own writer custody")
-            manager.restart(
-                self._contract.change_id,
-                request.attempt_id,
-                request.abandoned_commit,
-            )
         elif request.abandoned_commit is not None or request.attempt_id is not None:
             _conflict("only Implementation retry accepts attempt commit identity")
-        return binding.model_copy(
-            update={
-                "active_claim": None,
-                "output": None,
-                "candidate": None,
-                "result_candidate": None,
-                "return_context": None,
-                "recovery_attention": None,
-                "block": retry_block,
-                "retry_fingerprint": retry_fingerprint,
-                "retry_count": retry_count,
-            }
-        )
+        raise DeliveryWorkerExclusionRequiredError
 
     def _require_workspace(self) -> ChangeWorkspaceManager:
         if self._workspace_manager is None:

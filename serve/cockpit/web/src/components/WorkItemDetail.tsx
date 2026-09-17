@@ -450,7 +450,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
             setConfirmOpen(true);
           }}
         >
-          Recover confirmed-lost claim
+          Request claim recovery
         </PButton>
       )}
       {confirmOpen ? (
@@ -461,14 +461,15 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           dismissButton={false}
           disableBackdropClick
           onDismiss={() => setConfirmOpen(false)}
-          aria={{ role: "alertdialog", "aria-label": "Confirm lost claim" }}
+          aria={{ role: "alertdialog", "aria-label": "Request claim recovery" }}
         >
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">
-              Confirm lost claim
+              Request claim recovery
             </PHeading>
             <p className="text-sm">
-              Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.
+              This request does not stop a worker or prove it has stopped. Delivery keeps custody and files unchanged
+              unless supported host evidence proves every old writer is closed or excluded.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
@@ -482,7 +483,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
                 Cancel
               </PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>
-                {pendingAction === "recover" ? "Recovering..." : "Confirm lost and recover"}
+                {pendingAction === "recover" ? "Requesting..." : "Request recovery"}
               </PButton>
             </div>
           </ConfirmationContent>

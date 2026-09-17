@@ -1051,7 +1051,7 @@ class TargetMCPAdapter:
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
     async def recover_claim(self, request: RecoverClaimRequest) -> dict[str, object]:
-        """Recover one exact failed Delivery claim."""
+        """Request exact recovery; caller confirmation cannot establish worker exclusion."""
         params = self._validate(RecoverClaimParams, request)
         return self._call(
             params,
@@ -1068,7 +1068,7 @@ class TargetMCPAdapter:
         self,
         request: RepairClaimContextRequest,
     ) -> dict[str, object]:
-        """Recover one exact failed Integration repair claim."""
+        """Request legacy Integration recovery without treating identity as exclusion evidence."""
         params = self._validate(RepairClaimContextParams, request)
         return self._call(
             params,

@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
+from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
@@ -46,6 +47,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryResult,
 )
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
@@ -56,6 +58,39 @@ from owlbear_delivery_mcp.server import (
 )
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["planner", "builder", "integration", "proposal"])
+async def test_registered_recovery_exclusion_required(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = recovery_case(tmp_path, kind)
+    async with Client(assemble_target_server(application)) as client:
+        diagnosis = await client.call_tool("repair", {"change_id": "change-a"})
+        assert not diagnosis.is_error
+        result = await client.call_tool(operation, request)
+    assert result.is_error
+    _prefix, marker, content = result.content[0].text.partition("{")
+    assert marker, result.content[0].text
+    diagnostic = json.loads(marker + content)
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    assert diagnostic["current_authority_identity"] == "change-a"
+    assert "Custody and files are unchanged" in diagnostic["detail"]
+    unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+async def test_registered_verified_completed_recovery_replay(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(operation, request)
+    assert not result.is_error
+    payload = json.loads(result.content[0].text)
+    recovered = payload["recovery"] if kind == "proposal" else payload
+    assert recovered["status"] == "recovered"
+    unchanged()
+
 
 DELIVERY_TOOLS = {
     "create_design_session",

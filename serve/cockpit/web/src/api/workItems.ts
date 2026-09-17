@@ -851,6 +851,7 @@ export function clearWorkItemBlock(
   });
 }
 
+/** The legacy flag requests recovery; it is not host-owned worker exclusion evidence. */
 export function recoverWorkItemClaim(
   changeId: string,
   outcomeId: string,

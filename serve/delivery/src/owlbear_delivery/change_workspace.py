@@ -21,6 +21,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
+from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
+    RecoveryIntent,
+    RecoveryReceipt,
+    digest,
+    encoded,
+    journal_path,
+)
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -775,6 +783,7 @@ class ChangeCoordination(_WorkspaceModel):
     writer: ChangeWriter | None = None
     finalization_attempt: ChangeFinalizationAttempt | None = None
     continuation_action: ChangeContinuationAction | None = None
+    recovery_owner_id: str | None = Field(default=None, min_length=1, max_length=128)
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
     target_sync_conflict: ChangeTargetSyncConflictState | None = None
@@ -1138,18 +1147,99 @@ class PortfolioCoordinator:
     @contextmanager
     def publication_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[PublicationLock]:
         """Serialize bounded publication attempts for one Change across processes."""
-        self._coordination_path(change_id)
-        namespace_root = self._state_root / "claims" / "publication-locks"
-        lock_root = namespace_root / change_id
-        with ExitStack() as child_locks:
-            with locked_roots((namespace_root,), blocking=blocking):
-                child_locks.enter_context(locked_roots((lock_root,), blocking=blocking))
+        with self.recovery_lock(change_id, blocking=blocking):
             lock = PublicationLock(self, change_id)
             try:
                 self.require_continuation_access(change_id)
                 yield lock
             finally:
                 lock.close()
+
+    @contextmanager
+    def recovery_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[None]:
+        """Lock exact custody for observation/CAS, without granting effect-entry access."""
+        self._coordination_path(change_id)
+        namespace_root = self._state_root / "claims" / "publication-locks"
+        lock_root = namespace_root / change_id
+        with ExitStack() as child_locks:
+            with locked_roots((namespace_root,), blocking=blocking):
+                child_locks.enter_context(locked_roots((lock_root,), blocking=blocking))
+            yield
+
+    def recovery_coordination_bytes(self, change_id: str, owner_id: str) -> bytes:
+        """Capture the exact fenced coordination bytes that intent publication will CAS."""
+        coordination, _previous = self._read_coordination(change_id)
+        if coordination.recovery_owner_id not in {None, owner_id}:
+            raise DeliveryWorkerExclusionRequiredError
+        return _model_content(coordination.model_copy(update={"recovery_owner_id": owner_id}))
+
+    def record_recovery_intent(self, intent: RecoveryIntent) -> None:
+        """Atomically fence ordinary writers and persist intent without releasing custody."""
+        request = intent.invocation.request
+        _coordination, previous = self._read_coordination(request.change_id)
+        replacement = self.recovery_coordination_bytes(request.change_id, request.owner_id)
+        frontier_path = Path("changes") / request.change_id / "frontier.json"
+        frontier = (self._state_root / frontier_path).read_bytes()
+        if digest(replacement) != intent.coordination_digest or digest(frontier) != intent.frontier_digest:
+            raise DeliveryWorkerExclusionRequiredError
+        self._commit(
+            f"propose-recovery-{intent.recovery_id}",
+            (
+                ReplacementTransactionParticipant(
+                    self._state_root,
+                    self._coordination_path(request.change_id).relative_to(self._state_root),
+                    previous,
+                    replacement,
+                ),
+                TransactionParticipant(
+                    self._state_root, journal_path(request.change_id, intent.recovery_id, "intent"), encoded(intent)
+                ),
+                ReplacementTransactionParticipant(self._state_root, frontier_path, frontier, frontier),
+            ),
+        )
+
+    def prepare_recovery_release(
+        self, intent: RecoveryIntent, receipt: RecoveryReceipt
+    ) -> ReplacementTransactionParticipant:
+        """Prepare only the journal-verified exact release for the runtime transaction."""
+        request = intent.invocation.request
+        coordination, previous = self._read_coordination(request.change_id)
+        if (
+            digest(previous) != intent.coordination_digest
+            or coordination.recovery_owner_id != request.owner_id
+            or receipt.recovery_id != intent.recovery_id
+            or receipt.evidence.recovery_id != intent.recovery_id
+            or receipt.evidence.invocation != intent.invocation
+            or receipt.evidence.status not in {"closed", "excluded"}
+            or (self._state_root / journal_path(request.change_id, intent.recovery_id, "intent")).read_bytes()
+            != encoded(intent)
+            or (self._state_root / journal_path(request.change_id, intent.recovery_id, "evidence")).read_bytes()
+            != encoded(receipt.evidence)
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        changes = {"recovery_owner_id": None}
+        if intent.kind == "ready-readback":
+            action = coordination.continuation_action
+            if action is None or action.operation_id != request.owner_id or action.finished_at is not None:
+                raise DeliveryWorkerExclusionRequiredError
+            changes["continuation_action"] = action.model_copy(update={"finished_at": receipt.finished_at})
+        else:
+            writer = coordination.writer
+            if writer is not None:
+                if writer.claim_id != request.owner_id or writer.attempt_id != request.attempt_id:
+                    raise DeliveryWorkerExclusionRequiredError
+                changes["writer"] = None
+            if intent.kind == "clean-finalizer":
+                attempt = coordination.finalization_attempt
+                if writer is None or attempt is None or attempt.writer != writer or attempt.finished_at is not None:
+                    raise DeliveryWorkerExclusionRequiredError
+                changes["finalization_attempt"] = attempt.model_copy(update={"finished_at": receipt.finished_at})
+        return _replacement(
+            self._state_root,
+            self._coordination_path(request.change_id),
+            previous,
+            coordination.model_copy(update=changes),
+        )
 
     def register(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """Create one replayable per-change coordination record."""
@@ -1175,9 +1265,15 @@ class PortfolioCoordinator:
         self._require_continuation_coordination(self.show(change_id))
 
     def _require_continuation_coordination(self, coordination: ChangeCoordination) -> None:
+        self.require_no_pending_recovery(coordination.change_id)
         action = coordination.continuation_action
         if action is not None and action.finished_at is None and self._continuation_owner.get() != action.operation_id:
             _coordination_conflict(f"Change retains continuation action custody: {action.operation_id}")
+
+    def require_no_pending_recovery(self, change_id: str) -> None:
+        """Keep every normal mutation behind an unfinished recovery's custody fence."""
+        if self.show(change_id).recovery_owner_id is not None:
+            raise DeliveryWorkerExclusionRequiredError
 
     def executing_continuation(self, change_id: str) -> bool:
         """Report whether this call context owns the retained fixed operation."""
@@ -1399,10 +1495,12 @@ class PortfolioCoordinator:
 
     def release(self, change_id: str, claim_id: str) -> ChangeCoordination:
         """Release one exact writer."""
+        self.require_continuation_access(change_id)
         for _attempt in range(_OCC_RETRY_LIMIT):
             coordination_path = self._coordination_path(change_id)
             coordination_bytes = coordination_path.read_bytes()
             coordination = ChangeCoordination.model_validate_json(coordination_bytes)
+            self._require_continuation_coordination(coordination)
             if coordination.writer is None:
                 return coordination
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
@@ -1443,6 +1541,7 @@ class PortfolioCoordinator:
         existing = ChangeCoordination.model_validate_json(previous)
         if (
             existing.writer != coordination.writer
+            or existing.recovery_owner_id != coordination.recovery_owner_id
             or existing.publication_lease != coordination.publication_lease
             or existing.continuation_action != coordination.continuation_action
         ):
@@ -1698,6 +1797,12 @@ class ChangeWorkspaceManager:
     def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
         """Join current workspace custody to the caller's runtime transaction."""
         return self._coordinator.prepare_runtime_custody_guard(change_id)
+
+    def prepare_recovery_release(
+        self, intent: RecoveryIntent, receipt: RecoveryReceipt
+    ) -> ReplacementTransactionParticipant:
+        """Join exact recovered custody to its immutable completion receipt."""
+        return self._coordinator.prepare_recovery_release(intent, receipt)
 
     def ensure(
         self,
@@ -2409,6 +2514,10 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _require_recovery_authority(coordination: ChangeCoordination) -> None:
+        if coordination.recovery_owner_id is not None:
+            raise DeliveryWorkerExclusionRequiredError
+        if coordination.continuation_action is not None and coordination.continuation_action.finished_at is None:
+            _coordination_conflict("Change worktree recovery cannot overlap retained engine custody")
         if coordination.writer is not None:
             _coordination_conflict("Change worktree recovery cannot overlap an active writer")
         if coordination.publication_expiry is not None and coordination.publication_expiry > datetime.now(UTC):
@@ -3488,7 +3597,12 @@ class ChangeWorkspaceManager:
         head = self.observed_change_head(change_id)
         self._require_worktree(change_id, coordination.worktree_path, coordination.branch, head)
         status = self._run_git(
-            "status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=coordination.worktree_path
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            cwd=coordination.worktree_path,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
         paths = self._dirty_paths(status)
         fingerprint = hashlib.sha256(head.encode() + b"\0" + status)
@@ -3506,6 +3620,30 @@ class ChangeWorkspaceManager:
                 )
         reason = self._captured_finalization_guard(coordination, head, promoted_commits)
         return coordination, head, fingerprint.hexdigest(), paths, reason or ("workspace-dirty" if status else None)
+
+    def capture_recovery_workspace(
+        self, change_id: str, promoted_commits: tuple[str, ...]
+    ) -> tuple[ChangeCoordination, str, str, tuple[str, ...], str | None]:
+        """Inspect retained custody without exempting damaged or dirty workspace state."""
+        coordination, head, fingerprint, paths, reason = self.capture_finalization_workspace(
+            change_id, promoted_commits
+        )
+        ignored = self._run_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--untracked-files=normal",
+            cwd=coordination.worktree_path,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        ).stdout
+        if ignored:
+            return coordination, head, fingerprint, paths, "workspace-dirty"
+        if reason == "active-custody" and coordination.publication_lease is None:
+            reason = self._captured_finalization_guard(
+                coordination.model_copy(update={"writer": None}), head, promoted_commits
+            )
+        return coordination, head, fingerprint, paths, reason
 
     @staticmethod
     def _dirty_paths(status: bytes) -> tuple[str, ...]:
@@ -3932,6 +4070,8 @@ class ChangeWorkspaceManager:
         coordination = self._coordinator.show(change_id)
         if coordination.writer is None or coordination.writer.claim_id != claim_id:
             _coordination_conflict("writer claim does not own the change workspace")
+        if coordination.writer.kind == "finalize":
+            raise DeliveryWorkerExclusionRequiredError
         branch_head = self._resolve(coordination.branch)
         if branch_head != commit:
             _workspace_failure("candidate commit is not the current change branch head")
@@ -3964,31 +4104,34 @@ class ChangeWorkspaceManager:
 
     def restart(self, change_id: str, attempt_id: str, rejected_head: str) -> ChangeCoordination:
         """Preserve a rejected head and restore the change to its reviewed boundary."""
-        coordination = self._coordinator.show(change_id)
-        branch_head = self._resolve(coordination.branch)
-        self._reject_unpromoted_adoption_restart(coordination, branch_head)
-        worktree = coordination.worktree_path
-        attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
-        self._git("check-ref-format", attempt_ref)
-        preserved = self._resolve(attempt_ref, missing_ok=True)
-        if preserved is not None and preserved != rejected_head:
-            _workspace_failure("attempt history ref names another rejected head")
-        if coordination.writer is None:
-            return self._validate_released_restart(coordination, rejected_head, branch_head, preserved)
-        self._prepare_active_restart(
-            coordination,
-            attempt_id,
-            rejected_head,
-        )
-        if not self._worktree_present(worktree):
-            self._register_worktree(worktree, coordination.branch, self._git)
-        self._require_worktree(
-            change_id,
-            worktree,
-            coordination.branch,
-            coordination.last_reviewed_commit,
-        )
-        return self._coordinator.release(change_id, coordination.writer.claim_id)
+        with self._coordinator.publication_lock(change_id):
+            coordination = self._coordinator.show(change_id)
+            if coordination.writer is not None and coordination.writer.kind == "finalize":
+                raise DeliveryWorkerExclusionRequiredError
+            branch_head = self._resolve(coordination.branch)
+            self._reject_unpromoted_adoption_restart(coordination, branch_head)
+            worktree = coordination.worktree_path
+            attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
+            self._git("check-ref-format", attempt_ref)
+            preserved = self._resolve(attempt_ref, missing_ok=True)
+            if preserved is not None and preserved != rejected_head:
+                _workspace_failure("attempt history ref names another rejected head")
+            if coordination.writer is None:
+                return self._validate_released_restart(coordination, rejected_head, branch_head, preserved)
+            self._prepare_active_restart(
+                coordination,
+                attempt_id,
+                rejected_head,
+            )
+            if not self._worktree_present(worktree):
+                self._register_worktree(worktree, coordination.branch, self._git)
+            self._require_worktree(
+                change_id,
+                worktree,
+                coordination.branch,
+                coordination.last_reviewed_commit,
+            )
+            return self._coordinator.release(change_id, coordination.writer.claim_id)
 
     def _reject_unpromoted_adoption_restart(
         self,

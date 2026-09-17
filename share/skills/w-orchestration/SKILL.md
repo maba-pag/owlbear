@@ -139,9 +139,11 @@ typed `integration_attention`, acquisition failures, and the optional `health_hi
 `health_hint` is non-empty, immediately call `delivery_health` with `{}` and report its bounded
 diagnostics before dispatching any launch. Do not dispatch or recover a Change identified by those
 diagnostics; quarantined Changes have no actionable launch authority. Active claims remain occupied until the
-exact recovery operation completes. `recover_claim` automatically preserves dirty Builder bytes in
-an isolated quarantine ref, cleans the managed worktree, releases stale custody, and permits the
-next acquisition; it returns attention only when preservation or exact custody verification fails.
+exact verified recovery operation completes. `recover_claim` does not accept timeout or caller
+confirmation as evidence. Without supported host-owned exclusion it returns
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` with `retry_safe: false`, leaving custody and files unchanged.
+Closure must cover the invocation, descendant writers and outstanding tool jobs with no ability to
+resume, or enforce restart-durable exclusion from every managed filesystem, Git and mutation resource.
 Report the typed result unchanged. Do not filter for capacity, infer readiness, create identities,
 or reserve writer custody.
 
@@ -153,22 +155,23 @@ agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, w
 source head.
 
 If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
-equal the launch and require non-empty `failed_operation` and `reason`. Use that same exact
-`recover_claim` request with `confirmed_lost=true`. Never forward this result to
+equal the launch and require non-empty `failed_operation` and `reason`. Retain custody and report
+the exact identities and missing host-owned exclusion evidence. Never forward this result to
 `transition_delivery` or translate it into a worker lifecycle action.
 
 If Planner or Builder dispatch otherwise fails before returning a structurally valid worker result,
-use that same exact `recover_claim` request with `confirmed_lost=true`. Recovery attention remains runtime-owned evidence;
+retain the exact claim and request supported host-owned exclusion. A caller's `confirmed_lost`
+flag never contributes evidence. Recovery attention remains runtime-owned evidence;
 report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
 attention and is not claim-recoverable by Orchestrator; it may still qualify for the Change repair
 route in Step 4 when it has an exact `change_id`. Do not report a recovery operation as unavailable
 unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
 
-When exact recovery returns `recovered`, discard the failed launch and continue with the next
-acquisition cycle; do not inspect or classify the quarantined files. When it returns `attention`,
-report the returned reason and retry condition as machine-owned evidence. Do not ask the user to
-choose which dirty files to keep, discard, adopt, or commit.
+Only a verified completed recovery receipt permits fresh acquisition; never interpret an error
+envelope as `recovered`. `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` is non-retryable: report the
+missing supported host evidence and stop with custody intact. Read-only diagnosis remains available.
+Do not inspect or classify private preservation contents or ask the user to operate Git or kill processes.
 
 ## Step 3 - Forward One Worker Transition
 
@@ -188,18 +191,19 @@ commit fields. For a `DeliveryTransition`, call `transition_delivery` with outer
 `change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
 A worker-owned `block`, `retry`, or `return` is forwarded normally and must not be recovered. A
 malformed submission result or identity mismatch follows the existing dispatch-failure recovery
-route.
+route. A `retry` cannot release custody without verified exclusion; report the non-retryable rejection
+and do not rewrite it into another transition.
 
 Immediately before forwarding, if no directly callable `transition_delivery` binding exists, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool
-error, call `recover_claim` with `confirmed_lost=true` and the launch's exact change, outcome, attempt, and claim IDs, report
-the routing failure and recovery result, and end the session after the current acquired batch. Do
+error, retain the launch's exact change, outcome, attempt, and claim IDs, report
+the routing failure and missing exclusion evidence, and end the session after the current acquired batch. Do
 not redispatch Planner, Builder, or another agent to echo, relay, reconstruct, or apply a transition.
 
 An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
 the exact Step 2 recovery route for the still-active claim. A rejected `transition_delivery` call
-for worker-output schema validation is also a malformed dispatch result and requires that recovery
-before session completion.
+for worker-output schema validation is also a malformed dispatch result; retain custody and report
+the missing evidence instead of claiming recovery before session completion.
 
 ## Step 4 - Preserve Typed Integration Attention
 

@@ -1742,9 +1742,10 @@ it("keeps claim recovery and backward movement explicit and confirmable", async 
     },
   });
   const { container } = renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Recover confirmed-lost claim");
-  fireEvent.click(screen.getByText("Recover confirmed-lost claim"));
-  fireEvent.click(screen.getByText("Confirm lost and recover"));
+  await screen.findByText("Request claim recovery");
+  fireEvent.click(screen.getByText("Request claim recovery"));
+  expect(screen.getByText(/This request does not stop a worker or prove it has stopped/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Request recovery"));
   await waitFor(() =>
     expect(requests.some(({ url, method }) => method === "POST" && url.endsWith("/claims/recover"))).toBe(true),
   );
@@ -1795,9 +1796,9 @@ it("keeps claim recovery confirmation open when recovery fails", async () => {
   });
   mutationFailurePath = "/claims/recover";
   renderPage("/delivery/change-alpha/outcome%3AOUT-001");
-  await screen.findByText("Recover confirmed-lost claim");
-  fireEvent.click(screen.getByText("Recover confirmed-lost claim"));
-  fireEvent.click(screen.getByText("Confirm lost and recover"));
+  await screen.findByText("Request claim recovery");
+  fireEvent.click(screen.getByText("Request claim recovery"));
+  fireEvent.click(screen.getByText("Request recovery"));
 
   await waitFor(() =>
     expect(requests).toContainEqual({
@@ -1814,7 +1815,7 @@ it("keeps claim recovery confirmation open when recovery fails", async () => {
   expect(within(dialog).getByRole("alert")).toHaveTextContent(
     "The Delivery operation was rejected while the confirmation was open.",
   );
-  expect(within(dialog).getByText("Confirm lost claim")).toBeInTheDocument();
+  expect(within(dialog).getByText("Request claim recovery")).toBeInTheDocument();
 });
 
 it("clears a backward target that becomes invalid after a successful move", async () => {
@@ -5514,7 +5515,7 @@ it("reports engine continuation custody as provenance without offering caller-co
   expect(inspector).toHaveTextContent("cockpit-host");
   expect(inspector).toHaveTextContent("cockpit-session");
   expect(inspector).toHaveTextContent("not evidence that the worker is still running");
-  expect(within(inspector).queryByText("Recover confirmed-lost claim")).not.toBeInTheDocument();
+  expect(within(inspector).queryByText("Request claim recovery")).not.toBeInTheDocument();
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
 });
 

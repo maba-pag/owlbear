@@ -2,9 +2,9 @@
 
 ## Status and authority
 
-**D03-P: ready for specification review; no implementation authorized or performed.**
+**D03-A: partial implementation checkpoint; not complete or ready for phase acceptance.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
-Only this file is changed by D03-P. The programme and shared governance remain unchanged.
+D03-P changed only this file. The programme and shared governance remain unchanged.
 
 - Original source inspection: `96f21ec5d87de2a8003d4010281fc4dc47b7d645`, branch `copilot/d03-p`.
 - Published package: draft [PR #326](https://github.com/maba-pag/owlbear/pull/326), targeting `dev`.
@@ -22,8 +22,10 @@ Only this file is changed by D03-P. The programme and shared governance remain u
   837 scoped Python tests, 314 frontend tests, a production build, 22 browser tests and named-host
   dispatch rehearsal. This verifies predecessor acceptance; it is not D03 proof or a claim that
   later dependency updates were tested by that run.
-- Specification approval: **pending**. A later explicit implementation request approves only the
-  named phase against the plan presented on this PR. Worker-written progress is not approval.
+- Specification approval: user [comment 5714163306](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5714163306)
+  explicitly approved the presented plan at `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` and requested
+  **D03-A only**, implemented by GPT-6 Astra. This is separate from worker-written progress and
+  does not authorize B–E, merge or activation.
 
 Repository paths in links resolve from this file. Command paths below use the actual cloud checkout
 `/home/runner/work/owlbear/owlbear`; later workers must resolve their own checkout before invocation.
@@ -632,8 +634,8 @@ Closeout, split into bounded selections:
 
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
-| D03-P | Reviewed candidate `466b5ea50e8d9569c0e4295941a05b4fb0e84134`; this repair changes only the plan | PR review requested changes; three finding repairs mapped below; prior reviews are historical, not approval of this candidate | Publish repair on PR #326 and request D03-P re-review; stop |
-| D03-A | Not started | None | Exclusion and recovery reference path |
+| D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
+| D03-A | Working changes based on `6c8c039a05c32ec265e45430d0b8a4e8e05be23c`; publication revision assigned by the coordinating session | Fail-closed perimeter and proof below; independent implementation review pending | Positive host-evidence authority, immutable recovery journal, atomic release/replay and reference path remain; A is incomplete and B is blocked |
 | D03-B | Not started | None | Durable budgets/backoff |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
@@ -682,6 +684,153 @@ not reuse the earlier candidate's verdict.
 CodeQL skipped the documentation-only change; automated review remained unavailable because its
 configured model was absent. No automated review pass or independent re-review is claimed.
 
+### D03-A partial checkpoint — 2026-09-17
+
+The approved contract is unchanged. This checkpoint implements only the first fail-closed perimeter:
+
+- `recovery.py` defines the bounded exclusion-required error. Public claim recovery, legacy
+  Integration recovery and exact repair-proposal application reject without changing custody/files;
+  read-only diagnosis and existing input validation remain. Timeout cannot free a legacy Planner.
+- Runtime claim-removal and retry paths reject unsupported release. Central mutation registration
+  and `_require_change_mutable` remain intact, with the authority invariant passing.
+- Shared diagnostics classify the new code as a non-retryable conflict before generic handling.
+  Real-core strict MCP adapter, registered MCP server and HTTP tests preserve exact claim/writer,
+  index, worktree bytes and refs, including separately staged/private-untracked fixture bytes.
+- Controlled local-process tests prove both a still-writing parent and an orphaned writing child
+  remain contained after lease expiry and application reopening. These are **negative containment
+  proof only**, not supported closure, exactly-one replacement or full V10.
+- Workflow, proposal and frontend copy no longer treat user confirmation as worker termination.
+  Existing no-evidence positive legacy tests now assert rejection/preservation. No dirty restoration,
+  retry ledger, offline entry, provider activation or new public recovery operation is implemented.
+  No readiness enum/field was introduced, so reason-union parity changes are unnecessary.
+
+**Unimplemented A work (cloud-required, blocks A completion/B):** injected trusted host-evidence owner
+and issued-boundary binding; versioned immutable exact `RecoveryIntent`/`RecoveryReceipt` and opaque
+references; exact fence capture/recheck outside a global host wait; atomic `RuntimeTransaction`
+receipt plus claim/writer release; supported clean failed finalizer/claim activation and one interrupted
+engine reference path; completed verified receipt replay; wrong-generation/evidence/head rejection;
+concurrent/restart/fault-injection authority proof; replacement and late-result proof. Workspace
+release callers beyond the public recovery/removal/retry perimeter still require the planned audit.
+No fixture is represented as a production host integration.
+
+Changed file inventory, relative to the inspected absolute checkout
+`/home/runner/work/owlbear/owlbear`:
+
+- Core: `serve/delivery/src/owlbear_delivery/recovery.py` (new), `__init__.py`,
+  `portfolio_application.py`, `delivery_runtime.py`, `diagnostics.py`.
+- Core tests: `serve/delivery/tests/test_recovery.py` (new), `test_portfolio_application.py`,
+  `test_delivery_runtime.py`.
+- MCP: `serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py`, `target_server.py`;
+  `serve/delivery-mcp/tests/test_delivery_adapter.py`, `test_target_server.py`.
+- HTTP: `serve/cockpit/src/owlbear_cockpit/target_models.py`, `routes/target_work.py`;
+  `tests/test_cockpit_work_items.py`.
+- Frontend: `serve/cockpit/web/src/api/workItems.ts`, `components/WorkItemDetail.tsx`,
+  `__tests__/WorkPortfolio.test.tsx`.
+- Workflow: `share/skills/w-orchestration/SKILL.md`, `share/agents/orchestrator.agent.md`,
+  `share/agents/repairer.agent.md`, `tests/test_agent_ecosystem_validation.py`.
+- This package progress record: `.owlbear/research/delivery-cloud-d03-plan.md`.
+
+#### Executed proof and environment
+
+All Python commands ran from `/home/runner/work/owlbear/owlbear` with:
+
+```shell
+export PATH=/home/runner/work/owlbear/owlbear/.owlbear/scratch/d03-tools/bin:$PATH
+export TMPDIR=/home/runner/work/owlbear/owlbear/.owlbear/scratch
+export UV_CACHE_DIR=/home/runner/work/owlbear/owlbear/.owlbear/scratch/uv-cache
+export UV_PYTHON_INSTALL_DIR=/home/runner/work/owlbear/owlbear/.owlbear/scratch/uv-python
+```
+
+The first process command failed because `uv` was absent (exit 127, 0.001 s). After advisory DB
+clearance, `uv==0.12.15` was installed in the ignored scratch tools directory; locked workspace
+dependencies were restored by `uv run --locked` (including CPython 3.14.7). The first two-process-case
+run passed in 2.48 s (54.466 s wall including dependency restoration). No manifest/lockfile changed.
+
+The owning closeout command was:
+
+```shell
+uv run --locked pytest -n 1 -m 'not api and not model and not e2e' \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_delivery_runtime.py \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_recovery.py \
+  /home/runner/work/owlbear/owlbear/serve/delivery-mcp/tests/test_delivery_adapter.py \
+  /home/runner/work/owlbear/owlbear/serve/delivery-mcp/tests/test_target_server.py \
+  /home/runner/work/owlbear/owlbear/tests/test_cockpit_work_items.py \
+  /home/runner/work/owlbear/owlbear/tests/test_delivery_worktree_authority.py \
+  /home/runner/work/owlbear/owlbear/tests/test_agent_ecosystem_validation.py \
+  -q --tb=short --basetemp=/home/runner/work/owlbear/owlbear/.owlbear/scratch/d03-a-closeout
+```
+
+Result: **754 passed, 2 failed**, one existing Starlette deprecation warning; pytest 113.15 s,
+wall 114.237 s. Failures were not hidden:
+
+1. `test_delivery_loader_rejects_git_and_state_identity_before_composition`: repository-contained
+   scratch allowed Git to discover the enclosing checkout. Rechecked with
+   `GIT_CEILING_DIRECTORIES=/home/runner/work/owlbear/owlbear/.owlbear/scratch`; passed.
+2. `test_declared_mcp_tools_exist_in_live_registries`: pre-existing expected orchestrator tool set
+   omits `acquire_change_action` and `execute_change_action`, both already present in HEAD's agent
+   frontmatter. Both baseline files were inspected with `git show HEAD:<path>`; their mismatch is
+   unchanged. No permission grant or unrelated allowlist repair was made; this failure remains open.
+
+Focused runs before closeout: application recovery selection **36 passed** (6.16 s / 6.984 s wall);
+runtime retry/Integration/central-mutability selection **7 passed** (1.36 s / 2.166 s wall).
+The first transport selection had **11 passed, 4 failed** because registered MCP errors include a
+framework prefix before the diagnostic JSON. Parsing was corrected without weakening envelope
+assertions; the four registered cases then passed (4.52 s / 4.878 s wall), and all passed in closeout.
+
+After the orphan-child extension, the exact process node was rerun:
+
+```shell
+GIT_CEILING_DIRECTORIES=/home/runner/work/owlbear/owlbear/.owlbear/scratch \
+uv run --locked pytest -n 1 -m 'not api and not model and not e2e' \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py::test_legacy_process_exclusion_required_after_lease \
+  -q --tb=short --basetemp=/home/runner/work/owlbear/owlbear/.owlbear/scratch/d03-a-orphan
+```
+
+**4 passed**, 2.63 s / 3.532 s wall. Loader/environment and new workflow-contract recheck:
+the loader node above plus
+`tests/test_agent_ecosystem_validation.py::test_recovery_workflows_require_host_exclusion_not_caller_confirmation`
+with the same pytest flags and `--basetemp=.../.owlbear/scratch/d03-a-recheck`:
+**2 passed**, 0.96 s / 1.760 s wall.
+
+Frontend commands ran from `/home/runner/work/owlbear/owlbear/serve/cockpit/web`:
+
+```shell
+npm test -- /home/runner/work/owlbear/owlbear/serve/cockpit/web/src/__tests__/WorkPortfolio.test.tsx
+npm run build
+node /home/runner/work/owlbear/owlbear/serve/cockpit/web/scripts/run-biome-check.mjs check \
+  /home/runner/work/owlbear/owlbear/serve/cockpit/web/src/api/workItems.ts \
+  /home/runner/work/owlbear/owlbear/serve/cockpit/web/src/components/WorkItemDetail.tsx \
+  /home/runner/work/owlbear/owlbear/serve/cockpit/web/src/__tests__/WorkPortfolio.test.tsx
+```
+
+**110 tests passed** (103.99 s / 104.884 s wall); **build passed** (10.545 s wall);
+**Biome passed**, three files (0.226 s wall). Initial focused test failed for absent `cross-env`
+(0.141 s); `npm ci --no-audit --no-fund` restored unchanged locked dependencies (7.065 s).
+These checks used available Node 22.23.2, below the manifest's Node 24 minimum; npm emitted
+`EBADENGINE`. They are actual passing checks, **not pinned-Node acceptance**; external CI must cover
+the pinned runtime. No browser or live host check was run.
+
+Ruff `check` and `format --check` passed on all 16 changed Python paths (0.078 s and 0.059 s wall);
+initial import/unused-argument/format findings were repaired. Coordinating session owns secret
+scanning, publication, independent implementation review and final validation; no such pass is
+claimed by this writer.
+
+Final proposal-copy change was checked without repeating the closeout:
+
+```shell
+uv run --locked pytest -n 1 -m 'not api and not model and not e2e' \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py::test_repair_change_diagnoses_but_exclusion_required_to_apply \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py::test_repair_facade_matches_existing_repair_proposal_authority \
+  '/home/runner/work/owlbear/owlbear/serve/delivery-mcp/tests/test_delivery_adapter.py::test_real_core_recovery_exclusion_required[proposal]' \
+  '/home/runner/work/owlbear/owlbear/serve/delivery-mcp/tests/test_target_server.py::test_registered_recovery_exclusion_required[proposal]' \
+  -q --tb=short --basetemp=/home/runner/work/owlbear/owlbear/.owlbear/scratch/d03-a-final
+```
+
+**4 passed**, 3.65 s / 4.495 s wall. Ruff check/format rechecks on the changed application and its
+test passed (0.074 s / 0.055 s wall). `git diff --check` passed. Owned disposable pytest directories
+were cleaned; restored dependencies/tooling remain available to the coordinating reviewer.
+
 ### Gaps and decisions
 
 | Gap | Available evidence / reason unrun | Owner/environment and blocking effect |
@@ -692,12 +841,14 @@ configured model was absent. No automated review pass or independent re-review i
 | Offline structure is not semantic integrity | Runtime imports and automatic transaction recovery are deliberately excluded | D's output must label this limit. Unknown corruption remains diagnosed; D07 owns any approved repair. Not a blocker for a truthful read-only entry. |
 | Product tests/build/static checks | D03-P changes documentation only; proposed tests do not yet exist | Intentionally not run in P. Each implementing phase owns its cloud-required checks; external CI retains broad gates. No old counts are a new pass. |
 | Actual host workflow/stdio and live activation | Not exercised by planning or in-process adapters | D08-H / user-controlled host acceptance; no service start or activation here. |
-| Repair re-review | Three review findings have proposed plan fixes; no re-review verdict yet | Independent reviewer on PR #326 must review the published repair before specification approval. |
+| Repair re-review | Independent Claude Opus 5 `d03-p-prerequisite` PASS supplied by coordinating session on approved repaired plan | Prerequisite satisfied; separate user approval recorded above. |
+| D03-A positive authority and reference path | Only the fail-closed perimeter is implemented and tested; missing core work is listed above | Continue D03-A on PR #326. Blocks A acceptance, B and package merge; not a host-only deferral. |
+| Existing workflow-registry test mismatch | Baseline orchestrator expected-tool set omits two already-granted D02 continuation tools | Coordinating/integration owner; not hidden by skips or modified role permissions. |
 
 There is no new product permission request to resolve during planning: unavailable exclusion fails
 closed under the already required policy. A future request to release unverifiable D02 workers,
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-**Next request:** `Review D03-P using the package plan and review-repair record on this PR.`
-This recommendation does not start A, approve a merge, waive host proof or authorize live activation.
+**Next request:** `Resume D03-A on this PR from the recorded partial checkpoint; implement and prove the remaining approved recovery authority.`
+This recommendation does not start B, approve a merge, waive host proof or authorize live activation.

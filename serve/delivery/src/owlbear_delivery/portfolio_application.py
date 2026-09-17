@@ -10,7 +10,7 @@ import subprocess
 import time
 import uuid
 from contextlib import ExitStack, contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -49,7 +49,6 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
-    DirtyWorktreeQuarantineReceipt,
     OutOfBandHeadRecoveryReceipt,
     PortfolioCoordinator,
     PromoteExternalHead,
@@ -172,6 +171,24 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationPullRequest,
     failed_required_publication_checks,
+)
+from owlbear_delivery.recovery import (
+    MAX_RECOVERY_INTENTS,
+    DeliveryWorkerExclusionRequiredError,
+    RecoveryEvidence,
+    RecoveryEvidenceProvider,
+    RecoveryEvidenceReference,
+    RecoveryIntent,
+    RecoveryInvocation,
+    RecoveryInvocationRequest,
+    RecoveryReceipt,
+    UnavailableRecoveryEvidenceProvider,
+    digest,
+    invocation_path,
+    journal_path,
+    publish_record,
+    read_record,
+    verify_evidence,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -1871,6 +1888,7 @@ class PortfolioApplicationDependencies:
     change_branch_publisher: ChangeBranchPublisher | None = None
     draft_pull_request_publisher: DraftPullRequestPublisher | None = None
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
+    recovery_evidence_provider: RecoveryEvidenceProvider = field(default_factory=UnavailableRecoveryEvidenceProvider)
 
 
 @dataclass(frozen=True)
@@ -1969,6 +1987,7 @@ class PortfolioApplication:
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._startup_health_diagnostics = dependencies.health_diagnostics
+        self._recovery_evidence_provider = dependencies.recovery_evidence_provider
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -2668,8 +2687,10 @@ class PortfolioApplication:
         """Recreate one missing Change worktree from explicit reviewed authority."""
         if confirmed_recovery is not True:
             self._fail("Change worktree recovery requires explicit confirmation")
-        self._runtime(change_id, for_mutation=True, allow_finalizer=True)
-        with locked_roots((self._checkpoint_lock_root(change_id),)):
+        runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                raise DeliveryWorkerExclusionRequiredError
             try:
                 coordination = self._workspace_manager.recover(change_id, recovery_reviewed_head)
                 branch_head = self._workspace_manager.observed_change_head(change_id)
@@ -2867,6 +2888,10 @@ class PortfolioApplication:
         if runtime.change_disposition() is not None:
             self._fail("finalization requires current Change attention resolution")
         attempt = self._workspace_manager.show(change_id).finalization_attempt
+        reports = FinalizationReportStore(self._target_root, change_id).read()
+        if any(report.request.attempt_key == request.operation_id for report in reports.reports):
+            message = "failed finalization attempt cannot submit success after retirement"
+            raise DeliveryActionBusyError(message)
         active = attempt is not None and attempt.finished_at is None
         if active:
             self._require_finalization_attempt(runtime, request, attempt)
@@ -6219,18 +6244,15 @@ class PortfolioApplication:
                 try:
                     if claim.continuation or _timestamp(claim.started_at) > cutoff:
                         continue
-                    if claim.worker_role is DeliveryWorkerRole.BUILDER:
+                    if claim.worker_role in {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}:
                         failures.append(
                             DeliveryAcquisitionFailure(
                                 change_id=change_id,
                                 outcome_id=outcome_id,
-                                code=PortfolioApplicationError.code,
-                                detail=(
-                                    "Builder claim exceeded its timeout; worker termination must be "
-                                    "confirmed before worktree recovery."
-                                ),
+                                code=DeliveryWorkerExclusionRequiredError.code,
+                                detail=str(DeliveryWorkerExclusionRequiredError()),
                                 retry_condition=(
-                                    "Confirm the Builder invocation has ended before recovering its managed worktree."
+                                    "Supported host-owned exclusion evidence is required before recovery."
                                 ),
                             )
                         )
@@ -6380,7 +6402,7 @@ class PortfolioApplication:
                     ),
                 ),
             )
-        except DeliveryActionBusyError:
+        except (DeliveryActionBusyError, DeliveryWorkerExclusionRequiredError):
             return DeliveryContinuationResult(
                 change_id=request.change_id,
                 kind="busy",
@@ -6547,6 +6569,9 @@ class PortfolioApplication:
             host_id=request.host_id,
             session_id=request.session_id,
             acquired_at=self._clock(),
+        )
+        self._register_recovery_invocation(
+            runtime, action.operation_id, action.operation_id, action.kind, action.exact_head
         )
         self._coordinator.acquire_continuation_action(action)
         return DeliveryContinuationResult(
@@ -6779,6 +6804,13 @@ class PortfolioApplication:
             frontier_digest=readiness.basis.frontier_digest,
             exact_head=context.change_head,
             target_head=self._workspace_manager.observed_target_head(),
+        )
+        self._register_recovery_invocation(
+            self._runtime(request.change_id),
+            attempt.writer.claim_id,
+            attempt.writer.attempt_id,
+            "finalizer",
+            attempt.exact_head,
         )
         self._coordinator.acquire(request.change_id, attempt.writer, finalization_attempt=attempt)
         return DeliveryContinuationResult(
@@ -7191,9 +7223,10 @@ class PortfolioApplication:
                     attempt_id=claim.attempt_id,
                     claim_id=claim.claim_id,
                     expected_frontier_digest=snapshot.version,
-                    summary="Confirm that the stale Builder invocation has ended before recovery.",
+                    summary="Recovery requires supported host-owned exclusion of the stale Builder invocation.",
                     consequence=(
-                        "Delivery will preserve dirty bytes, restore the reviewed worktree, and release custody."
+                        "Custody and files remain unchanged without verified exclusion of every descendant writer "
+                        "and outstanding tool job. Caller confirmation alone cannot authorize recovery."
                     ),
                 )
                 for binding in snapshot.frontier.bindings
@@ -7218,9 +7251,13 @@ class PortfolioApplication:
         change_id: str,
         proposal_id: str | None = None,
         *,
-        confirmed_lost: bool = False,
+        confirmed_lost: bool = False,  # noqa: ARG002 - retained request shape is not evidence.
     ) -> DeliveryRepairResult:
         """Diagnose or apply one exact stale-Builder recovery proposal."""
+        if proposal_id is not None:
+            replay = self._completed_claim_recovery(change_id, proposal_id=proposal_id)
+            if replay is not None:
+                return DeliveryRepairResult(change_id=change_id, recovery=replay)
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id, for_mutation=proposal_id is not None)
             frontier_bytes = runtime.frontier_bytes()
@@ -7234,8 +7271,6 @@ class PortfolioApplication:
                 self._fail("repair proposal frontier changed")
             if proposal.kind is not DeliveryRepairKind.CONFIRM_LOST_WORKER:
                 self._fail("repair proposal kind is unsupported")
-            if not confirmed_lost:
-                self._fail("repair application requires explicit lost-worker confirmation")
             recovery = self._recover_claim(
                 change_id,
                 proposal.outcome_id,
@@ -7567,11 +7602,12 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
         *,
-        confirmed_lost: bool = False,
+        confirmed_lost: bool = False,  # noqa: ARG002 - retained request shape is not evidence.
     ) -> DeliveryClaimRecoveryResult:
-        """Automatically preserve and recover one exact failed claim or retain typed attention."""
-        if not confirmed_lost:
-            self._fail("claim recovery requires explicit lost-worker confirmation")
+        """Reject assertion-only recovery without releasing an exact active claim."""
+        replay = self._completed_claim_recovery(change_id, identity=(outcome_id, attempt_id, claim_id))
+        if replay is not None:
+            return replay
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
@@ -7581,7 +7617,7 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
     ) -> DeliveryIntegrationRepairRecoveryResult:
-        """Restart and remove one exact failed Integration repair claim."""
+        """Reject legacy Integration recovery without verified worker exclusion."""
         with self._coordinator.acquisition_lock():
             return self._recover_integration_repair_claim(change_id, attempt_id, claim_id)
 
@@ -7593,23 +7629,9 @@ class PortfolioApplication:
     ) -> DeliveryIntegrationRepairRecoveryResult:
         runtime = self._runtime(change_id, for_mutation=True)
         runtime.require_integration_repair_claim(attempt_id, claim_id)
-        snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
-        preserved_commit = snapshot.preserved_commit or snapshot.branch_head
-        if snapshot.writer is not None:
-            if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
-                self._fail("repair recovery does not match active writer custody")
-            self._workspace_manager.restart(change_id, attempt_id, preserved_commit)
-        elif not self._released_recovery_matches(snapshot):
-            self._fail("released repair recovery does not match reviewed workspace state")
-        runtime.remove_integration_repair_claim(attempt_id, claim_id)
-        return DeliveryIntegrationRepairRecoveryResult(
-            change_id=change_id,
-            attempt_id=attempt_id,
-            claim_id=claim_id,
-            preserved_commit=preserved_commit,
-        )
+        raise DeliveryWorkerExclusionRequiredError
 
-    def _recover_claim(  # noqa: PLR0911 - each exact recovery disposition has distinct observable evidence.
+    def _recover_claim(
         self,
         change_id: str,
         outcome_id: str,
@@ -7617,84 +7639,317 @@ class PortfolioApplication:
         claim_id: str,
     ) -> DeliveryClaimRecoveryResult:
         runtime = self._runtime(change_id, for_mutation=True)
-        binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
-        claim = binding.active_claim
-        if claim is None or claim.continuation:
-            message = "continuation custody requires supported worker exclusion; caller confirmation is insufficient"
-            raise DeliveryActionBusyError(message)
-        if claim.worker_role != DeliveryWorkerRole.BUILDER:
-            runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-            return self._recovered(change_id, outcome_id, attempt_id, claim_id)
-        snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
-        if snapshot.writer is None:
-            if self._released_recovery_matches(snapshot):
-                quarantine: DirtyWorktreeQuarantineReceipt | None = None
-                if snapshot.quarantine_ref is not None or snapshot.quarantine_commit is not None:
-                    try:
-                        quarantine = self._workspace_manager.verify_dirty_worktree_quarantine(
-                            change_id,
-                            attempt_id,
-                            claim_id,
-                            _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
-                        )
-                    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                        return self._retain_recovery_attention(
-                            runtime,
-                            outcome_id,
-                            claim,
-                            snapshot,
-                            reason=f"Automatic dirty worktree preservation evidence could not be verified: {exc}",
-                            retry_condition="Retry automatic recovery while the preserved quarantine evidence remains.",
-                        )
-                runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-                return self._recovered(
-                    change_id,
-                    outcome_id,
-                    attempt_id,
-                    claim_id,
-                    snapshot.preserved_commit,
-                    quarantine_commit=(
-                        quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit
-                    ),
-                    quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
-                )
-            return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
-        if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
-            return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
-        quarantine: DirtyWorktreeQuarantineReceipt | None = None
-        if (
-            snapshot.quarantine_ref is not None
-            or snapshot.quarantine_commit is not None
-            or (snapshot.worktree_head is not None and not snapshot.clean)
-        ):
-            try:
-                quarantine = self._workspace_manager.quarantine_dirty_worktree(
-                    change_id,
-                    attempt_id,
-                    claim_id,
-                    _dirty_recovery_operation_id(change_id, outcome_id, attempt_id, claim_id),
-                )
-            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-                return self._retain_recovery_attention(
-                    runtime,
-                    outcome_id,
-                    claim,
-                    snapshot,
-                    reason=f"Automatic dirty worktree preservation failed: {exc}",
-                    retry_condition="Retry automatic preservation while exact Builder custody is retained.",
-                )
-        rejected_head = snapshot.preserved_commit or snapshot.branch_head
-        self._workspace_manager.restart(change_id, attempt_id, rejected_head)
-        runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-        return self._recovered(
-            change_id,
-            outcome_id,
-            attempt_id,
-            claim_id,
-            rejected_head,
-            quarantine_commit=quarantine.quarantine_commit if quarantine is not None else snapshot.quarantine_commit,
-            quarantine_ref=quarantine.quarantine_ref if quarantine is not None else snapshot.quarantine_ref,
+        runtime.require_active_claim(outcome_id, attempt_id, claim_id)
+        raise DeliveryWorkerExclusionRequiredError
+
+    def _register_recovery_invocation(  # noqa: PLR0913, PLR0917 - exact engine-issued custody and resource binding.
+        self,
+        runtime: DeliveryRuntime,
+        owner_id: str,
+        attempt_id: str,
+        kind: str,
+        exact_head: str,
+        outcome_id: str | None = None,
+    ) -> None:
+        """Capture host provenance at issuance, before a claim can be dispatched."""
+        if isinstance(self._recovery_evidence_provider, UnavailableRecoveryEvidenceProvider):
+            return
+        coordination = self._coordinator.show(runtime.contract.change_id)
+        request = RecoveryInvocationRequest(
+            change_id=runtime.contract.change_id,
+            owner_id=owner_id,
+            attempt_id=attempt_id,
+            outcome_id=outcome_id,
+            kind=kind,
+            contract_digest=contract_fingerprint(runtime.contract),
+            exact_head=exact_head,
+            target_head=self._workspace_manager.observed_target_head(),
+            branch=coordination.branch,
+            worktree=str(coordination.worktree_path),
+            repository=str(self._workspace_manager.repository),
+            runtime_root=str(self._target_root),
+            integration_target=coordination.integration_target,
+            publication_repository=(
+                self._draft_pull_request_publisher.repository
+                if self._draft_pull_request_publisher is not None
+                else None
+            ),
         )
+        invocation = self._recovery_evidence_provider.register(request)
+        if invocation is None:
+            return
+        if not isinstance(invocation, RecoveryInvocation) or invocation.request != request:
+            raise DeliveryWorkerExclusionRequiredError
+        publish_record(self._target_root, invocation_path(request), invocation)
+
+    def _propose_recovery(self, change_id: str) -> RecoveryIntent:
+        """Internal owner path: capture exact custody, without waiting for host closure."""
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(change_id),
+            self._coordinator.recovery_lock(change_id),
+        ):
+            intent = self._capture_recovery_intent(change_id)
+            path = journal_path(change_id, intent.recovery_id, "intent")
+            directory = self._target_root / path.parent.parent
+            if (
+                directory.exists()
+                and len(tuple(directory.iterdir())) >= MAX_RECOVERY_INTENTS
+                and not (self._target_root / path).exists()
+            ):
+                raise DeliveryWorkerExclusionRequiredError
+            self._coordinator.record_recovery_intent(intent)
+            return intent
+
+    def _capture_recovery_intent(self, change_id: str) -> RecoveryIntent:
+        runtime = self._runtime(change_id)
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        coordination, head, fingerprint, paths, reason = self._workspace_manager.capture_recovery_workspace(
+            change_id, tuple(result.completed_commit for binding in frontier.bindings for result in binding.results)
+        )
+        # Recovery A never rewrites files, moves heads, repairs corruption, or interprets
+        # unpromoted output as proof of a completed effect.
+        if paths or reason is not None or coordination.publication_lease is not None:
+            raise DeliveryWorkerExclusionRequiredError
+        owner, owner_id, kind, failure_id, effect_id = self._recovery_owner(runtime, coordination)
+        relative = Path("changes") / change_id / "invocations" / f"{digest(owner_id.encode())}.json"
+        try:
+            invocation = RecoveryInvocation.model_validate_json(read_record(self._target_root, relative))
+        except (OSError, ValueError) as exc:
+            raise DeliveryWorkerExclusionRequiredError from exc
+        request = invocation.request
+        if (
+            request.change_id != change_id
+            or request.owner_id != owner_id
+            or request.contract_digest != contract_fingerprint(runtime.contract)
+            or request.exact_head != head
+            or request.target_head != self._workspace_manager.observed_target_head()
+            or request.worktree != str(coordination.worktree_path)
+            or request.branch != coordination.branch
+            or request.repository != str(self._workspace_manager.repository)
+            or request.runtime_root != str(self._target_root)
+            or request.integration_target != coordination.integration_target
+            or request.publication_repository
+            != (
+                self._draft_pull_request_publisher.repository
+                if self._draft_pull_request_publisher is not None
+                else None
+            )
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        expected_kind = {"clean-claim": "claim", "clean-finalizer": "finalizer", "ready-readback": "mark-ready"}[kind]
+        expected_attempt = (
+            owner.operation_id
+            if kind == "ready-readback"
+            else (owner.writer.attempt_id if kind == "clean-finalizer" else owner.attempt_id)
+        )
+        if request.kind != expected_kind or request.attempt_id != expected_attempt:
+            raise DeliveryWorkerExclusionRequiredError
+        if kind == "clean-claim":
+            binding = runtime.require_active_claim(request.outcome_id, request.attempt_id, request.owner_id)
+            if binding.active_claim != owner:
+                raise DeliveryWorkerExclusionRequiredError
+        proposal = self._repair_proposal(DeliveryPortfolioSnapshot.capture(runtime.contract, runtime.frontier_bytes()))
+        result_digest = None
+        if kind == "ready-readback":
+            result = self._read_engine_result(
+                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=request.owner_id)
+            )
+            if result is not None and result.kind != "blocked":
+                raise DeliveryWorkerExclusionRequiredError
+            path = self._coordinator.continuation_record_path(change_id, request.owner_id, result=True)
+            result_digest = digest(path.read_bytes() if result is not None else b"")
+        return RecoveryIntent(
+            invocation=invocation,
+            frontier_digest=digest(runtime.frontier_bytes()),
+            coordination_digest=digest(self._coordinator.recovery_coordination_bytes(change_id, owner_id)),
+            exact_head=head,
+            target_head=request.target_head,
+            workspace_fingerprint=fingerprint,
+            owner_record=owner.model_dump_json(),
+            failure_id=failure_id,
+            effect_receipt_id=effect_id,
+            kind=kind,
+            proposal_id=proposal.proposal_id if proposal is not None else None,
+            engine_result_digest=result_digest,
+        )
+
+    def _recovery_owner(
+        self, runtime: DeliveryRuntime, coordination: ChangeCoordination
+    ) -> tuple[
+        ChangeContinuationAction | ChangeFinalizationAttempt | DeliveryActiveClaim, str, str, str | None, str | None
+    ]:
+        claims = runtime.active_claims()
+        action = coordination.continuation_action
+        if runtime.integration_repair_claim() is not None:
+            raise DeliveryWorkerExclusionRequiredError
+        if action is not None and action.finished_at is None:
+            ready = runtime.ready_receipt()
+            if (
+                claims
+                or coordination.writer is not None
+                or action.kind != "mark-ready"
+                or ready is None
+                or ready.operation_id != action.operation_id
+                or ready.finalization_id != action.finalization_id
+                or ready.head_sha != action.exact_head
+                or runtime.pending_state_publication() is not None
+                or runtime.checkpoint_publication_state().pending_checkpoint is not None
+            ):
+                raise DeliveryWorkerExclusionRequiredError
+            path = self._coordinator.continuation_record_path(action.change_id, action.operation_id)
+            original = path.read_bytes()
+            if (
+                ChangeContinuationAction.model_validate_json(original) != action
+                or path.with_name("started.json").read_bytes() != original
+            ):
+                raise DeliveryWorkerExclusionRequiredError
+            return action, action.operation_id, "ready-readback", action.operation_id, ready.receipt_id
+        attempt = coordination.finalization_attempt
+        if coordination.writer is not None and coordination.writer.kind == "finalize":
+            if claims or attempt is None or attempt.writer != coordination.writer or attempt.finished_at is not None:
+                raise DeliveryWorkerExclusionRequiredError
+            reports = FinalizationReportStore(self._target_root, runtime.contract.change_id).read().reports
+            report = next((item for item in reports if item.request.attempt_key == attempt.writer.attempt_id), None)
+            if report is None:
+                raise DeliveryWorkerExclusionRequiredError
+            return attempt, attempt.writer.claim_id, "clean-finalizer", report.report_id, None
+        if len(claims) != 1:
+            raise DeliveryWorkerExclusionRequiredError
+        outcome_id, claim = claims[0]
+        binding = runtime.show_binding(outcome_id)
+        writer = coordination.writer
+        if (
+            binding.output is not None
+            or binding.result_candidate is not None
+            or binding.candidate is not None
+            or (
+                writer is not None
+                and (
+                    writer.claim_id != claim.claim_id or writer.attempt_id != claim.attempt_id or writer.kind != "build"
+                )
+            )
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        return claim, claim.claim_id, "clean-claim", claim.attempt_id, None
+
+    def _complete_recovery(
+        self, change_id: str, recovery_id: str, reference: RecoveryEvidenceReference
+    ) -> RecoveryReceipt:
+        """Verify outside locks, then CAS receipt and release in one runtime transaction."""
+        intent_path = journal_path(change_id, recovery_id, "intent")
+        intent = RecoveryIntent.model_validate_json(read_record(self._target_root, intent_path))
+        if intent.recovery_id != recovery_id or intent.invocation.request.change_id != change_id:
+            raise DeliveryWorkerExclusionRequiredError
+        evidence = verify_evidence(self._recovery_evidence_provider, reference, intent)
+        receipt_path = self._target_root / journal_path(change_id, recovery_id, "receipt")
+        self._coordinator.recover_pending_transactions()
+        if receipt_path.exists():
+            return self._verified_recovery_replay(intent, evidence, receipt_path)
+        observation_id = self._readback_recovery_ready(intent) if intent.kind == "ready-readback" else None
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(change_id),
+            self._coordinator.recovery_lock(change_id),
+        ):
+            self._coordinator.recover_pending_transactions()
+            if receipt_path.exists():
+                return self._verified_recovery_replay(intent, evidence, receipt_path)
+            if self._capture_recovery_intent(change_id) != intent:
+                raise DeliveryWorkerExclusionRequiredError
+            publish_record(self._target_root, journal_path(change_id, recovery_id, "evidence"), evidence)
+            receipt = RecoveryReceipt(
+                recovery_id=recovery_id,
+                evidence=evidence,
+                finished_at=self._clock(),
+                owner_effect="ready-receipt-readback" if intent.kind == "ready-readback" else "no-workspace-effect",
+                owner_observation_id=observation_id,
+            )
+            self._runtime(change_id).complete_recovery(intent, receipt)
+            return receipt
+
+    def _verified_recovery_replay(
+        self, intent: RecoveryIntent, evidence: RecoveryEvidence, path: Path
+    ) -> RecoveryReceipt:
+        receipt = RecoveryReceipt.model_validate_json(
+            read_record(self._target_root, path.relative_to(self._target_root))
+        )
+        request = intent.invocation.request
+        runtime = self._runtime(request.change_id)
+        coordination = self._coordinator.show(request.change_id)
+        action = coordination.continuation_action
+        writer = coordination.writer
+        if (
+            receipt.recovery_id != intent.recovery_id
+            or receipt.evidence != evidence
+            or receipt.owner_effect
+            != ("ready-receipt-readback" if intent.kind == "ready-readback" else "no-workspace-effect")
+            or any(claim.claim_id == request.owner_id for _, claim in runtime.active_claims())
+            or coordination.recovery_owner_id == request.owner_id
+            or (writer is not None and writer.claim_id == request.owner_id)
+            or (action is not None and action.operation_id == request.owner_id and action.finished_at is None)
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        return receipt
+
+    def _completed_claim_recovery(
+        self, change_id: str, *, identity: tuple[str, str, str] | None = None, proposal_id: str | None = None
+    ) -> DeliveryClaimRecoveryResult | None:
+        """Public forms may only replay an independently verified completed exact receipt."""
+        root = self._target_root / journal_path(change_id, "0" * 64, "intent").parent.parent
+        self._coordinator.recover_pending_transactions()
+        if not root.exists():
+            return None
+        paths = tuple(root.iterdir())
+        if len(paths) > MAX_RECOVERY_INTENTS:
+            raise DeliveryWorkerExclusionRequiredError
+        for path in paths:
+            receipt_path = self._target_root / journal_path(change_id, path.name, "receipt")
+            if not receipt_path.exists():
+                continue
+            intent = RecoveryIntent.model_validate_json(
+                read_record(self._target_root, journal_path(change_id, path.name, "intent"))
+            )
+            request = intent.invocation.request
+            if (
+                intent.kind != "clean-claim"
+                or intent.recovery_id != path.name
+                or request.change_id != change_id
+                or (identity is not None and identity != (request.outcome_id, request.attempt_id, request.owner_id))
+                or (proposal_id is not None and intent.proposal_id != proposal_id)
+            ):
+                continue
+            receipt = RecoveryReceipt.model_validate_json(
+                read_record(self._target_root, journal_path(change_id, path.name, "receipt"))
+            )
+            evidence = verify_evidence(self._recovery_evidence_provider, receipt.evidence.reference, intent)
+            self._verified_recovery_replay(intent, evidence, receipt_path)
+            return self._recovered(change_id, request.outcome_id, request.attempt_id, request.owner_id)
+        return None
+
+    def _readback_recovery_ready(self, intent: RecoveryIntent) -> str:
+        """Reconcile only a fully recorded ready effect; never invoke the mutation again."""
+        change_id = intent.invocation.request.change_id
+        publisher = self._draft_pull_request_publisher
+        ready = self._runtime(change_id).ready_receipt()
+        if publisher is None or ready is None or ready.receipt_id != intent.effect_receipt_id:
+            raise DeliveryWorkerExclusionRequiredError
+        observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        if observation is None:
+            raise DeliveryWorkerExclusionRequiredError
+        snapshot = observation.snapshot
+        if (
+            snapshot.repository != ready.repository
+            or snapshot.number != ready.number
+            or snapshot.node_id != ready.node_id
+            or snapshot.head_sha != intent.exact_head
+            or snapshot.base_branch != publisher.target_branch
+            or snapshot.draft
+            or snapshot.state != "open"
+            or snapshot.merged
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        return observation.observation_id
 
     def _candidates(self, selected_change_id: str | None = None) -> tuple[_Candidate, ...]:  # noqa: C901
         candidates = []
@@ -7915,6 +8170,14 @@ class PortfolioApplication:
             claim = claim.model_copy(
                 update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
             )
+        self._register_recovery_invocation(
+            candidate.runtime,
+            claim.claim_id,
+            claim.attempt_id,
+            "claim",
+            source.source_head,
+            candidate.binding.outcome_id,
+        )
         candidate.runtime.activate_claim(
             ActivateDeliveryClaim(
                 outcome_id=candidate.binding.outcome_id,
@@ -8181,6 +8444,7 @@ class PortfolioApplication:
                 coordination = self._workspace_manager.show(change_id)
             except (OSError, RuntimeError, ValueError) as exc:
                 raise DeliveryRuntimeReconciliationError(change_id, str(exc)) from exc
+            self._coordinator.require_no_pending_recovery(change_id)
             action = coordination.continuation_action
             if (
                 action is not None

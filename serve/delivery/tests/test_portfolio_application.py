@@ -70,7 +70,6 @@ from owlbear_delivery import (
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
-    DeliveryClaimRecoveryStatus,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -143,7 +142,6 @@ from owlbear_delivery import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
-    RetryDelivery,
     WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
@@ -177,6 +175,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
@@ -247,6 +246,30 @@ def _recover_claim(
         claim_id,
         confirmed_lost=True,
     )
+
+
+def _assert_recovery_excluded(application: PortfolioApplication, package) -> None:
+    runtime = application._runtime(package.change_id)
+    frontier = runtime.frontier_bytes()
+    coordination = application._coordinator.show(package.change_id)
+    files = _file_bytes(package.worktree_path)
+    index = Path(_git(package.worktree_path, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    index_bytes = index.read_bytes()
+    refs = _git(package.worktree_path, "show-ref")
+    for confirmed in (False, True):
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.recover_claim(
+                package.change_id,
+                package.outcome_id,
+                package.claim.attempt_id,
+                package.claim.claim_id,
+                confirmed_lost=confirmed,
+            )
+    assert runtime.frontier_bytes() == frontier
+    assert application._coordinator.show(package.change_id) == coordination
+    assert _file_bytes(package.worktree_path) == files
+    assert index.read_bytes() == index_bytes
+    assert _git(package.worktree_path, "show-ref") == refs
 
 
 def _approved_package_id(application: PortfolioApplication, change_id: str) -> str:
@@ -1852,7 +1875,7 @@ def test_continuation_preserves_failed_activation_identity(tmp_path: Path, *, wr
         DeliveryContinuationResult.model_validate(stopped.model_dump() | {"reason_code": stopped.failure.code})
     assert stopped.launch is None
     assert (coordinator.show("change-a").writer is not None) == writer_recorded
-    with pytest.raises(DeliveryActionBusyError, match="supported worker exclusion"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError, match="supported worker exclusion"):
         application.recover_claim("change-a", "OUT-001", claim.attempt_id, claim.claim_id, confirmed_lost=True)
     assert runtimes["change-a"].show_binding("OUT-001").active_claim == claim
 
@@ -1898,12 +1921,59 @@ def test_continuation_workers_cannot_be_recovered_by_timeout_or_caller_assertion
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
     before = runtimes["change-a"].frontier_bytes()
     assert reopened.acquire_actions().launch_packages == ()
-    with pytest.raises(DeliveryActionBusyError, match="supported worker exclusion"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError, match="supported worker exclusion"):
         reopened.recover_claim(
             "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
         )
     assert runtimes["change-a"].frontier_bytes() == before
     assert coordinator.show("change-a").writer == launch.writer
+
+
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.IMPLEMENTATION])
+@pytest.mark.parametrize("orphan_child", [False, True])
+def test_legacy_process_exclusion_required_after_lease(
+    tmp_path: Path, stage: DeliveryStage, *, orphan_child: bool
+) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    launch = application.acquire_frontier_work().launch_packages[0]
+    product = launch.worktree_path / "product.txt"
+    worker_code = (
+        "import pathlib,sys\n"
+        "product=pathlib.Path(sys.argv[1])\n"
+        "product.write_text('worker started\\n')\n"
+        "print('writing',flush=True)\n"
+        "sys.stdin.readline()\n"
+        "product.write_text('late worker write\\n')\n"
+    )
+    command = (sys.executable, "-c", worker_code, str(product))
+    if orphan_child:
+        parent_code = "import subprocess,sys\nsubprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]])\n"
+        command = (sys.executable, "-c", parent_code, worker_code, str(product))
+    with subprocess.Popen(  # noqa: S603 - controlled worker in a disposable repository.
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    ) as worker:
+        try:
+            assert worker.stdout.readline().strip() == "writing"
+            if orphan_child:
+                assert worker.wait(timeout=10) == 0
+            reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
+            before = runtimes["change-a"].frontier_bytes()
+            custody = coordinator.show("change-a")
+            assert reopened.acquire_actions().launch_packages == ()
+            with pytest.raises(DeliveryWorkerExclusionRequiredError):
+                reopened.recover_claim(
+                    "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
+                )
+            assert (worker.poll() is not None) == orphan_child
+            assert runtimes["change-a"].frontier_bytes() == before
+            assert coordinator.show("change-a") == custody
+        finally:
+            worker.communicate("\n", timeout=10)
+    assert product.read_text() == "late worker write\n"
+    assert runtimes["change-a"].active_claims() == ((launch.outcome_id, launch.claim),)
 
 
 def test_continuation_live_worker_remains_excluded_after_lease(tmp_path: Path) -> None:
@@ -1926,7 +1996,7 @@ def test_continuation_live_worker_remains_excluded_after_lease(tmp_path: Path) -
             reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
             assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
             assert reopened.acquire_actions().launch_packages == ()
-            with pytest.raises(DeliveryActionBusyError):
+            with pytest.raises(DeliveryWorkerExclusionRequiredError):
                 reopened.recover_claim(
                     "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
                 )
@@ -9483,19 +9553,22 @@ def test_repair_recovery_preserves_worktree_without_reacquisition(tmp_path: Path
     try:
         original_directory = os.fstat(directory_fd)
 
-        recovered = application.recover_integration_repair_claim(
-            "change-a",
-            first_claim.attempt_id,
-            first_claim.claim_id,
-        )
+        before = runtimes["change-a"].frontier_bytes()
+        custody = coordinator.show("change-a")
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.recover_integration_repair_claim(
+                "change-a",
+                first_claim.attempt_id,
+                first_claim.claim_id,
+            )
         acquired = application.acquire_frontier_work()
 
-        assert recovered.preserved_commit == reviewed
         assert os.path.samestat(worktree.stat(), original_directory)
         assert _git(worktree, "rev-parse", "HEAD") == reviewed
         assert acquired.launch_packages == ()
-        assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
-        assert runtimes["change-a"].integration_repair_claim() is None
+        assert runtimes["change-a"].frontier_bytes() == before
+        assert runtimes["change-a"].integration_repair_claim() == first_claim
+        assert coordinator.show("change-a") == custody
     finally:
         os.close(directory_fd)
 
@@ -9580,19 +9653,14 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert active[0][1].claim_id == failure.claim_id
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    recovered = _recover_claim(
-        application,
-        "change-a",
-        "OUT-001",
-        failure.attempt_id,
-        failure.claim_id,
-    )
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert runtimes["change-a"].active_claims() == ()
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        _recover_claim(application, "change-a", "OUT-001", failure.attempt_id, failure.claim_id)
+    assert runtimes["change-a"].frontier_bytes() == before
     assert not (state_root / "capacity.json").exists()
 
 
-def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
+def test_acquisition_retains_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -9611,13 +9679,11 @@ def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_p
     now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
-    assert recovered.failures == ()
-    assert len(recovered.recoveries) == 1
-    assert recovered.recoveries[0].status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.recoveries[0].claim_id == first.claim.claim_id
-    replacement = recovered.launch_packages[0]
-    assert replacement.claim.claim_id != first.claim.claim_id
-    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert len(recovered.failures) == 1
+    assert recovered.failures[0].code == DeliveryWorkerExclusionRequiredError.code
+    assert recovered.recoveries == ()
+    assert recovered.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
     assert coordinator.show("change-a").writer is None
     assert not (state_root / "capacity.json").exists()
 
@@ -9695,14 +9761,13 @@ def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_pa
     with patch.object(application._workspace_manager, "recovery_snapshot", side_effect=fail_change_a):
         recovered = application.acquire_frontier_work()
 
-    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
-    assert len(recovered.failures) == 1
+    assert recovered.launch_packages == ()
+    assert len(recovered.failures) == 2
     assert recovered.failures[0].change_id == "change-a"
     assert recovered.failures[0].claim_id is None
-    assert len(recovered.recoveries) == 1
-    assert recovered.recoveries[0].change_id == "change-b"
+    assert recovered.recoveries == ()
     assert runtimes["change-a"].active_claims()
-    assert runtimes["change-b"].active_claims()[0][1].claim_id != initial_by_change["change-b"].claim.claim_id
+    assert runtimes["change-b"].active_claims()[0][1] == initial_by_change["change-b"].claim
     assert coordinator.show("change-a").writer == initial_by_change["change-a"].writer
 
 
@@ -9718,13 +9783,21 @@ def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: P
     )
     initial = application.acquire_frontier_work()
     initial_by_change = {package.change_id: package for package in initial.launch_packages}
-    _recover_claim(
-        application,
+    planner = initial_by_change["change-b"]
+    application.transition_delivery(
         "change-b",
-        initial_by_change["change-b"].outcome_id,
-        initial_by_change["change-b"].claim.attempt_id,
-        initial_by_change["change-b"].claim.claim_id,
+        BlockDelivery(
+            action="block",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            block_id="finished-planner",
+            reason="Fixture planner returned a completed blocker.",
+            unblock_condition="Fixture evidence is available.",
+            expected_evidence=("fixture",),
+            locators=("fixture",),
+        ),
     )
+    runtimes["change-b"].unblock("OUT-001", "finished-planner", "fixture evidence", ("fixture",))
     malformed_path = state_root / "changes/change-a/frontier.json"
     malformed = json.loads(malformed_path.read_bytes())
     malformed["bindings"][0]["active_claim"]["started_at"] = "not-a-timestamp"
@@ -9765,21 +9838,12 @@ def test_execution_capacity_allows_independent_builders_and_planners(tmp_path: P
 
 
 @pytest.mark.parametrize("stage", [DeliveryStage.PLANNING])
-def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Path, stage: DeliveryStage) -> None:
+def test_read_only_claim_recovery_exclusion_required(tmp_path: Path, stage: DeliveryStage) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
     package = application.acquire_frontier_work().launch_packages[0]
 
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit is None
-    assert runtimes["change-a"].active_claims() == ()
+    _assert_recovery_excluded(application, package)
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer is None
     assert not (state_root / "capacity.json").exists()
 
@@ -9849,21 +9913,12 @@ def test_acquisition_claims_dirty_builder_for_worker_triage(tmp_path: Path) -> N
     )
     assert context.launch == launch
     assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
-    recovered = _recover_claim(
-        application,
-        launch.change_id,
-        launch.outcome_id,
-        launch.claim.attempt_id,
-        launch.claim.claim_id,
-    )
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit is not None
-    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{launch.claim.attempt_id}"
-    assert _git(launch.worktree_path, "status", "--porcelain") == ""
+    _assert_recovery_excluded(application, launch)
+    assert _git(launch.worktree_path, "status", "--porcelain") != ""
     assert _git(launch.worktree_path, "rev-parse", "HEAD") == launch.last_reviewed_commit
-    assert _git(launch.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted source"
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    assert (launch.worktree_path / "product.txt").read_text() == "uncommitted source\n"
+    assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
+    assert coordinator.show("change-a").writer == launch.writer
 
 
 def test_acquisition_rejects_dirty_planner_before_claim(tmp_path: Path) -> None:
@@ -9888,7 +9943,7 @@ def test_acquisition_rejects_dirty_planner_before_claim(tmp_path: Path) -> None:
     assert dirty_file.read_text(encoding="utf-8") == "uncommitted source\n"
 
 
-def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:
+def test_clean_build_recovery_exclusion_required_before_workspace_reset(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -9901,48 +9956,22 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     attempt_commit = _git(worktree, "rev-parse", "HEAD")
 
     with (
-        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after reset")),
-        pytest.raises(RuntimeError, match="injected"),
+        patch.object(runtimes["change-a"], "remove_active_claim") as remove_claim,
+        patch.object(application._workspace_manager, "restart") as restart,
     ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert coordinator.show("change-a").writer is None
-    assert (
-        _git(
-            worktree,
-            "rev-parse",
-            f"refs/owlbear/attempts/change-a/{package.claim.attempt_id}",
-        )
-        == attempt_commit
-    )
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit == attempt_commit
-    assert runtimes["change-a"].active_claims() == ()
+        _assert_recovery_excluded(application, package)
+    remove_claim.assert_not_called()
+    restart.assert_not_called()
+    assert _git(worktree, "rev-parse", "HEAD") == attempt_commit
+    assert coordinator.show("change-a").writer == package.writer
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert not (state_root / "capacity.json").exists()
-    with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
-        runtimes["change-a"].transition(
-            RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=package.claim.claim_id)
-        )
 
 
 @pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-reset"])
-def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path, interruption: str) -> None:
+def test_clean_build_recovery_exclusion_required_before_each_workspace_effect(
+    tmp_path: Path, interruption: str
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -9968,35 +9997,15 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
             raise RuntimeError(message)
         return result
 
-    with (
-        patch.object(manager, "_git", side_effect=interrupt_after_git),
-        pytest.raises(RuntimeError, match="injected workspace interruption"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit == rejected
-    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    with patch.object(manager, "_git", side_effect=interrupt_after_git):
+        _assert_recovery_excluded(application, package)
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == rejected
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
     assert not (state_root / "capacity.json").exists()
 
 
-def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tmp_path: Path) -> None:
+def test_dirty_build_recovery_exclusion_required_preserves_bytes_and_custody(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -10006,31 +10015,17 @@ def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tm
     product.write_text("uncommitted attempt\n", encoding="utf-8")
     branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
 
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit is not None
-    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{package.claim.attempt_id}"
-    assert _git(package.worktree_path, "rev-parse", recovered.quarantine_ref) == recovered.quarantine_commit
-    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    _assert_recovery_excluded(application, package)
+    assert _git(package.worktree_path, "status", "--porcelain") != ""
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
-    assert _git(package.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted attempt"
-    assert product.read_text(encoding="utf-8") == "baseline\n"
-    relaunched = application.acquire_frontier_work().launch_packages[0]
-    assert relaunched.claim.claim_id != package.claim.claim_id
-    assert relaunched.writer is not None
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
+    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+    assert application.acquire_frontier_work().launch_packages == ()
     assert _git(package.worktree_path, "rev-parse", "HEAD") == branch_head
 
 
-def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) -> None:
+def test_dirty_build_recovery_exclusion_required_before_workspace_cleanup(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -10038,46 +10033,21 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
     package = application.acquire_frontier_work().launch_packages[0]
     dirty_file = package.worktree_path / "uncommitted.txt"
     dirty_file.write_text("preserve me\n", encoding="utf-8")
-    with (
-        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after cleanup")),
-        pytest.raises(RuntimeError, match="injected after cleanup"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    interrupted = coordinator.show("change-a")
-    quarantine = interrupted.dirty_worktree_quarantine
-    assert quarantine is not None
-    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    with patch.object(runtimes["change-a"], "remove_active_claim") as remove_claim:
+        _assert_recovery_excluded(application, package)
+    remove_claim.assert_not_called()
+    assert coordinator.show("change-a").dirty_worktree_quarantine is None
+    assert _git(package.worktree_path, "status", "--porcelain") != ""
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
-    assert coordinator.show("change-a").writer is None
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit == quarantine.quarantine_commit
-    assert recovered.quarantine_ref == quarantine.quarantine_ref
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
-    relaunched = application.acquire_frontier_work().launch_packages[0]
-    assert relaunched.claim.claim_id != package.claim.claim_id
-    assert relaunched.writer is not None
+    assert coordinator.show("change-a").writer == package.writer
+    assert dirty_file.read_text() == "preserve me\n"
+    _assert_recovery_excluded(application, package)
+    assert application.acquire_frontier_work().launch_packages == ()
 
 
-def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
+def test_dirty_build_recovery_exclusion_required_across_application_restart(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -10089,37 +10059,15 @@ def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_pa
     rejected = _git(worktree, "rev-parse", "HEAD")
     (worktree / "uncommitted.bin").write_bytes(b"preserve\x00\xff")
 
-    with (
-        patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected before release")),
-        pytest.raises(CoordinationConflictError, match="injected before release"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    interrupted = coordinator.show("change-a")
-    quarantine = interrupted.dirty_worktree_quarantine
-    assert quarantine is not None
-    assert quarantine.base_head == rejected
-    assert interrupted.writer == package.writer
-    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit == quarantine.quarantine_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    with patch.object(coordinator, "release") as release:
+        _assert_recovery_excluded(application, package)
+    release.assert_not_called()
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _assert_recovery_excluded(reopened, package)
+    assert (worktree / "uncommitted.bin").read_bytes() == b"preserve\x00\xff"
+    assert _git(worktree, "rev-parse", "HEAD") == rejected
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
 
 
 def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: Path) -> None:
@@ -10135,19 +10083,9 @@ def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: 
         application._workspace_manager,
         "quarantine_dirty_worktree",
         side_effect=RuntimeError("injected preservation failure"),
-    ):
-        retained = _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert retained.attention is not None
-    assert retained.attention.custody_retained
-    assert "injected preservation failure" in retained.attention.reason
+    ) as preserve:
+        _assert_recovery_excluded(application, package)
+    preserve.assert_not_called()
     assert dirty_file.read_bytes() == b"preserve\x00\xff"
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer == package.writer
@@ -10173,30 +10111,20 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     )
     coordinator.acquire("change-a", mismatched)
 
-    retained = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert retained.attention is not None
-    assert retained.attention.writer_claim_id == mismatched.claim_id
+    _assert_recovery_excluded(application, package)
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
     assert not (state_root / "capacity.json").exists()
 
 
-def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Path) -> None:
+def test_claim_recovery_exclusion_required_without_caller_confirmation(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
     package = application.acquire_frontier_work().launch_packages[0]
 
-    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.recover_claim(
             package.change_id,
             package.outcome_id,
@@ -10207,7 +10135,7 @@ def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Pat
     assert runtimes["change-a"].active_claims() == ((package.outcome_id, package.claim),)
 
 
-def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Path) -> None:
+def test_repair_change_diagnoses_but_exclusion_required_to_apply(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -10223,12 +10151,14 @@ def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Pat
     assert proposal.outcome_id == package.outcome_id
     assert proposal.claim_id == package.claim.claim_id
 
-    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+    assert "host-owned exclusion" in proposal.summary
+    assert "Custody and files remain unchanged" in proposal.consequence
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.repair_change("change-a", proposal.proposal_id)
 
-    applied = application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
-    assert applied.recovery is not None
-    assert runtimes["change-a"].active_claims() == ()
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
 
 
 def test_repair_facade_matches_existing_repair_proposal_authority(tmp_path: Path) -> None:
