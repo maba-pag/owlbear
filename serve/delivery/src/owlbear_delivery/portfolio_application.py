@@ -5553,6 +5553,8 @@ class PortfolioApplication:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
         except (OSError, RuntimeError, ValueError):
             return basis, "coordination-unavailable"
+        if not self._coordinator.recovery_exclusions_verified(coordination):
+            return basis, "coordination-unavailable"
         action = coordination.continuation_action
         basis = basis.model_copy(update={"continuation_id": action.operation_id if action else None})
         if action is not None and action.finished_at is None:
@@ -7841,6 +7843,7 @@ class PortfolioApplication:
         intent = RecoveryIntent.model_validate_json(read_record(self._target_root, intent_path))
         if intent.recovery_id != recovery_id or intent.invocation.request.change_id != change_id:
             raise DeliveryWorkerExclusionRequiredError
+        self._coordinator.forget_verified_exclusion(recovery_id)
         evidence = verify_evidence(self._recovery_evidence_provider, reference, intent)
         receipt_path = self._target_root / journal_path(change_id, recovery_id, "receipt")
         self._coordinator.recover_pending_transactions()
@@ -7857,7 +7860,12 @@ class PortfolioApplication:
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
             if self._capture_recovery_intent(change_id) != intent:
                 raise DeliveryWorkerExclusionRequiredError
-            publish_record(self._target_root, journal_path(change_id, recovery_id, "evidence"), evidence)
+            evidence_path = journal_path(change_id, recovery_id, "evidence")
+            if (self._target_root / evidence_path).exists():
+                recorded = RecoveryEvidence.model_validate_json(read_record(self._target_root, evidence_path))
+                self._require_revalidated_evidence(recorded, evidence)
+                evidence = recorded
+            publish_record(self._target_root, evidence_path, evidence)
             receipt = RecoveryReceipt(
                 recovery_id=recovery_id,
                 evidence=evidence,
@@ -7866,6 +7874,7 @@ class PortfolioApplication:
                 owner_observation_id=observation_id,
             )
             self._runtime(change_id).complete_recovery(intent, receipt)
+            self._coordinator.record_verified_exclusion(recovery_id)
             return receipt
 
     def _verified_recovery_replay(
@@ -7875,13 +7884,13 @@ class PortfolioApplication:
             read_record(self._target_root, path.relative_to(self._target_root))
         )
         request = intent.invocation.request
+        self._require_revalidated_evidence(receipt.evidence, evidence)
         runtime = self._runtime(request.change_id)
         coordination = self._coordinator.show(request.change_id)
         action = coordination.continuation_action
         writer = coordination.writer
         if (
             receipt.recovery_id != intent.recovery_id
-            or receipt.evidence != evidence
             or receipt.owner_effect
             != ("ready-receipt-readback" if intent.kind == "ready-readback" else "no-workspace-effect")
             or any(claim.claim_id == request.owner_id for _, claim in runtime.active_claims())
@@ -7890,7 +7899,17 @@ class PortfolioApplication:
             or (action is not None and action.operation_id == request.owner_id and action.finished_at is None)
         ):
             raise DeliveryWorkerExclusionRequiredError
+        self._coordinator.record_verified_exclusion(intent.recovery_id)
         return receipt
+
+    @staticmethod
+    def _require_revalidated_evidence(recorded: RecoveryEvidence, current: RecoveryEvidence) -> None:
+        if (
+            recorded.model_copy(update={"status": current.status}) != current
+            or recorded.status not in {"closed", "excluded"}
+            or (recorded.status == "closed" and current.status != "closed")
+        ):
+            raise DeliveryWorkerExclusionRequiredError
 
     def _completed_claim_recovery(
         self, change_id: str, *, identity: tuple[str, str, str] | None = None, proposal_id: str | None = None
@@ -7922,6 +7941,7 @@ class PortfolioApplication:
             receipt = RecoveryReceipt.model_validate_json(
                 read_record(self._target_root, journal_path(change_id, path.name, "receipt"))
             )
+            self._coordinator.forget_verified_exclusion(intent.recovery_id)
             evidence = verify_evidence(self._recovery_evidence_provider, receipt.evidence.reference, intent)
             self._verified_recovery_replay(intent, evidence, receipt_path)
             return self._recovered(change_id, request.outcome_id, request.attempt_id, request.owner_id)

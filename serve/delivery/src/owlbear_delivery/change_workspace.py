@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Never, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Never, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -784,6 +784,9 @@ class ChangeCoordination(_WorkspaceModel):
     finalization_attempt: ChangeFinalizationAttempt | None = None
     continuation_action: ChangeContinuationAction | None = None
     recovery_owner_id: str | None = Field(default=None, min_length=1, max_length=128)
+    recovery_exclusions: tuple[Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")], ...] = Field(
+        default=(), max_length=256
+    )
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
     target_sync_conflict: ChangeTargetSyncConflictState | None = None
@@ -830,6 +833,11 @@ class ChangeCoordination(_WorkspaceModel):
     @field_validator("external_head_promotion_receipts", mode="before")
     @classmethod
     def _normalize_external_head_promotion_receipts(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("recovery_exclusions", mode="before")
+    @classmethod
+    def _normalize_recovery_exclusions(cls, value: object) -> object:
         return tuple(value) if isinstance(value, list) else value
 
     @property
@@ -1127,6 +1135,7 @@ class PortfolioCoordinator:
         self._state_root = state_root
         self._coordination_root = state_root / "coordination" / "changes"
         self._continuation_owner: ContextVar[str | None] = ContextVar("continuation_owner", default=None)
+        self._verified_exclusions: set[tuple[int, str]] = set()
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
 
@@ -1218,6 +1227,8 @@ class PortfolioCoordinator:
         ):
             raise DeliveryWorkerExclusionRequiredError
         changes = {"recovery_owner_id": None}
+        if receipt.evidence.status == "excluded":
+            changes["recovery_exclusions"] = (*coordination.recovery_exclusions, intent.recovery_id)
         if intent.kind == "ready-readback":
             action = coordination.continuation_action
             if action is None or action.operation_id != request.owner_id or action.finished_at is not None:
@@ -1272,8 +1283,23 @@ class PortfolioCoordinator:
 
     def require_no_pending_recovery(self, change_id: str) -> None:
         """Keep every normal mutation behind an unfinished recovery's custody fence."""
-        if self.show(change_id).recovery_owner_id is not None:
+        coordination = self.show(change_id)
+        if coordination.recovery_owner_id is not None or not self.recovery_exclusions_verified(coordination):
             raise DeliveryWorkerExclusionRequiredError
+
+    def recovery_exclusions_verified(self, coordination: ChangeCoordination) -> bool:
+        """Require fresh process-local verification of every restart-durable exclusion."""
+        return all(
+            (os.getpid(), recovery_id) in self._verified_exclusions for recovery_id in coordination.recovery_exclusions
+        )
+
+    def record_verified_exclusion(self, recovery_id: str) -> None:
+        """Remember the application owner's verification, never a persisted timestamp."""
+        self._verified_exclusions.add((os.getpid(), recovery_id))
+
+    def forget_verified_exclusion(self, recovery_id: str) -> None:
+        """Fail closed while a previously accepted exclusion is being revalidated."""
+        self._verified_exclusions.discard((os.getpid(), recovery_id))
 
     def executing_continuation(self, change_id: str) -> bool:
         """Report whether this call context owns the retained fixed operation."""
@@ -1542,6 +1568,7 @@ class PortfolioCoordinator:
         if (
             existing.writer != coordination.writer
             or existing.recovery_owner_id != coordination.recovery_owner_id
+            or existing.recovery_exclusions != coordination.recovery_exclusions
             or existing.publication_lease != coordination.publication_lease
             or existing.continuation_action != coordination.continuation_action
         ):

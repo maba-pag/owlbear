@@ -88,12 +88,20 @@ class ProcessEvidenceHost(EvidenceHost):
             raise RuntimeError(message)
         invocation = self.invocations[owner_id]
         code = (
-            "import pathlib,sys\n"
+            "import pathlib,subprocess,sys\n"
             "product=pathlib.Path(sys.argv[1])\n"
             "product.write_text('baseline\\n')\n"
             "print('writing',flush=True)\n"
-            "command=sys.stdin.readline().strip()\n"
-            "if command != 'close': product.write_text('late old write\\n')\n"
+            "for command in sys.stdin:\n"
+            " command=command.strip()\n"
+            " if command == 'close': break\n"
+            " if command == 'write':\n"
+            "  product.write_text('late old write\\n')\n"
+            "  subprocess.run(['git','update-ref','refs/owlbear/test-worker','HEAD'],cwd=product.parent,check=True)\n"
+            " elif command == 'restore':\n"
+            "  product.write_text('baseline\\n')\n"
+            "  subprocess.run(['git','update-ref','-d','refs/owlbear/test-worker'],cwd=product.parent,check=True)\n"
+            " print(command,flush=True)\n"
             "print('all-jobs-closed',flush=True)\n"
         )
         product = Path(invocation.request.worktree) / "product.txt"
@@ -229,7 +237,29 @@ def test_verified_activation_recovery_and_restart(tmp_path, writer_recorded):
     assert runtime.active_claims() == (("OUT-001", result.launch.claim),)
 
 
-def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path):
+def _reopen_excluded_recovery(tmp_path, runtimes, host, intent, receipt):
+    reopened, coordinator, _manager = _reopen_portfolio(
+        tmp_path, Path(intent.invocation.request.runtime_root), runtimes
+    )
+    reference = receipt.evidence.reference
+    frontier = runtimes["change-a"].frontier_bytes()
+    custody = coordinator.show("change-a")
+    assert not reopened.get_change("change-a").readiness.executable
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        coordinator.prepare_runtime_custody_guard("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        reopened._complete_recovery("change-a", intent.recovery_id, reference)
+    assert runtimes["change-a"].frontier_bytes() == frontier
+    assert coordinator.show("change-a") == custody
+    reopened._recovery_evidence_provider = host
+    host.seal(intent, "closed")
+    assert reopened._complete_recovery("change-a", intent.recovery_id, reference) == receipt
+    coordinator.prepare_runtime_custody_guard("change-a")
+    return reopened, coordinator
+
+
+@pytest.mark.parametrize("evidence_status", ["closed", "excluded"])
+def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, evidence_status):
     application, runtimes, coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     host = _host(application)
     attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
@@ -238,11 +268,14 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path):
     )
     intent = application._propose_recovery("change-a")
     assert intent.failure_id == report.report_id
-    receipt = application._complete_recovery("change-a", intent.recovery_id, host.seal(intent))
+    reference = host.seal(intent, evidence_status)
+    receipt = application._complete_recovery("change-a", intent.recovery_id, reference)
     assert runtimes["change-a"].finalization() is None
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-a").finalization_attempt.finished_at == receipt.finished_at
     assert (state / journal_path("change-a", intent.recovery_id, "intent")).exists()
+    if evidence_status == "excluded":
+        application, coordinator = _reopen_excluded_recovery(tmp_path, runtimes, host, intent, receipt)
     with pytest.raises(RuntimeError):
         application.finalize_change(
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
@@ -258,7 +291,8 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path):
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
-def test_verified_interrupted_ready_owner_readback_never_redispatches(tmp_path, interrupted):
+@pytest.mark.parametrize("evidence_status", ["closed", "excluded"])
+def test_verified_interrupted_ready_owner_readback_never_redispatches(tmp_path, interrupted, evidence_status):
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     _attach_local_target(application, tmp_path)
     application._delivery_state_publisher = DeliveryStatePublisher(
@@ -286,7 +320,7 @@ def test_verified_interrupted_ready_owner_readback_never_redispatches(tmp_path, 
     result_path = application._coordinator.continuation_record_path("change-a", action.operation_id, result=True)
     original = result_path.read_bytes() if result_path.exists() else None
     intent = application._propose_recovery("change-a")
-    reference = host.seal(intent)
+    reference = host.seal(intent, evidence_status)
     mutations = provider.set_pull_request_draft_state.call_count
     receipt = application._complete_recovery("change-a", intent.recovery_id, reference)
     assert receipt.owner_effect == "ready-receipt-readback"
@@ -300,6 +334,10 @@ def test_verified_interrupted_ready_owner_readback_never_redispatches(tmp_path, 
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
     reopened._recovery_evidence_provider = host
     assert reopened._complete_recovery("change-a", intent.recovery_id, reference) == receipt
+    if evidence_status == "excluded":
+        _reopen_excluded_recovery(tmp_path, {"change-a": runtime}, host, intent, receipt)
+        assert provider.set_pull_request_draft_state.call_count == mutations
+        assert (result_path.read_bytes() if result_path.exists() else None) == original
 
 
 def test_failed_finalizer_cannot_use_legacy_restart_or_reviewed_release(tmp_path):
@@ -438,6 +476,52 @@ def test_verified_exclusion_is_revalidated_after_restart(tmp_path):
     assert coordinator.show("change-a").writer is None
 
 
+@pytest.mark.parametrize("crash", [None, "evidence", "receipt"])
+def test_restart_cannot_use_exclusion_receipt_without_current_host_verification(tmp_path, crash):
+    application, runtimes, coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    host = _host(application)
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    intent = application._propose_recovery("change-a")
+    reference = host.seal(intent, "excluded")
+    commit = RuntimeTransaction.commit
+
+    def fail(transaction, **kwargs):
+        def interrupt(point):
+            if point == "after-first-publication":
+                raise KeyboardInterrupt
+
+        if any(part.relative_path.name == f"{crash}.json" for part in transaction._participants):
+            kwargs["failure"] = interrupt
+        return commit(transaction, **kwargs)
+
+    if crash:
+        with patch.object(RuntimeTransaction, "commit", fail), pytest.raises(KeyboardInterrupt):
+            application._complete_recovery("change-a", intent.recovery_id, reference)
+    else:
+        application._complete_recovery("change-a", intent.recovery_id, reference)
+    reopened, _, _ = _reopen_portfolio(tmp_path, state, runtimes)
+    frontier, custody = runtimes["change-a"].frontier_bytes(), coordinator.show("change-a")
+    assert (intent.recovery_id in custody.recovery_exclusions) == (crash != "evidence")
+    assert not reopened.get_change("change-a").readiness.executable
+    assert reopened.acquire_change_action(_continuation_request(reopened)).kind != "acquired"
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        reopened._coordinator.prepare_runtime_custody_guard("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        reopened._complete_recovery("change-a", intent.recovery_id, reference)
+    assert runtimes["change-a"].frontier_bytes() == frontier
+    assert coordinator.show("change-a") == custody
+    reopened._recovery_evidence_provider = host
+    host.seal(intent, "closed")
+    receipt = reopened._complete_recovery("change-a", intent.recovery_id, reference)
+    assert receipt.evidence.status == "excluded"
+    replacement = reopened.acquire_change_action(_continuation_request(reopened))
+    if replacement.kind == "reconciled":
+        replacement = reopened.acquire_change_action(_continuation_request(reopened))
+    assert replacement.kind == "acquired"
+    assert replacement.launch.claim.claim_id != launch.claim.claim_id
+    assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
+
+
 def test_closed_engine_without_owner_effect_receipt_stays_contained(tmp_path):
     application, runtime, provider, _state, _head, _root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     _host(application)
@@ -470,6 +554,16 @@ def test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement(t
         with pytest.raises(DeliveryWorkerExclusionRequiredError):
             reopened._complete_recovery("change-a", intent.recovery_id, reference)
         assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
+        worker.stdin.write("write\n")
+        worker.stdin.flush()
+        assert worker.stdout.readline().strip() == "write"
+        assert product.read_text() == "late old write\n"
+        assert _git(launch.worktree_path, "rev-parse", "refs/owlbear/test-worker") == intent.exact_head
+        assert coordinator.show("change-a").writer == launch.writer
+        assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
+        worker.stdin.write("restore\n")
+        worker.stdin.flush()
+        assert worker.stdout.readline().strip() == "restore"
         host.close(launch.claim.claim_id)
         receipt = reopened._complete_recovery("change-a", intent.recovery_id, reference)
     finally:
@@ -482,11 +576,14 @@ def test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement(t
     assert replacement.launch.claim.claim_id != launch.claim.claim_id
     assert application.acquire_change_action(_continuation_request(application)).kind == "busy"
     product.write_text("replacement-only\n")
+    refs = _git(launch.worktree_path, "show-ref")
     with pytest.raises(RuntimeError, match="cannot be dispatched again"):
         host.dispatch(launch.claim.claim_id)
     assert worker.stdin.closed
     assert worker.stdout.closed
     assert product.read_text() == "replacement-only\n"
+    assert _git(launch.worktree_path, "show-ref") == refs
+    assert "refs/owlbear/test-worker" not in refs
     assert coordinator.show("change-a").writer == replacement.launch.writer
 
 

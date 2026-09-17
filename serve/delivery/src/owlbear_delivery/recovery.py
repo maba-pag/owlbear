@@ -148,7 +148,11 @@ class RecoveryEvidenceProvider(Protocol):
         ...
 
     def verify(self, reference: RecoveryEvidenceReference, intent: RecoveryIntent) -> RecoveryEvidence:
-        """Resolve authenticated current evidence covering the exact proposed recovery."""
+        """Resolve current evidence using the same opaque reference across restarts.
+
+        Identity remains stable when exclusion advances to closure. Lost evidence is
+        unknown/unavailable, never a replacement reference or reconstructed provenance.
+        """
         ...
 
 

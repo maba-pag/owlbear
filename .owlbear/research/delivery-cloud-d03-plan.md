@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-A: partial implementation checkpoint; not complete or ready for phase acceptance.**
+**D03-A: implementation checkpoint with focused proof; independent implementation review pending.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -635,7 +635,7 @@ Closeout, split into bounded selections:
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
-| D03-A | Working changes based on `6c8c039a05c32ec265e45430d0b8a4e8e05be23c`; publication revision assigned by the coordinating session | Fail-closed perimeter and proof below; independent implementation review pending | Positive host-evidence authority, immutable recovery journal, atomic release/replay and reference path remain; A is incomplete and B is blocked |
+| D03-A | Resumed `ec392dfa91790bd270378e550ab6ed1ca01f1959`, implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c`; coordinating session assigns publication revision | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up | Independent implementation review and any findings remain; no self-acceptance or B authorization. Actual host integration remains unavailable. |
 | D03-B | Not started | None | Durable budgets/backoff |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
@@ -684,39 +684,62 @@ not reuse the earlier candidate's verdict.
 CodeQL skipped the documentation-only change; automated review remained unavailable because its
 configured model was absent. No automated review pass or independent re-review is claimed.
 
-### D03-A partial checkpoint — 2026-09-17
+### D03-A resumed implementation checkpoint — 2026-09-17
 
-The approved contract is unchanged. This checkpoint implements only the first fail-closed perimeter:
+The approved contract is unchanged. The interrupted head `ec392dfa91790bd270378e550ab6ed1ca01f1959`
+already contained substantially more than its stale progress description:
 
-- `recovery.py` defines the bounded exclusion-required error. Public claim recovery, legacy
+- `recovery.py` contains the versioned invocation, intent, evidence/reference and receipt contracts,
+  a narrow injected trusted-host port defaulting to unavailable, and immutable bounded journal helpers.
+  Invocation registration is captured at claim/finalizer/engine issuance; existing D02 identity strings
+  are not authenticated provenance.
+- The application captures clean exact claim/finalizer custody or a recorded interrupted `mark-ready`
+  effect. It verifies the configured host outside global locks, rechecks original owner/frontier/
+  coordination/Git fences and delegates atomic receipt/frontier/custody release to the runtime and
+  coordinator. Unknown engine outcomes, dirty workspaces and malformed state remain contained.
+  Original failure reports, attempts and engine results remain history; late old results are rejected.
+- Public claim recovery, legacy
   Integration recovery and exact repair-proposal application reject without changing custody/files;
-  read-only diagnosis and existing input validation remain. Timeout cannot free a legacy Planner.
+  read-only diagnosis and existing input validation remain. Exact already-completed recovery can
+  replay only after configured-owner verification. Timeout cannot free a legacy Planner.
 - Runtime claim-removal and retry paths reject unsupported release. Central mutation registration
   and `_require_change_mutable` remain intact, with the authority invariant passing.
 - Shared diagnostics classify the new code as a non-retryable conflict before generic handling.
   Real-core strict MCP adapter, registered MCP server and HTTP tests preserve exact claim/writer,
   index, worktree bytes and refs, including separately staged/private-untracked fixture bytes.
-- Controlled local-process tests prove both a still-writing parent and an orphaned writing child
-  remain contained after lease expiry and application reopening. These are **negative containment
-  proof only**, not supported closure, exactly-one replacement or full V10.
+- Recovery tests cover activation with/without a recorded writer, failed finalizer history,
+  interrupted ready-effect readback without repeating the mutation, wrong identity/head/scope,
+  malformed coordination, concurrent host waits, late results and transaction failures.
 - Workflow, proposal and frontend copy no longer treat user confirmation as worker termination.
   Existing no-evidence positive legacy tests now assert rejection/preservation. No dirty restoration,
   retry ledger, offline entry, provider activation or new public recovery operation is implemented.
-  No readiness enum/field was introduced, so reason-union parity changes are unnecessary.
 
-**Unimplemented A work (cloud-required, blocks A completion/B):** injected trusted host-evidence owner
-and issued-boundary binding; versioned immutable exact `RecoveryIntent`/`RecoveryReceipt` and opaque
-references; exact fence capture/recheck outside a global host wait; atomic `RuntimeTransaction`
-receipt plus claim/writer release; supported clean failed finalizer/claim activation and one interrupted
-engine reference path; completed verified receipt replay; wrong-generation/evidence/head rejection;
-concurrent/restart/fault-injection authority proof; replacement and late-result proof. Workspace
-release callers beyond the public recovery/removal/retry perimeter still require the planned audit.
-No fixture is represented as a production host integration.
+This resume fixes and proves the remaining inspected restart defect:
+
+- An `excluded` receipt previously released custody across restart without requiring normal acquisition
+  to revalidate ongoing exclusion. Coordination now atomically retains the excluded recovery identities.
+  Ordinary custody/frontier mutations and shared readiness fail closed until the application owner has
+  freshly verified each identity in that coordinator process. Transaction roll-forward does not bypass
+  this guard, and a fork cannot inherit verification through a cached PID. Verification itself remains
+  outside global locks; the internal exact recovery/replay path re-establishes permission.
+- Exclusion may become confirmed closure during replay or after evidence-journal publication fails.
+  Fresh owner evidence may advance `excluded` to `closed`, never reverse closure or change identity;
+  original immutable evidence/receipt bytes remain unchanged.
+- The controlled parent/orphan process now actually writes a tracked file **and shared Git ref after
+  lease expiry and rejected recovery**. No replacement is admitted. The fixture worker restores its
+  own synthetic effects, then the host joins its complete job channel before admitting exactly one
+  replacement. Old dispatch cannot resume; replacement files/refs stay intact.
+- Added backend/TypeScript readiness-reason parity proof. No new readiness enum or frontend source
+  change was needed: unverified restarted exclusion uses existing `coordination-unavailable`.
+
+No fake provider is represented as production integration, and no unsupported D02 invocation is
+retroactively trusted. This is implementation/proof evidence for independent review, not phase
+acceptance. B–E remain unstarted.
 
 Changed file inventory, relative to the inspected absolute checkout
 `/home/runner/work/owlbear/owlbear`:
 
-- Core: `serve/delivery/src/owlbear_delivery/recovery.py` (new), `__init__.py`,
+- Core: `serve/delivery/src/owlbear_delivery/recovery.py` (new), `__init__.py`, `change_workspace.py`,
   `portfolio_application.py`, `delivery_runtime.py`, `diagnostics.py`.
 - Core tests: `serve/delivery/tests/test_recovery.py` (new), `test_portfolio_application.py`,
   `test_delivery_runtime.py`.
@@ -729,8 +752,137 @@ Changed file inventory, relative to the inspected absolute checkout
 - Workflow: `share/skills/w-orchestration/SKILL.md`, `share/agents/orchestrator.agent.md`,
   `share/agents/repairer.agent.md`, `tests/test_agent_ecosystem_validation.py`.
 - This package progress record: `.owlbear/research/delivery-cloud-d03-plan.md`.
+- Resume-only consumer proof: `tests/test_cockpit_boundary.py`.
 
-#### Executed proof and environment
+#### Resume proof and environment
+
+All commands ran from `/home/runner/work/owlbear/owlbear`. The fresh runner lacked `uv`; after
+advisory clearance (no vulnerabilities reported), the tooling command was:
+
+```shell
+mkdir -p .owlbear/scratch/d03-resume
+python -m pip install --disable-pip-version-check \
+  --target .owlbear/scratch/d03-resume/tools uv==0.12.15 --quiet
+```
+
+Repository-local ignored scratch was used for this writer's disposable tools/state. No manifests
+changed. The first `uv run --locked` restored CPython 3.14.7 and 163 locked workspace packages;
+the default workspace sync included unrelated workspace dependencies, and was not repeated.
+For the following commands, `uv` denotes `.owlbear/scratch/d03-resume/tools/bin/uv`, with
+`TMPDIR=$PWD/.owlbear/scratch/d03-resume` and
+`UV_CACHE_DIR=$PWD/.owlbear/scratch/d03-resume/cache`.
+
+The first discriminating invocation, before edits, was:
+
+```shell
+uv run --locked pytest -n 1 --basetemp=.owlbear/scratch/d03-resume/test-first \
+  serve/delivery/tests/test_recovery.py::test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement \
+  serve/delivery/tests/test_recovery.py::test_owner_evidence_exclusion_required_without_verified_closure \
+  serve/delivery/tests/test_recovery.py::test_recovery_caller_cannot_supply_forged_evidence
+```
+
+**6 passed, 3.21 s pytest elapsed**; dependency-install wall time was not measured separately.
+After the restart guard edit, the new restart node plus
+`test_verified_exclusion_is_revalidated_after_restart`, using
+`uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e'` and
+`--basetemp=.owlbear/scratch/d03-resume/test-restart`, initially failed **3 cases in 1.58 s**:
+the strict coordination model needed its established JSON-array-to-tuple normalizer. The normalizer
+fix passed the same nodes (**3 passed, 1.58 s**, `test-restart-fixed` basetemp).
+The strengthened controlled-process node passed **2 cases, 1.51 s** (`test-process` basetemp).
+After adding evidence-publication crash coverage and exclusion-to-closure evolution, the new
+`test_restart_cannot_use_exclusion_receipt_without_current_host_verification` node passed
+**3 cases, 1.63 s** (`test-evidence-evolution` basetemp), with the same flags.
+
+Mandatory authority and parity invocation:
+
+```shell
+uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e' \
+  --basetemp=.owlbear/scratch/d03-resume/test-authority \
+  tests/test_delivery_worktree_authority.py::test_runtime_frontier_writers_use_the_central_mutability_policy \
+  tests/test_delivery_worktree_authority.py::test_worktree_registration_has_only_named_lifecycle_callers \
+  tests/test_delivery_worktree_authority.py::test_worktree_removal_has_only_named_cleanup_caller \
+  tests/test_cockpit_boundary.py::test_delivery_readiness_reason_typescript_parity
+```
+
+**4 passed, 2.09 s**. The once-only affected closeout used
+`GIT_CEILING_DIRECTORIES=$PWD/.owlbear/scratch` and:
+
+```shell
+/usr/bin/time -f 'wall=%e s' uv run --locked pytest -q -n 1 \
+  -m 'not api and not model and not e2e' --basetemp=.owlbear/scratch/d03-resume/test-closeout \
+  serve/delivery/tests/test_recovery.py \
+  serve/delivery/tests/test_portfolio_application.py::test_continuation_workers_cannot_be_recovered_by_timeout_or_caller_assertion \
+  serve/delivery/tests/test_portfolio_application.py::test_legacy_process_exclusion_required_after_lease \
+  serve/delivery/tests/test_portfolio_application.py::test_continuation_failure_retains_custody_and_blocks_success_and_mutations \
+  serve/delivery/tests/test_portfolio_application.py::test_engine_result_transaction_recovers_without_repeating_provider \
+  serve/delivery/tests/test_portfolio_application.py::test_repair_change_diagnoses_but_exclusion_required_to_apply \
+  serve/delivery/tests/test_portfolio_application.py::test_repair_facade_matches_existing_repair_proposal_authority \
+  serve/delivery/tests/test_portfolio_application.py::test_acquisition_retains_expired_planning_claim_at_inclusive_boundary \
+  serve/delivery/tests/test_portfolio_application.py::test_acquisition_retains_expired_clean_builder_claim_without_relaunch \
+  serve/delivery/tests/test_portfolio_application.py::test_expired_claim_recovery_failure_does_not_block_independent_change \
+  serve/delivery/tests/test_delivery_runtime.py::test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree \
+  serve/delivery/tests/test_delivery_runtime.py::test_repeated_retry_exclusion_required_preserves_claim_and_budget \
+  serve/delivery/tests/test_delivery_runtime.py::test_clean_implementation_retry_exclusion_required \
+  serve/delivery/tests/test_delivery_runtime.py::test_integration_repair_claim_is_change_scoped_and_exact \
+  serve/delivery/tests/test_change_workspace.py::test_coordinator_recovers_pending_runtime_transaction \
+  serve/delivery/tests/test_change_workspace.py::test_restart_recovers_after_git_succeeds_before_writer_release \
+  serve/delivery/tests/test_change_workspace.py::test_restart_recovers_from_each_git_interruption \
+  serve/delivery/tests/test_change_workspace.py::test_restart_recovers_missing_worktree_at_each_git_interruption \
+  serve/delivery-mcp/tests/test_delivery_adapter.py::test_real_core_recovery_exclusion_required \
+  serve/delivery-mcp/tests/test_delivery_adapter.py::test_verified_completed_recovery_replay \
+  serve/delivery-mcp/tests/test_target_server.py::test_registered_recovery_exclusion_required \
+  serve/delivery-mcp/tests/test_target_server.py::test_registered_verified_completed_recovery_replay \
+  tests/test_cockpit_work_items.py::test_real_core_claim_recovery_exclusion_required \
+  tests/test_cockpit_work_items.py::test_http_verified_completed_recovery_replay \
+  tests/test_agent_ecosystem_validation.py::test_recovery_workflows_require_host_exclusion_not_caller_confirmation
+```
+
+**84 passed, 19.94 s pytest / 20.72 s wall**, one existing Starlette/AnyIO deprecation warning.
+No test assertion was weakened or skipped. Final static invocation:
+
+```shell
+mapfile -t paths < <(git diff --name-only 6c8c039a05c32ec265e45430d0b8a4e8e05be23c -- '*.py')
+/usr/bin/time -f 'ruff-check wall=%e s' uv run --locked ruff check "${paths[@]}" --output-format concise
+/usr/bin/time -f 'ruff-format wall=%e s' uv run --locked ruff format --check "${paths[@]}"
+git diff --check
+```
+
+**All 18 Python files passed**, check **0.08 s wall**, format **0.06 s wall**; whitespace check passed.
+Two initial local line-length findings in the new coordination field/guard were fixed before this run.
+Unchanged frontend evidence below is **prior proof, not rerun**, and remains below pinned-Node acceptance.
+No full suite, MegaLinter, service, live state, provider mutation or browser acceptance was run.
+The coordinating session owns secret scanning, independent review, publication and final validation;
+this writer did not commit, publish, approve A, or start B.
+
+The coordinator subsequently requested the missing nonclaim restart oracle, without public-route
+expansion. The existing finalizer and interrupted-ready tests now also exercise `excluded` evidence:
+after reopening, unavailable host evidence leaves frontier/custody unchanged and mutations blocked;
+the internal `_complete_recovery` path verifies the stable reference and re-enables custody after
+closure. A finalizer replacement is acquired afresh while old failure authority remains historical.
+For ready recovery, the original blocked/missing result stays unchanged and provider mutation count
+remains one. No public executable recovery route is added: A–D use the internal owning port;
+registered executable handoffs remain E's scope. Providers must retain stable opaque references
+across restart, including exclusion-to-closure advancement; lost provenance remains unavailable.
+
+Follow-up command (same environment as above):
+
+```shell
+/usr/bin/time -f 'wall=%e s' uv run --locked pytest -q -n 1 \
+  -m 'not api and not model and not e2e' \
+  --basetemp=.owlbear/scratch/d03-resume/test-nonclaim-revalidation-fixed \
+  serve/delivery/tests/test_recovery.py::test_verified_clean_finalizer_recovery_keeps_failed_history \
+  serve/delivery/tests/test_recovery.py::test_verified_interrupted_ready_owner_readback_never_redispatches \
+  -k excluded
+```
+
+**3 passed, 2.47 s pytest / 3.28 s wall**. An initial run also passed all three
+(**2.44 s / 3.20 s wall**, `test-nonclaim-revalidation` basetemp); a helper-argument lint finding
+was repaired by deriving its runtime root/reference from the already-bound intent/receipt.
+Scoped `ruff check` and `ruff format --check` on `serve/delivery/src/owlbear_delivery/recovery.py`
+and `serve/delivery/tests/test_recovery.py` then passed (**0.04 s / 0.03 s wall**).
+No closeout or unaffected tests were repeated.
+
+#### Earlier partial-checkpoint proof (prior evidence, not rerun)
 
 All Python commands ran from `/home/runner/work/owlbear/owlbear` with:
 
@@ -836,13 +988,14 @@ were cleaned; restored dependencies/tooling remain available to the coordinating
 | Gap | Available evidence / reason unrun | Owner/environment and blocking effect |
 | --- | --- | --- |
 | Actual host termination/exclusion integration | No such provider in inspected source; D02 host rehearsal proves dispatch only | A implements fail-closed port and controlled-process proof. Host owner must supply verifiable exact invocation/descendant closure before enabling that host's recovery. Blocks any unsupported worker release and full V10/product acceptance; does not block B–E with tested fail-closed behavior. Do not call a fixture adapter production support. |
-| Unknown engine write outcomes | Existing exact journals/readback owners; D03 reconciliation not implemented | A/E cloud tests must demonstrate each supported owner path; unresolved cases remain explicitly contained. Missing core proof blocks the dependent phase/package closeout, not reassigned to the host. |
+| Unknown engine write outcomes | A's interrupted `mark-ready` reference path has exact receipt/provider readback proof; unrecorded/contradictory effects remain contained | E owns remaining approved owner paths and cumulative coverage. No generic provider retry or fabricated completion is supported. |
 | Preservation policy/limits and retry defaults | Concrete proposal above, derived from programme's review-required defaults | Specification reviewer must approve before corresponding implementation; no implicit destructive/privacy permission. New policy expansion needs an explicit decision, not a larger limit or weaker classifier. |
 | Offline structure is not semantic integrity | Runtime imports and automatic transaction recovery are deliberately excluded | D's output must label this limit. Unknown corruption remains diagnosed; D07 owns any approved repair. Not a blocker for a truthful read-only entry. |
-| Product tests/build/static checks | D03-P changes documentation only; proposed tests do not yet exist | Intentionally not run in P. Each implementing phase owns its cloud-required checks; external CI retains broad gates. No old counts are a new pass. |
+| Product tests/build/static checks | A's focused Python/consumer/static proof is recorded above; unchanged frontend prior proof used Node 22 rather than pinned Node 24 | External CI owns pinned-Node and broad gates. B–E own their additional proof; no prior count is a new pass. |
+| External CI at interrupted head | Coordinating session inspected implementation run `35219983240`: cancelled, zero failed jobs. Source/agent/Cockpit runs at `ec392dfa91790bd270378e550ab6ed1ca01f1959` are `action_required` with no jobs, including source run `35225758084` | Repository/integration owner must obtain completed external checks for the eventual review head. No external acceptance is inferred, and no CI policy/protection change was made. |
 | Actual host workflow/stdio and live activation | Not exercised by planning or in-process adapters | D08-H / user-controlled host acceptance; no service start or activation here. |
 | Repair re-review | Independent Claude Opus 5 `d03-p-prerequisite` PASS supplied by coordinating session on approved repaired plan | Prerequisite satisfied; separate user approval recorded above. |
-| D03-A positive authority and reference path | Only the fail-closed perimeter is implemented and tested; missing core work is listed above | Continue D03-A on PR #326. Blocks A acceptance, B and package merge; not a host-only deferral. |
+| D03-A independent implementation review | Positive authority/reference paths and restart guard are implemented with focused proof above | Coordinating session must obtain independent review and resolve findings before A acceptance or B. No worker-written acceptance is claimed. |
 | Existing workflow-registry test mismatch | Baseline orchestrator expected-tool set omits two already-granted D02 continuation tools | Coordinating/integration owner; not hidden by skips or modified role permissions. |
 
 There is no new product permission request to resolve during planning: unavailable exclusion fails
@@ -850,5 +1003,5 @@ closed under the already required policy. A future request to release unverifiab
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-**Next request:** `Resume D03-A on this PR from the recorded partial checkpoint; implement and prove the remaining approved recovery authority.`
+**Next request:** `Review D03-A on this PR at the newly published implementation checkpoint.`
 This recommendation does not start B, approve a merge, waive host proof or authorize live activation.
