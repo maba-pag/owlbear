@@ -656,7 +656,7 @@ coordinating session, not invented here. Approved contract and phase boundaries 
   Accepted-success accounting and its affected-episode reset share one ledger transaction.
 - Worker block outcomes, accepted Builder result submission/replay, stable task-lineage matching and
   current claimable-task readiness now use the same budget. Success on another task does not reset
-  the failed task. Repair heads and explicitly linked task aliases retain the original episode.
+  the failed task. Worker repair heads and explicitly linked task aliases retain the original episode.
   Fractional-second and regressed clocks cannot shorten the persisted delay.
 - Automatic acceptance observations stop after three, including across new sessions/operation IDs.
   Exhaustion itself is never authorization. No caller-provided explicit-observation flag is accepted;
@@ -717,6 +717,25 @@ Proof (counts overlap and must not be summed):
   caller flag was removed and strict request validation rejects it. No public authority was expanded.
   After the scoped lint-only return simplification, the three planner/Builder publication cases
   passed again in **4.10s**, and all six changed Python files passed Ruff check/format.
+- Final coordinating-owner-requested bounded closeout: **36 passed in 10.78s** on the unchanged
+  candidate, using `uv run --locked pytest -q -n1 -m 'not api and not model and not e2e' --tb=short`.
+  Scope was the ledger file; the new application budget/reservation/result-replay nodes; finalizer
+  budget, interrupted-report and exact-recovery nodes; central mutability and readiness parity;
+  plus runtime `test_checkpoint_failure_metadata_survives_reload_and_reanchors_by_head`,
+  `test_repeated_retry_exclusion_required_preserves_claim_and_budget` and
+  `test_clean_implementation_retry_exclusion_required`. No whole application-file rerun was made.
+  A final test-only assertion makes Planner acceptance explicit: candidate publication retains one
+  attempt/zero resets, while accepted `advance` yields zero attempts/one reset. That Planner case and
+  both Builder submission/replay variants passed **3 tests in 9.90s**, with file-scoped Ruff checks.
+- Final scoped re-review repairs above published `0b37ca2`: engine lookup now requires the exact
+  semantic key; worker same-lineage repair matching is unchanged. Three ledger cases prove changed
+  engine head, target or finalization cannot borrow an exhausted episode's budget. Block bookkeeping
+  errors after the durable runtime transition no longer prevent Delivery-state publication; the
+  reservation stays consumed, and exact transition replay records one failure without refund.
+  These new tests plus affected worker/finalizer/acceptance checks passed **9 tests in 5.74s**.
+  Ruff check/format passed for the four changed Python files. This production repair requires
+  current-candidate re-review and scanning; the parent's zero-alert CodeQL result for `0b37ca2`
+  is prior-source evidence, not a scan of these changes.
 
 **Remaining B integration gaps / review boundary:** reservation, owner receipt and retry accounting
 are still distinct durable transactions; supported receipt replay is tested, but no complete

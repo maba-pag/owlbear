@@ -370,3 +370,26 @@ def test_accepted_other_task_does_not_reset_failed_task_episode(tmp_path: Path) 
     assert ledger.episode(first_key).total_attempts == 1
     assert ledger.episode(first_key).reset_count == 0
     assert ledger.episode(other_key).total_attempts == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("exact_head", "d" * 40), ("target_head", "e" * 40), ("finalization_id", "final-2")],
+)
+def test_engine_contexts_do_not_share_exhausted_budget(tmp_path: Path, field: str, value: str) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    first_key = _engine_key(action="finalize")
+    for index, seconds in enumerate((0, 1, 3)):
+        now = _START + timedelta(seconds=seconds)
+        attempt = ledger.reserve(first_key, failure_class="mechanical", now=now, attempt_id=f"old-{index}")
+        ledger.record_failure(attempt, failure_code="failed-check", now=now)
+    assert ledger.episode(first_key).stop_code is RetryStopCode.EXHAUSTED
+    other_key = first_key.model_copy(update={field: value})
+    other = ledger.reserve(
+        other_key, failure_class="mechanical", now=_START + timedelta(seconds=10), attempt_id="new-context"
+    )
+    assert other.allowed
+    assert other.attempts == 1
+    assert other.episode_id != first_key.identity
+    assert ledger.episode(first_key).stop_code is RetryStopCode.EXHAUSTED
+    assert not ledger.reserve(first_key, failure_class="mechanical", now=_START + timedelta(days=1)).allowed

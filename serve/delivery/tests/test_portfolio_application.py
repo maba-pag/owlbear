@@ -1659,6 +1659,42 @@ def test_interrupted_engine_reservation_remains_consumed_without_dispatch_eviden
     assert provider.set_pull_request_draft_state.call_count == 0
 
 
+def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    request = BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id=launch.claim.claim_id,
+        block_id="blocked-check",
+        reason="Check failed",
+        unblock_condition="Check prerequisite available",
+        expected_evidence=("check",),
+        locators=("check",),
+    )
+    with (
+        patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")),
+        patch.object(application, "_publish_delivery_state", wraps=application._publish_delivery_state) as publish,
+    ):
+        blocked = application.transition_delivery("change-a", request)
+    publish.assert_called_once()
+    assert blocked.active_claim is None
+    assert runtimes["change-a"].show_binding("OUT-001") == blocked
+    ledger = RetryLedger(state_root, "change-a")
+    reserved = ledger.read().episodes[0]
+    assert reserved.total_attempts == 1
+    assert reserved.last_status == "reserved"
+    assert reserved.outcome_ids == ()
+    assert application.transition_delivery("change-a", request) == blocked
+    accounted = ledger.read().episodes[0]
+    assert accounted.total_attempts == 1
+    assert accounted.reset_count == 0
+    assert accounted.last_status == "failed"
+    assert len(accounted.outcome_ids) == 1
+    assert application.transition_delivery("change-a", request) == blocked
+    assert ledger.read().episodes[0] == accounted
+
+
 def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp_path: Path) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     action = _engine_action(application)
@@ -2130,6 +2166,8 @@ def test_continuation_plans_builds_and_finalizes_via_existing_result_routes(tmp_
             action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
         ),
     )
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].total_attempts == 0
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].reset_count == 1
     assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
     builder = application.acquire_change_action(_continuation_request(application)).launch
     _git(builder.worktree_path, "commit", "--allow-empty", "-m", "complete task")

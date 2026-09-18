@@ -4464,10 +4464,11 @@ class PortfolioApplication:
             if request.action == "advance":
                 self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
             elif request.action == "block":
-                ledger = runtime.retry_ledger(clock=self._clock)
-                attempt_id = ledger.attempt_for_operation(request.claim_id)
-                if attempt_id is not None:
-                    ledger.record_failure(attempt_id, failure_code="worker-blocked", now=self._clock())
+                with suppress(OSError, RuntimeError, ValueError):
+                    ledger = runtime.retry_ledger(clock=self._clock)
+                    attempt_id = ledger.attempt_for_operation(request.claim_id)
+                    if attempt_id is not None:
+                        ledger.record_failure(attempt_id, failure_code="worker-blocked", now=self._clock())
             self._publish_delivery_state(
                 change_id,
                 runtime,

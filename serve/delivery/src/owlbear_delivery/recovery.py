@@ -1223,6 +1223,8 @@ def _replace_episode(
 
 def _matching_episode(summary: RetryLedgerSummary, key: RetryEpisodeKey) -> RetryEpisodeSummary | None:
     exact = next((item for item in summary.episodes if item.episode_id == key.identity), None)
+    if key.outcome_id is None:
+        return exact
     candidates = tuple(
         item
         for item in summary.episodes
