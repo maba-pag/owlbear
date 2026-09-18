@@ -636,12 +636,102 @@ Closeout, split into bounded selections:
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
-| D03-B | Implementation checkpoint `6c08be1653061a81b34f3d60be9c74c0e873837e` plus uncommitted follow-up fixes; user approval `5723189457` explicitly authorizes B only | Focused Python, frontend, build, format/lint and compile proof recorded below; no self-acceptance or broad-suite claim | Parent/coordinating session must obtain independent B review and decide readiness. External CI, CodeQL/automated review, host exclusion/dispatch proof and live activation remain outstanding |
+| D03-B | Resumed from `cc11df10b851a145f77912e866ff9eb4ff4d3d48` under user comment `5723694522`; approved specification remains `43b91fdf0c5707551aaadad1b567173183174b06` | Current repair proof below; earlier 419/8/66/37/315 counts are prior-source evidence, not acceptance of this candidate | Partial: coordinating owner must review remaining integration gaps and obtain independent review; do not start C–E |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
 
-### D03-B verification record — 2026-09-18
+### D03-B resumed verification — 2026-09-18
+
+Implementation source: the working changes above `cc11df1`; publication revision is assigned by the
+coordinating session, not invented here. Approved contract and phase boundaries are unchanged.
+
+- Preserved the interrupted fixed-clock generated-ID repair and proved it. The first discriminating
+  application checks failed at the interrupted head: both engine-result crash/replay variants left
+  their reservation unaccounted, and acceptance readiness bypassed the first backoff. All three now
+  pass through the real application/owner fixtures.
+- Exact engine-result replay now reconciles its original reservation without a provider repeat.
+  Verified recovery replay reconciles the exact released reservation; a durable finalizer report
+  repairs interrupted failure accounting before release. Known failed outcomes retain backoff.
+  Accepted-success accounting and its affected-episode reset share one ledger transaction.
+- Worker block outcomes, accepted Builder result submission/replay, stable task-lineage matching and
+  current claimable-task readiness now use the same budget. Success on another task does not reset
+  the failed task. Repair heads and explicitly linked task aliases retain the original episode.
+  Fractional-second and regressed clocks cannot shorten the persisted delay.
+- Automatic acceptance observations stop after three, including across new sessions/operation IDs.
+  Exhaustion itself is never authorization. No caller-provided explicit-observation flag is accepted;
+  a genuinely admitted later explicit continuation remains an integration gap rather than invented
+  authority. The internal ledger's bounded nonautomatic-observation primitive remains tested.
+- New real worker and finalizer tests prove three-attempt exhaustion, report retirement/recovery and
+  restart persistence, plus independent Change progress. A reservation interrupted before intent
+  publication remains consumed and contained; no missing record is treated as dispatch-stop evidence.
+
+Actual environment: initial `uv` was missing, and the frontend test failed because `cross-env` was
+missing. Restored uv **0.12.16** after a clean advisory check, the existing locked Python workspace
+with available **Python 3.14.7**, and `npm ci --ignore-scripts --no-audit --no-fund`. No manifest or lock
+was changed. Node was **22.23.2**, below the declared Node 24 requirement; successful frontend proof
+does not replace the pinned-Node external gate. The actual lock resolved Vitest **5.0.1** and Vite
+**8.3.0**. All scratch/test roots were inside `.owlbear/scratch/`; `GIT_CEILING_DIRECTORIES` was set
+to that directory so a synthetic non-repository fixture could not discover the enclosing checkout.
+The uv executable is `.owlbear/scratch/d03-b-tools/bin/uv`; commands used
+`TMPDIR=$PWD/.owlbear/scratch/d03-b-temp`, a local `UV_CACHE_DIR` and per-run `--basetemp` beneath
+that test root (final run: `pytest-current-proof`). Disposable test repositories and download cache
+were removed at handoff; the executable and proof logs remain for the coordinating owner.
+
+Proof (counts overlap and must not be summed):
+
+- One affected Python closeout: `test_retry_ledger.py`, `test_portfolio_application.py`,
+  `test_recovery.py`, `test_work_items.py`, the runtime checkpoint-metadata node, readiness parity
+  and central-mutability nodes, with `uv run --locked pytest -q -n1 -m 'not api and not model and not e2e'`:
+  **456 passed, 3 failed in 114.16s**. One failure exposed a stale immediate-acceptance-retry test
+  assumption; its clock now advances while preserving the original assertions. A second exposed
+  missing verified-recovery receipt accounting, repaired in the owner. The third was the
+  enclosing-Git-repository fixture issue described above. All three passed targeted rechecks.
+- Post-repair affected-owner/consumer recheck: **87 passed in 27.66s**, covering the ledger and
+  recovery modules, exact application result/recovery/worker consumers, parity and mutability.
+  Later lineage and second-task-readiness changes were checked with the final command below:
+
+  ```shell
+  uv run --locked pytest \
+    serve/delivery/tests/test_retry_ledger.py \
+    serve/delivery/tests/test_portfolio_application.py \
+    serve/delivery/tests/test_recovery.py \
+    -k 'retry_ledger or budget or reservation or engine_result_transaction or submit_result or failed_activation_identity or finalization_replays_atomic or verified_clean_finalizer or interrupted_report_accounting or restart_cannot_use_exclusion' \
+    -q -n1 -m 'not api and not model and not e2e' --tb=short
+  ```
+
+  **33 passed in 10.42s**.
+- `npm test -- --run src/__tests__/WorkPortfolio.test.tsx` in `serve/cockpit/web`:
+  **111 passed in 117.34s**; `npm run build` passed (Vite **4.50s**). Scoped Biome checked the four
+  existing B frontend files in **164ms**. No frontend source changed during this resume.
+- Ruff check and format check passed on the six changed Python files: `recovery.py`,
+  `portfolio_application.py`, `__init__.py`, `test_retry_ledger.py`, `test_portfolio_application.py`,
+  and `test_recovery.py`. `git diff --check` passed.
+- The coordinating session then supplied four Opus findings against committed `cc11df1`. Worker
+  readiness identity/current-task matching, inferred explicit observation and ordinary-acquisition
+  reservation release were already repaired. Its additional candidate-publication finding was valid:
+  `publish_delivery_plan` / `publish_delivery_result` no longer reset anything; only accepted
+  `advance` / `submit_result` paths account accepted progress. Real planner/Builder tests now assert
+  candidate publication leaves attempts at one and reset count zero, then accepted result replay
+  resets exactly once. The final review-driven selection passed **9 tests in 7.76s**; a temporary
+  caller flag was removed and strict request validation rejects it. No public authority was expanded.
+  After the scoped lint-only return simplification, the three planner/Builder publication cases
+  passed again in **4.10s**, and all six changed Python files passed Ruff check/format.
+
+**Remaining B integration gaps / review boundary:** reservation, owner receipt and retry accounting
+are still distinct durable transactions; supported receipt replay is tested, but no complete
+same-transaction owner/accounting proof or safe no-start reservation refund is claimed. Existing
+nonzero legacy binding retry counters have not been imported into the new authority. Admitted
+explicit-observation entry and automatic background acceptance-observer budget coverage remain
+unverified. These are B completion questions, not
+permission to start E, reinterpret the approved contract, or enable live services. Independent
+current-candidate review, external CI/pinned Node and host proof remain with their existing owners.
+The coordinating session reports the latest `cc11df1` source, agent, Cockpit and setup CI runs as
+`action_required`; none is a phase pass. Its independent Opus 5 audit targets committed `cc11df1`,
+not these uncommitted repairs, so that audit cannot certify this candidate without a scoped recheck.
+No full suite, MegaLinter, quality aggregate, real provider mutation, live state or activation was run.
+
+### D03-B prior-source verification record — 2026-09-18
 
 - Approval boundary: user comment `5723189457` approves the presented B plan and requests Luna Max,
   with work stopping after B. No commit, progress report, comment, service, live record or provider

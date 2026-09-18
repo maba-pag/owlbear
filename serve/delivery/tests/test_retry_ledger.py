@@ -202,6 +202,7 @@ def test_acceptance_wait_allows_explicit_observation_without_reset(tmp_path: Pat
     assert updated.total_attempts == 3
     assert updated.explicit_observations == 1
     assert updated.reset_count == 0
+    assert updated.stop_code is RetryStopCode.ACCEPTANCE_WAIT
 
 
 def test_unresolved_reservation_is_contained_until_an_outcome(tmp_path: Path) -> None:
@@ -300,3 +301,72 @@ def test_corrupt_summary_fails_closed(tmp_path: Path) -> None:
 
     with pytest.raises(RetryLedgerCorruptError):
         ledger.read()
+
+
+def test_recovery_release_preserves_failed_backoff_and_fractional_clock(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    at = _START + timedelta(microseconds=750000)
+    original = ledger.reserve(key, failure_class="mechanical", now=at)
+    failed = ledger.record_failure(original, failure_code="failed", now=at)
+    assert ledger.record_recovery_release(original, now=at) == failed
+    assert not ledger.reserve(key, failure_class="mechanical", now=at - timedelta(seconds=1)).allowed
+    assert not ledger.reserve(key, failure_class="mechanical", now=at + timedelta(milliseconds=999)).allowed
+    assert ledger.reserve(key, failure_class="mechanical", now=at + timedelta(seconds=1)).allowed
+
+
+def test_old_accepted_result_cannot_reset_successor_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START)
+    ledger.record_accepted_progress(first, now=_START)
+    second = ledger.reserve(key, failure_class="mechanical", now=_START)
+    ledger.record_failure(second, failure_code="new-failure", now=_START)
+    before = ledger.read()
+    ledger.record_accepted_progress(first, now=_START)
+    assert ledger.read() == before
+    assert ledger.episode(key).repair_attempts == 0
+
+
+def test_repair_commit_and_task_alias_keep_original_failed_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = RetryEpisodeKey.worker(
+        "change-a",
+        "builder-claim",
+        _HEAD,
+        contract_digest="c" * 64,
+        outcome_id="OUT-001",
+        task_lineage="TASK-001",
+        procedure_class="builder",
+        original_candidate="original",
+    )
+    first = ledger.reserve(key, failure_class="mechanical", now=_START)
+    ledger.record_failure(first, failure_code="first-code", now=_START)
+    ledger.record_alias(key, alias_kind="task", value="renamed", now=_START)
+    renamed = key.model_copy(update={"exact_head": "d" * 40, "task_lineage": "renamed", "original_candidate": "new"})
+    second = ledger.reserve(renamed, failure_class="mechanical", now=_START + timedelta(seconds=1))
+    assert second.episode_id == first.episode_id
+    assert second.attempts == 2
+    assert ledger.episode(renamed).key == key
+
+
+def test_accepted_other_task_does_not_reset_failed_task_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    first_key = RetryEpisodeKey.worker(
+        "change-a",
+        "builder-claim",
+        _HEAD,
+        contract_digest="c" * 64,
+        outcome_id="OUT-001",
+        task_lineage="TASK-001",
+        procedure_class="builder",
+        original_candidate="candidate",
+    )
+    first = ledger.reserve(first_key, failure_class="mechanical", now=_START)
+    ledger.record_failure(first, failure_code="failed-check", now=_START)
+    other_key = first_key.model_copy(update={"task_lineage": "TASK-002"})
+    other = ledger.reserve(other_key, failure_class="mechanical", now=_START)
+    ledger.record_accepted_progress(other, now=_START)
+    assert ledger.episode(first_key).total_attempts == 1
+    assert ledger.episode(first_key).reset_count == 0
+    assert ledger.episode(other_key).total_attempts == 0

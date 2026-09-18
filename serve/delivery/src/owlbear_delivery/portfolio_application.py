@@ -2944,11 +2944,14 @@ class PortfolioApplication:
         with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
             binding = runtime.show_binding(outcome_id)
             claim = binding.active_claim
-            if claim is not None and claim.claim_id == claim_id:
-                runtime.retry_ledger(clock=self._clock()).record_accepted_progress(
-                    claim.attempt_id,
-                    now=self._clock(),
-                )
+            ledger = runtime.retry_ledger(clock=self._clock)
+            attempt_id = (
+                claim.attempt_id
+                if claim is not None and claim.claim_id == claim_id
+                else ledger.attempt_for_operation(claim_id)
+            )
+            if attempt_id is not None:
+                ledger.record_accepted_progress(attempt_id, now=self._clock())
 
     def _record_retry_release(
         self,
@@ -2961,8 +2964,20 @@ class PortfolioApplication:
         if attempt_id is None and outcome_id is None:
             return
         with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
-            ledger = runtime.retry_ledger(clock=self._clock())
+            ledger = runtime.retry_ledger(clock=self._clock)
             if attempt_id is not None:
+                reports = FinalizationReportStore(self._target_root, runtime.contract.change_id).read()
+                report = next(
+                    (item for item in reports.reports if item.request.attempt_key == attempt_id),
+                    None,
+                )
+                if report is not None:
+                    ledger.record_failure(
+                        attempt_id,
+                        failure_code=report.request.code.value,
+                        failure_detail=report.summary,
+                        now=report.observed_at,
+                    )
                 ledger.record_recovery_release(attempt_id, now=self._clock())
             elif outcome_id is not None:
                 ledger.record_recovery_release_for_outcome(outcome_id, now=self._clock())
@@ -3007,7 +3022,7 @@ class PortfolioApplication:
                 return exc.readiness
             if isinstance(report, FinalizationReport):
                 with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
-                    self._runtime(request.change_id).retry_ledger(clock=self._clock()).record_failure(
+                    self._runtime(request.change_id).retry_ledger(clock=self._clock).record_failure(
                         request.attempt_key,
                         failure_code=request.code.value,
                         failure_detail=report.summary,
@@ -4426,9 +4441,7 @@ class PortfolioApplication:
     ) -> DeliveryPlanCandidate:
         """Publish one validated Planning candidate through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
-        candidate = runtime.publish_plan(request)
-        self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
-        return candidate
+        return runtime.publish_plan(request)
 
     def publish_delivery_result(
         self,
@@ -4437,9 +4450,7 @@ class PortfolioApplication:
     ) -> DeliveryResultCandidate:
         """Publish one validated Build result through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
-        candidate = runtime.publish_result(request)
-        self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
-        return candidate
+        return runtime.publish_result(request)
 
     def transition_delivery(
         self,
@@ -4450,8 +4461,13 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             binding = runtime.transition(request)
-            if getattr(request, "action", None) != "block":
-                self._record_retry_release(runtime, outcome_id=request.outcome_id)
+            if request.action == "advance":
+                self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
+            elif request.action == "block":
+                ledger = runtime.retry_ledger(clock=self._clock)
+                attempt_id = ledger.attempt_for_operation(request.claim_id)
+                if attempt_id is not None:
+                    ledger.record_failure(attempt_id, failure_code="worker-blocked", now=self._clock())
             self._publish_delivery_state(
                 change_id,
                 runtime,
@@ -5638,15 +5654,32 @@ class PortfolioApplication:
             outcome = next((item for item in snapshot.contract.outcomes if item.outcome_id == card.work_item_id), None)
             binding = next((item for item in snapshot.frontier.bindings if item.outcome_id == card.work_item_id), None)
             if outcome is not None and binding is not None:
-                task_lineage = binding.task_ids[0] if binding.task_ids else card.work_item_id
+                role = (
+                    DeliveryWorkerRole.BUILDER
+                    if binding.stage is DeliveryStage.IMPLEMENTATION
+                    else DeliveryWorkerRole.PLANNER
+                )
+                completed = {result.task_id for result in binding.results}
+                task_lineage = (
+                    next(
+                        (
+                            task.task_id
+                            for task in binding.tasks
+                            if task.task_id not in completed and set(task.dependency_ids) <= completed
+                        ),
+                        card.work_item_id,
+                    )
+                    if role is DeliveryWorkerRole.BUILDER
+                    else card.work_item_id
+                )
                 key = RetryEpisodeKey.worker(
                     snapshot.contract.change_id,
-                    action.value,
+                    f"{role.value}-claim",
                     exact_head,
                     contract_digest=contract_fingerprint(snapshot.contract),
                     outcome_id=card.work_item_id,
                     task_lineage=task_lineage,
-                    procedure_class=action.value,
+                    procedure_class=role.value,
                     original_candidate=(
                         binding.candidate.digest
                         if binding.candidate is not None
@@ -5654,8 +5687,6 @@ class PortfolioApplication:
                         if binding.result_candidate is not None
                         else card.work_item_id
                     ),
-                    target_head=decision.basis.target_head,
-                    finalization_id=finalization.finalization_id if finalization is not None else None,
                 )
         failure_class = (
             RetryFailureClass.ACCEPTANCE
@@ -5683,15 +5714,8 @@ class PortfolioApplication:
             "next_eligible_at": episode.next_eligible_at,
             "stop_reason": episode.stop_code.value if episode.stop_code is not None else None,
         }
-        explicit_acceptance = (
-            failure_class is RetryFailureClass.ACCEPTANCE
-            and episode.last_status in {"failed", "waiting"}
-            and episode.explicit_observations == 0
-        )
-        backoff_active = (
-            episode.next_eligible_at is not None
-            and _timestamp(self._clock()) < _timestamp(episode.next_eligible_at)
-            and not explicit_acceptance
+        backoff_active = episode.next_eligible_at is not None and _timestamp(self._clock()) < _timestamp(
+            episode.next_eligible_at
         )
         if backoff_active:
             updates.update(
@@ -5727,11 +5751,11 @@ class PortfolioApplication:
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
             updates.update(
                 {
-                    "status": "ready",
+                    "status": "waiting",
                     "reason_code": "acceptance-wait",
-                    "executable": decision.action is not None and decision.operation is not None,
-                    "action": decision.action,
-                    "next_actor": WorkItemNextActor.AGENT,
+                    "executable": False,
+                    "action": None,
+                    "next_actor": WorkItemNextActor.YOU,
                 }
             )
         elif episode.stop_code is RetryStopCode.CONTAINMENT:
@@ -6710,6 +6734,7 @@ class PortfolioApplication:
             ExecuteDeliveryChangeAction(change_id=request.change_id, operation_id=action.operation_id)
         )
         if result is not None:
+            self._record_engine_attempt_result(action, result)
             kinds = {"completed": "reconciled", "waiting": "human", "stale": "stale", "blocked": "unavailable"}
             return DeliveryContinuationResult(
                 change_id=request.change_id,
@@ -6830,19 +6855,12 @@ class PortfolioApplication:
             else RetryFailureClass.MECHANICAL
         )
         ledger = runtime.retry_ledger(clock=self._clock)
-        episode = ledger.episode(key)
-        explicit = (
-            episode is not None
-            and episode.failure_class is RetryFailureClass.ACCEPTANCE
-            and episode.last_status in {"failed", "waiting"}
-            and episode.explicit_observations == 0
-        )
         return ledger.reserve(
             key,
             failure_class=failure_class,
             now=self._clock(),
             attempt_id=attempt_id,
-            automatic=not explicit,
+            automatic=True,
             operation_alias=attempt_id,
         )
 
@@ -6914,6 +6932,7 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             existing = self._read_engine_result(request)
             if existing is not None:
+                self._record_engine_attempt_result(existing.action, existing)
                 return existing
             action = self._read_engine_intent(request)
             with self._coordinator.continuation_execution(action):
@@ -7777,6 +7796,7 @@ class PortfolioApplication:
                     ):
                         self._fail("submitted result conflicts with current Outcome authority")
                     runtime.require_result_replay(submission.outcome_id, submission.claim_id, submission.result)
+                    self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
                     if runtime.pending_state_publication() is not None:
                         self._publish_delivery_state(
                             submission.change_id,
@@ -7810,6 +7830,7 @@ class PortfolioApplication:
                         output=candidate.output,
                     )
                 )
+                self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
                 self._publish_delivery_state(
                     submission.change_id,
                     runtime,
@@ -8242,6 +8263,7 @@ class PortfolioApplication:
         ):
             raise DeliveryWorkerExclusionRequiredError
         self._coordinator.record_verified_exclusion(intent.recovery_id)
+        self._record_retry_release(runtime, attempt_id=request.attempt_id)
         return receipt
 
     @staticmethod
@@ -8532,7 +8554,7 @@ class PortfolioApplication:
             claim = claim.model_copy(
                 update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
             )
-        reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id)
+        reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id, claim.claim_id)
         if reservation is not None and not reservation.allowed:
             return DeliveryAcquisitionFailure(
                 change_id=candidate.change_id,
@@ -8607,6 +8629,7 @@ class PortfolioApplication:
         candidate: _Candidate,
         source: _PreparedSource,
         attempt_id: str,
+        claim_id: str,
     ) -> RetryReservation | None:
         """Reserve worker/check repair before publishing a claim or writer."""
         original_candidate = (
@@ -8627,15 +8650,13 @@ class PortfolioApplication:
             original_candidate=original_candidate,
         )
         ledger = candidate.runtime.retry_ledger(clock=self._clock)
-        if candidate.binding.block is None or candidate.binding.block.resolved:
-            self._record_retry_release(candidate.runtime, outcome_id=candidate.binding.outcome_id)
         return ledger.reserve(
             key,
             failure_class=RetryFailureClass.MECHANICAL,
             now=self._clock(),
             attempt_id=attempt_id,
             automatic=True,
-            operation_alias=attempt_id,
+            operation_alias=claim_id,
         )
 
     def _current_launch(

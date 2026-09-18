@@ -417,6 +417,7 @@ class RetryEpisodeSummary(_RecoveryModel):
     policy_version: int = Field(default=1, ge=1)
     attempt_ids: tuple[str, ...] = ()
     outcome_ids: tuple[str, ...] = ()
+    accepted_attempt_ids: tuple[str, ...] = ()
     aliases: tuple[RetryEpisodeAlias, ...] = ()
     total_attempts: int = Field(default=0, ge=0)
     repair_attempts: int = Field(default=0, ge=0)
@@ -557,9 +558,9 @@ class RetryLedger:
         """Return one episode by semantic identity."""
         if key.change_id != self.change_id:
             raise ValueError("retry key belongs to another Change")
-        return next((item for item in self.read().episodes if item.episode_id == key.identity), None)
+        return _matching_episode(self.read(), key)
 
-    def reserve(  # noqa: C901, PLR0912, PLR0913, PLR0911 - policy branches are the bounded retry contract.
+    def reserve(  # noqa: C901, PLR0912, PLR0913, PLR0911, PLR0915 - bounded retry policy.
         self,
         key: RetryEpisodeKey,
         *,
@@ -580,7 +581,10 @@ class RetryLedger:
         policy = _retry_failure_class(failure_class)
         observed = _retry_time(now if now is not None else self._clock())
         summary, previous = self._read_with_bytes()
-        current = next((item for item in summary.episodes if item.episode_id == key.identity), None)
+        current = _matching_episode(summary, key)
+        requested_key = key
+        if current is not None:
+            key = current.key
         if current is not None and current.failure_class is not policy:
             raise RetryLedgerConflictError("retry episode changed failure class")
         if original and current is not None:
@@ -601,7 +605,6 @@ class RetryLedger:
                 contained = current.model_copy(
                     update={
                         "last_status": "contained",
-                        "next_eligible_at": None,
                         "stop_code": RetryStopCode.CONTAINMENT,
                     }
                 )
@@ -627,9 +630,17 @@ class RetryLedger:
             policy is RetryFailureClass.ACCEPTANCE
             and not automatic
             and current is not None
-            and current.last_status in {"failed", "waiting"}
+            and current.stop_code is RetryStopCode.ACCEPTANCE_WAIT
             and current.explicit_observations == 0
         )
+        if policy is RetryFailureClass.ACCEPTANCE and not automatic and not explicit_acceptance:
+            return RetryReservation(
+                episode_id=key.identity,
+                allowed=False,
+                reason_code=RetryStopCode.ACCEPTANCE_WAIT.value,
+                attempts=current.total_attempts if current else 0,
+                stop_code=RetryStopCode.ACCEPTANCE_WAIT,
+            )
         if (
             current is not None
             and current.next_eligible_at is not None
@@ -654,7 +665,7 @@ class RetryLedger:
                 stop_code=current.stop_code,
             )
 
-        first = current is None
+        first = current is None or current.total_attempts == 0
         kind = "observation" if policy is RetryFailureClass.ACCEPTANCE else "original" if first else "repair"
         total = current.total_attempts if current else 0
         repairs = current.repair_attempts if current else 0
@@ -712,6 +723,15 @@ class RetryLedger:
         else:
             reserved_id = attempt_id
         aliases = current.aliases if current else ()
+        if requested_key != key:
+            aliases = (
+                *aliases,
+                RetryEpisodeAlias(
+                    alias_kind="commit",
+                    value=requested_key.exact_head,
+                    observed_at=_retry_timestamp(observed),
+                ),
+            )
         if operation_alias is not None and not any(
             alias.alias_kind == "operation" and alias.value == operation_alias for alias in aliases
         ):
@@ -740,6 +760,7 @@ class RetryLedger:
             policy_version=self.policy_version,
             attempt_ids=(*current.attempt_ids, reserved_id) if current else (reserved_id,),
             outcome_ids=current.outcome_ids if current else (),
+            accepted_attempt_ids=current.accepted_attempt_ids if current else (),
             aliases=aliases,
             total_attempts=total + (1 if policy is not RetryFailureClass.ACCEPTANCE or automatic else 0),
             repair_attempts=repairs + (1 if kind == "repair" else 0),
@@ -863,6 +884,7 @@ class RetryLedger:
         reservation: RetryReservation | str,
         *,
         now: datetime | str | None = None,
+        accepted_progress: bool = False,
     ) -> RetryEpisodeSummary:
         """Record an accepted attempt without erasing its immutable history."""
         attempt_id = reservation.attempt_id if isinstance(reservation, RetryReservation) else reservation
@@ -874,7 +896,11 @@ class RetryLedger:
         if episode is None:
             raise RetryLedgerConflictError("attempt is not part of the current retry summary")
         outcome_id = digest(f"{attempt_id}:succeeded".encode())
-        if outcome_id in episode.outcome_ids or digest(f"{attempt_id}:failed".encode()) in episode.outcome_ids:
+        if (
+            outcome_id in episode.outcome_ids
+            or digest(f"{attempt_id}:failed".encode()) in episode.outcome_ids
+            or digest(f"{attempt_id}:contained".encode()) in episode.outcome_ids
+        ):
             return episode
         outcome = RetryAttemptOutcome(
             attempt_id=attempt_id,
@@ -890,6 +916,24 @@ class RetryLedger:
                 "stop_code": None,
             }
         )
+        if accepted_progress:
+            updated = updated.model_copy(
+                update={
+                    "accepted_attempt_ids": (*episode.accepted_attempt_ids, attempt_id),
+                    "total_attempts": 0,
+                    "repair_attempts": 0,
+                    "observation_attempts": 0,
+                    "explicit_observations": 0,
+                    "last_status": None,
+                    "last_failure_at": None,
+                    "reset_count": episode.reset_count + 1,
+                }
+            )
+        elif (
+            episode.failure_class is RetryFailureClass.ACCEPTANCE
+            and episode.observation_attempts >= self.acceptance_observations
+        ):
+            updated = updated.model_copy(update={"last_status": "waiting", "stop_code": RetryStopCode.ACCEPTANCE_WAIT})
         self._commit_summary(
             previous,
             summary.model_copy(
@@ -912,11 +956,20 @@ class RetryLedger:
         now: datetime | str | None = None,
     ) -> RetryEpisodeSummary:
         """Record accepted progress and reset only that episode's current budget."""
-        observed = _retry_time(now if now is not None else self._clock())
-        updated = self.record_success(reservation, now=observed)
-        if updated.last_status == "succeeded" and updated.total_attempts:
-            return self.reset(updated.key, accepted_progress=True, now=observed)
-        return updated
+        return self.record_success(reservation, now=now, accepted_progress=True)
+
+    def attempt_for_operation(self, operation: str) -> str | None:
+        """Resolve an exact issued worker operation through immutable reservations."""
+        for episode in self.read().episodes:
+            for attempt_id in episode.attempt_ids:
+                attempt = RetryAttempt.model_validate_json(
+                    read_record(self.runtime_root, self._attempts_path / f"{attempt_id}.json")
+                )
+                if attempt.episode_id != episode.episode_id or attempt.attempt_id != attempt_id:
+                    raise RetryLedgerCorruptError
+                if attempt.operation_alias == operation:
+                    return attempt_id
+        return None
 
     def record_recovery_release(
         self,
@@ -934,7 +987,11 @@ class RetryLedger:
         if episode is None:
             raise RetryLedgerConflictError("attempt is not part of the current retry summary")
         outcome_id = digest(f"{attempt_id}:contained".encode())
-        if outcome_id in episode.outcome_ids:
+        if (
+            outcome_id in episode.outcome_ids
+            or digest(f"{attempt_id}:failed".encode()) in episode.outcome_ids
+            or digest(f"{attempt_id}:succeeded".encode()) in episode.outcome_ids
+        ):
             return episode
         outcome = RetryAttemptOutcome(
             attempt_id=attempt_id,
@@ -947,7 +1004,7 @@ class RetryLedger:
             update={
                 "outcome_ids": (*episode.outcome_ids, outcome_id),
                 "last_status": "succeeded",
-                "next_eligible_at": None if stop_code is None else episode.next_eligible_at,
+                "next_eligible_at": episode.next_eligible_at,
                 "stop_code": stop_code,
             }
         )
@@ -1152,7 +1209,7 @@ def _retry_time(value: datetime | str) -> datetime:
 
 
 def _retry_timestamp(value: datetime) -> str:
-    return value.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _replace_episode(
@@ -1162,6 +1219,26 @@ def _replace_episode(
     if any(item.episode_id == replacement.episode_id for item in episodes):
         return tuple(replacement if item.episode_id == replacement.episode_id else item for item in episodes)
     return (*episodes, replacement)
+
+
+def _matching_episode(summary: RetryLedgerSummary, key: RetryEpisodeKey) -> RetryEpisodeSummary | None:
+    exact = next((item for item in summary.episodes if item.episode_id == key.identity), None)
+    candidates = tuple(
+        item
+        for item in summary.episodes
+        if item.total_attempts
+        and item.key.action_kind == key.action_kind
+        and item.key.contract_digest == key.contract_digest
+        and item.key.outcome_id == key.outcome_id
+        and item.key.procedure_class == key.procedure_class
+        and (
+            item.key.task_lineage == key.task_lineage
+            or any(alias.alias_kind == "task" and alias.value == key.task_lineage for alias in item.aliases)
+        )
+    )
+    if len(candidates) > 1:
+        raise RetryLedgerConflictError("multiple unresolved retry episodes cover this action")
+    return candidates[0] if candidates else exact
 
 
 def _episode_for_attempt(summary: RetryLedgerSummary, attempt_id: str) -> RetryEpisodeSummary | None:

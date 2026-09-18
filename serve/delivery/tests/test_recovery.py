@@ -35,6 +35,7 @@ from owlbear_delivery.recovery import (
     RecoveryEvidence,
     RecoveryEvidenceReference,
     RecoveryInvocation,
+    RetryLedger,
     journal_path,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError
@@ -276,6 +277,11 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, eviden
     assert (state / journal_path("change-a", intent.recovery_id, "intent")).exists()
     if evidence_status == "excluded":
         application, coordinator = _reopen_excluded_recovery(tmp_path, runtimes, host, intent, receipt)
+    else:
+        waiting = application.acquire_change_action(_continuation_request(application))
+        assert waiting.finalization is None
+        assert waiting.readiness.reason_code == "retry-backoff"
+        application._clock = lambda: "2026-08-04T00:00:01Z"
     with pytest.raises(RuntimeError):
         application.finalize_change(
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
@@ -288,6 +294,47 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, eviden
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
         )
     assert coordinator.show("change-a").writer == replacement.finalization.attempt.writer
+
+
+def test_finalizer_budget_survives_recovery_reports_and_restart(tmp_path):
+    now = "2026-08-04T00:00:00Z"
+    application, runtimes, coordinator, state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
+        clock=lambda: now,
+    )
+    host = _host(application)
+    for seconds in ("00", "01", "03"):
+        now = f"2026-08-04T00:00:{seconds}Z"
+        acquired = application.acquire_change_action(_continuation_request(application))
+        assert acquired.finalization is not None, acquired
+        attempt = acquired.finalization.attempt
+        application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+        intent = application._propose_recovery("change-a")
+        application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+        assert coordinator.show("change-a").writer is None
+        assert not application.get_change("change-a").readiness.executable
+    reopened, _, _ = _reopen_portfolio(tmp_path, state, runtimes, clock=lambda: now)
+    assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
+    assert reopened.get_change("change-a").readiness.attempts == 3
+    assert reopened.acquire_change_action(_continuation_request(reopened)).finalization is None
+    assert reopened.acquire_change_action(_continuation_request(reopened, "change-b")).finalization is not None
+
+
+def test_finalizer_recovery_reconciles_interrupted_report_accounting(tmp_path):
+    application, _runtimes, _coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    host = _host(application)
+    attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    with patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting interruption")):
+        application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    assert RetryLedger(state, "change-a").read().episodes[0].last_status == "reserved"
+    intent = application._propose_recovery("change-a")
+    application._complete_recovery("change-a", intent.recovery_id, host.seal(intent, "closed"))
+    episode = RetryLedger(state, "change-a").read().episodes[0]
+    assert episode.total_attempts == 1
+    assert episode.last_status == "failed"
+    assert episode.next_eligible_at == "2026-08-04T00:00:01Z"
+    assert application.get_change("change-a").readiness.reason_code == "retry-backoff"
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
