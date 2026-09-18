@@ -701,7 +701,16 @@ class RetryLedger:
                 stop_code=RetryStopCode.ACCEPTANCE_WAIT,
             )
 
-        reserved_id = attempt_id or digest(f"{key.identity}:{kind}:{total + 1}:{observed.isoformat()}".encode())
+        if attempt_id is None:
+            seed = f"{key.identity}:{kind}:{total + 1}:{observed.isoformat()}"
+            reserved_id = digest(seed.encode())
+            existing_attempts = set(current.attempt_ids if current is not None else ())
+            collision = 0
+            while reserved_id in existing_attempts:
+                collision += 1
+                reserved_id = digest(f"{seed}:{collision}".encode())
+        else:
+            reserved_id = attempt_id
         aliases = current.aliases if current else ()
         if operation_alias is not None and not any(
             alias.alias_kind == "operation" and alias.value == operation_alias for alias in aliases

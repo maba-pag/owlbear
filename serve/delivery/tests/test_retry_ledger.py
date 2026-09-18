@@ -121,6 +121,18 @@ def test_duplicate_reservation_is_idempotent_and_mechanical_budget_is_bounded(tm
     assert ledger.episode(key).repair_attempts == 2
 
 
+def test_generated_attempt_id_remains_unique_after_fixed_clock_reset(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START)
+    ledger.record_accepted_progress(first, now=_START)
+    second = ledger.reserve(key, failure_class="mechanical", now=_START)
+
+    assert second.attempt_id is not None
+    assert second.attempt_id != first.attempt_id
+    assert ledger.episode(key).attempt_ids == (first.attempt_id, second.attempt_id)
+
+
 def test_transient_budget_and_cas_reject_stale_summary(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     key = _engine_key(action="sync-target")
