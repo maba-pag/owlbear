@@ -4028,6 +4028,7 @@ class ChangeWorkspaceManager:
             "status",
             "--porcelain=v1",
             "-z",
+            "--ignored=matching",
             "--untracked-files=all",
             cwd=worktree,
         ).stdout
@@ -4053,13 +4054,70 @@ class ChangeWorkspaceManager:
             raw_states[path] = (current, baseline)
         if total > _MAX_PRESERVED_TOTAL_BYTES:
             raise PreservationRejectedError("raw preservation exceeds the total bounded limit")
-        # Recheck all fences after the complete read and before the first preservation write.
+        # Recheck the complete authority, manifest inputs, and every root descriptor after
+        # the complete read and before the first preservation write.
+        current_coordination = self._coordinator.show(change_id)
+        current_intent, current_recovery = self._require_preservation_authority(
+            change_id, recovery_id, current_coordination
+        )
+        if (
+            current_intent != intent
+            or current_recovery != _recovery
+            or self._coordinator.coordination_bytes(change_id) != coordination_bytes
+            or self._read_frontier_bytes(change_id) != frontier_bytes
+            or self.observed_target_head() != target_head
+            or self._directory_identity(worktree, "registered worktree") != worktree_identity
+            or self._directory_identity(self._repository, "managed repository") != repository_identity
+            or self._directory_identity(self.runtime_root, "runtime root") != runtime_identity
+        ):
+            raise PreservationFenceError("preservation authority or root descriptor changed during capture")
         self._require_worktree(change_id, worktree, coordination.branch, branch_head)
         current_index = self._resolve_managed_index(worktree)
-        if current_index != index or self._read_managed_index(current_index) != index_bytes:
+        current_common = self._directory_identity(current_index.common_directory, "Git common directory")
+        current_administration = self._directory_identity(
+            current_index.administration, "Git administration directory"
+        )
+        if (
+            current_index != index
+            or current_common != common_identity
+            or current_administration != administration_identity
+            or self._read_managed_index(current_index) != index_bytes
+        ):
             raise PreservationFenceError("managed index changed during preservation capture")
         if self._resolve(coordination.branch) != branch_head:
             raise PreservationFenceError("Change branch moved during preservation capture")
+        current_shared_index = self._preservation_git(
+            "rev-parse",
+            "--shared-index-path",
+            cwd=worktree,
+            check=False,
+        )
+        if (
+            current_shared_index.returncode != shared_index.returncode
+            or current_shared_index.stdout != shared_index.stdout
+        ):
+            raise PreservationFenceError("managed index split state changed during preservation capture")
+        current_staged = self._preservation_git(
+            "diff",
+            "--cached",
+            "--quiet",
+            "--ignore-submodules",
+            "--",
+            cwd=worktree,
+            check=False,
+        )
+        if current_staged.returncode != staged.returncode:
+            raise PreservationFenceError("managed index content changed during preservation capture")
+        current_status = self._preservation_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--untracked-files=all",
+            cwd=worktree,
+        ).stdout
+        if current_status != status:
+            raise PreservationFenceError("worktree path inventory changed during preservation capture")
 
         entries_meta: list[PreservationEntry] = []
         index_bytes_digest = hashlib.sha256(index_bytes).hexdigest()
@@ -4329,8 +4387,8 @@ class ChangeWorkspaceManager:
             metadata = path.lstat()
         except (FileNotFoundError, OSError) as exc:
             raise PreservationRejectedError(f"{label} is unavailable") from exc
-        if not stat.S_ISDIR(metadata.st_mode) or metadata.st_nlink != 1:
-            raise PreservationRejectedError(f"{label} is not a single directory")
+        if not stat.S_ISDIR(metadata.st_mode) or metadata.st_nlink < 1:
+            raise PreservationRejectedError(f"{label} is not a directory")
         return (
             metadata.st_dev,
             metadata.st_ino,
@@ -4598,7 +4656,7 @@ class ChangeWorkspaceManager:
         """Accept only self-contained index extensions with no private path cache."""
         if len(content) < 32 or content[:4] != b"DIRC":
             raise PreservationRejectedError("managed index header is invalid")
-        lowered_content = content.casefold()
+        lowered_content = content.lower()
         if any(
             marker.encode() in lowered_content
             for marker in (".env", "credential", "password", "passwd", "secret", "token", "private")
@@ -4638,7 +4696,7 @@ class ChangeWorkspaceManager:
             if extension not in known or cursor + size > checksum_start:
                 raise PreservationRejectedError("managed index extension requires containment")
             extension_content = content[cursor : cursor + size]
-            lowered = extension_content.casefold()
+            lowered = extension_content.lower()
             if any(
                 marker.encode() in lowered
                 for marker in (
@@ -4698,7 +4756,7 @@ class ChangeWorkspaceManager:
     @staticmethod
     def _validate_private_content(content: bytes) -> None:
         """Reject high-confidence credential material before private storage."""
-        lowered = content.casefold()
+        lowered = content.lower()
         markers = (
             b"-----begin ",
             b"private key-----",
