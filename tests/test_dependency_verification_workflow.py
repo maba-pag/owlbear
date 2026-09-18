@@ -21,6 +21,7 @@ VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit-verification.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
 SOURCE_VERIFY_PATH = ROOT / ".github/workflows/source-verification.yml"
+COPILOT_SETUP_PATH = ROOT / ".github/workflows/copilot-setup-steps.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
@@ -494,8 +495,53 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
     assert "tests/test_dependency_verification_workflow.py)" in text
 
 
+def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
+    workflow = _workflow(COPILOT_SETUP_PATH)
+    assert set(workflow["jobs"]) == {"copilot-setup-steps"}
+    job = _job(workflow, "copilot-setup-steps")
+    assert set(job) <= {"steps", "permissions", "runs-on", "services", "snapshot", "timeout-minutes"}
+    assert job["timeout-minutes"] == 59
+    assert job["permissions"] == {"contents": "read"}
+    steps = job["steps"]
+    checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+    assert "ref" not in checkout.get("with", {})
+    assert checkout["with"]["persist-credentials"] is False
+    runs = [step["run"] for step in steps if "run" in step]
+    assert "uv python install" in runs
+    assert "uv sync --locked --all-packages --group dev" in runs
+    assert "npm ci --engine-strict --no-audit --no-fund" in runs
+    install_commands = {
+        "uv python install",
+        "uv sync --locked --all-packages --group dev",
+        "npm ci --engine-strict --no-audit --no-fund",
+    }
+    for step in steps:
+        if step.get("working-directory") == "serve/cockpit/web" or step.get("uses", "").startswith(
+            "actions/setup-node@"
+        ):
+            assert step["if"] == "hashFiles('serve/cockpit/web/package-lock.json') != ''"
+        if step.get("run") in install_commands:
+            assert 0 < step["timeout-minutes"] <= 8
+    assert not re.search(r"\b(pytest|megalint|quality|docker|playwright)\b", "\n".join(runs))
+
+
+def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
+    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
+    uv_setup = next(step for step in steps if step.get("uses", "").startswith("astral-sh/setup-uv@"))
+    required = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"]
+    assert required.startswith(">=")
+    assert tuple(map(int, uv_setup["with"]["version"].split("."))) >= tuple(map(int, required[2:].split(".")))
+    node_setup = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
+    assert node_setup["with"]["node-version-file"] == "serve/cockpit/web/.nvmrc"
+    assert "node-version" not in node_setup["with"]
+    assert not any("python-version" in step.get("with", {}) for step in steps)
+    for line in COPILOT_SETUP_PATH.read_text().splitlines():
+        if "uses:" in line:
+            assert re.search(r"@[0-9a-f]{40}\s+# v[0-9]+\.[0-9]+\.[0-9]+$", line)
+
+
 def test_uv_runtime_check_precedes_uv_commands() -> None:
-    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH):
+    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH, COPILOT_SETUP_PATH):
         workflow = _workflow(path)
         jobs = workflow["jobs"]
         assert isinstance(jobs, dict)
