@@ -1,0 +1,76 @@
+---
+name: Copilot setup steps
+
+"on":
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - .python-version
+      - pyproject.toml
+      - uv.lock
+      - serve/*/pyproject.toml
+      - serve/cockpit/web/.nvmrc
+      - serve/cockpit/web/package.json
+      - serve/cockpit/web/package-lock.json
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 59
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout task revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          version: "0.12.15"
+          enable-cache: true
+          cache-python: true
+
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
+      - name: Install pinned Python
+        timeout-minutes: 5
+        run: uv python install
+
+      - name: Install locked Python workspace and test tools
+        timeout-minutes: 8
+        run: uv sync --locked --all-packages --group dev
+
+      - name: Setup pinned Node.js
+        if: hashFiles('serve/cockpit/web/package-lock.json') != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install locked Cockpit dependencies
+        if: hashFiles('serve/cockpit/web/package-lock.json') != ''
+        timeout-minutes: 5
+        working-directory: serve/cockpit/web
+        run: npm ci --engine-strict --no-audit --no-fund
+
+      - name: Report Python and uv versions
+        run: |
+          uv --version
+          uv run --locked python --version
+
+      - name: Verify pinned Node runtime
+        if: hashFiles('serve/cockpit/web/package-lock.json') != ''
+        run: |
+          node --version
+          npm --version
+          uv run --locked python .github/scripts/check_node_runtime.py \
+            --version-file serve/cockpit/web/.nvmrc \
+            --engines-file serve/cockpit/web/package.json \
+            --expected-version "$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
