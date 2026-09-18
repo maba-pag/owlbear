@@ -2,7 +2,8 @@
 
 ## Status and authority
 
-**D03-B: completion candidate awaiting independent review; not accepted and not a prerequisite for C yet.**
+**D03-B: ready for review at `a2006e3`; independent source review has no open findings.
+Final-source CodeQL and external gates remain outstanding. Not accepted; C is not authorized.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -636,7 +637,7 @@ Closeout, split into bounded selections:
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
-| D03-B | Source `3864bafade9a33f2637cdd116b75d0b764cc790f`, following resume repair `0b37ca2dca6c745f1352f060da4e010da27e484b` above `cc11df10b851a145f77912e866ff9eb4ff4d3d48`; user resume comment `5723694522`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Focused repair proof below; independent Opus 5 confirmed the reported source findings fixed at the final source. Earlier counts are not a current phase pass. | Partial: owner/ledger transaction coupling, legacy allowance reconciliation and observation integration block B completion and C. Final CodeQL timed out; automated review unavailable. |
+| D03-B | Source `a2006e320a502c55234030e988520c0be1005093`, following `f119cd60595905e18a3b6e8d1611442d754270dd`; resume comment `5726865466`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Four completion blockers addressed with focused owner/restart/legacy/registered-consumer proof below. Independent Claude Opus 5 rechecked final source: no open findings. | Ready for review, not accepted. Final-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
@@ -773,7 +774,7 @@ scan is not a final-source scan pass. Automated review was unavailable on both c
 configured model was absent; the wrapper's success label is not a pass. External verification
 must obtain the outstanding final-source security check.
 
-The next B session must resolve these concrete obligations before requesting phase acceptance:
+The prior checkpoint left these concrete obligations, addressed by the current resume below:
 
 1. Couple owner reservations/receipts and ledger accounting through the existing transaction
    authority, or prove the approved exact reconciliation boundary at every crash point. Retain an
@@ -787,14 +788,15 @@ The next B session must resolve these concrete obligations before requesting pha
    continuation path and its actual registered consumers. It must not reset the failure budget,
    infer authorization from exhaustion, or treat a caller assertion as human approval.
 
-These are **B completion blockers**, not presumed safe containment and not work reassigned to E.
-The integration owner must not start C or accept B on the strength of repaired findings alone.
+These were **B completion blockers**, not presumed safe containment or work reassigned to E.
+The integration owner must assess their implementation and proof, not repaired findings alone.
 No source changes followed that exact-head review in its session; the later candidate below requires new review.
 
-### D03-B completion candidate — resume comment 5726865466
+### D03-B current handoff — resume comment 5726865466
 
 Based on checkout `3e2932cfed8f41e441671eaa1ce4188e0ec89913` (source `3864baf`), stopping after B.
-No approved contract changed. The coordinating parent owns publication and independent review.
+Published source: `f119cd60595905e18a3b6e8d1611442d754270dd`, then final repair
+`a2006e320a502c55234030e988520c0be1005093`. No approved contract changed.
 
 - **Owner/accounting boundary:** accepted Planner/Builder transitions and finalization publish an
   immutable attempt-bound result participant in their existing authority transaction. Application
@@ -873,10 +875,24 @@ uv run --locked pytest \
   -m 'not api and not model and not e2e' --basetemp=.owlbear/scratch/d03-b-pytest
 ```
 
-All four listed completion blockers now have source and focused cloud proof for independent review.
-This is not self-acceptance: current-candidate code/security review, external CI and existing host
-gates remain outstanding. No C/D/E implementation, full suite, MegaLinter, live service/state or
-real-provider mutation was performed.
+All four listed completion blockers now have source and focused cloud proof. Counts above overlap
+and must not be summed; later focused runs validate refinements to the earlier closeout.
+Independent read-only Claude Opus 5 (`d03-b-completion-review`) reviewed `f119cd6` and rechecked
+`a2006e3`: no open findings. The legacy containment/backoff finding was fixed and tested;
+suspected transaction-recovery and worker-key divergence findings were withdrawn after source tracing.
+The reviewer ran no tests; execution evidence belongs to the implementation worker.
+
+Secret scans passed before both source publications. CodeQL reported **zero Python alerts at
+`f119cd6`**; its rerun on final source `a2006e3` **timed out**, with a tool instruction not to retry.
+That earlier scan is not a final-source pass. Automated review was unavailable in both calls because
+its configured model was absent, despite the wrapper's success label. The integration owner must
+obtain final-source security review and required external checks before package merge; none is waived.
+At session inspection, checkpoint `3e2932c` source/ecosystem/dependency/setup workflows were
+`action_required`, not passing. Historical `dev` dependency failure `33903819070` was unrelated.
+Pinned-Node acceptance and actual host exclusion/live activation remain external gates.
+
+Status: **ready for review**, not phase acceptance, merge permission or authorization for C.
+No C/D/E implementation, full suite, MegaLinter, live service/state or real-provider mutation occurred.
 
 ### D03-B prior-source verification record — 2026-09-18
 
@@ -1295,7 +1311,7 @@ closed under the already required policy. A future request to release unverifiab
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-### D03-B partial handoff — 2026-09-18
+### D03-B historical partial checkpoint — 2026-09-18
 
 User [comment 5723189457](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5723189457)
 approved the presented plan at `43b91fdf0c5707551aaadad1b567173183174b06` for B only.
@@ -1323,7 +1339,7 @@ configured model was absent; its wrapper success label is not a pass. Current pr
 source/Cockpit/ecosystem checks were skipped; setup success is not product proof. Prior A tests are
 not B tests. No live records, production exclusion integration or C–E implementation is authorized.
 
-**Next request:** `Resume D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's recorded completion blockers; stop after B.`
-Recommended implementation model: **GPT-6 Astra, High**, for the unresolved cross-owner transactional
-and observation-authority boundaries, followed by independent Opus 5 review. This recommendation
+**Next request:** `Review D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's current handoff.`
+Recommended review model: **Claude Opus 5, High**, for independent cross-owner transaction and
+observation-authority review against the final published source and proof. This recommendation
 does not start another session, authorize C, approve a merge, waive host proof or authorize activation.
