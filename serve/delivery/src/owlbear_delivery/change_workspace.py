@@ -24,11 +24,13 @@ from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
+    RecoveryEvidence,
     RecoveryIntent,
     RecoveryReceipt,
     digest,
     encoded,
     journal_path,
+    read_record,
 )
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -839,6 +841,29 @@ class WorktreePreservationReceipt(_WorkspaceModel):
     worktree_path: Path
     branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    integration_target: str = Field(min_length=1, max_length=256)
+    frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    coordination_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repository: Path
+    runtime_root: Path
+    worktree_device: int = Field(ge=0)
+    worktree_inode: int = Field(ge=0)
+    worktree_mode: int = Field(ge=0)
+    worktree_links: int = Field(ge=1)
+    repository_device: int = Field(ge=0)
+    repository_inode: int = Field(ge=0)
+    common_device: int = Field(ge=0)
+    common_inode: int = Field(ge=0)
+    administration_device: int = Field(ge=0)
+    administration_inode: int = Field(ge=0)
+    runtime_device: int = Field(ge=0)
+    runtime_inode: int = Field(ge=0)
+    index_path: Path
+    administration: Path
+    common_directory: Path
+    maintained_surfaces: tuple[str, ...] = Field(min_length=1, max_length=256)
+    last_write_provenance: tuple[str, ...] = Field(min_length=1, max_length=256)
     index_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     index_size: int = Field(ge=1, le=_MAX_PRESERVED_TOTAL_BYTES)
     paths: tuple[PreservationEntry, ...] = Field(max_length=_MAX_PRESERVED_PATHS)
@@ -854,6 +879,10 @@ class WorktreePreservationReceipt(_WorkspaceModel):
         path_names = tuple(entry.path for entry in self.paths)
         if path_names != tuple(sorted(path_names)) or len(path_names) != len(set(path_names)):
             raise ValueError("preserved paths must be sorted and unique")
+        if self.maintained_surfaces != tuple(sorted(set(self.maintained_surfaces))):
+            raise ValueError("preserved maintained surfaces must be sorted and unique")
+        if self.last_write_provenance != tuple(sorted(set(self.last_write_provenance))):
+            raise ValueError("preserved last-write provenance must be sorted and unique")
         expected_storage = (
             f"changes/{self.change_id}/recovery-receipts/{self.recovery_id}/preservation"
         )
@@ -874,6 +903,29 @@ class WorktreePreservationReceipt(_WorkspaceModel):
         worktree_path: Path,
         branch_head: str,
         reviewed_head: str,
+        target_head: str,
+        integration_target: str,
+        frontier_digest: str,
+        coordination_digest: str,
+        repository: Path,
+        runtime_root: Path,
+        worktree_device: int,
+        worktree_inode: int,
+        worktree_mode: int,
+        worktree_links: int,
+        repository_device: int,
+        repository_inode: int,
+        common_device: int,
+        common_inode: int,
+        administration_device: int,
+        administration_inode: int,
+        runtime_device: int,
+        runtime_inode: int,
+        index_path: Path,
+        administration: Path,
+        common_directory: Path,
+        maintained_surfaces: tuple[str, ...],
+        last_write_provenance: tuple[str, ...],
         index_digest: str,
         index_size: int,
         paths: tuple[PreservationEntry, ...],
@@ -886,6 +938,29 @@ class WorktreePreservationReceipt(_WorkspaceModel):
             "worktree_path": worktree_path,
             "branch_head": branch_head,
             "reviewed_head": reviewed_head,
+            "target_head": target_head,
+            "integration_target": integration_target,
+            "frontier_digest": frontier_digest,
+            "coordination_digest": coordination_digest,
+            "repository": repository,
+            "runtime_root": runtime_root,
+            "worktree_device": worktree_device,
+            "worktree_inode": worktree_inode,
+            "worktree_mode": worktree_mode,
+            "worktree_links": worktree_links,
+            "repository_device": repository_device,
+            "repository_inode": repository_inode,
+            "common_device": common_device,
+            "common_inode": common_inode,
+            "administration_device": administration_device,
+            "administration_inode": administration_inode,
+            "runtime_device": runtime_device,
+            "runtime_inode": runtime_inode,
+            "index_path": index_path,
+            "administration": administration,
+            "common_directory": common_directory,
+            "maintained_surfaces": maintained_surfaces,
+            "last_write_provenance": last_write_provenance,
             "index_digest": index_digest,
             "index_size": index_size,
             "paths": paths,
@@ -1475,6 +1550,10 @@ class PortfolioCoordinator:
         """Return one current per-change coordination record."""
         return self._read_coordination(change_id)[0]
 
+    def coordination_bytes(self, change_id: str) -> bytes:
+        """Return the exact current coordination bytes for an OCC fence."""
+        return self._read_coordination(change_id)[1]
+
     def require_continuation_access(self, change_id: str) -> None:
         """Refuse mutations outside the fixed executor while an action retains custody."""
         self._require_continuation_coordination(self.show(change_id))
@@ -1496,6 +1575,10 @@ class PortfolioCoordinator:
         return all(
             (os.getpid(), recovery_id) in self._verified_exclusions for recovery_id in coordination.recovery_exclusions
         )
+
+    def recovery_verification_recorded(self, recovery_id: str) -> bool:
+        """Return whether this process verified one closed or excluded recovery."""
+        return (os.getpid(), recovery_id) in self._verified_exclusions
 
     def record_verified_exclusion(self, recovery_id: str) -> None:
         """Remember the application owner's verification, never a persisted timestamp."""
@@ -3897,10 +3980,23 @@ class ChangeWorkspaceManager:
         self._require_preservation_identity(recovery_id)
         self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
+        intent, _recovery = self._require_preservation_authority(change_id, recovery_id, coordination)
         branch_head = self._resolve(coordination.branch)
+        if branch_head != intent.exact_head:
+            raise PreservationFenceError("Change branch head does not match the verified recovery boundary")
         worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
         self._require_worktree(change_id, worktree, coordination.branch, branch_head)
+        target_head = self.observed_target_head()
+        if target_head != intent.target_head:
+            raise PreservationFenceError("integration target moved since verified recovery")
+        frontier_bytes = self._read_frontier_bytes(change_id)
+        coordination_bytes = self._coordinator.coordination_bytes(change_id)
+        worktree_identity = self._directory_identity(worktree, "registered worktree")
+        repository_identity = self._directory_identity(self._repository, "managed repository")
         index = self._resolve_managed_index(worktree)
+        common_identity = self._directory_identity(index.common_directory, "Git common directory")
+        administration_identity = self._directory_identity(index.administration, "Git administration directory")
+        runtime_identity = self._directory_identity(self.runtime_root, "runtime root")
         index_bytes = self._read_managed_index(index)
         shared_index = self._preservation_git(
             "rev-parse",
@@ -3942,6 +4038,7 @@ class ChangeWorkspaceManager:
         raw_states: dict[str, tuple[_PreservedPathState, _PreservedPathState]] = {}
         if len(index_bytes) > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("managed Git index exceeds the per-file preservation limit")
+        self._validate_private_content(index_bytes)
         total = len(index_bytes)
         for path in paths:
             self._validate_preservation_path(worktree, path)
@@ -3949,6 +4046,7 @@ class ChangeWorkspaceManager:
             baseline = self._read_head_state(worktree, branch_head, path)
             for state in (current, baseline):
                 if state.content is not None:
+                    self._validate_private_content(state.content)
                     if len(state.content) > _MAX_PRESERVED_FILE_BYTES:
                         raise PreservationRejectedError("a preserved file exceeds the per-file limit")
                     total += len(state.content)
@@ -3997,6 +4095,29 @@ class ChangeWorkspaceManager:
             worktree_path=worktree,
             branch_head=branch_head,
             reviewed_head=coordination.last_reviewed_commit,
+            target_head=target_head,
+            integration_target=coordination.integration_target,
+            frontier_digest=digest(frontier_bytes),
+            coordination_digest=digest(coordination_bytes),
+            repository=self._repository,
+            runtime_root=self.runtime_root,
+            worktree_device=worktree_identity[0],
+            worktree_inode=worktree_identity[1],
+            worktree_mode=worktree_identity[2],
+            worktree_links=worktree_identity[3],
+            repository_device=repository_identity[0],
+            repository_inode=repository_identity[1],
+            common_device=common_identity[0],
+            common_inode=common_identity[1],
+            administration_device=administration_identity[0],
+            administration_inode=administration_identity[1],
+            runtime_device=runtime_identity[0],
+            runtime_inode=runtime_identity[1],
+            index_path=index.path,
+            administration=index.administration,
+            common_directory=index.common_directory,
+            maintained_surfaces=intent.maintained_surfaces,
+            last_write_provenance=intent.last_write_provenance,
             index_digest=index_bytes_digest,
             index_size=len(index_bytes),
             paths=tuple(sorted(entries_meta, key=lambda item: item.path)),
@@ -4027,15 +4148,7 @@ class ChangeWorkspaceManager:
         receipt, index_metadata, inventory = self._read_preservation_manifest(change_id, preservation_id)
         if receipt.change_id != change_id or receipt.preservation_id != preservation_id:
             raise PreservationFenceError("preservation identity does not match its private manifest")
-        coordination = self._coordinator.show(change_id)
-        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
-        if coordination.branch != receipt.branch or worktree != receipt.worktree_path:
-            raise PreservationFenceError("registered worktree identity changed since preservation")
-        self._require_worktree(change_id, worktree, receipt.branch, receipt.branch_head)
-        if self._resolve(coordination.branch) != receipt.branch_head:
-            raise PreservationFenceError("Change branch head changed since preservation")
-        index = self._resolve_managed_index(worktree)
-        self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        self._verify_preservation_fences(change_id, receipt, index_metadata)
         objects: dict[str, bytes] = {}
         for object_name in inventory:
             content = self._read_private_preservation_object(receipt, object_name)
@@ -4062,43 +4175,73 @@ class ChangeWorkspaceManager:
             selected = tuple(paths)
             if selected != tuple(sorted(set(selected))) or not set(selected) <= {entry.path for entry in receipt.paths}:
                 raise PreservationRejectedError("restoration paths must be an exact subset of the preservation")
-        coordination = self._coordinator.show(change_id)
-        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
+        worktree, _index = self._verify_preservation_fences(change_id, receipt, index_metadata)
+        inventory = self._read_preservation_manifest(change_id, preservation_id)[2]
+        objects = {
+            object_name: self._read_private_preservation_object(receipt, object_name)
+            for object_name in inventory
+        }
         if (
-            receipt.change_id != change_id
-            or receipt.preservation_id != preservation_id
-            or coordination.branch != receipt.branch
-            or worktree != receipt.worktree_path
-        ):
-            raise PreservationFenceError("registered worktree identity changed since preservation")
-        index_object = self._read_private_preservation_object(receipt, receipt.index_digest)
-        if (
-            len(index_object) != receipt.index_size
-            or hashlib.sha256(index_object).hexdigest() != receipt.index_digest
+            len(objects[receipt.index_digest]) != receipt.index_size
+            or hashlib.sha256(objects[receipt.index_digest]).hexdigest() != receipt.index_digest
         ):
             raise PreservationFenceError("private preservation index object failed verification")
-        if self._resolve(coordination.branch) != receipt.branch_head:
-            raise PreservationFenceError("Change branch head changed since preservation")
-        index = self._resolve_managed_index(worktree)
-        self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        self._verify_preservation_store(receipt, objects)
+        entries = {entry.path: entry for entry in receipt.paths}
+        expected_states = {
+            path: self._state_from_entry(entry, before=True, receipt=receipt)
+            for path, entry in entries.items()
+        }
+        desired_states = {
+            path: self._state_from_entry(entry, before=False, receipt=receipt)
+            for path, entry in entries.items()
+        }
+        for path in entries:
+            self._validate_preservation_path(worktree, path)
+        current_states = {path: self._read_worktree_state(worktree, path) for path in entries}
+        if any(
+            not self._same_state(current_states[path], expected_states[path])
+            and not self._same_state(current_states[path], desired_states[path])
+            for path in entries
+        ):
+            changed = next(
+                path
+                for path in entries
+                if not self._same_state(current_states[path], expected_states[path])
+                and not self._same_state(current_states[path], desired_states[path])
+            )
+            raise PreservationFenceError(f"path identity changed before restoration: {changed}")
+        # Recheck the complete manifest and every path before the first effect.
+        self._verify_preservation_fences(change_id, receipt, index_metadata)
+        current_states = {path: self._read_worktree_state(worktree, path) for path in entries}
+        if any(
+            not self._same_state(current_states[path], expected_states[path])
+            and not self._same_state(current_states[path], desired_states[path])
+            for path in entries
+        ):
+            raise PreservationFenceError("preservation path inventory changed before restoration")
         for path in selected:
-            entry = next(item for item in receipt.paths if item.path == path)
-            # Every individual effect has its own registration, branch, index and path fence.
-            self._require_worktree(change_id, worktree, receipt.branch, receipt.branch_head)
-            index = self._resolve_managed_index(worktree)
-            self._verify_index_metadata(index, receipt.index_digest, index_metadata)
-            current = self._read_worktree_state(worktree, path)
-            desired = self._state_from_entry(entry, before=True, receipt=receipt)
-            baseline = self._state_from_entry(entry, before=False, receipt=receipt)
+            self._verify_preservation_fences(change_id, receipt, index_metadata)
+            current_states = {item: self._read_worktree_state(worktree, item) for item in entries}
+            if any(
+                not self._same_state(current_states[item], expected_states[item])
+                and not self._same_state(current_states[item], desired_states[item])
+                for item in entries
+            ):
+                raise PreservationFenceError("preservation path inventory changed during restoration")
+            current = current_states[path]
+            desired = desired_states[path]
             if self._same_state(current, desired):
                 continue
-            if not self._same_state(current, baseline):
+            if not self._same_state(current, expected_states[path]):
                 raise PreservationFenceError(f"path identity changed before restoration: {path}")
-            self._write_worktree_state(worktree, path, desired, expected=baseline)
+            self._write_worktree_state(worktree, path, desired, expected=expected_states[path])
             if not self._same_state(self._read_worktree_state(worktree, path), desired):
                 raise PreservationFenceError(f"path identity changed during restoration: {path}")
-        self._require_worktree(change_id, worktree, receipt.branch, receipt.branch_head)
-        self._verify_index_metadata(self._resolve_managed_index(worktree), receipt.index_digest, index_metadata)
+        self._verify_preservation_fences(change_id, receipt, index_metadata)
+        final_states = {path: self._read_worktree_state(worktree, path) for path in selected}
+        if any(not self._same_state(final_states[path], desired_states[path]) for path in selected):
+            raise PreservationFenceError("preservation restore did not reach every requested path")
         return receipt
 
     restore_raw_preservation = restore_preservation
@@ -4106,6 +4249,170 @@ class ChangeWorkspaceManager:
     def _require_preservation_identity(self, recovery_id: str) -> None:
         if not _DIGEST_PATTERN.fullmatch(recovery_id):
             raise PreservationRejectedError("recovery identity is not an engine-issued digest")
+
+    def _require_preservation_authority(
+        self,
+        change_id: str,
+        recovery_id: str,
+        coordination: ChangeCoordination,
+    ) -> tuple[RecoveryIntent, RecoveryReceipt]:
+        """Require a completed, host-verified A recovery before raw custody."""
+        if (
+            coordination.recovery_owner_id is not None
+            or coordination.writer is not None
+            or coordination.publication_lease is not None
+            or (
+                coordination.continuation_action is not None
+                and coordination.continuation_action.finished_at is None
+            )
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        try:
+            intent = RecoveryIntent.model_validate_json(
+                read_record(self.runtime_root, journal_path(change_id, recovery_id, "intent"))
+            )
+            receipt = RecoveryReceipt.model_validate_json(
+                read_record(self.runtime_root, journal_path(change_id, recovery_id, "receipt"))
+            )
+            recorded_evidence = RecoveryEvidence.model_validate_json(
+                read_record(self.runtime_root, journal_path(change_id, recovery_id, "evidence"))
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise DeliveryWorkerExclusionRequiredError from exc
+        if (
+            intent.recovery_id != recovery_id
+            or intent.invocation.request.change_id != change_id
+            or receipt.recovery_id != recovery_id
+            or receipt.evidence.recovery_id != recovery_id
+            or receipt.evidence.status not in {"closed", "excluded"}
+            or receipt.evidence != recorded_evidence
+            or recorded_evidence.invocation != intent.invocation
+            or not intent.maintained_surfaces
+            or not intent.last_write_provenance
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        verified = (
+            receipt.evidence.status == "excluded"
+            and recovery_id in coordination.recovery_exclusions
+            and self._coordinator.recovery_exclusions_verified(coordination)
+        ) or (
+            receipt.evidence.status == "closed"
+            and self._coordinator.recovery_verification_recorded(recovery_id)
+        )
+        if not verified:
+            raise DeliveryWorkerExclusionRequiredError
+        request = intent.invocation.request
+        try:
+            worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
+            request_worktree = Path(request.worktree).resolve()
+            request_repository = Path(request.repository).resolve()
+            request_runtime = Path(request.runtime_root).resolve()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DeliveryWorkerExclusionRequiredError from exc
+        if (
+            request.branch != coordination.branch
+            or request_worktree != worktree
+            or request_repository != self._repository
+            or request_runtime != self.runtime_root
+            or request.integration_target != coordination.integration_target
+            or request.target_head != self.observed_target_head()
+            or intent.exact_head != self._resolve(coordination.branch)
+        ):
+            raise PreservationFenceError("verified recovery authority no longer matches the managed workspace")
+        return intent, receipt
+
+    @staticmethod
+    def _directory_identity(path: Path, label: str) -> tuple[int, int, int, int]:
+        """Pin one owner directory without following a substituted ancestor."""
+        try:
+            _reject_symlink_ancestors(path)
+            metadata = path.lstat()
+        except (FileNotFoundError, OSError) as exc:
+            raise PreservationRejectedError(f"{label} is unavailable") from exc
+        if not stat.S_ISDIR(metadata.st_mode) or metadata.st_nlink != 1:
+            raise PreservationRejectedError(f"{label} is not a single directory")
+        return (
+            metadata.st_dev,
+            metadata.st_ino,
+            stat.S_IMODE(metadata.st_mode),
+            metadata.st_nlink,
+        )
+
+    def _read_frontier_bytes(self, change_id: str) -> bytes:
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            content = read_contained(
+                root_fd,
+                Path("changes") / change_id / "frontier.json",
+                limit=65_536,
+            )
+        finally:
+            os.close(root_fd)
+        if content is None:
+            raise PreservationRejectedError("Delivery frontier is missing")
+        return content
+
+    def _verify_preservation_fences(
+        self,
+        change_id: str,
+        receipt: WorktreePreservationReceipt,
+        index_metadata: tuple[int, int, int, int],
+    ) -> tuple[Path, _ManagedIndexIdentity]:
+        """Revalidate every durable identity before a read or exact-path effect."""
+        coordination = self._coordinator.show(change_id)
+        intent, _recovery = self._require_preservation_authority(change_id, receipt.recovery_id, coordination)
+        worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
+        if (
+            receipt.change_id != change_id
+            or receipt.branch != coordination.branch
+            or receipt.worktree_path != worktree
+            or receipt.reviewed_head != coordination.last_reviewed_commit
+            or receipt.integration_target != coordination.integration_target
+            or receipt.repository != self._repository
+            or receipt.runtime_root != self.runtime_root
+            or receipt.maintained_surfaces != intent.maintained_surfaces
+            or receipt.last_write_provenance != intent.last_write_provenance
+        ):
+            raise PreservationFenceError("preservation authority no longer matches its registered roots")
+        branch_head = self._resolve(coordination.branch)
+        if branch_head != receipt.branch_head or branch_head != intent.exact_head:
+            raise PreservationFenceError("Change branch head changed since preservation")
+        if self.observed_target_head() != receipt.target_head or receipt.target_head != intent.target_head:
+            raise PreservationFenceError("integration target changed since preservation")
+        frontier = self._read_frontier_bytes(change_id)
+        if digest(frontier) != receipt.frontier_digest:
+            raise PreservationFenceError("Delivery frontier changed since preservation")
+        if digest(self._coordinator.coordination_bytes(change_id)) != receipt.coordination_digest:
+            raise PreservationFenceError("Change coordination changed since preservation")
+        self._require_worktree(change_id, worktree, receipt.branch, receipt.branch_head)
+        worktree_identity = self._directory_identity(worktree, "registered worktree")
+        repository_identity = self._directory_identity(self._repository, "managed repository")
+        runtime_identity = self._directory_identity(self.runtime_root, "runtime root")
+        if (
+            worktree_identity[:4]
+            != (
+                receipt.worktree_device,
+                receipt.worktree_inode,
+                receipt.worktree_mode,
+                receipt.worktree_links,
+            )
+            or repository_identity[:2] != (receipt.repository_device, receipt.repository_inode)
+            or runtime_identity[:2] != (receipt.runtime_device, receipt.runtime_inode)
+        ):
+            raise PreservationFenceError("preservation root descriptor changed")
+        index = self._resolve_managed_index(worktree)
+        common_identity = self._directory_identity(index.common_directory, "Git common directory")
+        administration_identity = self._directory_identity(index.administration, "Git administration directory")
+        if (
+            index.path != receipt.index_path
+            or index.administration != receipt.administration
+            or index.common_directory != receipt.common_directory
+            or common_identity[:2] != (receipt.common_device, receipt.common_inode)
+            or administration_identity[:2] != (receipt.administration_device, receipt.administration_inode)
+        ):
+            raise PreservationFenceError("Git common directory identity changed")
+        self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        return worktree, index
 
     @staticmethod
     def _require_preservation_environment() -> None:
@@ -4155,14 +4462,25 @@ class ChangeWorkspaceManager:
                 cwd=worktree,
             ).stdout.decode().strip()
         )
+        repository_common = Path(
+            self._preservation_git(
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-common-dir",
+                cwd=self._repository,
+            ).stdout.decode().strip()
+        )
         if (
             not index.is_absolute()
             or not administration.is_absolute()
             or not common.is_absolute()
+            or not repository_common.is_absolute()
             or index.parent != administration
             or common != common.resolve()
             or administration != administration.resolve()
             or index != index.resolve()
+            or repository_common != repository_common.resolve()
+            or common != repository_common
             or not _path_is_contained(common, administration)
         ):
             raise PreservationRejectedError("Git resolved an unexpected worktree administration path")
@@ -4273,12 +4591,19 @@ class ChangeWorkspaceManager:
             if mode not in {0o100644, 0o100755, 0o120000}:
                 raise PreservationRejectedError("unsupported managed index entry type")
             _validate_relative_preservation_path(path)
+        ChangeWorkspaceManager._validate_private_paths(tuple(path for path, _mode, _stage in entries))
 
     @staticmethod
     def _validate_index_extensions(content: bytes) -> None:
         """Accept only self-contained index extensions with no private path cache."""
         if len(content) < 32 or content[:4] != b"DIRC":
             raise PreservationRejectedError("managed index header is invalid")
+        lowered_content = content.casefold()
+        if any(
+            marker.encode() in lowered_content
+            for marker in (".env", "credential", "password", "passwd", "secret", "token", "private")
+        ):
+            raise PreservationRejectedError("managed index contains private metadata")
         version = int.from_bytes(content[4:8], "big")
         entry_count = int.from_bytes(content[8:12], "big")
         if version not in {2, 3}:
@@ -4312,6 +4637,21 @@ class ChangeWorkspaceManager:
             cursor += 8
             if extension not in known or cursor + size > checksum_start:
                 raise PreservationRejectedError("managed index extension requires containment")
+            extension_content = content[cursor : cursor + size]
+            lowered = extension_content.casefold()
+            if any(
+                marker.encode() in lowered
+                for marker in (
+                    ".env",
+                    "credential",
+                    "password",
+                    "passwd",
+                    "secret",
+                    "token",
+                    "private",
+                )
+            ):
+                raise PreservationRejectedError("managed index extension contains private metadata")
             cursor += size
         if cursor != checksum_start:
             raise PreservationRejectedError("managed index extension table is malformed")
@@ -4354,6 +4694,23 @@ class ChangeWorkspaceManager:
                 for component in components
             ):
                 raise PreservationRejectedError("private or secret-like path requires containment")
+
+    @staticmethod
+    def _validate_private_content(content: bytes) -> None:
+        """Reject high-confidence credential material before private storage."""
+        lowered = content.casefold()
+        markers = (
+            b"-----begin ",
+            b"private key-----",
+            b"aws_secret_access_key=",
+            b"aws_access_key_id=",
+            b"github_pat_",
+            b"ghp_",
+            b"xoxb-",
+            b"xoxp-",
+        )
+        if any(marker in lowered for marker in markers):
+            raise PreservationRejectedError("private or secret-like content requires containment")
 
     @staticmethod
     def _validate_preservation_path(worktree: Path, path: str) -> None:
@@ -4492,7 +4849,9 @@ class ChangeWorkspaceManager:
             raise PreservationFenceError("private preservation manifest does not match its receipt")
         if tuple(sorted(objects)) != inventory:
             raise PreservationFenceError("private preservation object inventory changed")
+        self._validate_private_paths(tuple(entry.path for entry in receipt.paths))
         for object_name, content in objects.items():
+            self._validate_private_content(content)
             stored = self._read_private_preservation_object(receipt, object_name)
             if stored != content or hashlib.sha256(stored).hexdigest() != object_name:
                 raise PreservationFenceError("private preservation object failed verification")
@@ -4567,6 +4926,7 @@ class ChangeWorkspaceManager:
                 objects = payload.get("objects")
                 if (
                     not isinstance(objects, list)
+                    or len(objects) > _MAX_PRESERVED_PATHS + 1
                     or any(not isinstance(item, str) or not re.fullmatch(r"[0-9a-f]{64}", item) for item in objects)
                     or objects != sorted(set(objects))
                 ):
@@ -4668,103 +5028,6 @@ class ChangeWorkspaceManager:
         finally:
             os.close(parent_fd)
 
-
-@contextmanager
-def _open_preservation_entry(
-    parent_fd: int,
-    name: str,
-    state: _PreservedPathState,
-) -> Iterator[int | None]:
-    """Create one regular file or symlink below a pinned worktree directory."""
-    if state.kind == "symlink":
-        if state.content is None:
-            raise PreservationRejectedError("symlink preservation content is missing")
-        os.symlink(os.fsdecode(state.content), name, dir_fd=parent_fd)
-        try:
-            yield None
-        finally:
-            try:
-                os.unlink(name, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
-        return
-    if state.content is None:
-        raise PreservationRejectedError("regular preservation content is missing")
-    descriptor = os.open(
-        name,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-        0o600,
-        dir_fd=parent_fd,
-    )
-    try:
-        try:
-            with os.fdopen(descriptor, "wb", closefd=False) as handle:
-                handle.write(state.content)
-                handle.flush()
-                os.fsync(descriptor)
-            yield descriptor
-        finally:
-            try:
-                os.unlink(name, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
-    finally:
-        os.close(descriptor)
-
-
-def _validate_relative_preservation_path(path: str) -> None:
-    parsed = PurePosixPath(path)
-    if (
-        not path
-        or len(path) > _MAX_PRESERVED_PATH_LENGTH
-        or parsed.is_absolute()
-        or parsed.parts in ((".",),)
-        or ".." in parsed.parts
-        or str(parsed) != path
-        or "\\" in path
-        or "\x00" in path
-        or not path.isprintable()
-    ):
-        raise PreservationRejectedError("preserved path is not a normalized relative path")
-
-
-def _path_is_contained(root: Path, candidate: Path) -> bool:
-    try:
-        candidate.relative_to(root)
-    except ValueError:
-        return False
-    return True
-
-
-def _reject_symlink_ancestors(path: Path) -> None:
-    current = Path(path.anchor)
-    for component in path.parts[1:]:
-        current /= component
-        try:
-            metadata = current.lstat()
-        except FileNotFoundError as exc:
-            raise PreservationRejectedError(f"Git administration path is missing: {current}") from exc
-        if stat.S_ISLNK(metadata.st_mode):
-            raise PreservationRejectedError(f"Git administration path contains a symlink: {current}")
-
-
-def _open_worktree_parent(worktree: Path, parts: tuple[str, ...]) -> int:
-    """Open/create only the exact regular directory chain for one restore path."""
-    descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for part in parts:
-            try:
-                successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
-            except FileNotFoundError:
-                os.mkdir(part, mode=0o755, dir_fd=descriptor)
-                os.fsync(descriptor)
-                successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = successor
-        return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
 
     @staticmethod
     def _dirty_paths(status: bytes) -> tuple[str, ...]:
@@ -5731,6 +5994,104 @@ def _open_worktree_parent(worktree: Path, parts: tuple[str, ...]) -> int:
             env=dict(environment) if environment is not None else None,
             timeout=10 if inspection else None,
         )
+ 
+
+@contextmanager
+def _open_preservation_entry(
+    parent_fd: int,
+    name: str,
+    state: _PreservedPathState,
+) -> Iterator[int | None]:
+    """Create one regular file or symlink below a pinned worktree directory."""
+    if state.kind == "symlink":
+        if state.content is None:
+            raise PreservationRejectedError("symlink preservation content is missing")
+        os.symlink(os.fsdecode(state.content), name, dir_fd=parent_fd)
+        try:
+            yield None
+        finally:
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        return
+    if state.content is None:
+        raise PreservationRejectedError("regular preservation content is missing")
+    descriptor = os.open(
+        name,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600,
+        dir_fd=parent_fd,
+    )
+    try:
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as handle:
+                handle.write(state.content)
+                handle.flush()
+                os.fsync(descriptor)
+            yield descriptor
+        finally:
+            try:
+                os.unlink(name, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+    finally:
+        os.close(descriptor)
+
+
+def _validate_relative_preservation_path(path: str) -> None:
+    parsed = PurePosixPath(path)
+    if (
+        not path
+        or len(path) > _MAX_PRESERVED_PATH_LENGTH
+        or parsed.is_absolute()
+        or parsed.parts in ((".",),)
+        or ".." in parsed.parts
+        or str(parsed) != path
+        or "\\" in path
+        or "\x00" in path
+        or not path.isprintable()
+    ):
+        raise PreservationRejectedError("preserved path is not a normalized relative path")
+
+
+def _path_is_contained(root: Path, candidate: Path) -> bool:
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _reject_symlink_ancestors(path: Path) -> None:
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError as exc:
+            raise PreservationRejectedError(f"Git administration path is missing: {current}") from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise PreservationRejectedError(f"Git administration path contains a symlink: {current}")
+
+
+def _open_worktree_parent(worktree: Path, parts: tuple[str, ...]) -> int:
+    """Open/create only the exact regular directory chain for one restore path."""
+    descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts:
+            try:
+                successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            except FileNotFoundError:
+                os.mkdir(part, mode=0o755, dir_fd=descriptor)
+                os.fsync(descriptor)
+                successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = successor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _replacement(

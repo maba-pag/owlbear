@@ -7878,6 +7878,8 @@ class PortfolioApplication:
         coordination = self._workspace_manager.show(change_id)
         writer = coordination.writer
         attempt = coordination.finalization_attempt
+        if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+            self._fail("completed-outcome repair cannot overlap another active Delivery claim")
         if (
             writer is None
             or writer.kind != "finalize"
@@ -8332,12 +8334,15 @@ class PortfolioApplication:
     def _capture_recovery_intent(self, change_id: str) -> RecoveryIntent:
         runtime = self._runtime(change_id)
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
-        coordination, head, fingerprint, paths, reason = self._workspace_manager.capture_recovery_workspace(
+        coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_recovery_workspace(
             change_id, tuple(result.completed_commit for binding in frontier.bindings for result in binding.results)
         )
         # Recovery A never rewrites files, moves heads, repairs corruption, or interprets
         # unpromoted output as proof of a completed effect.
-        if paths or reason is not None or coordination.publication_lease is not None:
+        if (
+            reason not in {None, "workspace-dirty"}
+            or coordination.publication_lease is not None
+        ):
             raise DeliveryWorkerExclusionRequiredError
         owner, owner_id, kind, failure_id, effect_id = self._recovery_owner(runtime, coordination)
         relative = Path("changes") / change_id / "invocations" / f"{digest(owner_id.encode())}.json"
@@ -8387,6 +8392,31 @@ class PortfolioApplication:
                 raise DeliveryWorkerExclusionRequiredError
             path = self._coordinator.continuation_record_path(change_id, request.owner_id, result=True)
             result_digest = digest(path.read_bytes() if result is not None else b"")
+        maintained_surfaces = tuple(
+            sorted(
+                {
+                    surface
+                    for binding in runtime.bindings()
+                    for task in binding.tasks
+                    for surface in task.maintained_surfaces
+                }
+            )
+        )
+        last_write_provenance = tuple(
+            sorted(
+                {
+                    f"change-head:{head}",
+                    f"frontier:{digest(runtime.frontier_bytes())}",
+                    f"owner:{owner_id}",
+                    f"attempt:{request.attempt_id}",
+                    *(
+                        f"result:{result.result_id}:{result.completed_commit}"
+                        for binding in runtime.bindings()
+                        for result in binding.results
+                    ),
+                }
+            )
+        )
         return RecoveryIntent(
             invocation=invocation,
             frontier_digest=digest(runtime.frontier_bytes()),
@@ -8400,6 +8430,8 @@ class PortfolioApplication:
             kind=kind,
             proposal_id=proposal.proposal_id if proposal is not None else None,
             engine_result_digest=result_digest,
+            maintained_surfaces=maintained_surfaces,
+            last_write_provenance=last_write_provenance,
         )
 
     def _recovery_owner(

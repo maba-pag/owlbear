@@ -638,9 +638,30 @@ Closeout, split into bounded selections:
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
 | D03-B | Source `7dd03b4de2384edfa77b2b848a784648c3fdd470`, repairing review of `fc557ff`; repair comment `5727705649`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Return accounting finding repaired with same-task backoff/exhaustion, replay and transaction-restart proof. Independent Claude Opus 5 repair review found no significant issues; prior cumulative proof is recorded below. | Ready for re-review, not accepted. Repair-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
-| D03-C | Not started | None | Nonterminal preservation/proof repair |
+| D03-C | Partial checkpoint `03137fd1dcfaab557a74de2beafdf7357f4b130e`; authorized by comment `5728172369` against plan `92e9135` | Compilation reported by the writer; CodeQL found zero Python alerts at this checkpoint. Early independent Opus review requested preservation/restoration and repair-authority/replay corrections. No behavioral test pass or final review is claimed for this checkpoint. | In progress, not accepted. Complete the authority/provenance integration, durable restoration receipt, bounded repair/resumption, strict consumer companions and focused proof before C review or D. |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
+
+### D03-C partial checkpoint — 2026-09-18
+
+The user authorized C against the package plan presented at `92e9135`. Published B source and
+its cumulative review plus return-accounting repair re-review are the prerequisite evidence;
+the earlier table's “No C authorization” described that earlier checkpoint, not this new request.
+External CI, pinned-Node and actual host gates remain outstanding and are not waived.
+
+`03137fd` adds workspace raw-preservation/index primitives, completed-outcome repair primitives
+and structural proof-mutation diagnostics. It is an interrupted implementation checkpoint,
+not a usable or accepted C recovery route. Early independent review found restoration image,
+manifest lookup, file-atime fencing, custody/provenance and repair replay/publication defects;
+the final disposition must be checked against the subsequent repair source, not assumed here.
+
+The writer reported compilation and whitespace checks, but no behavioral tests at `03137fd`.
+The fresh runner initially lacked `uv` and Pydantic. The coordinating session subsequently
+installed advisory-checked `uv 0.12.15` under `/tmp/d03-c-tools`; this is tooling setup, not
+test evidence. CodeQL reported zero Python alerts at `03137fd`; automated review was unavailable
+because its configured model could not be loaded. Neither compilation nor that scan establishes
+the recovery safety contract. All unfinished C contract/proof obligations block its completion
+and D; they are not reassigned to E.
 
 ### D03-B resumed verification — 2026-09-18
 

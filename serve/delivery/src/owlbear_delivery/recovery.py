@@ -92,7 +92,24 @@ class RecoveryIntent(_RecoveryModel):
     effect_receipt_id: str | None = Field(default=None, max_length=128)
     engine_result_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     proposal_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # These are engine-derived custody facts.  They remain optional for the
+    # older A-only journal records, but preservation must reject a record that
+    # does not carry both proofs.
+    maintained_surfaces: tuple[str, ...] = ()
+    last_write_provenance: tuple[str, ...] = ()
     kind: Literal["clean-claim", "clean-finalizer", "ready-readback"]
+
+    @model_validator(mode="after")
+    def _validate_provenance(self) -> Self:
+        for values, label in (
+            (self.maintained_surfaces, "maintained surfaces"),
+            (self.last_write_provenance, "last-write provenance"),
+        ):
+            if len(values) != len(set(values)) or any(
+                not value or len(value) > 512 or not value.isprintable() for value in values
+            ):
+                raise ValueError(f"{label} must contain bounded unique values")
+        return self
 
     @property
     def recovery_id(self) -> str:
