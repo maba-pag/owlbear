@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-B: ready for review at `a2006e3`; independent source review has no open findings.
+**D03-B: return-accounting repair ready for re-review at `7dd03b4`; independent repair review found no significant issues.
 Final-source CodeQL and external gates remain outstanding. Not accepted; C is not authorized.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
@@ -637,7 +637,7 @@ Closeout, split into bounded selections:
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
-| D03-B | Source `a2006e320a502c55234030e988520c0be1005093`, following `f119cd60595905e18a3b6e8d1611442d754270dd`; resume comment `5726865466`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Four completion blockers addressed with focused owner/restart/legacy/registered-consumer proof below. Independent Claude Opus 5 rechecked final source: no open findings. | Ready for review, not accepted. Final-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
+| D03-B | Source `7dd03b4de2384edfa77b2b848a784648c3fdd470`, repairing review of `fc557ff`; repair comment `5727705649`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Return accounting finding repaired with same-task backoff/exhaustion, replay and transaction-restart proof. Independent Claude Opus 5 repair review found no significant issues; prior cumulative proof is recorded below. | Ready for re-review, not accepted. Repair-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
@@ -857,7 +857,8 @@ repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
   `_read()` (transaction recovery), and startup calls `runtime.bindings()` through legacy import
   before scanning owner results. Engine/direct/background target identity uses the same
   `observed_target_head()` owner; provider failure codes are `StrEnum`.
-- **D03-B repair finding → fix → proof (working tree after `a2006e3`):** `ReturnDelivery`
+- **D03-B repair finding → fix → proof (`7dd03b4`, comment `5727705649`):** the subsequent
+  cumulative review of `fc557ff` found that `ReturnDelivery`
   previously cleared Builder custody without an owner-result participant or application failure
   accounting, leaving the consumed attempt `reserved` across return → same-task replan. The
   existing transaction now records nonaccepted `worker-returned` evidence and the application
@@ -867,7 +868,34 @@ repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
   Return/Block neighbor cases, **9 passed** ledger/recovery containment cases, and **3 passed**
   owner-transaction crash/restart cases (`before-publication`, `after-first-publication`,
   `before-manifest-cleanup`). Scoped Ruff check and format check pass for all 3 changed Python
-  files; no commit or publication was made.
+  files. Counts are separate selections and may overlap; they are not a whole-phase rerun.
+
+Repair environment: Python **3.14.7**, advisory-checked locked uv **0.12.15**, restored at
+`.owlbear/scratch/d03-repair-tools/bin/uv` because `uv` was absent from PATH.
+No dependency manifest/lock, frontend, service or live state changed. The regression reproduced
+with the production repair reverted: restart left `last_status="reserved"` and no outcome.
+The restored repair passed the following focused commands, with `TERM=xterm` and the restored
+tool directory on PATH:
+
+```sh
+uv run --locked pytest serve/delivery/tests/test_portfolio_application.py -q -n1 -m 'not api and not model and not e2e' --tb=short -k 'return_accounting or returned_builder_replan or return_owner_result or block_accounting or planner_accepted_retry or acceptance_retry_budget'
+uv run --locked pytest serve/delivery/tests/test_delivery_runtime.py -q -n1 -m 'not api and not model and not e2e' --tb=short -k 'implementation_nonadvance or dirty_implementation_retry or repeated_retry_exclusion_required or clean_implementation_retry_exclusion_required'
+uv run --locked pytest serve/delivery/tests/test_retry_ledger.py serve/delivery/tests/test_recovery.py -q -n1 -m 'not api and not model and not e2e' --tb=short -k 'duplicate_reservation or unresolved_reservation or legacy_failures or finalizer_recovery_reconciles_interrupted_report_accounting or evidence_owner_failure_and_forged_completed_receipt_never_release'
+uv run --locked pytest serve/delivery/tests/test_portfolio_application.py -q -n1 -m 'not api and not model and not e2e' --tb=short -k test_return_owner_result_reconciles_after_transaction_restart
+uv run --locked pytest tests/test_delivery_worktree_authority.py::test_runtime_frontier_writers_use_the_central_mutability_policy -q -n1 -m 'not api and not model and not e2e' --tb=short
+```
+
+The final mandatory central-mutability node passed **1 test in 2.15s** on unchanged `7dd03b4`.
+Independent Claude Opus 5 `d03-b-return-review` reviewed the repair diff from `fc557ff`
+(the source published as `7dd03b4`): **no significant issues found**. It traced consumed-attempt
+idempotency, atomic nonaccepted evidence, restart without caller replay, same-task budget isolation,
+and unchanged advance/block/exclusion behavior. It ran no tests. This scoped repair review does not
+replace the earlier cumulative review or confer phase acceptance.
+Secret scanning passed before publication. Repair-source CodeQL **timed out** and prohibited a
+repeat; automated review was unavailable because its configured model was absent. Neither is a pass.
+External source/Cockpit/dependency checks at the inspected baseline remained `action_required`.
+Final-source security validation, required CI, pinned-Node and host gates remain with their owners;
+no gate is waived and C was not started.
 
 Exact bounded-closeout pytest selection (the restored uv executable was
 `.owlbear/scratch/d03-b-tools/bin/uv`; `TMPDIR` pointed to that repository-local directory):
