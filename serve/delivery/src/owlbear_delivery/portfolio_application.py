@@ -115,6 +115,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
+    PrepareCompletedOutcomeRepair,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     derive_change_stage,
@@ -3158,6 +3159,16 @@ class PortfolioApplication:
             or not set(request.paths) <= set(paths)
             or (request.code.value == "workspace-dirty" and not paths)
             or (request.code.value == "workspace-preflight-failed" and reason is None)
+        ):
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
+        if request.category == "proof-mutation" and (
+            (
+                request.expected_workspace_fingerprint is not None
+                and request.expected_workspace_fingerprint != request.proof_fingerprint_before
+            )
+            or request.proof_fingerprint_after != fingerprint
+            or not set(request.paths) <= set(paths)
         ):
             msg = "diagnostic-conflict"
             raise FinalizationReportError(msg)
@@ -7836,6 +7847,71 @@ class PortfolioApplication:
     ) -> DeliveryRepairResult:
         """Diagnose or apply one high-level repair proposal."""
         return self.repair_change(change_id, proposal_id, confirmed_lost=confirmed_lost)
+
+    def repair_completed_outcome(
+        self,
+        change_id: str,
+        request: PrepareCompletedOutcomeRepair,
+    ) -> OutcomeAuthorityBinding:
+        """Apply the fenced engine-derived repair-task route for a completed outcome."""
+        with self._coordinator.acquisition_lock(), locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
+            if request.outcome_id not in {binding.outcome_id for binding in runtime.bindings()}:
+                self._fail("completed-outcome repair references an unknown outcome")
+            if not runtime.has_completed_outcome_repair(request):
+                self._validate_completed_outcome_repair_request(change_id, runtime, request)
+            binding = runtime.prepare_completed_outcome_repair(request)
+            self._publish_delivery_state(
+                change_id,
+                runtime,
+                _checkpoint_operation_id("completed-outcome-repair", change_id, request.outcome_id, request.attempt_id),
+            )
+            return binding
+
+    def _validate_completed_outcome_repair_request(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        request: PrepareCompletedOutcomeRepair,
+    ) -> None:
+        """Require engine-owned failure evidence before reopening completed work."""
+        coordination = self._workspace_manager.show(change_id)
+        writer = coordination.writer
+        attempt = coordination.finalization_attempt
+        if (
+            writer is None
+            or writer.kind != "finalize"
+            or writer.attempt_id != request.original_action_id
+            or attempt is None
+            or attempt.writer != writer
+            or attempt.finished_at is not None
+        ):
+            self._fail("completed-outcome repair requires the matching failed finalizer custody")
+        try:
+            reports = FinalizationReportStore(self._target_root, change_id).read().reports
+            preservation = self._workspace_manager.verify_preservation(change_id, request.preservation_id)
+        except (FinalizationReportError, OSError, RuntimeError, ValueError) as exc:
+            self._fail("completed-outcome repair evidence is unavailable", exc)
+        matching = tuple(report for report in reports if report.request.attempt_key == request.original_action_id)
+        if not matching:
+            self._fail("completed-outcome repair requires a recorded finalization failure")
+        report = matching[-1]
+        if (
+            report.request.change_id != change_id
+            or report.request.code.value != request.defect_code
+            or report.request.expected_frontier_digest != request.expected_frontier_digest
+            or report.request.expected_contract_digest != contract_fingerprint(runtime.contract)
+            or report.request.expected_change_head != attempt.exact_head
+        ):
+            self._fail("completed-outcome repair defect is not derived from the finalization failure")
+        if request.finding_boundary == "proof-procedure" and report.request.category != "proof-mutation":
+            self._fail("proof-procedure repair requires a proof-mutation diagnostic")
+        if request.finding_boundary == "implementation" and report.request.category == "proof-mutation":
+            self._fail("implementation repair cannot consume a proof-procedure diagnostic")
+        if preservation.preservation_id != request.preservation_id:
+            self._fail("completed-outcome repair preservation identity is stale")
+        if runtime.change_stage() is DeliveryChangeStage.COMPLETED:
+            self._fail("completed-outcome repair requires a nonterminal Change")
 
     def _unavailable_change(
         self, change_id: str, reason: Literal["runtime-unavailable", "coordination-unavailable"] = "runtime-unavailable"

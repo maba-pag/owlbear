@@ -105,11 +105,15 @@ author evidence for a different commit.
 
 ## Step 2a - Retain A Trusted Failure
 
-When a trusted current context reaches a failed custody preflight, maintained check, or independent
-review, call `report_finalization_failure` with only its registered structural fields: the current
+When a trusted current context reaches a failed custody preflight, maintained check, independent
+review, or a maintained proof procedure that changed the managed worktree, call
+`report_finalization_failure` with only its registered structural fields: the current
 contract and frontier digests, candidate and reviewed heads, observed diagnostic sequence, stable
 attempt key, category, registered code, checks state, and any category-allowed workspace fingerprint
-or dirty paths. Under an issued attempt the stable attempt key is exactly `attempt.writer.attempt_id`;
+or dirty paths. For `category: proof-mutation`, use only the registered
+`proof-mutated-worktree` code, the maintained `procedure_id`, distinct
+`proof_fingerprint_before`/`proof_fingerprint_after` values, and the changed relative paths; do not
+report a zero exit as a pass. Under an issued attempt the stable attempt key is exactly `attempt.writer.attempt_id`;
 any other value is rejected as a diagnostic conflict. Do not include commands, logs, URLs, summaries,
 exit details, observer identities, or repair instructions. Preserve the returned report identity and
 checks state in the bounded failure result; a report is diagnostic history, not proof, a custody
