@@ -507,10 +507,25 @@ An agent review is not a substitute for a required human approval.
 A new cloud task creates a branch; an existing-PR comment normally updates that PR's branch.
 Use the latter for phases.
 
-Bootstrap uses current locked manifests and only required tools: uv/Python for backend, pinned
-Node/npm for UI, and Playwright browsers only for browser proof. A Copilot setup workflow must be
-on the repository's actual default branch to be used. Do not change the default branch/protections
-or run `setup/init.py` as a bootstrap shortcut. The guide must be present in the selected checkout.
+[Copilot setup steps](../../.github/workflows/copilot-setup-steps.yml) install uv, Python from
+[.python-version](../../.python-version), and Node from [Cockpit's .nvmrc](../../serve/cockpit/web/.nvmrc),
+then restore locked Python workspace/dev dependencies and Cockpit npm dependencies with caching.
+The checkout follows the task context; it is not forced to `dev`. Frontend steps are conditional
+on the frontend lockfile, so the consumer checkout without frontend sources remains usable.
+Optional Python extras and browser binaries are installed only when a selected check needs them.
+Setup runs version checks, not tests, builds, MCP services or MegaLinter. Step timeouts bound dependency
+installation; the job's 59-minute ceiling preserves the cloud session's platform allowance.
+
+Renovate's existing GitHub Actions manager updates action digests/tags and the explicit uv version.
+Its existing pyenv/nvm managers update the shared Python/Node pins; the workflow has no duplicate
+runtime versions to synchronize. Package versions remain in their existing Renovate-managed lockfiles.
+
+GitHub must have this workflow on the repository's **default branch** before automatic setup works.
+If generated `main` is the default, use the normal reviewed infrastructure sync from `dev`; do not
+commit directly to `main` or change the default branch/protections as a shortcut. `workflow_dispatch`
+allows a setup-only rehearsal once discoverable. Inspect setup logs: GitHub can still start the agent
+after a setup step fails, so file presence is not proof of a ready environment. Never use `setup/init.py`
+as a cloud bootstrap. The guide must also be present in the selected task checkout.
 
 [Source CI](../../.github/workflows/source-verification.yml) and
 [Cockpit CI](../../.github/workflows/cockpit-verification.yml) target `dev` and skip drafts. Mark
