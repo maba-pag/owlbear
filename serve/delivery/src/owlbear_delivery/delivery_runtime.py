@@ -3247,13 +3247,14 @@ class DeliveryRuntime:
                     _model_content(candidate),
                 ),
             )
-        if isinstance(request, (AdvanceDelivery, BlockDelivery)) and binding.active_claim is not None:
+        if isinstance(request, (AdvanceDelivery, BlockDelivery, ReturnDelivery)) and binding.active_claim is not None:
             result_participants = (
                 *result_participants,
                 *self.retry_ledger().owner_result_participants(
                     binding.active_claim.attempt_id,
                     accepted=isinstance(request, AdvanceDelivery),
                     now=retry_observed_at or datetime.now(UTC),
+                    failure_code="worker-returned" if isinstance(request, ReturnDelivery) else "worker-blocked",
                 ),
             )
         self._replace(

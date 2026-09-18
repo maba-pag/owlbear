@@ -142,6 +142,7 @@ from owlbear_delivery import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
+    ReturnDelivery,
     WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
@@ -1977,6 +1978,219 @@ def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp
     assert len(accounted.outcome_ids) == 1
     assert reopened.transition_delivery("change-a", request) == blocked
     assert ledger.read().episodes[0] == accounted
+
+
+def test_return_accounting_reconciles_after_application_failure_and_replay(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    builder_result = application.acquire_change_action(_continuation_request(application))
+    if builder_result.kind == "reconciled":
+        builder_result = application.acquire_change_action(_continuation_request(application))
+    builder = builder_result.launch
+    preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    request = ReturnDelivery(
+        action="return",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="The Builder needs a revised plan.",
+        locators=("TASK-001",),
+        preserved_commit=preserved_commit,
+        attempt_id=builder.claim.attempt_id,
+    )
+
+    with patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")):
+        returned = application.transition_delivery("change-a", request)
+
+    assert returned.active_claim is None
+    assert coordinator.show("change-a").writer is None
+    ledger = RetryLedger(state_root, "change-a")
+    reserved = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert reserved.total_attempts == 1
+    assert reserved.last_status == "reserved"
+    assert reserved.outcome_ids == ()
+
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    accounted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert accounted.total_attempts == 1
+    assert accounted.last_status == "failed"
+    assert len(accounted.outcome_ids) == 1
+    assert accounted.next_eligible_at == "2026-08-04T00:00:01Z"
+    before_replay = ledger.read()
+    assert reopened.transition_delivery("change-a", request) == returned
+    assert ledger.read() == before_replay
+
+
+def test_returned_builder_replan_preserves_backoff_and_remaining_budget(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        clock=clock,
+    )
+
+    def acquire():
+        result = application.acquire_change_action(_continuation_request(application))
+        while result.kind == "reconciled":
+            result = application.acquire_change_action(_continuation_request(application))
+        return result
+
+    def replan() -> None:
+        planner_result = acquire()
+        assert planner_result.launch is not None
+        candidate = application.publish_delivery_plan(
+            "change-a",
+            PublishDeliveryPlan(
+                outcome_id=planner_result.launch.outcome_id,
+                claim_id=planner_result.launch.claim.claim_id,
+                tasks=(_task(),),
+            ),
+        )
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance",
+                outcome_id=planner_result.launch.outcome_id,
+                claim_id=planner_result.launch.claim.claim_id,
+                output=candidate.output,
+            ),
+        )
+
+    def return_builder():
+        builder_result = acquire()
+        assert builder_result.launch is not None
+        builder = builder_result.launch
+        assert builder.claim.task_id == "TASK-001"
+        preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+        application.transition_delivery(
+            "change-a",
+            ReturnDelivery(
+                action="return",
+                outcome_id=builder.outcome_id,
+                claim_id=builder.claim.claim_id,
+                target=DeliveryStage.PLANNING,
+                reason="The Builder needs a revised plan.",
+                locators=("TASK-001",),
+                preserved_commit=preserved_commit,
+                attempt_id=builder.claim.attempt_id,
+            ),
+        )
+        return builder
+
+    replan()
+    first_builder = return_builder()
+    ledger = RetryLedger(state_root, "change-a")
+    first_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert first_episode.total_attempts == 1
+    assert first_episode.next_eligible_at == "2026-08-04T00:00:01Z"
+
+    application, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    replan()
+    blocked = acquire()
+    assert blocked.launch is None
+    assert blocked.reason_code == "retry-backoff"
+
+    now += timedelta(seconds=1)
+    second_builder = return_builder()
+    assert second_builder.claim.attempt_id != first_builder.claim.attempt_id
+    second_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert second_episode.total_attempts == 2
+    assert second_episode.next_eligible_at == "2026-08-04T00:00:03Z"
+
+    replan()
+    blocked = acquire()
+    assert blocked.launch is None
+    assert blocked.reason_code == "retry-backoff"
+
+    now += timedelta(seconds=2)
+    third_builder = return_builder()
+    assert third_builder.claim.attempt_id not in {first_builder.claim.attempt_id, second_builder.claim.attempt_id}
+    exhausted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert exhausted.total_attempts == 3
+    assert exhausted.stop_code.value == "retry-exhausted"
+
+    replan()
+    stopped = acquire()
+    assert stopped.launch is None
+    assert stopped.reason_code == "retry-exhausted"
+
+
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_return_owner_result_reconciles_after_transaction_restart(tmp_path: Path, crash_stage: str) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    builder_result = application.acquire_change_action(_continuation_request(application))
+    if builder_result.kind == "reconciled":
+        builder_result = application.acquire_change_action(_continuation_request(application))
+    assert builder_result.launch is not None
+    builder = builder_result.launch
+    preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    request = ReturnDelivery(
+        action="return",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="The Builder needs a revised plan.",
+        locators=("TASK-001",),
+        preserved_commit=preserved_commit,
+        attempt_id=builder.claim.attempt_id,
+    )
+    original = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        if not transaction._transaction_id.startswith("delivery-runtime-"):
+            original(transaction)
+            return
+
+        def fail(stage):
+            if stage == crash_stage:
+                raise OSError
+
+        original(transaction, failure=fail)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(OSError, match=r"^$"):
+        application.transition_delivery("change-a", request)
+
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = next(
+        item for item in RetryLedger(state_root, "change-a").read().episodes if item.key.procedure_class == "builder"
+    )
+    assert episode.total_attempts == 1
+    assert episode.last_status == "failed"
+    assert len(episode.outcome_ids) == 1
+    assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim is None
+    assert coordinator.show("change-a").writer is None
+    assert reopened.transition_delivery("change-a", request).active_claim is None
 
 
 @pytest.mark.parametrize("restart_during_execution", [False, True])

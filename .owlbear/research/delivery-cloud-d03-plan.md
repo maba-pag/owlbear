@@ -857,6 +857,17 @@ repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
   `_read()` (transaction recovery), and startup calls `runtime.bindings()` through legacy import
   before scanning owner results. Engine/direct/background target identity uses the same
   `observed_target_head()` owner; provider failure codes are `StrEnum`.
+- **D03-B repair finding → fix → proof (working tree after `a2006e3`):** `ReturnDelivery`
+  previously cleared Builder custody without an owner-result participant or application failure
+  accounting, leaving the consumed attempt `reserved` across return → same-task replan. The
+  existing transaction now records nonaccepted `worker-returned` evidence and the application
+  records the matching failure; no refund, recovery release, exclusion weakening or C behavior
+  changed. The pre-fix application reproduction left the Builder episode unresolved; current
+  proof is **10 passed** focused application accounting/replan/replay cases, **6 passed** runtime
+  Return/Block neighbor cases, **9 passed** ledger/recovery containment cases, and **3 passed**
+  owner-transaction crash/restart cases (`before-publication`, `after-first-publication`,
+  `before-manifest-cleanup`). Scoped Ruff check and format check pass for all 3 changed Python
+  files; no commit or publication was made.
 
 Exact bounded-closeout pytest selection (the restored uv executable was
 `.owlbear/scratch/d03-b-tools/bin/uv`; `TMPDIR` pointed to that repository-local directory):
