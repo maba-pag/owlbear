@@ -23,6 +23,23 @@ _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
 _AGENT_WORKFLOW_PATH = _REPO_ROOT / ".github/workflows/agent-ecosystem.yml"
 
+
+def test_recovery_workflows_require_host_exclusion_not_caller_confirmation() -> None:
+    paths = (
+        _SKILLS_ROOT / "w-orchestration/SKILL.md",
+        _AGENTS_ROOT / "orchestrator.agent.md",
+        _AGENTS_ROOT / "repairer.agent.md",
+    )
+    for path in paths:
+        content = path.read_text()
+        assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in content
+        assert "host-owned" in content
+        assert "confirmed_lost=true" not in content
+    workflow = paths[0].read_text()
+    assert "descendant writers and outstanding tool jobs" in workflow
+    assert "Read-only diagnosis remains available" in workflow
+
+
 _EXPECTED_AGENTS = {
     "build-reviewer",
     "builder",

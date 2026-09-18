@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
+from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_delivery import (
     DeliveryAdmissionConflictError,
@@ -110,6 +111,7 @@ from owlbear_delivery.portfolio_operating import (
     DeliveryHealthView,
 )
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
 from owlbear_delivery_mcp.target_models import ReportFinalizationFailureParams
 from owlbear_delivery_mcp.target_server import (
@@ -290,6 +292,30 @@ def _external_head_promotion_receipt() -> ChangeExternalHeadPromotionReceipt:
         promoted_head=adoption.adopted_head,
         provenance="explicit",
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["planner", "builder", "integration", "proposal"])
+async def test_real_core_recovery_exclusion_required(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = recovery_case(tmp_path, kind)
+    with pytest.raises(ToolError) as error:
+        await getattr(TargetMCPAdapter(application), operation)(request)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    assert diagnostic["current_authority_identity"] == "change-a"
+    assert "Custody and files are unchanged" in diagnostic["detail"]
+    unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+async def test_verified_completed_recovery_replay(tmp_path: Path, kind: str) -> None:
+    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    result = await getattr(TargetMCPAdapter(application), operation)(request)
+    recovered = result["recovery"] if kind == "proposal" else result
+    assert recovered["status"] == "recovered"
+    unchanged()
 
 
 class _Result(BaseModel):

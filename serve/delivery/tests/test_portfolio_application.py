@@ -70,7 +70,6 @@ from owlbear_delivery import (
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
-    DeliveryClaimRecoveryStatus,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -143,7 +142,7 @@ from owlbear_delivery import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
-    RetryDelivery,
+    ReturnDelivery,
     WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
@@ -177,6 +176,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError, RetryEpisodeKey, RetryLedger
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
@@ -247,6 +247,30 @@ def _recover_claim(
         claim_id,
         confirmed_lost=True,
     )
+
+
+def _assert_recovery_excluded(application: PortfolioApplication, package) -> None:
+    runtime = application._runtime(package.change_id)
+    frontier = runtime.frontier_bytes()
+    coordination = application._coordinator.show(package.change_id)
+    files = _file_bytes(package.worktree_path)
+    index = Path(_git(package.worktree_path, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    index_bytes = index.read_bytes()
+    refs = _git(package.worktree_path, "show-ref")
+    for confirmed in (False, True):
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.recover_claim(
+                package.change_id,
+                package.outcome_id,
+                package.claim.attempt_id,
+                package.claim.claim_id,
+                confirmed_lost=confirmed,
+            )
+    assert runtime.frontier_bytes() == frontier
+    assert application._coordinator.show(package.change_id) == coordination
+    assert _file_bytes(package.worktree_path) == files
+    assert index.read_bytes() == index_bytes
+    assert _git(package.worktree_path, "show-ref") == refs
 
 
 def _approved_package_id(application: PortfolioApplication, change_id: str) -> str:
@@ -1161,6 +1185,7 @@ def test_continuation_publishes_syncs_finalizes_and_observes_acceptance(tmp_path
             "merged_at": datetime(2026, 8, 3, tzinfo=UTC),
         }
     )
+    application._clock = lambda: "2026-08-04T00:00:01Z"
     acceptance_action = _engine_action(application)
     accepted = _execute_engine(application, acceptance_action)
     assert accepted.kind == "completed", accepted
@@ -1529,17 +1554,653 @@ def test_engine_result_transaction_recovers_without_repeating_provider(tmp_path:
     reopened, coordinator = application, application._coordinator
     if restart:
         reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+        assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == 1
     result = _execute_engine(reopened, action)
     assert result.kind == "completed"
     assert result.ready == runtime.ready_receipt()
     assert provider.set_pull_request_draft_state.call_count == 1
     assert coordinator.show("change-a").continuation_action.finished_at is not None
+    ledger = RetryLedger(state_root, "change-a")
+    episode = ledger.episode(
+        RetryEpisodeKey.engine("change-a", action.kind, action.exact_head, action.target_head, action.finalization_id)
+    )
+    assert episode.total_attempts == 0
+    assert episode.reset_count == 1
+    assert episode.attempt_ids == (action.operation_id,)
+    assert _execute_engine(reopened, action) == result
+    assert ledger.read().episodes == (episode,)
 
 
-def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp_path: Path) -> None:
+def test_acceptance_retry_budget_never_infers_explicit_observation(tmp_path: Path) -> None:
+    application, _runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
+    for index, seconds in enumerate((0, 1, 3)):
+        now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=seconds)
+        action = _engine_action(application)
+        assert _execute_engine(application, action).kind == "waiting"
+        episode = RetryLedger(state_root, "change-a").read().episodes[0]
+        assert episode.total_attempts == index + 1
+        assert episode.explicit_observations == 0
+        assert application.get_change("change-a").readiness.executable is False
+    calls = provider.read_pull_request.call_count
+    now += timedelta(days=1)
+    stopped = application.acquire_change_action(_continuation_request(application, session_id="another-session"))
+    assert stopped.engine_action is None
+    assert stopped.reason_code == "acceptance-wait"
+    assert provider.read_pull_request.call_count == calls
+    with pytest.raises(ValidationError):
+        DeliveryContinuationRequest.model_validate(
+            _continuation_request(application).model_dump() | {"explicit_acceptance_observation": True}
+        )
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_background_and_explicit_acceptance_share_durable_budget(tmp_path: Path, *, mixed: bool) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    start = datetime(2026, 8, 4, tzinfo=UTC)
+    now = start
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
+    for index, seconds in enumerate((0, 1, 3)):
+        now = start + timedelta(seconds=seconds)
+        calls = provider.read_pull_request.call_count
+        if mixed and index != 1:
+            assert _execute_engine(application, _engine_action(application)).kind == "waiting"
+        else:
+            assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+        assert provider.read_pull_request.call_count == calls + 1
+        snapshot = RetryLedger(state_root, "change-a").read()
+        assert len(snapshot.episodes) == 1
+        application.get_change("change-a")
+        application.reconcile_awaiting_acceptance(("change-a",))
+        assert provider.read_pull_request.call_count == calls + 1
+        assert RetryLedger(state_root, "change-a").read() == snapshot
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+    now = start + timedelta(days=1)
+    reopened._clock = clock
+    calls = provider.read_pull_request.call_count
+    assert reopened.acquire_change_action(_continuation_request(reopened)).engine_action is None
+    with pytest.raises(DeliveryAcceptanceWaitingError):
+        reopened.observe_acceptance("change-a")
+    assert provider.read_pull_request.call_count == calls + 1
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (3, 1, 0)
+    with pytest.raises(DeliveryAcceptanceWaitingError):
+        reopened.observe_acceptance("change-a")
+    assert provider.read_pull_request.call_count == calls + 1
+
+
+def acceptance_budget_case(tmp_path: Path, *, exhausted: bool):
+    """Build durable backoff/exhaustion and a fresh application for consumer tests."""
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
+    for delay in (0, 1, 2) if exhausted else (0,):
+        now += timedelta(seconds=delay)
+        calls = provider.read_pull_request.call_count
+        assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+        assert provider.read_pull_request.call_count == calls + 1
+    if exhausted:
+        now += timedelta(days=1)
+
+    def restart():
+        reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime}, clock=clock)
+        reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+        return reopened
+
+    return application, provider, RetryLedger(state_root, "change-a"), restart
+
+
+def test_acceptance_completion_reconciles_accounting_without_observing_again(tmp_path: Path) -> None:
+    application, runtime, provider, state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    ledger = RetryLedger(state_root, "change-a")
+    other_key = RetryEpisodeKey.engine(
+        "change-a", "observe-acceptance", _head, "d" * 40, runtime.finalization().finalization_id
+    )
+    ledger.reserve(other_key, failure_class="acceptance", now=application._clock(), attempt_id="other-target")
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 14, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    with (
+        patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("injected accounting failure")),
+        pytest.raises(OSError, match="injected accounting"),
+    ):
+        application.observe_acceptance("change-a")
+    calls = provider.read_pull_request.call_count
+    assert runtime.completion_receipt() is not None
+    _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    episode = next(item for item in ledger.read().episodes if item.key != other_key)
+    assert episode.reset_count == 1
+    assert episode.total_attempts == 0
+    assert ledger.episode(other_key).reset_count == 0
+    assert ledger.episode(other_key).total_attempts == 1
+    assert ledger.episode(other_key).last_status == "reserved"
+    assert provider.read_pull_request.call_count == calls
+
+
+def test_readiness_uses_budgeted_acceptance_evidence_without_observing_again(tmp_path: Path) -> None:
+    application, _runtime, provider, state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(update={"mergeable": False, "merge_state_status": "dirty"})
+    application.reconcile_awaiting_acceptance(("change-a",))
+    calls = provider.read_pull_request.call_count
+    ledger = RetryLedger(state_root, "change-a")
+    before = ledger.read()
+    detail = application.show_work_item_view("change-a", "publication")
+    assert detail.publication.mergeable is False
+    assert detail.publication.merge_state_status == "dirty"
+    application.get_change("change-a")
+    assert provider.read_pull_request.call_count == calls
+    assert ledger.read() == before
+
+
+@pytest.mark.parametrize("count", [1, 2, 3])
+@pytest.mark.parametrize("clear_legacy_block", [False, True])
+def test_worker_legacy_budget_is_imported_before_dispatch(
+    tmp_path: Path, count: int, *, clear_legacy_block: bool
+) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    runtime = runtimes["change-a"]
+    frontier = json.loads(runtime.frontier_bytes())
+    frontier["bindings"][0].update(retry_count=count, retry_fingerprint="a" * 64)
+    if clear_legacy_block:
+        frontier["bindings"][0]["block"] = {
+            "block_id": "legacy-retry-budget",
+            "reason": "Legacy failure",
+            "unblock_condition": "Prerequisite restored",
+            "expected_evidence": ["restored"],
+            "locators": ["check"],
+        }
+    runtime._frontier_path.write_text(json.dumps(frontier))
+    if clear_legacy_block:
+        application.clear_block("change-a", "OUT-001", "legacy-retry-budget", "Restored", ("check",))
+        assert runtime.show_binding("OUT-001").retry_count == count
+        assert RetryLedger(state_root, "change-a").read().episodes[0].legacy_failures == count
+    first = application.acquire_change_action(_continuation_request(application))
+    if first.kind == "reconciled":
+        first = application.acquire_change_action(_continuation_request(application))
+    assert first.launch is None
+    assert first.reason_code == ("retry-backoff" if count < 3 else "retry-exhausted")
+    assert first.readiness.attempts == count
+    assert first.failure is None
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.total_attempts == count
+    assert episode.legacy_failures == count
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
+    acquired = reopened.acquire_change_action(_continuation_request(reopened))
+    assert (acquired.launch is not None) is (count < 3)
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == min(count + 1, 3)
+
+
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_planner_accepted_retry_reconciles_without_caller_replay(tmp_path: Path, crash_stage: str) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a", PublishDeliveryPlan(outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, tasks=(_task(),))
+    )
+    original = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(stage):
+            if stage == crash_stage:
+                message = "injected owner interruption"
+                raise OSError(message)
+
+        original(transaction, failure=fail)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(OSError, match="injected"):
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance", outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, output=candidate.output
+            ),
+        )
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.total_attempts == 0
+    assert episode.reset_count == 1
+    assert episode.accepted_attempt_ids == (launch.claim.attempt_id,)
+
+
+def test_legacy_active_claim_is_imported_before_accepted_advance_clears_counters(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    runtime = runtimes["change-a"]
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    shutil.rmtree(state_root / "changes/change-a/retry-ledger")
+    frontier = json.loads(runtime.frontier_bytes())
+    frontier["bindings"][0].update(retry_count=2, retry_fingerprint="a" * 64)
+    runtime._frontier_path.write_text(json.dumps(frontier))
+    candidate = application.publish_delivery_plan(
+        "change-a", PublishDeliveryPlan(outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, tasks=(_task(),))
+    )
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance", outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, output=candidate.output
+            ),
+        )
+    ledger = RetryLedger(state_root, "change-a")
+    imported = ledger.read().episodes[0]
+    assert imported.legacy_failures == 2
+    assert imported.total_attempts == 3
+    assert imported.attempt_ids == (launch.claim.attempt_id,)
+    assert runtime.show_binding("OUT-001").retry_count == 0
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    accepted = ledger.read().episodes[0]
+    assert (accepted.legacy_failures, accepted.total_attempts, accepted.reset_count) == (2, 0, 1)
+
+
+def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING}, clock=clock
+    )
+    for index, seconds in enumerate((0, 1, 3)):
+        now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=seconds)
+        acquired = application.acquire_change_action(_continuation_request(application))
+        if acquired.kind == "reconciled":
+            acquired = application.acquire_change_action(_continuation_request(application))
+        assert acquired.launch is not None, acquired
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id="OUT-001",
+                claim_id=acquired.launch.claim.claim_id,
+                block_id=f"block-{index}",
+                reason=f"Changed failure prose {index}",
+                unblock_condition="Procedure available",
+                expected_evidence=("procedure",),
+                locators=("TASK-001",),
+            ),
+        )
+        application.clear_block("change-a", "OUT-001", f"block-{index}", "Prerequisite available", ("procedure",))
+        ledger = RetryLedger(state_root, "change-a")
+        assert len(ledger.read().episodes) == 1
+        assert ledger.read().episodes[0].total_attempts == index + 1
+        assert not application.get_change("change-a").readiness.executable
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
+    assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
+    sibling = reopened.acquire_change_action(_continuation_request(reopened, "change-b"))
+    assert sibling.launch is not None
+    assert sibling.launch.change_id == "change-b"
+
+
+def test_interrupted_engine_reservation_remains_consumed_without_dispatch_evidence(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
+    with (
+        patch.object(
+            application._coordinator, "acquire_continuation_action", side_effect=OSError("interrupted intent")
+        ),
+        pytest.raises(OSError, match="interrupted intent"),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+    before = RetryLedger(state_root, "change-a").read()
+    assert before.episodes[0].total_attempts == 1
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+    stopped = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
+    assert stopped.engine_action is None
+    assert stopped.readiness.reason_code == "retry-containment"
+    assert RetryLedger(state_root, "change-a").read() == before
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.COMPLETED])
+def test_worker_and_finalizer_reservations_without_owner_remain_consumed(tmp_path: Path, stage) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
+    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
+    with (
+        patch.object(owner, operation, side_effect=OSError("interrupted owner publication")),
+        pytest.raises(OSError, match="interrupted owner"),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+    ledger = RetryLedger(state_root, "change-a")
+    before = ledger.read()
+    assert before.episodes[0].total_attempts == 1
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    stopped = reopened.acquire_change_action(_continuation_request(reopened, session_id="new-session"))
+    assert stopped.readiness.reason_code == "retry-containment"
+    assert stopped.launch is None
+    assert stopped.finalization is None
+    assert ledger.read() == before
+    assert coordinator.show("change-a").writer is None
+    assert runtimes["change-a"].active_claims() == ()
+
+
+def test_existing_finalization_receipt_reconciles_accounting_without_marker(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.finalize_change(
+            "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+        )
+    # A previous B version wrote finalization receipts without this companion.
+    (state_root / "changes/change-a/retry-ledger/owner-results" / f"{attempt.writer.attempt_id}.json").unlink()
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.reset_count == 1
+    assert episode.accepted_attempt_ids == (attempt.writer.attempt_id,)
+
+
+@pytest.mark.parametrize("original_claim", [False, True])
+def test_existing_builder_receipt_requires_original_claim_for_accounting(
+    tmp_path: Path, *, original_claim: bool
+) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    runtime = runtimes["change-a"]
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    _git(launch.worktree_path, "commit", "--allow-empty", "-m", "complete task")
+    submission = DeliveryResultSubmission(
+        change_id="change-a",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        result=_task_result(
+            "existing-builder-result",
+            "change-a",
+            runtime.authority_digest,
+            runtime.show_binding(launch.outcome_id).tasks[0],
+            _git(launch.worktree_path, "rev-parse", "HEAD"),
+        ),
+    )
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.submit_result(submission)
+    (state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json").unlink()
+    if not original_claim:
+        (receipt_path,) = (state_root / "changes/change-a/result-receipts/OUT-001").glob("*.json")
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["claim_id"] = "another-claim"
+        receipt_path.write_text(json.dumps(receipt))
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.reset_count == (1 if original_claim else 0)
+    assert episode.total_attempts == (0 if original_claim else 1)
+
+
+def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    request = BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id=launch.claim.claim_id,
+        block_id="blocked-check",
+        reason="Check failed",
+        unblock_condition="Check prerequisite available",
+        expected_evidence=("check",),
+        locators=("check",),
+    )
+    with (
+        patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")),
+        patch.object(application, "_publish_delivery_state", wraps=application._publish_delivery_state) as publish,
+    ):
+        blocked = application.transition_delivery("change-a", request)
+    publish.assert_called_once()
+    assert blocked.active_claim is None
+    assert runtimes["change-a"].show_binding("OUT-001") == blocked
+    ledger = RetryLedger(state_root, "change-a")
+    reserved = ledger.read().episodes[0]
+    assert reserved.total_attempts == 1
+    assert reserved.last_status == "reserved"
+    assert reserved.outcome_ids == ()
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    accounted = ledger.read().episodes[0]
+    assert accounted.total_attempts == 1
+    assert accounted.reset_count == 0
+    assert accounted.last_status == "failed"
+    assert len(accounted.outcome_ids) == 1
+    assert reopened.transition_delivery("change-a", request) == blocked
+    assert ledger.read().episodes[0] == accounted
+
+
+def test_return_accounting_reconciles_after_application_failure_and_replay(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    builder_result = application.acquire_change_action(_continuation_request(application))
+    if builder_result.kind == "reconciled":
+        builder_result = application.acquire_change_action(_continuation_request(application))
+    builder = builder_result.launch
+    preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    request = ReturnDelivery(
+        action="return",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="The Builder needs a revised plan.",
+        locators=("TASK-001",),
+        preserved_commit=preserved_commit,
+        attempt_id=builder.claim.attempt_id,
+    )
+
+    with patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")):
+        returned = application.transition_delivery("change-a", request)
+
+    assert returned.active_claim is None
+    assert coordinator.show("change-a").writer is None
+    ledger = RetryLedger(state_root, "change-a")
+    reserved = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert reserved.total_attempts == 1
+    assert reserved.last_status == "reserved"
+    assert reserved.outcome_ids == ()
+
+    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    accounted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert accounted.total_attempts == 1
+    assert accounted.last_status == "failed"
+    assert len(accounted.outcome_ids) == 1
+    assert accounted.next_eligible_at == "2026-08-04T00:00:01Z"
+    before_replay = ledger.read()
+    assert reopened.transition_delivery("change-a", request) == returned
+    assert ledger.read() == before_replay
+
+
+def test_returned_builder_replan_preserves_backoff_and_remaining_budget(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        clock=clock,
+    )
+
+    def acquire():
+        result = application.acquire_change_action(_continuation_request(application))
+        while result.kind == "reconciled":
+            result = application.acquire_change_action(_continuation_request(application))
+        return result
+
+    def replan() -> None:
+        planner_result = acquire()
+        assert planner_result.launch is not None
+        candidate = application.publish_delivery_plan(
+            "change-a",
+            PublishDeliveryPlan(
+                outcome_id=planner_result.launch.outcome_id,
+                claim_id=planner_result.launch.claim.claim_id,
+                tasks=(_task(),),
+            ),
+        )
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance",
+                outcome_id=planner_result.launch.outcome_id,
+                claim_id=planner_result.launch.claim.claim_id,
+                output=candidate.output,
+            ),
+        )
+
+    def return_builder():
+        builder_result = acquire()
+        assert builder_result.launch is not None
+        builder = builder_result.launch
+        assert builder.claim.task_id == "TASK-001"
+        preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+        application.transition_delivery(
+            "change-a",
+            ReturnDelivery(
+                action="return",
+                outcome_id=builder.outcome_id,
+                claim_id=builder.claim.claim_id,
+                target=DeliveryStage.PLANNING,
+                reason="The Builder needs a revised plan.",
+                locators=("TASK-001",),
+                preserved_commit=preserved_commit,
+                attempt_id=builder.claim.attempt_id,
+            ),
+        )
+        return builder
+
+    replan()
+    first_builder = return_builder()
+    ledger = RetryLedger(state_root, "change-a")
+    first_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert first_episode.total_attempts == 1
+    assert first_episode.next_eligible_at == "2026-08-04T00:00:01Z"
+
+    application, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    replan()
+    blocked = acquire()
+    assert blocked.launch is None
+    assert blocked.reason_code == "retry-backoff"
+
+    now += timedelta(seconds=1)
+    second_builder = return_builder()
+    assert second_builder.claim.attempt_id != first_builder.claim.attempt_id
+    second_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert second_episode.total_attempts == 2
+    assert second_episode.next_eligible_at == "2026-08-04T00:00:03Z"
+
+    replan()
+    blocked = acquire()
+    assert blocked.launch is None
+    assert blocked.reason_code == "retry-backoff"
+
+    now += timedelta(seconds=2)
+    third_builder = return_builder()
+    assert third_builder.claim.attempt_id not in {first_builder.claim.attempt_id, second_builder.claim.attempt_id}
+    exhausted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    assert exhausted.total_attempts == 3
+    assert exhausted.stop_code.value == "retry-exhausted"
+
+    replan()
+    stopped = acquire()
+    assert stopped.launch is None
+    assert stopped.reason_code == "retry-exhausted"
+
+
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_return_owner_result_reconciles_after_transaction_restart(tmp_path: Path, crash_stage: str) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    planner = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    builder_result = application.acquire_change_action(_continuation_request(application))
+    if builder_result.kind == "reconciled":
+        builder_result = application.acquire_change_action(_continuation_request(application))
+    assert builder_result.launch is not None
+    builder = builder_result.launch
+    preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    request = ReturnDelivery(
+        action="return",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        target=DeliveryStage.PLANNING,
+        reason="The Builder needs a revised plan.",
+        locators=("TASK-001",),
+        preserved_commit=preserved_commit,
+        attempt_id=builder.claim.attempt_id,
+    )
+    original = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        if not transaction._transaction_id.startswith("delivery-runtime-"):
+            original(transaction)
+            return
+
+        def fail(stage):
+            if stage == crash_stage:
+                raise OSError
+
+        original(transaction, failure=fail)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(OSError, match=r"^$"):
+        application.transition_delivery("change-a", request)
+
+    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = next(
+        item for item in RetryLedger(state_root, "change-a").read().episodes if item.key.procedure_class == "builder"
+    )
+    assert episode.total_attempts == 1
+    assert episode.last_status == "failed"
+    assert len(episode.outcome_ids) == 1
+    assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim is None
+    assert coordinator.show("change-a").writer is None
+    assert reopened.transition_delivery("change-a", request).active_claim is None
+
+
+@pytest.mark.parametrize("restart_during_execution", [False, True])
+def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(
+    tmp_path: Path, *, restart_during_execution: bool
+) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     action = _engine_action(application)
-    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    if not restart_during_execution:
+        reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
     entered, release = Event(), Event()
     original = provider.set_pull_request_draft_state.side_effect
 
@@ -1553,6 +2214,8 @@ def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp
         running = executor.submit(_execute_engine, application, action)
         try:
             assert entered.wait(timeout=5)
+            if restart_during_execution:
+                reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
             with (
                 locked_roots((state_root / "claims/acquisition-lock",), blocking=False),
                 pytest.raises(DeliveryActionBusyError),
@@ -1737,7 +2400,10 @@ def test_continuation_finalizer_rejects_target_drift_without_releasing_custody(t
     assert coordinator.show("change-a").writer == attempt.writer
 
 
-def test_continuation_finalization_replays_atomic_custody_release_after_interruption(tmp_path: Path) -> None:
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_continuation_finalization_replays_atomic_custody_release_after_interruption(
+    tmp_path: Path, crash_stage: str
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     acquired = application.acquire_change_action(_continuation_request(application))
     attempt = acquired.finalization.attempt
@@ -1746,7 +2412,7 @@ def test_continuation_finalization_replays_atomic_custody_release_after_interrup
 
     def interrupted(transaction):
         def fail(stage):
-            if stage == "after-first-publication":
+            if stage == crash_stage:
                 message = "injected custody completion interruption"
                 raise RuntimeError(message)
 
@@ -1754,8 +2420,10 @@ def test_continuation_finalization_replays_atomic_custody_release_after_interrup
 
     with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
         application.finalize_change("change-a", proof)
-    assert coordinator.show("change-a").writer == attempt.writer
+    if crash_stage != "before-manifest-cleanup":
+        assert coordinator.show("change-a").writer == attempt.writer
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == 1
     receipt = reopened.finalize_change("change-a", proof)
     assert receipt.operation_id == attempt.writer.attempt_id
     assert coordinator.show("change-a").writer is None
@@ -1852,9 +2520,17 @@ def test_continuation_preserves_failed_activation_identity(tmp_path: Path, *, wr
         DeliveryContinuationResult.model_validate(stopped.model_dump() | {"reason_code": stopped.failure.code})
     assert stopped.launch is None
     assert (coordinator.show("change-a").writer is not None) == writer_recorded
-    with pytest.raises(DeliveryActionBusyError, match="supported worker exclusion"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError, match="supported worker exclusion"):
         application.recover_claim("change-a", "OUT-001", claim.attempt_id, claim.claim_id, confirmed_lost=True)
     assert runtimes["change-a"].show_binding("OUT-001").active_claim == claim
+    ledger = RetryLedger(_state_root, "change-a")
+    episode = ledger.read().episodes[0]
+    assert episode.total_attempts == 1
+    assert episode.attempt_ids == (claim.attempt_id,)
+    assert episode.last_status == "failed"
+    reopened, _, _ = _reopen_portfolio(tmp_path, _state_root, runtimes)
+    assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
+    assert ledger.read().episodes == (episode,)
 
 
 def test_continuation_stale_and_unavailable_capability_do_not_acquire(tmp_path: Path) -> None:
@@ -1898,12 +2574,59 @@ def test_continuation_workers_cannot_be_recovered_by_timeout_or_caller_assertion
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
     before = runtimes["change-a"].frontier_bytes()
     assert reopened.acquire_actions().launch_packages == ()
-    with pytest.raises(DeliveryActionBusyError, match="supported worker exclusion"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError, match="supported worker exclusion"):
         reopened.recover_claim(
             "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
         )
     assert runtimes["change-a"].frontier_bytes() == before
     assert coordinator.show("change-a").writer == launch.writer
+
+
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.IMPLEMENTATION])
+@pytest.mark.parametrize("orphan_child", [False, True])
+def test_legacy_process_exclusion_required_after_lease(
+    tmp_path: Path, stage: DeliveryStage, *, orphan_child: bool
+) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    launch = application.acquire_frontier_work().launch_packages[0]
+    product = launch.worktree_path / "product.txt"
+    worker_code = (
+        "import pathlib,sys\n"
+        "product=pathlib.Path(sys.argv[1])\n"
+        "product.write_text('worker started\\n')\n"
+        "print('writing',flush=True)\n"
+        "sys.stdin.readline()\n"
+        "product.write_text('late worker write\\n')\n"
+    )
+    command = (sys.executable, "-c", worker_code, str(product))
+    if orphan_child:
+        parent_code = "import subprocess,sys\nsubprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]])\n"
+        command = (sys.executable, "-c", parent_code, worker_code, str(product))
+    with subprocess.Popen(  # noqa: S603 - controlled worker in a disposable repository.
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+    ) as worker:
+        try:
+            assert worker.stdout.readline().strip() == "writing"
+            if orphan_child:
+                assert worker.wait(timeout=10) == 0
+            reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
+            before = runtimes["change-a"].frontier_bytes()
+            custody = coordinator.show("change-a")
+            assert reopened.acquire_actions().launch_packages == ()
+            with pytest.raises(DeliveryWorkerExclusionRequiredError):
+                reopened.recover_claim(
+                    "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
+                )
+            assert (worker.poll() is not None) == orphan_child
+            assert runtimes["change-a"].frontier_bytes() == before
+            assert coordinator.show("change-a") == custody
+        finally:
+            worker.communicate("\n", timeout=10)
+    assert product.read_text() == "late worker write\n"
+    assert runtimes["change-a"].active_claims() == ((launch.outcome_id, launch.claim),)
 
 
 def test_continuation_live_worker_remains_excluded_after_lease(tmp_path: Path) -> None:
@@ -1926,7 +2649,7 @@ def test_continuation_live_worker_remains_excluded_after_lease(tmp_path: Path) -
             reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
             assert reopened.acquire_change_action(_continuation_request(reopened)).kind == "busy"
             assert reopened.acquire_actions().launch_packages == ()
-            with pytest.raises(DeliveryActionBusyError):
+            with pytest.raises(DeliveryWorkerExclusionRequiredError):
                 reopened.recover_claim(
                     "change-a", launch.outcome_id, launch.claim.attempt_id, launch.claim.claim_id, confirmed_lost=True
                 )
@@ -1944,12 +2667,16 @@ def test_continuation_plans_builds_and_finalizes_via_existing_result_routes(tmp_
         "change-a",
         PublishDeliveryPlan(outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, tasks=(_task(),)),
     )
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].total_attempts == 1
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].reset_count == 0
     application.transition_delivery(
         "change-a",
         AdvanceDelivery(
             action="advance", outcome_id=planner.outcome_id, claim_id=planner.claim.claim_id, output=candidate.output
         ),
     )
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].total_attempts == 0
+    assert RetryLedger(_state_root, "change-a").read().episodes[0].reset_count == 1
     assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
     builder = application.acquire_change_action(_continuation_request(application)).launch
     _git(builder.worktree_path, "commit", "--allow-empty", "-m", "complete task")
@@ -4723,7 +5450,12 @@ def test_observe_change_publication_checks_remains_read_only_for_required_failur
 
 def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) -> None:
     application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
 
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     waiting = application.reconcile_awaiting_acceptance(("change-a",))
     assert waiting[0].status.value == "waiting"
     assert runtime.change_disposition() is None
@@ -4734,6 +5466,7 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
         "GitHub is unavailable",
         retry_safe=True,
     )
+    now += timedelta(seconds=1)
     unavailable = application.reconcile_awaiting_acceptance(("change-a",))
     assert unavailable[0].status.value == "provider-unavailable"
     assert unavailable[0].code == "unavailable"
@@ -4749,7 +5482,10 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
             "merged_by_login": "octocat",
         }
     )
+    now += timedelta(seconds=2)
+    calls = provider.read_pull_request.call_count
     completed = application.reconcile_awaiting_acceptance(("change-a",))
+    assert provider.read_pull_request.call_count == calls + 1
     assert completed[0].status.value == "completed"
     assert completed[0].completion_id is not None
     assert runtime.completion_receipt() is not None
@@ -5180,6 +5916,12 @@ def test_observe_acceptance_preserves_user_checkout_states(
 
 def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_completion(tmp_path: Path) -> None:
     application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     provider_calls_before_acceptance = provider.read_pull_request.call_count
     merge_oid = "e" * 40
     merged_at = "2026-08-03T23:00:00Z"
@@ -5262,6 +6004,10 @@ def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_comp
     assert provider.read_pull_request.call_count == provider_calls_before_acceptance + 1
     assert runner.call_count == 2
 
+    with pytest.raises(DeliveryAcceptanceWaitingError, match="retry-backoff"):
+        application.observe_acceptance("change-a")
+    assert runner.call_count == 2
+    now += timedelta(seconds=1)
     receipt = application.observe_acceptance("change-a")
 
     assert isinstance(receipt, CompletionReceipt)
@@ -5364,10 +6110,17 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
         ),
     )
     user_checkout_before = user_checkout_snapshot(repository)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     with pytest.raises(DeliveryAcceptanceWaitingError, match="still open and unmerged"):
         application.observe_acceptance("change-a")
     assert runtime.change_disposition() is None
     pull_request = pull_request.model_copy(update={"state": "closed"})
+    now += timedelta(seconds=1)
     with pytest.raises(PortfolioApplicationError, match="does not satisfy acceptance authority"):
         application.observe_acceptance("change-a")
     disposition = runtime.change_disposition()
@@ -5398,6 +6151,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert merged_observation is not None
     original_latch = runtime.latch_merged_pull_request(merged_observation)
     pull_request = pull_request.model_copy(update={"state": "open", "merged": False, "merged_at": None})
+    now += timedelta(seconds=2)
     with pytest.raises(PortfolioApplicationError, match="regressed from the established merged observation"):
         application.observe_acceptance("change-a")
     disposition = runtime.change_disposition()
@@ -8335,7 +9089,10 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
-def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path, *, interrupted: bool) -> None:
+@pytest.mark.parametrize("crash_owner", ["workspace", "runtime"])
+def test_submit_result_promotes_and_replays_exact_builder_result(
+    tmp_path: Path, crash_owner: str, *, interrupted: bool
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -8361,6 +9118,13 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
         ),
     )
 
+    application.publish_delivery_result(
+        "change-a",
+        PublishDeliveryResult(outcome_id=submission.outcome_id, claim_id=submission.claim_id, result=submission.result),
+    )
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 1
+    assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == 0
+
     if interrupted:
         runtime.publish_result(
             PublishDeliveryResult(
@@ -8375,13 +9139,22 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
                     message = "injected result persistence interruption"
                     raise OSError(message)
 
-            original_commit(transaction, failure=fail)
+            original_commit(
+                transaction,
+                failure=fail
+                if crash_owner == "workspace" or transaction._transaction_id.startswith("delivery-runtime-")
+                else None,
+            )
 
         with (
             patch.object(RuntimeTransaction, "commit", interrupted_commit),
             pytest.raises(OSError, match="injected result persistence"),
         ):
             application.submit_result(submission)
+        application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+        assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == (
+            1 if crash_owner == "runtime" else 0
+        )
     submitted = application.submit_result(submission)
     replayed = application.submit_result(submission)
 
@@ -8393,6 +9166,10 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
     assert submitted.result_id == "RESULT-SUBMIT"
     assert submitted.binding.stage is DeliveryStage.COMPLETED
     assert submitted.binding.results == (submission.result,)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.total_attempts == 0
+    assert episode.reset_count == 1
+    assert episode.accepted_attempt_ids == (launch.claim.attempt_id,)
     (receipt_path,) = (state_root / "changes/change-a/result-receipts/OUT-001").glob("*.json")
     assert json.loads(receipt_path.read_bytes())["claim_id"] == launch.claim.claim_id
     before = runtime.frontier_bytes()
@@ -8463,6 +9240,37 @@ def test_submit_result_replays_when_another_task_holds_the_claim(tmp_path: Path)
     assert replayed.result_id == "RESULT-FIRST"
     assert replayed.binding.active_claim is not None
     assert replayed.binding.active_claim.task_id == "TASK-002"
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            action="block",
+            outcome_id="OUT-001",
+            claim_id=second_launch.claim.claim_id,
+            block_id="second-task-failed",
+            reason="Second task check failed",
+            unblock_condition="Check prerequisite available",
+            expected_evidence=("check",),
+            locators=("TASK-002",),
+            resume_commit=completed_commit,
+            request=DeliveryRequest(
+                request_id="second-task-prerequisite",
+                kind=DeliveryRequestKind.ACTION,
+                outcome_id="OUT-001",
+                summary="Restore the check prerequisite.",
+            ),
+        ),
+    )
+    application.resolve_request(
+        "change-a",
+        "second-task-prerequisite",
+        DeliveryRequestResolution(response_text="Available", provenance="user-confirmed"),
+    )
+    application.submit_result(submission)
+    assert application.show_work_item_view("change-a", "outcome:OUT-001").readiness.reason_code == "retry-backoff"
+    episodes = RetryLedger(_state_root, "change-a").read().episodes
+    second_episode = next(item for item in episodes if item.key.task_lineage == "TASK-002")
+    assert second_episode.total_attempts == 1
+    assert second_episode.reset_count == 0
 
 
 def test_transition_publishes_change_branch_before_delivery_state(
@@ -8974,6 +9782,7 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     current = application.show_operator_context("change-a", "OUT-001")
     assert current.block is not None
     assert current.block.resolved
+    application._clock = lambda: "2026-08-04T00:00:01Z"
     resumed = application.acquire_frontier_work().launch_packages[0]
     plan_context = application.show_plan_context(
         "change-a",
@@ -9040,6 +9849,7 @@ def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_pat
         request.request_id,
         DeliveryRequestResolution(response_text="The prerequisite is repaired.", provenance="user-confirmed"),
     )
+    application._clock = lambda: "2026-08-04T00:00:01Z"
     resumed = application.acquire_frontier_work().launch_packages
 
     assert len(resumed) == 1
@@ -9483,19 +10293,22 @@ def test_repair_recovery_preserves_worktree_without_reacquisition(tmp_path: Path
     try:
         original_directory = os.fstat(directory_fd)
 
-        recovered = application.recover_integration_repair_claim(
-            "change-a",
-            first_claim.attempt_id,
-            first_claim.claim_id,
-        )
+        before = runtimes["change-a"].frontier_bytes()
+        custody = coordinator.show("change-a")
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.recover_integration_repair_claim(
+                "change-a",
+                first_claim.attempt_id,
+                first_claim.claim_id,
+            )
         acquired = application.acquire_frontier_work()
 
-        assert recovered.preserved_commit == reviewed
         assert os.path.samestat(worktree.stat(), original_directory)
         assert _git(worktree, "rev-parse", "HEAD") == reviewed
         assert acquired.launch_packages == ()
-        assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
-        assert runtimes["change-a"].integration_repair_claim() is None
+        assert runtimes["change-a"].frontier_bytes() == before
+        assert runtimes["change-a"].integration_repair_claim() == first_claim
+        assert coordinator.show("change-a") == custody
     finally:
         os.close(directory_fd)
 
@@ -9580,19 +10393,14 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert active[0][1].claim_id == failure.claim_id
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    recovered = _recover_claim(
-        application,
-        "change-a",
-        "OUT-001",
-        failure.attempt_id,
-        failure.claim_id,
-    )
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert runtimes["change-a"].active_claims() == ()
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        _recover_claim(application, "change-a", "OUT-001", failure.attempt_id, failure.claim_id)
+    assert runtimes["change-a"].frontier_bytes() == before
     assert not (state_root / "capacity.json").exists()
 
 
-def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
+def test_acquisition_retains_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -9611,13 +10419,11 @@ def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_p
     now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
-    assert recovered.failures == ()
-    assert len(recovered.recoveries) == 1
-    assert recovered.recoveries[0].status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.recoveries[0].claim_id == first.claim.claim_id
-    replacement = recovered.launch_packages[0]
-    assert replacement.claim.claim_id != first.claim.claim_id
-    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert len(recovered.failures) == 1
+    assert recovered.failures[0].code == DeliveryWorkerExclusionRequiredError.code
+    assert recovered.recoveries == ()
+    assert recovered.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
     assert coordinator.show("change-a").writer is None
     assert not (state_root / "capacity.json").exists()
 
@@ -9695,14 +10501,13 @@ def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_pa
     with patch.object(application._workspace_manager, "recovery_snapshot", side_effect=fail_change_a):
         recovered = application.acquire_frontier_work()
 
-    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
-    assert len(recovered.failures) == 1
+    assert recovered.launch_packages == ()
+    assert len(recovered.failures) == 2
     assert recovered.failures[0].change_id == "change-a"
     assert recovered.failures[0].claim_id is None
-    assert len(recovered.recoveries) == 1
-    assert recovered.recoveries[0].change_id == "change-b"
+    assert recovered.recoveries == ()
     assert runtimes["change-a"].active_claims()
-    assert runtimes["change-b"].active_claims()[0][1].claim_id != initial_by_change["change-b"].claim.claim_id
+    assert runtimes["change-b"].active_claims()[0][1] == initial_by_change["change-b"].claim
     assert coordinator.show("change-a").writer == initial_by_change["change-a"].writer
 
 
@@ -9718,18 +10523,27 @@ def test_malformed_claim_timestamp_does_not_block_independent_change(tmp_path: P
     )
     initial = application.acquire_frontier_work()
     initial_by_change = {package.change_id: package for package in initial.launch_packages}
-    _recover_claim(
-        application,
+    planner = initial_by_change["change-b"]
+    application.transition_delivery(
         "change-b",
-        initial_by_change["change-b"].outcome_id,
-        initial_by_change["change-b"].claim.attempt_id,
-        initial_by_change["change-b"].claim.claim_id,
+        BlockDelivery(
+            action="block",
+            outcome_id=planner.outcome_id,
+            claim_id=planner.claim.claim_id,
+            block_id="finished-planner",
+            reason="Fixture planner returned a completed blocker.",
+            unblock_condition="Fixture evidence is available.",
+            expected_evidence=("fixture",),
+            locators=("fixture",),
+        ),
     )
+    runtimes["change-b"].unblock("OUT-001", "finished-planner", "fixture evidence", ("fixture",))
     malformed_path = state_root / "changes/change-a/frontier.json"
     malformed = json.loads(malformed_path.read_bytes())
     malformed["bindings"][0]["active_claim"]["started_at"] = "not-a-timestamp"
     malformed_path.write_bytes((json.dumps(malformed, sort_keys=True, separators=(",", ":")) + "\n").encode())
 
+    application._clock = lambda: "2026-08-04T01:00:01Z"
     recovered = application.acquire_frontier_work()
 
     assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
@@ -9765,21 +10579,12 @@ def test_execution_capacity_allows_independent_builders_and_planners(tmp_path: P
 
 
 @pytest.mark.parametrize("stage", [DeliveryStage.PLANNING])
-def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Path, stage: DeliveryStage) -> None:
+def test_read_only_claim_recovery_exclusion_required(tmp_path: Path, stage: DeliveryStage) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
     package = application.acquire_frontier_work().launch_packages[0]
 
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit is None
-    assert runtimes["change-a"].active_claims() == ()
+    _assert_recovery_excluded(application, package)
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer is None
     assert not (state_root / "capacity.json").exists()
 
@@ -9849,21 +10654,12 @@ def test_acquisition_claims_dirty_builder_for_worker_triage(tmp_path: Path) -> N
     )
     assert context.launch == launch
     assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
-    recovered = _recover_claim(
-        application,
-        launch.change_id,
-        launch.outcome_id,
-        launch.claim.attempt_id,
-        launch.claim.claim_id,
-    )
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit is not None
-    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{launch.claim.attempt_id}"
-    assert _git(launch.worktree_path, "status", "--porcelain") == ""
+    _assert_recovery_excluded(application, launch)
+    assert _git(launch.worktree_path, "status", "--porcelain") != ""
     assert _git(launch.worktree_path, "rev-parse", "HEAD") == launch.last_reviewed_commit
-    assert _git(launch.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted source"
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    assert (launch.worktree_path / "product.txt").read_text() == "uncommitted source\n"
+    assert runtimes["change-a"].active_claims() == (("OUT-001", launch.claim),)
+    assert coordinator.show("change-a").writer == launch.writer
 
 
 def test_acquisition_rejects_dirty_planner_before_claim(tmp_path: Path) -> None:
@@ -9888,7 +10684,7 @@ def test_acquisition_rejects_dirty_planner_before_claim(tmp_path: Path) -> None:
     assert dirty_file.read_text(encoding="utf-8") == "uncommitted source\n"
 
 
-def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:
+def test_clean_build_recovery_exclusion_required_before_workspace_reset(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -9901,48 +10697,22 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     attempt_commit = _git(worktree, "rev-parse", "HEAD")
 
     with (
-        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after reset")),
-        pytest.raises(RuntimeError, match="injected"),
+        patch.object(runtimes["change-a"], "remove_active_claim") as remove_claim,
+        patch.object(application._workspace_manager, "restart") as restart,
     ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert coordinator.show("change-a").writer is None
-    assert (
-        _git(
-            worktree,
-            "rev-parse",
-            f"refs/owlbear/attempts/change-a/{package.claim.attempt_id}",
-        )
-        == attempt_commit
-    )
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit == attempt_commit
-    assert runtimes["change-a"].active_claims() == ()
+        _assert_recovery_excluded(application, package)
+    remove_claim.assert_not_called()
+    restart.assert_not_called()
+    assert _git(worktree, "rev-parse", "HEAD") == attempt_commit
+    assert coordinator.show("change-a").writer == package.writer
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert not (state_root / "capacity.json").exists()
-    with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
-        runtimes["change-a"].transition(
-            RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=package.claim.claim_id)
-        )
 
 
 @pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-reset"])
-def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path, interruption: str) -> None:
+def test_clean_build_recovery_exclusion_required_before_each_workspace_effect(
+    tmp_path: Path, interruption: str
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -9968,35 +10738,15 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
             raise RuntimeError(message)
         return result
 
-    with (
-        patch.object(manager, "_git", side_effect=interrupt_after_git),
-        pytest.raises(RuntimeError, match="injected workspace interruption"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.preserved_commit == rejected
-    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    with patch.object(manager, "_git", side_effect=interrupt_after_git):
+        _assert_recovery_excluded(application, package)
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == rejected
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
     assert not (state_root / "capacity.json").exists()
 
 
-def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tmp_path: Path) -> None:
+def test_dirty_build_recovery_exclusion_required_preserves_bytes_and_custody(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -10006,31 +10756,17 @@ def test_dirty_build_recovery_preserves_bytes_releases_custody_and_relaunches(tm
     product.write_text("uncommitted attempt\n", encoding="utf-8")
     branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
 
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit is not None
-    assert recovered.quarantine_ref == f"refs/owlbear/quarantine/change-a/{package.claim.attempt_id}"
-    assert _git(package.worktree_path, "rev-parse", recovered.quarantine_ref) == recovered.quarantine_commit
-    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    _assert_recovery_excluded(application, package)
+    assert _git(package.worktree_path, "status", "--porcelain") != ""
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
-    assert _git(package.worktree_path, "show", f"{recovered.quarantine_commit}:product.txt") == "uncommitted attempt"
-    assert product.read_text(encoding="utf-8") == "baseline\n"
-    relaunched = application.acquire_frontier_work().launch_packages[0]
-    assert relaunched.claim.claim_id != package.claim.claim_id
-    assert relaunched.writer is not None
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
+    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+    assert application.acquire_frontier_work().launch_packages == ()
     assert _git(package.worktree_path, "rev-parse", "HEAD") == branch_head
 
 
-def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) -> None:
+def test_dirty_build_recovery_exclusion_required_before_workspace_cleanup(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -10038,46 +10774,21 @@ def test_dirty_build_recovery_replays_after_workspace_cleanup(tmp_path: Path) ->
     package = application.acquire_frontier_work().launch_packages[0]
     dirty_file = package.worktree_path / "uncommitted.txt"
     dirty_file.write_text("preserve me\n", encoding="utf-8")
-    with (
-        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after cleanup")),
-        pytest.raises(RuntimeError, match="injected after cleanup"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    interrupted = coordinator.show("change-a")
-    quarantine = interrupted.dirty_worktree_quarantine
-    assert quarantine is not None
-    assert _git(package.worktree_path, "status", "--porcelain") == ""
+    with patch.object(runtimes["change-a"], "remove_active_claim") as remove_claim:
+        _assert_recovery_excluded(application, package)
+    remove_claim.assert_not_called()
+    assert coordinator.show("change-a").dirty_worktree_quarantine is None
+    assert _git(package.worktree_path, "status", "--porcelain") != ""
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
-    assert coordinator.show("change-a").writer is None
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit == quarantine.quarantine_commit
-    assert recovered.quarantine_ref == quarantine.quarantine_ref
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
-    relaunched = application.acquire_frontier_work().launch_packages[0]
-    assert relaunched.claim.claim_id != package.claim.claim_id
-    assert relaunched.writer is not None
+    assert coordinator.show("change-a").writer == package.writer
+    assert dirty_file.read_text() == "preserve me\n"
+    _assert_recovery_excluded(application, package)
+    assert application.acquire_frontier_work().launch_packages == ()
 
 
-def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
+def test_dirty_build_recovery_exclusion_required_across_application_restart(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
@@ -10089,37 +10800,15 @@ def test_dirty_build_recovery_replays_after_restart_before_writer_release(tmp_pa
     rejected = _git(worktree, "rev-parse", "HEAD")
     (worktree / "uncommitted.bin").write_bytes(b"preserve\x00\xff")
 
-    with (
-        patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected before release")),
-        pytest.raises(CoordinationConflictError, match="injected before release"),
-    ):
-        _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    interrupted = coordinator.show("change-a")
-    quarantine = interrupted.dirty_worktree_quarantine
-    assert quarantine is not None
-    assert quarantine.base_head == rejected
-    assert interrupted.writer == package.writer
-    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
-
-    recovered = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
-    assert recovered.quarantine_commit == quarantine.quarantine_commit
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
+    with patch.object(coordinator, "release") as release:
+        _assert_recovery_excluded(application, package)
+    release.assert_not_called()
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    _assert_recovery_excluded(reopened, package)
+    assert (worktree / "uncommitted.bin").read_bytes() == b"preserve\x00\xff"
+    assert _git(worktree, "rev-parse", "HEAD") == rejected
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
+    assert coordinator.show("change-a").writer == package.writer
 
 
 def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: Path) -> None:
@@ -10135,19 +10824,9 @@ def test_dirty_build_recovery_retains_custody_when_preservation_fails(tmp_path: 
         application._workspace_manager,
         "quarantine_dirty_worktree",
         side_effect=RuntimeError("injected preservation failure"),
-    ):
-        retained = _recover_claim(
-            application,
-            package.change_id,
-            package.outcome_id,
-            package.claim.attempt_id,
-            package.claim.claim_id,
-        )
-
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert retained.attention is not None
-    assert retained.attention.custody_retained
-    assert "injected preservation failure" in retained.attention.reason
+    ) as preserve:
+        _assert_recovery_excluded(application, package)
+    preserve.assert_not_called()
     assert dirty_file.read_bytes() == b"preserve\x00\xff"
     assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
     assert coordinator.show("change-a").writer == package.writer
@@ -10173,30 +10852,20 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     )
     coordinator.acquire("change-a", mismatched)
 
-    retained = _recover_claim(
-        application,
-        package.change_id,
-        package.outcome_id,
-        package.claim.attempt_id,
-        package.claim.claim_id,
-    )
-
-    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert retained.attention is not None
-    assert retained.attention.writer_claim_id == mismatched.claim_id
+    _assert_recovery_excluded(application, package)
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
     assert not (state_root / "capacity.json").exists()
 
 
-def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Path) -> None:
+def test_claim_recovery_exclusion_required_without_caller_confirmation(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
     package = application.acquire_frontier_work().launch_packages[0]
 
-    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.recover_claim(
             package.change_id,
             package.outcome_id,
@@ -10207,7 +10876,7 @@ def test_claim_recovery_requires_explicit_lost_worker_confirmation(tmp_path: Pat
     assert runtimes["change-a"].active_claims() == ((package.outcome_id, package.claim),)
 
 
-def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Path) -> None:
+def test_repair_change_diagnoses_but_exclusion_required_to_apply(tmp_path: Path) -> None:
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -10223,12 +10892,14 @@ def test_repair_change_proposes_and_applies_stale_builder_recovery(tmp_path: Pat
     assert proposal.outcome_id == package.outcome_id
     assert proposal.claim_id == package.claim.claim_id
 
-    with pytest.raises(PortfolioApplicationError, match="explicit lost-worker confirmation"):
+    assert "host-owned exclusion" in proposal.summary
+    assert "Custody and files remain unchanged" in proposal.consequence
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.repair_change("change-a", proposal.proposal_id)
 
-    applied = application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
-    assert applied.recovery is not None
-    assert runtimes["change-a"].active_claims() == ()
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.repair_change("change-a", proposal.proposal_id, confirmed_lost=True)
+    assert runtimes["change-a"].active_claims() == (("OUT-001", package.claim),)
 
 
 def test_repair_facade_matches_existing_repair_proposal_authority(tmp_path: Path) -> None:

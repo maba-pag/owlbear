@@ -292,6 +292,11 @@ DeliveryReadinessReason = Literal[
     "publication-wait",
     "checkpoint-pending",
     "report-store-unavailable",
+    "retry-backoff",
+    "retry-exhausted",
+    "acceptance-wait",
+    "retry-containment",
+    "retry-ledger-unavailable",
 ]
 
 
@@ -307,6 +312,9 @@ class DeliveryReadiness(_ProjectionModel):
     basis: DeliveryReadinessBasis
     action: WorkItemAction | None = None
     last_attempt: FinalizationAttempt | None = None
+    attempts: int = Field(default=0, ge=0)
+    next_eligible_at: str | None = None
+    stop_reason: str | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:
@@ -545,6 +553,17 @@ class WorkItemProjector:
                                 "diagnostic retirement cannot release custody or authorize retry."
                             ),
                             "review-repair": "Review repair requires a new Change commit before verification.",
+                            "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
+                            "retry-exhausted": (
+                                "Automatic recovery is exhausted; preserve state for an explicit decision."
+                            ),
+                            "acceptance-wait": (
+                                "Acceptance remains unchanged; observe later without repeating the effect."
+                            ),
+                            "retry-containment": "Automatic recovery is contained pending an owning decision.",
+                            "retry-ledger-unavailable": (
+                                "Retry authority could not be read; preserve state before continuing."
+                            ),
                         }.get(decision.reason_code, card.next_step),
                     }
                 )

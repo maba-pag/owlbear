@@ -450,7 +450,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
             setConfirmOpen(true);
           }}
         >
-          Recover confirmed-lost claim
+          Request claim recovery
         </PButton>
       )}
       {confirmOpen ? (
@@ -461,14 +461,15 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           dismissButton={false}
           disableBackdropClick
           onDismiss={() => setConfirmOpen(false)}
-          aria={{ role: "alertdialog", "aria-label": "Confirm lost claim" }}
+          aria={{ role: "alertdialog", "aria-label": "Request claim recovery" }}
         >
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">
-              Confirm lost claim
+              Request claim recovery
             </PHeading>
             <p className="text-sm">
-              Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.
+              This request does not stop a worker or prove it has stopped. Delivery keeps custody and files unchanged
+              unless supported host evidence proves every old writer is closed or excluded.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
@@ -482,7 +483,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
                 Cancel
               </PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>
-                {pendingAction === "recover" ? "Recovering..." : "Confirm lost and recover"}
+                {pendingAction === "recover" ? "Requesting..." : "Request recovery"}
               </PButton>
             </div>
           </ConfirmationContent>
@@ -869,6 +870,9 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
         </p>
       ) : null}
       <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
+        <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
+        <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
         <ReadinessBasisRows basis={readiness.basis} />
       </dl>
       {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}

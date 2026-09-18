@@ -80,6 +80,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
@@ -393,8 +394,11 @@ def test_integration_repair_claim_is_change_scoped_and_exact(tmp_path: Path) -> 
     assert runtime.require_integration_repair_claim("repair-attempt", "repair-claim") == claim
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
         runtime.require_integration_repair_claim("other-attempt", "repair-claim")
-    assert runtime.remove_integration_repair_claim("repair-attempt", "repair-claim") == claim
-    assert runtime.integration_repair_claim() is None
+    before = runtime.frontier_bytes()
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.remove_integration_repair_claim("repair-attempt", "repair-claim")
+    assert runtime.frontier_bytes() == before
+    assert runtime.integration_repair_claim() == claim
 
 
 def _task(
@@ -1903,7 +1907,7 @@ def _active_second_task(tmp_path: Path):
     return runtime, coordinator, coordination, initial, attempt_commit, first_result, tasks
 
 
-@pytest.mark.parametrize("instruction", ["retry", "planning", "design", "block"])
+@pytest.mark.parametrize("instruction", ["planning", "design", "block"])
 def test_implementation_nonadvance_persists_only_consumed_successor_state(
     tmp_path: Path,
     instruction: str,
@@ -2025,26 +2029,41 @@ def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(t
     assert coordinator.show("delivery-runtime").writer is not None
 
 
-def test_repeated_identical_retries_become_a_durable_block(tmp_path: Path) -> None:
+def test_repeated_retry_exclusion_required_preserves_claim_and_budget(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path, stages=(DeliveryStage.PLANNING, DeliveryStage.PLANNING, DeliveryStage.PLANNING))
+    _activate(runtime, "OUT-001", "retry-claim")
+    before = runtime.frontier_bytes()
+    for _attempt in range(3):
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            runtime.transition(
+                RetryDelivery(
+                    action="retry",
+                    outcome_id="OUT-001",
+                    claim_id="retry-claim",
+                    failure_code="planner-failed",
+                )
+            )
+    assert runtime.frontier_bytes() == before
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
 
-    for index in range(3):
-        claim_id = f"retry-claim-{index}"
-        _activate(runtime, "OUT-001", claim_id)
-        binding = runtime.transition(
+
+def test_clean_implementation_retry_exclusion_required(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    before = runtime.frontier_bytes()
+    custody = coordinator.show("delivery-runtime")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(
             RetryDelivery(
                 action="retry",
                 outcome_id="OUT-001",
-                claim_id=claim_id,
-                failure_code="planner-failed",
+                claim_id="claim-002",
+                abandoned_commit=attempt_commit,
+                attempt_id="attempt-002",
             )
         )
-
-    assert binding.retry_count == 3
-    assert binding.retry_fingerprint is not None
-    assert binding.block is not None
-    assert binding.block.resolved is False
-    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    assert runtime.frontier_bytes() == before
+    assert coordinator.show("delivery-runtime") == custody
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 
 @pytest.mark.parametrize(

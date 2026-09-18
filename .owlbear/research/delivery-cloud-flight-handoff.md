@@ -540,4 +540,5 @@ find issues beyond scoped agent proof; do not launch them inside the agent or wa
 - [GitHub task/PR controls](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github): new tasks, follow-ups and workflow approvals.
 - [Model selection](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model): select models/depth in the UI, not prompts.
 - [Environment](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment) and [MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers): cloud tools are not local VS Code bindings.
+
 - [Session persistence](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) and [security controls](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations): published checkpoints, permissions and review limits.

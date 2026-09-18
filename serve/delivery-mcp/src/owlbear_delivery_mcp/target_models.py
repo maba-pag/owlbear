@@ -330,7 +330,7 @@ class ClaimContextParams(ChangeParams):
 
 
 class RecoverClaimParams(ClaimContextParams):
-    """Validate explicit lost-worker confirmation for claim recovery."""
+    """Retain the legacy request shape; confirmation supplies no exclusion evidence."""
 
     confirmed_lost: Literal[True]
 

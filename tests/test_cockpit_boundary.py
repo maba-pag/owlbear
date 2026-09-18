@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
+
+from owlbear_delivery.work_items import DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
 # Mined from #1390: Cockpit excludes Delivery lifecycle and finalization routes.
@@ -34,6 +38,14 @@ _FINALIZATION_IMPORT_NAMES: frozenset[str] = frozenset(
         "finalize_change",
     }
 )
+
+
+def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None:
+    """Every core recovery/readiness reason is represented by the frontend contract."""
+    source = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type DeliveryReadinessReasonCode\s*=\s*(.*?);", source, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryReadinessReason))
 
 
 def _collect_forbidden_imports(

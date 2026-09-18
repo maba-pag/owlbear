@@ -87,7 +87,12 @@ export type DeliveryReadinessReasonCode =
   | "review-repair"
   | "publication-wait"
   | "checkpoint-pending"
-  | "report-store-unavailable";
+  | "report-store-unavailable"
+  | "retry-backoff"
+  | "retry-exhausted"
+  | "acceptance-wait"
+  | "retry-containment"
+  | "retry-ledger-unavailable";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
@@ -143,6 +148,9 @@ export interface DeliveryReadiness {
   basis: DeliveryReadinessBasis;
   action: WorkItemAction | null;
   last_attempt: FinalizationAttempt | null;
+  attempts?: number;
+  next_eligible_at?: string | null;
+  stop_reason?: string | null;
 }
 
 export interface WorkItemCardView {
@@ -851,6 +859,7 @@ export function clearWorkItemBlock(
   });
 }
 
+/** The legacy flag requests recovery; it is not host-owned worker exclusion evidence. */
 export function recoverWorkItemClaim(
   changeId: string,
   outcomeId: string,

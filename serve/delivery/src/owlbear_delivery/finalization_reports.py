@@ -52,6 +52,7 @@ class FinalizationFailureCode(StrEnum):
     MAINTAINED_CHECK_UNAVAILABLE = "maintained-check-unavailable"
     INDEPENDENT_REVIEW_FAILED = "independent-review-failed"
     INDEPENDENT_REVIEW_UNAVAILABLE = "independent-review-unavailable"
+    PROOF_MUTATED_WORKTREE = "proof-mutated-worktree"
 
 
 _SUMMARIES = {
@@ -61,6 +62,7 @@ _SUMMARIES = {
     FinalizationFailureCode.MAINTAINED_CHECK_UNAVAILABLE: "A maintained verification check could not be observed.",
     FinalizationFailureCode.INDEPENDENT_REVIEW_FAILED: "Independent verification review reported a finding.",
     FinalizationFailureCode.INDEPENDENT_REVIEW_UNAVAILABLE: "Independent verification review was unavailable.",
+    FinalizationFailureCode.PROOF_MUTATED_WORKTREE: "The maintained proof procedure mutated the managed workspace.",
 }
 
 
@@ -78,25 +80,48 @@ class ReportFinalizationFailure(_ReportModel):
     expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_diagnostic_sequence: int = Field(ge=0)
     attempt_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
-    category: Literal["custody-preflight", "maintained-check", "independent-review"]
+    category: Literal["custody-preflight", "maintained-check", "independent-review", "proof-mutation"]
     code: FinalizationFailureCode
     checks_state: Literal["not-run", "failed", "unknown"]
     check_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
     exit_status: int | None = Field(default=None, ge=-255, le=255)
     expected_workspace_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    procedure_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    proof_fingerprint_before: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    proof_fingerprint_after: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     paths: tuple[str, ...] = Field(default=(), max_length=32)
 
     @model_validator(mode="after")
     def _validate_structure(self) -> ReportFinalizationFailure:
-        prefix = "workspace-" if self.category == "custody-preflight" else f"{self.category}-"
+        prefix = {
+            "custody-preflight": "workspace-",
+            "maintained-check": "maintained-check-",
+            "independent-review": "independent-review-",
+            "proof-mutation": "proof-mutated-",
+        }[self.category]
         if not self.code.value.startswith(prefix):
             msg = "failure code must match its diagnostic category"
             raise ValueError(msg)
         if self.category == "custody-preflight" and self.expected_workspace_fingerprint is None:
             msg = "custody diagnostics require an observed workspace fingerprint"
             raise ValueError(msg)
-        if self.category != "custody-preflight" and self.paths:
+        if self.category not in {"custody-preflight", "proof-mutation"} and self.paths:
             msg = "dirty paths belong only to custody diagnostics"
+            raise ValueError(msg)
+        if self.category == "proof-mutation" and (
+            self.procedure_id is None
+            or self.proof_fingerprint_before is None
+            or self.proof_fingerprint_after is None
+            or self.proof_fingerprint_before == self.proof_fingerprint_after
+            or self.code is not FinalizationFailureCode.PROOF_MUTATED_WORKTREE
+        ):
+            msg = "proof mutation diagnostics require procedure and distinct before/after fingerprints"
+            raise ValueError(msg)
+        if self.category != "proof-mutation" and any(
+            value is not None
+            for value in (self.procedure_id, self.proof_fingerprint_before, self.proof_fingerprint_after)
+        ):
+            msg = "proof mutation evidence belongs only to proof-mutation diagnostics"
             raise ValueError(msg)
         for value in self.paths:
             path = PurePosixPath(value)
