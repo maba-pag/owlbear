@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-A: ready for review at source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`; external verification gaps remain.**
+**D03-B: partial implementation checkpoint; not accepted and not a prerequisite for C yet.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -635,11 +635,40 @@ Closeout, split into bounded selections:
 | Phase | Implementation revision | Actual proof/review | Remaining |
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
-| D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
-| D03-B | Not started | None | Durable budgets/backoff |
+| D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
+| D03-B | Implementation checkpoint `6c08be1653061a81b34f3d60be9c74c0e873837e` plus uncommitted follow-up fixes; user approval `5723189457` explicitly authorizes B only | Focused Python, frontend, build, format/lint and compile proof recorded below; no self-acceptance or broad-suite claim | Parent/coordinating session must obtain independent B review and decide readiness. External CI, CodeQL/automated review, host exclusion/dispatch proof and live activation remain outstanding |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
+
+### D03-B verification record — 2026-09-18
+
+- Approval boundary: user comment `5723189457` approves the presented B plan and requests Luna Max,
+  with work stopping after B. No commit, progress report, comment, service, live record or provider
+  mutation was made by this implementation pass.
+- Focused Python proof (all with `UV_PYTHON=3.14.3 uv run --locked` and `pytest -n1`):
+  `serve/delivery/tests/test_portfolio_application.py serve/delivery/tests/test_recovery.py -q`
+  passed **419 tests in 156.13s**; `serve/delivery/tests/test_retry_ledger.py -q` passed
+  **8 in 1.45s**; `serve/delivery/tests/test_delivery_runtime.py -q` passed **66 in 8.84s**;
+  `serve/delivery/tests/test_work_items.py tests/test_cockpit_boundary.py -q` passed **37 in
+  1.81s** with one pre-existing Starlette deprecation warning. The first post-containment run
+  exposed 10 regressions; the final scoped run above passed after preserving active readiness and
+  releasing only verified/resolved worker custody without replenishing episode budgets.
+- Frontend proof: `npm test -- --run` passed **315 tests in 97.51s**; `npm run build` succeeded
+  (Vite reported **3.33s**); pinned scoped Biome
+  `serve/cockpit/web/node_modules/.bin/biome check serve/cockpit/web/src/api/workItems.ts
+  serve/cockpit/web/src/components/WorkItemDetail.tsx serve/cockpit/web/src/components/workItemPresentation.ts
+  serve/cockpit/web/src/__tests__/WorkPortfolio.test.tsx` checked **4 files in 104ms**.
+- Static proof: `UV_PYTHON=3.14.3 uv run --locked ruff check
+  serve/delivery/src/owlbear_delivery/recovery.py serve/delivery/src/owlbear_delivery/portfolio_application.py
+  serve/delivery/src/owlbear_delivery/delivery_runtime.py serve/delivery/tests/test_retry_ledger.py` passed in
+  **0.04s**; the same four paths with `ruff format --check` passed in **0.06s**; `UV_PYTHON=3.14.3
+  uv run --locked python -m py_compile serve/delivery/src/owlbear_delivery/recovery.py
+  serve/delivery/src/owlbear_delivery/portfolio_application.py serve/delivery/src/owlbear_delivery/delivery_runtime.py
+  serve/delivery/src/owlbear_delivery/work_items.py serve/delivery/tests/test_retry_ledger.py` passed in **0.22s**.
+  `git diff --check` passed. No full suite,
+  MegaLinter, quality gate, E2E, external CI, CodeQL, independent B review, real host exclusion
+  proof or live activation was run or inferred.
 
 ### D03-P verification record
 
@@ -1029,5 +1058,33 @@ closed under the already required policy. A future request to release unverifiab
 include ambiguous/private data, reset exhausted budgets without accepted progress, or broaden
 offline repair would be a genuine decision and is **not** authorized by this plan.
 
-**Next request:** `Review D03-A using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.`
+### D03-B partial handoff — 2026-09-18
+
+User [comment 5723189457](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5723189457)
+approved the presented plan at `43b91fdf0c5707551aaadad1b567173183174b06` for B only.
+D03-A's independent current-head review is
+[comment 5723179195](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5723179195).
+The approved specification above is unchanged. GPT-5.6 Luna Max implemented the partial B checkpoint;
+it is not phase completion, package acceptance, or permission to advance.
+
+Published `6c08be1653061a81b34f3d60be9c74c0e873837e` adds the runtime-owned retry ledger,
+application reservation/accounting integration, shared readiness budget fields and frontend labels/
+rendering, with dedicated `serve/delivery/tests/test_retry_ledger.py` coverage. This checkpoint was
+published to preserve work before completion of proof and review repairs.
+
+Independent read-only Claude Opus 5 review of that exact checkpoint confirmed the initially dropped
+second-episode defect is fixed and worker/finalizer outcomes now have integration. Remaining review
+work at that revision includes exact reconciliation of interrupted reservations/result accounting,
+removing the inference that exhaustion itself authorizes an explicit observation, generated-ID
+uniqueness after a reset at a fixed clock, and preserving backoff during containment release.
+The final code must be checked against these findings rather than treating this interim list as
+an acceptance verdict. Ledger correctness alone is not proof of the application/worker paths.
+
+Secret scanning passed before that publication. `parallel_validation` on `6c08be1` reported **zero
+CodeQL alerts for Python and JavaScript**. Automated code review was unavailable because its
+configured model was absent; its wrapper success label is not a pass. Current pre-B external
+source/Cockpit/ecosystem checks were skipped; setup success is not product proof. Prior A tests are
+not B tests. No live records, production exclusion integration or C–E implementation is authorized.
+
+**Next request:** `Resume D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's partial checkpoint; stop after B.`
 This recommendation does not start B, approve a merge, waive host proof or authorize live activation.

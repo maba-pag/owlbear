@@ -655,13 +655,7 @@ class RetryLedger:
             )
 
         first = current is None
-        kind = (
-            "observation"
-            if policy is RetryFailureClass.ACCEPTANCE
-            else "original"
-            if first
-            else "repair"
-        )
+        kind = "observation" if policy is RetryFailureClass.ACCEPTANCE else "original" if first else "repair"
         total = current.total_attempts if current else 0
         repairs = current.repair_attempts if current else 0
         observations = current.observation_attempts if current else 0
@@ -707,9 +701,7 @@ class RetryLedger:
                 stop_code=RetryStopCode.ACCEPTANCE_WAIT,
             )
 
-        reserved_id = attempt_id or digest(
-            f"{key.identity}:{kind}:{total + 1}:{observed.isoformat()}".encode()
-        )
+        reserved_id = attempt_id or digest(f"{key.identity}:{kind}:{total + 1}:{observed.isoformat()}".encode())
         aliases = current.aliases if current else ()
         if operation_alias is not None and not any(
             alias.alias_kind == "operation" and alias.value == operation_alias for alias in aliases
@@ -807,11 +799,9 @@ class RetryLedger:
         delay = self.backoff_seconds[min(delay_index, len(self.backoff_seconds) - 1)]
         next_at = observed + timedelta(seconds=delay)
         attempts_limit_reached = (
-            episode.failure_class is RetryFailureClass.MECHANICAL
-            and episode.repair_attempts >= self.mechanical_repairs
+            episode.failure_class is RetryFailureClass.MECHANICAL and episode.repair_attempts >= self.mechanical_repairs
         ) or (
-            episode.failure_class is RetryFailureClass.TRANSIENT
-            and episode.total_attempts >= self.transient_attempts
+            episode.failure_class is RetryFailureClass.TRANSIENT and episode.total_attempts >= self.transient_attempts
         )
         acceptance_limit_reached = (
             episode.failure_class is RetryFailureClass.ACCEPTANCE
@@ -966,6 +956,22 @@ class RetryLedger:
             outcome_id=outcome_id,
         )
         return updated
+
+    def record_recovery_release_for_outcome(
+        self,
+        outcome_id: str,
+        *,
+        now: datetime | str | None = None,
+    ) -> tuple[RetryEpisodeSummary, ...]:
+        """Release pending worker reservations for one exact outcome without resetting budgets."""
+        summary, _ = self._read_with_bytes()
+        attempts = tuple(
+            attempt_id
+            for episode in summary.episodes
+            if episode.key.outcome_id == outcome_id
+            for attempt_id in _pending_attempts(episode)
+        )
+        return tuple(self.record_recovery_release(attempt_id, now=now) for attempt_id in attempts)
 
     def record_alias(
         self,

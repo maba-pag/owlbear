@@ -2950,6 +2950,23 @@ class PortfolioApplication:
                     now=self._clock(),
                 )
 
+    def _record_retry_release(
+        self,
+        runtime: DeliveryRuntime,
+        *,
+        attempt_id: str | None = None,
+        outcome_id: str | None = None,
+    ) -> None:
+        """Release verified custody without resetting the affected retry budget."""
+        if attempt_id is None and outcome_id is None:
+            return
+        with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+            ledger = runtime.retry_ledger(clock=self._clock())
+            if attempt_id is not None:
+                ledger.record_recovery_release(attempt_id, now=self._clock())
+            elif outcome_id is not None:
+                ledger.record_recovery_release_for_outcome(outcome_id, now=self._clock())
+
     def _require_finalization_attempt(
         self, runtime: DeliveryRuntime, request: FinalizeDeliveryChange, attempt: ChangeFinalizationAttempt
     ) -> None:
@@ -4433,6 +4450,8 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             binding = runtime.transition(request)
+            if getattr(request, "action", None) != "block":
+                self._record_retry_release(runtime, outcome_id=request.outcome_id)
             self._publish_delivery_state(
                 change_id,
                 runtime,
@@ -5511,6 +5530,7 @@ class PortfolioApplication:
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
                 resolved = runtime.resolve_request(request_id, resolution)
+                self._record_retry_release(runtime, outcome_id=resolved.outcome_id)
                 self._publish_delivery_state(
                     change_id,
                     runtime,
@@ -5531,6 +5551,7 @@ class PortfolioApplication:
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
                 binding = runtime.unblock(outcome_id, block_id, operator_note, locators)
+                self._record_retry_release(runtime, outcome_id=outcome_id)
                 self._publish_delivery_state(
                     change_id,
                     runtime,
@@ -5600,6 +5621,8 @@ class PortfolioApplication:
         action = decision.operation
         if action is None:
             return decision
+        if decision.status == "running":
+            return decision
         exact_head = decision.basis.candidate_head or decision.basis.source_head
         if exact_head is None:
             return decision
@@ -5665,9 +5688,11 @@ class PortfolioApplication:
             and episode.last_status in {"failed", "waiting"}
             and episode.explicit_observations == 0
         )
-        backoff_active = episode.next_eligible_at is not None and _timestamp(self._clock()) < _timestamp(
-            episode.next_eligible_at
-        ) and not explicit_acceptance
+        backoff_active = (
+            episode.next_eligible_at is not None
+            and _timestamp(self._clock()) < _timestamp(episode.next_eligible_at)
+            and not explicit_acceptance
+        )
         if backoff_active:
             updates.update(
                 {
@@ -6838,14 +6863,7 @@ class PortfolioApplication:
         episode = ledger.episode(key)
         if episode is None:
             return
-        reservation = next(
-            (
-                item
-                for item in episode.attempt_ids
-                if item == action.operation_id
-            ),
-            None,
-        )
+        reservation = next((item for item in episode.attempt_ids if item == action.operation_id), None)
         if reservation is None:
             return
         if result.kind == "completed":
@@ -8197,6 +8215,7 @@ class PortfolioApplication:
                 owner_observation_id=observation_id,
             )
             self._runtime(change_id).complete_recovery(intent, receipt)
+            self._record_retry_release(self._runtime(change_id), attempt_id=intent.invocation.request.attempt_id)
             self._coordinator.record_verified_exclusion(recovery_id)
             return receipt
 
@@ -8607,7 +8626,10 @@ class PortfolioApplication:
             procedure_class=candidate.role.value,
             original_candidate=original_candidate,
         )
-        return candidate.runtime.retry_ledger(clock=self._clock).reserve(
+        ledger = candidate.runtime.retry_ledger(clock=self._clock)
+        if candidate.binding.block is None or candidate.binding.block.resolved:
+            self._record_retry_release(candidate.runtime, outcome_id=candidate.binding.outcome_id)
+        return ledger.reserve(
             key,
             failure_class=RetryFailureClass.MECHANICAL,
             now=self._clock(),

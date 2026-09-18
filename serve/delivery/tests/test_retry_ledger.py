@@ -217,6 +217,44 @@ def test_unresolved_reservation_is_contained_until_an_outcome(tmp_path: Path) ->
     assert retry.allowed
 
 
+def test_verified_release_preserves_budget_for_worker_episode(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = RetryEpisodeKey.worker(
+        "change-a",
+        "builder-claim",
+        _HEAD,
+        contract_digest="c" * 64,
+        outcome_id="OUT-001",
+        task_lineage="TASK-001",
+        procedure_class="builder",
+        original_candidate="candidate-1",
+    )
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="worker-1")
+    ledger.record_failure(original, failure_code="builder-failed", now=_START)
+    repair = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="worker-2",
+    )
+
+    released = ledger.record_recovery_release_for_outcome("OUT-001", now=_START + timedelta(seconds=1))
+
+    assert len(released) == 1
+    assert released[0].total_attempts == 2
+    assert released[0].repair_attempts == 1
+    assert released[0].reset_count == 0
+    assert released[0].last_status == "succeeded"
+    next_repair = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="worker-3",
+    )
+    assert next_repair.allowed
+    assert repair.attempt_id == "worker-2"
+
+
 def test_reset_requires_accepted_progress_and_is_change_episode_scoped(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     affected = _engine_key(action="build")
