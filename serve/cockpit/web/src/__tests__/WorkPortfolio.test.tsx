@@ -5468,6 +5468,11 @@ it("labels every continuation readiness reason without blanking a new engine sta
     "engine-action-blocked",
     "target-sync-required",
     "claim-custody-unreconciled",
+    "retry-backoff",
+    "retry-exhausted",
+    "acceptance-wait",
+    "retry-containment",
+    "retry-ledger-unavailable",
   ];
   expect(new Set(continuationReasons.map((reason) => READINESS_REASON_LABELS[reason])).size).toBe(
     continuationReasons.length,
@@ -5489,6 +5494,25 @@ it("labels every continuation readiness reason without blanking a new engine sta
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
     unmount();
   }
+});
+
+it("renders durable retry readiness metadata", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "waiting",
+      reason_code: "retry-backoff",
+      attempts: 2,
+      next_eligible_at: "2026-08-04T00:00:02Z",
+      stop_reason: null,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector).toHaveTextContent("Automatic attempts");
+  expect(inspector).toHaveTextContent("2");
+  expect(inspector).toHaveTextContent("Next eligible at");
+  expect(inspector).toHaveTextContent("2026-08-04T00:00:02Z");
 });
 
 it("reports engine continuation custody as provenance without offering caller-confirmed recovery", async () => {

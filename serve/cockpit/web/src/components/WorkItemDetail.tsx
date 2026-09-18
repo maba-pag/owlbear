@@ -870,6 +870,9 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
         </p>
       ) : null}
       <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
+        <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
+        <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
         <ReadinessBasisRows basis={readiness.basis} />
       </dl>
       {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}

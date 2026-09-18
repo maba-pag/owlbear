@@ -182,6 +182,13 @@ from owlbear_delivery.recovery import (
     RecoveryInvocation,
     RecoveryInvocationRequest,
     RecoveryReceipt,
+    RetryEpisodeKey,
+    RetryFailureClass,
+    RetryLedger,
+    RetryLedgerConflictError,
+    RetryLedgerCorruptError,
+    RetryReservation,
+    RetryStopCode,
     UnavailableRecoveryEvidenceProvider,
     digest,
     invocation_path,
@@ -2878,6 +2885,7 @@ class PortfolioApplication:
                 and existing.observations == request.observations
                 and existing.review == request.review
             ):
+                self._record_finalization_retry_success(runtime, request.operation_id)
                 self._promote_finalized_external_head(change_id, existing.exact_head)
                 self._retire_finalization_report(runtime, existing.exact_head)
                 return existing
@@ -2921,9 +2929,26 @@ class PortfolioApplication:
                 _timestamp(self._clock()),
                 additional_participants=additional_participants,
             )
+        self._record_finalization_retry_success(runtime, request.operation_id)
         self._promote_finalized_external_head(change_id, finalization.exact_head)
         self._retire_finalization_report(runtime, finalization.exact_head)
         return finalization
+
+    def _record_finalization_retry_success(self, runtime: DeliveryRuntime, attempt_id: str) -> None:
+        """Close a reserved finalizer attempt after its durable receipt is published."""
+        with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+            runtime.retry_ledger(clock=self._clock).record_accepted_progress(attempt_id, now=self._clock())
+
+    def _record_worker_retry_success(self, runtime: DeliveryRuntime, outcome_id: str, claim_id: str) -> None:
+        """Close a reserved worker attempt after its claim-scoped output is accepted."""
+        with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+            binding = runtime.show_binding(outcome_id)
+            claim = binding.active_claim
+            if claim is not None and claim.claim_id == claim_id:
+                runtime.retry_ledger(clock=self._clock()).record_accepted_progress(
+                    claim.attempt_id,
+                    now=self._clock(),
+                )
 
     def _require_finalization_attempt(
         self, runtime: DeliveryRuntime, request: FinalizeDeliveryChange, attempt: ChangeFinalizationAttempt
@@ -2956,13 +2981,22 @@ class PortfolioApplication:
         """Persist structural diagnostics without granting lifecycle or proof authority."""
         with locked_roots((self._checkpoint_lock_root(request.change_id),)):
             try:
-                return FinalizationReportStore(self._target_root, request.change_id).record(
+                report = FinalizationReportStore(self._target_root, request.change_id).record(
                     request,
                     _timestamp(self._clock()),
                     lambda: self._validate_finalization_report_basis(request),
                 )
             except _FinalizationReadUnavailableError as exc:
                 return exc.readiness
+            if isinstance(report, FinalizationReport):
+                with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
+                    self._runtime(request.change_id).retry_ledger(clock=self._clock()).record_failure(
+                        request.attempt_key,
+                        failure_code=request.code.value,
+                        failure_detail=report.summary,
+                        now=report.observed_at,
+                    )
+            return report
 
     def _validate_finalization_report_basis(self, request: ReportFinalizationFailure) -> None:
         self._reconcile_runtimes()
@@ -4374,7 +4408,10 @@ class PortfolioApplication:
         request: PublishDeliveryPlan,
     ) -> DeliveryPlanCandidate:
         """Publish one validated Planning candidate through its exact runtime."""
-        return self._runtime(change_id, for_mutation=True).publish_plan(request)
+        runtime = self._runtime(change_id, for_mutation=True)
+        candidate = runtime.publish_plan(request)
+        self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
+        return candidate
 
     def publish_delivery_result(
         self,
@@ -4382,7 +4419,10 @@ class PortfolioApplication:
         request: PublishDeliveryResult,
     ) -> DeliveryResultCandidate:
         """Publish one validated Build result through its exact runtime."""
-        return self._runtime(change_id, for_mutation=True).publish_result(request)
+        runtime = self._runtime(change_id, for_mutation=True)
+        candidate = runtime.publish_result(request)
+        self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
+        return candidate
 
     def transition_delivery(
         self,
@@ -5544,7 +5584,142 @@ class PortfolioApplication:
             self._with_finalization_report(self._card_readiness(snapshot, card, basis, workspace_reason), reports)
             for card in cards
         )
+        decisions = tuple(
+            self._with_retry_readiness(snapshot, card, decision)
+            for card, decision in zip(cards, decisions, strict=True)
+        )
         return WorkItemProjector(snapshot, decisions)
+
+    def _with_retry_readiness(  # noqa: C901 - maps one persisted policy to the shared readiness contract.
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        card: WorkItemCardView,
+        decision: DeliveryReadiness,
+    ) -> DeliveryReadiness:
+        """Overlay durable retry state without creating or mutating a ledger on read."""
+        action = decision.operation
+        if action is None:
+            return decision
+        exact_head = decision.basis.candidate_head or decision.basis.source_head
+        if exact_head is None:
+            return decision
+        finalization = snapshot.frontier.finalization
+        key = RetryEpisodeKey.engine(
+            snapshot.contract.change_id,
+            action.value,
+            exact_head,
+            decision.basis.target_head,
+            finalization.finalization_id if finalization is not None else None,
+        )
+        if card.scope is WorkItemScope.OUTCOME and card.work_item_id != snapshot.contract.change_id:
+            outcome = next((item for item in snapshot.contract.outcomes if item.outcome_id == card.work_item_id), None)
+            binding = next((item for item in snapshot.frontier.bindings if item.outcome_id == card.work_item_id), None)
+            if outcome is not None and binding is not None:
+                task_lineage = binding.task_ids[0] if binding.task_ids else card.work_item_id
+                key = RetryEpisodeKey.worker(
+                    snapshot.contract.change_id,
+                    action.value,
+                    exact_head,
+                    contract_digest=contract_fingerprint(snapshot.contract),
+                    outcome_id=card.work_item_id,
+                    task_lineage=task_lineage,
+                    procedure_class=action.value,
+                    original_candidate=(
+                        binding.candidate.digest
+                        if binding.candidate is not None
+                        else binding.result_candidate.digest
+                        if binding.result_candidate is not None
+                        else card.work_item_id
+                    ),
+                    target_head=decision.basis.target_head,
+                    finalization_id=finalization.finalization_id if finalization is not None else None,
+                )
+        failure_class = (
+            RetryFailureClass.ACCEPTANCE
+            if action is WorkItemActionKind.OBSERVE_ACCEPTANCE
+            else RetryFailureClass.TRANSIENT
+            if action in {WorkItemActionKind.SYNC_TARGET, WorkItemActionKind.OBSERVE_ACCEPTANCE}
+            else RetryFailureClass.MECHANICAL
+        )
+        try:
+            episode = RetryLedger(self._target_root, snapshot.contract.change_id, clock=self._clock).episode(key)
+        except (OSError, RetryLedgerCorruptError, RuntimeError, ValueError):
+            return decision.model_copy(
+                update={
+                    "status": "unavailable",
+                    "reason_code": "retry-ledger-unavailable",
+                    "executable": False,
+                    "action": None,
+                    "stop_reason": "retry-ledger-unavailable",
+                }
+            )
+        if episode is None or episode.failure_class is not failure_class:
+            return decision
+        updates: dict[str, object] = {
+            "attempts": episode.total_attempts,
+            "next_eligible_at": episode.next_eligible_at,
+            "stop_reason": episode.stop_code.value if episode.stop_code is not None else None,
+        }
+        explicit_acceptance = (
+            failure_class is RetryFailureClass.ACCEPTANCE
+            and episode.last_status in {"failed", "waiting"}
+            and episode.explicit_observations == 0
+        )
+        backoff_active = episode.next_eligible_at is not None and _timestamp(self._clock()) < _timestamp(
+            episode.next_eligible_at
+        ) and not explicit_acceptance
+        if backoff_active:
+            updates.update(
+                {
+                    "status": "waiting",
+                    "reason_code": "retry-backoff",
+                    "executable": False,
+                    "action": None,
+                    "next_actor": WorkItemNextActor.AGENT,
+                }
+            )
+        elif episode.last_status in {"reserved", "contained"}:
+            updates.update(
+                {
+                    "status": "blocked",
+                    "reason_code": "retry-containment",
+                    "executable": False,
+                    "action": None,
+                    "next_actor": WorkItemNextActor.YOU,
+                    "stop_reason": RetryStopCode.CONTAINMENT.value,
+                }
+            )
+        elif episode.stop_code is RetryStopCode.EXHAUSTED:
+            updates.update(
+                {
+                    "status": "blocked",
+                    "reason_code": "retry-exhausted",
+                    "executable": False,
+                    "action": None,
+                    "next_actor": WorkItemNextActor.YOU,
+                }
+            )
+        elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
+            updates.update(
+                {
+                    "status": "ready",
+                    "reason_code": "acceptance-wait",
+                    "executable": decision.action is not None and decision.operation is not None,
+                    "action": decision.action,
+                    "next_actor": WorkItemNextActor.AGENT,
+                }
+            )
+        elif episode.stop_code is RetryStopCode.CONTAINMENT:
+            updates.update(
+                {
+                    "status": "blocked",
+                    "reason_code": "retry-containment",
+                    "executable": False,
+                    "action": None,
+                    "next_actor": WorkItemNextActor.YOU,
+                }
+            )
+        return decision.model_copy(update=updates)
 
     def _capture_action_basis(
         self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...], basis: DeliveryReadinessBasis
@@ -6558,6 +6733,31 @@ class PortfolioApplication:
             return DeliveryContinuationResult(
                 change_id=request.change_id, kind="waiting", reason_code=reason, readiness=readiness
             )
+        reservation = self._reserve_engine_attempt(runtime, readiness, self._continuation_operation_id(request))
+        if reservation is not None and not reservation.allowed:
+            retry_status = "waiting" if reservation.reason_code in {"retry-backoff", "acceptance-wait"} else "blocked"
+            retry_readiness = readiness.model_copy(
+                update={
+                    "status": retry_status,
+                    "reason_code": (
+                        reservation.reason_code
+                        if reservation.reason_code
+                        in {"retry-backoff", "retry-exhausted", "acceptance-wait", "retry-containment"}
+                        else "retry-exhausted"
+                    ),
+                    "executable": False,
+                    "action": None,
+                    "attempts": reservation.attempts,
+                    "next_eligible_at": reservation.next_eligible_at,
+                    "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
+                }
+            )
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="waiting" if retry_readiness.status == "waiting" else "unsupported",
+                reason_code=retry_readiness.reason_code,
+                readiness=retry_readiness,
+            )
         finalization = runtime.finalization()
         action = ChangeContinuationAction(
             operation_id=self._continuation_operation_id(request),
@@ -6579,6 +6779,86 @@ class PortfolioApplication:
         return DeliveryContinuationResult(
             change_id=request.change_id, kind="acquired", reason_code="ready", readiness=readiness, engine_action=action
         )
+
+    def _reserve_engine_attempt(
+        self,
+        runtime: DeliveryRuntime,
+        readiness: DeliveryReadiness,
+        attempt_id: str,
+    ) -> RetryReservation | None:
+        """Reserve a semantic engine attempt before continuation custody is published."""
+        if readiness.operation is None or readiness.basis.candidate_head is None:
+            return None
+        finalization = runtime.finalization()
+        key = RetryEpisodeKey.engine(
+            runtime.contract.change_id,
+            readiness.operation.value,
+            readiness.basis.candidate_head,
+            readiness.basis.target_head,
+            finalization.finalization_id if finalization is not None else None,
+        )
+        failure_class = (
+            RetryFailureClass.ACCEPTANCE
+            if readiness.operation is WorkItemActionKind.OBSERVE_ACCEPTANCE
+            else RetryFailureClass.TRANSIENT
+            if readiness.operation is WorkItemActionKind.SYNC_TARGET
+            else RetryFailureClass.MECHANICAL
+        )
+        ledger = runtime.retry_ledger(clock=self._clock)
+        episode = ledger.episode(key)
+        explicit = (
+            episode is not None
+            and episode.failure_class is RetryFailureClass.ACCEPTANCE
+            and episode.last_status in {"failed", "waiting"}
+            and episode.explicit_observations == 0
+        )
+        return ledger.reserve(
+            key,
+            failure_class=failure_class,
+            now=self._clock(),
+            attempt_id=attempt_id,
+            automatic=not explicit,
+            operation_alias=attempt_id,
+        )
+
+    def _record_engine_attempt_result(
+        self,
+        action: ChangeContinuationAction,
+        result: DeliveryEngineActionResult,
+    ) -> None:
+        """Account for a known engine result; unknown effects remain outside retry policy."""
+        key = RetryEpisodeKey.engine(
+            action.change_id,
+            action.kind,
+            action.exact_head,
+            action.target_head,
+            action.finalization_id,
+        )
+        ledger = RetryLedger(self._target_root, action.change_id, clock=self._clock)
+        episode = ledger.episode(key)
+        if episode is None:
+            return
+        reservation = next(
+            (
+                item
+                for item in episode.attempt_ids
+                if item == action.operation_id
+            ),
+            None,
+        )
+        if reservation is None:
+            return
+        if result.kind == "completed":
+            ledger.record_accepted_progress(reservation, now=self._clock())
+        elif result.kind == "waiting" or (
+            result.kind == "blocked" and result.reason_code != "engine-action-interrupted"
+        ):
+            ledger.record_failure(
+                reservation,
+                failure_code=result.reason_code,
+                failure_detail=(result.failure.detail if result.failure is not None else None),
+                now=self._clock(),
+            )
 
     def _read_engine_intent(self, request: ExecuteDeliveryChangeAction) -> ChangeContinuationAction:
         path = self._coordinator.continuation_record_path(request.change_id, request.operation_id)
@@ -6623,6 +6903,7 @@ class PortfolioApplication:
                 self._coordinator.finish_continuation_action(
                     action, (result.model_dump_json() + "\n").encode(), self._clock(), release=result.kind != "blocked"
                 )
+                self._record_engine_attempt_result(action, result)
                 return result
 
     def _execute_engine_action(self, action: ChangeContinuationAction) -> DeliveryEngineActionResult:
@@ -6792,9 +7073,51 @@ class PortfolioApplication:
                 reason_code="readiness-changed",
                 readiness=context.readiness,
             )
+        runtime = self._runtime(request.change_id)
+        finalizer_attempt_id = self._identity_factory()
+        key = RetryEpisodeKey.engine(
+            request.change_id,
+            WorkItemActionKind.FINALIZE.value,
+            context.change_head,
+            self._workspace_manager.observed_target_head(),
+            runtime.finalization().finalization_id if runtime.finalization() is not None else None,
+        )
+        reservation = runtime.retry_ledger(clock=self._clock).reserve(
+            key,
+            failure_class=RetryFailureClass.MECHANICAL,
+            now=self._clock(),
+            attempt_id=finalizer_attempt_id,
+            automatic=True,
+            operation_alias=finalizer_attempt_id,
+        )
+        if not reservation.allowed:
+            retry_status = "waiting" if reservation.reason_code in {"retry-backoff", "acceptance-wait"} else "blocked"
+            retry_reason = (
+                reservation.reason_code
+                if reservation.reason_code
+                in {"retry-backoff", "retry-exhausted", "acceptance-wait", "retry-containment"}
+                else "retry-exhausted"
+            )
+            blocked = readiness.model_copy(
+                update={
+                    "status": retry_status,
+                    "reason_code": retry_reason,
+                    "executable": False,
+                    "action": None,
+                    "attempts": reservation.attempts,
+                    "next_eligible_at": reservation.next_eligible_at,
+                    "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
+                }
+            )
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind="unsupported",
+                reason_code=blocked.reason_code,
+                readiness=blocked,
+            )
         attempt = ChangeFinalizationAttempt(
             writer=ChangeWriter(
-                attempt_id=self._identity_factory(),
+                attempt_id=finalizer_attempt_id,
                 claim_id=self._identity_factory(),
                 actor_id=request.host_id,
                 process_id=request.session_id,
@@ -8190,6 +8513,20 @@ class PortfolioApplication:
             claim = claim.model_copy(
                 update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
             )
+        reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id)
+        if reservation is not None and not reservation.allowed:
+            return DeliveryAcquisitionFailure(
+                change_id=candidate.change_id,
+                outcome_id=candidate.binding.outcome_id,
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                code="ERR_DELIVERY_RETRY_EXHAUSTED",
+                detail="Automatic worker repair is not eligible for this semantic failure episode.",
+                retry_condition=(
+                    "Wait for the durable retry eligibility time or record accepted progress for this exact episode; "
+                    "do not create a new allowance by renaming the task or operation."
+                ),
+            )
         self._register_recovery_invocation(
             candidate.runtime,
             claim.claim_id,
@@ -8223,6 +8560,14 @@ class PortfolioApplication:
                 writer = coordination.writer
             return self._launch_package(candidate, claim, source, writer)
         except (OSError, RuntimeError, ValueError) as exc:
+            if reservation is not None and reservation.attempt_id is not None:
+                with suppress(OSError, RuntimeError, ValueError):
+                    candidate.runtime.retry_ledger(clock=self._clock).record_failure(
+                        reservation,
+                        failure_code=getattr(exc, "code", PortfolioApplicationError.code),
+                        failure_detail=str(exc),
+                        now=self._clock(),
+                    )
             return DeliveryAcquisitionFailure(
                 change_id=candidate.change_id,
                 outcome_id=candidate.binding.outcome_id,
@@ -8237,6 +8582,39 @@ class PortfolioApplication:
                     else "Recover the exact failed claim after reconciling writer custody."
                 ),
             )
+
+    def _reserve_worker_attempt(
+        self,
+        candidate: _Candidate,
+        source: _PreparedSource,
+        attempt_id: str,
+    ) -> RetryReservation | None:
+        """Reserve worker/check repair before publishing a claim or writer."""
+        original_candidate = (
+            candidate.binding.candidate.digest
+            if candidate.binding.candidate is not None
+            else candidate.binding.result_candidate.digest
+            if candidate.binding.result_candidate is not None
+            else candidate.binding.outcome_id
+        )
+        key = RetryEpisodeKey.worker(
+            candidate.change_id,
+            f"{candidate.role.value}-claim",
+            source.source_head,
+            contract_digest=contract_fingerprint(candidate.runtime.contract),
+            outcome_id=candidate.binding.outcome_id,
+            task_lineage=candidate.task_id or candidate.binding.outcome_id,
+            procedure_class=candidate.role.value,
+            original_candidate=original_candidate,
+        )
+        return candidate.runtime.retry_ledger(clock=self._clock).reserve(
+            key,
+            failure_class=RetryFailureClass.MECHANICAL,
+            now=self._clock(),
+            attempt_id=attempt_id,
+            automatic=True,
+            operation_alias=attempt_id,
+        )
 
     def _current_launch(
         self,

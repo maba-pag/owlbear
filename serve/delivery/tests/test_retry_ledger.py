@@ -1,0 +1,252 @@
+"""Focused D03-B durable retry ledger checks."""
+
+# ruff: noqa: SLF001 - CAS assertions intentionally exercise the ledger's transaction boundary.
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+
+from owlbear_delivery.recovery import (
+    RetryEpisodeKey,
+    RetryFailureClass,
+    RetryLedger,
+    RetryLedgerConflictError,
+    RetryLedgerCorruptError,
+    RetryLedgerSummary,
+    RetryStopCode,
+)
+
+_START = datetime(2026, 8, 4, tzinfo=UTC)
+_HEAD = "a" * 40
+_TARGET = "b" * 40
+
+
+def _engine_key(change_id: str = "change-a", action: str = "build") -> RetryEpisodeKey:
+    return RetryEpisodeKey.engine(change_id, action, _HEAD, _TARGET, "final-1")
+
+
+def test_semantic_identity_aliases_and_restart_persistence(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    same_key = _engine_key()
+
+    assert key.identity == same_key.identity
+    reservation = ledger.reserve(
+        key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now=_START,
+        attempt_id="operation-original",
+        operation_alias="session-original",
+    )
+    episode = ledger.record_failure(reservation, failure_code="builder-failed", now=_START)
+    episode = ledger.record_alias(key, alias_kind="commit", value=_HEAD, now=_START)
+
+    restarted = RetryLedger(tmp_path, "change-a").read()
+    restored = restarted.episodes[0]
+    assert restored.episode_id == key.identity
+    assert restored.attempt_ids == ("operation-original",)
+    assert {alias.value for alias in episode.aliases} == {"session-original", _HEAD}
+    assert {alias.value for alias in restored.aliases} == {"session-original", _HEAD}
+    assert restored.next_eligible_at == (_START + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+
+
+def test_duplicate_reservation_is_idempotent_and_mechanical_budget_is_bounded(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+
+    original = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START,
+        attempt_id="attempt-1",
+        operation_alias="operation-1",
+    )
+    assert ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START,
+        attempt_id="attempt-1",
+        operation_alias="operation-1-replayed",
+    ).replayed
+    first_failure = ledger.record_failure(original, failure_code="repair-1", now=_START)
+    assert first_failure.repair_attempts == 0
+    assert ledger.record_failure(original, failure_code="different-prose", now=_START).outcome_ids == (
+        first_failure.outcome_ids
+    )
+    with pytest.raises(RetryLedgerConflictError, match="original retry attempt"):
+        ledger.reserve(
+            key,
+            failure_class="mechanical",
+            now=_START,
+            attempt_id="attempt-original-again",
+            original=True,
+        )
+
+    early = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(milliseconds=500),
+        attempt_id="attempt-2",
+    )
+    assert not early.allowed
+    assert early.reason_code == RetryStopCode.BACKOFF.value
+
+    repair_one = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="attempt-2",
+    )
+    ledger.record_failure(repair_one, failure_code="repair-2", now=_START + timedelta(seconds=1))
+    repair_two = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=3),
+        attempt_id="attempt-3",
+    )
+    ledger.record_failure(repair_two, failure_code="repair-3", now=_START + timedelta(seconds=3))
+
+    exhausted = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=10),
+        attempt_id="attempt-4",
+    )
+    assert not exhausted.allowed
+    assert exhausted.reason_code == RetryStopCode.EXHAUSTED.value
+    assert exhausted.attempts == 3
+    assert ledger.episode(key).repair_attempts == 2
+
+
+def test_transient_budget_and_cas_reject_stale_summary(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="sync-target")
+    _, previous = ledger._read_with_bytes()
+
+    first = ledger.reserve(key, failure_class="transient", now=_START, attempt_id="transient-1")
+    ledger.record_failure(first, failure_code="read-failed", now=_START)
+    second = ledger.reserve(
+        key,
+        failure_class="transient",
+        now=_START + timedelta(seconds=1),
+        attempt_id="transient-2",
+    )
+    ledger.record_failure(second, failure_code="read-failed", now=_START + timedelta(seconds=1))
+    third = ledger.reserve(
+        key,
+        failure_class="transient",
+        now=_START + timedelta(seconds=3),
+        attempt_id="transient-3",
+    )
+    episode = ledger.record_failure(third, failure_code="read-failed", now=_START + timedelta(seconds=3))
+    assert episode.total_attempts == 3
+    assert episode.stop_code is RetryStopCode.EXHAUSTED
+
+    stale = RetryLedgerSummary.empty("change-a").model_copy(update={"version": 1})
+    with pytest.raises(RetryLedgerConflictError):
+        ledger._commit_summary(previous, stale)
+
+
+def test_acceptance_wait_allows_explicit_observation_without_reset(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="observe-acceptance")
+    at = _START
+
+    for index in range(3):
+        reservation = ledger.reserve(
+            key,
+            failure_class="acceptance",
+            now=at,
+            attempt_id=f"observation-{index}",
+        )
+        episode = ledger.record_failure(reservation, failure_code="unchanged", now=at)
+        at = at + timedelta(seconds=1 if index == 0 else 2)
+
+    assert episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT
+    assert episode.observation_attempts == 3
+    assert episode.total_attempts == 3
+
+    automatic = ledger.reserve(
+        key,
+        failure_class="acceptance",
+        now=at + timedelta(days=1),
+        attempt_id="observation-automatic-4",
+    )
+    assert not automatic.allowed
+    assert automatic.reason_code == RetryStopCode.ACCEPTANCE_WAIT.value
+
+    explicit = ledger.reserve(
+        key,
+        failure_class="acceptance",
+        now=at + timedelta(days=1),
+        attempt_id="observation-explicit",
+        automatic=False,
+    )
+    assert explicit.allowed
+    updated = ledger.record_success(explicit, now=at + timedelta(days=1))
+    assert updated.total_attempts == 3
+    assert updated.explicit_observations == 1
+    assert updated.reset_count == 0
+
+
+def test_unresolved_reservation_is_contained_until_an_outcome(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="in-flight")
+
+    blocked = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=10),
+        attempt_id="replacement",
+    )
+    assert not blocked.allowed
+    assert blocked.reason_code == RetryStopCode.CONTAINMENT.value
+    assert ledger.episode(key).last_status == "contained"
+
+    ledger.record_failure(first, failure_code="known-result", now=_START + timedelta(seconds=10))
+    retry = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=11),
+        attempt_id="replacement",
+    )
+    assert retry.allowed
+
+
+def test_reset_requires_accepted_progress_and_is_change_episode_scoped(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    affected = _engine_key(action="build")
+    unrelated = _engine_key(action="check")
+    first = ledger.reserve(affected, failure_class="mechanical", now=_START, attempt_id="affected-1")
+    ledger.record_failure(first, failure_code="builder-failed", now=_START)
+    other = ledger.reserve(unrelated, failure_class="mechanical", now=_START, attempt_id="unrelated-1")
+    ledger.record_failure(other, failure_code="check-failed", now=_START)
+
+    with pytest.raises(ValueError, match="accepted progress"):
+        ledger.reset(affected, accepted_progress=False, now=_START)
+
+    reset = ledger.reset(affected, accepted_progress=True, now=_START + timedelta(seconds=1))
+    assert reset.total_attempts == 0
+    assert reset.reset_count == 1
+    assert reset.attempt_ids == ("affected-1",)
+    assert ledger.episode(unrelated).total_attempts == 1
+    next_attempt = ledger.reserve(
+        affected,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="affected-2",
+    )
+    assert next_attempt.allowed
+
+
+def test_corrupt_summary_fails_closed(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    ledger.summary_path.parent.mkdir(parents=True)
+    ledger.summary_path.write_bytes(b"not-json")
+
+    with pytest.raises(RetryLedgerCorruptError):
+        ledger.read()

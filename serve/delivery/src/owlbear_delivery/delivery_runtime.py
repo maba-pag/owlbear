@@ -31,6 +31,7 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryIntent,
     RecoveryReceipt,
+    RetryLedger,
     digest,
     encoded,
     journal_path,
@@ -42,6 +43,7 @@ from owlbear_delivery.runtime_transaction import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery.change_workspace import ChangeWorkspaceManager
@@ -1519,6 +1521,10 @@ class DeliveryRuntime:
     def authority_digest(self) -> str:
         """Return the canonical admitted contract digest bound into task results."""
         return self._authority_digest
+
+    def retry_ledger(self, *, clock: Callable[[], datetime | str] | None = None) -> RetryLedger:
+        """Return the Change-scoped durable retry authority."""
+        return RetryLedger(self._target_root, self._contract.change_id, clock=clock)
 
     @property
     def contract(self) -> DeliveryContract:
