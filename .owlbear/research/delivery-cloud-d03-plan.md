@@ -636,15 +636,15 @@ Closeout, split into bounded selections:
 | --- | --- | --- | --- |
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
-| D03-B | Resumed from `cc11df10b851a145f77912e866ff9eb4ff4d3d48` under user comment `5723694522`; approved specification remains `43b91fdf0c5707551aaadad1b567173183174b06` | Current repair proof below; earlier 419/8/66/37/315 counts are prior-source evidence, not acceptance of this candidate | Partial: coordinating owner must review remaining integration gaps and obtain independent review; do not start C–E |
+| D03-B | Source `3864bafade9a33f2637cdd116b75d0b764cc790f`, following resume repair `0b37ca2dca6c745f1352f060da4e010da27e484b` above `cc11df10b851a145f77912e866ff9eb4ff4d3d48`; user resume comment `5723694522`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Focused repair proof below; independent Opus 5 confirmed the reported source findings fixed at the final source. Earlier counts are not a current phase pass. | Partial: owner/ledger transaction coupling, legacy allowance reconciliation and observation integration block B completion and C. Final CodeQL timed out; automated review unavailable. |
 | D03-C | Not started | None | Nonterminal preservation/proof repair |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
 
 ### D03-B resumed verification — 2026-09-18
 
-Implementation source: the working changes above `cc11df1`; publication revision is assigned by the
-coordinating session, not invented here. Approved contract and phase boundaries are unchanged.
+Implementation source: `3864bafade9a33f2637cdd116b75d0b764cc790f`, preserving the interrupted
+`cc11df1` work. Approved contract and phase boundaries are unchanged.
 
 - Preserved the interrupted fixed-clock generated-ID repair and proved it. The first discriminating
   application checks failed at the interrupted head: both engine-result crash/replay variants left
@@ -745,10 +745,53 @@ explicit-observation entry and automatic background acceptance-observer budget c
 unverified. These are B completion questions, not
 permission to start E, reinterpret the approved contract, or enable live services. Independent
 current-candidate review, external CI/pinned Node and host proof remain with their existing owners.
-The coordinating session reports the latest `cc11df1` source, agent, Cockpit and setup CI runs as
-`action_required`; none is a phase pass. Its independent Opus 5 audit targets committed `cc11df1`,
-not these uncommitted repairs, so that audit cannot certify this candidate without a scoped recheck.
+The coordinating session inspected the `cc11df1` source, agent, Cockpit and setup CI runs:
+all were `action_required`; none is a phase pass. Historical `dev` failure logs were also inspected
+and do not provide B proof. The independent current-source recheck is recorded below.
 No full suite, MegaLinter, quality aggregate, real provider mutation, live state or activation was run.
+
+#### Resume review and next completion boundary
+
+Independent read-only Claude Opus 5 reviewer `d03-b-audit` compared B against A's reviewed
+`43b91fd`, inspected the interrupted checkpoint, then reviewed the repairs and bound its final
+source verification to `3864bafade9a33f2637cdd116b75d0b764cc790f`. The reviewer confirmed these
+reported defects fixed:
+
+- worker readiness used a different role/task identity from reservation;
+- publishing an unaccepted candidate reset the episode;
+- exhausted state inferred permission for an extra explicit observation;
+- ordinary acquisition cleared containment, and containment discarded persisted backoff;
+- resumed matching combined distinct engine heads, targets and finalizations;
+- retry bookkeeping failure after a committed block skipped publication.
+
+The latent timestamp-versus-clock-callable error was also corrected. The reviewer ran no tests;
+the implementing worker ran the focused checks recorded above. This confirms the specific
+repairs, **not B completeness or acceptance**.
+
+Changed-file secret scans passed before both source commits. `parallel_validation` on `0b37ca2`
+reported **zero Python CodeQL alerts**. The required rerun after the final source changes at
+`3864baf` **timed out**, with an explicit instruction not to retry in this environment. The earlier
+scan is not a final-source scan pass. Automated review was unavailable on both calls because its
+configured model was absent; the wrapper's success label is not a pass. External verification
+must obtain the outstanding final-source security check.
+
+The next B session must resolve these concrete obligations before requesting phase acceptance:
+
+1. Couple owner reservations/receipts and ledger accounting through the existing transaction
+   authority, or prove the approved exact reconciliation boundary at every crash point. Retain an
+   uncertain reservation; a missing intent is not proof that dispatch never began. Test accepted
+   worker/finalizer/engine outcomes across restart without requiring the caller to reconstruct history.
+2. Trace and reconcile nonzero legacy per-binding retry counters into the single allowance. A new
+   empty ledger must not grant extra attempts for an existing episode; add legacy-state fixtures.
+3. Trace every automatic acceptance-observation entry, including background publication observation,
+   and apply/prove the persisted three-observation budget and backoff without disabling pure diagnosis.
+4. Implement the approved bounded later explicit observation through a supported, distinguishable
+   continuation path and its actual registered consumers. It must not reset the failure budget,
+   infer authorization from exhaustion, or treat a caller assertion as human approval.
+
+These are **B completion blockers**, not presumed safe containment and not work reassigned to E.
+The integration owner must not start C or accept B on the strength of repaired findings alone.
+No source changes followed this exact-head review; the final commit updates only this progress record.
 
 ### D03-B prior-source verification record — 2026-09-18
 
@@ -1195,5 +1238,7 @@ configured model was absent; its wrapper success label is not a pass. Current pr
 source/Cockpit/ecosystem checks were skipped; setup success is not product proof. Prior A tests are
 not B tests. No live records, production exclusion integration or C–E implementation is authorized.
 
-**Next request:** `Resume D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's partial checkpoint; stop after B.`
-This recommendation does not start B, approve a merge, waive host proof or authorize live activation.
+**Next request:** `Resume D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's recorded completion blockers; stop after B.`
+Recommended implementation model: **GPT-6 Astra, High**, for the unresolved cross-owner transactional
+and observation-authority boundaries, followed by independent Opus 5 review. This recommendation
+does not start another session, authorize C, approve a merge, waive host proof or authorize activation.
