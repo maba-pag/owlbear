@@ -408,6 +408,17 @@ class RetryAttemptOutcome(_RecoveryModel):
     stop_code: RetryStopCode | None = None
 
 
+class RetryOwnerResult(_RecoveryModel):
+    """Exact result evidence committed by the owner with its authority change."""
+
+    schema_version: Literal[1] = 1
+    attempt_id: str
+    episode_id: str
+    accepted: bool
+    observed_at: str
+    failure_code: str = "worker-blocked"
+
+
 class RetryEpisodeSummary(_RecoveryModel):
     """CAS-projected state for one semantic episode."""
 
@@ -428,6 +439,7 @@ class RetryEpisodeSummary(_RecoveryModel):
     next_eligible_at: str | None = Field(default=None, max_length=64)
     stop_code: RetryStopCode | None = None
     reset_count: int = Field(default=0, ge=0)
+    legacy_failures: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _validate_identity(self) -> Self:
@@ -535,10 +547,6 @@ class RetryLedger:
     def read(self) -> RetryLedgerSummary:
         """Read the current summary without creating or mutating ledger state."""
         try:
-            RuntimeTransaction.recover_all(self.runtime_root)
-        except (OSError, RuntimeError, ValueError) as exc:
-            raise RetryLedgerCorruptError from exc
-        try:
             content = self.summary_path.read_bytes()
         except FileNotFoundError:
             return RetryLedgerSummary.empty(self.change_id)
@@ -559,6 +567,97 @@ class RetryLedger:
         if key.change_id != self.change_id:
             raise ValueError("retry key belongs to another Change")
         return _matching_episode(self.read(), key)
+
+    def import_legacy_failures(
+        self, key: RetryEpisodeKey, count: int, *, now: datetime | str
+    ) -> RetryEpisodeSummary | None:
+        """Carry a binding's historical failures forward, never as a new allowance."""
+        if count <= 0:
+            return self.episode(key)
+        summary, previous = self._read_with_bytes()
+        current = _matching_episode(summary, key)
+        if current is not None and (current.legacy_failures >= count or current.reset_count > 0):
+            return current
+        observed = _retry_time(now)
+        if current is None:
+            current = RetryEpisodeSummary(episode_id=key.identity, key=key, failure_class=RetryFailureClass.MECHANICAL)
+        total = current.total_attempts + count - current.legacy_failures
+        exhausted = total >= self.mechanical_repairs + 1
+        episode = current.model_copy(
+            update={
+                "total_attempts": total,
+                "repair_attempts": max(0, total - 1),
+                "legacy_failures": count,
+                "last_status": "failed",
+                "last_failure_at": _retry_timestamp(observed),
+                "next_eligible_at": None if exhausted else _retry_timestamp(observed + timedelta(seconds=2)),
+                "stop_code": RetryStopCode.EXHAUSTED if exhausted else None,
+            }
+        )
+        self._commit_summary(
+            previous,
+            summary.model_copy(
+                update={
+                    "version": summary.version + 1,
+                    "updated_at": _retry_timestamp(observed),
+                    "episodes": _replace_episode(summary.episodes, episode),
+                }
+            ),
+        )
+        return episode
+
+    def owner_result_participants(
+        self, attempt_id: str, *, accepted: bool, now: datetime | str, failure_code: str = "worker-blocked"
+    ) -> tuple[TransactionParticipant, ...]:
+        """Prepare evidence for the owner's transaction, not a separate accounting write."""
+        episode = _episode_for_attempt(self.read(), attempt_id)
+        if episode is None:
+            return ()
+        result = RetryOwnerResult(
+            attempt_id=attempt_id,
+            episode_id=episode.episode_id,
+            accepted=accepted,
+            observed_at=_retry_timestamp(_retry_time(now)),
+            failure_code=failure_code,
+        )
+        return (
+            TransactionParticipant(
+                self.runtime_root, self._directory / "owner-results" / f"{attempt_id}.json", encoded(result)
+            ),
+        )
+
+    def reconcile_owner_results(self) -> None:
+        """Finish accounting from exact durable receipts, without caller replay or refund."""
+        for episode in self.read().episodes:
+            for attempt_id in _pending_attempts(episode):
+                path = self.runtime_root / self._directory / "owner-results" / f"{attempt_id}.json"
+                try:
+                    result = RetryOwnerResult.model_validate_json(path.read_bytes())
+                except FileNotFoundError:
+                    continue
+                if result.attempt_id != attempt_id or result.episode_id != episode.episode_id:
+                    raise RetryLedgerCorruptError
+                if result.accepted:
+                    self.record_accepted_progress(attempt_id, now=result.observed_at)
+                else:
+                    self.record_failure(attempt_id, failure_code=result.failure_code, now=result.observed_at)
+
+    def pending_attempts(self) -> tuple[RetryAttempt, ...]:
+        """Read unresolved immutable reservations for exact owner reconciliation."""
+        pending = []
+        for episode in self.read().episodes:
+            for attempt_id in _pending_attempts(episode):
+                attempt = RetryAttempt.model_validate_json(
+                    read_record(self.runtime_root, self._attempts_path / f"{attempt_id}.json")
+                )
+                if (
+                    attempt.episode_id != episode.episode_id
+                    or attempt.attempt_id != attempt_id
+                    or attempt.key != episode.key
+                ):
+                    raise RetryLedgerCorruptError
+                pending.append(attempt)
+        return tuple(pending)
 
     def reserve(  # noqa: C901, PLR0912, PLR0913, PLR0911, PLR0915 - bounded retry policy.
         self,
@@ -778,6 +877,7 @@ class RetryLedger:
                 else None
             ),
             reset_count=current.reset_count if current else 0,
+            legacy_failures=current.legacy_failures if current else 0,
         )
         self._commit_summary(
             previous,

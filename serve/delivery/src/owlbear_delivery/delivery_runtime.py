@@ -2549,6 +2549,7 @@ class DeliveryRuntime:
                 frontier_participant,
                 self._pending_publication_participant(replacement, self.publication_base_digest(previous)),
                 *additional_participants,
+                *self.retry_ledger().owner_result_participants(request.operation_id, accepted=True, now=finalized_at),
             ),
         ).commit()
         return receipt
@@ -3194,7 +3195,9 @@ class DeliveryRuntime:
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return candidate
 
-    def transition(self, request: DeliveryTransition) -> OutcomeAuthorityBinding:
+    def transition(
+        self, request: DeliveryTransition, *, retry_observed_at: datetime | str | None = None
+    ) -> OutcomeAuthorityBinding:
         """Apply one worker-owned mechanical transition instruction."""
         frontier, previous = self._read()
         _require_change_mutable(frontier, "transition")
@@ -3230,6 +3233,15 @@ class DeliveryRuntime:
                     self._target_root,
                     self._result_receipt_path(binding.outcome_id, candidate.digest),
                     _model_content(candidate),
+                ),
+            )
+        if isinstance(request, (AdvanceDelivery, BlockDelivery)) and binding.active_claim is not None:
+            result_participants = (
+                *result_participants,
+                *self.retry_ledger().owner_result_participants(
+                    binding.active_claim.attempt_id,
+                    accepted=isinstance(request, AdvanceDelivery),
+                    now=retry_observed_at or datetime.now(UTC),
                 ),
             )
         self._replace(
@@ -3319,7 +3331,7 @@ class DeliveryRuntime:
                 return binding
             _conflict("requestless block is not clearable")
         cleared = block.model_copy(update={"resolution_note": operator_note, "resolution_locators": locators})
-        updated = binding.model_copy(update={"block": cleared, "retry_fingerprint": None, "retry_count": 0})
+        updated = binding.model_copy(update={"block": cleared})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
 
@@ -3546,8 +3558,6 @@ class DeliveryRuntime:
                     "return_context": context,
                     "recovery_attention": None,
                     "block": None,
-                    "retry_fingerprint": None,
-                    "retry_count": 0,
                 }
             )
         if binding.stage == DeliveryStage.PLANNING and request.source_boundary is None:
@@ -3603,8 +3613,6 @@ class DeliveryRuntime:
                 "recovery_attention": None,
                 "block": block,
                 "requests": requests,
-                "retry_fingerprint": None,
-                "retry_count": 0,
             }
         )
 
@@ -3997,8 +4005,6 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
             "recovery_attention": None,
             "block": None,
             "requests": (),
-            "retry_fingerprint": None,
-            "retry_count": 0,
         }
     )
 

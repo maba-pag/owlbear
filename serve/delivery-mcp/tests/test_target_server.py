@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
+from serve.delivery.tests.test_portfolio_application import acceptance_budget_case
 from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 import owlbear_delivery_mcp.server as live_server
@@ -58,6 +59,26 @@ from owlbear_delivery_mcp.server import (
 )
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exhausted", [False, True])
+async def test_registered_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhausted: bool) -> None:
+    application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
+    calls = provider.read_pull_request.call_count
+    async with Client(assemble_target_server(application)) as client:
+        first = await client.call_tool("observe_acceptance", {"change_id": "change-a"})
+    async with Client(assemble_target_server(restart())) as client:
+        second = await client.call_tool("observe_acceptance", {"change_id": "change-a"})
+    assert first.is_error
+    assert second.is_error
+    assert "ERR_DELIVERY_ACCEPTANCE_WAITING" in first.content[0].text
+    assert ("acceptance-wait" if exhausted else "retry-backoff") in second.content[0].text
+    assert provider.read_pull_request.call_count == calls + int(exhausted)
+    episode = ledger.read().episodes[0]
+    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
+        (3, 1, 0) if exhausted else (1, 0, 0)
+    )
 
 
 @pytest.mark.asyncio

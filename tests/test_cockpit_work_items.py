@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from serve.delivery.tests.test_portfolio_application import acceptance_budget_case
 from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_cockpit.deps import get_target_context
@@ -757,6 +758,24 @@ def test_real_core_claim_recovery_exclusion_required(tmp_path: Path, kind: str) 
     assert diagnostic["retry_safe"] is False
     assert "Custody and files are unchanged" in diagnostic["detail"]
     unchanged()
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhausted: bool) -> None:
+    application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
+    calls = provider.read_pull_request.call_count
+    with TestClient(assemble_target_app(application)) as client:
+        first = client.post("/api/changes/change-a/acceptance/observe")
+    with TestClient(assemble_target_app(restart())) as client:
+        second = client.post("/api/changes/change-a/acceptance/observe")
+    assert first.status_code == second.status_code == 409
+    assert first.json()["code"] == "ERR_DELIVERY_ACCEPTANCE_WAITING"
+    assert second.json()["detail"] == ("acceptance-wait" if exhausted else "retry-backoff")
+    assert provider.read_pull_request.call_count == calls + int(exhausted)
+    episode = ledger.read().episodes[0]
+    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (
+        (3, 1, 0) if exhausted else (1, 0, 0)
+    )
 
 
 def test_http_verified_completed_recovery_replay(tmp_path: Path) -> None:

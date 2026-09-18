@@ -107,6 +107,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryReturnContext,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
+    DeliveryRuntimeReferenceError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -182,6 +183,7 @@ from owlbear_delivery.recovery import (
     RecoveryInvocation,
     RecoveryInvocationRequest,
     RecoveryReceipt,
+    RetryAttempt,
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
@@ -2004,6 +2006,63 @@ class PortfolioApplication:
             if hooks
             else lambda: datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         )
+        for runtime in self._runtimes.values():
+            try:
+                with locked_roots((self._checkpoint_lock_root(runtime.contract.change_id),), blocking=False):
+                    self._reconcile_retry_results(runtime)
+            except (OSError, RuntimeError, ValueError):
+                _logger.warning("Retry accounting remains contained for %s", runtime.contract.change_id)
+
+    def _reconcile_retry_results(self, runtime: DeliveryRuntime) -> None:
+        """Replay accounting only from owner receipts; absent evidence keeps reservations."""
+        ledger = runtime.retry_ledger(clock=self._clock)
+        ledger.reconcile_owner_results()
+        completion = runtime.completion_receipt()
+        finalization = runtime.finalization()
+        for attempt in ledger.pending_attempts():
+            if attempt.key.outcome_id is not None:
+                self._reconcile_worker_retry_receipt(runtime, ledger, attempt)
+            elif (
+                attempt.key.action_kind == "finalize"
+                and finalization is not None
+                and finalization.operation_id == attempt.attempt_id
+                and finalization.exact_head == attempt.key.exact_head
+            ):
+                ledger.record_accepted_progress(attempt.attempt_id, now=finalization.finalized_at)
+            elif (
+                attempt.key.action_kind == "observe-acceptance"
+                and completion is not None
+                and completion.finalization_receipt_id == attempt.key.finalization_id
+                and completion.finalized_change_head == attempt.key.exact_head
+            ):
+                ledger.record_accepted_progress(attempt.attempt_id, now=completion.completed_at)
+            elif attempt.attempt_id.startswith("continue-"):
+                result = self._read_engine_result(
+                    ExecuteDeliveryChangeAction(change_id=runtime.contract.change_id, operation_id=attempt.attempt_id)
+                )
+                if result is not None:
+                    self._record_engine_attempt_result(result.action, result)
+        reports = FinalizationReportStore(self._target_root, runtime.contract.change_id).read()
+        for report in reports.reports:
+            if any(report.request.attempt_key in episode.attempt_ids for episode in ledger.read().episodes):
+                ledger.record_failure(
+                    report.request.attempt_key, failure_code=report.request.code.value, now=report.observed_at
+                )
+
+    def _reconcile_worker_retry_receipt(
+        self, runtime: DeliveryRuntime, ledger: RetryLedger, attempt: RetryAttempt
+    ) -> None:
+        """Recognize an original Builder receipt written before owner-result companions."""
+        if attempt.operation_alias is None:
+            return
+        binding = runtime.show_binding(attempt.key.outcome_id)
+        for result in binding.results:
+            try:
+                runtime.require_result_replay(binding.outcome_id, attempt.operation_alias, result)
+            except (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError):
+                continue
+            ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
+            return
 
     def create_design_session(
         self,
@@ -3507,7 +3566,39 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         try:
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
-                outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
+                if not self._is_acceptance_reconciliation_eligible(runtime):
+                    return self._reconciliation_skipped_outcome(change_id, "Change is no longer awaiting merge.")
+                reservation = self._reserve_acceptance_observation(runtime, explicit=False)
+                if not reservation.allowed:
+                    return DeliveryAcceptanceReconciliationOutcome(
+                        change_id=change_id,
+                        status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                        code=reservation.reason_code,
+                        detail="Acceptance observation is waiting for its durable retry policy.",
+                    )
+                try:
+                    outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
+                except PublicationProviderError as exc:
+                    runtime.retry_ledger(clock=self._clock).record_failure(
+                        reservation, failure_code=exc.code.value, now=self._clock()
+                    )
+                    raise
+                except PortfolioApplicationError as exc:
+                    outcome = DeliveryAcceptanceReconciliationOutcome(
+                        change_id=change_id,
+                        status=(
+                            DeliveryAcceptanceReconciliationStatus.ATTENTION
+                            if runtime.change_disposition() is not None
+                            else DeliveryAcceptanceReconciliationStatus.SKIPPED
+                        ),
+                        code=exc.code,
+                        detail=str(exc),
+                    )
+                ledger = runtime.retry_ledger(clock=self._clock)
+                if outcome is not None and outcome.status is DeliveryAcceptanceReconciliationStatus.COMPLETED:
+                    ledger.record_accepted_progress(reservation, now=self._clock())
+                else:
+                    ledger.record_failure(reservation, failure_code="acceptance-wait", now=self._clock())
         except BlockingIOError:
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
@@ -3517,14 +3608,20 @@ class PortfolioApplication:
             )
         except PublicationProviderError as exc:
             return self._provider_unavailable_outcome(change_id, exc)
-        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
+        except (
+            DeliveryRuntimeConflictError,
+            RetryLedgerConflictError,
+            RetryLedgerCorruptError,
+            OSError,
+            ValueError,
+        ) as exc:
             return DeliveryAcceptanceReconciliationOutcome(
                 change_id=change_id,
                 status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
                 code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
                 detail=str(exc) or "Change state changed during reconciliation.",
             )
-        result = outcome if outcome is not None else self._reconcile_merged_acceptance(change_id, runtime)
+        result = outcome
         disposition = runtime.change_disposition()
         if disposition is not None:
             self._publish_attention_best_effort(
@@ -3538,7 +3635,7 @@ class PortfolioApplication:
         self,
         change_id: str,
         runtime: DeliveryRuntime,
-    ) -> DeliveryAcceptanceReconciliationOutcome | None:
+    ) -> DeliveryAcceptanceReconciliationOutcome:
         """Read one provider snapshot while holding only the Change checkpoint lock."""
         if not self._is_acceptance_reconciliation_eligible(runtime):
             return self._reconciliation_skipped_outcome(change_id, "Change is no longer awaiting merge.")
@@ -3561,7 +3658,7 @@ class PortfolioApplication:
                 "No bound pull-request publication was found.",
                 code="ERR_DELIVERY_PUBLICATION_MISSING",
             )
-        return self._classify_acceptance_observation(
+        outcome = self._classify_acceptance_observation(
             change_id,
             runtime,
             observation,
@@ -3570,6 +3667,14 @@ class PortfolioApplication:
                 ready=ready,
                 target_branch=publisher.target_branch,
             ),
+        )
+        if outcome is not None:
+            return outcome
+        receipt = self._observe_acceptance_once(change_id, runtime, observation=observation)
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
+            completion_id=receipt.completion_id,
         )
 
     @staticmethod
@@ -3594,6 +3699,10 @@ class PortfolioApplication:
         authority: _AcceptanceReconciliationAuthority,
     ) -> DeliveryAcceptanceReconciliationOutcome | None:
         snapshot = observation.snapshot
+        if self._acceptance_reconciliation_authority_matches(
+            snapshot, authority.exact_head, authority.ready, authority.target_branch
+        ):
+            self._remember_acceptance_observation(observation)
         if snapshot.state == "open" and not snapshot.merged:
             if snapshot.head_sha == authority.exact_head:
                 return DeliveryAcceptanceReconciliationOutcome(
@@ -3661,47 +3770,11 @@ class PortfolioApplication:
             and snapshot.head_sha == ready.head_sha == exact_head
         )
 
-    def _reconcile_merged_acceptance(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-    ) -> DeliveryAcceptanceReconciliationOutcome:
-        """Use the existing exact completion path after a matching merged read."""
-        try:
-            receipt = self.observe_acceptance(change_id)
-        except DeliveryAcceptanceWaitingError as exc:
-            return DeliveryAcceptanceReconciliationOutcome(
-                change_id=change_id,
-                status=DeliveryAcceptanceReconciliationStatus.WAITING,
-                detail=str(exc),
-            )
-        except PublicationProviderError as exc:
-            return self._provider_unavailable_outcome(change_id, exc)
-        except PortfolioApplicationError as exc:
-            if runtime.change_disposition() is not None:
-                return DeliveryAcceptanceReconciliationOutcome(
-                    change_id=change_id,
-                    status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
-                    code=exc.code,
-                    detail=str(exc),
-                )
-            return DeliveryAcceptanceReconciliationOutcome(
-                change_id=change_id,
-                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
-                code=exc.code,
-                detail=str(exc),
-            )
-        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
-            return DeliveryAcceptanceReconciliationOutcome(
-                change_id=change_id,
-                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
-                code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
-                detail=str(exc) or "Change state changed during reconciliation.",
-            )
-        return DeliveryAcceptanceReconciliationOutcome(
-            change_id=change_id,
-            status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
-            completion_id=receipt.completion_id,
+    def _remember_acceptance_observation(self, observation: PublicationPullRequestObservationReceipt) -> None:
+        self._publication_observation_cache[observation.change_id] = (
+            time.monotonic() + _PUBLICATION_OBSERVATION_CACHE_SECONDS,
+            observation.snapshot.head_sha,
+            observation,
         )
 
     @staticmethod
@@ -3725,86 +3798,137 @@ class PortfolioApplication:
             return abandonment
 
     def observe_acceptance(self, change_id: str) -> CompletionReceipt:
-        """Complete one Change from a fresh exact merged-PR observation."""
-        if self._draft_pull_request_publisher is None:
-            message = "draft pull-request publication is not configured"
-            raise PortfolioApplicationError(message)
+        """Explicitly observe once, including one bounded read after automatic waiting."""
         runtime = self._runtime(change_id, for_mutation=True)
         with self._engine_checkpoint_lock(change_id):
             existing = runtime.completion_receipt()
             if existing is not None:
                 self._publish_delivery_state(change_id, runtime, f"acceptance-{existing.completion_id}")
                 return existing
-            if runtime.change_disposition() is not None:
-                message = "Delivery Change requires attention resolution before acceptance observation"
-                raise PortfolioApplicationError(message)
-            finalization = runtime.finalization()
-            ready = runtime.ready_receipt()
-            publication = runtime.checkpoint_publication_state()
-            if finalization is None or ready is None:
-                message = "acceptance observation requires awaiting-merge authority"
-                raise PortfolioApplicationError(message)
-            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
-                message = "acceptance observation requires the reconciled final checkpoint"
-                raise PortfolioApplicationError(message)
+            reservation = self._reserve_acceptance_observation(runtime, explicit=True)
+            if not reservation.allowed:
+                raise DeliveryAcceptanceWaitingError(reservation.reason_code)
+            try:
+                receipt = self._observe_acceptance_once(change_id, runtime)
+            except (DeliveryAcceptanceWaitingError, PublicationProviderError, PortfolioApplicationError) as exc:
+                runtime.retry_ledger(clock=self._clock).record_failure(
+                    reservation, failure_code=getattr(exc, "code", "acceptance-wait"), now=self._clock()
+                )
+                raise
+            runtime.retry_ledger(clock=self._clock).record_accepted_progress(reservation, now=self._clock())
+            return receipt
+
+    def _reserve_acceptance_observation(self, runtime: DeliveryRuntime, *, explicit: bool) -> RetryReservation:
+        if runtime.change_disposition() is not None:
+            message = "Delivery Change requires attention resolution before acceptance observation"
+            raise PortfolioApplicationError(message)
+        finalization = runtime.finalization()
+        if finalization is None or runtime.ready_receipt() is None:
+            message = "acceptance observation requires awaiting-merge authority"
+            raise PortfolioApplicationError(message)
+        key = RetryEpisodeKey.engine(
+            runtime.contract.change_id,
+            "observe-acceptance",
+            finalization.exact_head,
+            self._workspace_manager.observed_target_head(),
+            finalization.finalization_id,
+        )
+        ledger = runtime.retry_ledger(clock=self._clock)
+        episode = ledger.episode(key)
+        return ledger.reserve(
+            key,
+            failure_class=RetryFailureClass.ACCEPTANCE,
+            now=self._clock(),
+            automatic=not (explicit and episode is not None and episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT),
+        )
+
+    def _observe_acceptance_once(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        *,
+        observation: PublicationPullRequestObservationReceipt | None = None,
+    ) -> CompletionReceipt:
+        """Apply one already-reserved observation under the Change checkpoint lock."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        existing = runtime.completion_receipt()
+        if existing is not None:
+            self._publish_delivery_state(change_id, runtime, f"acceptance-{existing.completion_id}")
+            return existing
+        if runtime.change_disposition() is not None:
+            message = "Delivery Change requires attention resolution before acceptance observation"
+            raise PortfolioApplicationError(message)
+        finalization = runtime.finalization()
+        ready = runtime.ready_receipt()
+        publication = runtime.checkpoint_publication_state()
+        if finalization is None or ready is None:
+            message = "acceptance observation requires awaiting-merge authority"
+            raise PortfolioApplicationError(message)
+        if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+            message = "acceptance observation requires the reconciled final checkpoint"
+            raise PortfolioApplicationError(message)
+        if observation is None:
             observation = self._draft_pull_request_publisher.observe_pull_request(
                 ObserveChangePublicationPullRequest(change_id=change_id)
             )
-            if observation is None:
-                message = "acceptance observation requires a bound pull request"
-                raise PortfolioApplicationError(message)
-            snapshot = observation.snapshot
-            if (
-                snapshot.repository != self._draft_pull_request_publisher.repository
-                or snapshot.repository != ready.repository
-                or snapshot.number != ready.number
-                or snapshot.node_id != ready.node_id
-                or snapshot.base_branch != self._draft_pull_request_publisher.target_branch
-                or snapshot.head_sha != finalization.exact_head
-            ):
-                runtime.capture_acceptance_attention(
-                    observation,
-                    ("provider pull request does not satisfy acceptance authority",),
-                    reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
-                )
-                self._publish_attention_best_effort(
-                    change_id,
-                    runtime,
-                    f"acceptance-attention-{observation.observation_id}",
-                )
-                message = "provider pull request does not satisfy acceptance authority"
-                raise PortfolioApplicationError(message)
-            latch = self._latch_acceptance_observation(change_id, runtime, observation)
-            checks = self._draft_pull_request_publisher.read_check_observations(
-                ReadChangePublicationCheckObservations(
-                    change_id=change_id,
-                    repository=latch.repository,
+        if observation is None:
+            message = "acceptance observation requires a bound pull request"
+            raise PortfolioApplicationError(message)
+        snapshot = observation.snapshot
+        if (
+            snapshot.repository != self._draft_pull_request_publisher.repository
+            or snapshot.repository != ready.repository
+            or snapshot.number != ready.number
+            or snapshot.node_id != ready.node_id
+            or snapshot.base_branch != self._draft_pull_request_publisher.target_branch
+            or snapshot.head_sha != finalization.exact_head
+        ):
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request does not satisfy acceptance authority",),
+                reason=DeliveryAcceptanceAttentionReason.IDENTITY_MISMATCH,
+            )
+            self._publish_attention_best_effort(
+                change_id,
+                runtime,
+                f"acceptance-attention-{observation.observation_id}",
+            )
+            message = "provider pull request does not satisfy acceptance authority"
+            raise PortfolioApplicationError(message)
+        self._remember_acceptance_observation(observation)
+        latch = self._latch_acceptance_observation(change_id, runtime, observation)
+        checks = self._draft_pull_request_publisher.read_check_observations(
+            ReadChangePublicationCheckObservations(
+                change_id=change_id,
+                repository=latch.repository,
+                number=latch.number,
+                exact_commit=finalization.exact_head,
+            )
+        )
+        receipt = CompletionReceipt.create(
+            CompletionEvidence(
+                change_id=change_id,
+                finalization_receipt_id=finalization.finalization_id,
+                finalized_change_head=finalization.exact_head,
+                repository_identity=latch.repository,
+                pull_request_identity=CompletionPullRequestIdentity(
                     number=latch.number,
-                    exact_commit=finalization.exact_head,
-                )
+                    node_id=latch.node_id,
+                ),
+                accepted_target_ref=latch.base_branch,
+                accepted_merge_commit=latch.accepted_merge_commit,
+                merged_at=latch.merged_at,
+                acceptance_observation_id=latch.acceptance_observation_id,
+                check_observation_ids=tuple(item.observation_id for item in checks),
+                review_receipt_ids=(finalization.review.review_id,),
+                completed_at=_timestamp(self._clock()),
             )
-            receipt = CompletionReceipt.create(
-                CompletionEvidence(
-                    change_id=change_id,
-                    finalization_receipt_id=finalization.finalization_id,
-                    finalized_change_head=finalization.exact_head,
-                    repository_identity=latch.repository,
-                    pull_request_identity=CompletionPullRequestIdentity(
-                        number=latch.number,
-                        node_id=latch.node_id,
-                    ),
-                    accepted_target_ref=latch.base_branch,
-                    accepted_merge_commit=latch.accepted_merge_commit,
-                    merged_at=latch.merged_at,
-                    acceptance_observation_id=latch.acceptance_observation_id,
-                    check_observation_ids=tuple(item.observation_id for item in checks),
-                    review_receipt_ids=(finalization.review.review_id,),
-                    completed_at=_timestamp(self._clock()),
-                )
-            )
-            completed = runtime.complete_change(receipt)
-            self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
-            return completed
+        )
+        completed = runtime.complete_change(receipt)
+        self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
+        return completed
 
     def _latch_acceptance_observation(
         self,
@@ -4460,7 +4584,7 @@ class PortfolioApplication:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
-            binding = runtime.transition(request)
+            binding = runtime.transition(request, retry_observed_at=self._clock())
             if request.action == "advance":
                 self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
             elif request.action == "block":
@@ -6306,6 +6430,8 @@ class PortfolioApplication:
             return None
         now = time.monotonic()
         cached = self._publication_observation_cache.get(change_id)
+        if frontier.ready is not None:
+            return cached[2] if cached is not None and cached[1] == published_head else None
         if cached is not None and cached[0] > now and cached[1] == published_head:
             return cached[2]
         try:
@@ -6641,6 +6767,9 @@ class PortfolioApplication:
         self, request: DeliveryContinuationRequest, observed: DeliveryReadiness
     ) -> DeliveryContinuationResult:
         self._coordinator.recover_pending_transactions()
+        runtime = self._runtimes.get(request.change_id)
+        if runtime is not None:
+            self._reconcile_retry_results(runtime)
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay
@@ -7046,7 +7175,9 @@ class PortfolioApplication:
                 ),
             )
         else:
-            values["acceptance"] = self.observe_acceptance(action.change_id)
+            values["acceptance"] = self._observe_acceptance_once(
+                action.change_id, self._runtime(action.change_id, for_mutation=True)
+            )
         return DeliveryEngineActionResult(
             action=action, kind="completed", reason_code="engine-action-completed", **values
         )
@@ -7227,6 +7358,17 @@ class PortfolioApplication:
             current = self._selected_change_card(snapshot, cards).readiness
         except (OSError, RuntimeError, ValueError):
             current = readiness
+        if failure.code == "ERR_DELIVERY_RETRY_EXHAUSTED" and current.reason_code in {
+            "retry-backoff",
+            "retry-exhausted",
+            "retry-containment",
+        }:
+            return DeliveryContinuationResult(
+                change_id=candidate.change_id,
+                kind="waiting" if current.status == "waiting" else "unsupported",
+                reason_code=current.reason_code,
+                readiness=current,
+            )
         return DeliveryContinuationResult(
             change_id=candidate.change_id,
             kind="unavailable",
@@ -7829,7 +7971,8 @@ class PortfolioApplication:
                         outcome_id=submission.outcome_id,
                         claim_id=submission.claim_id,
                         output=candidate.output,
-                    )
+                    ),
+                    retry_observed_at=self._clock(),
                 )
                 self._record_worker_retry_success(runtime, submission.outcome_id, submission.claim_id)
                 self._publish_delivery_state(
@@ -8651,6 +8794,7 @@ class PortfolioApplication:
             original_candidate=original_candidate,
         )
         ledger = candidate.runtime.retry_ledger(clock=self._clock)
+        ledger.import_legacy_failures(key, candidate.binding.retry_count, now=self._clock())
         return ledger.reserve(
             key,
             failure_class=RetryFailureClass.MECHANICAL,

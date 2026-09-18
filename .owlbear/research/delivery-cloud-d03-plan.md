@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-B: partial implementation checkpoint; not accepted and not a prerequisite for C yet.**
+**D03-B: completion candidate awaiting independent review; not accepted and not a prerequisite for C yet.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -737,13 +737,11 @@ Proof (counts overlap and must not be summed):
   current-candidate re-review and scanning; the parent's zero-alert CodeQL result for `0b37ca2`
   is prior-source evidence, not a scan of these changes.
 
-**Remaining B integration gaps / review boundary:** reservation, owner receipt and retry accounting
-are still distinct durable transactions; supported receipt replay is tested, but no complete
-same-transaction owner/accounting proof or safe no-start reservation refund is claimed. Existing
-nonzero legacy binding retry counters have not been imported into the new authority. Admitted
-explicit-observation entry and automatic background acceptance-observer budget coverage remain
-unverified. These are B completion questions, not
-permission to start E, reinterpret the approved contract, or enable live services. Independent
+**Prior B integration gaps / review boundary:** the four blockers below were outstanding at
+`3864baf`. The current resume candidate addresses them through exact owner-result reconciliation,
+legacy failure import and shared automatic/explicit observation accounting, as recorded below.
+Reservations and custody publication remain separate; missing owner evidence never refunds a
+reservation. This is not permission to start E, reinterpret the approved contract, or enable live services. Independent
 current-candidate review, external CI/pinned Node and host proof remain with their existing owners.
 The coordinating session inspected the `cc11df1` source, agent, Cockpit and setup CI runs:
 all were `action_required`; none is a phase pass. Historical `dev` failure logs were also inspected
@@ -791,7 +789,78 @@ The next B session must resolve these concrete obligations before requesting pha
 
 These are **B completion blockers**, not presumed safe containment and not work reassigned to E.
 The integration owner must not start C or accept B on the strength of repaired findings alone.
-No source changes followed this exact-head review; the final commit updates only this progress record.
+No source changes followed that exact-head review in its session; the later candidate below requires new review.
+
+### D03-B completion candidate — resume comment 5726865466
+
+Based on checkout `3e2932cfed8f41e441671eaa1ce4188e0ec89913` (source `3864baf`), stopping after B.
+No approved contract changed. The coordinating parent owns publication and independent review.
+
+- **Owner/accounting boundary:** accepted Planner/Builder transitions and finalization publish an
+  immutable attempt-bound result participant in their existing authority transaction. Application
+  restart and continuation reconcile these records, original engine intent/results, finalizer
+  failure reports and exact completion receipts without original caller replay. Existing Builder
+  claim receipts and finalization receipts also reconcile without the new companion; mismatched or
+  absent evidence does not. Startup skips busy Changes rather than waiting on their execution locks.
+  Reservations without
+  exact outcome evidence stay consumed; there is no speculative refund or custody release.
+- **Legacy allowance:** nonzero binding failure counts are imported before worker dispatch, including
+  an existing unreset ledger, with an idempotent imported-count projection. Import conservatively
+  starts a two-second backoff where legacy failure time is unavailable; three failures exhaust.
+  Non-accepted block clearing, blocking, return and administrative reset retain unimported counters.
+  Refused legacy acquisition reports the shared budget/backoff reason, not a failed worker activation.
+- **Automatic observations:** background reconciliation and engine continuation use the same semantic
+  ledger. Background merged readback uses its single observed snapshot, not a second unbudgeted read.
+  Awaiting-merge readiness uses cached evidence only; ledger reads do not recover transactions.
+- **Explicit later observation:** the existing registered `observe_acceptance` operation and HTTP
+  acceptance-observe route distinguish an explicit request from automatic continuation/background
+  work. After three automatic observations they permit one later read, with no reset on waiting,
+  no exhaustion-derived automatic permission and no new approval flag. Real-core MCP/HTTP tests cover it.
+
+Cloud proof used pinned **CPython 3.14.7**, current locked dependencies and uv **0.12.16** (restored
+after `uv: command not found`; advisory check clean). No dependency manifests changed. All pytest
+commands used `uv run --locked pytest`, `-q -n 1 -m 'not api and not model and not e2e'`, and
+repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
+
+- First discriminating legacy ledger selection: **4 passed, 0.92s**. Final bounded closeout:
+  **111 passed, 26.64s**, including registered consumers, central mutation and TypeScript parity.
+  It covers three-point Planner/finalizer transaction crashes, accepted Builder transaction versus
+  pre-acceptance workspace interruption, missing owner reservations, exact historical receipt matching,
+  mixed automatic/background budgets, provider evidence/backoff, and explicit later observation.
+  Two existing acceptance scenarios now advance their fake clocks through the enforced backoff;
+  provider/custody assertions remain intact. Intermediate fixture failures were repaired and rerun.
+- Scoped `ruff check` and `ruff format --check` passed for all **8 changed Python files**.
+  One existing Starlette/AnyIO deprecation warning remains. No frontend source/dependency change:
+  prior frontend evidence is not rerun or upgraded to pinned-Node acceptance.
+- After the final acquisition-presentation refinement, the impacted application selection
+  `-k 'worker_legacy_budget or continuation_preserves_failed_activation_identity or worker_budget_survives_resolved_blocks or block_accounting_failure'`
+  passed **10 tests, 4.12s** with the same flags; both scoped Ruff checks passed again.
+- Consumer follow-up strengthened the two registered-observation nodes to cover both backoff
+  and the one later read after three automatic waits, then repeat through fresh core applications
+  and fresh MCP/HTTP clients. **4 passed, 5.58s**; three-file Ruff check/format passed. Production
+  source was unchanged by this follow-up; no additional provider read or reset occurred on restart.
+
+Exact final pytest selection (the restored uv executable was
+`.owlbear/scratch/d03-b-tools/bin/uv`; `TMPDIR` pointed to that repository-local directory):
+
+```sh
+uv run --locked pytest \
+  serve/delivery/tests/test_retry_ledger.py \
+  serve/delivery/tests/test_portfolio_application.py \
+  serve/delivery/tests/test_delivery_runtime.py \
+  serve/delivery-mcp/tests/test_target_server.py \
+  tests/test_cockpit_work_items.py \
+  tests/test_delivery_worktree_authority.py::test_runtime_frontier_writers_use_the_central_mutability_policy \
+  tests/test_cockpit_boundary.py::test_delivery_readiness_reason_typescript_parity \
+  -q -n 1 \
+  -k 'retry or acceptance or legacy_budget or planner_accepted or existing_builder_receipt or existing_finalization_receipt or worker_and_finalizer_reservations or engine_result_transaction or engine_executor_excludes or continuation_finalization_replays_atomic or submit_result_promotes or continuation_plans_builds or block_accounting or checkpoint_failure_metadata or requestless_unblock or administrative_move or implementation_block or central_mutability_policy or typescript_parity' \
+  -m 'not api and not model and not e2e' --basetemp=.owlbear/scratch/d03-b-pytest
+```
+
+All four listed completion blockers now have source and focused cloud proof for independent review.
+This is not self-acceptance: current-candidate code/security review, external CI and existing host
+gates remain outstanding. No C/D/E implementation, full suite, MegaLinter, live service/state or
+real-provider mutation was performed.
 
 ### D03-B prior-source verification record — 2026-09-18
 

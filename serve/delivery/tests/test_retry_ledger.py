@@ -303,6 +303,35 @@ def test_corrupt_summary_fails_closed(tmp_path: Path) -> None:
         ledger.read()
 
 
+@pytest.mark.parametrize("count", [1, 2, 3, 7])
+def test_legacy_failures_are_not_a_fresh_allowance(tmp_path: Path, count: int) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    ledger.import_legacy_failures(key, count, now=_START)
+    restarted = RetryLedger(tmp_path, "change-a")
+    restarted.import_legacy_failures(key, count, now=_START + timedelta(days=1))
+    episode = restarted.episode(key)
+    assert episode.total_attempts == count
+    assert episode.repair_attempts == count - 1
+    assert not restarted.reserve(key, failure_class="mechanical", now=_START).allowed
+    attempt = restarted.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=2))
+    assert attempt.allowed is (count < 3)
+    if attempt.allowed:
+        assert attempt.attempts == count + 1
+
+
+def test_legacy_failures_join_an_existing_unreset_ledger_once(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    first = ledger.reserve(key, failure_class="mechanical", now=_START)
+    ledger.record_failure(first, failure_code="failed", now=_START)
+    imported = ledger.import_legacy_failures(key, 2, now=_START)
+    assert imported.total_attempts == 3
+    assert imported.legacy_failures == 2
+    assert imported.stop_code is RetryStopCode.EXHAUSTED
+    assert ledger.import_legacy_failures(key, 2, now=_START + timedelta(days=1)) == imported
+
+
 def test_recovery_release_preserves_failed_backoff_and_fractional_clock(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     key = _engine_key()

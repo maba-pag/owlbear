@@ -1553,6 +1553,7 @@ def test_engine_result_transaction_recovers_without_repeating_provider(tmp_path:
     reopened, coordinator = application, application._coordinator
     if restart:
         reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+        assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == 1
     result = _execute_engine(reopened, action)
     assert result.kind == "completed"
     assert result.ready == runtime.ready_receipt()
@@ -1595,6 +1596,179 @@ def test_acceptance_retry_budget_never_infers_explicit_observation(tmp_path: Pat
         DeliveryContinuationRequest.model_validate(
             _continuation_request(application).model_dump() | {"explicit_acceptance_observation": True}
         )
+
+
+@pytest.mark.parametrize("mixed", [False, True])
+def test_background_and_explicit_acceptance_share_durable_budget(tmp_path: Path, *, mixed: bool) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    start = datetime(2026, 8, 4, tzinfo=UTC)
+    now = start
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
+    for index, seconds in enumerate((0, 1, 3)):
+        now = start + timedelta(seconds=seconds)
+        calls = provider.read_pull_request.call_count
+        if mixed and index != 1:
+            assert _execute_engine(application, _engine_action(application)).kind == "waiting"
+        else:
+            assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+        assert provider.read_pull_request.call_count == calls + 1
+        snapshot = RetryLedger(state_root, "change-a").read()
+        assert len(snapshot.episodes) == 1
+        application.get_change("change-a")
+        application.reconcile_awaiting_acceptance(("change-a",))
+        assert provider.read_pull_request.call_count == calls + 1
+        assert RetryLedger(state_root, "change-a").read() == snapshot
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+    now = start + timedelta(days=1)
+    reopened._clock = clock
+    calls = provider.read_pull_request.call_count
+    assert reopened.acquire_change_action(_continuation_request(reopened)).engine_action is None
+    with pytest.raises(DeliveryAcceptanceWaitingError):
+        reopened.observe_acceptance("change-a")
+    assert provider.read_pull_request.call_count == calls + 1
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert (episode.total_attempts, episode.explicit_observations, episode.reset_count) == (3, 1, 0)
+    with pytest.raises(DeliveryAcceptanceWaitingError):
+        reopened.observe_acceptance("change-a")
+    assert provider.read_pull_request.call_count == calls + 1
+
+
+def acceptance_budget_case(tmp_path: Path, *, exhausted: bool):
+    """Build durable backoff/exhaustion and a fresh application for consumer tests."""
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
+    for delay in (0, 1, 2) if exhausted else (0,):
+        now += timedelta(seconds=delay)
+        calls = provider.read_pull_request.call_count
+        assert application.reconcile_awaiting_acceptance(("change-a",))[0].status.value == "waiting"
+        assert provider.read_pull_request.call_count == calls + 1
+    if exhausted:
+        now += timedelta(days=1)
+
+    def restart():
+        reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime}, clock=clock)
+        reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
+        return reopened
+
+    return application, provider, RetryLedger(state_root, "change-a"), restart
+
+
+def test_acceptance_completion_reconciles_accounting_without_observing_again(tmp_path: Path) -> None:
+    application, runtime, provider, state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 14, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    with (
+        patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("injected accounting failure")),
+        pytest.raises(OSError, match="injected accounting"),
+    ):
+        application.observe_acceptance("change-a")
+    calls = provider.read_pull_request.call_count
+    assert runtime.completion_receipt() is not None
+    _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.reset_count == 1
+    assert episode.total_attempts == 0
+    assert provider.read_pull_request.call_count == calls
+
+
+def test_readiness_uses_budgeted_acceptance_evidence_without_observing_again(tmp_path: Path) -> None:
+    application, _runtime, provider, state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    state["pull_request"] = state["pull_request"].model_copy(update={"mergeable": False, "merge_state_status": "dirty"})
+    application.reconcile_awaiting_acceptance(("change-a",))
+    calls = provider.read_pull_request.call_count
+    ledger = RetryLedger(state_root, "change-a")
+    before = ledger.read()
+    detail = application.show_work_item_view("change-a", "publication")
+    assert detail.publication.mergeable is False
+    assert detail.publication.merge_state_status == "dirty"
+    application.get_change("change-a")
+    assert provider.read_pull_request.call_count == calls
+    assert ledger.read() == before
+
+
+@pytest.mark.parametrize("count", [1, 2, 3])
+@pytest.mark.parametrize("clear_legacy_block", [False, True])
+def test_worker_legacy_budget_is_imported_before_dispatch(
+    tmp_path: Path, count: int, *, clear_legacy_block: bool
+) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    runtime = runtimes["change-a"]
+    frontier = json.loads(runtime.frontier_bytes())
+    frontier["bindings"][0].update(retry_count=count, retry_fingerprint="a" * 64)
+    if clear_legacy_block:
+        frontier["bindings"][0]["block"] = {
+            "block_id": "legacy-retry-budget",
+            "reason": "Legacy failure",
+            "unblock_condition": "Prerequisite restored",
+            "expected_evidence": ["restored"],
+            "locators": ["check"],
+        }
+    runtime._frontier_path.write_text(json.dumps(frontier))
+    if clear_legacy_block:
+        application.clear_block("change-a", "OUT-001", "legacy-retry-budget", "Restored", ("check",))
+        assert runtime.show_binding("OUT-001").retry_count == count
+    first = application.acquire_change_action(_continuation_request(application))
+    if first.kind == "reconciled":
+        first = application.acquire_change_action(_continuation_request(application))
+    assert first.launch is None
+    assert first.reason_code == ("retry-backoff" if count < 3 else "retry-exhausted")
+    assert first.readiness.attempts == count
+    assert first.failure is None
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.total_attempts == count
+    assert episode.legacy_failures == count
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=lambda: "2030-01-01T00:00:00Z")
+    acquired = reopened.acquire_change_action(_continuation_request(reopened))
+    assert (acquired.launch is not None) is (count < 3)
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == min(count + 1, 3)
+
+
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_planner_accepted_retry_reconciles_without_caller_replay(tmp_path: Path, crash_stage: str) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    candidate = application.publish_delivery_plan(
+        "change-a", PublishDeliveryPlan(outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, tasks=(_task(),))
+    )
+    original = RuntimeTransaction.commit
+
+    def interrupted(transaction):
+        def fail(stage):
+            if stage == crash_stage:
+                message = "injected owner interruption"
+                raise OSError(message)
+
+        original(transaction, failure=fail)
+
+    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(OSError, match="injected"):
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance", outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, output=candidate.output
+            ),
+        )
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.total_attempts == 0
+    assert episode.reset_count == 1
+    assert episode.accepted_attempt_ids == (launch.claim.attempt_id,)
 
 
 def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_path: Path) -> None:
@@ -1659,6 +1833,78 @@ def test_interrupted_engine_reservation_remains_consumed_without_dispatch_eviden
     assert provider.set_pull_request_draft_state.call_count == 0
 
 
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.COMPLETED])
+def test_worker_and_finalizer_reservations_without_owner_remain_consumed(tmp_path: Path, stage) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
+    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
+    with (
+        patch.object(owner, operation, side_effect=OSError("interrupted owner publication")),
+        pytest.raises(OSError, match="interrupted owner"),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+    ledger = RetryLedger(state_root, "change-a")
+    before = ledger.read()
+    assert before.episodes[0].total_attempts == 1
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    stopped = reopened.acquire_change_action(_continuation_request(reopened, session_id="new-session"))
+    assert stopped.readiness.reason_code == "retry-containment"
+    assert stopped.launch is None
+    assert stopped.finalization is None
+    assert ledger.read() == before
+    assert coordinator.show("change-a").writer is None
+    assert runtimes["change-a"].active_claims() == ()
+
+
+def test_existing_finalization_receipt_reconciles_accounting_without_marker(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    attempt = application.acquire_change_action(_continuation_request(application)).finalization.attempt
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.finalize_change(
+            "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+        )
+    # A previous B version wrote finalization receipts without this companion.
+    (state_root / "changes/change-a/retry-ledger/owner-results" / f"{attempt.writer.attempt_id}.json").unlink()
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.reset_count == 1
+    assert episode.accepted_attempt_ids == (attempt.writer.attempt_id,)
+
+
+@pytest.mark.parametrize("original_claim", [False, True])
+def test_existing_builder_receipt_requires_original_claim_for_accounting(
+    tmp_path: Path, *, original_claim: bool
+) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    runtime = runtimes["change-a"]
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    _git(launch.worktree_path, "commit", "--allow-empty", "-m", "complete task")
+    submission = DeliveryResultSubmission(
+        change_id="change-a",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        result=_task_result(
+            "existing-builder-result",
+            "change-a",
+            runtime.authority_digest,
+            runtime.show_binding(launch.outcome_id).tasks[0],
+            _git(launch.worktree_path, "rev-parse", "HEAD"),
+        ),
+    )
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.submit_result(submission)
+    (state_root / "changes/change-a/retry-ledger/owner-results" / f"{launch.claim.attempt_id}.json").unlink()
+    if not original_claim:
+        (receipt_path,) = (state_root / "changes/change-a/result-receipts/OUT-001").glob("*.json")
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt["claim_id"] = "another-claim"
+        receipt_path.write_text(json.dumps(receipt))
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert episode.reset_count == (1 if original_claim else 0)
+    assert episode.total_attempts == (0 if original_claim else 1)
+
+
 def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp_path: Path) -> None:
     application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     launch = application.acquire_change_action(_continuation_request(application)).launch
@@ -1685,20 +1931,24 @@ def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp
     assert reserved.total_attempts == 1
     assert reserved.last_status == "reserved"
     assert reserved.outcome_ids == ()
-    assert application.transition_delivery("change-a", request) == blocked
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
     accounted = ledger.read().episodes[0]
     assert accounted.total_attempts == 1
     assert accounted.reset_count == 0
     assert accounted.last_status == "failed"
     assert len(accounted.outcome_ids) == 1
-    assert application.transition_delivery("change-a", request) == blocked
+    assert reopened.transition_delivery("change-a", request) == blocked
     assert ledger.read().episodes[0] == accounted
 
 
-def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp_path: Path) -> None:
+@pytest.mark.parametrize("restart_during_execution", [False, True])
+def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(
+    tmp_path: Path, *, restart_during_execution: bool
+) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
     action = _engine_action(application)
-    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    if not restart_during_execution:
+        reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
     entered, release = Event(), Event()
     original = provider.set_pull_request_draft_state.side_effect
 
@@ -1712,6 +1962,8 @@ def test_engine_executor_excludes_second_host_without_holding_portfolio_lock(tmp
         running = executor.submit(_execute_engine, application, action)
         try:
             assert entered.wait(timeout=5)
+            if restart_during_execution:
+                reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
             with (
                 locked_roots((state_root / "claims/acquisition-lock",), blocking=False),
                 pytest.raises(DeliveryActionBusyError),
@@ -1896,7 +2148,10 @@ def test_continuation_finalizer_rejects_target_drift_without_releasing_custody(t
     assert coordinator.show("change-a").writer == attempt.writer
 
 
-def test_continuation_finalization_replays_atomic_custody_release_after_interruption(tmp_path: Path) -> None:
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_continuation_finalization_replays_atomic_custody_release_after_interruption(
+    tmp_path: Path, crash_stage: str
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     acquired = application.acquire_change_action(_continuation_request(application))
     attempt = acquired.finalization.attempt
@@ -1905,7 +2160,7 @@ def test_continuation_finalization_replays_atomic_custody_release_after_interrup
 
     def interrupted(transaction):
         def fail(stage):
-            if stage == "after-first-publication":
+            if stage == crash_stage:
                 message = "injected custody completion interruption"
                 raise RuntimeError(message)
 
@@ -1913,8 +2168,10 @@ def test_continuation_finalization_replays_atomic_custody_release_after_interrup
 
     with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
         application.finalize_change("change-a", proof)
-    assert coordinator.show("change-a").writer == attempt.writer
+    if crash_stage != "before-manifest-cleanup":
+        assert coordinator.show("change-a").writer == attempt.writer
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == 1
     receipt = reopened.finalize_change("change-a", proof)
     assert receipt.operation_id == attempt.writer.attempt_id
     assert coordinator.show("change-a").writer is None
@@ -4941,7 +5198,12 @@ def test_observe_change_publication_checks_remains_read_only_for_required_failur
 
 def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) -> None:
     application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
 
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     waiting = application.reconcile_awaiting_acceptance(("change-a",))
     assert waiting[0].status.value == "waiting"
     assert runtime.change_disposition() is None
@@ -4952,6 +5214,7 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
         "GitHub is unavailable",
         retry_safe=True,
     )
+    now += timedelta(seconds=1)
     unavailable = application.reconcile_awaiting_acceptance(("change-a",))
     assert unavailable[0].status.value == "provider-unavailable"
     assert unavailable[0].code == "unavailable"
@@ -4967,7 +5230,10 @@ def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) 
             "merged_by_login": "octocat",
         }
     )
+    now += timedelta(seconds=2)
+    calls = provider.read_pull_request.call_count
     completed = application.reconcile_awaiting_acceptance(("change-a",))
+    assert provider.read_pull_request.call_count == calls + 1
     assert completed[0].status.value == "completed"
     assert completed[0].completion_id is not None
     assert runtime.completion_receipt() is not None
@@ -5398,6 +5664,12 @@ def test_observe_acceptance_preserves_user_checkout_states(
 
 def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_completion(tmp_path: Path) -> None:
     application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     provider_calls_before_acceptance = provider.read_pull_request.call_count
     merge_oid = "e" * 40
     merged_at = "2026-08-03T23:00:00Z"
@@ -5480,6 +5752,10 @@ def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_comp
     assert provider.read_pull_request.call_count == provider_calls_before_acceptance + 1
     assert runner.call_count == 2
 
+    with pytest.raises(DeliveryAcceptanceWaitingError, match="retry-backoff"):
+        application.observe_acceptance("change-a")
+    assert runner.call_count == 2
+    now += timedelta(seconds=1)
     receipt = application.observe_acceptance("change-a")
 
     assert isinstance(receipt, CompletionReceipt)
@@ -5582,10 +5858,17 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
         ),
     )
     user_checkout_before = user_checkout_snapshot(repository)
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock():
+        return now.isoformat()
+
+    application._clock = clock
     with pytest.raises(DeliveryAcceptanceWaitingError, match="still open and unmerged"):
         application.observe_acceptance("change-a")
     assert runtime.change_disposition() is None
     pull_request = pull_request.model_copy(update={"state": "closed"})
+    now += timedelta(seconds=1)
     with pytest.raises(PortfolioApplicationError, match="does not satisfy acceptance authority"):
         application.observe_acceptance("change-a")
     disposition = runtime.change_disposition()
@@ -5616,6 +5899,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
     assert merged_observation is not None
     original_latch = runtime.latch_merged_pull_request(merged_observation)
     pull_request = pull_request.model_copy(update={"state": "open", "merged": False, "merged_at": None})
+    now += timedelta(seconds=2)
     with pytest.raises(PortfolioApplicationError, match="regressed from the established merged observation"):
         application.observe_acceptance("change-a")
     disposition = runtime.change_disposition()
@@ -8553,7 +8837,10 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
 
 
 @pytest.mark.parametrize("interrupted", [False, True])
-def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path, *, interrupted: bool) -> None:
+@pytest.mark.parametrize("crash_owner", ["workspace", "runtime"])
+def test_submit_result_promotes_and_replays_exact_builder_result(
+    tmp_path: Path, crash_owner: str, *, interrupted: bool
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
@@ -8600,13 +8887,22 @@ def test_submit_result_promotes_and_replays_exact_builder_result(tmp_path: Path,
                     message = "injected result persistence interruption"
                     raise OSError(message)
 
-            original_commit(transaction, failure=fail)
+            original_commit(
+                transaction,
+                failure=fail
+                if crash_owner == "workspace" or transaction._transaction_id.startswith("delivery-runtime-")
+                else None,
+            )
 
         with (
             patch.object(RuntimeTransaction, "commit", interrupted_commit),
             pytest.raises(OSError, match="injected result persistence"),
         ):
             application.submit_result(submission)
+        application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+        assert RetryLedger(state_root, "change-a").read().episodes[0].reset_count == (
+            1 if crash_owner == "runtime" else 0
+        )
     submitted = application.submit_result(submission)
     replayed = application.submit_result(submission)
 

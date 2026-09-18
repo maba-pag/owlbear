@@ -949,7 +949,7 @@ class TargetMCPAdapter:
         )
 
     async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]:
-        """Complete one Change from engine-derived merged pull-request evidence."""
+        """Explicitly observe acceptance once; exhaustion permits one later read, not a budget reset."""
         params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,
