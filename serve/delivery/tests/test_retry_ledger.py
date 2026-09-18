@@ -332,6 +332,38 @@ def test_legacy_failures_join_an_existing_unreset_ledger_once(tmp_path: Path) ->
     assert ledger.import_legacy_failures(key, 2, now=_START + timedelta(days=1)) == imported
 
 
+@pytest.mark.parametrize("contained", [False, True])
+def test_legacy_import_preserves_existing_containment_and_later_backoff(tmp_path: Path, *, contained: bool) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    original = ledger.reserve(key, failure_class="mechanical", now=_START)
+    if contained:
+        ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="another-attempt")
+    else:
+        ledger.record_failure(original, failure_code="failed", now=_START + timedelta(seconds=10))
+    before = ledger.episode(key)
+    imported = ledger.import_legacy_failures(key, 1, now=_START)
+    assert imported.total_attempts == 2
+    assert imported.stop_code is before.stop_code
+    assert imported.last_status == before.last_status
+    if before.next_eligible_at is not None:
+        assert imported.next_eligible_at == before.next_eligible_at
+        assert imported.last_failure_at == before.last_failure_at
+    blocked = ledger.reserve(key, failure_class="mechanical", now=_START + timedelta(seconds=3))
+    assert not blocked.allowed
+    assert blocked.reason_code == ("retry-containment" if contained else "retry-backoff")
+
+
+def test_legacy_import_rejects_incompatible_existing_failure_class(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key()
+    ledger.reserve(key, failure_class="transient", now=_START)
+    before = ledger.read()
+    with pytest.raises(RetryLedgerConflictError, match="failure class"):
+        ledger.import_legacy_failures(key, 1, now=_START)
+    assert ledger.read() == before
+
+
 def test_recovery_release_preserves_failed_backoff_and_fractional_clock(tmp_path: Path) -> None:
     ledger = RetryLedger(tmp_path, "change-a")
     key = _engine_key()

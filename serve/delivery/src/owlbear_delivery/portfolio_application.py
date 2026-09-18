@@ -2015,9 +2015,9 @@ class PortfolioApplication:
 
     def _reconcile_retry_results(self, runtime: DeliveryRuntime) -> None:
         """Replay accounting only from owner receipts; absent evidence keeps reservations."""
+        self._import_legacy_worker_budgets(runtime)
         ledger = runtime.retry_ledger(clock=self._clock)
         ledger.reconcile_owner_results()
-        completion = runtime.completion_receipt()
         finalization = runtime.finalization()
         for attempt in ledger.pending_attempts():
             if attempt.key.outcome_id is not None:
@@ -2029,13 +2029,6 @@ class PortfolioApplication:
                 and finalization.exact_head == attempt.key.exact_head
             ):
                 ledger.record_accepted_progress(attempt.attempt_id, now=finalization.finalized_at)
-            elif (
-                attempt.key.action_kind == "observe-acceptance"
-                and completion is not None
-                and completion.finalization_receipt_id == attempt.key.finalization_id
-                and completion.finalized_change_head == attempt.key.exact_head
-            ):
-                ledger.record_accepted_progress(attempt.attempt_id, now=completion.completed_at)
             elif attempt.attempt_id.startswith("continue-"):
                 result = self._read_engine_result(
                     ExecuteDeliveryChangeAction(change_id=runtime.contract.change_id, operation_id=attempt.attempt_id)
@@ -2063,6 +2056,41 @@ class PortfolioApplication:
                 continue
             ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
             return
+
+    def _import_legacy_worker_budgets(self, runtime: DeliveryRuntime) -> None:
+        """Preserve historical failures before a mutation can clear binding metadata."""
+        for binding in runtime.bindings():
+            if not binding.retry_count or binding.stage not in {DeliveryStage.PLANNING, DeliveryStage.IMPLEMENTATION}:
+                continue
+            role = (
+                DeliveryWorkerRole.BUILDER
+                if binding.stage is DeliveryStage.IMPLEMENTATION
+                else DeliveryWorkerRole.PLANNER
+            )
+            completed = {result.task_id for result in binding.results}
+            task_id = (
+                binding.active_task_id
+                or next(
+                    (
+                        task.task_id
+                        for task in binding.tasks
+                        if task.task_id not in completed and set(task.dependency_ids) <= completed
+                    ),
+                    None,
+                )
+                if role is DeliveryWorkerRole.BUILDER
+                else None
+            )
+            change_id = runtime.contract.change_id
+            candidate = _Candidate((0, 0, 0, change_id), change_id, runtime, binding, task_id, role)
+            key = self._worker_retry_key(candidate, self._workspace_manager.show(change_id).last_reviewed_commit)
+            claim = binding.active_claim
+            runtime.retry_ledger(clock=self._clock).import_legacy_failures(
+                key,
+                binding.retry_count,
+                now=self._clock(),
+                existing_attempt=(claim.attempt_id, claim.claim_id) if claim is not None else None,
+            )
 
     def create_design_session(
         self,
@@ -3577,7 +3605,7 @@ class PortfolioApplication:
                         detail="Acceptance observation is waiting for its durable retry policy.",
                     )
                 try:
-                    outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
+                    outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime, reservation.attempt_id)
                 except PublicationProviderError as exc:
                     runtime.retry_ledger(clock=self._clock).record_failure(
                         reservation, failure_code=exc.code.value, now=self._clock()
@@ -3635,6 +3663,7 @@ class PortfolioApplication:
         self,
         change_id: str,
         runtime: DeliveryRuntime,
+        attempt_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
         """Read one provider snapshot while holding only the Change checkpoint lock."""
         if not self._is_acceptance_reconciliation_eligible(runtime):
@@ -3670,7 +3699,7 @@ class PortfolioApplication:
         )
         if outcome is not None:
             return outcome
-        receipt = self._observe_acceptance_once(change_id, runtime, observation=observation)
+        receipt = self._observe_acceptance_once(change_id, runtime, attempt_id=attempt_id, observation=observation)
         return DeliveryAcceptanceReconciliationOutcome(
             change_id=change_id,
             status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
@@ -3809,7 +3838,7 @@ class PortfolioApplication:
             if not reservation.allowed:
                 raise DeliveryAcceptanceWaitingError(reservation.reason_code)
             try:
-                receipt = self._observe_acceptance_once(change_id, runtime)
+                receipt = self._observe_acceptance_once(change_id, runtime, attempt_id=reservation.attempt_id)
             except (DeliveryAcceptanceWaitingError, PublicationProviderError, PortfolioApplicationError) as exc:
                 runtime.retry_ledger(clock=self._clock).record_failure(
                     reservation, failure_code=getattr(exc, "code", "acceptance-wait"), now=self._clock()
@@ -3847,6 +3876,7 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         *,
+        attempt_id: str,
         observation: PublicationPullRequestObservationReceipt | None = None,
     ) -> CompletionReceipt:
         """Apply one already-reserved observation under the Change checkpoint lock."""
@@ -3926,7 +3956,12 @@ class PortfolioApplication:
                 completed_at=_timestamp(self._clock()),
             )
         )
-        completed = runtime.complete_change(receipt)
+        completed = runtime.complete_change(
+            receipt,
+            additional_participants=runtime.retry_ledger(clock=self._clock).owner_result_participants(
+                attempt_id, accepted=True, now=receipt.completed_at
+            ),
+        )
         self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
         return completed
 
@@ -4584,6 +4619,7 @@ class PortfolioApplication:
         """Apply one validated mechanical transition through its exact runtime."""
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._import_legacy_worker_budgets(runtime)
             binding = runtime.transition(request, retry_observed_at=self._clock())
             if request.action == "advance":
                 self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
@@ -5670,6 +5706,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
+                self._import_legacy_worker_budgets(runtime)
                 resolved = runtime.resolve_request(request_id, resolution)
                 self._record_retry_release(runtime, outcome_id=resolved.outcome_id)
                 self._publish_delivery_state(
@@ -5691,6 +5728,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
+                self._import_legacy_worker_budgets(runtime)
                 binding = runtime.unblock(outcome_id, block_id, operator_note, locators)
                 self._record_retry_release(runtime, outcome_id=outcome_id)
                 self._publish_delivery_state(
@@ -5709,6 +5747,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
+                self._import_legacy_worker_budgets(runtime)
                 result = runtime.administrative_move(request)
                 self._publish_delivery_state(
                     change_id,
@@ -7176,7 +7215,7 @@ class PortfolioApplication:
             )
         else:
             values["acceptance"] = self._observe_acceptance_once(
-                action.change_id, self._runtime(action.change_id, for_mutation=True)
+                action.change_id, self._runtime(action.change_id, for_mutation=True), attempt_id=action.operation_id
             )
         return DeliveryEngineActionResult(
             action=action, kind="completed", reason_code="engine-action-completed", **values
@@ -7928,6 +7967,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(submission.change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(submission.change_id),)):
+                self._import_legacy_worker_budgets(runtime)
                 binding = runtime.show_binding(submission.outcome_id)
                 existing = next(
                     (item for item in binding.results if item.task_id == submission.result.task_id),
@@ -8776,23 +8816,7 @@ class PortfolioApplication:
         claim_id: str,
     ) -> RetryReservation | None:
         """Reserve worker/check repair before publishing a claim or writer."""
-        original_candidate = (
-            candidate.binding.candidate.digest
-            if candidate.binding.candidate is not None
-            else candidate.binding.result_candidate.digest
-            if candidate.binding.result_candidate is not None
-            else candidate.binding.outcome_id
-        )
-        key = RetryEpisodeKey.worker(
-            candidate.change_id,
-            f"{candidate.role.value}-claim",
-            source.source_head,
-            contract_digest=contract_fingerprint(candidate.runtime.contract),
-            outcome_id=candidate.binding.outcome_id,
-            task_lineage=candidate.task_id or candidate.binding.outcome_id,
-            procedure_class=candidate.role.value,
-            original_candidate=original_candidate,
-        )
+        key = self._worker_retry_key(candidate, source.source_head)
         ledger = candidate.runtime.retry_ledger(clock=self._clock)
         ledger.import_legacy_failures(key, candidate.binding.retry_count, now=self._clock())
         return ledger.reserve(
@@ -8802,6 +8826,26 @@ class PortfolioApplication:
             attempt_id=attempt_id,
             automatic=True,
             operation_alias=claim_id,
+        )
+
+    @staticmethod
+    def _worker_retry_key(candidate: _Candidate, source_head: str) -> RetryEpisodeKey:
+        original_candidate = (
+            candidate.binding.candidate.digest
+            if candidate.binding.candidate is not None
+            else candidate.binding.result_candidate.digest
+            if candidate.binding.result_candidate is not None
+            else candidate.binding.outcome_id
+        )
+        return RetryEpisodeKey.worker(
+            candidate.change_id,
+            f"{candidate.role.value}-claim",
+            source_head,
+            contract_digest=contract_fingerprint(candidate.runtime.contract),
+            outcome_id=candidate.binding.outcome_id,
+            task_lineage=candidate.task_id or candidate.binding.outcome_id,
+            procedure_class=candidate.role.value,
+            original_candidate=original_candidate,
         )
 
     def _current_launch(

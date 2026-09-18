@@ -1665,6 +1665,11 @@ def acceptance_budget_case(tmp_path: Path, *, exhausted: bool):
 
 def test_acceptance_completion_reconciles_accounting_without_observing_again(tmp_path: Path) -> None:
     application, runtime, provider, state, _head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    ledger = RetryLedger(state_root, "change-a")
+    other_key = RetryEpisodeKey.engine(
+        "change-a", "observe-acceptance", _head, "d" * 40, runtime.finalization().finalization_id
+    )
+    ledger.reserve(other_key, failure_class="acceptance", now=application._clock(), attempt_id="other-target")
     state["pull_request"] = state["pull_request"].model_copy(
         update={
             "state": "closed",
@@ -1682,9 +1687,12 @@ def test_acceptance_completion_reconciles_accounting_without_observing_again(tmp
     calls = provider.read_pull_request.call_count
     assert runtime.completion_receipt() is not None
     _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
-    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    episode = next(item for item in ledger.read().episodes if item.key != other_key)
     assert episode.reset_count == 1
     assert episode.total_attempts == 0
+    assert ledger.episode(other_key).reset_count == 0
+    assert ledger.episode(other_key).total_attempts == 1
+    assert ledger.episode(other_key).last_status == "reserved"
     assert provider.read_pull_request.call_count == calls
 
 
@@ -1724,6 +1732,7 @@ def test_worker_legacy_budget_is_imported_before_dispatch(
     if clear_legacy_block:
         application.clear_block("change-a", "OUT-001", "legacy-retry-budget", "Restored", ("check",))
         assert runtime.show_binding("OUT-001").retry_count == count
+        assert RetryLedger(state_root, "change-a").read().episodes[0].legacy_failures == count
     first = application.acquire_change_action(_continuation_request(application))
     if first.kind == "reconciled":
         first = application.acquire_change_action(_continuation_request(application))
@@ -1769,6 +1778,35 @@ def test_planner_accepted_retry_reconciles_without_caller_replay(tmp_path: Path,
     assert episode.total_attempts == 0
     assert episode.reset_count == 1
     assert episode.accepted_attempt_ids == (launch.claim.attempt_id,)
+
+
+def test_legacy_active_claim_is_imported_before_accepted_advance_clears_counters(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    runtime = runtimes["change-a"]
+    launch = application.acquire_change_action(_continuation_request(application)).launch
+    shutil.rmtree(state_root / "changes/change-a/retry-ledger")
+    frontier = json.loads(runtime.frontier_bytes())
+    frontier["bindings"][0].update(retry_count=2, retry_fingerprint="a" * 64)
+    runtime._frontier_path.write_text(json.dumps(frontier))
+    candidate = application.publish_delivery_plan(
+        "change-a", PublishDeliveryPlan(outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, tasks=(_task(),))
+    )
+    with patch.object(RetryLedger, "record_accepted_progress", side_effect=OSError("interrupted accounting")):
+        application.transition_delivery(
+            "change-a",
+            AdvanceDelivery(
+                action="advance", outcome_id=launch.outcome_id, claim_id=launch.claim.claim_id, output=candidate.output
+            ),
+        )
+    ledger = RetryLedger(state_root, "change-a")
+    imported = ledger.read().episodes[0]
+    assert imported.legacy_failures == 2
+    assert imported.total_attempts == 3
+    assert imported.attempt_ids == (launch.claim.attempt_id,)
+    assert runtime.show_binding("OUT-001").retry_count == 0
+    _reopen_portfolio(tmp_path, state_root, runtimes)
+    accepted = ledger.read().episodes[0]
+    assert (accepted.legacy_failures, accepted.total_attempts, accepted.reset_count) == (2, 0, 1)
 
 
 def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_path: Path) -> None:

@@ -569,29 +569,67 @@ class RetryLedger:
         return _matching_episode(self.read(), key)
 
     def import_legacy_failures(
-        self, key: RetryEpisodeKey, count: int, *, now: datetime | str
+        self,
+        key: RetryEpisodeKey,
+        count: int,
+        *,
+        now: datetime | str,
+        existing_attempt: tuple[str, str] | None = None,
     ) -> RetryEpisodeSummary | None:
         """Carry a binding's historical failures forward, never as a new allowance."""
         if count <= 0:
             return self.episode(key)
         summary, previous = self._read_with_bytes()
         current = _matching_episode(summary, key)
-        if current is not None and (current.legacy_failures >= count or current.reset_count > 0):
+        if current is not None and current.failure_class is not RetryFailureClass.MECHANICAL:
+            message = "legacy worker counters conflict with the episode failure class"
+            raise RetryLedgerConflictError(message)
+        adopt = existing_attempt is not None and (current is None or existing_attempt[0] not in current.attempt_ids)
+        if current is not None and (current.reset_count > 0 or (current.legacy_failures >= count and not adopt)):
             return current
         observed = _retry_time(now)
         if current is None:
             current = RetryEpisodeSummary(episode_id=key.identity, key=key, failure_class=RetryFailureClass.MECHANICAL)
-        total = current.total_attempts + count - current.legacy_failures
+        total = current.total_attempts + max(0, count - current.legacy_failures) + int(adopt)
         exhausted = total >= self.mechanical_repairs + 1
+        next_times = tuple(
+            value
+            for value in (
+                current.next_eligible_at,
+                None if exhausted else _retry_timestamp(observed + timedelta(seconds=2)),
+            )
+            if value is not None
+        )
+        next_eligible_at = max(next_times, key=_retry_time) if next_times else None
+        attempt = (
+            RetryAttempt(
+                attempt_id=existing_attempt[0],
+                episode_id=current.episode_id,
+                key=current.key,
+                failure_class=RetryFailureClass.MECHANICAL,
+                kind="repair",
+                reserved_at=_retry_timestamp(observed),
+                operation_alias=existing_attempt[1],
+            )
+            if adopt
+            else None
+        )
         episode = current.model_copy(
             update={
                 "total_attempts": total,
                 "repair_attempts": max(0, total - 1),
-                "legacy_failures": count,
-                "last_status": "failed",
-                "last_failure_at": _retry_timestamp(observed),
-                "next_eligible_at": None if exhausted else _retry_timestamp(observed + timedelta(seconds=2)),
-                "stop_code": RetryStopCode.EXHAUSTED if exhausted else None,
+                "legacy_failures": max(count, current.legacy_failures),
+                "attempt_ids": (*current.attempt_ids, attempt.attempt_id) if attempt else current.attempt_ids,
+                "last_status": (
+                    "contained"
+                    if current.stop_code is RetryStopCode.CONTAINMENT or current.last_status == "contained"
+                    else "reserved"
+                    if attempt is not None or _pending_attempts(current)
+                    else "failed"
+                ),
+                "last_failure_at": current.last_failure_at or _retry_timestamp(observed),
+                "next_eligible_at": next_eligible_at,
+                "stop_code": current.stop_code or (RetryStopCode.EXHAUSTED if exhausted else None),
             }
         )
         self._commit_summary(
@@ -603,6 +641,8 @@ class RetryLedger:
                     "episodes": _replace_episode(summary.episodes, episode),
                 }
             ),
+            RetryAttempt if attempt is not None else None,
+            attempt,
         )
         return episode
 

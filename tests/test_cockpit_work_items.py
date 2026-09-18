@@ -765,8 +765,15 @@ def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhaust
     application, provider, ledger, restart = acceptance_budget_case(tmp_path, exhausted=exhausted)
     calls = provider.read_pull_request.call_count
     with TestClient(assemble_target_app(application)) as client:
+        for _ in range(2):
+            assert (
+                client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code
+                == 200
+            )
+        assert provider.read_pull_request.call_count == calls
         first = client.post("/api/changes/change-a/acceptance/observe")
     with TestClient(assemble_target_app(restart())) as client:
+        assert client.post("/api/work-items/acceptance/reconcile", json={"change_ids": ["change-a"]}).status_code == 200
         second = client.post("/api/changes/change-a/acceptance/observe")
     assert first.status_code == second.status_code == 409
     assert first.json()["code"] == "ERR_DELIVERY_ACCEPTANCE_WAITING"

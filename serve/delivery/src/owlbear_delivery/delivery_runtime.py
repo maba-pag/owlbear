@@ -2386,7 +2386,9 @@ class DeliveryRuntime:
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
         return candidate
 
-    def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt:
+    def complete_change(
+        self, receipt: CompletionReceipt, *, additional_participants: tuple[TransactionParticipant, ...] = ()
+    ) -> CompletionReceipt:
         """Atomically publish one terminal receipt and its minimal frontier projection."""
         frontier, previous = self._read()
         store = CompletionReceiptStore(self._target_root)
@@ -2450,12 +2452,22 @@ class DeliveryRuntime:
             self.publication_base_digest(previous),
         )
         transaction_id = hashlib.sha256(
-            completion_participant.content + display_participant.content + previous + replacement
+            completion_participant.content
+            + display_participant.content
+            + previous
+            + replacement
+            + b"".join(participant.content for participant in additional_participants)
         ).hexdigest()
         RuntimeTransaction(
             self._target_root,
             f"delivery-completion-{transaction_id}",
-            (completion_participant, display_participant, frontier_participant, pending_participant),
+            (
+                completion_participant,
+                display_participant,
+                frontier_participant,
+                pending_participant,
+                *additional_participants,
+            ),
         ).commit()
         return receipt
 

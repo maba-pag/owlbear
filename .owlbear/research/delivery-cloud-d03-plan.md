@@ -799,13 +799,15 @@ No approved contract changed. The coordinating parent owns publication and indep
 - **Owner/accounting boundary:** accepted Planner/Builder transitions and finalization publish an
   immutable attempt-bound result participant in their existing authority transaction. Application
   restart and continuation reconcile these records, original engine intent/results, finalizer
-  failure reports and exact completion receipts without original caller replay. Existing Builder
+  failure reports and completion-bound attempt results without original caller replay. Existing Builder
   claim receipts and finalization receipts also reconcile without the new companion; mismatched or
   absent evidence does not. Startup skips busy Changes rather than waiting on their execution locks.
   Reservations without
   exact outcome evidence stay consumed; there is no speculative refund or custody release.
-- **Legacy allowance:** nonzero binding failure counts are imported before worker dispatch, including
-  an existing unreset ledger, with an idempotent imported-count projection. Import conservatively
+- **Legacy allowance:** nonzero binding failure counts are imported at restart and before clearing,
+  resolving, returning, administratively resetting or accepting binding authority, as well as before
+  dispatch. Existing issued claims are accounted from runtime identity, not granted another dispatch.
+  An existing unreset ledger uses an idempotent imported-count projection. Import conservatively
   starts a two-second backoff where legacy failure time is unavailable; three failures exhaust.
   Non-accepted block clearing, blocking, return and administrative reset retain unimported counters.
   Refused legacy acquisition reports the shared budget/backoff reason, not a failed worker activation.
@@ -822,7 +824,7 @@ after `uv: command not found`; advisory check clean). No dependency manifests ch
 commands used `uv run --locked pytest`, `-q -n 1 -m 'not api and not model and not e2e'`, and
 repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
 
-- First discriminating legacy ledger selection: **4 passed, 0.92s**. Final bounded closeout:
+- First discriminating legacy ledger selection: **4 passed, 0.92s**. Bounded closeout:
   **111 passed, 26.64s**, including registered consumers, central mutation and TypeScript parity.
   It covers three-point Planner/finalizer transaction crashes, accepted Builder transaction versus
   pre-acceptance workspace interruption, missing owner reservations, exact historical receipt matching,
@@ -832,15 +834,29 @@ repository-local `--basetemp=.owlbear/scratch/d03-b-pytest`.
 - Scoped `ruff check` and `ruff format --check` passed for all **8 changed Python files**.
   One existing Starlette/AnyIO deprecation warning remains. No frontend source/dependency change:
   prior frontend evidence is not rerun or upgraded to pinned-Node acceptance.
-- After the final acquisition-presentation refinement, the impacted application selection
-  `-k 'worker_legacy_budget or continuation_preserves_failed_activation_identity or worker_budget_survives_resolved_blocks or block_accounting_failure'`
-  passed **10 tests, 4.12s** with the same flags; both scoped Ruff checks passed again.
-- Consumer follow-up strengthened the two registered-observation nodes to cover both backoff
-  and the one later read after three automatic waits, then repeat through fresh core applications
-  and fresh MCP/HTTP clients. **4 passed, 5.58s**; three-file Ruff check/format passed. Production
-  source was unchanged by this follow-up; no additional provider read or reset occurred on restart.
+- The subsequent pre-mutation legacy-import refinement is production code, not merely retained
+  counters: tests prove import before block clearing and before accepted advancement erases legacy
+  fields, including crash/restart of an already-issued legacy claim. Real registered MCP/HTTP
+  operations cover backoff and one later read, then fresh applications/clients cannot read again.
+  The real HTTP polling route also remains bounded across repeated polls and restart. These nodes
+  passed **11 tests, 7.05s**. Impacted ledger/application closeout then passed **54 tests, 8.79s**
+  with `-k 'legacy or retry or planner_accepted or submit_result_promotes or continuation_finalization_replays_atomic or existing_builder_receipt or existing_finalization_receipt or block_accounting or worker_budget_survives or worker_and_finalizer_reservations'`;
+  all eight Python files passed Ruff check/format again. The 111-test run is the preceding bounded
+  closeout, supplemented by these changed-path checks, not a rerun on this final refinement.
+- Final exact-isolation check: completion publishes its attempt result in the completion transaction;
+  restart does not reset other episodes merely because head/finalization match. A different-target
+  pending episode stays consumed while the completed observation reconciles without caller replay.
+  The application acceptance selection plus central-mutability node passed **28 tests, 15.39s**;
+  eight-file Ruff check/format passed again.
+- Review follow-up: legacy import now retains an existing stop/containment and later backoff,
+  preserves its failure timestamp and rejects incompatible failure classes. Targeted ledger/legacy
+  and owner-restart proof passed **29 tests, 5.20s**; both changed files passed Ruff check/format.
+  The suggested missed-recovery gaps do not apply to this candidate: runtime mutation entry calls
+  `_read()` (transaction recovery), and startup calls `runtime.bindings()` through legacy import
+  before scanning owner results. Engine/direct/background target identity uses the same
+  `observed_target_head()` owner; provider failure codes are `StrEnum`.
 
-Exact final pytest selection (the restored uv executable was
+Exact bounded-closeout pytest selection (the restored uv executable was
 `.owlbear/scratch/d03-b-tools/bin/uv`; `TMPDIR` pointed to that repository-local directory):
 
 ```sh
