@@ -323,6 +323,46 @@ def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remot
     return coordinator, manager
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("status", "--porcelain=v1", "-z"),
+        ("diff", "--cached", "--quiet", "--"),
+        ("rev-parse", "--path-format=absolute", "--git-path", "index"),
+        ("ls-files", "--sparse", "--stage", "-z"),
+        ("ls-tree", "-z", "HEAD", "--", "shared.txt"),
+        ("cat-file", "blob", "HEAD:shared.txt"),
+    ],
+)
+def test_preservation_git_inspections_have_bounded_timeout(tmp_path: Path, arguments: tuple[str, ...]) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    with patch("owlbear_delivery.change_workspace.subprocess.run") as run:
+        manager._preservation_git(*arguments, cwd=repository)  # noqa: SLF001
+    assert run.call_args.kwargs["timeout"] == 10
+    assert run.call_args.kwargs["env"]["GIT_OPTIONAL_LOCKS"] == "0"
+    assert run.call_args.args[0][3:] == ("--no-optional-locks", *arguments)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "timeout"),
+    [
+        (("status", "--porcelain"), 10),
+        (("-C", ".", "--no-optional-locks", "status", "--porcelain"), 10),
+        (("--no-optional-locks", "-C", ".", "worktree", "list"), 10),
+        (("--no-optional-locks", "branch", "--show-current"), 10),
+        (("--no-optional-locks", "commit", "-m", "message"), None),
+    ],
+)
+def test_git_inspection_timeout_handles_supported_global_options(tmp_path: Path, arguments, timeout) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    with patch("owlbear_delivery.change_workspace.subprocess.run") as run:
+        manager._run_git(*arguments)  # noqa: SLF001
+    assert run.call_args.kwargs["timeout"] == timeout
+    assert run.call_args.args[0][3:] == arguments
+
+
 def test_nonterminal_recovery_same_size_replacement_is_not_the_captured_preimage(tmp_path: Path) -> None:
     worktree = tmp_path / "worktree"
     worktree.mkdir()

@@ -732,6 +732,24 @@ This follow-up stops at C and requires independent review; it is not phase accep
 The coordinating session reports source/Cockpit/ecosystem/dependency/setup CI at `edc2824`
 as `action_required`, not passing. No external CI success is inferred for this candidate.
 
+The workspace checkpoint was published as `9126efc`. The coordinating session reports Python
+CodeQL with zero alerts there; the automated reviewer was unavailable. Independent baseline Opus
+review identified lost Git inspection deadlines: `_preservation_git` prepended
+`--no-optional-locks`, hiding the inspected verb from `_run_git`. The follow-up timeout-only
+repair recognizes the existing global option and `-C`, and bounds preservation status/diff/ref,
+index/tree and blob reads at ten seconds without changing mutation deadlines. Its two new
+timeout test nodes cover eleven cases: **nine failed before repair; all eleven passed after
+repair in 0.85 seconds**. Test-file Ruff check/format and whitespace checks passed; source Ruff
+remains **269 diagnostics versus 269 at `9126efc`, with no new code/message diagnostics**.
+No unchanged preservation suites were rerun for this timeout repair.
+
+The same independent review identified another concrete unresolved provenance/allowlist defect:
+whole-index substring privacy screening contains ordinary tracked names such as
+`custom-tokens.css` and `password-widget`. The approved full-index privacy boundary is unchanged:
+the raw index is copied, so skipping filename screening or weakening secret policy is not a safe
+repair. Settle evidence-backed index/path qualification with the outstanding provenance and
+classification work before claiming C complete.
+
 Automated validation was requested after `d58d78f` but declined to start because of its time limit,
 with an explicit instruction not to retry. No current-source CodeQL or automated review pass is
 claimed; the zero-alert result at historical `03137fd` is not evidence for this source. External CI,

@@ -6191,8 +6191,17 @@ class ChangeWorkspaceManager:
         input_bytes: bytes | None = None,
         environment: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
-        command = arguments[2:] if arguments[:1] == ("-C",) else arguments
-        inspection = command[:1] in (("status",), ("diff",), ("rev-parse",)) or command[:2] in (
+        command = arguments
+        while command[:1] in (("-C",), ("--no-optional-locks",)):
+            command = command[2:] if command[0] == "-C" else command[1:]
+        inspection = command[:1] in (
+            ("status",),
+            ("diff",),
+            ("rev-parse",),
+            ("ls-files",),
+            ("ls-tree",),
+            ("cat-file",),
+        ) or command[:2] in (
             ("branch", "--show-current"),
             ("worktree", "list"),
         )
