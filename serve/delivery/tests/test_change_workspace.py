@@ -344,6 +344,22 @@ def test_nonterminal_recovery_rejects_ignored_inventory_before_private_capture()
         ChangeWorkspaceManager._preservation_status_paths(b"!! .venv/\0")  # noqa: SLF001
 
 
+def test_recovery_workspace_retains_stronger_custody_guard_with_ignored_inventory(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("ignored-recovery")
+    (coordination.worktree_path / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    (coordination.worktree_path / "ignored.txt").write_text("do not touch\n", encoding="utf-8")
+    coordinator.acquire(
+        coordination.change_id,
+        ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
+    )
+
+    captured = manager.capture_recovery_workspace(coordination.change_id, ())
+
+    assert captured[-1] == "active-custody"
+
+
 def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state")
     coordination = _coordination(tmp_path, "repair-release")

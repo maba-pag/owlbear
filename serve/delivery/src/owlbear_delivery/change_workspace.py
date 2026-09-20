@@ -3995,7 +3995,10 @@ class ChangeWorkspaceManager:
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
         if ignored:
-            return coordination, head, fingerprint, paths, "workspace-dirty"
+            # Preserve any stronger custody/preflight guard.  Treating ignored
+            # inventory as generic dirtiness can make Recovery-A appear eligible
+            # while masking an active writer or damaged workspace boundary.
+            return coordination, head, fingerprint, paths, reason or "workspace-dirty"
         if reason == "active-custody" and coordination.publication_lease is None:
             reason = self._captured_finalization_guard(
                 coordination.model_copy(update={"writer": None}), head, promoted_commits
