@@ -99,8 +99,13 @@ export type FinalizationFailureCode =
   | "maintained-check-failed"
   | "maintained-check-unavailable"
   | "independent-review-failed"
-  | "independent-review-unavailable";
-export type FinalizationFailureCategory = "custody-preflight" | "maintained-check" | "independent-review";
+  | "independent-review-unavailable"
+  | "proof-mutated-worktree";
+export type FinalizationFailureCategory =
+  | "custody-preflight"
+  | "maintained-check"
+  | "independent-review"
+  | "proof-mutation";
 
 export interface DeliveryReadinessBasis {
   contract_digest: string | null;
@@ -128,6 +133,9 @@ export interface FinalizationReport {
     checks_state: "not-run" | "failed" | "unknown";
     check_id: string | null;
     exit_status: number | null;
+    procedure_id: string | null;
+    proof_fingerprint_before: string | null;
+    proof_fingerprint_after: string | null;
     paths: string[];
   };
 }

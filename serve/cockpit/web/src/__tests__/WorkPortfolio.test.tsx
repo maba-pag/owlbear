@@ -4958,6 +4958,9 @@ it("shows the applicable finalization attempt retained by readiness", async () =
             checks_state: "not-run",
             check_id: null,
             exit_status: null,
+            procedure_id: null,
+            proof_fingerprint_before: null,
+            proof_fingerprint_after: null,
             paths: [],
           },
         },
@@ -4997,6 +5000,9 @@ it("reports the historical applicability of a finalization attempt from an earli
             checks_state: "failed",
             check_id: "uv run test",
             exit_status: 1,
+            procedure_id: null,
+            proof_fingerprint_before: null,
+            proof_fingerprint_after: null,
             paths: ["serve/delivery"],
           },
         },
@@ -5011,6 +5017,49 @@ it("reports the historical applicability of a finalization attempt from an earli
   expect(within(attempt).getByTestId("readiness-attempt-applicability")).toHaveTextContent("Historical");
   expect(attempt).toHaveTextContent("Maintained checks failed on an earlier candidate.");
   expect(attempt).toHaveTextContent("Failed");
+});
+
+it("renders proof-mutation finalization evidence", async () => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "finalization-failed",
+      checks_state: "failed",
+      last_attempt: {
+        applicability: "current",
+        report: {
+          report_id: "b".repeat(64),
+          sequence: 4,
+          observed_at: "2026-08-13T09:00:00Z",
+          summary: "The maintained proof procedure mutated the managed workspace.",
+          producer: "finalization-diagnostic",
+          request: {
+            change_id: "change-alpha",
+            attempt_key: "attempt-4",
+            category: "proof-mutation",
+            code: "proof-mutated-worktree",
+            checks_state: "failed",
+            check_id: null,
+            exit_status: 0,
+            procedure_id: "proof-procedure",
+            proof_fingerprint_before: "c".repeat(64),
+            proof_fingerprint_after: "d".repeat(64),
+            paths: ["serve/delivery/src/owlbear_delivery"],
+          },
+        },
+      },
+    }),
+  });
+  renderPage();
+  const table = await screen.findByTestId("work-portfolio-table");
+  fireEvent.click(within(table).getAllByRole("link", { name: /Delivery foundation/ })[0]);
+
+  const attempt = within(await screen.findByTestId("work-item-detail")).getByTestId("readiness-last-attempt");
+  expect(attempt).toHaveTextContent("proof-mutation");
+  expect(attempt).toHaveTextContent("proof-mutated-worktree");
+  expect(attempt).toHaveTextContent("proof-procedure");
+  expect(attempt).toHaveTextContent("c".repeat(64));
+  expect(attempt).toHaveTextContent("d".repeat(64));
 });
 
 it("reports engine readiness rather than the publication phase for a dirty candidate", async () => {

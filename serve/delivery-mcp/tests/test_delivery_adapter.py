@@ -79,7 +79,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestSupersessionReceipt,
     MarkChangePullRequestReady,
 )
-from owlbear_delivery.finalization_reports import FinalizationFailureCode
+from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAcquisitionFailure,
     DeliveryActionSelection,
@@ -1481,6 +1481,31 @@ def test_report_finalization_failure_request_reuses_core_structural_validation()
             **request.model_dump(exclude={"paths"}),
             paths=("product.txt",),
         )
+
+
+@pytest.mark.asyncio
+async def test_registered_report_finalization_failure_preserves_proof_mutation_evidence() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {
+        **_requests()["report_finalization_failure"],
+        "category": "proof-mutation",
+        "code": "proof-mutated-worktree",
+        "procedure_id": "proof-procedure",
+        "proof_fingerprint_before": DIGEST,
+        "proof_fingerprint_after": "d" * 64,
+    }
+
+    result = await adapter.report_finalization_failure(request)
+
+    assert result["reason_code"] == "runtime-unavailable"
+    submitted = application.calls[0][1][0]
+    assert isinstance(submitted, ReportFinalizationFailure)
+    assert submitted.category == "proof-mutation"
+    assert submitted.code is FinalizationFailureCode.PROOF_MUTATED_WORKTREE
+    assert submitted.procedure_id == "proof-procedure"
+    assert submitted.proof_fingerprint_before == DIGEST
+    assert submitted.proof_fingerprint_after == "d" * 64
 
 
 def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact() -> None:

@@ -836,6 +836,9 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
         </dd>
         <dt className="text-contrast-medium">Checks</dt>
         <dd>{READINESS_CHECKS_LABELS[attempt.report.request.checks_state]}</dd>
+        <IdentityRow label="Procedure" value={attempt.report.request.procedure_id} />
+        <IdentityRow label="Proof fingerprint before" value={attempt.report.request.proof_fingerprint_before} />
+        <IdentityRow label="Proof fingerprint after" value={attempt.report.request.proof_fingerprint_after} />
         <IdentityRow label="Report" value={attempt.report.report_id} />
         <IdentityRow label="Observed at" value={attempt.report.observed_at} />
       </dl>

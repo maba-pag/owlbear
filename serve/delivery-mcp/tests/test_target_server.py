@@ -564,6 +564,24 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_registered_finalization_failure_schema_exposes_proof_diagnostics() -> None:
+    server = assemble_target_server(_RecordingApplication())  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    schema = tools["report_finalization_failure"].input_schema
+    properties = schema["properties"]
+    assert set(properties) >= {
+        "procedure_id",
+        "proof_fingerprint_before",
+        "proof_fingerprint_after",
+    }
+    assert "proof-mutation" in properties["category"]["enum"]
+    assert "proof-mutated-worktree" in schema["$defs"]["FinalizationFailureCode"]["enum"]
+
+
+@pytest.mark.asyncio
 async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> None:
     application = _RecordingApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]

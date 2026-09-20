@@ -638,30 +638,59 @@ Closeout, split into bounded selections:
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
 | D03-B | Source `7dd03b4de2384edfa77b2b848a784648c3fdd470`, repairing review of `fc557ff`; repair comment `5727705649`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Return accounting finding repaired with same-task backoff/exhaustion, replay and transaction-restart proof. Independent Claude Opus 5 repair review found no significant issues; prior cumulative proof is recorded below. | Ready for re-review, not accepted. Repair-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
-| D03-C | Partial checkpoint `03137fd1dcfaab557a74de2beafdf7357f4b130e`; authorized by comment `5728172369` against plan `92e9135` | Compilation reported by the writer; CodeQL found zero Python alerts at this checkpoint. Early independent Opus review requested preservation/restoration and repair-authority/replay corrections. No behavioral test pass or final review is claimed for this checkpoint. | In progress, not accepted. Complete the authority/provenance integration, durable restoration receipt, bounded repair/resumption, strict consumer companions and focused proof before C review or D. |
+| D03-C | Resumed partial source `4baee52646c2f460f622f9d4342f8b0717965d03`, following `d58d78f` and interrupted `a1c437f`; authorized by comment `5728172369` against plan `92e9135` | Behavioral proof now exists; writer-reported checks and independent Claude Opus 5 findings are recorded below. Automated validation declined to start because of its time limit. | Partial, not accepted. Unresolved preservation fences, provenance/classification, durable restoration receipt, provider gating and bounded end-to-end resumption still block C completion and D. |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
 
-### D03-C partial checkpoint — 2026-09-18
+### D03-C resumed partial checkpoint — 2026-09-20
 
 The user authorized C against the package plan presented at `92e9135`. Published B source and
 its cumulative review plus return-accounting repair re-review are the prerequisite evidence;
 the earlier table's “No C authorization” described that earlier checkpoint, not this new request.
 External CI, pinned-Node and actual host gates remain outstanding and are not waived.
 
-`03137fd` adds workspace raw-preservation/index primitives, completed-outcome repair primitives
-and structural proof-mutation diagnostics. It is an interrupted implementation checkpoint,
-not a usable or accepted C recovery route. Early independent review found restoration image,
-manifest lookup, file-atime fencing, custody/provenance and repair replay/publication defects;
-the final disposition must be checked against the subsequent repair source, not assumed here.
+The resume preserved `a1c437f` and published two further checkpoints. `d58d78f` repairs the
+temporary-file lifetime during exact restoration, strengthens raw path identity fencing, rejects
+ignored inventory before copying, admits completed A recovery custody through an exact transaction
+participant, and checks mechanical retry authority before completed-outcome repair. `4baee52`
+repairs persisted repair-task lineage on replay and adds runtime/application regressions for
+restart, preserved downstream results, and semantic/out-of-scope rejection.
 
-The writer reported compilation and whitespace checks, but no behavioral tests at `03137fd`.
-The fresh runner initially lacked `uv` and Pydantic. The coordinating session subsequently
-installed advisory-checked `uv 0.12.15` under `/tmp/d03-c-tools`; this is tooling setup, not
-test evidence. CodeQL reported zero Python alerts at `03137fd`; automated review was unavailable
-because its configured model could not be loaded. Neither compilation nor that scan establishes
-the recovery safety contract. All unfinished C contract/proof obligations block its completion
-and D; they are not reassigned to E.
+The writer reported the following passing checks at clean source `4baee52`, using
+`uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e'` with explicit paths:
+`serve/delivery/tests/test_recovery.py` (50),
+`serve/delivery/tests/test_portfolio_application.py` (407),
+`serve/delivery/tests/test_delivery_runtime.py` (66), and four authority checks.
+Compilation and whitespace checks passed. A real linked-worktree preservation/restoration test
+also exercises raw index retention, mode restoration, untracked symlink removal, duplicate restore
+and stale-index rejection. These selections overlap earlier inner-loop runs; they are not a count
+of new C scenarios or proof of the entire phase. The existing locked Python environment was
+restored with advisory-checked uv 0.12.16; dependency setup is not test evidence.
+
+Independent Claude Opus 5 read-only review confirmed the temporary-file, custody contradiction,
+ignored-byte copying, retry-admission and runtime replay findings are addressed. At `4baee52`,
+the following concrete findings remain open: access time is incorrectly persisted as stable
+preimage identity; `O_NOATIME` is incorrectly mandatory on platforms lacking it; and ignored files
+can mask stronger non-dirty recovery guard failures. Global ignored-inventory rejection is safe
+but overly restrictive. These are not waived by the successful quiescent restoration fixture.
+
+Still required for C completion: exact-path provenance and disposable/useful/foreign classification;
+durable partial-restore receipt/fault handling; the successful-finalization/publication authority
+branch with draft/readback gating; a registered-procedure proof-attempt record; original-action
+resumption after Builder repair and fresh independent review; and the remaining binary/deletion/
+rename/symlink/filter, private/foreign/index/split/sparse/lock/drift and restart failure matrices.
+The subsequent consumer companion increment mirrors proof-mutation fields in Cockpit, renders
+the structural procedure/fingerprints, and adds backend/TypeScript parity and registered MCP
+schema/adapter coverage. The writer reported 112 Cockpit tests, the frontend build, scoped Biome,
+Ruff, and the MCP/parity selections passing. Independent Opus review found no regression in that
+increment. Full Biome still reports two pre-existing unrelated `.vscode` formatting errors; these
+were not changed. This closes the strict companion gap, not the owner proof-attempt or resumption
+gaps above. Do not relabel unfinished C obligations as E work.
+
+Automated validation was requested after `d58d78f` but declined to start because of its time limit,
+with an explicit instruction not to retry. No current-source CodeQL or automated review pass is
+claimed; the zero-alert result at historical `03137fd` is not evidence for this source. External CI,
+pinned-Node and actual host gates remain outstanding. C is partial and D has not started.
 
 ### D03-B resumed verification — 2026-09-18
 
