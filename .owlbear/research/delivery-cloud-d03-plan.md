@@ -750,6 +750,25 @@ the raw index is copied, so skipping filename screening or weakening secret poli
 repair. Settle evidence-backed index/path qualification with the outstanding provenance and
 classification work before claiming C complete.
 
+Independent follow-up review of the preservation checkpoint required three tightly coupled fixes
+after timeout checkpoint `2618a45` (parent-reported Python CodeQL: zero alerts; timeout repair
+independently passed). Root directory link count is now observation-only, since recreating a
+deleted nested directory changes it; root device/inode/mode fences and file/index hardlink
+rejection remain. Lookup skips incomplete sibling preservation directories with no manifest,
+but still rejects malformed present manifests. Restoration failure journaling now includes
+`subprocess.SubprocessError`, retaining the original Git failure or timeout.
+
+Four initial reproductions failed before these fixes. Fresh scoped proof selecting
+`restores_nested_directory_without_losing_root_fence`,
+`receipt_lookup_contains_incomplete_sibling`, `git_failure_retains_failure_journal`,
+`still_rejects_file_and_index_hardlinks` and `capture_failure_keeps_bytes_and_replays`:
+**12 passed in 2.76 seconds**. Covers nested restoration/replay, substituted root and root-mode
+drift, regular-file/index hardlinks, earlier-sorting orphan versus malformed manifest, Git failure/
+timeout journaling and the directly affected capture-replay cases. Test-file Ruff check/format
+and whitespace checks passed; source Ruff has **267 diagnostics versus 269 at `2618a45`, with
+no new code/message diagnostics**. Per-effect inventory and index scans were not hoisted or
+weakened; repeated bounded scans retain their known cost limitation.
+
 Automated validation was requested after `d58d78f` but declined to start because of its time limit,
 with an explicit instruction not to retry. No current-source CodeQL or automated review pass is
 claimed; the zero-alert result at historical `03137fd` is not evidence for this source. External CI,

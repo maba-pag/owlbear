@@ -866,7 +866,7 @@ class WorktreePreservationReceipt(_WorkspaceModel):
     worktree_device: int = Field(ge=0)
     worktree_inode: int = Field(ge=0)
     worktree_mode: int = Field(ge=0)
-    worktree_links: int = Field(ge=1)
+    worktree_links: int = Field(ge=1)  # Observation only; restoring directories changes this count.
     repository_device: int = Field(ge=0)
     repository_inode: int = Field(ge=0)
     common_device: int = Field(ge=0)
@@ -4112,7 +4112,7 @@ class ChangeWorkspaceManager:
             or self._coordinator.coordination_bytes(change_id) != coordination_bytes
             or self._read_frontier_bytes(change_id) != frontier_bytes
             or self.observed_target_head() != target_head
-            or self._directory_identity(worktree, "registered worktree") != worktree_identity
+            or self._directory_identity(worktree, "registered worktree")[:3] != worktree_identity[:3]
             or self._directory_identity(self._repository, "managed repository") != repository_identity
             or self._directory_identity(self.runtime_root, "runtime root") != runtime_identity
         ):
@@ -4387,8 +4387,8 @@ class ChangeWorkspaceManager:
         try:
             yield operation_id
             self._write_restoration_record(receipt, operation_id, "result.json", record)
-        except (OSError, ValueError, RuntimeError):
-            with suppress(OSError, ValueError, RuntimeError):
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            with suppress(OSError, ValueError, RuntimeError, subprocess.SubprocessError):
                 self._write_restoration_record(
                     receipt, operation_id, "failure.json", {"code": "restoration-interrupted"}
                 )
@@ -4575,12 +4575,11 @@ class ChangeWorkspaceManager:
         repository_identity = self._directory_identity(self._repository, "managed repository")
         runtime_identity = self._directory_identity(self.runtime_root, "runtime root")
         if (
-            worktree_identity[:4]
+            worktree_identity[:3]
             != (
                 receipt.worktree_device,
                 receipt.worktree_inode,
                 receipt.worktree_mode,
-                receipt.worktree_links,
             )
             or repository_identity[:2] != (receipt.repository_device, receipt.repository_inode)
             or runtime_identity[:2] != (receipt.runtime_device, receipt.runtime_inode)
@@ -5060,7 +5059,7 @@ class ChangeWorkspaceManager:
                     except FileNotFoundError:
                         continue
                     if content is None:
-                        raise PreservationRejectedError("private preservation manifest is missing")
+                        continue
                     try:
                         payload = json.loads(content)
                         if not isinstance(payload, dict):

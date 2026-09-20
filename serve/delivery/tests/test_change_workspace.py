@@ -462,8 +462,16 @@ def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path:
     assert participant.content == coordinator.coordination_bytes(coordination.change_id)
 
 
-def _preservation_workspace(tmp_path: Path):
+def _preservation_workspace(tmp_path: Path, *, nested: bool = False):
     repository, initial = _repository(tmp_path, target="release")
+    if nested:
+        (repository / "nested" / "deeper").mkdir(parents=True)
+        (repository / "nested" / "deeper" / "file.txt").write_bytes(b"nested baseline\n")
+        _git(repository, "add", "nested")
+        _git(repository, "commit", "-m", "nested baseline")
+        initial = _git(repository, "rev-parse", "HEAD")
+        _git(repository, "branch", "-f", "release", initial)
+        _git(repository, "update-ref", "refs/remotes/origin/release", initial)
     coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("preserve-change")
     frontier_path = manager.runtime_root / "changes" / coordination.change_id / "frontier.json"
@@ -563,6 +571,91 @@ def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_
     _git(coordination.worktree_path, "update-index", "--chmod=+x", "shared.txt")
     with pytest.raises(PreservationFenceError, match="index"):
         manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+
+@pytest.mark.parametrize("root_drift", ["replacement", "mode"])
+def test_nonterminal_recovery_restores_nested_directory_without_losing_root_fence(
+    tmp_path: Path, root_drift: str
+) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path, nested=True)
+    worktree = coordination.worktree_path
+    shutil.rmtree(worktree / "nested")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "nested" / "deeper" / "file.txt").read_bytes() == b"nested baseline\n"
+    assert worktree.stat().st_nlink != preservation.worktree_links
+    assert manager.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+
+    if root_drift == "replacement":
+        retained = worktree.with_name("retained-original")
+        worktree.rename(retained)
+        shutil.copytree(retained, worktree)
+    else:
+        worktree.chmod(worktree.stat().st_mode ^ 0o010)
+    with pytest.raises(PreservationFenceError, match="root descriptor"):
+        manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "nested" / "deeper" / "file.txt").read_bytes() == b"nested baseline\n"
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+
+
+@pytest.mark.parametrize("kind", ["worktree-file", "index"])
+def test_nonterminal_recovery_still_rejects_file_and_index_hardlinks(tmp_path: Path, kind: str) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    path = (
+        manager._resolve_managed_index(worktree).path  # noqa: SLF001
+        if kind == "index"
+        else worktree / "shared.txt"
+    )
+    os.link(path, tmp_path / "retained-hardlink")
+    if kind == "index":
+        reader, arguments = manager._resolve_managed_index, (worktree,)  # noqa: SLF001
+    else:
+        reader, arguments = manager._read_worktree_state, (worktree, "shared.txt")  # noqa: SLF001
+    with pytest.raises(PreservationRejectedError, match=r"linked|single regular"):
+        reader(*arguments)
+
+
+@pytest.mark.parametrize("orphan_manifest", ["missing", "malformed"])
+def test_nonterminal_recovery_receipt_lookup_contains_incomplete_sibling(tmp_path: Path, orphan_manifest: str) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty bytes\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    incomplete = manager.runtime_root / Path(preservation.storage_ref).parent.parent / ("0" * 64) / "preservation"
+    incomplete.mkdir(parents=True)
+    assert intent.recovery_id > "0" * 64
+    if orphan_manifest == "malformed":
+        (incomplete / "manifest.json").write_bytes(b"{")
+        with pytest.raises(PreservationRejectedError, match="manifest is malformed"):
+            manager.verify_preservation(coordination.change_id, preservation.preservation_id)
+    else:
+        (incomplete / "unfinished.raw").write_bytes(b"retained incomplete object")
+        assert manager.verify_preservation(coordination.change_id, preservation.preservation_id) == preservation
+        manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+        assert (coordination.worktree_path / "shared.txt").read_bytes() == b"base\n"
+        assert (incomplete / "unfinished.raw").read_bytes() == b"retained incomplete object"
+
+
+@pytest.mark.parametrize("error_type", [subprocess.CalledProcessError, subprocess.TimeoutExpired])
+def test_nonterminal_recovery_git_failure_retains_failure_journal(tmp_path: Path, error_type) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty bytes\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    error = error_type(1, "git") if error_type is subprocess.CalledProcessError else error_type("git", 10)
+    with (
+        pytest.raises(error_type) as raised,
+        manager._restoration_attempt(preservation, ("shared.txt",)),  # noqa: SLF001
+        patch("owlbear_delivery.change_workspace.subprocess.run", side_effect=error),
+    ):
+        manager._preservation_git("status", "--porcelain", cwd=coordination.worktree_path)  # noqa: SLF001
+    assert raised.value is error
+    _assert_restoration_failure(manager, preservation)
+    assert not tuple((manager.runtime_root / preservation.storage_ref).glob("restoration/*/result.json"))
+    assert (coordination.worktree_path / "shared.txt").read_bytes() == b"dirty bytes\n"
 
 
 @pytest.mark.parametrize("failure", ["intent", "path-result", "result", "restore"])
