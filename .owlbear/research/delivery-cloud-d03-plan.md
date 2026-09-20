@@ -2,8 +2,8 @@
 
 ## Status and authority
 
-**D03-B: return-accounting repair ready for re-review at `7dd03b4`; independent repair review found no significant issues.
-Final-source CodeQL and external gates remain outstanding. Not accepted; C is not authorized.**
+**D03-C: resumed partial checkpoint; not accepted. C's remaining recovery/integration blockers
+and external gates remain outstanding. D is not authorized.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
@@ -638,7 +638,7 @@ Closeout, split into bounded selections:
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
 | D03-B | Source `7dd03b4de2384edfa77b2b848a784648c3fdd470`, repairing review of `fc557ff`; repair comment `5727705649`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Return accounting finding repaired with same-task backoff/exhaustion, replay and transaction-restart proof. Independent Claude Opus 5 repair review found no significant issues; prior cumulative proof is recorded below. | Ready for re-review, not accepted. Repair-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
-| D03-C | Resumed partial source `4baee52646c2f460f622f9d4342f8b0717965d03`, following `d58d78f` and interrupted `a1c437f`; authorized by comment `5728172369` against plan `92e9135` | Behavioral proof now exists; writer-reported checks and independent Claude Opus 5 findings are recorded below. Automated validation declined to start because of its time limit. | Partial, not accepted. Unresolved preservation fences, provenance/classification, durable restoration receipt, provider gating and bounded end-to-end resumption still block C completion and D. |
+| D03-C | Resumed partial source through `edc2824`; follow-up candidate and proof described below; authorized by comment `5728172369` against plan `92e9135` | Behavioral proof and independent prior Claude Opus 5 findings are recorded below. The latest workspace-only checkpoint awaits independent review and publication. | Partial, not accepted. Provenance/classification, exclusive recovery integration, provider gating, registered proof attempts and bounded end-to-end resumption still block C completion and D. |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
 
@@ -686,6 +686,51 @@ Ruff, and the MCP/parity selections passing. Independent Opus review found no re
 increment. Full Biome still reports two pre-existing unrelated `.vscode` formatting errors; these
 were not changed. This closes the strict companion gap, not the owner proof-attempt or resumption
 gaps above. Do not relabel unfinished C obligations as E work.
+
+#### Workspace-only follow-up from `edc2824`
+
+The next resume verified the previously untested stronger ignored-inventory guard and repaired
+access-time handling. Four new discriminating cases failed before the fix, then passed: regular
+file/index reads without `O_NOATIME`, access-time-changing symlink reads, and an ordinary reader
+between preimage observations. New manifests zero the legacy access-time slot; comparison ignores
+that slot in earlier manifests without changing their recorded bytes. Device/inode/link count,
+size/mode, modification/change times and raw-content/index fences remain enforced.
+
+Restoration now writes private immutable operation and per-path intent/result records with
+independent readback and fsync before reporting success. Interruptions retain a bounded failure
+record where storage remains writable. Replay re-establishes postimage durability, leaves the
+original manifest/objects untouched, and rejects a third value, newly dirty path or changed raw
+index before further restoration. This is a workspace primitive, **not** an application recovery
+completion receipt or permission to release custody.
+
+Fresh proof on the follow-up candidate used repository-local disposable test state and
+`uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e'`:
+
+- `serve/delivery/tests/test_change_workspace.py -k 'nonterminal_recovery or
+  stronger_custody_guard or preservation_captures_linked_index'`: **29 passed in 6.32 seconds**.
+  Includes before/after raw-object and manifest publication failure; restoration intent,
+  post-effect, path-result and final-result interruptions; restart with unchanged paths, changed
+  bytes, a new untracked path or same-size raw-index mutation; directory fsync failure; replay
+  receipt immutability and owner-only permissions.
+- `test_recovery.py::test_completed_outcome_repair_replays_with_retry_authority_and_preserves_result`,
+  the two existing quarantine replay/changed-byte nodes, and
+  `tests/test_delivery_worktree_authority.py::test_delivery_sources_have_no_git_admin_artifact_path`:
+  **4 passed in 2.54 seconds**. These are direct-consumer/authority proof, not completed C integration.
+- Changed workspace test file: Ruff check and format check passed. `git diff --check` passed.
+  Scoped source Ruff remains failing: **269 diagnostics, versus 275 at `edc2824`, with no new
+  code/message diagnostics**. Source formatting also has existing C-region failures. Neither
+  check is represented as a clean source pass; broad lint suppression/autofix was not applied.
+
+Still unfinished: prove exact path ownership and disposable/useful/foreign classification before
+copying; integrate exclusive recovery custody and these primitive receipts with the original
+application action; gate repair with existing successful finalization/publication draft readback;
+persist maintained-procedure proof attempts; complete Builder repair, fresh cumulative review and
+original-action resumption. Complete the outstanding binary/deletion/rename/filter,
+private/staged/foreign, split/sparse/lock and root-substitution matrices. No new public recovery API,
+live record, provider mutation, A exclusion rule or B retry budget was introduced or relaxed.
+This follow-up stops at C and requires independent review; it is not phase acceptance.
+The coordinating session reports source/Cockpit/ecosystem/dependency/setup CI at `edc2824`
+as `action_required`, not passing. No external CI success is inferred for this candidate.
 
 Automated validation was requested after `d58d78f` but declined to start because of its time limit,
 with an explicit instruction not to retry. No current-source CodeQL or automated review pass is

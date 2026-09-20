@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
@@ -44,7 +45,7 @@ from owlbear_delivery.recovery import (
     digest,
     journal_path,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
+from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant, write_contained
 
 
 def _coordination(root: Path, change_id: str) -> ChangeCoordination:
@@ -339,6 +340,43 @@ def test_nonterminal_recovery_same_size_replacement_is_not_the_captured_preimage
     assert not ChangeWorkspaceManager._same_state(before, after)  # noqa: SLF001
 
 
+@pytest.mark.parametrize("kind", ["regular", "symlink", "index"])
+def test_nonterminal_recovery_reads_without_noatime(tmp_path: Path, monkeypatch, kind: str) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("portable-read")
+    path = coordination.worktree_path / "shared.txt"
+    if kind == "index":
+        index = manager._resolve_managed_index(coordination.worktree_path)  # noqa: SLF001
+        path = index.path
+    elif kind == "symlink":
+        path = coordination.worktree_path / "read-link"
+        path.symlink_to("shared.txt")
+    metadata = path.lstat()
+    os.utime(path, ns=(1, metadata.st_mtime_ns), follow_symlinks=False)
+    monkeypatch.delattr(os, "O_NOATIME", raising=False)
+
+    if kind == "index":
+        assert manager._read_managed_index(index) == path.read_bytes()  # noqa: SLF001
+    else:
+        first = manager._read_worktree_state(coordination.worktree_path, path.name)  # noqa: SLF001
+        second = manager._read_worktree_state(coordination.worktree_path, path.name)  # noqa: SLF001
+        assert manager._same_state(first, second)  # noqa: SLF001
+
+
+def test_nonterminal_recovery_reader_atime_does_not_invalidate_preimage(tmp_path: Path) -> None:
+    path = tmp_path / "changed.bin"
+    path.write_bytes(b"preserved")
+    metadata = path.stat()
+    os.utime(path, ns=(1, metadata.st_mtime_ns))
+    before = ChangeWorkspaceManager._read_worktree_state(tmp_path, path.name)  # noqa: SLF001
+
+    assert path.read_bytes() == b"preserved"
+    after = ChangeWorkspaceManager._read_worktree_state(tmp_path, path.name)  # noqa: SLF001
+
+    assert ChangeWorkspaceManager._same_state(before, after)  # noqa: SLF001
+
+
 def test_nonterminal_recovery_rejects_ignored_inventory_before_private_capture() -> None:
     with pytest.raises(PreservationRejectedError, match="ignored"):
         ChangeWorkspaceManager._preservation_status_paths(b"!! .venv/\0")  # noqa: SLF001
@@ -384,7 +422,7 @@ def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path:
     assert participant.content == coordinator.coordination_bytes(coordination.change_id)
 
 
-def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_path: Path) -> None:
+def _preservation_workspace(tmp_path: Path):
     repository, initial = _repository(tmp_path, target="release")
     coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("preserve-change")
@@ -449,7 +487,11 @@ def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_
         receipt.model_dump_json().encode()
     )
     coordinator.record_verified_exclusion(intent.recovery_id)
+    return coordinator, manager, coordination, intent
 
+
+def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     index = manager._resolve_managed_index(coordination.worktree_path)  # noqa: SLF001
     assert index.path != manager.repository / ".git" / "index"
     index_bytes = manager._read_managed_index(index)  # noqa: SLF001
@@ -481,6 +523,158 @@ def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_
     _git(coordination.worktree_path, "update-index", "--chmod=+x", "shared.txt")
     with pytest.raises(PreservationFenceError, match="index"):
         manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+
+@pytest.mark.parametrize("failure", ["intent", "path-result", "result", "restore"])
+@pytest.mark.parametrize("drift", ["none", "path", "new-path", "index"])
+def test_nonterminal_recovery_restoration_journal_replays_interruption(
+    tmp_path: Path, monkeypatch, failure: str, drift: str
+) -> None:
+    coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"dirty preservation\n")
+    (worktree / "added.bin").write_bytes(b"\x00new binary")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+    coordination_bytes = coordinator.coordination_bytes(coordination.change_id)
+    restore = manager._write_worktree_state  # noqa: SLF001
+
+    def fail_record(receipt, operation_id, name, payload):
+        if (
+            (failure == "intent" and name == "intent.json")
+            or (failure == "path-result" and name.startswith("paths/") and name.endswith("/result.json"))
+            or (failure == "result" and name == "result.json")
+        ):
+            msg = "injected receipt interruption"
+            raise OSError(msg)
+        return ChangeWorkspaceManager._write_restoration_record(  # noqa: SLF001
+            manager, receipt, operation_id, name, payload
+        )
+
+    def fail_restore(*args, **kwargs):
+        restore(*args, **kwargs)
+        msg = "injected post-restore interruption"
+        raise OSError(msg)
+
+    with monkeypatch.context() as faults:
+        faults.setattr(manager, "_write_restoration_record", fail_record)
+        if failure == "restore":
+            faults.setattr(manager, "_write_worktree_state", fail_restore)
+        with pytest.raises(OSError, match="injected"):
+            manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert coordinator.coordination_bytes(coordination.change_id) == coordination_bytes
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+    assert manager.verify_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    if failure == "intent":
+        assert (worktree / "added.bin").read_bytes() == b"\x00new binary"
+        assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+    else:
+        _assert_restoration_failure(manager, preservation)
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(intent.recovery_id)
+    if drift != "none":
+        if drift == "path":
+            (worktree / "shared.txt").write_bytes(b"foreign newer edit\n")
+        elif drift == "new-path":
+            (worktree / "foreign.txt").write_bytes(b"unrelated new file\n")
+        else:
+            index_bytes = index_bytes[:-1] + bytes([index_bytes[-1] ^ 1])
+            index.path.write_bytes(index_bytes)
+        before_shared = (worktree / "shared.txt").read_bytes()
+        before_added = (worktree / "added.bin").read_bytes() if (worktree / "added.bin").exists() else None
+        with pytest.raises(PreservationFenceError, match=r"identity|inventory|index"):
+            restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+        assert (worktree / "shared.txt").read_bytes() == before_shared
+        assert ((worktree / "added.bin").read_bytes() if (worktree / "added.bin").exists() else None) == before_added
+    else:
+        _assert_restoration_replay(restarted, preservation)
+    assert restarted._read_managed_index(index) == index_bytes  # noqa: SLF001
+
+
+def _assert_restoration_replay(manager, preservation):
+    assert manager.restore_preservation(preservation.change_id, preservation.preservation_id) == preservation
+    assert (preservation.worktree_path / "shared.txt").read_bytes() == b"base\n"
+    assert not (preservation.worktree_path / "added.bin").exists()
+    journal_root = manager.runtime_root / preservation.storage_ref / "restoration"
+    results = tuple(journal_root.glob("*/result.json"))
+    assert len(results) == 1
+    result = json.loads(results[0].read_bytes())
+    assert result["preservation_receipt_id"] == preservation.receipt_id
+    assert result["paths"] == ["added.bin", "shared.txt"]
+    assert len(tuple(journal_root.glob("*/paths/*/intent.json"))) == 2
+    assert len(tuple(journal_root.glob("*/paths/*/result.json"))) == 2
+    assert all(path.stat().st_mode & 0o077 == 0 for path in journal_root.rglob("*.json"))
+    records = {path: path.read_bytes() for path in journal_root.rglob("*.json")}
+    manager.restore_preservation(preservation.change_id, preservation.preservation_id)
+    assert {path: path.read_bytes() for path in journal_root.rglob("*.json")} == records
+
+
+def _assert_restoration_failure(manager, preservation):
+    failures = tuple((manager.runtime_root / preservation.storage_ref).glob("restoration/*/failure.json"))
+    assert len(failures) == 1
+    assert json.loads(failures[0].read_bytes())["code"] == "restoration-interrupted"
+
+
+@pytest.mark.parametrize("failure", ["before-object", "after-object", "before-manifest", "after-manifest"])
+def test_nonterminal_recovery_capture_failure_keeps_bytes_and_replays(tmp_path: Path, failure: str) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"preserved raw bytes\n")
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+    refs = _git(manager.repository, "show-ref")
+
+    def interrupted_write(root_fd, path, content, **kwargs):
+        selected = path.name == "manifest.json" if "manifest" in failure else path.suffix == ".raw"
+        msg = "injected preservation interruption"
+        if selected and failure.startswith("before"):
+            raise OSError(msg)
+        write_contained(root_fd, path, content, **kwargs)
+        if selected and failure.startswith("after"):
+            raise OSError(msg)
+
+    with (
+        patch("owlbear_delivery.change_workspace.write_contained", side_effect=interrupted_write),
+        pytest.raises(OSError, match="injected"),
+    ):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    assert (worktree / "shared.txt").read_bytes() == b"preserved raw bytes\n"
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+    assert _git(manager.repository, "show-ref") == refs
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    assert manager.verify_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+
+
+def test_nonterminal_recovery_restore_fsync_failure_cannot_publish_success(tmp_path: Path, monkeypatch) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"dirty bytes\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    parent_inode = worktree.stat().st_ino
+    real_fsync = os.fsync
+
+    def fail_parent_sync(descriptor):
+        if os.fstat(descriptor).st_ino == parent_inode:
+            msg = "injected worktree directory fsync failure"
+            raise OSError(msg)
+        real_fsync(descriptor)
+
+    with monkeypatch.context() as faults:
+        faults.setattr(os, "fsync", fail_parent_sync)
+        with pytest.raises(OSError, match="fsync"):
+            manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    journal_root = manager.runtime_root / preservation.storage_ref / "restoration"
+    assert not tuple(journal_root.glob("*/result.json"))
+    assert not tuple(journal_root.glob("*/paths/*/result.json"))
+    assert tuple(journal_root.glob("*/failure.json"))
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert len(tuple(journal_root.glob("*/result.json"))) == 1
 
 
 @pytest.mark.parametrize("operation", ["ensure", "recover", "validate_recovery"])

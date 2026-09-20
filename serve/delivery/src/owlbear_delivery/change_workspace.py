@@ -9,7 +9,7 @@ import re
 import stat
 import subprocess
 import tempfile
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -810,9 +810,9 @@ class PreservationEntry(_WorkspaceModel):
     after_mode: int | None = Field(default=None, ge=0)
     before_object: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     after_object: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    # Device, inode, link count, size, mode, atime, mtime and ctime for the
-    # captured worktree preimage.  The HEAD postimage is read from Git and has
-    # no worktree descriptor to pin.
+    # Device, inode, link count, size, mode, legacy atime slot, mtime and ctime.
+    # New captures zero the atime slot; old captures retain it only as metadata.
+    # Ordinary reads (including readlink) must not invalidate either version.
     before_identity: tuple[int, int, int, int, int, int, int, int] | None = None
 
     @field_validator("path")
@@ -4297,7 +4297,7 @@ class ChangeWorkspaceManager:
         """Restore only recorded paths, retaining private evidence on any fence failure."""
         self._require_preservation_identity(preservation_id)
         self._require_preservation_environment()
-        receipt, index_metadata, _inventory = self._read_preservation_manifest(change_id, preservation_id)
+        receipt, index_metadata, inventory = self._read_preservation_manifest(change_id, preservation_id)
         if paths is None:
             selected = tuple(entry.path for entry in receipt.paths)
         else:
@@ -4305,7 +4305,6 @@ class ChangeWorkspaceManager:
             if selected != tuple(sorted(set(selected))) or not set(selected) <= {entry.path for entry in receipt.paths}:
                 raise PreservationRejectedError("restoration paths must be an exact subset of the preservation")
         worktree, _index = self._verify_preservation_fences(change_id, receipt, index_metadata)
-        inventory = self._read_preservation_manifest(change_id, preservation_id)[2]
         objects = {
             object_name: self._read_private_preservation_object(receipt, object_name)
             for object_name in inventory
@@ -4349,31 +4348,89 @@ class ChangeWorkspaceManager:
             for path in entries
         ):
             raise PreservationFenceError("preservation path inventory changed before restoration")
-        for path in selected:
+        with self._restoration_attempt(receipt, selected) as operation_id:
+            for path in selected:
+                record_name = f"paths/{digest(path.encode())}"
+                record = entries[path].model_dump(mode="json")
+                self._write_restoration_record(receipt, operation_id, f"{record_name}/intent.json", record)
+                self._verify_preservation_fences(change_id, receipt, index_metadata)
+                current_states = {item: self._read_worktree_state(worktree, item) for item in entries}
+                if any(
+                    not self._same_state(current_states[item], expected_states[item])
+                    and not self._same_state(current_states[item], desired_states[item])
+                    for item in entries
+                ):
+                    raise PreservationFenceError("preservation path inventory changed during restoration")
+                current = current_states[path]
+                desired = desired_states[path]
+                if not self._same_state(current, desired):
+                    if not self._same_state(current, expected_states[path]):
+                        raise PreservationFenceError(f"path identity changed before restoration: {path}")
+                    self._write_worktree_state(worktree, path, desired, expected=expected_states[path])
+                if not self._same_state(self._read_worktree_state(worktree, path), desired):
+                    raise PreservationFenceError(f"path identity changed during restoration: {path}")
+                self._sync_restored_path(worktree, path, desired)
+                self._write_restoration_record(receipt, operation_id, f"{record_name}/result.json", record)
             self._verify_preservation_fences(change_id, receipt, index_metadata)
-            current_states = {item: self._read_worktree_state(worktree, item) for item in entries}
-            if any(
-                not self._same_state(current_states[item], expected_states[item])
-                and not self._same_state(current_states[item], desired_states[item])
-                for item in entries
-            ):
-                raise PreservationFenceError("preservation path inventory changed during restoration")
-            current = current_states[path]
-            desired = desired_states[path]
-            if self._same_state(current, desired):
-                continue
-            if not self._same_state(current, expected_states[path]):
-                raise PreservationFenceError(f"path identity changed before restoration: {path}")
-            self._write_worktree_state(worktree, path, desired, expected=expected_states[path])
-            if not self._same_state(self._read_worktree_state(worktree, path), desired):
-                raise PreservationFenceError(f"path identity changed during restoration: {path}")
-        self._verify_preservation_fences(change_id, receipt, index_metadata)
-        final_states = {path: self._read_worktree_state(worktree, path) for path in selected}
-        if any(not self._same_state(final_states[path], desired_states[path]) for path in selected):
-            raise PreservationFenceError("preservation restore did not reach every requested path")
+            final_states = {path: self._read_worktree_state(worktree, path) for path in selected}
+            if any(not self._same_state(final_states[path], desired_states[path]) for path in selected):
+                raise PreservationFenceError("preservation restore did not reach every requested path")
         return receipt
 
     restore_raw_preservation = restore_preservation
+
+    @contextmanager
+    def _restoration_attempt(self, receipt: WorktreePreservationReceipt, selected: tuple[str, ...]) -> Iterator[str]:
+        record = {"preservation_receipt_id": receipt.receipt_id, "paths": selected}
+        operation_id = digest(json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
+        self._write_restoration_record(receipt, operation_id, "intent.json", record)
+        try:
+            yield operation_id
+            self._write_restoration_record(receipt, operation_id, "result.json", record)
+        except (OSError, ValueError, RuntimeError):
+            with suppress(OSError, ValueError, RuntimeError):
+                self._write_restoration_record(
+                    receipt, operation_id, "failure.json", {"code": "restoration-interrupted"}
+                )
+            raise
+
+    def _write_restoration_record(
+        self, receipt: WorktreePreservationReceipt, operation_id: str, name: str, payload: dict[str, object]
+    ) -> None:
+        relative = Path(receipt.storage_ref) / "restoration" / operation_id / Path(name).parent
+        content = (json.dumps({"schema_version": 1, **payload}, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            with contained_directory(root_fd, relative, create=True) as parent_fd:
+                record_path = Path(name).name
+                write_contained(parent_fd, Path(record_path), content)
+                if read_contained(parent_fd, Path(record_path), limit=len(content)) != content:
+                    msg = "private restoration record failed readback"
+                    raise PreservationFenceError(msg)
+                descriptor = os.open(record_path, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
+                try:
+                    os.fsync(descriptor)
+                    os.fsync(parent_fd)
+                finally:
+                    os.close(descriptor)
+        finally:
+            os.close(root_fd)
+
+    @staticmethod
+    def _sync_restored_path(worktree: Path, path: str, state: _PreservedPathState) -> None:
+        """Establish durability again after a response lost beyond the path effect."""
+        relative = PurePosixPath(path)
+        parent_fd = _open_worktree_parent(worktree, relative.parts[:-1])
+        try:
+            if state.kind == "regular":
+                descriptor = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
 
     def _require_preservation_identity(self, recovery_id: str) -> None:
         if not _DIGEST_PATTERN.fullmatch(recovery_id):
@@ -4541,7 +4598,16 @@ class ChangeWorkspaceManager:
         ):
             raise PreservationFenceError("Git common directory identity changed")
         self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        self._verify_preservation_inventory(worktree, receipt)
         return worktree, index
+
+    def _verify_preservation_inventory(self, worktree: Path, receipt: WorktreePreservationReceipt) -> None:
+        status = self._preservation_git(
+            "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all", cwd=worktree
+        ).stdout
+        if not set(self._preservation_status_paths(status)) <= {entry.path for entry in receipt.paths}:
+            msg = "worktree path inventory expanded after preservation"
+            raise PreservationFenceError(msg)
 
     @staticmethod
     def _require_preservation_environment() -> None:
@@ -4641,10 +4707,7 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _read_managed_index(identity: _ManagedIndexIdentity) -> bytes:
-        noatime = getattr(os, "O_NOATIME", 0)
-        if not noatime:
-            raise PreservationRejectedError("managed Git index atime cannot be fenced safely")
-        descriptor = os.open(identity.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | noatime)
+        descriptor = os.open(identity.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             before = os.fstat(descriptor)
             if (
@@ -4658,28 +4721,22 @@ class ChangeWorkspaceManager:
             after = os.fstat(descriptor)
         finally:
             os.close(descriptor)
-        if (
-            len(content) != before.st_size
-            or (
-                before.st_dev,
-                before.st_ino,
-                before.st_mode,
-                before.st_nlink,
-                before.st_size,
-                before.st_atime_ns,
-                before.st_mtime_ns,
-                before.st_ctime_ns,
-            )
-            != (
-                after.st_dev,
-                after.st_ino,
-                after.st_mode,
-                after.st_nlink,
-                after.st_size,
-                after.st_atime_ns,
-                after.st_mtime_ns,
-                after.st_ctime_ns,
-            )
+        if len(content) != before.st_size or (
+            before.st_dev,
+            before.st_ino,
+            before.st_mode,
+            before.st_nlink,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_mode,
+            after.st_nlink,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
         ):
             raise PreservationFenceError("managed Git index changed while it was read")
         return content
@@ -4875,26 +4932,22 @@ class ChangeWorkspaceManager:
         if stat.S_ISLNK(metadata.st_mode):
             content = os.fsencode(os.readlink(candidate))
             after = candidate.lstat()
-            if _preservation_file_identity(after) != identity:
+            if not _same_preservation_identity(_preservation_file_identity(after), identity):
                 raise PreservationFenceError(f"worktree path changed while it was read: {path}")
             return _PreservedPathState("symlink", content, 0o777, identity)
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
             raise PreservationRejectedError("special or multiply-linked worktree path requires containment")
         if metadata.st_size > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("worktree path exceeds the per-file preservation limit")
-        noatime = getattr(os, "O_NOATIME", 0)
-        if not noatime:
-            raise PreservationRejectedError("worktree path atime cannot be fenced safely")
-        try:
-            descriptor = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | noatime)
-        except PermissionError as exc:
-            raise PreservationRejectedError("worktree path atime cannot be fenced safely") from exc
+        descriptor = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             content = os.read(descriptor, metadata.st_size + 1)
             after = os.fstat(descriptor)
         finally:
             os.close(descriptor)
-        if len(content) != metadata.st_size or _preservation_file_identity(after) != identity:
+        if len(content) != metadata.st_size or not _same_preservation_identity(
+            _preservation_file_identity(after), identity
+        ):
             raise PreservationFenceError(f"worktree path changed while it was read: {path}")
         return _PreservedPathState("regular", content, mode, identity)
 
@@ -5136,7 +5189,7 @@ class ChangeWorkspaceManager:
             and (
                 left.identity is None
                 or right.identity is None
-                or left.identity == right.identity
+                or _same_preservation_identity(left.identity, right.identity)
             )
         )
 
@@ -6206,10 +6259,18 @@ def _preservation_file_identity(
         metadata.st_nlink,
         metadata.st_size,
         stat.S_IMODE(metadata.st_mode),
-        metadata.st_atime_ns,
+        0,
         metadata.st_mtime_ns,
         metadata.st_ctime_ns,
     )
+
+
+def _same_preservation_identity(
+    left: tuple[int, int, int, int, int, int, int, int],
+    right: tuple[int, int, int, int, int, int, int, int],
+) -> bool:
+    """Compare stable metadata without invalidating evidence after ordinary reads."""
+    return left[:5] == right[:5] and left[6:] == right[6:]
 
 
 def _validate_relative_preservation_path(path: str) -> None:
