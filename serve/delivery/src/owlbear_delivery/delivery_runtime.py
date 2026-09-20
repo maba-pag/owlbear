@@ -2747,13 +2747,33 @@ class DeliveryRuntime:
             _reference("completed-outcome repair task ownership is absent")
         repair_id = _completed_outcome_repair_id(self._contract.change_id, request, source.digest)
         repair_task_id = f"repair-{repair_id}"
+        existing = next((task for task in binding.tasks if task.task_id == repair_task_id), None)
+        persisted: CompletedOutcomeRepairReceipt | None = None
+        if existing is not None:
+            try:
+                persisted = CompletedOutcomeRepairReceipt.model_validate_json(
+                    read_record(self._target_root, journal_path(self._contract.change_id, repair_id, "receipt"))
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                _reference("completed-outcome repair receipt is missing or invalid", exc)
+            prior_task_ids = persisted.previous_task_ids
+            prior_result_ids = persisted.previous_result_ids
+            if (
+                tuple(task.task_id for task in binding.tasks if task.task_id != repair_task_id) != prior_task_ids
+                or tuple(result.result_id for result in binding.results if result.task_id in prior_task_ids)
+                != prior_result_ids
+            ):
+                _conflict("completed-outcome repair receipt no longer matches its retained lineage")
+        else:
+            prior_task_ids = binding.task_ids
+            prior_result_ids = tuple(result.result_id for result in binding.results)
         finished_at = datetime.now(UTC).isoformat()
         receipt = CompletedOutcomeRepairReceipt.create(
             self._contract.change_id,
             request,
             repair_task_id,
-            binding.task_ids,
-            tuple(result.result_id for result in binding.results),
+            prior_task_ids,
+            prior_result_ids,
             finished_at,
         )
         repair = DeliveryTaskDefinition(
@@ -2766,7 +2786,7 @@ class DeliveryRuntime:
                 f"resume original action {request.original_action_id} only after the repair proof passes."
             ),
             commitment_ids=source.commitment_ids,
-            dependency_ids=binding.task_ids,
+            dependency_ids=prior_task_ids,
             required_outputs=source.required_outputs,
             maintained_surfaces=source.maintained_surfaces,
             constraints=(
@@ -2780,22 +2800,17 @@ class DeliveryRuntime:
                 f"Repair episode {request.episode_id} attempt {request.attempt_id} must be independently reproven.",
             ),
         )
-        existing = next((task for task in binding.tasks if task.task_id == repair_task_id), None)
         if existing is not None:
             if existing != repair:
                 _conflict("completed-outcome repair publication conflicts with its episode identity")
-            try:
-                persisted = CompletedOutcomeRepairReceipt.model_validate_json(
-                    read_record(self._target_root, journal_path(self._contract.change_id, repair_id, "receipt"))
-                )
-            except (OSError, TypeError, ValueError) as exc:
-                _reference("completed-outcome repair receipt is missing or invalid", exc)
+            if persisted is None:
+                _reference("completed-outcome repair receipt is missing or invalid")
             expected_persisted = CompletedOutcomeRepairReceipt.create(
                 self._contract.change_id,
                 request,
                 repair_task_id,
-                binding.task_ids,
-                tuple(result.result_id for result in binding.results),
+                prior_task_ids,
+                prior_result_ids,
                 persisted.finished_at,
             )
             if persisted != expected_persisted:

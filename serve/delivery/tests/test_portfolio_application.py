@@ -130,6 +130,7 @@ from owlbear_delivery import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
+    PrepareCompletedOutcomeRepair,
     PublicationBaselineUnavailableError,
     PublicationCheck,
     PublicationCheckBlockingState,
@@ -177,7 +178,13 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
-from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError, RetryEpisodeKey, RetryLedger
+from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
+    RetryEpisodeKey,
+    RetryFailureClass,
+    RetryLedger,
+    digest,
+)
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
@@ -435,7 +442,36 @@ class _ObservedLock:
         self._lock.release()
 
 
-def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
+def _contract(
+    change_id: str,
+    intent: bytes,
+    design: bytes,
+    *,
+    include_downstream: bool = False,
+) -> DeliveryContract:
+    outcomes = [
+        DeliveryOutcome(
+            outcome_id="OUT-001",
+            title="Acquire work",
+            promise="Return one bounded launch package.",
+            acceptance=("The launch is observable.",),
+            commitment_ids=("COM-001",),
+            dependency_ids=(),
+        )
+    ]
+    plan_scopes = [DeliveryPlanScope(scope_id="SCOPE-001", outcome_id="OUT-001")]
+    if include_downstream:
+        outcomes.append(
+            DeliveryOutcome(
+                outcome_id="OUT-002",
+                title="Report work",
+                promise="Retain one downstream report.",
+                acceptance=("The report is retained.",),
+                commitment_ids=("COM-001",),
+                dependency_ids=("OUT-001",),
+            )
+        )
+        plan_scopes.append(DeliveryPlanScope(scope_id="SCOPE-002", outcome_id="OUT-002"))
     return DeliveryContract(
         change_id=change_id,
         title=f"Delivery {change_id}",
@@ -447,17 +483,8 @@ def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
                 statement="Keep acquisition deterministic.",
             ),
         ),
-        outcomes=(
-            DeliveryOutcome(
-                outcome_id="OUT-001",
-                title="Acquire work",
-                promise="Return one bounded launch package.",
-                acceptance=("The launch is observable.",),
-                commitment_ids=("COM-001",),
-                dependency_ids=(),
-            ),
-        ),
-        plan_scopes=(DeliveryPlanScope(scope_id="SCOPE-001", outcome_id="OUT-001"),),
+        outcomes=tuple(outcomes),
+        plan_scopes=tuple(plan_scopes),
         source_bindings=(
             {"source_name": "intent.md", "sha256": hashlib.sha256(intent).hexdigest()},
             {"source_name": "design.md", "sha256": hashlib.sha256(design).hexdigest()},
@@ -500,6 +527,24 @@ def _task() -> DeliveryTaskDefinition:
         exclusions=("Do not expose portfolio inventory.",),
         acceptance_observations=("The public acquisition result names the active claim.",),
         proof_boundaries=("PortfolioApplication.acquire_frontier_work",),
+    )
+
+
+def _downstream_task() -> DeliveryTaskDefinition:
+    return DeliveryTaskDefinition(
+        task_id="TASK-002",
+        outcome_id="OUT-002",
+        plan_scope_id="SCOPE-002",
+        title="Report acquisition",
+        result="One retained downstream report.",
+        commitment_ids=("COM-001",),
+        dependency_ids=("TASK-001",),
+        required_outputs=("Retained downstream report",),
+        maintained_surfaces=("serve/delivery/src/owlbear_delivery/delivery_runtime.py",),
+        constraints=("Retain prior result evidence.",),
+        exclusions=("Do not rewrite prior results.",),
+        acceptance_observations=("The downstream report remains historical evidence.",),
+        proof_boundaries=("PortfolioApplication completed-outcome repair",),
     )
 
 
@@ -600,16 +645,35 @@ def _runtime(
         task,
         completed_commit,
     )
-    frontier = DeliveryFrontier(
-        bindings=(
-            OutcomeAuthorityBinding(
-                outcome_id="OUT-001",
-                plan_scope_id="SCOPE-001",
-                stage=stage,
-                tasks=(task,) if has_task else (),
-                results=(result,) if has_result else (),
-            ),
+    bindings = [
+        OutcomeAuthorityBinding(
+            outcome_id="OUT-001",
+            plan_scope_id="SCOPE-001",
+            stage=stage,
+            tasks=(task,) if has_task else (),
+            results=(result,) if has_result else (),
         )
+    ]
+    if len(contract.outcomes) > 1:
+        downstream_task = _downstream_task()
+        downstream_result = _task_result(
+            "RESULT-002",
+            contract.change_id,
+            authority_digest,
+            downstream_task,
+            completed_commit,
+        )
+        bindings.append(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-002",
+                plan_scope_id="SCOPE-002",
+                stage=DeliveryStage.COMPLETED if has_result else DeliveryStage.IMPLEMENTATION,
+                tasks=(downstream_task,) if has_task else (),
+                results=(downstream_result,) if has_result else (),
+            )
+        )
+    frontier = DeliveryFrontier(
+        bindings=tuple(bindings)
     )
     path = state_root / "changes" / contract.change_id / "frontier.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -713,6 +777,7 @@ def _portfolio(
     *,
     execution_capacity: int = 3,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
+    include_downstream: bool = False,
 ):
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -733,7 +798,7 @@ def _portfolio(
     for change_id, stage in stages.items():
         intent = f"intent prose sentinel {change_id}\n".encode()
         design = f"design prose sentinel {change_id}\n".encode()
-        contract = _contract(change_id, intent, design)
+        contract = _contract(change_id, intent, design, include_downstream=include_downstream)
         package = store.create(change_id, intent, design)
         store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
         coordination = manager.ensure(change_id)
@@ -7618,6 +7683,46 @@ def test_completed_outcome_repair_replay_does_not_republish_acknowledged_state(t
 
     assert result is sentinel.binding
     application._publish_delivery_state.assert_not_called()
+
+
+def test_completed_outcome_repair_requires_pending_retry_reservation() -> None:
+    application = PortfolioApplication.__new__(PortfolioApplication)
+    application._clock = lambda: "2026-08-12T00:00:00Z"
+    episode_id = "a" * 64
+    episode = Mock(
+        episode_id=episode_id,
+        attempt_ids=("failed-finalize",),
+        failure_class=RetryFailureClass.MECHANICAL,
+        outcome_ids=(digest(b"failed-finalize:failed"),),
+    )
+    pending = Mock(
+        attempt_id="repair-attempt",
+        episode_id=episode_id,
+        kind="repair",
+        failure_class=RetryFailureClass.MECHANICAL,
+    )
+    ledger = Mock()
+    ledger.read.return_value = Mock(episodes=(episode,))
+    ledger.pending_attempts.return_value = (pending,)
+    runtime = Mock()
+    runtime.retry_ledger.return_value = ledger
+    request = PrepareCompletedOutcomeRepair(
+        outcome_id="OUT-001",
+        owning_task_id="task-001",
+        episode_id=episode_id,
+        attempt_id="repair-attempt",
+        defect_code="proof-failure",
+        finding_boundary="proof-procedure",
+        original_action_id="failed-finalize",
+        preservation_id="b" * 64,
+        expected_frontier_digest="c" * 64,
+    )
+
+    application._validate_completed_outcome_repair_retry(runtime, request)
+
+    pending.kind = "original"
+    with pytest.raises(PortfolioApplicationError, match="pending mechanical retry reservation"):
+        application._validate_completed_outcome_repair_retry(runtime, request)
 
 
 def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_path: Path) -> None:

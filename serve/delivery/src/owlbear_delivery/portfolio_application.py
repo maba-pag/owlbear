@@ -7918,18 +7918,18 @@ class PortfolioApplication:
             self._fail("completed-outcome repair preservation identity is stale")
         if runtime.change_stage() is DeliveryChangeStage.COMPLETED:
             self._fail("completed-outcome repair requires a nonterminal Change")
-        self._validate_completed_outcome_repair_retry(runtime, request, attempt)
+        self._validate_completed_outcome_repair_retry(runtime, request)
 
     def _validate_completed_outcome_repair_retry(
         self,
         runtime: DeliveryRuntime,
         request: PrepareCompletedOutcomeRepair,
-        attempt: ChangeFinalizationAttempt,
     ) -> None:
         """Require a pending mechanical repair reservation for the failed finalizer episode."""
         try:
-            summary = runtime.retry_ledger(clock=self._clock).read()
-            pending = runtime.retry_ledger(clock=self._clock).pending_attempts()
+            ledger = runtime.retry_ledger(clock=self._clock)
+            summary = ledger.read()
+            pending = ledger.pending_attempts()
         except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError) as exc:
             self._fail("completed-outcome repair retry authority is unavailable", exc)
         episodes = tuple(

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -28,13 +29,21 @@ from serve.delivery.tests.test_portfolio_application import (
     _task_result,
 )
 
-from owlbear_delivery import DeliveryResultSubmission, DeliveryStage
+from owlbear_delivery import (
+    DeliveryResultSubmission,
+    DeliveryRuntimeReferenceError,
+    DeliveryStage,
+    PortfolioApplicationError,
+    PrepareCompletedOutcomeRepair,
+)
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceReference,
     RecoveryInvocation,
+    RetryEpisodeKey,
+    RetryFailureClass,
     RetryLedger,
     journal_path,
 )
@@ -184,6 +193,90 @@ def completed_recovery_case(tmp_path: Path, kind: str):
         assert _git(launch.worktree_path, "show-ref") == refs
 
     return application, operation, request, unchanged
+
+
+def test_completed_outcome_repair_replays_with_retry_authority_and_preserves_result(
+    tmp_path: Path,
+) -> None:
+    """Exercise the engine repair route after a real failed finalizer recovery."""
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+        include_downstream=True,
+    )
+    host = _host(application)
+    launch = application.acquire_change_action(_continuation_request(application))
+    assert launch.kind == "acquired"
+    assert launch.finalization is not None
+    finalizer = launch.finalization.attempt
+    original_action_id = finalizer.writer.attempt_id
+    failure = _failure_request(application, attempt_key=original_action_id)
+    report = application.report_finalization_failure(failure)
+
+    recovery_intent = application._propose_recovery("change-a")
+    application._complete_recovery("change-a", recovery_intent.recovery_id, host.seal(recovery_intent))
+    assert coordinator.show("change-a").writer is None
+    preservation = application._workspace_manager.capture_preservation("change-a", recovery_intent.recovery_id)
+
+    now[0] = "2026-08-04T00:00:02Z"
+    key = RetryEpisodeKey.engine(
+        "change-a",
+        "finalize",
+        finalizer.exact_head,
+        application._workspace_manager.observed_target_head(),
+        None,
+    )
+    reservation = runtimes["change-a"].retry_ledger(clock=lambda: now[0]).reserve(
+        key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now=now[0],
+        attempt_id="repair-attempt",
+        automatic=True,
+        operation_alias="repair-attempt",
+    )
+    assert reservation.allowed
+    before = runtimes["change-a"].frontier_bytes()
+    downstream_before = runtimes["change-a"].show_binding("OUT-002")
+    request = PrepareCompletedOutcomeRepair(
+        outcome_id="OUT-001",
+        owning_task_id="TASK-001",
+        episode_id=reservation.episode_id,
+        attempt_id=reservation.attempt_id,
+        defect_code=report.request.code.value,
+        finding_boundary="implementation",
+        original_action_id=original_action_id,
+        preservation_id=preservation.preservation_id,
+        expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="proof-procedure repair requires a proof-mutation diagnostic"):
+        application.repair_completed_outcome(
+            "change-a", request.model_copy(update={"finding_boundary": "proof-procedure"})
+        )
+    with pytest.raises(DeliveryRuntimeReferenceError, match="task ownership is absent"):
+        application.repair_completed_outcome("change-a", request.model_copy(update={"owning_task_id": "TASK-002"}))
+
+    binding = application.repair_completed_outcome("change-a", request)
+    assert binding.stage.value == "implementation"
+    assert tuple(task.task_id for task in binding.tasks[:1]) == ("TASK-001",)
+    assert len(binding.tasks) == 2
+    assert binding.tasks[1].task_id.startswith("repair-")
+    assert tuple(result.result_id for result in binding.results) == ("RESULT-001",)
+    assert runtimes["change-a"].show_binding("OUT-002") == downstream_before
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        _state,
+        runtimes,
+        clock=lambda: now[0],
+    )
+    replayed = reopened.repair_completed_outcome("change-a", request)
+    assert replayed == reopened._runtime("change-a").show_binding("OUT-001")
+    assert tuple(result.result_id for result in replayed.results) == ("RESULT-001",)
+    assert reopened._runtime("change-a").show_binding("OUT-002") == downstream_before
+    assert reopened_coordinator.show("change-a").writer is None
 
 
 @pytest.mark.parametrize("writer_recorded", [False, True])
