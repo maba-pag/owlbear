@@ -638,7 +638,7 @@ Closeout, split into bounded selections:
 | D03-P | Repaired plan `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | Independent Claude Opus 5 `d03-p-prerequisite` review PASS, supplied by the coordinating session; all three original findings resolved | Prerequisite satisfied; explicit user approval recorded separately above |
 | D03-A | Source `4dff7c0421aca9b0f84330c4fc1c52689158bbb0`, preserving interrupted `ec392dfa91790bd270378e550ab6ed1ca01f1959` and implementing approved `6c8c039a05c32ec265e45430d0b8a4e8e05be23c` | 84 affected closeout tests, 4 authority/parity tests and 3 additional nonclaim restart tests passed; all 18 changed Python files pass Ruff check/format, with scoped recheck after follow-up. Independent Claude Opus 5 review found no blocking in-scope defects at the published source; the latest review also rechecked merged head `43b91fdf0c5707551aaadad1b567173183174b06` and found no actionable A finding. | Ready for review, not acceptance or B authorization. Automated review unavailable; CodeQL timed out. External CI, baseline workflow mismatch and actual host integration remain outstanding. |
 | D03-B | Source `7dd03b4de2384edfa77b2b848a784648c3fdd470`, repairing review of `fc557ff`; repair comment `5727705649`, approved specification `43b91fdf0c5707551aaadad1b567173183174b06` | Return accounting finding repaired with same-task backoff/exhaustion, replay and transaction-restart proof. Independent Claude Opus 5 repair review found no significant issues; prior cumulative proof is recorded below. | Ready for re-review, not accepted. Repair-source CodeQL timed out; automated review unavailable; external CI and host gates remain. No C authorization. |
-| D03-C | Resumed partial source through `edc2824`; follow-up candidate and proof described below; authorized by comment `5728172369` against plan `92e9135` | Behavioral proof and independent prior Claude Opus 5 findings are recorded below. The latest workspace-only checkpoint awaits independent review and publication. | Partial, not accepted. Provenance/classification, exclusive recovery integration, provider gating, registered proof attempts and bounded end-to-end resumption still block C completion and D. |
+| D03-C | Source `93e8b7062d3aaa14ee9e7fddb382ba7bab2a7bde`, following `9126efc` and `2618a45`; authorized by comment `5728172369` against plan `92e9135` | Scoped preservation and review-repair proof below; independent Claude Opus 5 narrow repair review found no significant issues. Final-source CodeQL timed out; automated reviewer unavailable. | Partial, not accepted. Provenance/classification, exclusive recovery integration, provider gating, registered proof attempts and bounded end-to-end resumption still block C completion and D. |
 | D03-D | Not started | None | Offline diagnostics |
 | D03-E | Not started | None | Registered/cumulative proof |
 
@@ -649,64 +649,32 @@ its cumulative review plus return-accounting repair re-review are the prerequisi
 the earlier table's “No C authorization” described that earlier checkpoint, not this new request.
 External CI, pinned-Node and actual host gates remain outstanding and are not waived.
 
-The resume preserved `a1c437f` and published two further checkpoints. `d58d78f` repairs the
-temporary-file lifetime during exact restoration, strengthens raw path identity fencing, rejects
-ignored inventory before copying, admits completed A recovery custody through an exact transaction
-participant, and checks mechanical retry authority before completed-outcome repair. `4baee52`
-repairs persisted repair-task lineage on replay and adds runtime/application regressions for
-restart, preserved downstream results, and semantic/out-of-scope rejection.
+**Published source:** `93e8b7062d3aaa14ee9e7fddb382ba7bab2a7bde`; PR #326 targets
+`dev@5ca8b6d`. This resume preserves the earlier C checkpoints through `edc2824`, including
+the completed-outcome repair owner/replay, retry admission and proof-mutation consumer companions.
+It changes only the workspace owner, its tests and this progress record.
 
-The writer reported the following passing checks at clean source `4baee52`, using
-`uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e'` with explicit paths:
-`serve/delivery/tests/test_recovery.py` (50),
-`serve/delivery/tests/test_portfolio_application.py` (407),
-`serve/delivery/tests/test_delivery_runtime.py` (66), and four authority checks.
-Compilation and whitespace checks passed. A real linked-worktree preservation/restoration test
-also exercises raw index retention, mode restoration, untracked symlink removal, duplicate restore
-and stale-index rejection. These selections overlap earlier inner-loop runs; they are not a count
-of new C scenarios or proof of the entire phase. The existing locked Python environment was
-restored with advisory-checked uv 0.12.16; dependency setup is not test evidence.
-
-Independent Claude Opus 5 read-only review confirmed the temporary-file, custody contradiction,
-ignored-byte copying, retry-admission and runtime replay findings are addressed. At `4baee52`,
-the following concrete findings remain open: access time is incorrectly persisted as stable
-preimage identity; `O_NOATIME` is incorrectly mandatory on platforms lacking it; and ignored files
-can mask stronger non-dirty recovery guard failures. Global ignored-inventory rejection is safe
-but overly restrictive. These are not waived by the successful quiescent restoration fixture.
-
-Still required for C completion: exact-path provenance and disposable/useful/foreign classification;
-durable partial-restore receipt/fault handling; the successful-finalization/publication authority
-branch with draft/readback gating; a registered-procedure proof-attempt record; original-action
-resumption after Builder repair and fresh independent review; and the remaining binary/deletion/
-rename/symlink/filter, private/foreign/index/split/sparse/lock/drift and restart failure matrices.
-The subsequent consumer companion increment mirrors proof-mutation fields in Cockpit, renders
-the structural procedure/fingerprints, and adds backend/TypeScript parity and registered MCP
-schema/adapter coverage. The writer reported 112 Cockpit tests, the frontend build, scoped Biome,
-Ruff, and the MCP/parity selections passing. Independent Opus review found no regression in that
-increment. Full Biome still reports two pre-existing unrelated `.vscode` formatting errors; these
-were not changed. This closes the strict companion gap, not the owner proof-attempt or resumption
-gaps above. Do not relabel unfinished C obligations as E work.
-
-#### Workspace-only follow-up from `edc2824`
-
-The next resume verified the previously untested stronger ignored-inventory guard and repaired
-access-time handling. Four new discriminating cases failed before the fix, then passed: regular
-file/index reads without `O_NOATIME`, access-time-changing symlink reads, and an ordinary reader
-between preimage observations. New manifests zero the legacy access-time slot; comparison ignores
-that slot in earlier manifests without changing their recorded bytes. Device/inode/link count,
-size/mode, modification/change times and raw-content/index fences remain enforced.
+The resume verified the stronger ignored-inventory guard and repaired access-time handling.
+New manifests zero the legacy access-time slot; comparison ignores that slot in earlier manifests
+without changing their recorded bytes. Reads no longer require `O_NOATIME`. File/index identity,
+hardlink, mode/time and raw-content fences remain; the worktree root is fenced by device/inode/mode,
+not directory link count, which changes during legitimate nested restoration.
 
 Restoration now writes private immutable operation and per-path intent/result records with
 independent readback and fsync before reporting success. Interruptions retain a bounded failure
-record where storage remains writable. Replay re-establishes postimage durability, leaves the
+record for filesystem, fence and Git failures where storage remains writable. Replay re-establishes
+postimage durability, leaves the
 original manifest/objects untouched, and rejects a third value, newly dirty path or changed raw
 index before further restoration. This is a workspace primitive, **not** an application recovery
-completion receipt or permission to release custody.
+completion receipt or permission to release custody. Capture/restore still have no production
+callers. Missing-manifest sibling captures no longer poison intact receipt lookup; malformed
+present manifests still contain. Preservation Git inspections now retain ten-second deadlines
+through the `--no-optional-locks` prefix, without changing mutation deadlines.
 
-Fresh proof on the follow-up candidate used repository-local disposable test state and
+**Writer-owned proof:** disposable fixtures and
 `uv run --locked pytest -q -n 1 -m 'not api and not model and not e2e'`:
 
-- `serve/delivery/tests/test_change_workspace.py -k 'nonterminal_recovery or
+- At `9126efc`, `serve/delivery/tests/test_change_workspace.py -k 'nonterminal_recovery or
   stronger_custody_guard or preservation_captures_linked_index'`: **29 passed in 6.32 seconds**.
   Includes before/after raw-object and manifest publication failure; restoration intent,
   post-effect, path-result and final-result interruptions; restart with unchanged paths, changed
@@ -716,63 +684,57 @@ Fresh proof on the follow-up candidate used repository-local disposable test sta
   the two existing quarantine replay/changed-byte nodes, and
   `tests/test_delivery_worktree_authority.py::test_delivery_sources_have_no_git_admin_artifact_path`:
   **4 passed in 2.54 seconds**. These are direct-consumer/authority proof, not completed C integration.
-- Changed workspace test file: Ruff check and format check passed. `git diff --check` passed.
-  Scoped source Ruff remains failing: **269 diagnostics, versus 275 at `edc2824`, with no new
-  code/message diagnostics**. Source formatting also has existing C-region failures. Neither
-  check is represented as a clean source pass; broad lint suppression/autofix was not applied.
+- At `2618a45`, two timeout nodes: **11 passed in 0.85 seconds**; nine failed before repair.
+- At `93e8b7`, selections `restores_nested_directory_without_losing_root_fence`,
+  `receipt_lookup_contains_incomplete_sibling`, `git_failure_retains_failure_journal`,
+  `still_rejects_file_and_index_hardlinks` and `capture_failure_keeps_bytes_and_replays`:
+  **12 passed in 2.76 seconds**. Includes nested restoration/replay, root substitution/mode drift,
+  file/index hardlinks, orphan versus malformed manifest, Git failure/timeout journaling and
+  capture-replay faults. Four reproductions failed before these repairs.
+- Four atime/platform reproductions failed before the first repair. These selections overlap;
+  they are not an aggregate count or whole-phase proof. Unchanged broad suites were not rerun.
+- Test-file Ruff check/format and whitespace checks passed. Source Ruff still fails:
+  **267 diagnostics versus 275 at `edc2824`**, with no new code/message diagnostics reported.
+  Existing source-format failures remain; no broad autofix or suppression was applied.
 
-Still unfinished: prove exact path ownership and disposable/useful/foreign classification before
-copying; integrate exclusive recovery custody and these primitive receipts with the original
-application action; gate repair with existing successful finalization/publication draft readback;
-persist maintained-procedure proof attempts; complete Builder repair, fresh cumulative review and
-original-action resumption. Complete the outstanding binary/deletion/rename/filter,
-private/staged/foreign, split/sparse/lock and root-substitution matrices. No new public recovery API,
-live record, provider mutation, A exclusion rule or B retry budget was introduced or relaxed.
-This follow-up stops at C and requires independent review; it is not phase acceptance.
-The coordinating session reports source/Cockpit/ecosystem/dependency/setup CI at `edc2824`
-as `action_required`, not passing. No external CI success is inferred for this candidate.
+**Prior evidence, not rerun:** at `4baee52`, recovery/application/runtime selections reported
+50/407/66 passes and four authority checks, with independent Opus review of the earlier repairs.
+The `71330f3` consumer increment reported 112 Cockpit tests, build, scoped Biome/Ruff and MCP/parity
+checks passing with independent review. Two unrelated `.vscode` Biome failures remain.
+The locked environment was restored with advisory-checked uv 0.12.16; manifests were unchanged.
 
-The workspace checkpoint was published as `9126efc`. The coordinating session reports Python
-CodeQL with zero alerts there; the automated reviewer was unavailable. Independent baseline Opus
-review identified lost Git inspection deadlines: `_preservation_git` prepended
-`--no-optional-locks`, hiding the inspected verb from `_run_git`. The follow-up timeout-only
-repair recognizes the existing global option and `-C`, and bounds preservation status/diff/ref,
-index/tree and blob reads at ten seconds without changing mutation deadlines. Its two new
-timeout test nodes cover eleven cases: **nine failed before repair; all eleven passed after
-repair in 0.85 seconds**. Test-file Ruff check/format and whitespace checks passed; source Ruff
-remains **269 diagnostics versus 269 at `9126efc`, with no new code/message diagnostics**.
-No unchanged preservation suites were rerun for this timeout repair.
+**Review and validation:** independent Claude Opus 5 reviewed cumulative C through `edc2824`,
+the `9126efc` restoration checkpoint and `2618a45` deadline fix. Findings drove the root-fence,
+orphan-lookup and Git-failure repairs in `93e8b7`. A fresh independent Claude Opus 5 review of
+`2618a45..93e8b7` found no significant issues, confirming all three fixes and retained root,
+file/index hardlink, malformed-manifest and exception-propagation fences. This is a narrow repair
+verdict, not acceptance or a fresh cumulative review of all C.
+Secret scans passed before each source publication. CodeQL found zero Python alerts at `9126efc`
+and `2618a45`, but **timed out at final source `93e8b7`** and instructed no retry. The automated
+reviewer was unavailable because its configured model was absent; it is not a successful review.
+GitHub source/Cockpit/ecosystem/dependency/setup runs inspected at `93e8b7` were `action_required`,
+not passing. Final-source external CI, pinned-Node and actual host gates remain outstanding.
 
-The same independent review identified another concrete unresolved provenance/allowlist defect:
-whole-index substring privacy screening contains ordinary tracked names such as
-`custom-tokens.css` and `password-widget`. The approved full-index privacy boundary is unchanged:
-the raw index is copied, so skipping filename screening or weakening secret policy is not a safe
-repair. Settle evidence-backed index/path qualification with the outstanding provenance and
-classification work before claiming C complete.
+**C completion blockers (also block D):**
 
-Independent follow-up review of the preservation checkpoint required three tightly coupled fixes
-after timeout checkpoint `2618a45` (parent-reported Python CodeQL: zero alerts; timeout repair
-independently passed). Root directory link count is now observation-only, since recreating a
-deleted nested directory changes it; root device/inode/mode fences and file/index hardlink
-rejection remain. Lookup skips incomplete sibling preservation directories with no manifest,
-but still rejects malformed present manifests. Restoration failure journaling now includes
-`subprocess.SubprocessError`, retaining the original Git failure or timeout.
+- Exact-path ownership/provenance and disposable/useful/foreign classification before copying.
+  Independent review also found whole-index substring screening rejects ordinary tracked names
+  such as `custom-tokens.css` and password-component source, blocking capture on this repository.
+  Qualify the entire copied index through evidence-backed privacy/provenance policy; do not merely
+  exempt names or skip screening. Global ignored-inventory rejection remains over-restrictive.
+- Integrate exclusive application recovery custody and primitive receipts with the original action;
+  these journals alone are neither recovery completion authority nor a resumption gate.
+- Successful-finalization/publication repair branch with draft/readback gating.
+- Durable maintained-procedure proof attempts, not caller-asserted fingerprints.
+- Builder repair → new candidate → fresh cumulative independent review → original whole-Change
+  check/resumption; preserve the original failure budget and historical downstream receipts.
+- Complete remaining binary/deletion/rename/filter, private/staged/foreign, split/sparse/lock
+  and restart matrices. Current focused fixtures do not establish the whole supported surface.
+- Repeated per-effect inventory/index scans have bounded but potentially high cost. Do not hoist
+  away the approved per-effect drift checks merely to improve runtime.
 
-Four initial reproductions failed before these fixes. Fresh scoped proof selecting
-`restores_nested_directory_without_losing_root_fence`,
-`receipt_lookup_contains_incomplete_sibling`, `git_failure_retains_failure_journal`,
-`still_rejects_file_and_index_hardlinks` and `capture_failure_keeps_bytes_and_replays`:
-**12 passed in 2.76 seconds**. Covers nested restoration/replay, substituted root and root-mode
-drift, regular-file/index hardlinks, earlier-sorting orphan versus malformed manifest, Git failure/
-timeout journaling and the directly affected capture-replay cases. Test-file Ruff check/format
-and whitespace checks passed; source Ruff has **267 diagnostics versus 269 at `2618a45`, with
-no new code/message diagnostics**. Per-effect inventory and index scans were not hoisted or
-weakened; repeated bounded scans retain their known cost limitation.
-
-Automated validation was requested after `d58d78f` but declined to start because of its time limit,
-with an explicit instruction not to retry. No current-source CodeQL or automated review pass is
-claimed; the zero-alert result at historical `03137fd` is not evidence for this source. External CI,
-pinned-Node and actual host gates remain outstanding. C is partial and D has not started.
+No public recovery API, live record, provider mutation, A exclusion rule or B retry budget was
+introduced or relaxed. Do not relabel unfinished C work as E. C is partial; D has not started.
 
 ### D03-B resumed verification — 2026-09-18
 
@@ -1510,7 +1472,7 @@ configured model was absent; its wrapper success label is not a pass. Current pr
 source/Cockpit/ecosystem checks were skipped; setup success is not product proof. Prior A tests are
 not B tests. No live records, production exclusion integration or C–E implementation is authorized.
 
-**Next request:** `Review D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's current handoff.`
-Recommended review model: **Claude Opus 5, High**, for independent cross-owner transaction and
-observation-authority review against the final published source and proof. This recommendation
-does not start another session, authorize C, approve a merge, waive host proof or authorize activation.
+**Next request:** `Resume D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's recorded completion blockers; stop after C.`
+Recommended implementation model: **GPT-6 Astra, High**, for the remaining cross-owner provenance,
+custody and resumption boundaries, followed by independent Claude Opus 5 review. This recommendation
+does not dispatch another session, authorize D, approve a merge, waive host proof or authorize activation.
