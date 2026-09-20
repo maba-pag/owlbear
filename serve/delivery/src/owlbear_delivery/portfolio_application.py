@@ -7858,14 +7858,20 @@ class PortfolioApplication:
             runtime = self._runtime(change_id, for_mutation=True, allow_finalizer=True)
             if request.outcome_id not in {binding.outcome_id for binding in runtime.bindings()}:
                 self._fail("completed-outcome repair references an unknown outcome")
-            if not runtime.has_completed_outcome_repair(request):
+            replay = runtime.has_completed_outcome_repair(request)
+            if not replay:
                 self._validate_completed_outcome_repair_request(change_id, runtime, request)
             binding = runtime.prepare_completed_outcome_repair(request)
-            self._publish_delivery_state(
-                change_id,
-                runtime,
-                _checkpoint_operation_id("completed-outcome-repair", change_id, request.outcome_id, request.attempt_id),
-            )
+            # A replay after the publication acknowledgment must not invoke the
+            # provider again.  An unacknowledged local intent remains retryable.
+            if not replay or runtime.pending_state_publication() is not None:
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    _checkpoint_operation_id(
+                        "completed-outcome-repair", change_id, request.outcome_id, request.attempt_id
+                    ),
+                )
             return binding
 
     def _validate_completed_outcome_repair_request(
@@ -7881,14 +7887,12 @@ class PortfolioApplication:
         if runtime.active_claims() or runtime.integration_repair_claim() is not None:
             self._fail("completed-outcome repair cannot overlap another active Delivery claim")
         if (
-            writer is None
-            or writer.kind != "finalize"
-            or writer.attempt_id != request.original_action_id
-            or attempt is None
-            or attempt.writer != writer
-            or attempt.finished_at is not None
+            attempt is None
+            or attempt.writer.attempt_id != request.original_action_id
+            or writer is not None
+            or attempt.finished_at is None
         ):
-            self._fail("completed-outcome repair requires the matching failed finalizer custody")
+            self._fail("completed-outcome repair requires the matching failed finalizer record")
         try:
             reports = FinalizationReportStore(self._target_root, change_id).read().reports
             preservation = self._workspace_manager.verify_preservation(change_id, request.preservation_id)
@@ -7914,6 +7918,42 @@ class PortfolioApplication:
             self._fail("completed-outcome repair preservation identity is stale")
         if runtime.change_stage() is DeliveryChangeStage.COMPLETED:
             self._fail("completed-outcome repair requires a nonterminal Change")
+        self._validate_completed_outcome_repair_retry(runtime, request, attempt)
+
+    def _validate_completed_outcome_repair_retry(
+        self,
+        runtime: DeliveryRuntime,
+        request: PrepareCompletedOutcomeRepair,
+        attempt: ChangeFinalizationAttempt,
+    ) -> None:
+        """Require a pending mechanical repair reservation for the failed finalizer episode."""
+        try:
+            summary = runtime.retry_ledger(clock=self._clock).read()
+            pending = runtime.retry_ledger(clock=self._clock).pending_attempts()
+        except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError) as exc:
+            self._fail("completed-outcome repair retry authority is unavailable", exc)
+        episodes = tuple(
+            episode
+            for episode in summary.episodes
+            if request.original_action_id in episode.attempt_ids
+        )
+        if len(episodes) != 1:
+            self._fail("completed-outcome repair is not bound to one retry episode")
+        episode = episodes[0]
+        if (
+            request.episode_id != episode.episode_id
+            or episode.failure_class is not RetryFailureClass.MECHANICAL
+            or digest(f"{request.original_action_id}:failed".encode()) not in episode.outcome_ids
+        ):
+            self._fail("completed-outcome repair does not match the failed retry episode")
+        repair_attempts = tuple(item for item in pending if item.attempt_id == request.attempt_id)
+        if (
+            len(repair_attempts) != 1
+            or repair_attempts[0].episode_id != episode.episode_id
+            or repair_attempts[0].kind != "repair"
+            or repair_attempts[0].failure_class is not RetryFailureClass.MECHANICAL
+        ):
+            self._fail("completed-outcome repair requires a pending mechanical retry reservation")
 
     def _unavailable_change(
         self, change_id: str, reason: Literal["runtime-unavailable", "coordination-unavailable"] = "runtime-unavailable"

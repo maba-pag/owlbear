@@ -25,12 +25,24 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    PreservationFenceError,
+    PreservationRejectedError,
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
     RecoverOutOfBandHead,
     SyncChangeWithTarget,
     WriterIdentity,
+)
+from owlbear_delivery.recovery import (
+    RecoveryEvidence,
+    RecoveryEvidenceReference,
+    RecoveryIntent,
+    RecoveryInvocation,
+    RecoveryInvocationRequest,
+    RecoveryReceipt,
+    digest,
+    journal_path,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 
@@ -308,6 +320,151 @@ def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remot
     coordinator = PortfolioCoordinator(tmp_path / "state")
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target, remote=remote)
     return coordinator, manager
+
+
+def test_nonterminal_recovery_same_size_replacement_is_not_the_captured_preimage(tmp_path: Path) -> None:
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    path = worktree / "changed.bin"
+    path.write_bytes(b"same-size")
+
+    before = ChangeWorkspaceManager._read_worktree_state(worktree, "changed.bin")  # noqa: SLF001
+    replacement = worktree / "replacement.bin"
+    replacement.write_bytes(b"same-size")
+    replacement.replace(path)
+    after = ChangeWorkspaceManager._read_worktree_state(worktree, "changed.bin")  # noqa: SLF001
+
+    assert before.content == after.content
+    assert before.mode == after.mode
+    assert not ChangeWorkspaceManager._same_state(before, after)  # noqa: SLF001
+
+
+def test_nonterminal_recovery_rejects_ignored_inventory_before_private_capture() -> None:
+    with pytest.raises(PreservationRejectedError, match="ignored"):
+        ChangeWorkspaceManager._preservation_status_paths(b"!! .venv/\0")  # noqa: SLF001
+
+
+def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state")
+    coordination = _coordination(tmp_path, "repair-release")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="finalize")
+    attempt = ChangeFinalizationAttempt(
+        writer=writer,
+        contract_digest="b" * 64,
+        frontier_digest="c" * 64,
+        exact_head="a" * 40,
+        target_head="b" * 40,
+        finished_at="2026-08-02T00:02:00Z",
+    )
+    coordinator.register(coordination.model_copy(update={"finalization_attempt": attempt}))
+
+    participant = coordinator.prepare_finalization_repair_release(
+        coordination.change_id,
+        writer.attempt_id,
+        "2026-08-02T00:03:00Z",
+    )
+
+    assert isinstance(participant, TransactionParticipant)
+    assert participant.content == coordinator.coordination_bytes(coordination.change_id)
+
+
+def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path, target="release")
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("preserve-change")
+    frontier_path = manager.runtime_root / "changes" / coordination.change_id / "frontier.json"
+    frontier = b'{"frontier":"preservation"}\n'
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier_path.write_bytes(frontier)
+    request = RecoveryInvocationRequest(
+        change_id=coordination.change_id,
+        owner_id="owner-preservation",
+        attempt_id="attempt-preservation",
+        outcome_id="OUT-001",
+        kind="claim",
+        contract_digest="a" * 64,
+        exact_head=initial,
+        target_head=manager.observed_target_head(),
+        branch=coordination.branch,
+        worktree=str(coordination.worktree_path),
+        repository=str(manager.repository),
+        runtime_root=str(manager.runtime_root),
+        integration_target=coordination.integration_target,
+    )
+    invocation = RecoveryInvocation(
+        request=request,
+        host_instance="test-host",
+        host_generation="test-generation",
+        invocation_id="invocation-preservation",
+    )
+    intent = RecoveryIntent(
+        invocation=invocation,
+        frontier_digest=digest(frontier),
+        coordination_digest=digest(coordinator.coordination_bytes(coordination.change_id)),
+        exact_head=initial,
+        target_head=request.target_head,
+        workspace_fingerprint="b" * 64,
+        owner_record="owner record",
+        kind="clean-claim",
+        maintained_surfaces=("src",),
+        last_write_provenance=("test-owner",),
+    )
+    evidence = RecoveryEvidence(
+        reference=RecoveryEvidenceReference(reference="opaque-preservation"),
+        recovery_id=intent.recovery_id,
+        invocation=invocation,
+        status="closed",
+    )
+    receipt = RecoveryReceipt(
+        recovery_id=intent.recovery_id,
+        evidence=evidence,
+        owner_effect="no-workspace-effect",
+        finished_at="2026-08-02T00:04:00Z",
+    )
+    recovery_root = manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "intent").parent
+    recovery_root.mkdir(parents=True, exist_ok=True)
+    (manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "intent")).write_bytes(
+        intent.model_dump_json().encode()
+    )
+    (manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "evidence")).write_bytes(
+        evidence.model_dump_json().encode()
+    )
+    (manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "receipt")).write_bytes(
+        receipt.model_dump_json().encode()
+    )
+    coordinator.record_verified_exclusion(intent.recovery_id)
+
+    index = manager._resolve_managed_index(coordination.worktree_path)  # noqa: SLF001
+    assert index.path != manager.repository / ".git" / "index"
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+    (coordination.worktree_path / "shared.txt").chmod(0o755)
+    (coordination.worktree_path / "preserved-link").symlink_to("shared.txt")
+
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    assert tuple(entry.path for entry in preservation.paths) == ("preserved-link", "shared.txt")
+    assert manager.verify_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    private_root = (
+        manager.runtime_root
+        / "changes"
+        / coordination.change_id
+        / "recovery-receipts"
+        / intent.recovery_id
+        / "preservation"
+    )
+    assert (private_root / "manifest.json").exists()
+    assert (private_root.stat().st_mode & 0o077) == 0
+
+    restored = manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert restored == preservation
+    assert (coordination.worktree_path / "shared.txt").read_bytes() == b"base\n"
+    assert (coordination.worktree_path / "shared.txt").stat().st_mode & 0o777 == 0o644
+    assert not (coordination.worktree_path / "preserved-link").is_symlink()
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+    assert manager.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    _git(coordination.worktree_path, "update-index", "--chmod=+x", "shared.txt")
+    with pytest.raises(PreservationFenceError, match="index"):
+        manager.restore_preservation(coordination.change_id, preservation.preservation_id)
 
 
 @pytest.mark.parametrize("operation", ["ensure", "recover", "validate_recovery"])

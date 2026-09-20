@@ -13,6 +13,7 @@ import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Barrier, Event, Lock
@@ -7597,6 +7598,26 @@ def test_supersede_publication_preserves_finalization_when_provider_fails(tmp_pa
     assert runtime.finalization_invalidation() is None
     assert runtime.publication_history() is not None
     assert runtime.publication_history().current == predecessor_identity
+
+
+def test_completed_outcome_repair_replay_does_not_republish_acknowledged_state(tmp_path: Path) -> None:
+    application = PortfolioApplication.__new__(PortfolioApplication)
+    runtime = Mock()
+    runtime.bindings.return_value = (Mock(outcome_id="OUT-001"),)
+    runtime.has_completed_outcome_repair.return_value = True
+    runtime.prepare_completed_outcome_repair.return_value = sentinel.binding
+    runtime.pending_state_publication.return_value = None
+    application._coordinator = Mock()
+    application._coordinator.acquisition_lock.return_value = nullcontext()
+    application._checkpoint_lock_root = lambda _change_id: tmp_path / "checkpoint-lock"
+    application._runtime = Mock(return_value=runtime)
+    application._publish_delivery_state = Mock()
+    request = Mock(outcome_id="OUT-001", attempt_id="repair-attempt")
+
+    result = application.repair_completed_outcome("change-a", request)
+
+    assert result is sentinel.binding
+    application._publish_delivery_state.assert_not_called()
 
 
 def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_path: Path) -> None:
