@@ -4329,6 +4329,10 @@ class ChangeWorkspaceManager:
         }
         for path in entries:
             self._validate_preservation_path(worktree, path)
+        # A process can die after replacing the target but before unlinking the
+        # owner-private source.  Let the inventory fence authenticate and
+        # remove that exact co-link before ordinary strict reads below.
+        self._verify_preservation_fences(change_id, receipt, index_metadata)
         current_states = {path: self._read_worktree_state(worktree, path) for path in entries}
         if any(
             not self._same_state(current_states[path], expected_states[path])
@@ -4651,7 +4655,25 @@ class ChangeWorkspaceManager:
                             limit=_MAX_PRESERVED_TOTAL_BYTES,
                         )
                         if intent_bytes is None:
-                            raise PreservationFenceError("restoration operation intent is missing")
+                            with (
+                                contained_directory(restoration_fd, Path(operation_id)) as operation_fd,
+                                os.scandir(operation_fd) as incomplete_entries,
+                            ):
+                                if any(True for _entry in incomplete_entries):
+                                    message = "restoration operation intent is missing with artifacts"
+                                    raise PreservationFenceError(message)
+                            for path in entries_by_path:
+                                staging_path = str(
+                                    PurePosixPath(path).parent / _preservation_temporary_name(operation_id, path)
+                                )
+                                self._validate_preservation_path(worktree, staging_path)
+                                try:
+                                    (worktree / PurePosixPath(staging_path)).lstat()
+                                except FileNotFoundError:
+                                    continue
+                                message = "restoration operation intent is missing with worktree exposure"
+                                raise PreservationFenceError(message)
+                            continue
                         try:
                             operation_payload = json.loads(intent_bytes)
                         except json.JSONDecodeError as exc:
@@ -4801,9 +4823,38 @@ class ChangeWorkspaceManager:
                             try:
                                 (worktree / PurePosixPath(staging_path)).lstat()
                             except FileNotFoundError:
-                                if identity is not None and source_state is None:
-                                    target_state = self._read_worktree_state(worktree, path)
-                                    if not self._same_state(target_state, expected_state) and not self._same_state(
+                                if identity is not None:
+                                    try:
+                                        if source_state is None:
+                                            target_state = self._read_worktree_state(worktree, path)
+                                        else:
+                                            target_state = self._read_worktree_state(
+                                                worktree,
+                                                path,
+                                                expected_staging_identity=tuple(identity),
+                                            )
+                                    except (
+                                        OSError,
+                                        PreservationRejectedError,
+                                        PreservationFenceError,
+                                        ValueError,
+                                    ) as exc:
+                                        message = "restoration staging target identity is invalid"
+                                        raise PreservationFenceError(message) from exc
+                                    if source_state is not None and self._same_state(target_state, desired_state):
+                                        if target_state.identity is None or not _same_staging_identity(
+                                            tuple(identity), target_state.identity
+                                        ):
+                                            message = "restoration staging owner identity changed"
+                                            raise PreservationFenceError(message) from None
+                                        self._remove_private_staging(
+                                            receipt,
+                                            operation_id,
+                                            path,
+                                            source,
+                                            tuple(identity),
+                                        )
+                                    elif not self._same_state(target_state, expected_state) and not self._same_state(
                                         target_state, desired_state
                                     ):
                                         raise PreservationFenceError("restoration staging identity has no artifact")
@@ -4811,7 +4862,11 @@ class ChangeWorkspaceManager:
                             if identity is None:
                                 raise PreservationFenceError("restoration staging identity is missing")
                             try:
-                                staging_state = self._read_worktree_state(worktree, staging_path, allow_linked=True)
+                                staging_state = self._read_worktree_state(
+                                    worktree,
+                                    staging_path,
+                                    expected_staging_identity=tuple(identity),
+                                )
                             except (OSError, PreservationRejectedError, PreservationFenceError, ValueError) as exc:
                                 message = "owned restoration staging type or bytes are invalid"
                                 raise PreservationFenceError(message) from exc
@@ -5144,7 +5199,7 @@ class ChangeWorkspaceManager:
         worktree: Path,
         path: str,
         *,
-        allow_linked: bool = False,
+        expected_staging_identity: tuple[int, int, int, int, int, int, int, int] | None = None,
     ) -> _PreservedPathState:
         candidate = worktree / PurePosixPath(path)
         try:
@@ -5159,7 +5214,13 @@ class ChangeWorkspaceManager:
             if not _same_preservation_identity(_preservation_file_identity(after), identity):
                 raise PreservationFenceError(f"worktree path changed while it was read: {path}")
             return _PreservedPathState("symlink", content, 0o777, identity)
-        if not stat.S_ISREG(metadata.st_mode) or (metadata.st_nlink != 1 and not allow_linked):
+        if not stat.S_ISREG(metadata.st_mode):
+            message = "special or multiply-linked worktree path requires containment"
+            raise PreservationRejectedError(message)
+        if metadata.st_nlink != 1 and (
+            expected_staging_identity is None
+            or not _same_staging_identity(expected_staging_identity, identity)
+        ):
             raise PreservationRejectedError("special or multiply-linked worktree path requires containment")
         if metadata.st_size > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("worktree path exceeds the per-file preservation limit")
@@ -5668,11 +5729,18 @@ class ChangeWorkspaceManager:
                 temporary_state = None
             else:
                 temporary_exists = True
-                temporary_state = self._read_worktree_state(worktree, temporary_relative, allow_linked=True)
+                temporary_state = None
             if temporary_exists:
-                if staging_identity is None or temporary_state is None or temporary_state.identity is None:
+                if staging_identity is None:
                     raise PreservationFenceError(f"restoration staging identity is missing: {path}")
-                if not _same_staging_identity(staging_identity, temporary_state.identity):
+                temporary_state = self._read_worktree_state(
+                    worktree,
+                    temporary_relative,
+                    expected_staging_identity=staging_identity,
+                )
+                if temporary_state.identity is None or not _same_staging_identity(
+                    staging_identity, temporary_state.identity
+                ):
                     raise PreservationFenceError(f"restoration staging owner identity changed: {path}")
                 if not self._same_state(temporary_state, state):
                     raise PreservationFenceError(f"owned restoration staging changed before replay: {path}")
@@ -5751,7 +5819,11 @@ class ChangeWorkspaceManager:
                 finally:
                     os.close(root_fd)
                 os.fsync(parent_fd)
-                temporary_state = self._read_worktree_state(worktree, temporary_relative, allow_linked=True)
+                temporary_state = self._read_worktree_state(
+                    worktree,
+                    temporary_relative,
+                    expected_staging_identity=staging_identity,
+                )
                 if (
                     temporary_state.identity is None
                     or staging_identity is None

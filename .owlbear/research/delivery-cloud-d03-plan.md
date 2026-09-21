@@ -644,6 +644,33 @@ Closeout, split into bounded selections:
 
 ### D03-C resumed partial checkpoint — 2026-09-20
 
+#### Review repair — 2026-09-21
+
+User comment `5764113682` authorizes repair of the D03-C review at `27494f0`, not
+completion of the unfinished phase or D work. The repair checkpoints `65e9846` and
+`8cf34bc` preserve progress; the former was explicitly unverified when published.
+
+- Legacy finalization reports now validate against the original canonical field set;
+  current-C reports retain their existing identities. Legacy recovery intents retain
+  their original bytes/IDs, and authority recapture compares every original fence
+  without fabricating preservation provenance. Frozen pre-C report/intent fixtures
+  cover read/replay, completed recovery, restart exclusion and in-flight recapture.
+- Restoration stages privately before exposing an operation-bound worktree name.
+  Durable records bind the source inode and intended bytes/type; identical foreign
+  files are not accepted by name alone. Cross-filesystem staging fails closed.
+  Markerless private partial artifacts are retained, ignored as authority, and not
+  garbage-collected. No-effect absent-path durability walks no longer create parents.
+- The writer reports 221 affected tests passing, including the earlier 11 focused
+  repair cases (overlapping counts), with locked uv 0.12.16 and disposable state.
+  These are worker results, not parent reruns or whole-phase proof. Independent
+  Opus review found the compatible identity encoding sound. Staging review drove
+  fixes for hardlink reads and progressive multi-path journal ordering; the remaining
+  post-replacement/private-unlink crash window is under final repair.
+
+Broader C provenance/classification, copied-index privacy qualification, application
+custody integration, provider/procedure authority and original-action resumption
+remain the blockers listed below. No D work or live-state migration occurred.
+
 The user authorized C against the package plan presented at `92e9135`. Published B source and
 its cumulative review plus return-accounting repair re-review are the prerequisite evidence;
 the earlier table's “No C authorization” described that earlier checkpoint, not this new request.

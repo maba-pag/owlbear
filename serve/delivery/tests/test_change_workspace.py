@@ -812,6 +812,41 @@ def _kill_during_restoration_before_replace(tmp_path: Path, preservation, reposi
     assert result.returncode == -signal.SIGKILL, result.stderr
 
 
+def _kill_after_restoration_replace_before_private_unlink(
+    tmp_path: Path, preservation, repository: Path
+) -> None:
+    script = (
+        "import os, signal, sys\n"
+        "from pathlib import Path\n"
+        "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "root = Path(sys.argv[1])\n"
+        "repository = Path(sys.argv[2])\n"
+        "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "coordinator.record_verified_exclusion(sys.argv[5])\n"
+        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "def kill_before_private_unlink(*args, **kwargs):\n"
+        "    os.kill(os.getpid(), signal.SIGKILL)\n"
+        "manager._remove_private_staging = kill_before_private_unlink\n"
+        "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
+    )
+    result = subprocess.run(  # noqa: S603 - the child is a controlled test process.
+        (
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            str(repository),
+            preservation.change_id,
+            preservation.preservation_id,
+            preservation.recovery_id,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == -signal.SIGKILL, result.stderr
+
+
 def _kill_during_private_staging_write(tmp_path: Path, preservation, repository: Path) -> None:
     ready = tmp_path / "private-stage-write-ready"
     script = (
@@ -899,6 +934,24 @@ def test_nonterminal_recovery_replays_operation_owned_staging_after_subprocess_d
     assert not staging.exists()
 
 
+def test_nonterminal_recovery_cleans_private_source_after_replace_death(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_during_restoration_before_replace(tmp_path, preservation, manager.repository)
+    _kill_after_restoration_replace_before_private_unlink(tmp_path, preservation, manager.repository)
+    target = worktree / "shared.txt"
+    assert target.stat().st_nlink == 2
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert target.read_bytes() == b"base\n"
+    assert target.stat().st_nlink == 1
+
+
 def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(tmp_path: Path) -> None:
     _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     worktree = coordination.worktree_path
@@ -915,6 +968,61 @@ def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert (worktree / "shared.txt").read_bytes() == b"base\n"
     assert not staging.exists()
+
+
+def test_nonterminal_recovery_retains_staging_evidence_when_private_source_disappears(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_during_restoration_before_replace(tmp_path, preservation, manager.repository)
+    staging = _restoration_staging_path(preservation, "shared.txt")
+    staging_record = next(
+        (manager.runtime_root / preservation.storage_ref / "restoration").glob("*/paths/*/staging.json")
+    )
+    staging_payload = json.loads(staging_record.read_bytes())
+    (staging_record.parent / staging_payload["source"]).unlink()
+    staging.unlink()
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    with pytest.raises(PreservationFenceError, match="staging source is missing"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert staging_record.exists()
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+
+
+@pytest.mark.parametrize("orphan", ["empty", "artifact"])
+def test_nonterminal_recovery_handles_empty_operation_directory_without_authorizing_artifacts(
+    tmp_path: Path, orphan: str
+) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    selected = tuple(entry.path for entry in preservation.paths)
+    operation_id = digest(
+        json.dumps(
+            {"preservation_receipt_id": preservation.receipt_id, "paths": selected},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    )
+    operation_dir = manager.runtime_root / preservation.storage_ref / "restoration" / operation_id
+    operation_dir.mkdir(parents=True)
+    if orphan == "artifact":
+        (operation_dir / "orphan").write_bytes(b"unowned")
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    if orphan == "artifact":
+        with pytest.raises(PreservationFenceError, match="intent is missing with artifacts"):
+            restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+        assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+    else:
+        assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+        assert (worktree / "shared.txt").read_bytes() == b"base\n"
 
 
 @pytest.mark.parametrize("mutation", ["bytes", "same-bytes", "same-bytes-foreign", "type", "index"])
