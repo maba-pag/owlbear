@@ -28,8 +28,9 @@ do not load every package, the entire programme history or previous chats by def
 ### Scope and Authority
 
 Repository: **maba-pag/owlbear**. Package order: **D03 -> D04 -> D05 -> D06 -> D07 -> D08**.
-Start D03 only after D02's required implementation/review is complete and published. Verify current
-status and source; no completion is assumed from a schedule. Reuse any already completed work.
+Verify the requested package's prerequisites and current phase in published source, its package
+record and the PR. Reuse completed work; neither this guide's examples nor an old handoff determines
+what remains to do. Resolve stale or contradictory progress against the actual commits and reviews.
 
 The [Delivery programme](change-continuation-delivery-redesign.md) owns product requirements and
 acceptance. This guide owns the cloud execution procedure, not product status. Read the programme's
@@ -78,7 +79,7 @@ to set up a cloud test environment.
 | Core state/custody/replay | Owning pytest suites; temporary repos, clocks, controlled processes and provider fakes below real owners. | Actual laptop/VS Code worker liveness. |
 | MCP registration/arguments/results | [Registered-tool tests](../../serve/delivery-mcp/tests/test_target_server.py) use `Client(assemble_target_server(...))` in-process; [adapter tests](../../serve/delivery-mcp/tests/test_delivery_adapter.py) exercise strict mapping. No daemon or agent MCP binding needed. | Host discovery and external stdio/remote transport. |
 | HTTP behavior | [Cockpit route tests](../../tests/test_cockpit_work_items.py) use the in-process test client and disposable fixtures. | Deployed service operation. |
-| UI logic/types | [Frontend scripts](../../serve/cockpit/web/package.json): scoped `npm test --` with test paths, `npm run build`, and direct ESLint/CSS/HTML checks. | Real geometry, focus or browser security from jsdom alone. |
+| UI logic/types | [Frontend scripts](../../serve/cockpit/web/package.json): scoped tests, type/build checks and the current package-owned linters. Resolve commands from the checked-out manifest. | Real geometry, focus or browser security from jsdom alone. |
 | Browser interaction | `npm run test:e2e:work` uses [a disposable fixture server](../../serve/cockpit/web/e2e/support/start-work-portfolio-stack.mjs). Browser MCP is not needed. Inspect and clean up the harness's temporary resources. | Managed macOS authentication or live activation. |
 | Agent/prompt contracts | [Ecosystem tests](../../tests/test_agent_ecosystem_validation.py) plus actual schema/adapter tests. | Real host dispatch and independently selected model execution. |
 | Static validity | Explicit owned paths with `uv run --locked ruff check`, `ruff format --check`, frontend build/direct linters, and document link checks. | All checks included in external CI/MegaLinter. |
@@ -119,9 +120,9 @@ specific blocker. Missing an optional capability does not invalidate all work on
 ### Package Record and Approval
 
 Each package has one committed plan: `.owlbear/research/delivery-cloud-dNN-plan.md`, using the
-lowercase package ID, for example `delivery-cloud-d04-plan.md`. This is a future output convention,
-not a claim that these files already exist. Keep one current specification and concise progress,
-not a chronological diary. Git history and PR discussions retain superseded details.
+lowercase package ID, for example `delivery-cloud-d04-plan.md`. Reuse the existing package record
+when present. Keep one current specification and concise progress, not a chronological diary.
+Git history and PR discussions retain superseded details.
 
 The plan must contain:
 
@@ -130,8 +131,9 @@ The plan must contain:
 2. **Phases:** exact IDs, dependency order, editable paths, required exports/consumer companions,
    positive/negative scenarios and runnable proof commands. Separate narrow inner-loop checks from
    justified closeout checks, with expected runtime where known. For each phase, assess complexity/
-   uncertainty and impact if wrong; recommend an implementation tier and review model with a short
-   reason using Model Selection below. Keep tests with the behavior they prove.
+   uncertainty and impact if wrong to choose proof boundaries and identify unresolved decisions.
+   Use Model Selection below for the actual next action, not a permanent expensive-model assignment
+   attached to the phase ID. Keep tests with the behavior they prove.
 3. **Progress:** for each phase, implementation revision, actual proof, review reference and remaining
    work. Keep specification approval separate from worker-written progress.
 4. **Verification gaps:** check/claim, reason unrun, evidence available, responsible environment and
@@ -153,6 +155,37 @@ successor's safety contract blocks that successor. Between packages, require the
 PR merged into `dev` with required checks/reviews satisfied. Host checks expressly assigned to D08-H
 remain pending; their absence must not be reported as full product acceptance or silently waived.
 
+### Model Selection
+
+**Default to GPT-5.6 Luna Max for planning, implementation, review, repair and resume.** Settled
+requirements, existing patterns and clear acceptance criteria do not need a larger model merely
+because the action is called planning or review. High impact requires strong proof, not automatic
+model escalation. A precisely diagnosed safety defect with a defined repair/test boundary can be
+Luna work. This cloud staffing policy replaces model preferences elsewhere, not product requirements.
+
+| Select | When it earns the additional cost | Complete PR mention |
+| --- | --- | --- |
+| GPT-5.6 Luna Max | Default, including source-grounded planning and independent review against explicit criteria. | `@copilot+gpt-5.6-luna:max` |
+| Claude Opus 5 | An additional perspective is needed on ambiguous acceptance, cross-component safety interactions or consequential final review. Name the unresolved claim it must assess. | `@copilot+claude-opus-5` |
+| GPT-6 Astra | Novel architecture or cross-cutting contracts require broad synthesis and a material trade-off cannot be resolved from the approved plan/current owners. Scope it to that decision, then return bounded work to Luna. | `@copilot+gpt-6-astra` |
+
+These mention forms have been supplied by the user or observed in this repository's PR workflow.
+Do not invent depth suffixes. Other models/depths, including Sol, need an exact GitHub-generated
+selector and a concrete benefit for this task; do not make them mandatory escalation steps.
+Respect the user's selected model. A recommendation cannot switch the running session's model.
+
+Do not escalate solely because of a phase letter, a risk label, a timeout, a test failure or review
+findings. First narrow the current task and use its evidence. Recommend a larger model only with
+one concrete unresolved decision or demonstrated reasoning gap and why the extra review/reasoning
+would help. Exact cost ratios and benchmark equivalence are not assumed. Repair/resume starts with
+Luna unless the remaining work meets that escalation test; it need not inherit the previous model.
+
+Independent review still uses a separate read-only worker, not the implementer's self-check. Luna
+may review Luna-produced work against well-defined criteria; different-family Opus review is useful
+where the stated risk or ambiguity warrants it, not compulsory for every phase. Preserve any
+explicit task-specific review requirement until changed by the user. No model choice waives tests,
+acceptance, unresolved findings, required human approval or exact-revision review.
+
 ### Session End and Recovery
 
 Target 30 minutes of coding and 15 minutes of proof/handoff; stop new implementation by minute 35
@@ -161,12 +194,24 @@ Publish coherent checkpoints early through the platform; unpushed work may not s
 If a phase is too large, checkpoint it and continue that phase in another session. Never trim safety
 or proof to fit the clock. Split an oversized PR only at a reviewed coherent boundary.
 
-End with the phase, observed code revision, actual checks, unresolved findings/gaps and **one short
-copy-ready next request** using the prompts below. The recommendation does not dispatch or authorize
-anything. Beside the request, give the recommended next model and reasoning depth with one reason;
-keep selection outside the instruction text, or use the GitHub-generated qualified mention described
-under Model Selection. Use plain status: ready for review, partial, or blocked. "Ready for review"
-can have recorded external gaps; it is not merge approval or permission to skip critical proof.
+End with the phase, observed code revision, actual checks, unresolved findings/gaps and **one complete
+next request in a `text` code block**. Start the request with the exact model-qualified mention from
+Model Selection, then the action, actual phase ID, this guide's path and necessary PR/review context.
+Default prefix: `@copilot+gpt-5.6-luna:max`. Never output a bare `Repair D03-C ...`, plain `@copilot`,
+a model placeholder, or a separate model recommendation in place of a usable command. No hashes,
+paths or model names should need manual assembly. If escalating, explain why outside the block,
+but still put the selected model's complete mention inside it.
+
+Choose the next action from evidence: partial work -> Resume the same phase; unresolved review
+findings -> Repair that phase; ready candidate -> Review; reviewed prerequisite -> propose only the
+next phase defined in the package plan. Include the review/report link if not already readable on
+the PR. A genuine unresolved user decision needs a precise question, not a command that presumes
+approval. If the package is ready for human merge, state that instead of inventing another agent job.
+
+Keep the package progress and PR summary aligned with the published result, replacing obsolete
+"plan only" or "no implementation" claims as work advances. Do not append a session-by-session
+transcript. Use plain status: ready for review, partial, or blocked, with external gaps explicit.
+The next request is a recommendation only; it does not dispatch, grant approval or start a successor.
 
 On interruption, inspect published commits, the package record and actual test/review evidence.
 Preserve good work. Do not restart the package or assume success from a missing response. Repair
@@ -188,7 +233,8 @@ Research enough to settle the next coherent contract and falsifiable proof. The 
 table is an initial split, not sufficient authority for implementation. Resolve concrete paths,
 interfaces, transaction boundaries and test oracles in the package plan. Revise the split if needed,
 preserving all requirements and explicit phase dependencies; don't create speculative frameworks.
-Mark critical decisions that cannot safely be handed to a lighter implementation model.
+Identify genuinely unresolved design decisions separately from straightforward decomposition of
+settled requirements; apply Model Selection to the decision rather than all planning work.
 
 Create/revise only the package plan and required source attribution, open/update the package draft
 PR targeting `dev`, and stop. No product edits. Present only genuine user decisions and the first
@@ -376,128 +422,68 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 
 ## Operator Quick Start
 
-### Model Selection
-
-For cloud work, use **Astra for planning and critical implementation, Luna Max for settled
-implementation, Sol High as a targeted alternative, and Opus 5 for independent review**. This is
-the user's cloud staffing preference; it replaces the programme's default Opus implementation
-assignment, not its scope, acceptance or safety requirements. Tiers describe the work, not a fixed
-ranking of model capability. The package planner must refine recommendations for actual scope and split phases.
-If an approved package plan uses different phase boundaries, use its reasoned assessment rather than
-matching letters blindly. A phase ID or short diff alone does not establish complexity.
-
-| Work | Manual model choice | Selection rule |
-| --- | --- | --- |
-| Planning and T3 critical/unresolved implementation | GPT-6 Astra | High if offered; otherwise select an available depth deliberately. |
-| T2 bounded engineering and T1 settled work | GPT-5.6 Luna, Max | Economical default under a concrete contract, focused tests and Opus review; not restricted to mechanical edits. |
-| Bounded implementation needing a different approach | GPT-5.6 Sol, High | Optional, not a mandatory intermediate step. Name the concrete expected benefit over Luna before choosing it. |
-| Independent plan/code review | Claude Opus 5 | Review the actual contract and evidence; no implementation or automatic repairs in the review session. |
-
-Choose using current availability, task results and total cost including retries and review. No fixed
-benchmark equivalence or price ratio is assumed here. Regular review makes economical implementation
-practical, but does not remove safety checks or guarantee correctness. If authorization, custody,
-privacy or migration semantics remain unresolved, use Astra to settle and implement that critical
-boundary; hand the bounded consumers to Luna. Sol is not a substitute for Astra's package-level judgment.
-
-| Phase(s) | Complexity / uncertainty | Impact if wrong | Default implementation |
-| --- | --- | --- | --- |
-| D03-P through D08-P | High: settle the next package's contracts and proof | High: errors propagate into dependent phases | Astra |
-| D03-A | High: exclusion, recovery and restart interleavings | Critical: replacement of a live writer or lost custody | Astra |
-| D03-B | Medium if retry identity/budgets are fully specified | High: repeated effects or an unrecoverable wait | Luna Max; Astra if policy/identity remains unresolved |
-| D03-C | High: preservation and partial-failure recovery | Critical: lost or exposed work | Astra |
-| D03-D | Medium: bounded read-only diagnosis | High if corrupt input is misclassified as safe | Luna Max under the settled diagnostic contract |
-| D03-E | Medium: adapter and controller wiring | High: incorrect recovery dispatch | Luna Max; no new recovery semantics |
-| D04-A, D04-B | High: coherent activation and evidence applicability | Critical: inconsistent authority or false acceptance | Astra |
-| D04-C | Medium: consumers of approved revision contracts | High: wrong revision or request handoff | Luna Max |
-| D05-A | High: approval identity and provider effects | Critical: unapproved or duplicate merge | Astra |
-| D05-B | Medium under settled server authorization | High: stale or misleading confirmation | Luna Max; Astra for any new authorization decision |
-| D06-A, D06-B | High: provenance, resource ownership and private inputs | Critical: secret disclosure or false confirmation | Astra |
-| D06-C | Medium under an exact runner/resource contract | High: wrong resource cleanup or misleading proof | Luna Max |
-| D06-D | Low only for supplied state/copy rendering | Low only with no input, privacy or lifecycle decisions | Luna Max; Astra if new privacy/lifecycle semantics arise |
-| D07-A, D07-B | High: migration, interrupted recovery and restart | Critical: state loss or incompatible execution | Astra |
-| D07-C | Medium under the tested installation contract | High: incorrect installed version or startup behavior | Luna Max |
-| D08-A | Medium for evidence collection/docs using approved test oracles | High: missed integration gap | Luna Max; Astra owns new oracles and final acceptance judgment |
-| D08-H | High: actual host rehearsal and readiness judgment | Critical: unsafe live transition | Astra; real host only, no automatic activation |
-
-**Review:** use Opus 5 for Astra/Sol/Luna plans and code, including cumulative package review.
-Keep it read-only and return valid findings to the implementation model, then request Opus re-review
-of the corrected code. A separate model family is independent judgment, not proof of fresh context
-or correctness; a fresh session is preferred and the actual reviewed revision must be recorded.
-
-**Repair/resume:** normally retain the selected implementation model/depth. A concrete difficult
-local defect can justify Sol High; an unresolved critical contract justifies Astra. Neither a timeout
-nor the mere existence of review findings warrants an automatic cost increase. The user selects the model.
-
-### Model-Qualified PR Mentions
-
-GitHub can generate a model-qualified mention when the user configures a PR-comment session.
-Use the exact mention generated by that UI. The user has confirmed these forms:
-`@copilot+claude-opus-5` and `@copilot+gpt-5.6-luna:max`. They select the requested session route;
-they do not grant broader scope or attest to hidden serving-model identity. For Astra/Sol or other
-depths, copy GitHub's generated form instead of guessing the suffix. Plain `@copilot` with UI
-selection remains valid. No repository model router or extra prompt variables are needed.
-
 ### Launch and Continue
 
-1. Have the local implementation owner finish/review D02 and publish `dev` plus this guide. Cloud
-   workers cannot see unpushed source or local chats. Run a bounded cloud pilot before relying on
-   unattended implementation. Success means the selected checkout's locked dependencies install,
-   one relevant focused in-process test passes, and the platform publishes a result/checkpoint that
-   a subsequent session can retrieve. Record the actual revision, command and result; no full suite,
-   live MCP, MegaLinter or test merge is required. If the pilot fails, identify the specific missing
-   capability and limit work to what can be verified; do not declare cloud execution ready.
-2. For a new package, select **maba-pag/owlbear**, starting branch **dev**, and the model/reasoning
-   level in GitHub. Paste the first prompt with the desired ID. Only the ID changes.
+1. Check the requested package's actual status and published prerequisites. Use its existing PR for
+   unfinished work, not a new planning task. The selected checkout must contain this guide and needed
+   source; cloud workers cannot see unpushed local changes. For an unproven environment, verify locked
+   dependency setup, one focused in-process test and a published result retrievable by the next session.
+   Reuse valid environment evidence; do not repeat a pilot just because a new phase starts.
+2. For a new package, select **maba-pag/owlbear**, starting branch **dev**, and Luna Max unless the
+   current action meets the escalation criteria. Use the complete prompt below with the desired ID.
 3. Read the resulting plan. On that PR, post the implementation prompt for its first phase. This
    authorizes the named phase against the presented plan, not unresolved decisions or successors.
 4. Use review/repair/resume prompts on that PR. For a fresh independent review task, attach the PR
-   URL, omit the whole `@copilot...` mention, and select Opus 5 in the UI. No PR number, hashes,
-   plan paths or test commands need manual entry.
+   URL and select the same model/depth in the UI if that composer does not interpret qualified mentions.
+   Do not assume a new task knows which PR to review. No hashes or test commands need manual entry.
 5. After all phases, review the cumulative result, satisfy required checks and human approvals,
    merge, then start the next package from `dev`. Missing connectivity means the session stops and waits.
 
-**Plan or implement** (new planning task; on an existing PR, prefix with `@copilot`):
+These examples are complete PR-comment requests. Change only the phase ID to the actual target;
+an example ID is not a current status claim. In a new-task composer, also select the matching model
+in its UI; the qualified mention is the supported PR-follow-up route, not a universal UI override.
+
+**Plan**:
 
 ```text
-Work on D03-P using .owlbear/research/delivery-cloud-flight-handoff.md.
+@copilot+gpt-5.6-luna:max Work on D04-P using .owlbear/research/delivery-cloud-flight-handoff.md.
 Follow its Agent Start Here reading route and execute only that phase.
 ```
 
 **Authorize an implementation phase** (change only the phase ID):
 
 ```text
-@copilot Work on D03-A using .owlbear/research/delivery-cloud-flight-handoff.md.
+@copilot+gpt-5.6-luna:max Work on D03-B using .owlbear/research/delivery-cloud-flight-handoff.md.
 I approve the package plan presented in this PR for that phase. Follow the reading route and stop after it.
 ```
 
-**Review** (change only the phase ID; this example reviews the plan):
+**Review against defined criteria**:
 
 ```text
-@copilot+claude-opus-5 Review D03-P using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
+@copilot+gpt-5.6-luna:max Review D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
-**Luna Max implementation** (for a settled phase, after its prerequisite review):
+**Different-family review when warranted**:
 
 ```text
-@copilot+gpt-5.6-luna:max Work on D03-B using .owlbear/research/delivery-cloud-flight-handoff.md.
-Follow the approved package plan and stop after this phase for Opus review.
+@copilot+claude-opus-5 Review D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
 **Repair findings**:
 
 ```text
-@copilot Repair D03-A using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's review.
+@copilot+gpt-5.6-luna:max Repair D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's review.
 ```
 
 **Resume an interruption**:
 
 ```text
-@copilot Resume D03-A using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
+@copilot+gpt-5.6-luna:max Resume D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
 ### Platform Preparation
 
-Check account cloud access, model availability, budget and human approval requirements before flight.
+Check account cloud access, model availability, budget and human approval requirements before launch.
 Before relying on multiple sequential packages, inspect `dev`'s actual required checks and approval
 rules and confirm an eligible approver is available where required. The requester may not qualify
 as the required approver of their own Copilot PR. If merge eligibility cannot be established, continue
