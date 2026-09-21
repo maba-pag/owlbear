@@ -779,6 +779,38 @@ reviewer was unavailable because its configured model was absent; it is not a su
 GitHub source/Cockpit/ecosystem/dependency/setup runs inspected at `93e8b7` were `action_required`,
 not passing. Final-source external CI, pinned-Node and actual host gates remain outstanding.
 
+### D03-C admission-boundary resume — 2026-09-21
+
+User comment `5766196814` resumes C from `a5e271b`, preserving the independently
+reviewed intent-publication repair (`5765655406`). The next bounded slice is a
+necessary pre-copy admission gate: bind the active Builder task and its definition
+digest to explicit relative paths, and reject paths outside that authority before
+copying. Existing persisted recovery identities and clean A recovery must remain
+compatible.
+
+Compatibility does not invent missing admission authority: older dirty pending
+recoveries and primitive preservation receipts without admitted paths are contained,
+not silently upgraded. This bounded slice supports canonical exact-file scopes and
+existing directory scopes through component-boundary containment, persisting only
+the exact observed dirty paths. Glob, descriptive and noncanonical scopes remain
+unsupported for dirty admission. That restriction must not block clean A recovery.
+
+Admitted scope is **not** last-write evidence, privacy clearance or proof that
+bytes are disposable. This slice does not authorize automatic restoration merely
+because a path belongs to a task. Whole-index privacy qualification, recorded
+procedure provenance, exclusive application custody and original-action resumption
+remain required. No filename exception or relaxed private-content screening is
+authorized by this resume.
+
+Implementation adds engine-derived task ID/digest and exact admitted scope/path
+fields to recovery intents; preservation receipts already bind that intent by its
+identity, so their schema and digest remain unchanged. Capture rejects unadmitted
+dirty paths before reading their raw contents or publishing preservation objects;
+replay checks the same recorded admission. Existing provenance producer values
+remain unchanged. Historical pre-C and `a5e271b` intent encodings retain their
+identities; only persisted-old to current recapture may omit newly introduced
+fields, without ignoring older authority facts.
+
 **C completion blockers (also block D):**
 
 - Exact-path ownership/provenance and disposable/useful/foreign classification before copying.

@@ -4081,6 +4081,7 @@ class ChangeWorkspaceManager:
         paths = self._preservation_status_paths(status)
         if len(paths) > _MAX_PRESERVED_PATHS:
             raise PreservationRejectedError("changed path count exceeds the bounded preservation policy")
+        self._require_admitted_paths(intent, paths)
         self._validate_private_paths((*paths, *(entry[0] for entry in entries)))
         raw_states: dict[str, tuple[_PreservedPathState, _PreservedPathState]] = {}
         if len(index_bytes) > _MAX_PRESERVED_FILE_BYTES:
@@ -4525,6 +4526,14 @@ class ChangeWorkspaceManager:
         ):
             raise PreservationFenceError("verified recovery authority no longer matches the managed workspace")
         return intent, receipt
+
+    @staticmethod
+    def _require_admitted_paths(intent: RecoveryIntent, paths: tuple[str, ...]) -> None:
+        """Reject dirty paths outside the persisted active-task admission before raw reads."""
+        if not set(paths) <= set(intent.admitted_paths):
+            if intent.admitted_task_id is None:
+                raise PreservationRejectedError("dirty paths require an admitted Builder task")
+            raise PreservationRejectedError("dirty paths fall outside the admitted task path authority")
 
     @staticmethod
     def _directory_identity(path: Path, label: str) -> tuple[int, int, int, int]:

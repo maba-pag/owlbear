@@ -514,6 +514,22 @@ def _preservation_workspace(tmp_path: Path, *, nested: bool = False):
         kind="clean-claim",
         maintained_surfaces=("src",),
         last_write_provenance=("test-owner",),
+        admitted_task_id="TASK-PRESERVATION",
+        admitted_task_digest="c" * 64,
+        admitted_task_scope=(
+            "added.bin",
+            "nested/deeper/file.txt",
+            "nested/deeper/new.txt",
+            "preserved-link",
+            "shared.txt",
+        ),
+        admitted_paths=(
+            "added.bin",
+            "nested/deeper/file.txt",
+            "nested/deeper/new.txt",
+            "preserved-link",
+            "shared.txt",
+        ),
     )
     evidence = RecoveryEvidence(
         reference=RecoveryEvidenceReference(reference="opaque-preservation"),
@@ -575,6 +591,67 @@ def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_
     _git(coordination.worktree_path, "update-index", "--chmod=+x", "shared.txt")
     with pytest.raises(PreservationFenceError, match="index"):
         manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+
+def test_preservation_rejects_foreign_dirty_path_before_private_capture(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"dirty preservation\n")
+    (worktree / "foreign.txt").write_bytes(b"unknown bytes\n")
+
+    with pytest.raises(PreservationRejectedError, match="admitted task path authority"):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    private_root = manager.runtime_root / "changes" / intent.invocation.request.change_id / "recovery-receipts"
+    assert not (private_root / intent.recovery_id / "preservation").exists()
+
+
+def test_old_provenance_dirty_recovery_cannot_upgrade_to_admitted_preservation(tmp_path: Path) -> None:
+    coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    old_bytes = (
+        intent.model_dump_json(
+            exclude={
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            }
+        )
+        + "\n"
+    ).encode()
+    old_intent = RecoveryIntent.model_validate_json(old_bytes)
+    # Old authority may still recapture cleanly, but it cannot authorize dirty raw custody.
+    assert old_intent.authority_matches(intent)
+    evidence_path = manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "evidence")
+    receipt_path = manager.runtime_root / journal_path(coordination.change_id, intent.recovery_id, "receipt")
+    evidence = RecoveryEvidence.model_validate_json(evidence_path.read_bytes())
+    receipt = RecoveryReceipt.model_validate_json(receipt_path.read_bytes())
+    old_evidence = evidence.model_copy(update={"recovery_id": old_intent.recovery_id})
+    old_receipt = receipt.model_copy(update={"recovery_id": old_intent.recovery_id, "evidence": old_evidence})
+    old_intent_path = manager.runtime_root / journal_path(coordination.change_id, old_intent.recovery_id, "intent")
+    old_intent_path.parent.mkdir(parents=True, exist_ok=True)
+    old_intent_path.write_bytes(old_bytes)
+    (manager.runtime_root / journal_path(coordination.change_id, old_intent.recovery_id, "evidence")).write_bytes(
+        old_evidence.model_dump_json().encode()
+    )
+    (manager.runtime_root / journal_path(coordination.change_id, old_intent.recovery_id, "receipt")).write_bytes(
+        old_receipt.model_dump_json().encode()
+    )
+    coordinator.record_verified_exclusion(old_intent.recovery_id)
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty legacy preservation\n")
+
+    with pytest.raises(PreservationRejectedError, match="admitted Builder task"):
+        manager.capture_preservation(coordination.change_id, old_intent.recovery_id)
+
+    private_root = (
+        manager.runtime_root
+        / "changes"
+        / coordination.change_id
+        / "recovery-receipts"
+        / old_intent.recovery_id
+        / "preservation"
+    )
+    assert not private_root.exists()
 
 
 @pytest.mark.parametrize("root_drift", ["replacement", "mode"])

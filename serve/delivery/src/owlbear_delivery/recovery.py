@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Literal, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,6 +26,11 @@ if TYPE_CHECKING:
 _MAX_RECORD_BYTES = 65_536
 _DIGEST_LENGTH = 64
 MAX_RECOVERY_INTENTS = 256
+_MAX_PROVENANCE_VALUE_LENGTH = 512
+_MAX_ADMITTED_PATH_LENGTH = 4096
+_ADMITTED_AUTHORITY_FIELDS = frozenset(
+    {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
+)
 
 
 class _RecoveryModel(BaseModel):
@@ -97,6 +102,13 @@ class RecoveryIntent(_RecoveryModel):
     # does not carry both proofs.
     maintained_surfaces: tuple[str, ...] = ()
     last_write_provenance: tuple[str, ...] = ()
+    # D03-C authority for raw preservation is narrower than the historical
+    # provenance fields above: one active Builder task and the exact paths it
+    # admitted.  These fields are intentionally optional for older journals.
+    admitted_task_id: str | None = Field(default=None, min_length=1, max_length=256)
+    admitted_task_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    admitted_task_scope: tuple[str, ...] = Field(default=(), max_length=256)
+    admitted_paths: tuple[str, ...] = Field(default=(), max_length=256)
     kind: Literal["clean-claim", "clean-finalizer", "ready-readback"]
 
     @model_validator(mode="after")
@@ -106,9 +118,36 @@ class RecoveryIntent(_RecoveryModel):
             (self.last_write_provenance, "last-write provenance"),
         ):
             if len(values) != len(set(values)) or any(
-                not value or len(value) > 512 or not value.isprintable() for value in values
+                not value or len(value) > _MAX_PROVENANCE_VALUE_LENGTH or not value.isprintable()
+                for value in values
             ):
-                raise ValueError(f"{label} must contain bounded unique values")
+                message = f"{label} must contain bounded unique values"
+                raise ValueError(message)
+        for values, label in (
+            (self.admitted_task_scope, "admitted task scope"),
+            (self.admitted_paths, "admitted paths"),
+        ):
+            if values != tuple(sorted(set(values))) or any(
+                not value
+                or len(value) > _MAX_ADMITTED_PATH_LENGTH
+                or Path(value).is_absolute()
+                or ".." in PurePosixPath(value).parts
+                for value in values
+            ):
+                message = f"{label} must contain sorted, unique relative paths"
+                raise ValueError(message)
+        if (self.admitted_task_id is None) != (self.admitted_task_digest is None):
+            message = "admitted task identity requires both task id and digest"
+            raise ValueError(message)
+        if self.admitted_task_id is not None and not self.admitted_task_scope:
+            message = "admitted task identity requires a non-empty exact path scope"
+            raise ValueError(message)
+        if self.admitted_task_id is None and (self.admitted_task_scope or self.admitted_paths):
+            message = "admitted paths require an admitted task identity"
+            raise ValueError(message)
+        if not set(self.admitted_paths) <= set(self.admitted_task_scope):
+            message = "admitted paths must be within the admitted task scope"
+            raise ValueError(message)
         return self
 
     @property
@@ -119,15 +158,35 @@ class RecoveryIntent(_RecoveryModel):
     @property
     def uses_legacy_encoding(self) -> bool:
         """Whether this journal predates the D03-C provenance fields."""
-        return not {"maintained_surfaces", "last_write_provenance"}.intersection(self.model_fields_set)
+        return not {
+            "maintained_surfaces",
+            "last_write_provenance",
+        }.intersection(self.model_fields_set) and not _ADMITTED_AUTHORITY_FIELDS.intersection(
+            self.model_fields_set
+        )
 
     def authority_matches(self, other: RecoveryIntent) -> bool:
         """Compare a re-captured authority without changing a legacy identity."""
-        if self == other:
-            return True
-        if self.uses_legacy_encoding and not other.uses_legacy_encoding:
+        if self.uses_legacy_encoding:
+            if other.uses_legacy_encoding:
+                return encoded(self) == encoded(other)
             return _legacy_intent_bytes(self) == _legacy_intent_bytes(other)
-        return False
+        if self._has_legacy_provenance_only():
+            if self._has_admitted_authority(other):
+                return _without_admitted_authority_bytes(self) == _without_admitted_authority_bytes(other)
+            return encoded(self) == encoded(other)
+        if other.uses_legacy_encoding or other._has_legacy_provenance_only():
+            return False
+        return encoded(self) == encoded(other)
+
+    def _has_legacy_provenance_only(self) -> bool:
+        return bool({"maintained_surfaces", "last_write_provenance"}.intersection(self.model_fields_set)) and not (
+            _ADMITTED_AUTHORITY_FIELDS.intersection(self.model_fields_set)
+        )
+
+    @staticmethod
+    def _has_admitted_authority(intent: RecoveryIntent) -> bool:
+        return bool(_ADMITTED_AUTHORITY_FIELDS.intersection(intent.model_fields_set))
 
 
 class RecoveryEvidenceReference(_RecoveryModel):
@@ -214,15 +273,39 @@ class UnavailableRecoveryEvidenceProvider:
 
 def encoded(model: BaseModel) -> bytes:
     """Canonical immutable journal bytes."""
-    if isinstance(model, RecoveryIntent) and model.uses_legacy_encoding:
-        return _legacy_intent_bytes(model)
+    if isinstance(model, RecoveryIntent):
+        if model.uses_legacy_encoding:
+            return _legacy_intent_bytes(model)
+        if not _ADMITTED_AUTHORITY_FIELDS.intersection(model.model_fields_set):
+            return _without_admitted_authority_bytes(model)
     return (model.model_dump_json() + "\n").encode()
 
 
 def _legacy_intent_bytes(intent: RecoveryIntent) -> bytes:
     return (
         intent.model_dump_json(
-            exclude={"maintained_surfaces", "last_write_provenance"},
+            exclude={
+                "maintained_surfaces",
+                "last_write_provenance",
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            },
+        )
+        + "\n"
+    ).encode()
+
+
+def _without_admitted_authority_bytes(intent: RecoveryIntent) -> bytes:
+    return (
+        intent.model_dump_json(
+            exclude={
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            }
         )
         + "\n"
     ).encode()

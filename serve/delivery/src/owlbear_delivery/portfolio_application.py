@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import logging
+import stat
 import subprocess
 import time
 import uuid
@@ -13,7 +14,7 @@ from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import Lock
 from typing import TYPE_CHECKING, Literal, Never
 
@@ -256,6 +257,11 @@ if TYPE_CHECKING:
         VerifiedDesignPackage,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
+
+
+_EXACT_TASK_PATH_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-"
+)
 
 
 def _timestamp(value: str) -> datetime:
@@ -8371,9 +8377,90 @@ class PortfolioApplication:
             self._coordinator.record_recovery_intent(intent)
             return intent
 
+    @staticmethod
+    def _recovery_admitted_task(
+        runtime: DeliveryRuntime,
+        owner: ChangeContinuationAction | ChangeFinalizationAttempt | DeliveryActiveClaim,
+        kind: str,
+    ) -> DeliveryTaskDefinition | None:
+        if kind != "clean-claim" or not isinstance(owner, DeliveryActiveClaim) or owner.task_id is None:
+            return None
+        binding = next((candidate for candidate in runtime.bindings() if candidate.active_claim == owner), None)
+        if binding is None:
+            raise DeliveryWorkerExclusionRequiredError
+        task = next((candidate for candidate in binding.tasks if candidate.task_id == owner.task_id), None)
+        if task is None:
+            raise DeliveryWorkerExclusionRequiredError
+        return task
+
+    @staticmethod
+    def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:
+        surfaces = tuple(task.maintained_surfaces)
+        if len(surfaces) != len(set(surfaces)):
+            raise DeliveryWorkerExclusionRequiredError
+        for surface in surfaces:
+            path = PurePosixPath(surface)
+            if (
+                not surface
+                or surface != path.as_posix()
+                or surface.startswith("/")
+                or any(part in {"", ".", ".."} for part in path.parts)
+                or any(character not in _EXACT_TASK_PATH_CHARS for character in surface)
+            ):
+                raise DeliveryWorkerExclusionRequiredError
+            try:
+                (worktree / path).stat()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise DeliveryWorkerExclusionRequiredError from exc
+        return tuple(sorted(surfaces))
+
+    @staticmethod
+    def _scope_admits_path(worktree: Path, scope: str, path: str) -> bool:
+        scope_parts = PurePosixPath(scope).parts
+        path_parts = PurePosixPath(path).parts
+        if path_parts == scope_parts:
+            return True
+        if len(path_parts) <= len(scope_parts) or path_parts[: len(scope_parts)] != scope_parts:
+            return False
+        try:
+            metadata = (worktree / PurePosixPath(scope)).stat()
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise DeliveryWorkerExclusionRequiredError from exc
+        return stat.S_ISDIR(metadata.st_mode)
+
+    @staticmethod
+    def _recovery_admission_fields(
+        task: DeliveryTaskDefinition | None,
+        paths: tuple[str, ...],
+        worktree: Path,
+    ) -> tuple[str | None, str | None, tuple[str, ...], tuple[str, ...]]:
+        if task is None:
+            if paths:
+                raise DeliveryWorkerExclusionRequiredError
+            return None, None, (), ()
+        if not paths:
+            # Clean Recovery-A carries no path authority; unsupported task-scope
+            # descriptors remain a dirty-admission concern only.
+            return None, None, (), ()
+        scope = PortfolioApplication._exact_task_scope(task, worktree)
+        admitted_paths = tuple(sorted(paths))
+        if any(
+            not any(PortfolioApplication._scope_admits_path(worktree, candidate, path) for candidate in scope)
+            for path in admitted_paths
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        return task.task_id, task.digest, scope, admitted_paths
+
     def _capture_recovery_intent(self, change_id: str) -> RecoveryIntent:
         runtime = self._runtime(change_id)
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        coordination = self._coordinator.show(change_id)
+        owner, owner_id, kind, failure_id, effect_id = self._recovery_owner(runtime, coordination)
+        admitted_task = self._recovery_admitted_task(runtime, owner, kind)
         coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_recovery_workspace(
             change_id, tuple(result.completed_commit for binding in frontier.bindings for result in binding.results)
         )
@@ -8384,7 +8471,12 @@ class PortfolioApplication:
             or coordination.publication_lease is not None
         ):
             raise DeliveryWorkerExclusionRequiredError
-        owner, owner_id, kind, failure_id, effect_id = self._recovery_owner(runtime, coordination)
+        (
+            admitted_task_id,
+            admitted_task_digest,
+            admitted_task_scope,
+            admitted_paths,
+        ) = self._recovery_admission_fields(admitted_task, _paths, coordination.worktree_path)
         relative = Path("changes") / change_id / "invocations" / f"{digest(owner_id.encode())}.json"
         try:
             invocation = RecoveryInvocation.model_validate_json(read_record(self._target_root, relative))
@@ -8472,6 +8564,10 @@ class PortfolioApplication:
             engine_result_digest=result_digest,
             maintained_surfaces=maintained_surfaces,
             last_write_provenance=last_write_provenance,
+            admitted_task_id=admitted_task_id,
+            admitted_task_digest=admitted_task_digest,
+            admitted_task_scope=admitted_task_scope,
+            admitted_paths=admitted_paths,
         )
 
     def _recovery_owner(

@@ -26,6 +26,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _portfolio,
     _prepare_legacy_integration_repair,
     _reopen_portfolio,
+    _task,
     _task_result,
 )
 
@@ -52,7 +53,6 @@ from owlbear_delivery.recovery import (
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
-
 _LEGACY_RECOVERY_ID = "11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"
 _LEGACY_INTENT_JSON = (
     b'{"schema_version":1,"invocation":{"schema_version":1,"request":{"change_id":"change-a",'
@@ -73,6 +73,15 @@ _LEGACY_INTENT_JSON = (
     b'"owner_record":"legacy owner record","failure_id":null,"effect_receipt_id":null,'
     b'"engine_result_digest":null,"proposal_id":null,"kind":"clean-claim"}\n'
 )
+_A5_INTENT_JSON = _LEGACY_INTENT_JSON.replace(
+    b'"engine_result_digest":null,"proposal_id":null,"kind":"clean-claim"',
+    b'"engine_result_digest":null,"proposal_id":null,'
+    b'"maintained_surfaces":["legacy-surface-a","legacy-surface-b"],'
+    b'"last_write_provenance":["attempt:legacy-attempt","change-head:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"frontier:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","owner:legacy-owner",'
+    b'"result:RESULT-001:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],"kind":"clean-claim"',
+)
+_A5_RECOVERY_ID = hashlib.sha256(_A5_INTENT_JSON).hexdigest()
 _LEGACY_EVIDENCE_JSON = (
     b'{"schema_version":1,"reference":{"reference":"opaque-'
     b'11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"},'
@@ -174,6 +183,27 @@ def test_legacy_recovery_fixture_replays_excluded_receipt_after_restart(tmp_path
     assert RecoveryIntent.model_validate_json(tampered).recovery_id != _LEGACY_RECOVERY_ID
 
 
+def test_a5_recovery_fixture_preserves_bytes_and_directional_authority() -> None:
+    intent = RecoveryIntent.model_validate_json(_A5_INTENT_JSON)
+    assert not intent.uses_legacy_encoding
+    assert intent.recovery_id == _A5_RECOVERY_ID
+    assert encoded(intent) == _A5_INTENT_JSON
+
+    upgraded = intent.model_copy(
+        update={
+            "admitted_task_id": "TASK-001",
+            "admitted_task_digest": "d" * 64,
+            "admitted_task_scope": ("src/file.py",),
+            "admitted_paths": (),
+        }
+    )
+    assert intent.authority_matches(upgraded)
+    assert not upgraded.authority_matches(intent)
+    assert not upgraded.authority_matches(
+        upgraded.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)})
+    )
+
+
 def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path) -> None:
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
@@ -183,7 +213,17 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     current = application._propose_recovery("change-a")
     current_path = state / journal_path("change-a", current.recovery_id, "intent")
     legacy_bytes = (
-        current.model_dump_json(exclude={"maintained_surfaces", "last_write_provenance"}) + "\n"
+        current.model_dump_json(
+            exclude={
+                "maintained_surfaces",
+                "last_write_provenance",
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            }
+        )
+        + "\n"
     ).encode()
     legacy = RecoveryIntent.model_validate_json(legacy_bytes)
     assert legacy.uses_legacy_encoding
@@ -203,6 +243,217 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     assert receipt.evidence.recovery_id == legacy.recovery_id
     assert coordinator.show("change-a").recovery_owner_id is None
     assert current.authority_matches(current.model_copy(update={"maintained_surfaces": ("changed",)})) is False
+
+
+def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path) -> None:
+    """Old clean journals replay; dirty preservation remains separately admission-gated."""
+    application, _runtimes, coordinator, state = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_downstream=True
+    )
+    host = _host(application)
+    application.acquire_change_action(_continuation_request(application))
+    current = application._propose_recovery("change-a")
+    legacy_surfaces = (
+        "serve/delivery/src/owlbear_delivery/delivery_runtime.py",
+        "serve/delivery/src/owlbear_delivery/portfolio_application.py",
+    )
+    legacy_provenance = (
+        f"attempt:{current.invocation.request.attempt_id}",
+        f"change-head:{current.exact_head}",
+        f"frontier:{current.frontier_digest}",
+        f"owner:{current.invocation.request.owner_id}",
+    )
+    old_intent = current.model_copy(
+        update={
+            "maintained_surfaces": legacy_surfaces,
+            "last_write_provenance": legacy_provenance,
+        }
+    )
+    old_bytes = (
+        old_intent.model_dump_json(
+            exclude={
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            }
+        )
+        + "\n"
+    ).encode()
+    old_intent = RecoveryIntent.model_validate_json(old_bytes)
+    assert not old_intent.uses_legacy_encoding
+    assert encoded(old_intent) == old_bytes
+    assert old_intent.authority_matches(
+        current.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)})
+    ) is False
+    current_path = state / journal_path("change-a", current.recovery_id, "intent")
+    current_path.unlink()
+    old_path = state / journal_path("change-a", old_intent.recovery_id, "intent")
+    old_path.parent.mkdir(parents=True)
+    old_path.write_bytes(old_bytes)
+
+    receipt = application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
+
+    assert receipt.recovery_id == old_intent.recovery_id
+    assert coordinator.show("change-a").recovery_owner_id is None
+
+
+def test_a5_recovery_intent_identity_survives_admitted_authority_fields(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    _host(application)
+    application.acquire_change_action(_continuation_request(application))
+    current = application._propose_recovery("change-a")
+    prior = current
+    prior_bytes = (
+        prior.model_dump_json(
+            exclude={
+                "admitted_task_id",
+                "admitted_task_digest",
+                "admitted_task_scope",
+                "admitted_paths",
+            }
+        )
+        + "\n"
+    ).encode()
+    persisted = RecoveryIntent.model_validate_json(prior_bytes)
+
+    assert not persisted.uses_legacy_encoding
+    assert encoded(persisted) == prior_bytes
+    assert persisted.recovery_id == hashlib.sha256(prior_bytes).hexdigest()
+    assert persisted.maintained_surfaces == current.maintained_surfaces
+    assert persisted.last_write_provenance == current.last_write_provenance
+    assert persisted.authority_matches(current)
+    assert not persisted.authority_matches(
+        current.model_copy(update={"maintained_surfaces": ("tampered-old-surface",)})
+    )
+    assert not persisted.authority_matches(
+        current.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)})
+    )
+    assert not persisted.authority_matches(
+        persisted.model_copy(update={"maintained_surfaces": ("legacy-surface",)})
+    )
+
+
+def test_recovery_intent_binds_only_the_active_task_authority(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        include_downstream=True,
+    )
+    host = _host(application)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    intent = application._propose_recovery("change-a")
+
+    claim = runtimes["change-a"].active_claims()[0][1]
+    task = next(
+        task
+        for task in runtimes["change-a"].show_binding("OUT-001").tasks
+        if task.task_id == claim.task_id
+    )
+    assert intent.admitted_task_id is None
+    assert intent.admitted_task_digest is None
+    assert intent.admitted_task_scope == ()
+    assert intent.admitted_paths == ()
+    assert intent.maintained_surfaces == tuple(
+        sorted(
+            {
+                surface
+                for binding in runtimes["change-a"].bindings()
+                for candidate in binding.tasks
+                for surface in candidate.maintained_surfaces
+            }
+        )
+    )
+    assert f"owner:{intent.invocation.request.owner_id}" in intent.last_write_provenance
+    assert f"attempt:{intent.invocation.request.attempt_id}" in intent.last_write_provenance
+
+    receipt = application._complete_recovery("change-a", intent.recovery_id, host.seal(intent))
+    preservation = application._workspace_manager.capture_preservation("change-a", intent.recovery_id)
+    assert receipt.recovery_id == intent.recovery_id
+    assert preservation.recovery_id == intent.recovery_id
+    assert preservation.maintained_surfaces == intent.maintained_surfaces
+    assert intent.authority_matches(intent.model_copy(update={"admitted_task_digest": "d" * 64})) is False
+    assert coordinator.show("change-a").recovery_owner_id is None
+    assert launch.claim.task_id == task.task_id
+
+
+@pytest.mark.parametrize(
+    "surface",
+    ["serve/delivery/**", "serve/delivery/", "not an exact path", "./source.py", "../source.py"],
+)
+def test_recovery_rejects_noncanonical_task_surface_descriptors(tmp_path: Path, surface: str) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    task = _task().model_copy(update={"maintained_surfaces": (surface,)})
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._exact_task_scope(task, coordinator.show("change-a").worktree_path)
+
+
+def test_clean_recovery_skips_ambiguous_task_surface_admission(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    task = _task().model_copy(update={"maintained_surfaces": ("serve/delivery/**",)})
+
+    assert application._recovery_admission_fields(
+        task,
+        (),
+        coordinator.show("change-a").worktree_path,
+    ) == (None, None, (), ())
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._recovery_admission_fields(
+            task,
+            ("serve/delivery/module.py",),
+            coordinator.show("change-a").worktree_path,
+        )
+
+
+@pytest.mark.parametrize("surface", ["serve/delivery/", "not an exact path", "serve/delivery/**"])
+def test_clean_recovery_ignores_ambiguous_task_scope(tmp_path: Path, surface: str) -> None:
+    application, _runtimes, _coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    _host(application)
+    application.acquire_change_action(_continuation_request(application))
+    task = _task().model_copy(update={"maintained_surfaces": (surface,)})
+
+    with patch.object(
+        type(application),
+        "_recovery_admitted_task",
+        staticmethod(lambda _runtime, _owner, _kind: task),
+    ):
+        intent = application._propose_recovery("change-a")
+
+    assert intent.admitted_task_id is None
+    assert intent.admitted_task_digest is None
+    assert intent.admitted_task_scope == ()
+    assert intent.admitted_paths == ()
+
+
+def test_recovery_uses_canonical_directory_scope_for_exact_dirty_paths(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    worktree = coordinator.show("change-a").worktree_path
+    (worktree / "serve" / "delivery").mkdir(parents=True)
+    task = _task().model_copy(update={"maintained_surfaces": ("serve/delivery",)})
+
+    assert application._exact_task_scope(task, worktree) == ("serve/delivery",)
+    admitted = application._recovery_admission_fields(
+        task,
+        ("serve/delivery/src/module.py",),
+        worktree,
+    )
+    assert admitted[2:] == (("serve/delivery",), ("serve/delivery/src/module.py",))
 
 
 class ProcessEvidenceHost(EvidenceHost):
