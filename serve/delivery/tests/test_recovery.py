@@ -41,13 +41,73 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceReference,
+    RecoveryIntent,
     RecoveryInvocation,
+    RecoveryReceipt,
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
+    encoded,
     journal_path,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError
+
+
+_LEGACY_RECOVERY_ID = "11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"
+_LEGACY_INTENT_JSON = (
+    b'{"schema_version":1,"invocation":{"schema_version":1,"request":{"change_id":"change-a",'
+    b'"owner_id":"legacy-owner","attempt_id":"legacy-attempt","outcome_id":"OUT-001","kind":"claim",'
+    b'"contract_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+    b'"exact_head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"target_head":"cccccccccccccccccccccccccccccccccccccccc","branch":"owlbear/change/change-a",'
+    b'"worktree":"/legacy/worktree","repository":"/legacy/repository","runtime_root":"/legacy/runtime",'
+    b'"integration_target":"release","publication_repository":null,'
+    b'"mutation_channels":["managed-filesystem","shared-git-metadata-and-refs","git-remotes",'
+    b'"delivery-runtime","publication-provider"]},"host_instance":"legacy-host",'
+    b'"host_generation":"legacy-generation","invocation_id":"legacy-invocation"},'
+    b'"frontier_digest":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",'
+    b'"coordination_digest":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",'
+    b'"exact_head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"target_head":"cccccccccccccccccccccccccccccccccccccccc",'
+    b'"workspace_fingerprint":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",'
+    b'"owner_record":"legacy owner record","failure_id":null,"effect_receipt_id":null,'
+    b'"engine_result_digest":null,"proposal_id":null,"kind":"clean-claim"}\n'
+)
+_LEGACY_EVIDENCE_JSON = (
+    b'{"schema_version":1,"reference":{"reference":"opaque-'
+    b'11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"},'
+    b'"recovery_id":"11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f",'
+    b'"invocation":{"schema_version":1,"request":{"change_id":"change-a","owner_id":"legacy-owner",'
+    b'"attempt_id":"legacy-attempt","outcome_id":"OUT-001","kind":"claim",'
+    b'"contract_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+    b'"exact_head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"target_head":"cccccccccccccccccccccccccccccccccccccccc","branch":"owlbear/change/change-a",'
+    b'"worktree":"/legacy/worktree","repository":"/legacy/repository","runtime_root":"/legacy/runtime",'
+    b'"integration_target":"release","publication_repository":null,'
+    b'"mutation_channels":["managed-filesystem","shared-git-metadata-and-refs","git-remotes",'
+    b'"delivery-runtime","publication-provider"]},"host_instance":"legacy-host",'
+    b'"host_generation":"legacy-generation","invocation_id":"legacy-invocation"},'
+    b'"status":"excluded","scope":"invocation-all-descendants-all-tool-jobs"}\n'
+)
+_LEGACY_RECEIPT_JSON = (
+    b'{"schema_version":1,"recovery_id":"11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f",'
+    b'"evidence":{"schema_version":1,"reference":{"reference":"opaque-'
+    b'11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"},'
+    b'"recovery_id":"11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f",'
+    b'"invocation":{"schema_version":1,"request":{"change_id":"change-a","owner_id":"legacy-owner",'
+    b'"attempt_id":"legacy-attempt","outcome_id":"OUT-001","kind":"claim",'
+    b'"contract_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+    b'"exact_head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"target_head":"cccccccccccccccccccccccccccccccccccccccc","branch":"owlbear/change/change-a",'
+    b'"worktree":"/legacy/worktree","repository":"/legacy/repository","runtime_root":"/legacy/runtime",'
+    b'"integration_target":"release","publication_repository":null,'
+    b'"mutation_channels":["managed-filesystem","shared-git-metadata-and-refs","git-remotes",'
+    b'"delivery-runtime","publication-provider"]},"host_instance":"legacy-host",'
+    b'"host_generation":"legacy-generation","invocation_id":"legacy-invocation"},'
+    b'"status":"excluded","scope":"invocation-all-descendants-all-tool-jobs"},'
+    b'"stages":["proposed","excluded","reconciled","completed"],"preservation":"clean-no-restoration",'
+    b'"owner_effect":"no-workspace-effect","owner_observation_id":null,"finished_at":"2026-08-02T00:04:00Z"}\n'
+)
 
 
 class EvidenceHost:
@@ -81,6 +141,66 @@ class EvidenceHost:
         return self.evidence.get(reference.reference) or RecoveryEvidence(
             reference=reference, recovery_id=intent.recovery_id, invocation=intent.invocation, status="unknown"
         )
+
+
+def test_legacy_recovery_fixture_replays_excluded_receipt_after_restart(tmp_path: Path) -> None:
+    journal_root = tmp_path / "changes" / "change-a" / "recovery-receipts" / _LEGACY_RECOVERY_ID
+    journal_root.mkdir(parents=True)
+    intent_path = journal_root / "intent.json"
+    evidence_path = journal_root / "evidence.json"
+    receipt_path = journal_root / "receipt.json"
+    intent_path.write_bytes(_LEGACY_INTENT_JSON)
+    evidence_path.write_bytes(_LEGACY_EVIDENCE_JSON)
+    receipt_path.write_bytes(_LEGACY_RECEIPT_JSON)
+
+    intent = RecoveryIntent.model_validate_json(_LEGACY_INTENT_JSON)
+    evidence = RecoveryEvidence.model_validate_json(_LEGACY_EVIDENCE_JSON)
+    receipt = RecoveryReceipt.model_validate_json(_LEGACY_RECEIPT_JSON)
+    assert intent.uses_legacy_encoding
+    assert intent.recovery_id == _LEGACY_RECOVERY_ID
+    assert encoded(intent) == _LEGACY_INTENT_JSON
+    assert evidence.recovery_id == receipt.recovery_id == intent.recovery_id
+    assert evidence.status == receipt.evidence.status == "excluded"
+    assert encoded(evidence) == _LEGACY_EVIDENCE_JSON
+    assert encoded(receipt) == _LEGACY_RECEIPT_JSON
+
+    restarted_intent = RecoveryIntent.model_validate_json(intent_path.read_bytes())
+    restarted_receipt = RecoveryReceipt.model_validate_json(receipt_path.read_bytes())
+    assert restarted_intent.recovery_id == _LEGACY_RECOVERY_ID
+    assert restarted_receipt.recovery_id == restarted_intent.recovery_id
+    assert restarted_receipt.evidence.status == "excluded"
+
+    tampered = _LEGACY_INTENT_JSON.replace(b'"owner_record":"legacy owner record"', b'"owner_record":"tampered"')
+    assert RecoveryIntent.model_validate_json(tampered).recovery_id != _LEGACY_RECOVERY_ID
+
+
+def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
+    )
+    host = _host(application)
+    application.acquire_change_action(_continuation_request(application))
+    current = application._propose_recovery("change-a")
+    current_path = state / journal_path("change-a", current.recovery_id, "intent")
+    legacy_bytes = (
+        current.model_dump_json(exclude={"maintained_surfaces", "last_write_provenance"}) + "\n"
+    ).encode()
+    legacy = RecoveryIntent.model_validate_json(legacy_bytes)
+    assert legacy.uses_legacy_encoding
+    assert legacy.recovery_id != current.recovery_id
+    assert legacy.authority_matches(current)
+    assert not legacy.authority_matches(legacy.model_copy(update={"owner_record": "tampered"}))
+    current_path.unlink()
+    legacy_path = state / journal_path("change-a", legacy.recovery_id, "intent")
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_bytes(legacy_bytes)
+
+    receipt = application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
+
+    assert receipt.recovery_id == legacy.recovery_id
+    assert receipt.evidence.recovery_id == legacy.recovery_id
+    assert coordinator.show("change-a").recovery_owner_id is None
+    assert current.authority_matches(current.model_copy(update={"maintained_surfaces": ("changed",)})) is False
 
 
 class ProcessEvidenceHost(EvidenceHost):

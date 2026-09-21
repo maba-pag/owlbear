@@ -116,6 +116,19 @@ class RecoveryIntent(_RecoveryModel):
         """Return the content-addressed journal identity (not evidence authenticity)."""
         return digest(encoded(self))
 
+    @property
+    def uses_legacy_encoding(self) -> bool:
+        """Whether this journal predates the D03-C provenance fields."""
+        return not {"maintained_surfaces", "last_write_provenance"}.intersection(self.model_fields_set)
+
+    def authority_matches(self, other: RecoveryIntent) -> bool:
+        """Compare a re-captured authority without changing a legacy identity."""
+        if self == other:
+            return True
+        if self.uses_legacy_encoding and not other.uses_legacy_encoding:
+            return _legacy_intent_bytes(self) == _legacy_intent_bytes(other)
+        return False
+
 
 class RecoveryEvidenceReference(_RecoveryModel):
     """Opaque reference resolved exclusively by the configured host owner."""
@@ -201,7 +214,18 @@ class UnavailableRecoveryEvidenceProvider:
 
 def encoded(model: BaseModel) -> bytes:
     """Canonical immutable journal bytes."""
+    if isinstance(model, RecoveryIntent) and model.uses_legacy_encoding:
+        return _legacy_intent_bytes(model)
     return (model.model_dump_json() + "\n").encode()
+
+
+def _legacy_intent_bytes(intent: RecoveryIntent) -> bytes:
+    return (
+        intent.model_dump_json(
+            exclude={"maintained_surfaces", "last_write_provenance"},
+        )
+        + "\n"
+    ).encode()
 
 
 def digest(content: bytes) -> str:

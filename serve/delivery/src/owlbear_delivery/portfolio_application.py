@@ -8556,7 +8556,7 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             if receipt_path.exists():
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
-            if self._capture_recovery_intent(change_id) != intent:
+            if not intent.authority_matches(self._capture_recovery_intent(change_id)):
                 raise DeliveryWorkerExclusionRequiredError
             evidence_path = journal_path(change_id, recovery_id, "evidence")
             if (self._target_root / evidence_path).exists():

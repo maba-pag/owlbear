@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
+import secrets
 import stat
 import subprocess
 import tempfile
@@ -62,6 +64,7 @@ _MAX_PRESERVED_PATHS = 256
 _MAX_PRESERVED_PATH_LENGTH = 4096
 _MAX_PRESERVED_FILE_BYTES = 16 * 1024 * 1024
 _MAX_PRESERVED_TOTAL_BYTES = 64 * 1024 * 1024
+_RESTORATION_STAGE_PATTERN = re.compile(r"^stage-[0-9a-f]{32}$")
 _PRESERVATION_ENV_OVERRIDES = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -4366,9 +4369,18 @@ class ChangeWorkspaceManager:
                 if not self._same_state(current, desired):
                     if not self._same_state(current, expected_states[path]):
                         raise PreservationFenceError(f"path identity changed before restoration: {path}")
-                    self._write_worktree_state(worktree, path, desired, expected=expected_states[path])
+                    self._write_worktree_state(
+                        worktree,
+                        path,
+                        desired,
+                        expected=expected_states[path],
+                        operation_id=operation_id,
+                        receipt=receipt,
+                        record_name=record_name,
+                    )
                 if not self._same_state(self._read_worktree_state(worktree, path), desired):
                     raise PreservationFenceError(f"path identity changed during restoration: {path}")
+                self._cleanup_restoration_staging_source(receipt, operation_id, path)
                 self._sync_restored_path(worktree, path, desired)
                 self._write_restoration_record(receipt, operation_id, f"{record_name}/result.json", record)
             self._verify_preservation_fences(change_id, receipt, index_metadata)
@@ -4416,11 +4428,26 @@ class ChangeWorkspaceManager:
         finally:
             os.close(root_fd)
 
+    def _remove_restoration_record(
+        self, receipt: WorktreePreservationReceipt, operation_id: str, name: str
+    ) -> None:
+        relative = Path(receipt.storage_ref) / "restoration" / operation_id / Path(name).parent
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            with contained_directory(root_fd, relative) as parent_fd:
+                try:
+                    os.unlink(Path(name).name, dir_fd=parent_fd)
+                except FileNotFoundError:
+                    return
+                os.fsync(parent_fd)
+        finally:
+            os.close(root_fd)
+
     @staticmethod
     def _sync_restored_path(worktree: Path, path: str, state: _PreservedPathState) -> None:
         """Establish durability again after a response lost beyond the path effect."""
         relative = PurePosixPath(path)
-        parent_fd = _open_worktree_parent(worktree, relative.parts[:-1])
+        parent_fd = _open_worktree_parent(worktree, relative.parts[:-1], create=False)
         try:
             if state.kind == "regular":
                 descriptor = os.open(relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
@@ -4604,9 +4631,204 @@ class ChangeWorkspaceManager:
         status = self._preservation_git(
             "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all", cwd=worktree
         ).stdout
-        if not set(self._preservation_status_paths(status)) <= {entry.path for entry in receipt.paths}:
+        known_paths = {entry.path for entry in receipt.paths}
+        authorized_staging = self._authorized_restoration_staging(receipt, worktree)
+        if not set(self._preservation_status_paths(status)) <= known_paths | authorized_staging:
             msg = "worktree path inventory expanded after preservation"
             raise PreservationFenceError(msg)
+
+    def _authorized_restoration_staging(  # noqa: C901, PLR0912, PLR0915 - validate every durable staging fence.
+        self,
+        receipt: WorktreePreservationReceipt,
+        worktree: Path,
+    ) -> set[str]:
+        """Return only operation-owned staging paths that are durably journaled and byte-exact."""
+        relative = Path(receipt.storage_ref) / "restoration"
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        authorized: set[str] = set()
+        entries_by_path = {entry.path: entry for entry in receipt.paths}
+        try:
+            try:
+                with contained_directory(root_fd, relative) as restoration_fd:
+                    with os.scandir(restoration_fd) as operations:
+                        operation_entries = tuple(operations)
+                    if any(not item.is_dir(follow_symlinks=False) for item in operation_entries):
+                        raise PreservationFenceError("restoration journal operation inventory is malformed")
+                    operation_names = tuple(sorted(item.name for item in operation_entries))
+                    if len(operation_names) > _MAX_PRESERVED_PATHS:
+                        raise PreservationFenceError("restoration journal exceeds its bounded operation inventory")
+                    for operation_id in operation_names:
+                        if not _DIGEST_PATTERN.fullmatch(operation_id):
+                            raise PreservationFenceError("restoration journal operation identity is malformed")
+                        intent_bytes = read_contained(
+                            restoration_fd,
+                            Path(operation_id) / "intent.json",
+                            limit=_MAX_PRESERVED_TOTAL_BYTES,
+                        )
+                        if intent_bytes is None:
+                            raise PreservationFenceError("restoration operation intent is missing")
+                        try:
+                            operation_payload = json.loads(intent_bytes)
+                        except json.JSONDecodeError as exc:
+                            raise PreservationFenceError("restoration operation intent is malformed") from exc
+                        if not isinstance(operation_payload, dict) or operation_payload.get("schema_version") != 1:
+                            raise PreservationFenceError("restoration operation intent is malformed")
+                        if set(operation_payload) != {"schema_version", "preservation_receipt_id", "paths"}:
+                            raise PreservationFenceError("restoration operation intent is malformed")
+                        if operation_payload["preservation_receipt_id"] != receipt.receipt_id:
+                            raise PreservationFenceError("restoration operation authority does not match its receipt")
+                        selected_raw = operation_payload["paths"]
+                        if (
+                            not isinstance(selected_raw, list)
+                            or any(not isinstance(path, str) for path in selected_raw)
+                            or selected_raw != sorted(set(selected_raw))
+                            or not set(selected_raw) <= entries_by_path.keys()
+                        ):
+                            raise PreservationFenceError("restoration operation paths are malformed")
+                        operation_record = {
+                            "preservation_receipt_id": receipt.receipt_id,
+                            "paths": selected_raw,
+                        }
+                        expected_operation_id = digest(
+                            json.dumps(operation_record, sort_keys=True, separators=(",", ":")).encode()
+                        )
+                        if operation_id != expected_operation_id:
+                            raise PreservationFenceError("restoration operation identity is invalid")
+                        for path in selected_raw:
+                            entry_bytes = read_contained(
+                                restoration_fd,
+                                Path(operation_id) / "paths" / digest(path.encode()) / "intent.json",
+                                limit=_MAX_PRESERVED_TOTAL_BYTES,
+                            )
+                            if entry_bytes is None:
+                                raise PreservationFenceError("restoration path intent is missing")
+                            try:
+                                entry_payload = json.loads(entry_bytes)
+                            except json.JSONDecodeError as exc:
+                                raise PreservationFenceError("restoration path intent is malformed") from exc
+                            if not isinstance(entry_payload, dict) or entry_payload.get("schema_version") != 1:
+                                raise PreservationFenceError("restoration path intent is malformed")
+                            entry_payload = {
+                                key: value for key, value in entry_payload.items() if key != "schema_version"
+                            }
+                            try:
+                                recorded_entry = PreservationEntry.model_validate(entry_payload)
+                            except (TypeError, ValueError) as exc:
+                                raise PreservationFenceError("restoration path intent is malformed") from exc
+                            if recorded_entry != entries_by_path[path]:
+                                raise PreservationFenceError("restoration path intent does not match its receipt")
+                            staging_record = read_contained(
+                                restoration_fd,
+                                Path(operation_id) / "paths" / digest(path.encode()) / "staging.json",
+                                limit=_MAX_PRESERVED_TOTAL_BYTES,
+                            )
+                            if staging_record is not None:
+                                try:
+                                    staging_payload = json.loads(staging_record)
+                                except json.JSONDecodeError as exc:
+                                    raise PreservationFenceError("restoration staging identity is malformed") from exc
+                                if (
+                                    not isinstance(staging_payload, dict)
+                                    or set(staging_payload)
+                                    != {
+                                        "schema_version",
+                                        "preservation_receipt_id",
+                                        "operation_id",
+                                        "path",
+                                        "source",
+                                        "identity",
+                                    }
+                                    or staging_payload.get("schema_version") != 1
+                                    or staging_payload.get("preservation_receipt_id") != receipt.receipt_id
+                                    or staging_payload.get("operation_id") != operation_id
+                                    or staging_payload.get("path") != path
+                                ):
+                                    raise PreservationFenceError("restoration staging identity is invalid")
+                                source = staging_payload.get("source")
+                                if (
+                                    not isinstance(source, str)
+                                    or not _RESTORATION_STAGE_PATTERN.fullmatch(source)
+                                ):
+                                    raise PreservationFenceError("restoration staging source is malformed")
+                                identity = staging_payload.get("identity")
+                                if (
+                                    not isinstance(identity, list)
+                                    or len(identity) != 8
+                                    or any(type(value) is not int or value < 0 for value in identity)
+                                ):
+                                    raise PreservationFenceError("restoration staging identity is malformed")
+                                source_relative = (
+                                    Path(operation_id) / "paths" / digest(path.encode()) / source
+                                )
+                            else:
+                                source = None
+                                identity = None
+                                source_relative = None
+                            if recorded_entry.after_kind == "absent":
+                                if staging_record is not None:
+                                    raise PreservationFenceError("unexpected restoration staging for absent path")
+                                continue
+                            try:
+                                desired_state = self._state_from_entry(
+                                    recorded_entry,
+                                    before=False,
+                                    receipt=receipt,
+                                )
+                                expected_state = self._state_from_entry(
+                                    recorded_entry,
+                                    before=True,
+                                    receipt=receipt,
+                                )
+                                source_state = (
+                                    self._read_private_staging_state(root_fd, source_relative)
+                                    if source_relative is not None
+                                    else None
+                                )
+                            except (OSError, PreservationRejectedError, PreservationFenceError, ValueError) as exc:
+                                message = "owned restoration staging type or bytes are invalid"
+                                raise PreservationFenceError(message) from exc
+                            if source_state is not None:
+                                if (
+                                    identity is None
+                                    or source_state.identity is None
+                                    or not _same_staging_identity(tuple(identity), source_state.identity)
+                                ):
+                                    raise PreservationFenceError("restoration staging owner identity changed")
+                                if not self._same_state(source_state, desired_state):
+                                    raise PreservationFenceError("owned restoration staging bytes or type changed")
+                            staging_path = str(
+                                PurePosixPath(path).parent / _preservation_temporary_name(operation_id, path)
+                            )
+                            self._validate_preservation_path(worktree, staging_path)
+                            try:
+                                (worktree / PurePosixPath(staging_path)).lstat()
+                            except FileNotFoundError:
+                                if identity is not None and source_state is None:
+                                    target_state = self._read_worktree_state(worktree, path)
+                                    if not self._same_state(target_state, expected_state) and not self._same_state(
+                                        target_state, desired_state
+                                    ):
+                                        raise PreservationFenceError("restoration staging identity has no artifact")
+                                continue
+                            if identity is None:
+                                raise PreservationFenceError("restoration staging identity is missing")
+                            try:
+                                staging_state = self._read_worktree_state(worktree, staging_path)
+                            except (OSError, PreservationRejectedError, PreservationFenceError, ValueError) as exc:
+                                message = "owned restoration staging type or bytes are invalid"
+                                raise PreservationFenceError(message) from exc
+                            if staging_state.identity is None or not _same_staging_identity(
+                                tuple(identity), staging_state.identity
+                            ):
+                                raise PreservationFenceError("restoration staging owner identity changed")
+                            if not self._same_state(staging_state, desired_state):
+                                raise PreservationFenceError("owned restoration staging bytes or type changed")
+                            authorized.add(staging_path)
+            except FileNotFoundError:
+                return authorized
+        finally:
+            os.close(root_fd)
+        return authorized
 
     @staticmethod
     def _require_preservation_environment() -> None:
@@ -5180,6 +5402,216 @@ class ChangeWorkspaceManager:
         return _PreservedPathState(kind, content, mode, identity)
 
     @staticmethod
+    def _read_private_staging_state(
+        root_fd: int,
+        relative: Path | None,
+    ) -> _PreservedPathState | None:
+        """Read an owner-private stage without following links or trusting its name."""
+        if relative is None:
+            return None
+        with contained_directory(root_fd, relative.parent) as parent_fd:
+            try:
+                metadata = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                return None
+            identity = _preservation_file_identity(metadata)
+            if stat.S_ISLNK(metadata.st_mode):
+                content = os.fsencode(os.readlink(relative.name, dir_fd=parent_fd))
+                after = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+                if not _same_staging_identity(_preservation_file_identity(after), identity):
+                    raise PreservationFenceError("private restoration staging changed while it was read")
+                return _PreservedPathState("symlink", content, 0o777, identity)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink < 1:
+                raise PreservationRejectedError("private restoration staging is not a regular file")
+            descriptor = os.open(
+                relative.name,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=parent_fd,
+            )
+            try:
+                observed = os.fstat(descriptor)
+                if not _same_staging_identity(_preservation_file_identity(observed), identity):
+                    raise PreservationFenceError("private restoration staging changed while it was opened")
+                with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                    content = handle.read(_MAX_PRESERVED_FILE_BYTES + 1)
+                after = os.fstat(descriptor)
+            finally:
+                os.close(descriptor)
+            if len(content) > _MAX_PRESERVED_FILE_BYTES:
+                raise PreservationRejectedError("private restoration staging exceeds its bound")
+            if not _same_staging_identity(_preservation_file_identity(after), identity):
+                raise PreservationFenceError("private restoration staging changed while it was read")
+            return _PreservedPathState("regular", content, stat.S_IMODE(metadata.st_mode), identity)
+
+    def _create_private_staging(
+        self,
+        receipt: WorktreePreservationReceipt,
+        operation_id: str,
+        path: str,
+        state: _PreservedPathState,
+    ) -> tuple[str, _PreservedPathState]:
+        """Create a private stage before exposing any artifact to the worktree."""
+        if state.kind == "absent" or state.content is None:
+            raise PreservationRejectedError("private restoration staging content is missing")
+        relative = Path(operation_id) / "paths" / digest(path.encode())
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            with contained_directory(
+                root_fd,
+                Path(receipt.storage_ref) / "restoration" / relative,
+                create=True,
+            ) as parent_fd:
+                for _attempt in range(8):
+                    source = f"stage-{secrets.token_hex(16)}"
+                    created = False
+                    staged: _PreservedPathState | None = None
+                    try:
+                        if state.kind == "symlink":
+                            os.symlink(os.fsdecode(state.content), source, dir_fd=parent_fd)
+                            created = True
+                            os.fsync(parent_fd)
+                        else:
+                            descriptor = os.open(
+                                source,
+                                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                0o600,
+                                dir_fd=parent_fd,
+                            )
+                            created = True
+                            try:
+                                with os.fdopen(descriptor, "wb", closefd=False) as handle:
+                                    handle.write(state.content)
+                                    handle.flush()
+                                os.fchmod(descriptor, state.mode or 0o644)
+                                os.fsync(descriptor)
+                            finally:
+                                os.close(descriptor)
+                            os.fsync(parent_fd)
+                        staged = self._read_private_staging_state(
+                            root_fd,
+                            Path(receipt.storage_ref) / "restoration" / relative / source,
+                        )
+                        if staged is None or staged.identity is None or not self._same_state(staged, state):
+                            raise PreservationFenceError("private restoration staging failed readback")
+                        return source, staged
+                    except FileExistsError:
+                        continue
+                    except BaseException:
+                        if created and staged is not None and staged.identity is not None:
+                            with suppress(OSError):
+                                current = self._read_private_staging_state(
+                                    root_fd,
+                                    Path(receipt.storage_ref) / "restoration" / relative / source,
+                                )
+                                if (
+                                    current is not None
+                                    and current.identity is not None
+                                    and _same_staging_identity(staged.identity, current.identity)
+                                ):
+                                    os.unlink(source, dir_fd=parent_fd)
+                                    os.fsync(parent_fd)
+                        raise
+                raise PreservationFenceError("private restoration staging name allocation exhausted")
+        finally:
+            os.close(root_fd)
+
+    def _read_restoration_staging_record(
+        self,
+        receipt: WorktreePreservationReceipt,
+        operation_id: str,
+        path: str,
+    ) -> tuple[str, tuple[int, int, int, int, int, int, int, int]] | None:
+        record_relative = (
+            Path(receipt.storage_ref)
+            / "restoration"
+            / operation_id
+            / "paths"
+            / digest(path.encode())
+            / "staging.json"
+        )
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            content = read_contained(root_fd, record_relative, limit=_MAX_PRESERVED_TOTAL_BYTES)
+        finally:
+            os.close(root_fd)
+        if content is None:
+            return None
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise PreservationFenceError("restoration staging identity is malformed") from exc
+        if (
+            not isinstance(payload, dict)
+            or set(payload)
+            != {
+                "schema_version",
+                "preservation_receipt_id",
+                "operation_id",
+                "path",
+                "source",
+                "identity",
+            }
+            or payload.get("schema_version") != 1
+            or payload.get("preservation_receipt_id") != receipt.receipt_id
+            or payload.get("operation_id") != operation_id
+            or payload.get("path") != path
+        ):
+            raise PreservationFenceError("restoration staging identity is invalid")
+        source = payload.get("source")
+        identity = payload.get("identity")
+        if (
+            not isinstance(source, str)
+            or not _RESTORATION_STAGE_PATTERN.fullmatch(source)
+            or not isinstance(identity, list)
+            or len(identity) != 8
+            or any(type(value) is not int or value < 0 for value in identity)
+        ):
+            raise PreservationFenceError("restoration staging identity is malformed")
+        return source, tuple(identity)
+
+    def _remove_private_staging(
+        self,
+        receipt: WorktreePreservationReceipt,
+        operation_id: str,
+        path: str,
+        source: str,
+        identity: tuple[int, int, int, int, int, int, int, int],
+    ) -> None:
+        if not _RESTORATION_STAGE_PATTERN.fullmatch(source):
+            raise PreservationFenceError("restoration staging source is malformed")
+        relative = (
+            Path(receipt.storage_ref)
+            / "restoration"
+            / operation_id
+            / "paths"
+            / digest(path.encode())
+            / source
+        )
+        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            with contained_directory(root_fd, relative.parent) as parent_fd:
+                staged = self._read_private_staging_state(root_fd, relative)
+                if staged is None:
+                    return
+                if staged.identity is None or not _same_staging_identity(identity, staged.identity):
+                    raise PreservationFenceError("restoration staging owner identity changed")
+                os.unlink(source, dir_fd=parent_fd)
+                os.fsync(parent_fd)
+        finally:
+            os.close(root_fd)
+
+    def _cleanup_restoration_staging_source(
+        self,
+        receipt: WorktreePreservationReceipt,
+        operation_id: str,
+        path: str,
+    ) -> None:
+        record = self._read_restoration_staging_record(receipt, operation_id, path)
+        if record is not None:
+            source, identity = record
+            self._remove_private_staging(receipt, operation_id, path, source, identity)
+
+    @staticmethod
     def _same_state(left: _PreservedPathState, right: _PreservedPathState) -> bool:
         return (
             left.kind == right.kind
@@ -5199,6 +5631,9 @@ class ChangeWorkspaceManager:
         state: _PreservedPathState,
         *,
         expected: _PreservedPathState,
+        operation_id: str,
+        receipt: WorktreePreservationReceipt,
+        record_name: str,
     ) -> None:
         self._validate_preservation_path(worktree, path)
         relative = PurePosixPath(path)
@@ -5216,24 +5651,128 @@ class ChangeWorkspaceManager:
                     return
                 os.fsync(parent_fd)
                 return
-            temporary = f".owlbear-preserve-{hashlib.sha256(path.encode()).hexdigest()[:16]}"
-            temporary_created = False
+            if receipt.runtime_device != receipt.worktree_device:
+                raise PreservationFenceError("private restoration staging requires one filesystem")
+            temporary = _preservation_temporary_name(operation_id, path)
+            temporary_relative = str(relative.parent / temporary)
+            staging_record = self._read_restoration_staging_record(receipt, operation_id, path)
+            staging_source = staging_record[0] if staging_record is not None else None
+            staging_identity = staging_record[1] if staging_record is not None else None
             try:
-                with _open_preservation_entry(parent_fd, temporary, state) as descriptor:
-                    temporary_created = True
-                    if state.kind == "regular":
-                        os.fchmod(descriptor, state.mode or 0o644)
-                        os.fsync(descriptor)
-                    else:
-                        os.fsync(parent_fd)
-                    os.replace(temporary, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
-                os.fsync(parent_fd)
-            finally:
-                if temporary_created:
+                (worktree / PurePosixPath(temporary_relative)).lstat()
+            except FileNotFoundError:
+                temporary_exists = False
+                temporary_state = None
+            else:
+                temporary_exists = True
+                temporary_state = self._read_worktree_state(worktree, temporary_relative)
+            if temporary_exists:
+                if staging_identity is None or temporary_state is None or temporary_state.identity is None:
+                    raise PreservationFenceError(f"restoration staging identity is missing: {path}")
+                if not _same_staging_identity(staging_identity, temporary_state.identity):
+                    raise PreservationFenceError(f"restoration staging owner identity changed: {path}")
+                if not self._same_state(temporary_state, state):
+                    raise PreservationFenceError(f"owned restoration staging changed before replay: {path}")
+            else:
+                source_state: _PreservedPathState | None = None
+                if staging_source is not None:
+                    source_relative = (
+                        Path(receipt.storage_ref)
+                        / "restoration"
+                        / operation_id
+                        / "paths"
+                        / digest(path.encode())
+                        / staging_source
+                    )
+                    root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
                     try:
-                        os.unlink(temporary, dir_fd=parent_fd)
-                    except FileNotFoundError:
-                        pass
+                        source_state = self._read_private_staging_state(root_fd, source_relative)
+                    finally:
+                        os.close(root_fd)
+                    if source_state is not None:
+                        if source_state.identity is None or staging_identity is None:
+                            raise PreservationFenceError(f"restoration staging identity is missing: {path}")
+                        if not _same_staging_identity(staging_identity, source_state.identity):
+                            raise PreservationFenceError(f"restoration staging owner identity changed: {path}")
+                        if not self._same_state(source_state, state):
+                            raise PreservationFenceError(f"owned restoration staging changed before replay: {path}")
+                if source_state is None:
+                    if staging_record is not None:
+                        self._remove_restoration_record(
+                            receipt,
+                            operation_id,
+                            f"{record_name}/staging.json",
+                        )
+                    staging_source, source_state = self._create_private_staging(
+                        receipt,
+                        operation_id,
+                        path,
+                        state,
+                    )
+                    if source_state.identity is None:
+                        raise PreservationFenceError(f"private restoration staging identity is unavailable: {path}")
+                    staging_identity = source_state.identity
+                    self._write_restoration_record(
+                        receipt,
+                        operation_id,
+                        f"{record_name}/staging.json",
+                        {
+                            "preservation_receipt_id": receipt.receipt_id,
+                            "operation_id": operation_id,
+                            "path": path,
+                            "source": staging_source,
+                            "identity": list(staging_identity),
+                        },
+                    )
+                source_relative = (
+                    Path(receipt.storage_ref)
+                    / "restoration"
+                    / operation_id
+                    / "paths"
+                    / digest(path.encode())
+                    / staging_source
+                )
+                root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    with contained_directory(root_fd, source_relative.parent) as source_parent_fd:
+                        os.link(
+                            source_relative.name,
+                            temporary,
+                            src_dir_fd=source_parent_fd,
+                            dst_dir_fd=parent_fd,
+                            follow_symlinks=False,
+                        )
+                        os.fsync(source_parent_fd)
+                except OSError as exc:
+                    if exc.errno == errno.EXDEV:
+                        raise PreservationFenceError(
+                            "private restoration staging cannot cross filesystems"
+                        ) from exc
+                    raise
+                finally:
+                    os.close(root_fd)
+                os.fsync(parent_fd)
+                temporary_state = self._read_worktree_state(worktree, temporary_relative)
+                if (
+                    temporary_state.identity is None
+                    or staging_identity is None
+                    or not _same_staging_identity(staging_identity, temporary_state.identity)
+                ):
+                    raise PreservationFenceError(f"restoration staging owner identity changed: {path}")
+                if not self._same_state(temporary_state, state):
+                    raise PreservationFenceError(f"owned restoration staging changed before replay: {path}")
+            if not self._same_state(self._read_worktree_state(worktree, path), expected):
+                raise PreservationFenceError(f"path identity changed before restoration: {path}")
+            os.replace(temporary, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            os.fsync(parent_fd)
+            if staging_source is not None and staging_identity is not None:
+                self._remove_private_staging(
+                    receipt,
+                    operation_id,
+                    path,
+                    staging_source,
+                    staging_identity,
+                )
         finally:
             os.close(parent_fd)
 
@@ -6214,49 +6753,6 @@ class ChangeWorkspaceManager:
         )
  
 
-@contextmanager
-def _open_preservation_entry(
-    parent_fd: int,
-    name: str,
-    state: _PreservedPathState,
-) -> Iterator[int | None]:
-    """Create one regular file or symlink below a pinned worktree directory."""
-    if state.kind == "symlink":
-        if state.content is None:
-            raise PreservationRejectedError("symlink preservation content is missing")
-        os.symlink(os.fsdecode(state.content), name, dir_fd=parent_fd)
-        try:
-            yield None
-        finally:
-            try:
-                os.unlink(name, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
-        return
-    if state.content is None:
-        raise PreservationRejectedError("regular preservation content is missing")
-    descriptor = os.open(
-        name,
-        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-        0o600,
-        dir_fd=parent_fd,
-    )
-    try:
-        try:
-            with os.fdopen(descriptor, "wb", closefd=False) as handle:
-                handle.write(state.content)
-                handle.flush()
-                os.fsync(descriptor)
-            yield descriptor
-        finally:
-            try:
-                os.unlink(name, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
-    finally:
-        os.close(descriptor)
-
-
 def _preservation_file_identity(
     metadata: os.stat_result,
 ) -> tuple[int, int, int, int, int, int, int, int]:
@@ -6279,6 +6775,16 @@ def _same_preservation_identity(
 ) -> bool:
     """Compare stable metadata without invalidating evidence after ordinary reads."""
     return left[:5] == right[:5] and left[6:] == right[6:]
+
+
+def _same_staging_identity(
+    left: tuple[int, int, int, int, int, int, int, int],
+    right: tuple[int, int, int, int, int, int, int, int],
+) -> bool:
+    """Compare an owner inode while allowing its expected hard-link transition."""
+    stable = left[:2] == right[:2] and left[3:5] == right[3:5] and left[6] == right[6]
+    ctime_transition = left[7] == right[7] or {left[2], right[2]} == {1, 2}
+    return stable and ctime_transition
 
 
 def _validate_relative_preservation_path(path: str) -> None:
@@ -6317,14 +6823,16 @@ def _reject_symlink_ancestors(path: Path) -> None:
             raise PreservationRejectedError(f"Git administration path contains a symlink: {current}")
 
 
-def _open_worktree_parent(worktree: Path, parts: tuple[str, ...]) -> int:
-    """Open/create only the exact regular directory chain for one restore path."""
+def _open_worktree_parent(worktree: Path, parts: tuple[str, ...], *, create: bool = True) -> int:
+    """Open the directory chain, stopping at its nearest existing ancestor when requested."""
     descriptor = os.open(worktree, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         for part in parts:
             try:
                 successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
             except FileNotFoundError:
+                if not create:
+                    break
                 os.mkdir(part, mode=0o755, dir_fd=descriptor)
                 os.fsync(descriptor)
                 successor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
@@ -6334,6 +6842,11 @@ def _open_worktree_parent(worktree: Path, parts: tuple[str, ...]) -> int:
     except BaseException:
         os.close(descriptor)
         raise
+
+
+def _preservation_temporary_name(operation_id: str, path: str) -> str:
+    """Bind a worktree staging name to one durable restoration operation and path."""
+    return f".owlbear-preserve-{operation_id}-{hashlib.sha256(path.encode()).hexdigest()[:16]}"
 
 
 def _replacement(

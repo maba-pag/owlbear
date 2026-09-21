@@ -3,8 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import shutil
 import subprocess
+import sys
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -602,6 +605,21 @@ def test_nonterminal_recovery_restores_nested_directory_without_losing_root_fenc
     assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
 
 
+def test_nonterminal_recovery_absent_nested_replay_does_not_recreate_parents(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    untracked = worktree / "nested" / "deeper" / "new.txt"
+    untracked.parent.mkdir(parents=True)
+    untracked.write_bytes(b"untracked\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert not untracked.exists()
+    shutil.rmtree(worktree / "nested")
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert not (worktree / "nested").exists()
+
+
 @pytest.mark.parametrize("kind", ["worktree-file", "index"])
 def test_nonterminal_recovery_still_rejects_file_and_index_hardlinks(tmp_path: Path, kind: str) -> None:
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
@@ -748,6 +766,195 @@ def _assert_restoration_failure(manager, preservation):
     failures = tuple((manager.runtime_root / preservation.storage_ref).glob("restoration/*/failure.json"))
     assert len(failures) == 1
     assert json.loads(failures[0].read_bytes())["code"] == "restoration-interrupted"
+
+
+def _restoration_staging_path(preservation, path: str) -> Path:
+    selected = tuple(entry.path for entry in preservation.paths)
+    operation_id = digest(
+        json.dumps(
+            {"preservation_receipt_id": preservation.receipt_id, "paths": selected},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    )
+    temporary = f".owlbear-preserve-{operation_id}-{hashlib.sha256(path.encode()).hexdigest()[:16]}"
+    return preservation.worktree_path / Path(path).parent / temporary
+
+
+def _kill_during_restoration_before_replace(tmp_path: Path, preservation, repository: Path) -> None:
+    script = (
+        "import os, signal, sys\n"
+        "from pathlib import Path\n"
+        "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "root = Path(sys.argv[1])\n"
+        "repository = Path(sys.argv[2])\n"
+        "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "os.replace = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
+        "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
+    )
+    result = subprocess.run(  # noqa: S603 - the child is a controlled test process.
+        (
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            str(repository),
+            preservation.change_id,
+            preservation.preservation_id,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == -signal.SIGKILL, result.stderr
+
+
+def _kill_during_private_staging_write(tmp_path: Path, preservation, repository: Path) -> None:
+    ready = tmp_path / "private-stage-write-ready"
+    script = (
+        "import os, signal, sys, time\n"
+        "from pathlib import Path\n"
+        "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "root = Path(sys.argv[1])\n"
+        "repository = Path(sys.argv[2])\n"
+        "ready = Path(sys.argv[5])\n"
+        "real_fdopen = os.fdopen\n"
+        "def fdopen(fd, *args, **kwargs):\n"
+        "    handle = real_fdopen(fd, *args, **kwargs)\n"
+        "    try:\n"
+        "        name = os.readlink('/proc/self/fd/' + str(fd))\n"
+        "    except OSError:\n"
+        "        name = ''\n"
+        "    if not Path(name).name.startswith('stage-'):\n"
+        "        return handle\n"
+        "    class PartialWrite:\n"
+        "        def __init__(self, wrapped):\n"
+        "            self.wrapped = wrapped\n"
+        "        def __enter__(self):\n"
+        "            return self\n"
+        "        def __exit__(self, *exc):\n"
+        "            return self.wrapped.__exit__(*exc)\n"
+        "        def write(self, content):\n"
+        "            count = self.wrapped.write(content[:2])\n"
+        "            self.wrapped.flush()\n"
+        "            ready.write_text(str(count))\n"
+        "            while True:\n"
+        "                time.sleep(1)\n"
+        "        def flush(self):\n"
+        "            return self.wrapped.flush()\n"
+        "    return PartialWrite(handle)\n"
+        "os.fdopen = fdopen\n"
+        "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
+    )
+    process = subprocess.Popen(  # noqa: S603 - the child is a controlled test process.
+        (
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            str(repository),
+            preservation.change_id,
+            preservation.preservation_id,
+            str(ready),
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    for _ in range(100):
+        if ready.exists():
+            break
+        time.sleep(0.01)
+    if not ready.exists():
+        os.kill(process.pid, signal.SIGKILL)
+        _stdout, stderr = process.communicate()
+        pytest.fail(f"private staging child did not reach partial-write gate: {stderr}")
+    os.kill(process.pid, signal.SIGKILL)
+    _stdout, stderr = process.communicate()
+    assert process.returncode == -signal.SIGKILL, stderr
+
+
+def test_nonterminal_recovery_replays_operation_owned_staging_after_subprocess_death(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_during_restoration_before_replace(tmp_path, preservation, manager.repository)
+    staging = _restoration_staging_path(preservation, "shared.txt")
+    assert staging.read_bytes() == b"base\n"
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+
+    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert not staging.exists()
+
+
+def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_during_private_staging_write(tmp_path, preservation, manager.repository)
+    staging = _restoration_staging_path(preservation, "shared.txt")
+    assert not staging.exists()
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+
+    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert not staging.exists()
+
+
+@pytest.mark.parametrize("mutation", ["bytes", "same-bytes", "same-bytes-foreign", "type", "index"])
+def test_nonterminal_recovery_rejects_changed_operation_owned_staging_or_index(
+    tmp_path: Path, mutation: str
+) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    _kill_during_restoration_before_replace(tmp_path, preservation, manager.repository)
+    staging = _restoration_staging_path(preservation, "shared.txt")
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    original_index = manager._read_managed_index(index)  # noqa: SLF001
+    if mutation == "bytes":
+        staging.write_bytes(b"foreign staging bytes\n")
+    elif mutation == "same-bytes":
+        staging.write_bytes(b"base\n")
+    elif mutation == "same-bytes-foreign":
+        staging.unlink()
+        staging.write_bytes(b"base\n")
+    elif mutation == "type":
+        staging.unlink()
+        staging.mkdir()
+    else:
+        index.write_bytes(original_index[:-1] + bytes([original_index[-1] ^ 1]))
+
+    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    with pytest.raises(PreservationFenceError, match=r"staging|index"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+
+
+def test_nonterminal_recovery_rejects_foreign_collision_at_owned_staging_name(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    staging = _restoration_staging_path(preservation, "shared.txt")
+    staging.write_bytes(b"foreign collision\n")
+
+    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    with pytest.raises(PreservationFenceError, match="inventory"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert staging.read_bytes() == b"foreign collision\n"
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
 
 
 @pytest.mark.parametrize("failure", ["before-object", "after-object", "before-manifest", "after-manifest"])

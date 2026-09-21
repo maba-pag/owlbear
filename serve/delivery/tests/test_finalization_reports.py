@@ -16,6 +16,23 @@ from owlbear_delivery.finalization_reports import (
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
+_LEGACY_REPORT_JSON = (
+    b'{"check_id":null,"exit_status":null,"observed_at":"2026-08-02T00:00:00Z","producer":"finalization-diagnostic",'
+    b'"report_id":"f3da20d3c7ab272ca417f31828759d5b3e1f0d1ac627c3e74cb48273087dc86a",'
+    b'"request":{"attempt_key":"legacy-report","category":"maintained-check","change_id":"change-a","check_id":null,'
+    b'"checks_state":"failed","code":"maintained-check-failed","exit_status":null,'
+    b'"expected_change_head":"cccccccccccccccccccccccccccccccccccccccc",'
+    b'"expected_contract_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",'
+    b'"expected_diagnostic_sequence":0,'
+    b'"expected_frontier_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",'
+    b'"expected_reviewed_head":"cccccccccccccccccccccccccccccccccccccccc","expected_workspace_fingerprint":null,'
+    b'"paths":[]},"sequence":1,"summary":"A maintained verification check failed."}\n'
+)
+_LEGACY_REPORT_POINTER_JSON = (
+    b'{"report_id":"f3da20d3c7ab272ca417f31828759d5b3e1f0d1ac627c3e74cb48273087dc86a","sequence":1}\n'
+)
+
+
 def _request(**updates):
     return ReportFinalizationFailure(
         **{
@@ -32,6 +49,29 @@ def _request(**updates):
             **updates,
         }
     )
+
+
+def test_legacy_report_fixture_reads_replays_and_rejects_tampering(tmp_path: Path) -> None:
+    root = tmp_path / "finalization-reports" / "change-a"
+    reports = root / "reports"
+    reports.mkdir(parents=True)
+    report_id = "f3da20d3c7ab272ca417f31828759d5b3e1f0d1ac627c3e74cb48273087dc86a"
+    (reports / f"{report_id}.json").write_bytes(_LEGACY_REPORT_JSON)
+    (root / "current.json").write_bytes(_LEGACY_REPORT_POINTER_JSON)
+
+    store = FinalizationReportStore(tmp_path, "change-a")
+    report = store.read().reports[0]
+    assert report.report_id == report_id
+    assert store.record(
+        _request(attempt_key="legacy-report"),
+        datetime.now(UTC),
+        lambda: pytest.fail("legacy replay must not validate a new basis"),
+    ) == report
+
+    tampered = _LEGACY_REPORT_JSON.replace(b'"checks_state":"failed"', b'"checks_state":"unknown"')
+    (reports / f"{report_id}.json").write_bytes(tampered)
+    with pytest.raises(FinalizationReportError, match="report-store-unavailable"):
+        FinalizationReportStore(tmp_path, "change-a").read()
 
 
 def test_report_replay_restart_and_matching_pointer_retirement(tmp_path: Path) -> None:

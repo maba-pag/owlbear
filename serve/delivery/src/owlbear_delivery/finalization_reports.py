@@ -149,6 +149,29 @@ def _encoded(model: BaseModel, *, exclude: set[str] | None = None) -> bytes:
     ).encode()
 
 
+_CURRENT_REPORT_REQUEST_FIELDS = frozenset(
+    {"procedure_id", "proof_fingerprint_before", "proof_fingerprint_after"}
+)
+
+
+def _encoded_report(report: FinalizationReport, *, exclude: set[str] | None = None) -> bytes:
+    """Serialize a report with the format that established its identity.
+
+    D03-C added proof-mutation request fields without changing the report schema
+    version.  A report loaded without those fields must therefore be hashed and
+    size-checked from its original field set rather than from a reserialized
+    current model.
+    """
+    legacy = not report.request.model_fields_set.intersection(_CURRENT_REPORT_REQUEST_FIELDS)
+    payload = report.model_dump(mode="json", exclude=exclude)
+    if legacy:
+        request = payload.get("request")
+        if isinstance(request, dict):
+            for field in _CURRENT_REPORT_REQUEST_FIELDS:
+                request.pop(field, None)
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
 class FinalizationReport(_ReportModel):
     """Immutable diagnostic identity; its producer is not authenticated proof."""
 
@@ -169,10 +192,10 @@ class FinalizationReport(_ReportModel):
         if self.summary != _SUMMARIES[self.request.code]:
             msg = "report summary must use its registered engine template"
             raise ValueError(msg)
-        if hashlib.sha256(_encoded(self, exclude={"report_id"})).hexdigest() != self.report_id:
+        if hashlib.sha256(_encoded_report(self, exclude={"report_id"})).hexdigest() != self.report_id:
             msg = "report identity does not match its immutable content"
             raise ValueError(msg)
-        if len(_encoded(self)) > MAX_REPORT_BYTES:
+        if len(_encoded_report(self)) > MAX_REPORT_BYTES:
             msg = "diagnostic report exceeds encoded capacity"
             raise ValueError(msg)
         return self
