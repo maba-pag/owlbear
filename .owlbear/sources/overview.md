@@ -4,6 +4,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## GitHub Review and Cloud Instructions
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub repository instructions | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions> | Automatic path-scoped loading, `excludeAgent` feature targeting and PR head-branch context | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md` | 2026-09-21 |
+| GitHub instruction support matrix | <https://docs.github.com/en/copilot/reference/custom-instructions-support> | Path-specific instruction eligibility in GitHub and IDE features; explicit applicability avoids imposing cloud procedures on local sessions | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review customization | <https://docs.github.com/en/copilot/tutorials/customize-code-review> | Concise review criteria and unsupported comment-format/overview customization | `.github/instructions/code-review.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review usage | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review> | Native review versus Fix with Copilot, effort controls, re-review, thread reply and optional approval limits | [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+
 ## Copilot Cloud Dependency Setup
 
 | Source | URL | What | Where Used | Date |

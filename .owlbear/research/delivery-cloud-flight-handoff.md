@@ -258,6 +258,9 @@ and request cumulative review; do not interpret cumulative proof as a whole-proj
 
 ### Review
 
+This is an explicitly requested cloud-agent review, not GitHub's built-in **Request review** action.
+For the native-review handoff, see [Native Copilot Review](#native-copilot-review).
+
 Read-only review of the named phase on the supplied PR. For P, assess the proposed plan against
 current source and programme requirements: complete scope, feasible dependencies, concrete contracts,
 bounded phases, discriminating tests and cloud capability limits. Planning review precedes approval;
@@ -422,6 +425,38 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 
 ## Operator Quick Start
 
+### Native Copilot Review
+
+GitHub's **Reviewers -> Copilot -> Request** uses the
+[review instructions](../../.github/instructions/code-review.instructions.md). An explicit
+`@copilot+... Review ...` comment starts a cloud-agent task and uses the
+[cloud instructions](../../.github/instructions/cloud-agent.instructions.md) instead. These files
+target GitHub's two features; their applicability text directs local IDE sessions not to apply these
+procedures. This is instruction guidance, not a deterministic runtime guard.
+Keep review custom instructions enabled. Current GitHub documentation specifies instruction loading
+from the PR head branch, so the files must be present there to test this behavior.
+
+Native review controls its own comments/overview and model mix; custom instructions cannot guarantee
+this guide's report or next-command format. Its effort control is Lite/Balanced, not the qualified
+model selector used in PR-comment tasks. No findings does not certify whole-package acceptance.
+Copilot approvals count only when repository/platform settings enable them; these instructions do not
+change those settings or bypass required checks.
+
+Inspect native findings, then use **Fix with Copilot** or a normal PR comment to request scoped repair.
+The cloud worker validates suggestions, reports actual results/gaps and supplies the complete next
+request. Replies inside native review threads are not a conversation with the reviewer; re-request
+native review after fixes or use an explicit cloud review for the custom report and model choice.
+
+### Verify Automatic Loading
+
+Pilot on a PR whose head contains the two instruction files. Inspect available review/session
+attributions and behavior for relevant instruction loading, scoped findings and honest proof limits.
+Then run one scoped cloud repair and verify its complete model-qualified next command. Include an
+ordinary non-Delivery task: it must not invent a phase or require a Delivery workflow. Local frontmatter
+and link checks establish file integrity only, not hosted instruction adherence. Use available logs
+to inspect tool/MCP use; the presence of default GitHub/Playwright tools is not a live OwlBear MCP
+requirement. No new setup workflow, hook, permissions or automatic review settings are required.
+
 ### Launch and Continue
 
 1. Check the requested package's actual status and published prerequisites. Use its existing PR for
@@ -534,5 +569,7 @@ find issues beyond scoped agent proof; do not launch them inside the agent or wa
 - [Cloud agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent): asynchronous execution and 59-minute session limit.
 - [GitHub task/PR controls](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github): new tasks, follow-ups and workflow approvals.
 - [Model selection](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model): select models/depth in the UI, not prompts.
+- [Native review customization](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review): instruction loading, review effort and cloud repair handoff.
+- [Instruction targeting](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions) and [review limits](https://docs.github.com/en/copilot/tutorials/customize-code-review#unsupported-instruction-types): `excludeAgent`, applicability and unsupported formatting controls.
 - [Environment](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment) and [MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers): cloud tools are not local VS Code bindings.
 - [Session persistence](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) and [security controls](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations): published checkpoints, permissions and review limits.
