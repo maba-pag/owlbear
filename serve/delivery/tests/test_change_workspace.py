@@ -662,6 +662,7 @@ def test_nonterminal_recovery_restores_nested_directory_without_losing_root_fenc
     worktree = coordination.worktree_path
     shutil.rmtree(worktree / "nested")
     preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    assert tuple(entry.path for entry in preservation.paths) == ("nested/deeper/file.txt",)
     index = manager._resolve_managed_index(worktree)  # noqa: SLF001
     index_bytes = manager._read_managed_index(index)  # noqa: SLF001
 

@@ -31,6 +31,9 @@ _MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
 )
+_ADMITTED_PATH_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-"
+)
 
 
 class _RecoveryModel(BaseModel):
@@ -82,6 +85,26 @@ class RecoveryInvocation(_RecoveryModel):
     invocation_id: str = Field(min_length=1, max_length=256)
 
 
+def _is_canonical_admitted_path(value: str) -> bool:
+    parsed = PurePosixPath(value)
+    return (
+        bool(value)
+        and value == parsed.as_posix()
+        and not parsed.is_absolute()
+        and not any(part in {"", ".", ".."} for part in parsed.parts)
+        and "\\" not in value
+        and "\x00" not in value
+        and value.isprintable()
+        and all(character in _ADMITTED_PATH_CHARS for character in value)
+    )
+
+
+def _scope_contains_path(scope: str, path: str) -> bool:
+    scope_parts = PurePosixPath(scope).parts
+    path_parts = PurePosixPath(path).parts
+    return len(path_parts) >= len(scope_parts) and path_parts[: len(scope_parts)] == scope_parts
+
+
 class RecoveryIntent(_RecoveryModel):
     """Immutable proposed recovery of one captured owner; never a release capability."""
 
@@ -130,8 +153,7 @@ class RecoveryIntent(_RecoveryModel):
             if values != tuple(sorted(set(values))) or any(
                 not value
                 or len(value) > _MAX_ADMITTED_PATH_LENGTH
-                or Path(value).is_absolute()
-                or ".." in PurePosixPath(value).parts
+                or not _is_canonical_admitted_path(value)
                 for value in values
             ):
                 message = f"{label} must contain sorted, unique relative paths"
@@ -145,7 +167,10 @@ class RecoveryIntent(_RecoveryModel):
         if self.admitted_task_id is None and (self.admitted_task_scope or self.admitted_paths):
             message = "admitted paths require an admitted task identity"
             raise ValueError(message)
-        if not set(self.admitted_paths) <= set(self.admitted_task_scope):
+        if not all(
+            any(_scope_contains_path(scope, path) for scope in self.admitted_task_scope)
+            for path in self.admitted_paths
+        ):
             message = "admitted paths must be within the admitted task scope"
             raise ValueError(message)
         return self

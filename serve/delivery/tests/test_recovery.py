@@ -456,6 +456,25 @@ def test_recovery_uses_canonical_directory_scope_for_exact_dirty_paths(tmp_path:
     assert admitted[2:] == (("serve/delivery",), ("serve/delivery/src/module.py",))
 
 
+def test_recovery_intent_validates_nested_admitted_paths_by_component_boundary() -> None:
+    payload = RecoveryIntent.model_validate_json(_A5_INTENT_JSON).model_dump()
+    payload.update(
+        {
+            "admitted_task_id": "TASK-001",
+            "admitted_task_digest": "d" * 64,
+            "admitted_task_scope": ("serve/delivery",),
+            "admitted_paths": ("serve/delivery/src/module.py",),
+        }
+    )
+
+    intent = RecoveryIntent.model_validate(payload)
+
+    assert intent.admitted_paths == ("serve/delivery/src/module.py",)
+    payload["admitted_paths"] = ("serve/delivery-extra/module.py",)
+    with pytest.raises(ValueError, match="within the admitted task scope"):
+        RecoveryIntent.model_validate(payload)
+
+
 class ProcessEvidenceHost(EvidenceHost):
     """Own the controlled invocation's entire process/job graph below the evidence port."""
 
