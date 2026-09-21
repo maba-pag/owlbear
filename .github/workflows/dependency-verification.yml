@@ -35,9 +35,17 @@ name: Dependency verification
       - tests/test_dependency_verification_workflow.py
       - uv.lock
   workflow_dispatch:
+    inputs:
+      cache_probe:
+        description: "Preparation-only cache comparison; none runs normal verification"
+        type: choice
+        options: [none, uv, precommit]
+        default: none
 
 concurrency:
-  group: dependency-verification-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    dependency-verification-${{ github.event.pull_request.number || github.ref }}-${{
+    inputs.cache_probe || 'none' }}
   cancel-in-progress: true
 
 permissions:
@@ -48,8 +56,8 @@ jobs:
   resolve_runtimes:
     name: Resolve Python runtimes
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -76,8 +84,8 @@ jobs:
   classify:
     name: Classify dependency surfaces
     if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -418,6 +426,132 @@ jobs:
         if: needs.classify.outputs.renovate == 'true'
         run: python3 -m json.tool .github/renovate.json >/dev/null
 
+  cache-probe-uv:
+    name: "Cache probe uv ${{ matrix.policy }} / Python ${{ matrix.python }}"
+    if: github.event_name == 'workflow_dispatch' && inputs.cache_probe == 'uv'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [current, pruned, disabled]
+        python: ["3.12.14", pinned]
+    env:
+      UV_PROJECT_ENVIRONMENT: .venv-probe
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        id: uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          version: "0.12.15"
+          enable-cache: ${{ matrix.policy != 'disabled' }}
+          prune-cache: ${{ matrix.policy == 'pruned' }}
+          cache-local-path: ${{ runner.temp }}/uv-cache-probe-${{ matrix.policy }}
+          cache-suffix: probe-${{ github.run_id }}-${{ matrix.policy }}
+
+      - name: Resolve and install Python
+        env:
+          MATRIX_PYTHON: ${{ matrix.python }}
+        run: |
+          if [[ "$MATRIX_PYTHON" == pinned ]]; then
+            MATRIX_PYTHON="$(tr -d '\r\n' < .python-version)"
+          fi
+          echo "PROBE_PYTHON=$MATRIX_PYTHON" >> "$GITHUB_ENV"
+          uv python install "$MATRIX_PYTHON"
+
+      - name: Install locked Python workspace
+        run: uv sync --locked --python "$PROBE_PYTHON" --all-packages --all-extras --all-groups
+
+      - name: Record cache evidence
+        env:
+          CACHE_HIT: ${{ steps.uv.outputs.cache-hit }}
+          CACHE_KEY: ${{ steps.uv.outputs.cache-key }}
+          POLICY: ${{ matrix.policy }}
+        run: |
+          {
+            echo "## uv cache probe: $POLICY / Python $PROBE_PYTHON"
+            echo "Revision: $GITHUB_SHA; run: $GITHUB_RUN_ID; attempt: $GITHUB_RUN_ATTEMPT"
+            echo "Cache hit: ${CACHE_HIT:-false}; key: ${CACHE_KEY:-disabled}"
+            echo "Compare Setup uv + Install locked Python workspace + Post Setup uv durations."
+            echo "Both Python legs intentionally share a policy key; inspect save conflicts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  cache-probe-precommit:
+    name: "Cache probe pre-commit / ${{ matrix.policy }}"
+    if: github.event_name == 'workflow_dispatch' && inputs.cache_probe == 'precommit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [cached, disabled]
+    env:
+      PRE_COMMIT_HOME: ${{ github.workspace }}/.cache/precommit-probe
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          version: "0.12.15"
+          enable-cache: false
+
+      - name: Install locked Python tooling
+        run: uv sync --locked --group dev
+
+      - name: Setup Node.js for hook environments
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          package-manager-cache: false
+
+      - name: Identify hook interpreter
+        id: python
+        run: |
+          uv run --locked --no-sync python -c '
+          import hashlib
+          import sys
+          print("identity=" + hashlib.sha256((sys.version + sys.executable).encode()).hexdigest())
+          ' >> "$GITHUB_OUTPUT"
+
+      - name: Cache hook environments
+        id: hooks
+        if: matrix.policy == 'cached'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ env.PRE_COMMIT_HOME }}
+          key: >-
+            precommit-probe-${{ github.run_id }}-${{ runner.os }}-${{ runner.arch }}-${{
+            steps.python.outputs.identity }}-${{ hashFiles('.pre-commit-config.yaml', 'uv.lock',
+            'serve/cockpit/web/.nvmrc') }}
+
+      - name: Validate GitHub Actions workflows
+        run: uv run --locked --no-sync pre-commit run actionlint --all-files
+
+      - name: Prepare remaining hook environments
+        run: uv run --locked --no-sync pre-commit install-hooks
+
+      - name: Record cache evidence
+        env:
+          CACHE_HIT: ${{ steps.hooks.outputs.cache-hit }}
+          POLICY: ${{ matrix.policy }}
+        run: |
+          {
+            echo "## pre-commit cache probe: $POLICY"
+            echo "Revision: $GITHUB_SHA; run: $GITHUB_RUN_ID; attempt: $GITHUB_RUN_ATTEMPT"
+            echo "Cache hit: ${CACHE_HIT:-false}"
+            echo "Compare cache restore/save + actionlint + hook preparation durations."
+            echo "Hook preparation does not execute the full lint suite."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   gate:
     name: Verify dependency update
     needs:
@@ -429,7 +563,8 @@ jobs:
     if: >-
       always() &&
       (github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false)
+      github.event.pull_request.draft == false) &&
+      (github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -269,7 +269,8 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "uv.lock",
     }
     assert _job(workflow, "classify")["if"] == (
-        "github.event_name != 'pull_request' || github.event.pull_request.draft == false"
+        "(github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "(github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')"
     )
     assert "workflow_dispatch" in workflow["on"]
 
@@ -286,6 +287,9 @@ def test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready() -> No
             assert isinstance(job, dict)
             condition = job.get("if")
             assert isinstance(condition, str), f"{path.name}:{job_name} needs a draft guard"
+            if path == VERIFY_PATH and job_name in {"cache-probe-uv", "cache-probe-precommit"}:
+                assert condition.startswith("github.event_name == 'workflow_dispatch' && ")
+                continue
             assert "github.event_name != 'pull_request'" in condition
             assert "github.event.pull_request.draft == false" in condition
 
@@ -670,7 +674,8 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     gate = _job(workflow, "gate")
 
     assert gate["if"] == (
-        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)"
+        "always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && "
+        "(github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none')"
     )
     assert gate["needs"] == [
         "classify",
@@ -688,6 +693,48 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
         "needs.classify.outputs.proof_tooling == 'true' || "
         "needs.classify.outputs.workspace_lock_tooling == 'true' }}"
     )
+
+
+def test_cache_probes_are_opt_in_and_isolated_from_required_proofs() -> None:
+    workflow = _workflow(VERIFY_PATH)
+    probe_input = workflow["on"]["workflow_dispatch"]["inputs"]["cache_probe"]
+    assert probe_input["default"] == "none"
+    assert probe_input["options"] == ["none", "uv", "precommit"]
+    assert "inputs.cache_probe || 'none'" in workflow["concurrency"]["group"]
+    for job_name in ("classify", "resolve_runtimes", "gate"):
+        assert (
+            "github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none'"
+            in (_job(workflow, job_name)["if"])
+        )
+    assert not set(_job(workflow, "gate")["needs"]) & {"cache-probe-uv", "cache-probe-precommit"}
+    for job_name, mode in (("cache-probe-uv", "uv"), ("cache-probe-precommit", "precommit")):
+        probe = _job(workflow, job_name)
+        assert probe["if"] == f"github.event_name == 'workflow_dispatch' && inputs.cache_probe == '{mode}'"
+        assert probe["runs-on"] == "ubuntu-24.04"
+        assert not probe["strategy"]["fail-fast"]
+        assert "needs" not in probe
+        for step in probe["steps"]:
+            assert not any(command in step.get("run", "") for command in ("pytest", "uv run lint", "megalint"))
+
+    uv_probe = _job(workflow, "cache-probe-uv")
+    assert uv_probe["strategy"]["matrix"] == {
+        "policy": ["current", "pruned", "disabled"],
+        "python": ["3.12.14", "pinned"],
+    }
+    uv_cache = next(step["with"] for step in uv_probe["steps"] if step.get("id") == "uv")
+    assert uv_cache["enable-cache"] == "${{ matrix.policy != 'disabled' }}"
+    assert uv_cache["prune-cache"] == "${{ matrix.policy == 'pruned' }}"
+    assert uv_cache["cache-local-path"] == "${{ runner.temp }}/uv-cache-probe-${{ matrix.policy }}"
+    assert uv_cache["cache-suffix"] == "probe-${{ github.run_id }}-${{ matrix.policy }}"
+    precommit_probe = _job(workflow, "cache-probe-precommit")
+    hooks = next(step for step in precommit_probe["steps"] if step.get("id") == "hooks")
+    assert hooks["if"] == "matrix.policy == 'cached'"
+    assert hooks["with"]["path"] == "${{ env.PRE_COMMIT_HOME }}"
+    assert "precommit-probe-${{ github.run_id }}" in hooks["with"]["key"]
+    assert "steps.python.outputs.identity" in hooks["with"]["key"]
+    assert ".pre-commit-config.yaml" in hooks["with"]["key"]
+    assert "restore-keys" not in hooks["with"]
+    assert "github.run_attempt" not in uv_cache["cache-suffix"] + hooks["with"]["key"]
 
 
 def test_dependency_workflow_actions_are_pinned() -> None:

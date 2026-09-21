@@ -39,6 +39,36 @@ pull-request browser gate is Chromium-only, while manual dispatch retains the fu
 Dependency workflow contract tests own workflow-shape validation; the agent-ecosystem workflow
 focuses on agent, hook, and knowledge surfaces.
 
+## Cache comparisons
+
+The [dependency workflow](workflows/dependency-verification.yml) has a manual `cache_probe` input.
+Leave it at `none` for normal verification. Select `uv` or `precommit` for preparation-only
+measurements on disposable Ubuntu runners; probe runs do not satisfy the dependency verification
+gate or run the full test/lint suites. They do not change production cache policy or browser ordering.
+
+1. Dispatch the chosen probe on the intended revision. This is the cold attempt: keys include the
+  run ID, not the attempt number. Experiment cache paths and cancellation groups are isolated from
+  normal verification. The uv comparison uses six runners and can upload several GB of cache data.
+2. After it completes, use **Re-run all jobs** on that same run for a warm attempt. Do not dispatch
+  again: a new run ID starts cold. Check the reported revision, actual cache hits, and runner image
+  versions before comparing attempts. A missing or evicted cache is not a warm result.
+3. Compare total preparation costs, including post-job cache saves. For uv, include setup, Python
+  installation, workspace installation, and post-setup durations. Current and pruned policies
+  intentionally share a key between the Python floor and pinned-runtime legs, preserving matrix
+  contention; inspect reservation warnings as well as hit flags. The disabled policy has no remote
+  cache traffic. Compare both per-job totals and the slowest matrix leg, not upload time alone.
+4. For pre-commit, compare cache restore/save, actionlint, and remaining-hook preparation durations.
+  Both policies execute the pinned actionlint hook; `install-hooks` prepares other environments
+  without running their checks. A warm hit must avoid repeated environment installation. This
+  bounded result does not establish full-lint execution time or cross-PR cache reuse.
+
+Retain a production policy only after cold and warm totals show a useful benefit for the expected
+run pattern. PR merge-ref caches cannot be shared with sibling PRs; same-PR reruns can reuse them.
+Pruning removes downloaded wheels, so reduced archive size alone is not evidence of a speedup.
+Do not add cache-seeding triggers or change package requirements to make a probe look faster.
+Browser overlap remains a separate scheduling choice: it can shorten successful runs but also
+increase work and final failure latency when unit tests fail early.
+
 ## MegaLinter toolchain updates
 
 [Renovate](renovate.json) updates the native and action MegaLinter declarations together. Ruff,
