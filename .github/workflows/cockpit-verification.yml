@@ -108,6 +108,9 @@ jobs:
       - name: Verify PDS Biome plugin
         run: npm run test:biome-pds
 
+      - name: Verify bounded PDS asset synchronization
+        run: npm run test:sync-pds
+
       - name: Build production Cockpit
         run: npm run build
 

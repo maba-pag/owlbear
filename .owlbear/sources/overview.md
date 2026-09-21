@@ -4,11 +4,21 @@
 
 External repos and resources studied during OwlBear development.
 
+## GitHub Review and Cloud Instructions
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| GitHub repository instructions | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions> | Automatic path-scoped loading, `excludeAgent` feature targeting and PR head-branch context | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md` | 2026-09-21 |
+| GitHub instruction support matrix | <https://docs.github.com/en/copilot/reference/custom-instructions-support> | Path-specific instruction eligibility in GitHub and IDE features; explicit applicability avoids imposing cloud procedures on local sessions | `.github/instructions/code-review.instructions.md`; `.github/instructions/cloud-agent.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review customization | <https://docs.github.com/en/copilot/tutorials/customize-code-review> | Concise review criteria and unsupported comment-format/overview customization | `.github/instructions/code-review.instructions.md`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+| GitHub code review usage | <https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review> | Native review versus Fix with Copilot, effort controls, re-review, thread reply and optional approval limits | [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
+
 ## Copilot Cloud Dependency Setup
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | GitHub cloud environment setup | <https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment> | Single setup job, supported settings, default-branch discovery and setup-failure behavior | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
+| GitHub parallel steps | <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsparallel> | Same-job independent step execution with implicit wait and failure propagation, without custom process management | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-21 |
 | Astral setup-uv | <https://github.com/astral-sh/setup-uv> | Version selection, managed Python installation and dependency caching | `.github/workflows/copilot-setup-steps.yml` | 2026-09-18 |
 | Renovate GitHub Actions manager | <https://docs.renovatebot.com/modules/manager/github-actions/> | Native workflow discovery, action SHA/tag updates and `astral-sh/setup-uv` version input extraction | `.github/workflows/copilot-setup-steps.yml`; [cloud guide](../research/delivery-cloud-flight-handoff.md) | 2026-09-18 |
 

@@ -258,6 +258,9 @@ and request cumulative review; do not interpret cumulative proof as a whole-proj
 
 ### Review
 
+This is an explicitly requested cloud-agent review, not GitHub's built-in **Request review** action.
+For the native-review handoff, see [Native Copilot Review](#native-copilot-review).
+
 Read-only review of the named phase on the supplied PR. For P, assess the proposed plan against
 current source and programme requirements: complete scope, feasible dependencies, concrete contracts,
 bounded phases, discriminating tests and cloud capability limits. Planning review precedes approval;
@@ -422,6 +425,37 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 
 ## Operator Quick Start
 
+### Native Copilot Review
+
+| Entry point | Instructions | Output |
+| --- | --- | --- |
+| Reviewers -> Copilot -> Request | [Native review criteria](../../.github/instructions/code-review.instructions.md) | GitHub's review comments and overview. |
+| Model-qualified PR comment or Fix with Copilot | [Cloud task rules](../../.github/instructions/cloud-agent.instructions.md) | The requested work, evidence summary and complete next request. |
+
+The instruction files declare their execution scope. Custom instructions are guidance, not runtime
+enforcement. Keep review custom instructions enabled and include the files on the PR head branch.
+
+Native review controls its own comments/overview and model mix; custom instructions cannot guarantee
+this guide's report or next-command format. Its effort control is Lite/Balanced, not the qualified
+model selector used in PR-comment tasks. No findings does not certify whole-package acceptance.
+Copilot approvals count only when repository/platform settings enable them; these instructions do not
+change those settings or bypass required checks.
+
+Inspect native findings, then use **Fix with Copilot** or a normal PR comment to request scoped repair.
+The cloud worker validates suggestions, reports actual results/gaps and supplies the complete next
+request. Replies inside native review threads are not a conversation with the reviewer; re-request
+native review after fixes or use an explicit cloud review for the custom report and model choice.
+
+### Verify Automatic Loading
+
+Pilot on a PR whose head contains the two instruction files. Inspect available review/session
+attributions and behavior for relevant instruction loading, scoped findings and honest proof limits.
+Then run one scoped cloud repair and verify its complete model-qualified next command. Include an
+ordinary code PR to check that the task itself determines scope and the next request. Local frontmatter
+and link checks establish file integrity only, not hosted instruction adherence. Use available logs
+to inspect tool/MCP use; the presence of default GitHub/Playwright tools is not a live OwlBear MCP
+requirement. No new setup workflow, hook, permissions or automatic review settings are required.
+
 ### Launch and Continue
 
 1. Check the requested package's actual status and published prerequisites. Use its existing PR for
@@ -495,12 +529,18 @@ Use the latter for phases.
 
 [Copilot setup steps](../../.github/workflows/copilot-setup-steps.yml) install uv, Python from
 [.python-version](../../.python-version), and Node from [Cockpit's .nvmrc](../../serve/cockpit/web/.nvmrc),
-then restore locked Python workspace/dev dependencies and Cockpit npm dependencies with caching.
+then restore locked Python workspace/dev dependencies and Cockpit npm dependencies as sequential
+steps. Toolchain installation and runtime checks finish before dependency restoration;
+each install must succeed before setup continues and has its own timeout.
 The checkout follows the task context; it is not forced to `dev`. Frontend steps are conditional
 on the frontend lockfile, so the consumer checkout without frontend sources remains usable.
 Optional Python extras and browser binaries are installed only when a selected check needs them.
-Setup runs version checks, not tests, builds, MCP services or MegaLinter. Step timeouts bound dependency
-installation; the job's 59-minute ceiling preserves the cloud session's platform allowance.
+Setup runs version checks, not tests, builds, MCP services or MegaLinter. Dependency caches are used
+when matching entries are accessible; cold runs still install normally.
+
+There is no PR or push trigger. Copilot consumes the named setup job as preparation;
+`workflow_dispatch` remains available for manual diagnosis. The 59-minute job limit is the platform
+ceiling, not a setup time target; shorter installation-step limits bound preparation work.
 
 Renovate's existing GitHub Actions manager updates action digests/tags and the explicit uv version.
 Its existing pyenv/nvm managers update the shared Python/Node pins; the workflow has no duplicate
@@ -525,6 +565,8 @@ find issues beyond scoped agent proof; do not launch them inside the agent or wa
 - [Cloud agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent): asynchronous execution and 59-minute session limit.
 - [GitHub task/PR controls](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-on-github): new tasks, follow-ups and workflow approvals.
 - [Model selection](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model): select models/depth in the UI, not prompts.
+- [Native review customization](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review): instruction loading, review effort and cloud repair handoff.
+- [Instruction targeting](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions) and [review limits](https://docs.github.com/en/copilot/tutorials/customize-code-review#unsupported-instruction-types): `excludeAgent`, applicability and unsupported formatting controls.
 - [Environment](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/customize-the-agent-environment) and [MCP configuration](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/configure-mcp-servers): cloud tools are not local VS Code bindings.
 
 - [Session persistence](https://docs.github.com/en/copilot/how-tos/copilot-on-github/use-copilot-agents/manage-and-track-agents) and [security controls](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations): published checkpoints, permissions and review limits.

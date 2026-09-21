@@ -497,6 +497,7 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
 
 def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     workflow = _workflow(COPILOT_SETUP_PATH)
+    assert set(workflow["on"]) == {"workflow_dispatch"}
     assert set(workflow["jobs"]) == {"copilot-setup-steps"}
     job = _job(workflow, "copilot-setup-steps")
     assert set(job) <= {"steps", "permissions", "runs-on", "services", "snapshot", "timeout-minutes"}
@@ -523,6 +524,36 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
         if step.get("run") in install_commands:
             assert 0 < step["timeout-minutes"] <= 8
     assert not re.search(r"\b(pytest|megalint|quality|docker|playwright)\b", "\n".join(runs))
+    assert {step["uses"].split("@")[0] for step in steps if "uses" in step} == {
+        "actions/checkout",
+        "astral-sh/setup-uv",
+        "actions/setup-node",
+    }
+
+
+def test_copilot_setup_installs_after_toolchains_before_reporting() -> None:
+    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
+    install_commands = {
+        "uv sync --locked --all-packages --group dev",
+        "npm ci --engine-strict --no-audit --no-fund",
+    }
+    install_indices = [index for index, step in enumerate(steps) if step.get("run") in install_commands]
+    assert len(install_indices) == 2
+    assert {steps[index]["run"] for index in install_indices} == install_commands
+    for index in install_indices:
+        step = steps[index]
+        assert not step.get("continue-on-error", False)
+        assert not step.get("background", False)
+    preceding = steps[: install_indices[0]]
+    assert any(step.get("uses", "").startswith("astral-sh/setup-uv@") for step in preceding)
+    assert any(step.get("uses", "").startswith("actions/setup-node@") for step in preceding)
+    assert any(step.get("run") == "uv python install" for step in preceding)
+    assert any("check_node_runtime.py" in step.get("run", "") for step in preceding)
+    assert not any(re.search(r"\buv\s+(?:run|sync)\b|\bnpm\s+ci\b", step.get("run", "")) for step in preceding)
+    assert all(not step.get("continue-on-error", False) for step in preceding)
+    following = steps[install_indices[-1] + 1 :]
+    assert len(following) == 1
+    assert "uv run --locked --no-sync python --version" in following[0]["run"]
 
 
 def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
