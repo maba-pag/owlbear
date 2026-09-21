@@ -789,6 +789,7 @@ def _kill_during_restoration_before_replace(tmp_path: Path, preservation, reposi
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "coordinator.record_verified_exclusion(sys.argv[5])\n"
         "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
         "os.replace = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
@@ -802,6 +803,7 @@ def _kill_during_restoration_before_replace(tmp_path: Path, preservation, reposi
             str(repository),
             preservation.change_id,
             preservation.preservation_id,
+            preservation.recovery_id,
         ),
         capture_output=True,
         text=True,
@@ -818,7 +820,7 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
-        "ready = Path(sys.argv[5])\n"
+        "ready = Path(sys.argv[6])\n"
         "real_fdopen = os.fdopen\n"
         "def fdopen(fd, *args, **kwargs):\n"
         "    handle = real_fdopen(fd, *args, **kwargs)\n"
@@ -846,6 +848,7 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         "    return PartialWrite(handle)\n"
         "os.fdopen = fdopen\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "coordinator.record_verified_exclusion(sys.argv[5])\n"
         "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
     )
@@ -858,6 +861,7 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
             str(repository),
             preservation.change_id,
             preservation.preservation_id,
+            preservation.recovery_id,
             str(ready),
         ),
         stdout=subprocess.PIPE,
@@ -888,7 +892,8 @@ def test_nonterminal_recovery_replays_operation_owned_staging_after_subprocess_d
     assert staging.read_bytes() == b"base\n"
     assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
 
-    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert (worktree / "shared.txt").read_bytes() == b"base\n"
     assert not staging.exists()
@@ -905,7 +910,8 @@ def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(
     assert not staging.exists()
     assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
 
-    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert (worktree / "shared.txt").read_bytes() == b"base\n"
     assert not staging.exists()
@@ -934,9 +940,10 @@ def test_nonterminal_recovery_rejects_changed_operation_owned_staging_or_index(
         staging.unlink()
         staging.mkdir()
     else:
-        index.write_bytes(original_index[:-1] + bytes([original_index[-1] ^ 1]))
+        index.path.write_bytes(original_index[:-1] + bytes([original_index[-1] ^ 1]))
 
-    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
     with pytest.raises(PreservationFenceError, match=r"staging|index"):
         restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
     assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
@@ -950,7 +957,8 @@ def test_nonterminal_recovery_rejects_foreign_collision_at_owned_staging_name(tm
     staging = _restoration_staging_path(preservation, "shared.txt")
     staging.write_bytes(b"foreign collision\n")
 
-    _restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
     with pytest.raises(PreservationFenceError, match="inventory"):
         restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
     assert staging.read_bytes() == b"foreign collision\n"

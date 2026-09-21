@@ -187,6 +187,8 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     ).encode()
     legacy = RecoveryIntent.model_validate_json(legacy_bytes)
     assert legacy.uses_legacy_encoding
+    assert encoded(legacy) == legacy_bytes
+    assert legacy.recovery_id == hashlib.sha256(legacy_bytes).hexdigest()
     assert legacy.recovery_id != current.recovery_id
     assert legacy.authority_matches(current)
     assert not legacy.authority_matches(legacy.model_copy(update={"owner_record": "tampered"}))

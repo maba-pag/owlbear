@@ -4428,21 +4428,6 @@ class ChangeWorkspaceManager:
         finally:
             os.close(root_fd)
 
-    def _remove_restoration_record(
-        self, receipt: WorktreePreservationReceipt, operation_id: str, name: str
-    ) -> None:
-        relative = Path(receipt.storage_ref) / "restoration" / operation_id / Path(name).parent
-        root_fd = os.open(self.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            with contained_directory(root_fd, relative) as parent_fd:
-                try:
-                    os.unlink(Path(name).name, dir_fd=parent_fd)
-                except FileNotFoundError:
-                    return
-                os.fsync(parent_fd)
-        finally:
-            os.close(root_fd)
-
     @staticmethod
     def _sync_restored_path(worktree: Path, path: str, state: _PreservedPathState) -> None:
         """Establish durability again after a response lost beyond the path effect."""
@@ -4701,6 +4686,14 @@ class ChangeWorkspaceManager:
                                 limit=_MAX_PRESERVED_TOTAL_BYTES,
                             )
                             if entry_bytes is None:
+                                staging_path = str(
+                                    PurePosixPath(path).parent / _preservation_temporary_name(operation_id, path)
+                                )
+                                self._validate_preservation_path(worktree, staging_path)
+                                try:
+                                    (worktree / PurePosixPath(staging_path)).lstat()
+                                except FileNotFoundError:
+                                    continue
                                 raise PreservationFenceError("restoration path intent is missing")
                             try:
                                 entry_payload = json.loads(entry_bytes)
@@ -4758,7 +4751,12 @@ class ChangeWorkspaceManager:
                                 ):
                                     raise PreservationFenceError("restoration staging identity is malformed")
                                 source_relative = (
-                                    Path(operation_id) / "paths" / digest(path.encode()) / source
+                                    Path(receipt.storage_ref)
+                                    / "restoration"
+                                    / operation_id
+                                    / "paths"
+                                    / digest(path.encode())
+                                    / source
                                 )
                             else:
                                 source = None
@@ -4813,7 +4811,7 @@ class ChangeWorkspaceManager:
                             if identity is None:
                                 raise PreservationFenceError("restoration staging identity is missing")
                             try:
-                                staging_state = self._read_worktree_state(worktree, staging_path)
+                                staging_state = self._read_worktree_state(worktree, staging_path, allow_linked=True)
                             except (OSError, PreservationRejectedError, PreservationFenceError, ValueError) as exc:
                                 message = "owned restoration staging type or bytes are invalid"
                                 raise PreservationFenceError(message) from exc
@@ -5142,7 +5140,12 @@ class ChangeWorkspaceManager:
             raise PreservationRejectedError("directory paths require bounded file inventory")
 
     @staticmethod
-    def _read_worktree_state(worktree: Path, path: str) -> _PreservedPathState:
+    def _read_worktree_state(
+        worktree: Path,
+        path: str,
+        *,
+        allow_linked: bool = False,
+    ) -> _PreservedPathState:
         candidate = worktree / PurePosixPath(path)
         try:
             metadata = candidate.lstat()
@@ -5156,7 +5159,7 @@ class ChangeWorkspaceManager:
             if not _same_preservation_identity(_preservation_file_identity(after), identity):
                 raise PreservationFenceError(f"worktree path changed while it was read: {path}")
             return _PreservedPathState("symlink", content, 0o777, identity)
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        if not stat.S_ISREG(metadata.st_mode) or (metadata.st_nlink != 1 and not allow_linked):
             raise PreservationRejectedError("special or multiply-linked worktree path requires containment")
         if metadata.st_size > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("worktree path exceeds the per-file preservation limit")
@@ -5665,7 +5668,7 @@ class ChangeWorkspaceManager:
                 temporary_state = None
             else:
                 temporary_exists = True
-                temporary_state = self._read_worktree_state(worktree, temporary_relative)
+                temporary_state = self._read_worktree_state(worktree, temporary_relative, allow_linked=True)
             if temporary_exists:
                 if staging_identity is None or temporary_state is None or temporary_state.identity is None:
                     raise PreservationFenceError(f"restoration staging identity is missing: {path}")
@@ -5698,11 +5701,7 @@ class ChangeWorkspaceManager:
                             raise PreservationFenceError(f"owned restoration staging changed before replay: {path}")
                 if source_state is None:
                     if staging_record is not None:
-                        self._remove_restoration_record(
-                            receipt,
-                            operation_id,
-                            f"{record_name}/staging.json",
-                        )
+                        raise PreservationFenceError(f"restoration staging source is missing: {path}")
                     staging_source, source_state = self._create_private_staging(
                         receipt,
                         operation_id,
@@ -5752,7 +5751,7 @@ class ChangeWorkspaceManager:
                 finally:
                     os.close(root_fd)
                 os.fsync(parent_fd)
-                temporary_state = self._read_worktree_state(worktree, temporary_relative)
+                temporary_state = self._read_worktree_state(worktree, temporary_relative, allow_linked=True)
                 if (
                     temporary_state.identity is None
                     or staging_identity is None
