@@ -12,10 +12,7 @@ const INDEX_MJS_PATH = join(
 
 const OUTPUT_DIR =
   globalThis.process.env.PDS_OUTPUT_DIR ?? join(globalThis.process.cwd(), "public", "porsche-design-system");
-
-const COMPONENTS_DIR = join(OUTPUT_DIR, "components");
-const ICONS_DIR = join(OUTPUT_DIR, "icons");
-const CREST_DIR = join(OUTPUT_DIR, "crest");
+const DOWNLOAD_CONCURRENCY = 8;
 
 const CREST_FILES = [
   "porsche-crest.d76137c@1x.png",
@@ -93,70 +90,64 @@ function parseIconFilenameMap(iconSource) {
   return entries;
 }
 
-async function resetOutputDirs() {
-  await rm(COMPONENTS_DIR, { recursive: true, force: true });
-  await rm(ICONS_DIR, { recursive: true, force: true });
-  await rm(CREST_DIR, { recursive: true, force: true });
-  await mkdir(COMPONENTS_DIR, { recursive: true });
-  await mkdir(ICONS_DIR, { recursive: true });
-  await mkdir(CREST_DIR, { recursive: true });
+async function downloadAssets(filenames, directory, baseUrl, fetchContent) {
+  const pending = filenames.values();
+  let failure;
+  const worker = async () => {
+    for (const filename of pending) {
+      if (failure) return;
+      try {
+        const content = await fetchContent(`${baseUrl}/${filename}`, filename);
+        await writeFile(join(directory, filename), content);
+      } catch (error) {
+        failure ??= error;
+        return;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(DOWNLOAD_CONCURRENCY, filenames.length) }, worker));
+  if (failure) throw failure;
 }
 
-async function main() {
-  try {
-    const indexSource = await readFile(INDEX_MJS_PATH, "utf8");
-    const corePath = parseCorePath(indexSource);
-    const cdnBase = "https://cdn.ui.porsche.com";
-    const coreUrl = `${cdnBase}${corePath}`;
+export async function syncPdsAssets({ indexPath = INDEX_MJS_PATH, outputDir = OUTPUT_DIR } = {}) {
+  const componentsDir = join(outputDir, "components");
+  const iconsDir = join(outputDir, "icons");
+  const crestDir = join(outputDir, "crest");
+  const indexSource = await readFile(indexPath, "utf8");
+  const corePath = parseCorePath(indexSource);
+  const cdnBase = "https://cdn.ui.porsche.com";
 
-    await resetOutputDirs();
+  for (const directory of [componentsDir, iconsDir, crestDir]) {
+    await rm(directory, { recursive: true, force: true });
+    await mkdir(directory, { recursive: true });
+  }
 
-    const coreSource = await fetchText(coreUrl, "core chunk");
-    const coreFilename = corePath.split("/").pop();
-    if (!coreFilename) {
-      fail("failed to derive core chunk filename");
-    }
-    await writeFile(join(COMPONENTS_DIR, coreFilename), coreSource, "utf8");
+  const coreSource = await fetchText(`${cdnBase}${corePath}`, "core chunk");
+  const coreFilename = corePath.split("/").pop();
+  if (!coreFilename) fail("failed to derive core chunk filename");
+  await writeFile(join(componentsDir, coreFilename), coreSource, "utf8");
 
-    const componentHashes = parseComponentHashes(coreSource);
-    for (const [chunkName, hash] of componentHashes.entries()) {
-      const componentFilename = `porsche-design-system.${chunkName}.${hash}.js`;
-      const componentUrl = `${cdnBase}/porsche-design-system/components/${componentFilename}`;
-      const componentSource = await fetchText(componentUrl, `component chunk ${chunkName}`);
-      await writeFile(join(COMPONENTS_DIR, componentFilename), componentSource, "utf8");
-    }
+  const componentHashes = parseComponentHashes(coreSource);
+  const componentFiles = [...componentHashes].map(([name, hash]) => `porsche-design-system.${name}.${hash}.js`);
+  await downloadAssets(componentFiles, componentsDir, `${cdnBase}/porsche-design-system/components`, fetchText);
 
-    const iconHash = componentHashes.get("icon");
-    if (!iconHash) {
-      fail("failed to locate icon chunk in component chunk-map");
-    }
-    const iconChunkFilename = `porsche-design-system.icon.${iconHash}.js`;
-    const iconChunkUrl = `${cdnBase}/porsche-design-system/components/${iconChunkFilename}`;
-    const iconSource = await fetchText(iconChunkUrl, "icon chunk");
-    const iconMap = parseIconFilenameMap(iconSource);
+  const iconHash = componentHashes.get("icon");
+  if (!iconHash) fail("failed to locate icon chunk in component chunk-map");
+  const iconSource = await readFile(join(componentsDir, `porsche-design-system.icon.${iconHash}.js`), "utf8");
+  const iconMap = parseIconFilenameMap(iconSource);
+  await downloadAssets([...new Set(iconMap.values())], iconsDir, `${cdnBase}/porsche-design-system/icons`, fetchText);
+  await downloadAssets(CREST_FILES, crestDir, `${cdnBase}/porsche-design-system/crest`, fetchBytes);
 
-    for (const iconFilename of iconMap.values()) {
-      const iconUrl = `${cdnBase}/porsche-design-system/icons/${iconFilename}`;
-      const iconSvg = await fetchText(iconUrl, `icon ${iconFilename}`);
-      await writeFile(join(ICONS_DIR, iconFilename), iconSvg, "utf8");
-    }
+  console.log(
+    `[sync-pds] synced ${componentHashes.size + 1} component files, ` +
+      `${iconMap.size} icons, and ${CREST_FILES.length} crest assets`,
+  );
+}
 
-    for (const crestFilename of CREST_FILES) {
-      const crestUrl = `${cdnBase}/porsche-design-system/crest/${crestFilename}`;
-      const crestBytes = await fetchBytes(crestUrl, `crest ${crestFilename}`);
-      await writeFile(join(CREST_DIR, crestFilename), crestBytes);
-    }
-
-    const syncedComponentCount = componentHashes.size + 1;
-    console.log(
-      `[sync-pds] synced ${syncedComponentCount} component files, ` +
-        `${iconMap.size} icons, and ${CREST_FILES.length} crest assets`,
-    );
-  } catch (error) {
+if (import.meta.main) {
+  syncPdsAssets().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[sync-pds] failed: ${message}`);
-    globalThis.process.exit(1);
-  }
+    globalThis.process.exitCode = 1;
+  });
 }
-
-void main();

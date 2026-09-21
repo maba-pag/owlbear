@@ -14,6 +14,7 @@
     "lint:biome:staged": "node scripts/run-biome-check.mjs check --staged --no-errors-on-unmatched",
     "format:biome": "node scripts/run-biome-check.mjs format .",
     "sync:pds": "node scripts/sync-pds-assets.mjs",
+    "test:sync-pds": "node --test --test-timeout=10000 scripts/test-sync-pds-assets.mjs",
     "test:biome-pds": "node scripts/test-biome-pds.mjs",
     "lint:html": "htmlhint --config .htmlhintrc index.html",
     "preview": "vite preview",
