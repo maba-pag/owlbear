@@ -427,14 +427,13 @@ mock-only test, package status label or cloud review can certify managed SSO or 
 
 ### Native Copilot Review
 
-GitHub's **Reviewers -> Copilot -> Request** uses the
-[review instructions](../../.github/instructions/code-review.instructions.md). An explicit
-`@copilot+... Review ...` comment starts a cloud-agent task and uses the
-[cloud instructions](../../.github/instructions/cloud-agent.instructions.md) instead. These files
-target GitHub's two features; their applicability text directs local IDE sessions not to apply these
-procedures. This is instruction guidance, not a deterministic runtime guard.
-Keep review custom instructions enabled. Current GitHub documentation specifies instruction loading
-from the PR head branch, so the files must be present there to test this behavior.
+| Entry point | Instructions | Output |
+| --- | --- | --- |
+| Reviewers -> Copilot -> Request | [Native review criteria](../../.github/instructions/code-review.instructions.md) | GitHub's review comments and overview. |
+| Model-qualified PR comment or Fix with Copilot | [Cloud task rules](../../.github/instructions/cloud-agent.instructions.md) | The requested work, evidence summary and complete next request. |
+
+The instruction files declare their execution scope. Custom instructions are guidance, not runtime
+enforcement. Keep review custom instructions enabled and include the files on the PR head branch.
 
 Native review controls its own comments/overview and model mix; custom instructions cannot guarantee
 this guide's report or next-command format. Its effort control is Lite/Balanced, not the qualified
@@ -452,7 +451,7 @@ native review after fixes or use an explicit cloud review for the custom report 
 Pilot on a PR whose head contains the two instruction files. Inspect available review/session
 attributions and behavior for relevant instruction loading, scoped findings and honest proof limits.
 Then run one scoped cloud repair and verify its complete model-qualified next command. Include an
-ordinary non-Delivery task: it must not invent a phase or require a Delivery workflow. Local frontmatter
+ordinary code PR to check that the task itself determines scope and the next request. Local frontmatter
 and link checks establish file integrity only, not hosted instruction adherence. Use available logs
 to inspect tool/MCP use; the presence of default GitHub/Playwright tools is not a live OwlBear MCP
 requirement. No new setup workflow, hook, permissions or automatic review settings are required.
@@ -530,21 +529,18 @@ Use the latter for phases.
 
 [Copilot setup steps](../../.github/workflows/copilot-setup-steps.yml) install uv, Python from
 [.python-version](../../.python-version), and Node from [Cockpit's .nvmrc](../../serve/cockpit/web/.nvmrc),
-then restore locked Python workspace/dev dependencies and Cockpit npm dependencies in one native
-`parallel` step group. Toolchain installation and runtime checks finish before either dependency
-restore starts. The group waits for both installs and propagates failures; their existing timeouts
-remain independent. Only the dependency restores overlap, not checkout or environment-setting actions.
+then restore locked Python workspace/dev dependencies and Cockpit npm dependencies as sequential
+steps. Toolchain installation and runtime checks finish before dependency restoration;
+each install must succeed before setup continues and has its own timeout.
 The checkout follows the task context; it is not forced to `dev`. Frontend steps are conditional
 on the frontend lockfile, so the consumer checkout without frontend sources remains usable.
 Optional Python extras and browser binaries are installed only when a selected check needs them.
 Setup runs version checks, not tests, builds, MCP services or MegaLinter. Dependency caches are used
-when matching entries are accessible; cold runs still install normally. Parallel downloads may reduce
-elapsed time, but actual benefit depends on cache hits and runner bandwidth/disk contention.
+when matching entries are accessible; cold runs still install normally.
 
 There is no PR or push trigger. Copilot consumes the named setup job as preparation;
-`workflow_dispatch` remains available for manual diagnosis. No run-level cancellation group is used
-to manage installation concurrency. The 59-minute job limit is the platform ceiling, not a setup
-time target; shorter installation-step limits bound preparation work.
+`workflow_dispatch` remains available for manual diagnosis. The 59-minute job limit is the platform
+ceiling, not a setup time target; shorter installation-step limits bound preparation work.
 
 Renovate's existing GitHub Actions manager updates action digests/tags and the explicit uv version.
 Its existing pyenv/nvm managers update the shared Python/Node pins; the workflow has no duplicate

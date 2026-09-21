@@ -48,16 +48,15 @@ jobs:
             --engines-file serve/cockpit/web/package.json \
             --expected-version "$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
 
-      - parallel:
-          - name: Install locked Python workspace and test tools
-            timeout-minutes: 8
-            run: uv sync --locked --all-packages --group dev
+      - name: Install locked Python workspace and test tools
+        timeout-minutes: 8
+        run: uv sync --locked --all-packages --group dev
 
-          - name: Install locked Cockpit dependencies
-            if: hashFiles('serve/cockpit/web/package-lock.json') != ''
-            timeout-minutes: 5
-            working-directory: serve/cockpit/web
-            run: npm ci --engine-strict --no-audit --no-fund
+      - name: Install locked Cockpit dependencies
+        if: hashFiles('serve/cockpit/web/package-lock.json') != ''
+        timeout-minutes: 5
+        working-directory: serve/cockpit/web
+        run: npm ci --engine-strict --no-audit --no-fund
 
       - name: Report Python and uv versions
         run: |

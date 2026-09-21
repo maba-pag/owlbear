@@ -83,15 +83,18 @@ All other `serve/` packages are Python — use `uv run` for those.
 
 ## 5. Test Domain Mapping
 
-Maps source paths to the test scope that covers them. Used by quality-runner `mode=full` with `changed_paths` for domain-scoped regression testing.
+### GitHub Cloud Sessions
 
-The routing table and full-suite fallback below describe local/CI tooling, not a requirement for
-GitHub-hosted cloud-agent or built-in PR review sessions. Those sessions use explicit affected
-test selections and scoped checks, never the whole-project suite or MegaLinter/`uv run quality`.
-If scope is unknown, inspect the owning tests instead of invoking the broad fallback. Follow the
+Use explicit affected test selections and scoped checks. If scope is unknown, inspect the owning
+tests before choosing a check. Never run the whole-project suite, MegaLinter or `uv run quality`.
+Follow the
 applicable [cloud-agent](instructions/cloud-agent.instructions.md) or
-[code-review](instructions/code-review.instructions.md) instructions. Required external CI gates
-remain unchanged.
+[code-review](instructions/code-review.instructions.md) instructions. Required external CI gates remain unchanged.
+
+### Local Development and CI
+
+This table maps source paths to their regression scope for local/CI tooling, including
+quality-runner `mode=full` with `changed_paths`.
 
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |
