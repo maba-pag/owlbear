@@ -692,6 +692,10 @@ published.
   A separate read-only Luna reviewer checked the final source/test diff against
   `67febdc`, including the artifact bounds and retention assertions, with no
   significant issues found. This is narrow repair review, not C acceptance.
+  Published repair source is `4ed0be0`. Secret scans passed. Final automated
+  validation declined to run because of its time limit and instructed no retry;
+  no final-source CodeQL or automated-review pass is claimed. Product CI inspected
+  at the baseline remains `action_required`; external and host gates remain open.
 
 Focused commands used locked uv 0.12.16 with Python 3.14.7:
 
