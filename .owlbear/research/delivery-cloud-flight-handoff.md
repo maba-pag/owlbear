@@ -495,12 +495,21 @@ Use the latter for phases.
 
 [Copilot setup steps](../../.github/workflows/copilot-setup-steps.yml) install uv, Python from
 [.python-version](../../.python-version), and Node from [Cockpit's .nvmrc](../../serve/cockpit/web/.nvmrc),
-then restore locked Python workspace/dev dependencies and Cockpit npm dependencies with caching.
+then restore locked Python workspace/dev dependencies and Cockpit npm dependencies in one native
+`parallel` step group. Toolchain installation and runtime checks finish before either dependency
+restore starts. The group waits for both installs and propagates failures; their existing timeouts
+remain independent. Only the dependency restores overlap, not checkout or environment-setting actions.
 The checkout follows the task context; it is not forced to `dev`. Frontend steps are conditional
 on the frontend lockfile, so the consumer checkout without frontend sources remains usable.
 Optional Python extras and browser binaries are installed only when a selected check needs them.
-Setup runs version checks, not tests, builds, MCP services or MegaLinter. Step timeouts bound dependency
-installation; the job's 59-minute ceiling preserves the cloud session's platform allowance.
+Setup runs version checks, not tests, builds, MCP services or MegaLinter. Dependency caches are used
+when matching entries are accessible; cold runs still install normally. Parallel downloads may reduce
+elapsed time, but actual benefit depends on cache hits and runner bandwidth/disk contention.
+
+There is no PR or push trigger. Copilot consumes the named setup job as preparation;
+`workflow_dispatch` remains available for manual diagnosis. No run-level cancellation group is used
+to manage installation concurrency. The 59-minute job limit is the platform ceiling, not a setup
+time target; shorter installation-step limits bound preparation work.
 
 Renovate's existing GitHub Actions manager updates action digests/tags and the explicit uv version.
 Its existing pyenv/nvm managers update the shared Python/Node pins; the workflow has no duplicate

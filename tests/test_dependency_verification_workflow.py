@@ -495,14 +495,19 @@ def test_dependency_workflow_uses_semantic_snapshots_and_protects_proof_tooling(
     assert "tests/test_dependency_verification_workflow.py)" in text
 
 
+def _job_steps(job: dict[str, object]) -> list[dict[str, object]]:
+    return [child for step in job["steps"] for child in step.get("parallel", [step])]
+
+
 def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     workflow = _workflow(COPILOT_SETUP_PATH)
+    assert set(workflow["on"]) == {"workflow_dispatch"}
     assert set(workflow["jobs"]) == {"copilot-setup-steps"}
     job = _job(workflow, "copilot-setup-steps")
     assert set(job) <= {"steps", "permissions", "runs-on", "services", "snapshot", "timeout-minutes"}
     assert job["timeout-minutes"] == 59
     assert job["permissions"] == {"contents": "read"}
-    steps = job["steps"]
+    steps = _job_steps(job)
     checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
     assert "ref" not in checkout.get("with", {})
     assert checkout["with"]["persist-credentials"] is False
@@ -523,10 +528,41 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
         if step.get("run") in install_commands:
             assert 0 < step["timeout-minutes"] <= 8
     assert not re.search(r"\b(pytest|megalint|quality|docker|playwright)\b", "\n".join(runs))
+    assert {step["uses"].split("@")[0] for step in steps if "uses" in step} == {
+        "actions/checkout",
+        "astral-sh/setup-uv",
+        "actions/setup-node",
+    }
+
+
+def test_copilot_setup_joins_independent_installs_after_toolchains() -> None:
+    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
+    groups = [(index, step) for index, step in enumerate(steps) if "parallel" in step]
+    assert len(groups) == 1
+    group_index, group = groups[0]
+    assert set(group) == {"parallel"}
+    installs = group["parallel"]
+    assert {step["run"] for step in installs} == {
+        "uv sync --locked --all-packages --group dev",
+        "npm ci --engine-strict --no-audit --no-fund",
+    }
+    for step in installs:
+        assert not step.get("continue-on-error", False)
+        assert not step.get("background", False)
+    preceding = steps[:group_index]
+    assert any(step.get("uses", "").startswith("astral-sh/setup-uv@") for step in preceding)
+    assert any(step.get("uses", "").startswith("actions/setup-node@") for step in preceding)
+    assert any(step.get("run") == "uv python install" for step in preceding)
+    assert any("check_node_runtime.py" in step.get("run", "") for step in preceding)
+    assert not any(re.search(r"\buv\s+(?:run|sync)\b|\bnpm\s+ci\b", step.get("run", "")) for step in preceding)
+    assert all(not step.get("continue-on-error", False) for step in preceding)
+    following = steps[group_index + 1 :]
+    assert len(following) == 1
+    assert "uv run --locked --no-sync python --version" in following[0]["run"]
 
 
 def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
-    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
+    steps = _job_steps(_job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps"))
     uv_setup = next(step for step in steps if step.get("uses", "").startswith("astral-sh/setup-uv@"))
     required = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"]
     assert required.startswith(">=")
@@ -550,6 +586,7 @@ def test_uv_runtime_check_precedes_uv_commands() -> None:
             steps = job.get("steps", [])
             if not isinstance(steps, list):
                 continue
+            steps = _job_steps(job)
             setup_indices = [
                 index for index, step in enumerate(steps) if "astral-sh/setup-uv@" in str(step.get("uses", ""))
             ]
