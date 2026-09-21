@@ -91,6 +91,7 @@ def _is_canonical_admitted_path(value: str) -> bool:
         bool(value)
         and value == parsed.as_posix()
         and not parsed.is_absolute()
+        and parsed.parts
         and not any(part in {"", ".", ".."} for part in parsed.parts)
         and "\\" not in value
         and "\x00" not in value

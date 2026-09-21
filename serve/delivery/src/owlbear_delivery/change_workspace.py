@@ -3985,31 +3985,95 @@ class ChangeWorkspaceManager:
         return coordination, head, fingerprint.hexdigest(), paths, reason or ("workspace-dirty" if status else None)
 
     def capture_recovery_workspace(
-        self, change_id: str, promoted_commits: tuple[str, ...]
+        self,
+        change_id: str,
+        promoted_commits: tuple[str, ...],
+        *,
+        expected_paths: tuple[str, ...] | None = None,
+        expected_scope_details: tuple[tuple[str, ...], dict[str, str]] | None = None,
     ) -> tuple[ChangeCoordination, str, str, tuple[str, ...], str | None]:
         """Inspect retained custody without exempting damaged or dirty workspace state."""
-        coordination, head, fingerprint, paths, reason = self.capture_finalization_workspace(
+        coordination, head, status, paths, reason = self.capture_recovery_workspace_metadata(
             change_id, promoted_commits
         )
-        ignored = self._run_git(
+        if expected_paths is not None and paths != expected_paths:
+            raise DeliveryWorkerExclusionRequiredError
+        if expected_scope_details is not None:
+            scope, expected_kinds = expected_scope_details
+            for relative in scope:
+                candidate = coordination.worktree_path
+                try:
+                    for part in PurePosixPath(relative).parts:
+                        candidate /= part
+                        metadata = candidate.lstat()
+                        if stat.S_ISLNK(metadata.st_mode):
+                            raise DeliveryWorkerExclusionRequiredError
+                except FileNotFoundError:
+                    actual_kind = expected_kinds[relative]
+                else:
+                    actual_kind = "directory" if stat.S_ISDIR(metadata.st_mode) else "file"
+                if actual_kind != expected_kinds[relative]:
+                    raise DeliveryWorkerExclusionRequiredError
+        fingerprint = hashlib.sha256(head.encode() + b"\0" + status)
+        fingerprint.update(self._run_git("diff", "HEAD", "--binary", cwd=coordination.worktree_path).stdout)
+        for relative in paths:
+            try:
+                metadata = (coordination.worktree_path / relative).lstat()
+            except FileNotFoundError:
+                fingerprint.update(repr((relative, "absent")).encode())
+            else:
+                fingerprint.update(
+                    repr(
+                        (relative, metadata.st_mode, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+                    ).encode()
+                )
+        fingerprint_hex = fingerprint.hexdigest()
+        return coordination, head, fingerprint_hex, paths, reason
+
+    def capture_recovery_workspace_metadata(
+        self, change_id: str, promoted_commits: tuple[str, ...]
+    ) -> tuple[ChangeCoordination, str, bytes, tuple[str, ...], str | None]:
+        """Capture recovery status and custody facts without reading dirty content."""
+        coordination = self._coordinator.show(change_id)
+        head = self.observed_change_head(change_id)
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, head)
+        status = self._run_git(
             "status",
             "--porcelain=v1",
             "-z",
-            "--ignored=matching",
-            "--untracked-files=normal",
+            "--untracked-files=all",
             cwd=coordination.worktree_path,
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
-        if ignored:
-            # Preserve any stronger custody/preflight guard.  Treating ignored
-            # inventory as generic dirtiness can make Recovery-A appear eligible
-            # while masking an active writer or damaged workspace boundary.
-            return coordination, head, fingerprint, paths, reason or "workspace-dirty"
+        paths = self._dirty_paths(status)
+        reason = self._captured_finalization_guard(coordination, head, promoted_commits)
         if reason == "active-custody" and coordination.publication_lease is None:
             reason = self._captured_finalization_guard(
                 coordination.model_copy(update={"writer": None}), head, promoted_commits
             )
-        return coordination, head, fingerprint, paths, reason
+        return coordination, head, status, paths, reason or ("workspace-dirty" if status else None)
+
+    def baseline_scope_kinds(
+        self, worktree: Path, head: str, scopes: tuple[str, ...]
+    ) -> dict[str, str]:
+        """Classify missing task surfaces from the exact reviewed tree."""
+        kinds: dict[str, str] = {}
+        for scope in scopes:
+            output = self._run_git("ls-tree", "-z", head, "--", scope, cwd=worktree).stdout
+            if not output:
+                kinds[scope] = "missing"
+                continue
+            fields = output.split(b"\t", 1)[0].split()
+            if not fields:
+                raise DeliveryWorkerExclusionRequiredError
+            mode = fields[0]
+            if mode == b"040000":
+                kinds[scope] = "directory"
+            elif mode == b"120000":
+                raise DeliveryWorkerExclusionRequiredError
+            else:
+                kinds[scope] = "file"
+        return kinds
 
     def capture_preservation(
         self,
@@ -4043,20 +4107,8 @@ class ChangeWorkspaceManager:
         common_identity = self._directory_identity(index.common_directory, "Git common directory")
         administration_identity = self._directory_identity(index.administration, "Git administration directory")
         runtime_identity = self._directory_identity(self.runtime_root, "runtime root")
-        index_bytes = self._read_managed_index(index)
-        shared_index = self._preservation_git(
-            "rev-parse",
-            "--shared-index-path",
-            cwd=worktree,
-            check=False,
-        )
-        if shared_index.returncode not in (0, 128):
-            raise PreservationRejectedError("managed index split-state could not be established")
-        if shared_index.returncode == 0 and shared_index.stdout.strip():
-            raise PreservationRejectedError("split-index dependencies require containment")
-        entries = self._index_entries(worktree)
-        self._validate_index_entries(entries)
-        self._validate_index_extensions(index_bytes)
+        # Classify the complete dirty-path inventory before reading any raw
+        # index or worktree bytes into the private preservation store.
         staged = self._preservation_git(
             "diff",
             "--cached",
@@ -4078,11 +4130,26 @@ class ChangeWorkspaceManager:
             "--untracked-files=all",
             cwd=worktree,
         ).stdout
-        paths = self._preservation_status_paths(status)
+        paths = self._preservation_status_paths(status, reject_ignored=False)
         if len(paths) > _MAX_PRESERVED_PATHS:
             raise PreservationRejectedError("changed path count exceeds the bounded preservation policy")
         self._require_admitted_paths(intent, paths)
-        self._validate_private_paths((*paths, *(entry[0] for entry in entries)))
+        self._validate_private_paths(paths)
+
+        index_bytes = self._read_managed_index(index)
+        shared_index = self._preservation_git(
+            "rev-parse",
+            "--shared-index-path",
+            cwd=worktree,
+            check=False,
+        )
+        if shared_index.returncode not in (0, 128):
+            raise PreservationRejectedError("managed index split-state could not be established")
+        if shared_index.returncode == 0 and shared_index.stdout.strip():
+            raise PreservationRejectedError("split-index dependencies require containment")
+        entries = self._index_entries(worktree)
+        self._validate_index_entries(entries)
+        self._validate_index_extensions(index_bytes)
         raw_states: dict[str, tuple[_PreservedPathState, _PreservedPathState]] = {}
         if len(index_bytes) > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("managed Git index exceeds the per-file preservation limit")
@@ -4311,7 +4378,9 @@ class ChangeWorkspaceManager:
             selected = tuple(paths)
             if selected != tuple(sorted(set(selected))) or not set(selected) <= {entry.path for entry in receipt.paths}:
                 raise PreservationRejectedError("restoration paths must be an exact subset of the preservation")
-        worktree, _index = self._verify_preservation_fences(change_id, receipt, index_metadata)
+        worktree, _index = self._verify_preservation_fences(
+            change_id, receipt, index_metadata, selected_paths=selected
+        )
         objects = {
             object_name: self._read_private_preservation_object(receipt, object_name)
             for object_name in inventory
@@ -4336,7 +4405,7 @@ class ChangeWorkspaceManager:
         # A process can die after replacing the target but before unlinking the
         # owner-private source.  Let the inventory fence authenticate and
         # remove that exact co-link before ordinary strict reads below.
-        self._verify_preservation_fences(change_id, receipt, index_metadata)
+        self._verify_preservation_fences(change_id, receipt, index_metadata, selected_paths=selected)
         current_states = {path: self._read_worktree_state(worktree, path) for path in entries}
         if any(
             not self._same_state(current_states[path], expected_states[path])
@@ -4351,7 +4420,7 @@ class ChangeWorkspaceManager:
             )
             raise PreservationFenceError(f"path identity changed before restoration: {changed}")
         # Recheck the complete manifest and every path before the first effect.
-        self._verify_preservation_fences(change_id, receipt, index_metadata)
+        self._verify_preservation_fences(change_id, receipt, index_metadata, selected_paths=selected)
         current_states = {path: self._read_worktree_state(worktree, path) for path in entries}
         if any(
             not self._same_state(current_states[path], expected_states[path])
@@ -4364,7 +4433,7 @@ class ChangeWorkspaceManager:
                 record_name = f"paths/{digest(path.encode())}"
                 record = entries[path].model_dump(mode="json")
                 self._write_restoration_record(receipt, operation_id, f"{record_name}/intent.json", record)
-                self._verify_preservation_fences(change_id, receipt, index_metadata)
+                self._verify_preservation_fences(change_id, receipt, index_metadata, selected_paths=selected)
                 current_states = {item: self._read_worktree_state(worktree, item) for item in entries}
                 if any(
                     not self._same_state(current_states[item], expected_states[item])
@@ -4391,7 +4460,7 @@ class ChangeWorkspaceManager:
                 self._cleanup_restoration_staging_source(receipt, operation_id, path)
                 self._sync_restored_path(worktree, path, desired)
                 self._write_restoration_record(receipt, operation_id, f"{record_name}/result.json", record)
-            self._verify_preservation_fences(change_id, receipt, index_metadata)
+            self._verify_preservation_fences(change_id, receipt, index_metadata, selected_paths=selected)
             final_states = {path: self._read_worktree_state(worktree, path) for path in selected}
             if any(not self._same_state(final_states[path], desired_states[path]) for path in selected):
                 raise PreservationFenceError("preservation restore did not reach every requested path")
@@ -4571,10 +4640,18 @@ class ChangeWorkspaceManager:
         change_id: str,
         receipt: WorktreePreservationReceipt,
         index_metadata: tuple[int, int, int, int],
+        *,
+        selected_paths: tuple[str, ...] = (),
     ) -> tuple[Path, _ManagedIndexIdentity]:
         """Revalidate every durable identity before a read or exact-path effect."""
         coordination = self._coordinator.show(change_id)
         intent, _recovery = self._require_preservation_authority(change_id, receipt.recovery_id, coordination)
+        recorded_paths = tuple(entry.path for entry in receipt.paths)
+        checked_paths = tuple(sorted(set(recorded_paths) | set(selected_paths)))
+        if checked_paths:
+            if intent.admitted_task_id is None:
+                raise PreservationRejectedError("preservation receipt lacks admitted Builder task authority")
+            self._require_admitted_paths(intent, checked_paths)
         worktree = self._canonical_worktree_path(change_id, coordination.worktree_path)
         if (
             receipt.change_id != change_id
@@ -4634,7 +4711,7 @@ class ChangeWorkspaceManager:
         ).stdout
         known_paths = {entry.path for entry in receipt.paths}
         authorized_staging = self._authorized_restoration_staging(receipt, worktree)
-        if not set(self._preservation_status_paths(status)) <= known_paths | authorized_staging:
+        if not set(self._preservation_status_paths(status, reject_ignored=False)) <= known_paths | authorized_staging:
             msg = "worktree path inventory expanded after preservation"
             raise PreservationFenceError(msg)
 
@@ -5089,7 +5166,10 @@ class ChangeWorkspaceManager:
             if mode not in {0o100644, 0o100755, 0o120000}:
                 raise PreservationRejectedError("unsupported managed index entry type")
             _validate_relative_preservation_path(path)
-        ChangeWorkspaceManager._validate_private_paths(tuple(path for path, _mode, _stage in entries))
+        ChangeWorkspaceManager._validate_private_paths(
+            tuple(path for path, _mode, _stage in entries),
+            conservative=False,
+        )
 
     @staticmethod
     def _validate_index_extensions(content: bytes) -> None:
@@ -5155,7 +5235,7 @@ class ChangeWorkspaceManager:
             raise PreservationRejectedError("managed index extension table is malformed")
 
     @staticmethod
-    def _preservation_status_paths(status: bytes) -> tuple[str, ...]:
+    def _preservation_status_paths(status: bytes, *, reject_ignored: bool = True) -> tuple[str, ...]:
         if status and not status.endswith(b"\0"):
             raise PreservationRejectedError("Git returned an unterminated worktree status")
         paths: set[str] = set()
@@ -5170,7 +5250,9 @@ class ChangeWorkspaceManager:
                 raise PreservationRejectedError("Git returned a malformed worktree status")
             code = record[:2].decode("ascii", errors="strict")
             if code == "!!":
-                raise PreservationRejectedError("ignored worktree content requires containment")
+                if reject_ignored:
+                    raise PreservationRejectedError("ignored worktree content requires containment")
+                continue
             paths.add(os.fsdecode(record[3:]))
             if "R" in code or "C" in code:
                 if index >= len(records) or not records[index]:
@@ -5180,7 +5262,7 @@ class ChangeWorkspaceManager:
         return tuple(sorted(paths))
 
     @staticmethod
-    def _validate_private_paths(paths: tuple[str, ...]) -> None:
+    def _validate_private_paths(paths: tuple[str, ...], *, conservative: bool = True) -> None:
         for path in paths:
             _validate_relative_preservation_path(path)
             components = {component.casefold() for component in PurePosixPath(path).parts}
@@ -5190,7 +5272,10 @@ class ChangeWorkspaceManager:
                 or component.startswith("id_rsa.")
                 or component.startswith("id_ed25519.")
                 or component.startswith("id_ecdsa.")
-                or any(marker in component for marker in ("credential", "password", "secret", "token"))
+                or (
+                    conservative
+                    and any(marker in component for marker in ("credential", "password", "secret", "token"))
+                )
                 for component in components
             ):
                 raise PreservationRejectedError("private or secret-like path requires containment")
@@ -5883,15 +5968,7 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _dirty_paths(status: bytes) -> tuple[str, ...]:
-        records = iter(status.decode("utf-8", errors="strict").split("\0"))
-        paths: set[str] = set()
-        for record in records:
-            if not record:
-                continue
-            paths.add(record[3:])
-            if "R" in record[:2] or "C" in record[:2]:
-                paths.add(next(records))
-        return tuple(sorted(paths))
+        return ChangeWorkspaceManager._preservation_status_paths(status)
 
     def _captured_finalization_guard(
         self,

@@ -781,6 +781,16 @@ not passing. Final-source external CI, pinned-Node and actual host gates remain 
 
 ### D03-C admission-boundary resume — 2026-09-21
 
+The current repair starts at `9196317`, following partial admission checkpoint
+`c2bca75` and the already-published `dev` merge `416f86c`. The PR comparison base is
+`dev@d7d5d2d`. Preserve the merged tooling changes and the reviewed restoration
+repairs; neither is admission proof. This repair is limited to completing and
+checking the admission boundary, not the remaining C integration below.
+The repair review identified missing replay admission and legacy dirty-completion
+guards, plus content fingerprinting before path admission. These must be resolved
+without changing the index privacy policy or ignored-file containment; an initial
+draft's wider policy changes are not acceptance evidence for this slice.
+
 User comment `5766196814` resumes C from `a5e271b`, preserving the independently
 reviewed intent-publication repair (`5765655406`). The next bounded slice is a
 necessary pre-copy admission gate: bind the active Builder task and its definition

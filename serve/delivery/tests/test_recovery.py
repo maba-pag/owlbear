@@ -204,7 +204,8 @@ def test_a5_recovery_fixture_preserves_bytes_and_directional_authority() -> None
     )
 
 
-def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dirty", [False, True])
+def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool) -> None:
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
     )
@@ -237,6 +238,12 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     legacy_path.parent.mkdir(parents=True)
     legacy_path.write_bytes(legacy_bytes)
 
+    if dirty:
+        (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
+        return
+
     receipt = application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
 
     assert receipt.recovery_id == legacy.recovery_id
@@ -245,7 +252,8 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     assert current.authority_matches(current.model_copy(update={"maintained_surfaces": ("changed",)})) is False
 
 
-def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dirty", [False, True])
+def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool) -> None:
     """Old clean journals replay; dirty preservation remains separately admission-gated."""
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_downstream=True
@@ -291,6 +299,12 @@ def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Pat
     old_path = state / journal_path("change-a", old_intent.recovery_id, "intent")
     old_path.parent.mkdir(parents=True)
     old_path.write_bytes(old_bytes)
+
+    if dirty:
+        (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
+        return
 
     receipt = application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
 
@@ -454,6 +468,53 @@ def test_recovery_uses_canonical_directory_scope_for_exact_dirty_paths(tmp_path:
         worktree,
     )
     assert admitted[2:] == (("serve/delivery",), ("serve/delivery/src/module.py",))
+
+
+def test_recovery_does_not_expand_file_scope_after_directory_replacement(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    worktree = coordinator.show("change-a").worktree_path
+    (worktree / "src").mkdir()
+    (worktree / "src" / "file.py").write_text("file\n", encoding="utf-8")
+    task = _task().model_copy(update={"maintained_surfaces": ("src/file.py",)})
+    scope, kinds = application._exact_task_scope_details(task, worktree)
+    (worktree / "src" / "file.py").unlink()
+    (worktree / "src" / "file.py").mkdir()
+
+    assert scope == ("src/file.py",)
+    assert not application._scope_admits_path(
+        worktree,
+        scope[0],
+        "src/file.py/secret",
+        scope_kind=kinds[scope[0]],
+    )
+
+
+def test_recovery_rejects_symlink_task_scope(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    worktree = coordinator.show("change-a").worktree_path
+    (worktree / "src").mkdir()
+    (worktree / "link").symlink_to("src", target_is_directory=True)
+    task = _task().model_copy(update={"maintained_surfaces": ("link",)})
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._exact_task_scope(task, worktree)
+
+
+def test_recovery_rejects_root_scope_as_an_ambiguous_directory(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    task = _task().model_copy(update={"maintained_surfaces": (".",)})
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._exact_task_scope(task, coordinator.show("change-a").worktree_path)
 
 
 def test_recovery_intent_validates_nested_admitted_paths_by_component_boundary() -> None:

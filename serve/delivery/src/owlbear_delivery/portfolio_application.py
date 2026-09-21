@@ -8395,41 +8395,72 @@ class PortfolioApplication:
 
     @staticmethod
     def _exact_task_scope(task: DeliveryTaskDefinition, worktree: Path) -> tuple[str, ...]:
+        scope, _kinds = PortfolioApplication._exact_task_scope_details(task, worktree)
+        return scope
+
+    @staticmethod
+    def _exact_task_scope_details(
+        task: DeliveryTaskDefinition,
+        worktree: Path,
+        baseline_kinds: dict[str, str] | None = None,
+    ) -> tuple[tuple[str, ...], dict[str, Literal["directory", "file", "missing"]]]:
         surfaces = tuple(task.maintained_surfaces)
         if len(surfaces) != len(set(surfaces)):
             raise DeliveryWorkerExclusionRequiredError
+        kinds: dict[str, Literal["directory", "file", "missing"]] = {}
         for surface in surfaces:
             path = PurePosixPath(surface)
             if (
                 not surface
                 or surface != path.as_posix()
                 or surface.startswith("/")
+                or not path.parts
                 or any(part in {"", ".", ".."} for part in path.parts)
                 or any(character not in _EXACT_TASK_PATH_CHARS for character in surface)
             ):
                 raise DeliveryWorkerExclusionRequiredError
+            candidate = worktree
             try:
-                (worktree / path).stat()
+                for part in path.parts:
+                    candidate /= part
+                    metadata = candidate.lstat()
+                    if stat.S_ISLNK(metadata.st_mode):
+                        raise DeliveryWorkerExclusionRequiredError
             except FileNotFoundError:
+                baseline_kind = (baseline_kinds or {}).get(surface, "missing")
+                if baseline_kind not in {"directory", "file", "missing"}:
+                    raise DeliveryWorkerExclusionRequiredError
+                kinds[surface] = baseline_kind
                 continue
             except OSError as exc:
                 raise DeliveryWorkerExclusionRequiredError from exc
-        return tuple(sorted(surfaces))
+            kinds[surface] = "directory" if stat.S_ISDIR(metadata.st_mode) else "file"
+        return tuple(sorted(surfaces)), kinds
 
     @staticmethod
-    def _scope_admits_path(worktree: Path, scope: str, path: str) -> bool:
+    def _scope_admits_path(
+        worktree: Path,
+        scope: str,
+        path: str,
+        *,
+        scope_kind: Literal["directory", "file", "missing"] | None = None,
+    ) -> bool:
         scope_parts = PurePosixPath(scope).parts
         path_parts = PurePosixPath(path).parts
         if path_parts == scope_parts:
             return True
         if len(path_parts) <= len(scope_parts) or path_parts[: len(scope_parts)] != scope_parts:
             return False
+        if scope_kind is not None:
+            return scope_kind == "directory"
         try:
-            metadata = (worktree / PurePosixPath(scope)).stat()
+            metadata = (worktree / PurePosixPath(scope)).lstat()
         except FileNotFoundError:
             return False
         except OSError as exc:
             raise DeliveryWorkerExclusionRequiredError from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            return False
         return stat.S_ISDIR(metadata.st_mode)
 
     @staticmethod
@@ -8437,6 +8468,8 @@ class PortfolioApplication:
         task: DeliveryTaskDefinition | None,
         paths: tuple[str, ...],
         worktree: Path,
+        *,
+        scope_details: tuple[tuple[str, ...], dict[str, Literal["directory", "file", "missing"]]] | None = None,
     ) -> tuple[str | None, str | None, tuple[str, ...], tuple[str, ...]]:
         if task is None:
             if paths:
@@ -8446,10 +8479,18 @@ class PortfolioApplication:
             # Clean Recovery-A carries no path authority; unsupported task-scope
             # descriptors remain a dirty-admission concern only.
             return None, None, (), ()
-        scope = PortfolioApplication._exact_task_scope(task, worktree)
+        scope, scope_kinds = scope_details or PortfolioApplication._exact_task_scope_details(task, worktree)
         admitted_paths = tuple(sorted(paths))
         if any(
-            not any(PortfolioApplication._scope_admits_path(worktree, candidate, path) for candidate in scope)
+            not any(
+                PortfolioApplication._scope_admits_path(
+                    worktree,
+                    candidate,
+                    path,
+                    scope_kind=scope_kinds[candidate],
+                )
+                for candidate in scope
+            )
             for path in admitted_paths
         ):
             raise DeliveryWorkerExclusionRequiredError
@@ -8461,7 +8502,7 @@ class PortfolioApplication:
         coordination = self._coordinator.show(change_id)
         owner, owner_id, kind, failure_id, effect_id = self._recovery_owner(runtime, coordination)
         admitted_task = self._recovery_admitted_task(runtime, owner, kind)
-        coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_recovery_workspace(
+        coordination, head, _status, paths, reason = self._workspace_manager.capture_recovery_workspace_metadata(
             change_id, tuple(result.completed_commit for binding in frontier.bindings for result in binding.results)
         )
         # Recovery A never rewrites files, moves heads, repairs corruption, or interprets
@@ -8471,12 +8512,45 @@ class PortfolioApplication:
             or coordination.publication_lease is not None
         ):
             raise DeliveryWorkerExclusionRequiredError
+        baseline_kinds = (
+            self._workspace_manager.baseline_scope_kinds(
+                coordination.worktree_path,
+                head,
+                tuple(admitted_task.maintained_surfaces),
+            )
+            if admitted_task is not None and paths
+            else None
+        )
+        scope_details = (
+            self._exact_task_scope_details(admitted_task, coordination.worktree_path, baseline_kinds)
+            if admitted_task is not None and paths
+            else None
+        )
         (
             admitted_task_id,
             admitted_task_digest,
             admitted_task_scope,
             admitted_paths,
-        ) = self._recovery_admission_fields(admitted_task, _paths, coordination.worktree_path)
+        ) = self._recovery_admission_fields(
+            admitted_task,
+            paths,
+            coordination.worktree_path,
+            scope_details=scope_details,
+        )
+        if (
+            scope_details is not None
+            and self._exact_task_scope_details(admitted_task, coordination.worktree_path, baseline_kinds)
+            != scope_details
+        ):
+            raise DeliveryWorkerExclusionRequiredError
+        coordination, head, fingerprint, captured_paths, reason = self._workspace_manager.capture_recovery_workspace(
+            change_id,
+            tuple(result.completed_commit for binding in frontier.bindings for result in binding.results),
+            expected_paths=paths,
+            expected_scope_details=scope_details,
+        )
+        if captured_paths != paths or reason not in {None, "workspace-dirty"}:
+            raise DeliveryWorkerExclusionRequiredError
         relative = Path("changes") / change_id / "invocations" / f"{digest(owner_id.encode())}.json"
         try:
             invocation = RecoveryInvocation.model_validate_json(read_record(self._target_root, relative))
@@ -8637,6 +8711,8 @@ class PortfolioApplication:
         intent = RecoveryIntent.model_validate_json(read_record(self._target_root, intent_path))
         if intent.recovery_id != recovery_id or intent.invocation.request.change_id != change_id:
             raise DeliveryWorkerExclusionRequiredError
+        if intent.admitted_task_id is None:
+            self._require_legacy_recovery_clean(change_id, intent)
         self._coordinator.forget_verified_exclusion(recovery_id)
         evidence = verify_evidence(self._recovery_evidence_provider, reference, intent)
         receipt_path = self._target_root / journal_path(change_id, recovery_id, "receipt")
@@ -8652,7 +8728,10 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             if receipt_path.exists():
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
-            if not intent.authority_matches(self._capture_recovery_intent(change_id)):
+            current_intent = self._capture_recovery_intent(change_id)
+            if intent.admitted_task_id is None and current_intent.admitted_paths:
+                raise DeliveryWorkerExclusionRequiredError
+            if not intent.authority_matches(current_intent):
                 raise DeliveryWorkerExclusionRequiredError
             evidence_path = journal_path(change_id, recovery_id, "evidence")
             if (self._target_root / evidence_path).exists():
@@ -8671,6 +8750,17 @@ class PortfolioApplication:
             self._record_retry_release(self._runtime(change_id), attempt_id=intent.invocation.request.attempt_id)
             self._coordinator.record_verified_exclusion(recovery_id)
             return receipt
+
+    def _require_legacy_recovery_clean(self, change_id: str, intent: RecoveryIntent) -> None:
+        """Contain old journals to clean recovery until path admission exists."""
+        runtime = self._runtime(change_id)
+        frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
+        _coordination, _head, _status, paths, _reason = self._workspace_manager.capture_recovery_workspace_metadata(
+            change_id,
+            tuple(result.completed_commit for binding in frontier.bindings for result in binding.results),
+        )
+        if paths:
+            raise DeliveryWorkerExclusionRequiredError
 
     def _verified_recovery_replay(
         self, intent: RecoveryIntent, evidence: RecoveryEvidence, path: Path
