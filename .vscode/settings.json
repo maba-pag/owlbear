@@ -105,20 +105,14 @@
   "git.autorefresh": false,
   // NOTE: User-local absolute path — update to your owlbear install location.
   // On Windows this might be e.g. "C:\\Users\\you\\Projects\\owlbear".
-  "github.copilot.chat.additionalReadAccessPaths": [
-    "/Users/markus/Projects/owlbear"
-  ],
+  "github.copilot.chat.additionalReadAccessPaths": ["/Users/markus/Projects/owlbear"],
   "github.copilot.chat.agent.autoFix": true,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
   "github.copilot.chat.githubMcpServer.enabled": true,
-  "github.copilot.chat.githubMcpServer.toolsets": [
-    "actions",
-    "issues",
-    "pull_requests"
-  ],
+  "github.copilot.chat.githubMcpServer.toolsets": ["actions", "issues", "pull_requests"],
   "github.copilot.chat.newWorkspaceCreation.enabled": false,
   "github.copilot.chat.searchSubagent.enabled": true,
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
@@ -140,9 +134,7 @@
     "implementAbstractClasses": true
   },
   "python.analysis.aiHoverSummaries": true,
-  "python.analysis.fixAll": [
-    "source.unusedImports"
-  ],
+  "python.analysis.fixAll": ["source.unusedImports"],
   "python.analysis.typeCheckingMode": "standard",
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
