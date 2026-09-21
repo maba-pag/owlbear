@@ -45,6 +45,8 @@ The [dependency workflow](workflows/dependency-verification.yml) has a manual `c
 Leave it at `none` for normal verification. Select `uv` or `precommit` for preparation-only
 measurements on disposable Ubuntu runners; probe runs do not satisfy the dependency verification
 gate or run the full test/lint suites. They do not change production cache policy or browser ordering.
+The skipped gate is named `Cache probe (no dependency proof)` during probes, not
+`Verify dependency update`: GitHub accepts skipped required jobs, so the check names must differ.
 
 1. Dispatch the chosen probe on the intended revision. This is the cold attempt: keys include the
   run ID, not the attempt number. Experiment cache paths and cancellation groups are isolated from

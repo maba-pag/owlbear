@@ -701,6 +701,10 @@ def test_cache_probes_are_opt_in_and_isolated_from_required_proofs() -> None:
     assert probe_input["default"] == "none"
     assert probe_input["options"] == ["none", "uv", "precommit"]
     assert "inputs.cache_probe || 'none'" in workflow["concurrency"]["group"]
+    assert _job(workflow, "gate")["name"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.cache_probe != 'none' && "
+        "'Cache probe (no dependency proof)' || 'Verify dependency update' }}"
+    )
     for job_name in ("classify", "resolve_runtimes", "gate"):
         assert (
             "github.event_name != 'workflow_dispatch' || inputs.cache_probe == 'none'"

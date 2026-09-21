@@ -454,6 +454,9 @@ jobs:
           cache-local-path: ${{ runner.temp }}/uv-cache-probe-${{ matrix.policy }}
           cache-suffix: probe-${{ github.run_id }}-${{ matrix.policy }}
 
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
       - name: Resolve and install Python
         env:
           MATRIX_PYTHON: ${{ matrix.python }}
@@ -504,6 +507,9 @@ jobs:
           version: "0.12.15"
           enable-cache: false
 
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
       - name: Install locked Python tooling
         run: uv sync --locked --group dev
 
@@ -553,7 +559,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   gate:
-    name: Verify dependency update
+    name: >-
+      ${{ github.event_name == 'workflow_dispatch' && inputs.cache_probe != 'none' &&
+      'Cache probe (no dependency proof)' || 'Verify dependency update' }}
     needs:
       - classify
       - resolve_runtimes
