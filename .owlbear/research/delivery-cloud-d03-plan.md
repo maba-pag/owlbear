@@ -646,9 +646,10 @@ Closeout, split into bounded selections:
 
 #### Review repair — 2026-09-21
 
-User comment `5764113682` authorizes repair of the D03-C review at `27494f0`, not
-completion of the unfinished phase or D work. The repair checkpoints `65e9846` and
-`8cf34bc` preserve progress; the former was explicitly unverified when published.
+User comments `5764113682` and `5765408189` authorize repairs of the D03-C reviews,
+not completion of the unfinished phase or D work. The repair checkpoints `65e9846`,
+`8cf34bc` and `67febdc` preserve progress; the first was explicitly unverified when
+published.
 
 - Legacy finalization reports now validate against the original canonical field set;
   current-C reports retain their existing identities. Legacy recovery intents retain
@@ -664,8 +665,40 @@ completion of the unfinished phase or D work. The repair checkpoints `65e9846` a
   repair cases (overlapping counts), with locked uv 0.12.16 and disposable state.
   These are worker results, not parent reruns or whole-phase proof. Independent
   Opus review found the compatible identity encoding sound. Staging review drove
-  fixes for hardlink reads and progressive multi-path journal ordering; the remaining
-  post-replacement/private-unlink crash window is under final repair.
+  fixes for hardlink reads and progressive multi-path journal ordering.
+- The `67febdc` post-replacement/private-unlink repair passed the subsequent
+  read-only Luna review at PR comment `5765209697`, as did identity compatibility
+  and absent-parent behavior. Its 223 earlier affected tests and 48/3 final focused
+  selections overlap and remain prior worker evidence. Final-source CodeQL found
+  zero Python alerts; automated review was unavailable, not passing.
+- That review found one remaining interrupted-publication defect: a killed private
+  operation-intent write leaves `.tmp-*` without `intent.json`, and the new scanner
+  rejects the nonempty directory before retry can publish the intent. The repair
+  tolerates bounded private temporary regular files without reading their contents,
+  assigning them authority, or deleting them. Retry publishes the intent from current
+  verified receipt/selection data; unauthorized worktree exposure remains blocked.
+  Files must be single-link, owner-only regular files; at most 256 entries and 64 MiB
+  total are tolerated. Symlinks, hardlinks, loose modes, unknown names and excess
+  size/count remain contained.
+- Repair proof: a real child SIGKILL immediately before linking `intent.json` failed
+  before the fix and passes after it. Replay retains the orphan's exact bytes/inode
+  and raw index; unauthorized worktree exposure is rejected before restoration.
+  The writer reports **54 nonterminal-recovery cases passed in 19.76 seconds**,
+  including **6 focused cases** (overlapping), plus the Git-admin-path authority
+  invariant (**1 passed**). No parent reruns or whole-phase proof are claimed.
+  Whitespace checks passed. Scoped Ruff still reports 373 diagnostics and two
+  unformatted files; these remain explicit static-check failures, not a clean gate.
+  No diagnostics were reported on added lines; no fresh baseline delta was run.
+  A separate read-only Luna reviewer checked the final source/test diff against
+  `67febdc`, including the artifact bounds and retention assertions, with no
+  significant issues found. This is narrow repair review, not C acceptance.
+
+Focused commands used locked uv 0.12.16 with Python 3.14.7:
+
+```shell
+uv run --locked --python 3.14.7 pytest serve/delivery/tests/test_change_workspace.py -q -n 1 -k nonterminal_recovery -m 'not api and not model and not e2e' --tb=short
+uv run --locked --python 3.14.7 pytest tests/test_delivery_worktree_authority.py::test_delivery_sources_have_no_git_admin_artifact_path -q -n 1 -m 'not api and not model and not e2e' --tb=short
+```
 
 Broader C provenance/classification, copied-index privacy qualification, application
 custody integration, provider/procedure authority and original-action resumption

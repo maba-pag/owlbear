@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -769,16 +770,20 @@ def _assert_restoration_failure(manager, preservation):
 
 
 def _restoration_staging_path(preservation, path: str) -> Path:
+    operation_id = _restoration_operation_id(preservation)
+    temporary = f".owlbear-preserve-{operation_id}-{hashlib.sha256(path.encode()).hexdigest()[:16]}"
+    return preservation.worktree_path / Path(path).parent / temporary
+
+
+def _restoration_operation_id(preservation) -> str:
     selected = tuple(entry.path for entry in preservation.paths)
-    operation_id = digest(
+    return digest(
         json.dumps(
             {"preservation_receipt_id": preservation.receipt_id, "paths": selected},
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
     )
-    temporary = f".owlbear-preserve-{operation_id}-{hashlib.sha256(path.encode()).hexdigest()[:16]}"
-    return preservation.worktree_path / Path(path).parent / temporary
 
 
 def _kill_during_restoration_before_replace(tmp_path: Path, preservation, repository: Path) -> None:
@@ -792,6 +797,37 @@ def _kill_during_restoration_before_replace(tmp_path: Path, preservation, reposi
         "coordinator.record_verified_exclusion(sys.argv[5])\n"
         "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
         "os.replace = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
+        "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
+    )
+    result = subprocess.run(  # noqa: S603 - the child is a controlled test process.
+        (
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            str(repository),
+            preservation.change_id,
+            preservation.preservation_id,
+            preservation.recovery_id,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == -signal.SIGKILL, result.stderr
+
+
+def _kill_during_restoration_intent_link(tmp_path: Path, preservation, repository: Path) -> None:
+    script = (
+        "import os, signal, sys\n"
+        "from pathlib import Path\n"
+        "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "root = Path(sys.argv[1])\n"
+        "repository = Path(sys.argv[2])\n"
+        "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "coordinator.record_verified_exclusion(sys.argv[5])\n"
+        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "os.link = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
     )
     result = subprocess.run(  # noqa: S603 - the child is a controlled test process.
@@ -914,6 +950,96 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
     os.kill(process.pid, signal.SIGKILL)
     _stdout, stderr = process.communicate()
     assert process.returncode == -signal.SIGKILL, stderr
+
+
+def test_nonterminal_recovery_replays_after_operation_intent_publication_death(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_during_restoration_intent_link(tmp_path, preservation, manager.repository)
+    operation_dir = (
+        manager.runtime_root / preservation.storage_ref / "restoration" / _restoration_operation_id(preservation)
+    )
+    orphaned = tuple(operation_dir.glob(".tmp-*"))
+    assert len(orphaned) == 1
+    orphan_metadata = orphaned[0].lstat()
+    orphan_bytes = orphaned[0].read_bytes()
+    orphan_identity = (orphan_metadata.st_dev, orphan_metadata.st_ino)
+    assert stat.S_ISREG(orphan_metadata.st_mode)
+    assert orphan_metadata.st_nlink == 1
+    assert orphan_metadata.st_size <= 64 * 1024 * 1024
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+    assert manager._read_managed_index(index) == index_bytes  # noqa: SLF001
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    exposed = _restoration_staging_path(preservation, "shared.txt")
+    exposed.write_bytes(b"foreign worktree artifact\n")
+    with pytest.raises(PreservationFenceError, match="worktree exposure"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+    assert restarted._read_managed_index(index) == index_bytes  # noqa: SLF001
+    exposed.unlink()
+    assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert (worktree / "shared.txt").read_bytes() == b"base\n"
+    assert restarted._read_managed_index(index) == index_bytes  # noqa: SLF001
+    assert orphaned[0].read_bytes() == orphan_bytes
+    replayed_orphan_metadata = orphaned[0].lstat()
+    assert (replayed_orphan_metadata.st_dev, replayed_orphan_metadata.st_ino) == orphan_identity
+
+
+@pytest.mark.parametrize("artifact", ["symlink", "hardlink", "permissions", "oversize", "too-many"])
+def test_nonterminal_recovery_rejects_untrusted_incomplete_operation_artifacts(
+    tmp_path: Path, artifact: str
+) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    operation_dir = (
+        manager.runtime_root / preservation.storage_ref / "restoration" / _restoration_operation_id(preservation)
+    )
+    operation_dir.mkdir(parents=True)
+    artifact_path = operation_dir / f".tmp-{'a' * 24}"
+    if artifact == "symlink":
+        target = tmp_path / "foreign-source"
+        target.write_bytes(b"foreign\n")
+        artifact_path.symlink_to(target)
+    elif artifact == "hardlink":
+        target = tmp_path / "foreign-source"
+        target.write_bytes(b"foreign\n")
+        target.chmod(0o600)
+        os.link(target, artifact_path)
+    elif artifact == "permissions":
+        artifact_path.write_bytes(b"foreign\n")
+        artifact_path.chmod(0o640)
+    elif artifact == "oversize":
+        with artifact_path.open("wb") as handle:
+            handle.truncate(64 * 1024 * 1024 + 1)
+        artifact_path.chmod(0o600)
+    else:
+        for index in range(257):
+            (operation_dir / f".tmp-{index:024x}").touch(mode=0o600)
+    artifact_metadata = artifact_path.lstat() if artifact != "too-many" else None
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    with pytest.raises(PreservationFenceError, match="intent is missing with artifacts"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (worktree / "shared.txt").read_bytes() == b"dirty preservation\n"
+    if artifact == "too-many":
+        assert len(tuple(operation_dir.iterdir())) == 257
+    else:
+        assert artifact_metadata is not None
+        current_metadata = artifact_path.lstat()
+        assert (current_metadata.st_dev, current_metadata.st_ino) == (
+            artifact_metadata.st_dev,
+            artifact_metadata.st_ino,
+        )
 
 
 def test_nonterminal_recovery_replays_operation_owned_staging_after_subprocess_death(tmp_path: Path) -> None:

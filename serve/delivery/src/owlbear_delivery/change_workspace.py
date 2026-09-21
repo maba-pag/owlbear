@@ -65,6 +65,9 @@ _MAX_PRESERVED_PATH_LENGTH = 4096
 _MAX_PRESERVED_FILE_BYTES = 16 * 1024 * 1024
 _MAX_PRESERVED_TOTAL_BYTES = 64 * 1024 * 1024
 _RESTORATION_STAGE_PATTERN = re.compile(r"^stage-[0-9a-f]{32}$")
+_RESTORATION_RECORD_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
+_RESTORATION_RECORD_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_MAX_RESTORATION_INCOMPLETE_ARTIFACTS = 256
 _PRESERVATION_ENV_OVERRIDES = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -4659,9 +4662,30 @@ class ChangeWorkspaceManager:
                                 contained_directory(restoration_fd, Path(operation_id)) as operation_fd,
                                 os.scandir(operation_fd) as incomplete_entries,
                             ):
-                                if any(True for _entry in incomplete_entries):
-                                    message = "restoration operation intent is missing with artifacts"
-                                    raise PreservationFenceError(message)
+                                incomplete_size = 0
+                                for incomplete_count, entry in enumerate(incomplete_entries, start=1):
+                                    if incomplete_count > _MAX_RESTORATION_INCOMPLETE_ARTIFACTS:
+                                        message = "restoration operation intent is missing with artifacts"
+                                        raise PreservationFenceError(message)
+                                    try:
+                                        metadata = entry.stat(follow_symlinks=False)
+                                    except OSError as exc:
+                                        message = "restoration operation intent is missing with artifacts"
+                                        raise PreservationFenceError(message) from exc
+                                    if (
+                                        _RESTORATION_RECORD_TEMPORARY_PATTERN.fullmatch(entry.name) is None
+                                        or not stat.S_ISREG(metadata.st_mode)
+                                        or metadata.st_nlink != 1
+                                        or stat.S_IMODE(metadata.st_mode) != _RESTORATION_RECORD_TEMPORARY_MODE
+                                        or metadata.st_size < 0
+                                        or metadata.st_size > _MAX_PRESERVED_TOTAL_BYTES
+                                    ):
+                                        message = "restoration operation intent is missing with artifacts"
+                                        raise PreservationFenceError(message)
+                                    incomplete_size += metadata.st_size
+                                    if incomplete_size > _MAX_PRESERVED_TOTAL_BYTES:
+                                        message = "restoration operation intent is missing with artifacts"
+                                        raise PreservationFenceError(message)
                             for path in entries_by_path:
                                 staging_path = str(
                                     PurePosixPath(path).parent / _preservation_temporary_name(operation_id, path)
