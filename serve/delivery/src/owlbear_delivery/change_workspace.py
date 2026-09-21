@@ -3996,6 +3996,23 @@ class ChangeWorkspaceManager:
         coordination, head, status, paths, reason = self.capture_recovery_workspace_metadata(
             change_id, promoted_commits
         )
+        ignored = self._run_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--untracked-files=normal",
+            cwd=coordination.worktree_path,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        ).stdout
+        if ignored:
+            return (
+                coordination,
+                head,
+                hashlib.sha256(head.encode() + b"\0" + status).hexdigest(),
+                paths,
+                reason or "workspace-dirty",
+            )
         if expected_paths is not None and paths != expected_paths:
             raise DeliveryWorkerExclusionRequiredError
         if expected_scope_details is not None:
@@ -4047,6 +4064,17 @@ class ChangeWorkspaceManager:
         ).stdout
         paths = self._dirty_paths(status)
         reason = self._captured_finalization_guard(coordination, head, promoted_commits)
+        ignored = self._run_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--untracked-files=normal",
+            cwd=coordination.worktree_path,
+            environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        ).stdout
+        if ignored:
+            return coordination, head, status, paths, reason or "workspace-dirty"
         if reason == "active-custody" and coordination.publication_lease is None:
             reason = self._captured_finalization_guard(
                 coordination.model_copy(update={"writer": None}), head, promoted_commits
@@ -4130,7 +4158,7 @@ class ChangeWorkspaceManager:
             "--untracked-files=all",
             cwd=worktree,
         ).stdout
-        paths = self._preservation_status_paths(status, reject_ignored=False)
+        paths = self._preservation_status_paths(status)
         if len(paths) > _MAX_PRESERVED_PATHS:
             raise PreservationRejectedError("changed path count exceeds the bounded preservation policy")
         self._require_admitted_paths(intent, paths)
@@ -4711,7 +4739,7 @@ class ChangeWorkspaceManager:
         ).stdout
         known_paths = {entry.path for entry in receipt.paths}
         authorized_staging = self._authorized_restoration_staging(receipt, worktree)
-        if not set(self._preservation_status_paths(status, reject_ignored=False)) <= known_paths | authorized_staging:
+        if not set(self._preservation_status_paths(status)) <= known_paths | authorized_staging:
             msg = "worktree path inventory expanded after preservation"
             raise PreservationFenceError(msg)
 
@@ -5166,10 +5194,7 @@ class ChangeWorkspaceManager:
             if mode not in {0o100644, 0o100755, 0o120000}:
                 raise PreservationRejectedError("unsupported managed index entry type")
             _validate_relative_preservation_path(path)
-        ChangeWorkspaceManager._validate_private_paths(
-            tuple(path for path, _mode, _stage in entries),
-            conservative=False,
-        )
+        ChangeWorkspaceManager._validate_private_paths(tuple(path for path, _mode, _stage in entries))
 
     @staticmethod
     def _validate_index_extensions(content: bytes) -> None:
@@ -5235,7 +5260,7 @@ class ChangeWorkspaceManager:
             raise PreservationRejectedError("managed index extension table is malformed")
 
     @staticmethod
-    def _preservation_status_paths(status: bytes, *, reject_ignored: bool = True) -> tuple[str, ...]:
+    def _preservation_status_paths(status: bytes) -> tuple[str, ...]:
         if status and not status.endswith(b"\0"):
             raise PreservationRejectedError("Git returned an unterminated worktree status")
         paths: set[str] = set()
@@ -5250,8 +5275,7 @@ class ChangeWorkspaceManager:
                 raise PreservationRejectedError("Git returned a malformed worktree status")
             code = record[:2].decode("ascii", errors="strict")
             if code == "!!":
-                if reject_ignored:
-                    raise PreservationRejectedError("ignored worktree content requires containment")
+                raise PreservationRejectedError("ignored worktree content requires containment")
                 continue
             paths.add(os.fsdecode(record[3:]))
             if "R" in code or "C" in code:
@@ -5262,7 +5286,7 @@ class ChangeWorkspaceManager:
         return tuple(sorted(paths))
 
     @staticmethod
-    def _validate_private_paths(paths: tuple[str, ...], *, conservative: bool = True) -> None:
+    def _validate_private_paths(paths: tuple[str, ...]) -> None:
         for path in paths:
             _validate_relative_preservation_path(path)
             components = {component.casefold() for component in PurePosixPath(path).parts}
@@ -5272,10 +5296,7 @@ class ChangeWorkspaceManager:
                 or component.startswith("id_rsa.")
                 or component.startswith("id_ed25519.")
                 or component.startswith("id_ecdsa.")
-                or (
-                    conservative
-                    and any(marker in component for marker in ("credential", "password", "secret", "token"))
-                )
+                or any(marker in component for marker in ("credential", "password", "secret", "token"))
                 for component in components
             ):
                 raise PreservationRejectedError("private or secret-like path requires containment")

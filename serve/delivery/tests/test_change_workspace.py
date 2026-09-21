@@ -426,11 +426,11 @@ def test_nonterminal_recovery_rejects_ignored_inventory_before_private_capture()
         ChangeWorkspaceManager._preservation_status_paths(b"!! .venv/\0")  # noqa: SLF001
 
 
-def test_recovery_workspace_ignores_unrelated_ignored_inventory(tmp_path: Path) -> None:
+def test_recovery_workspace_retains_stronger_custody_guard_with_ignored_inventory(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("ignored-recovery")
-    (repository / ".git" / "info" / "exclude").write_text("ignored.txt\n", encoding="utf-8")
+    (coordination.worktree_path / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
     (coordination.worktree_path / "ignored.txt").write_text("do not touch\n", encoding="utf-8")
     coordinator.acquire(
         coordination.change_id,
@@ -439,7 +439,7 @@ def test_recovery_workspace_ignores_unrelated_ignored_inventory(tmp_path: Path) 
 
     captured = manager.capture_recovery_workspace(coordination.change_id, ())
 
-    assert captured[-1] is None
+    assert captured[-1] == "active-custody"
 
 
 def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:
@@ -613,29 +613,6 @@ def test_preservation_status_paths_include_both_rename_names() -> None:
     status = b"R  renamed.txt\0original.txt\0"
 
     assert ChangeWorkspaceManager._preservation_status_paths(status) == ("original.txt", "renamed.txt")
-
-
-def test_index_path_privacy_qualification_avoids_substring_false_positives() -> None:
-    ChangeWorkspaceManager._validate_index_entries(
-        (
-            ("custom-tokens.css", 0o100644, 0),
-            ("password-component/source.py", 0o100644, 0),
-        )
-    )
-    with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_index_entries((("secrets/config", 0o100644, 0),))
-
-
-def test_unrelated_ignored_inventory_is_not_a_dirty_preservation_path(tmp_path: Path) -> None:
-    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
-    (manager.repository / ".git" / "info" / "exclude").write_text("ignored.txt\n", encoding="utf-8")
-    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
-    (coordination.worktree_path / "ignored.txt").write_bytes(b"unrelated\n")
-
-    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
-
-    assert tuple(entry.path for entry in preservation.paths) == ("shared.txt",)
-    assert manager.verify_preservation(coordination.change_id, preservation.preservation_id) == preservation
 
 
 def test_recovery_workspace_metadata_does_not_read_dirty_content(tmp_path: Path) -> None:
