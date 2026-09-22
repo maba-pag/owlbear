@@ -4006,6 +4006,8 @@ class ChangeWorkspaceManager:
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
         ignored_inventory = self._has_ignored_inventory(ignored)
+        if ignored_inventory and expected_paths is not None:
+            raise DeliveryWorkerExclusionRequiredError
         if expected_paths is not None and paths != expected_paths:
             raise DeliveryWorkerExclusionRequiredError
         if expected_scope_details is not None:

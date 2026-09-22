@@ -796,13 +796,22 @@ ordinary dirty entry as ignored content, bypassing path/scope rechecks and conte
 fingerprinting. Pending legacy recovery must reject ignored-only dirt, while replay
 of an already completed receipt must not depend on later workspace cleanliness.
 
-The current source repair distinguishes actual `!!` ignored entries from ordinary
-dirty paths, includes admitted untracked bytes in the post-admission fingerprint,
-and rejects reviewed file/directory scope substitution. Metadata-only admission
-does not use the content diff; raw reads follow exact path/scope checks. The writer's
-initial focused selections reported 80 and 154 passes (overlapping), plus the
-Git-admin-path invariant. Final mixed-ignored and completed-receipt replay review
-findings still require closeout; these counts alone are not admission acceptance.
+Repair checkpoints `970368d` and `b2da6be` distinguish actual `!!` ignored entries
+from ordinary dirty paths, include admitted untracked bytes in the post-admission
+fingerprint, and reject reviewed file/directory scope substitution. Metadata-only
+admission does not use the content diff; raw reads follow exact path/scope checks,
+and Git content reads use only literal admitted pathspecs. Completed pre-C/A5
+receipts replay before pending-workspace cleanliness checks and exclusion-cache
+clearing. Pending legacy/no-admission recovery rejects ignored-only dirt as well
+as ordinary dirty paths. Historical identities and old preservation containment
+remain unchanged.
+
+The sole writer reported 163 workspace tests and 83 focused admission/replay tests
+passing, plus the Git-admin-path invariant; selections overlap and must not be
+summed. These extend earlier 80/154 and 82-pass checkpoints, not independent parent
+reruns. Final fail-closed mixed-ignored containment, independent review and automated
+validation are being closed out separately; these counts alone are not whole-C
+acceptance.
 
 User comment `5766196814` resumes C from `a5e271b`, preserving the independently
 reviewed intent-publication repair (`5765655406`). The next bounded slice is a

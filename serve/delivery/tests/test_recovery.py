@@ -241,7 +241,13 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     if dirty == "replay":
         receipt = application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
-        assert application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy)) == receipt
+        with (
+            patch.object(coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion) as forget,
+            patch.object(application, "_require_legacy_recovery_clean") as legacy_guard,
+        ):
+            assert application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy)) == receipt
+        forget.assert_not_called()
+        legacy_guard.assert_not_called()
         return
     if dirty == "ignored":
         worktree = coordinator.show("change-a").worktree_path
@@ -316,7 +322,13 @@ def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Pat
     if dirty == "replay":
         receipt = application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
-        assert application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent)) == receipt
+        with (
+            patch.object(coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion) as forget,
+            patch.object(application, "_require_legacy_recovery_clean") as legacy_guard,
+        ):
+            assert application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent)) == receipt
+        forget.assert_not_called()
+        legacy_guard.assert_not_called()
         return
     if dirty:
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
