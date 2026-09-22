@@ -918,6 +918,8 @@ fields, without ignoring older authority facts.
 
 ### Maintained-procedure authority increment
 
+Published source and focused tests: **`4566935`**. C remains partial; this is not phase acceptance.
+
 User [comment 5784139431](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5784139431)
 resumes C from `e78f6f7`. The bounded increment adds local storage for maintained-procedure
 observations and a fail-closed application consumer. Preserve `a292038`'s read boundaries,
@@ -961,7 +963,9 @@ Proof-owned Ruff checks passed. Application Ruff retains four reported pre-exist
 `ruff format --check` on `test_finalization_reports.py` remains non-clean on the reported
 pre-existing legacy `assert store.record(...)` at line 68. Independent
 read-only review found no significant issues after the exact-basis, encoded-size and historical
-registration corrections. Final-source automated validation is pending. No authority invariant,
+registration corrections. Final-source automated validation declined to run because its circuit
+breaker had tripped after two timeouts and instructed no retry. No final-source CodeQL or automated
+review pass is claimed. Secret scans passed. No authority invariant,
 full suite, live service/state or provider mutation was run for this slice; broader C and external
 gates remain open. This is not C acceptance.
 
