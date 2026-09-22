@@ -840,16 +840,41 @@ to these findings and focused regressions. Historical replay/identity compatibil
 had no actionable review findings. The reviewed intent-publication scanner and
 whole-index privacy rules must remain unchanged.
 
-Follow-up checkpoint `8ad62e6` shares canonical path validation between admission and intent
-validation, checks the complete admitted inventory before Git content fingerprinting,
-and uses descriptor-relative no-follow traversal for raw worktree reads. Directory
-identities are checked across the read; symlink leaf text and absent paths remain
-supported without following targets or creating directories. Focused regressions
-cover intermediate symlinks, unsupported spellings, ordinary nested/deleted/symlink
-leaf states and ancestor substitution. Independent review confirmed both original
-findings fixed, but identified descriptor cleanup gaps on interrupted traversal;
-these require explicit cleanup proof before final closeout. This does not complete
-the broader C obligations.
+Follow-up repair source **`a292038`**, following `8ad62e6`, shares canonical path
+validation between admission and intent validation, checks the complete admitted
+inventory before Git content fingerprinting, and uses descriptor-relative no-follow
+traversal for raw worktree reads. Directory identities are checked across the read;
+symlink leaf text and absent paths remain supported without following targets or
+creating directories. Focused regressions cover intermediate symlinks, unsupported
+spellings, ordinary nested/deleted/symlink leaf states and ancestor substitution.
+Independent review found two descriptor cleanup gaps during implementation; both
+were repaired with descriptor-tracking tests. Final read-only review of the repair
+against `06bb47a` found no significant issues. This is not whole-C acceptance.
+
+**Follow-up proof:** the sole source/test writer used Python 3.14.7 and uv 0.12.16
+with `uv run --locked pytest -q ... -n1` and synthetic disposable state:
+
+- Scoped recovery regression before the last helper/cleanup refinements: **84 passed**.
+- Final workspace impacted selection: **9 passed**; admission/legacy selection:
+  **15 passed**. The latter used `serve/delivery/tests/test_recovery.py` with
+  `-k 'legacy_recovery_fixture or a5_recovery_fixture or noncanonical or recovery_intent_identity_survives_admitted_authority_fields'`.
+- After the final successor-descriptor cleanup, `serve/delivery/tests/test_change_workspace.py`
+  with `-k 'closes_successor_on_identity_mismatch or closes_parent_on_missing_intermediate or reader_fences_ancestor_substitution or recovery_workspace_reads_supported or recovery_workspace_rejects_intermediate_symlink_before_git_fingerprint'`:
+  **7 passed**.
+- `tests/test_delivery_worktree_authority.py -k git_admin`: **2 passed**, including
+  the source invariant and its forbidden-artifact fixture test.
+
+Selections overlap; counts are not additive or parent reruns. The writer reported
+staged/unstaged fingerprints remain distinct and clean fingerprints stable.
+Scoped Ruff remains non-clean (**390 diagnostics versus 399 at `06bb47a`**), with
+no new diagnostics reported; `git diff --check` passed. No format check was run.
+Parent source inspection confirmed historical encoding/replay, the intent-publication
+scanner and index privacy validators are unchanged. Secret scans found no secrets.
+CodeQL on final source `a292038` found **0 Python alerts**; automated review could
+not load its configured model and is not a passing review. Current-head product CI
+at the repair baseline `06bb47a` required action; final external CI, static, pinned-Node
+and actual-host gates remain unproved. No live state/services, provider mutations,
+whole-suite or MegaLinter run was used.
 
 Parent validation on committed `5c8e0e0`: secret scans found no secrets; CodeQL
 found **0 Python alerts**. Automated code review was unavailable because its model
