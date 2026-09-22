@@ -31,6 +31,7 @@ from owlbear_delivery.recovery import (
     RecoveryReceipt,
     digest,
     encoded,
+    is_canonical_admitted_path,
     journal_path,
     read_record,
 )
@@ -4010,9 +4011,13 @@ class ChangeWorkspaceManager:
             raise DeliveryWorkerExclusionRequiredError
         if expected_paths is not None and paths != expected_paths:
             raise DeliveryWorkerExclusionRequiredError
+        if expected_paths is not None:
+            self._validate_recovery_path_containment(coordination.worktree_path, expected_paths)
         if expected_scope_details is not None:
             scope, expected_kinds = expected_scope_details
             for relative in scope:
+                if not is_canonical_admitted_path(relative):
+                    raise DeliveryWorkerExclusionRequiredError
                 candidate = coordination.worktree_path
                 try:
                     for part in PurePosixPath(relative).parts:
@@ -4657,6 +4662,17 @@ class ChangeWorkspaceManager:
             if intent.admitted_task_id is None:
                 raise PreservationRejectedError("dirty paths require an admitted Builder task")
             raise PreservationRejectedError("dirty paths fall outside the admitted task path authority")
+
+    @staticmethod
+    def _validate_recovery_path_containment(worktree: Path, paths: tuple[str, ...]) -> None:
+        """Reject unsupported admitted paths or symlinked ancestors before Git reads content."""
+        if paths != tuple(sorted(set(paths))) or any(not is_canonical_admitted_path(path) for path in paths):
+            raise DeliveryWorkerExclusionRequiredError
+        for path in paths:
+            try:
+                ChangeWorkspaceManager._validate_preservation_path(worktree, path)
+            except (OSError, PreservationRejectedError) as exc:
+                raise DeliveryWorkerExclusionRequiredError from exc
 
     @staticmethod
     def _directory_identity(path: Path, label: str) -> tuple[int, int, int, int]:
@@ -5376,44 +5392,141 @@ class ChangeWorkspaceManager:
         for component in PurePosixPath(path).parts[:-1]:
             current = current / component
             try:
-                if stat.S_ISLNK(current.lstat().st_mode):
+                metadata = current.lstat()
+                if stat.S_ISLNK(metadata.st_mode):
                     raise PreservationRejectedError("external symlink traversal is not permitted")
+                if not stat.S_ISDIR(metadata.st_mode):
+                    raise PreservationRejectedError("worktree path ancestor is not a directory")
             except FileNotFoundError:
                 break
         if candidate.is_dir() and not candidate.is_symlink():
             raise PreservationRejectedError("directory paths require bounded file inventory")
 
     @staticmethod
-    def _read_worktree_state(
-        worktree: Path,
+    def _verify_worktree_ancestors(
+        ancestors: tuple[tuple[Path, tuple[int, int, int]], ...],
         path: str,
-        *,
-        expected_staging_identity: tuple[int, int, int, int, int, int, int, int] | None = None,
-    ) -> _PreservedPathState:
-        candidate = worktree / PurePosixPath(path)
+    ) -> None:
+        message = f"worktree ancestor changed while reading: {path}"
+        for ancestor, expected in ancestors:
+            try:
+                current = ancestor.lstat()
+            except FileNotFoundError as exc:
+                raise PreservationFenceError(message) from exc
+            if (
+                stat.S_ISLNK(current.st_mode)
+                or not stat.S_ISDIR(current.st_mode)
+                or _directory_identity_tuple(current) != expected
+            ):
+                raise PreservationFenceError(message)
+
+    @staticmethod
+    def _open_worktree_read_parent(
+        worktree: Path,
+        parts: tuple[str, ...],
+        path: str,
+    ) -> tuple[int, tuple[tuple[Path, tuple[int, int, int]], ...]] | None:
+        root_changed = f"worktree root changed while reading: {path}"
+        ancestor_changed = f"worktree ancestor changed while reading: {path}"
         try:
-            metadata = candidate.lstat()
+            root_metadata = worktree.lstat()
         except FileNotFoundError:
-            return _PreservedPathState("absent", None, None)
+            return None
+        _require_worktree_directory(
+            root_metadata,
+            symlink_message="worktree root is not a directory",
+            non_directory_message="worktree root is not a directory",
+        )
+        root_identity = _directory_identity_tuple(root_metadata)
+        parent_fd = _open_directory_no_follow(
+            worktree,
+            dir_fd=None,
+            missing_message=root_changed,
+            unsafe_message="worktree root cannot be opened without following links",
+        )
+        ancestors = [(worktree, root_identity)]
+        try:
+            _require_directory_identity(os.fstat(parent_fd), root_identity, root_changed)
+            current = worktree
+            for part in parts:
+                current /= part
+                try:
+                    metadata = current.lstat()
+                except FileNotFoundError:
+                    ChangeWorkspaceManager._verify_worktree_ancestors(tuple(ancestors), path)
+                    try:
+                        os.close(parent_fd)
+                    finally:
+                        parent_fd = -1
+                    return None
+                _require_worktree_directory(
+                    metadata,
+                    symlink_message="external symlink traversal is not permitted",
+                    non_directory_message="worktree path ancestor is not a directory",
+                )
+                expected = _directory_identity_tuple(metadata)
+                successor = _open_directory_no_follow(
+                    part,
+                    dir_fd=parent_fd,
+                    missing_message=ancestor_changed,
+                    unsafe_message="worktree path ancestor cannot be opened safely",
+                    changed_errnos=(errno.ELOOP, errno.ENOTDIR),
+                )
+                try:
+                    opened = os.fstat(successor)
+                except BaseException:
+                    os.close(successor)
+                    raise
+                _require_directory_identity(opened, expected, ancestor_changed)
+                os.close(parent_fd)
+                parent_fd = successor
+                ancestors.append((current, expected))
+            return parent_fd, tuple(ancestors)
+        except BaseException:
+            if parent_fd >= 0:
+                os.close(parent_fd)
+            raise
+
+    @staticmethod
+    def _read_worktree_leaf(
+        parent_fd: int,
+        name: str,
+        path: str,
+        metadata: os.stat_result,
+        expected_staging_identity: tuple[int, int, int, int, int, int, int, int] | None,
+    ) -> _PreservedPathState:
+        changed_message = f"worktree path changed while it was read: {path}"
         identity = _preservation_file_identity(metadata)
         mode = stat.S_IMODE(metadata.st_mode)
+        containment_message = "special or multiply-linked worktree path requires containment"
+        size_message = "worktree path exceeds the per-file preservation limit"
         if stat.S_ISLNK(metadata.st_mode):
-            content = os.fsencode(os.readlink(candidate))
-            after = candidate.lstat()
+            content = os.fsencode(os.readlink(name, dir_fd=parent_fd))
+            after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
             if not _same_preservation_identity(_preservation_file_identity(after), identity):
-                raise PreservationFenceError(f"worktree path changed while it was read: {path}")
+                raise PreservationFenceError(changed_message)
             return _PreservedPathState("symlink", content, 0o777, identity)
         if not stat.S_ISREG(metadata.st_mode):
-            message = "special or multiply-linked worktree path requires containment"
-            raise PreservationRejectedError(message)
+            raise PreservationRejectedError(containment_message)
         if metadata.st_nlink != 1 and (
             expected_staging_identity is None
             or not _same_staging_identity(expected_staging_identity, identity)
         ):
-            raise PreservationRejectedError("special or multiply-linked worktree path requires containment")
+            raise PreservationRejectedError(containment_message)
         if metadata.st_size > _MAX_PRESERVED_FILE_BYTES:
-            raise PreservationRejectedError("worktree path exceeds the per-file preservation limit")
-        descriptor = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            raise PreservationRejectedError(size_message)
+        try:
+            descriptor = os.open(
+                name,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=parent_fd,
+            )
+        except FileNotFoundError as exc:
+            raise PreservationFenceError(changed_message) from exc
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise PreservationFenceError(changed_message) from exc
+            raise
         try:
             content = os.read(descriptor, metadata.st_size + 1)
             after = os.fstat(descriptor)
@@ -5422,8 +5535,39 @@ class ChangeWorkspaceManager:
         if len(content) != metadata.st_size or not _same_preservation_identity(
             _preservation_file_identity(after), identity
         ):
-            raise PreservationFenceError(f"worktree path changed while it was read: {path}")
+            raise PreservationFenceError(changed_message)
         return _PreservedPathState("regular", content, mode, identity)
+
+    @staticmethod
+    def _read_worktree_state(
+        worktree: Path,
+        path: str,
+        *,
+        expected_staging_identity: tuple[int, int, int, int, int, int, int, int] | None = None,
+    ) -> _PreservedPathState:
+        _validate_relative_preservation_path(path)
+        relative = PurePosixPath(path)
+        opened = ChangeWorkspaceManager._open_worktree_read_parent(worktree, relative.parts[:-1], path)
+        if opened is None:
+            return _PreservedPathState("absent", None, None)
+        parent_fd, ancestors = opened
+        try:
+            try:
+                metadata = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+                return _PreservedPathState("absent", None, None)
+            state = ChangeWorkspaceManager._read_worktree_leaf(
+                parent_fd,
+                relative.name,
+                path,
+                metadata,
+                expected_staging_identity,
+            )
+            ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+            return state
+        finally:
+            os.close(parent_fd)
 
     def _read_head_state(self, worktree: Path, head: str, path: str) -> _PreservedPathState:
         output = self._preservation_git("ls-tree", "-z", head, "--", path, cwd=worktree).stdout
@@ -7003,7 +7147,53 @@ class ChangeWorkspaceManager:
             env=dict(environment) if environment is not None else None,
             timeout=10 if inspection else None,
         )
- 
+
+
+def _directory_identity_tuple(metadata: os.stat_result) -> tuple[int, int, int]:
+    return metadata.st_dev, metadata.st_ino, stat.S_IMODE(metadata.st_mode)
+
+
+def _require_worktree_directory(
+    metadata: os.stat_result,
+    *,
+    symlink_message: str,
+    non_directory_message: str,
+) -> None:
+    if stat.S_ISLNK(metadata.st_mode):
+        raise PreservationRejectedError(symlink_message)
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise PreservationRejectedError(non_directory_message)
+
+
+def _require_directory_identity(
+    metadata: os.stat_result,
+    expected: tuple[int, int, int],
+    message: str,
+) -> None:
+    if _directory_identity_tuple(metadata) != expected:
+        raise PreservationFenceError(message)
+
+
+def _open_directory_no_follow(
+    path: Path | str,
+    *,
+    dir_fd: int | None,
+    missing_message: str,
+    unsafe_message: str,
+    changed_errnos: tuple[int, ...] = (),
+) -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        if dir_fd is None:
+            return os.open(path, flags)
+        return os.open(path, flags, dir_fd=dir_fd)
+    except FileNotFoundError as exc:
+        raise PreservationFenceError(missing_message) from exc
+    except OSError as exc:
+        if exc.errno in changed_errnos:
+            raise PreservationFenceError(missing_message) from exc
+        raise PreservationRejectedError(unsafe_message) from exc
+
 
 def _preservation_file_identity(
     metadata: os.stat_result,

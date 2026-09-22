@@ -796,7 +796,7 @@ ordinary dirty entry as ignored content, bypassing path/scope rechecks and conte
 fingerprinting. Pending legacy recovery must reject ignored-only dirt, while replay
 of an already completed receipt must not depend on later workspace cleanliness.
 
-Final repair source: `5c8e0e0`, following checkpoints `970368d` and `b2da6be`.
+Admission checkpoint source: `5c8e0e0`, following checkpoints `970368d` and `b2da6be`.
 The repair distinguishes actual `!!` ignored entries
 from ordinary dirty paths, include admitted untracked bytes in the post-admission
 fingerprint, and reject reviewed file/directory scope substitution. Metadata-only
@@ -829,6 +829,25 @@ The independent read-only reviewer covered admission changes since `a5e271b`,
 excluding merged tooling and the broader C obligations below, and reported no
 remaining actionable findings after inspecting the final fail-closed/replay diff.
 Its test evidence is writer-reported, not an independent test run.
+
+The subsequent read-only review of `a5e271b..06bb47a` identified two remaining
+pre-read boundary defects, superseding the earlier clean admission verdict:
+directory-scope admission checked only the scope root, allowing an intermediate
+symlink below it to redirect the new raw fingerprint read outside the worktree;
+unsupported dirty-path spellings were rejected by intent validation only after
+content fingerprinting. The repair requested in PR comment `5782447782` is limited
+to these findings and focused regressions. Historical replay/identity compatibility
+had no actionable review findings. The reviewed intent-publication scanner and
+whole-index privacy rules must remain unchanged.
+
+The follow-up repair shares canonical path validation between admission and intent
+validation, checks the complete admitted inventory before Git content fingerprinting,
+and uses descriptor-relative no-follow traversal for raw worktree reads. Directory
+identities are checked across the read; symlink leaf text and absent paths remain
+supported without following targets or creating directories. Focused regressions
+cover intermediate symlinks, unsupported spellings, ordinary nested/deleted/symlink
+leaf states and ancestor substitution. Final proof and review are recorded below
+when available; this does not complete the broader C obligations.
 
 Parent validation on committed `5c8e0e0`: secret scans found no secrets; CodeQL
 found **0 Python alerts**. Automated code review was unavailable because its model

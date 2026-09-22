@@ -196,6 +196,7 @@ from owlbear_delivery.recovery import (
     UnavailableRecoveryEvidenceProvider,
     digest,
     invocation_path,
+    is_canonical_admitted_path,
     journal_path,
     publish_record,
     read_record,
@@ -257,11 +258,6 @@ if TYPE_CHECKING:
         VerifiedDesignPackage,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
-
-
-_EXACT_TASK_PATH_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-"
-)
 
 
 def _timestamp(value: str) -> datetime:
@@ -8415,14 +8411,7 @@ class PortfolioApplication:
         kinds: dict[str, Literal["directory", "file", "missing"]] = {}
         for surface in surfaces:
             path = PurePosixPath(surface)
-            if (
-                not surface
-                or surface != path.as_posix()
-                or surface.startswith("/")
-                or not path.parts
-                or any(part in {"", ".", ".."} for part in path.parts)
-                or any(character not in _EXACT_TASK_PATH_CHARS for character in surface)
-            ):
+            if not is_canonical_admitted_path(surface):
                 raise DeliveryWorkerExclusionRequiredError
             candidate = worktree
             try:
@@ -8484,6 +8473,8 @@ class PortfolioApplication:
             if paths:
                 raise DeliveryWorkerExclusionRequiredError
             return None, None, (), ()
+        if any(not is_canonical_admitted_path(path) for path in paths):
+            raise DeliveryWorkerExclusionRequiredError
         if not paths:
             # Clean Recovery-A carries no path authority; unsupported task-scope
             # descriptors remain a dirty-admission concern only.

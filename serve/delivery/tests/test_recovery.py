@@ -439,6 +439,21 @@ def test_recovery_rejects_noncanonical_task_surface_descriptors(tmp_path: Path, 
         application._exact_task_scope(task, coordinator.show("change-a").worktree_path)
 
 
+def test_recovery_rejects_noncanonical_dirty_path_before_admission(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    task = _task().model_copy(update={"maintained_surfaces": ("src",)})
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._recovery_admission_fields(
+            task,
+            ("src/file with space.py",),
+            coordinator.show("change-a").worktree_path,
+        )
+
+
 def test_clean_recovery_skips_ambiguous_task_surface_admission(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state = _portfolio(
         tmp_path,

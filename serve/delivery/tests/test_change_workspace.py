@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import signal
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -464,6 +464,138 @@ def test_recovery_workspace_normalizes_active_custody_for_ordinary_untracked_con
 
     assert captured[3:] == (("added.bin",), "workspace-dirty")
     assert read_state.call_count == 1
+
+
+def test_recovery_workspace_rejects_intermediate_symlink_before_git_fingerprint(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path, nested=True)
+    worktree = coordination.worktree_path
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "file.txt").write_bytes(b"outside\n")
+    nested = worktree / "nested" / "deeper"
+    shutil.rmtree(nested)
+    nested.symlink_to(external, target_is_directory=True)
+    expected_paths = ("nested/deeper", "nested/deeper/file.txt")
+
+    with (
+        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("dirty content was read")),
+        patch.object(manager, "_run_git", wraps=manager._run_git) as run_git,  # noqa: SLF001
+        pytest.raises(DeliveryWorkerExclusionRequiredError),
+    ):
+        manager.capture_recovery_workspace(
+            coordination.change_id,
+            (),
+            expected_paths=expected_paths,
+            expected_scope_details=(("nested",), {"nested": "directory"}),
+        )
+
+    assert not any(call.args[:1] == ("diff",) for call in run_git.call_args_list)
+
+
+def test_recovery_workspace_rejects_noncanonical_admitted_path_before_git_fingerprint(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    path = coordination.worktree_path / "file with space.py"
+    path.write_bytes(b"unsupported admission\n")
+
+    with (
+        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("dirty content was read")),
+        patch.object(manager, "_run_git", wraps=manager._run_git) as run_git,  # noqa: SLF001
+        pytest.raises(DeliveryWorkerExclusionRequiredError),
+    ):
+        manager.capture_recovery_workspace(
+            coordination.change_id,
+            (),
+            expected_paths=("file with space.py",),
+            expected_scope_details=(("file with space.py",), {"file with space.py": "file"}),
+        )
+
+    assert not any(call.args[:1] == ("diff",) for call in run_git.call_args_list)
+
+
+@pytest.mark.parametrize("kind", ["nested", "deletion", "symlink-leaf"])
+def test_recovery_workspace_reads_supported_nested_path_states(tmp_path: Path, kind: str) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path, nested=True)
+    worktree = coordination.worktree_path
+    path = worktree / "nested" / "deeper" / "file.txt"
+    if kind == "nested":
+        path.write_bytes(b"nested change\n")
+        relative = "nested/deeper/file.txt"
+    elif kind == "deletion":
+        path.unlink()
+        relative = "nested/deeper/file.txt"
+    else:
+        external = tmp_path / "symlink-target.txt"
+        external.write_bytes(b"outside\n")
+        (path.parent / "link").symlink_to(external)
+        relative = "nested/deeper/link"
+
+    captured = manager.capture_recovery_workspace(
+        coordination.change_id,
+        (),
+        expected_paths=(relative,),
+        expected_scope_details=(("nested",), {"nested": "directory"}),
+    )
+
+    assert captured[3] == (relative,)
+    state = manager._read_worktree_state(worktree, relative)  # noqa: SLF001
+    assert state.kind == {"nested": "regular", "deletion": "absent", "symlink-leaf": "symlink"}[kind]
+
+
+def test_recovery_workspace_reader_fences_ancestor_substitution(tmp_path: Path) -> None:
+    _coordinator, _manager, coordination, _intent = _preservation_workspace(tmp_path, nested=True)
+    worktree = coordination.worktree_path
+    original_open = os.open
+    swapped = False
+
+    def open_and_replace(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if dir_fd is not None and path == "deeper" and not swapped:
+            nested = worktree / "nested" / "deeper"
+            retained = worktree / "nested" / "retained-deeper"
+            nested.rename(retained)
+            nested.mkdir()
+            swapped = True
+        return descriptor
+
+    with (
+        patch("owlbear_delivery.change_workspace.os.open", side_effect=open_and_replace),
+        pytest.raises(PreservationFenceError, match="ancestor"),
+    ):
+        ChangeWorkspaceManager._read_worktree_state(worktree, "nested/deeper/file.txt")  # noqa: SLF001
+
+    assert swapped
+
+
+def test_recovery_workspace_reader_closes_parent_on_missing_intermediate(tmp_path: Path) -> None:
+    worktree = tmp_path / "worktree"
+    (worktree / "nested").mkdir(parents=True)
+    opened: list[int] = []
+    closed: list[int] = []
+    original_open = os.open
+    original_close = os.close
+
+    def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        opened.append(descriptor)
+        return descriptor
+
+    def tracking_close(descriptor):
+        closed.append(descriptor)
+        return original_close(descriptor)
+
+    with (
+        patch("owlbear_delivery.change_workspace.os.open", side_effect=tracking_open),
+        patch("owlbear_delivery.change_workspace.os.close", side_effect=tracking_close),
+    ):
+        result = ChangeWorkspaceManager._open_worktree_read_parent(  # noqa: SLF001
+            worktree,
+            ("nested", "missing"),
+            "nested/missing/file.txt",
+        )
+
+    assert result is None
+    assert set(opened) == set(closed)
 
 
 def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:

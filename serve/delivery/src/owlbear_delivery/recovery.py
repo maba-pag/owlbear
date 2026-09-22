@@ -27,11 +27,11 @@ _MAX_RECORD_BYTES = 65_536
 _DIGEST_LENGTH = 64
 MAX_RECOVERY_INTENTS = 256
 _MAX_PROVENANCE_VALUE_LENGTH = 512
-_MAX_ADMITTED_PATH_LENGTH = 4096
+MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
 )
-_ADMITTED_PATH_CHARS = frozenset(
+ADMITTED_PATH_CHARS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-"
 )
 
@@ -85,10 +85,12 @@ class RecoveryInvocation(_RecoveryModel):
     invocation_id: str = Field(min_length=1, max_length=256)
 
 
-def _is_canonical_admitted_path(value: str) -> bool:
+def is_canonical_admitted_path(value: str) -> bool:
+    """Return whether a path is safe to persist as an admitted workspace path."""
     parsed = PurePosixPath(value)
     return (
         bool(value)
+        and len(value) <= MAX_ADMITTED_PATH_LENGTH
         and value == parsed.as_posix()
         and not parsed.is_absolute()
         and parsed.parts
@@ -96,7 +98,7 @@ def _is_canonical_admitted_path(value: str) -> bool:
         and "\\" not in value
         and "\x00" not in value
         and value.isprintable()
-        and all(character in _ADMITTED_PATH_CHARS for character in value)
+        and all(character in ADMITTED_PATH_CHARS for character in value)
     )
 
 
@@ -153,8 +155,7 @@ class RecoveryIntent(_RecoveryModel):
         ):
             if values != tuple(sorted(set(values))) or any(
                 not value
-                or len(value) > _MAX_ADMITTED_PATH_LENGTH
-                or not _is_canonical_admitted_path(value)
+                or not is_canonical_admitted_path(value)
                 for value in values
             ):
                 message = f"{label} must contain sorted, unique relative paths"
