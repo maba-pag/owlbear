@@ -152,6 +152,7 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportError,
     FinalizationReportSnapshot,
     FinalizationReportStore,
+    ProofAttemptStore,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -1901,6 +1902,7 @@ class PortfolioApplicationDependencies:
     draft_pull_request_publisher: DraftPullRequestPublisher | None = None
     health_diagnostics: tuple[DeliveryHealthDiagnostic, ...] = ()
     recovery_evidence_provider: RecoveryEvidenceProvider = field(default_factory=UnavailableRecoveryEvidenceProvider)
+    proof_attempt_store_factory: Callable[[str], ProofAttemptStore] | None = None
 
 
 @dataclass(frozen=True)
@@ -2000,6 +2002,7 @@ class PortfolioApplication:
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._startup_health_diagnostics = dependencies.health_diagnostics
         self._recovery_evidence_provider = dependencies.recovery_evidence_provider
+        self._proof_attempt_store_factory = dependencies.proof_attempt_store_factory
         self._execution_capacity = config.execution_capacity
         self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -7912,8 +7915,8 @@ class PortfolioApplication:
             or report.request.expected_change_head != attempt.exact_head
         ):
             self._fail("completed-outcome repair defect is not derived from the finalization failure")
-        if request.finding_boundary == "proof-procedure" and report.request.category != "proof-mutation":
-            self._fail("proof-procedure repair requires a proof-mutation diagnostic")
+        if request.finding_boundary == "proof-procedure":
+            self._validate_proof_procedure_repair(change_id, report)
         if request.finding_boundary == "implementation" and report.request.category == "proof-mutation":
             self._fail("implementation repair cannot consume a proof-procedure diagnostic")
         if preservation.preservation_id != request.preservation_id:
@@ -7921,6 +7924,42 @@ class PortfolioApplication:
         if runtime.change_stage() is DeliveryChangeStage.COMPLETED:
             self._fail("completed-outcome repair requires a nonterminal Change")
         self._validate_completed_outcome_repair_retry(runtime, request)
+
+    def _require_owner_proof_attempt(self, change_id: str, report: FinalizationReport) -> None:
+        """Require owner evidence before classifying a mutation as procedure repair."""
+        factory = getattr(self, "_proof_attempt_store_factory", None)
+        if factory is None:
+            self._fail("proof-procedure repair owner observation is unavailable")
+        try:
+            proof_store = factory(change_id)
+            proof_attempts = proof_store.read()
+        except (FinalizationReportError, OSError, RuntimeError, ValueError) as exc:
+            self._fail("proof-procedure repair owner observation is unavailable", exc)
+        matching_attempts = tuple(
+            attempt
+            for attempt in proof_attempts
+            if (
+                attempt.change_id == change_id
+                and proof_store.is_current(attempt)
+                and attempt.attempt_key == report.request.attempt_key
+                and attempt.procedure_id == report.request.procedure_id
+                and attempt.expected_contract_digest == report.request.expected_contract_digest
+                and attempt.expected_frontier_digest == report.request.expected_frontier_digest
+                and attempt.expected_change_head == report.request.expected_change_head
+                and attempt.expected_reviewed_head == report.request.expected_reviewed_head
+                and attempt.proof_fingerprint_before == report.request.proof_fingerprint_before
+                and attempt.proof_fingerprint_after == report.request.proof_fingerprint_after
+                and attempt.paths == report.request.paths
+            )
+        )
+        if len(matching_attempts) != 1:
+            self._fail("proof-procedure repair requires owner-observed proof attempt")
+
+    def _validate_proof_procedure_repair(self, change_id: str, report: FinalizationReport) -> None:
+        """Require a mutation report and current owner observation for procedure repair."""
+        if report.request.category != "proof-mutation":
+            self._fail("proof-procedure repair requires a proof-mutation diagnostic")
+        self._require_owner_proof_attempt(change_id, report)
 
     def _validate_completed_outcome_repair_retry(
         self,

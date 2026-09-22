@@ -30,8 +30,10 @@ if TYPE_CHECKING:
 
 MAX_REPORT_BYTES = 16_384
 MAX_REPORTS = 256
+MAX_PROOF_ATTEMPTS = 256
 _MAX_PATH_LENGTH = 240
 _MAX_IDENTIFIER_LENGTH = 128
+_MAX_ATTEMPT_KEY_LENGTH = 128
 type _ReportFileSignature = tuple[str, int, int, int, int, int]
 
 
@@ -170,6 +172,131 @@ def _encoded_report(report: FinalizationReport, *, exclude: set[str] | None = No
             for field in _CURRENT_REPORT_REQUEST_FIELDS:
                 request.pop(field, None)
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+class MaintainedProofProcedure(_ReportModel):
+    """Owner-registered identity for a maintained proof procedure.
+
+    This is deliberately not a command or an executable profile.  A later owner
+    integration supplies the registration digest from its maintained runner
+    registry; finalization requests cannot create or alter that authority.
+    """
+
+    procedure_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    registration_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ProofAttemptBasis(_ReportModel):
+    """Exact engine basis that an owner observation is allowed to describe."""
+
+    expected_contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class ProofAttemptObservation(_ReportModel):
+    """One already-captured observation from an owner-controlled read-only observer."""
+
+    proof_fingerprint_before: str = Field(pattern=r"^[0-9a-f]{64}$")
+    proof_fingerprint_after: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paths: tuple[str, ...] = Field(default=(), max_length=32)
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_observation(self) -> ProofAttemptObservation:
+        if self.observed_at.tzinfo is None or self.proof_fingerprint_before == self.proof_fingerprint_after:
+            msg = "proof observations require timezone and distinct before/after fingerprints"
+            raise ValueError(msg)
+        _validate_diagnostic_paths(self.paths)
+        return self
+
+
+class ProofAttempt(_ReportModel):
+    """Durable diagnostic binding one registered procedure to owner observation."""
+
+    attempt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1, max_length=128, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    attempt_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    procedure_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    registration_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_contract_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    proof_fingerprint_before: str = Field(pattern=r"^[0-9a-f]{64}$")
+    proof_fingerprint_after: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paths: tuple[str, ...] = Field(default=(), max_length=32)
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_attempt(self) -> ProofAttempt:
+        if self.observed_at.tzinfo is None or self.proof_fingerprint_before == self.proof_fingerprint_after:
+            msg = "proof attempts require timezone and distinct before/after fingerprints"
+            raise ValueError(msg)
+        _validate_diagnostic_paths(self.paths)
+        payload = self.model_dump(mode="json", exclude={"attempt_id"})
+        if hashlib.sha256(_encoded_payload(payload)).hexdigest() != self.attempt_id:
+            msg = "proof attempt identity does not match its immutable content"
+            raise ValueError(msg)
+        if len(_encoded(self)) > MAX_REPORT_BYTES:
+            msg = "proof attempt exceeds encoded capacity"
+            raise ValueError(msg)
+        return self
+
+    @classmethod
+    def create(
+        cls,
+        change_id: str,
+        attempt_key: str,
+        procedure: MaintainedProofProcedure,
+        basis: ProofAttemptBasis,
+        observation: ProofAttemptObservation,
+    ) -> ProofAttempt:
+        """Create an immutable attempt from one owner observation."""
+        observation_id = hashlib.sha256(_encoded(observation)).hexdigest()
+        values = {
+            "change_id": change_id,
+            "attempt_key": attempt_key,
+            "procedure_id": procedure.procedure_id,
+            "registration_digest": procedure.registration_digest,
+            "expected_contract_digest": basis.expected_contract_digest,
+            "expected_frontier_digest": basis.expected_frontier_digest,
+            "expected_change_head": basis.expected_change_head,
+            "expected_reviewed_head": basis.expected_reviewed_head,
+            "observation_id": observation_id,
+            "proof_fingerprint_before": observation.proof_fingerprint_before,
+            "proof_fingerprint_after": observation.proof_fingerprint_after,
+            "paths": observation.paths,
+            "observed_at": observation.observed_at.isoformat().replace("+00:00", "Z"),
+        }
+        values["attempt_id"] = hashlib.sha256(_encoded_payload(values)).hexdigest()
+        return cls.model_validate_json(json.dumps(values))
+
+
+def _encoded_payload(payload: dict[str, object]) -> bytes:
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _validate_diagnostic_paths(paths: tuple[str, ...]) -> None:
+    for value in paths:
+        path = PurePosixPath(value)
+        if (
+            not value
+            or len(value) > _MAX_PATH_LENGTH
+            or path.is_absolute()
+            or ".." in path.parts
+            or str(path) != value
+            or value == "."
+            or "\\" in value
+            or not value.isprintable()
+        ):
+            msg = "diagnostic paths must be normalized contained relative paths"
+            raise ValueError(msg)
+    if len(set(paths)) != len(paths):
+        msg = "diagnostic paths must be unique"
+        raise ValueError(msg)
 
 
 class FinalizationReport(_ReportModel):
@@ -446,3 +573,184 @@ class FinalizationReportStore:
             self._cache_snapshot(
                 snapshot.model_copy(update={"current_report_id": None}), replacement, self._cached_report_inventory
             )
+
+
+class ProofAttemptStore:
+    """Durable owner-local observations for maintained proof procedures.
+
+    The store is intentionally separate from finalization reports.  It records
+    only observations obtained by an owner-controlled read-only callback and
+    never turns one into a successful finalization receipt.  The callback must
+    not execute a procedure or mutate the workspace; execution composition and
+    started-attempt journaling remain a later owner integration.
+    """
+
+    def __init__(
+        self,
+        runtime_root: Path,
+        change_id: str,
+        maintained_procedures: tuple[MaintainedProofProcedure, ...],
+    ) -> None:
+        if (
+            not change_id
+            or len(change_id) > _MAX_IDENTIFIER_LENGTH
+            or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in change_id)
+        ):
+            msg = "invalid Change identity"
+            raise ValueError(msg)
+        if not maintained_procedures or len({item.procedure_id for item in maintained_procedures}) != len(
+            maintained_procedures
+        ):
+            msg = "maintained procedure registry must contain unique procedures"
+            raise ValueError(msg)
+        self._runtime_root = runtime_root
+        self._relative_root = Path("proof-attempts") / change_id
+        self._root = runtime_root / self._relative_root
+        self._change_id = change_id
+        self._procedures = {item.procedure_id: item for item in maintained_procedures}
+        self._cached: tuple[ProofAttempt, ...] | None = None
+        self._cached_inventory: tuple[_ReportFileSignature, ...] = ()
+
+    @contextmanager
+    def _locked(self, *, create: bool) -> Iterator[int | None]:
+        root_fd = None
+        entered = False
+        try:
+            root_fd = os.open(self._runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            with contained_directory(root_fd, self._relative_root, create=create) as attempt_fd:
+                lock_fd = os.open(
+                    ".storage.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=attempt_fd
+                )
+                try:
+                    if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+                        msg = "invalid proof-attempt lock"
+                        raise ValueError(msg)
+                    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+                    RuntimeTransaction.recover_contained(self._root, attempt_fd)
+                    entered = True
+                    yield attempt_fd
+                finally:
+                    os.close(lock_fd)
+        except FileNotFoundError as exc:
+            if create or root_fd is None or entered:
+                msg = "proof-attempt-store-unavailable"
+                raise FinalizationReportError(msg) from exc
+            yield None
+        except (OSError, ValueError, TransactionConflictError, yaml.YAMLError) as exc:
+            msg = "proof-attempt-store-unavailable"
+            raise FinalizationReportError(msg) from exc
+        finally:
+            if root_fd is not None:
+                os.close(root_fd)
+
+    @staticmethod
+    def _inventory(descriptor: int) -> tuple[_ReportFileSignature, ...]:
+        try:
+            with contained_directory(descriptor, Path("attempts")) as attempts_fd, os.scandir(attempts_fd) as entries:
+                return tuple(
+                    sorted(
+                        (
+                            entry.name,
+                            metadata.st_mode,
+                            metadata.st_ino,
+                            metadata.st_size,
+                            metadata.st_mtime_ns,
+                            metadata.st_ctime_ns,
+                        )
+                        for entry in entries
+                        for metadata in (entry.stat(follow_symlinks=False),)
+                    )
+                )
+        except FileNotFoundError:
+            return ()
+
+    def _read(self, descriptor: int) -> tuple[ProofAttempt, ...]:
+        inventory = self._inventory(descriptor)
+        if self._cached is not None and inventory == self._cached_inventory:
+            return self._cached
+        names = tuple(item[0] for item in inventory)
+        if len(names) > MAX_PROOF_ATTEMPTS:
+            msg = "proof-attempt history exceeds capacity"
+            raise ValueError(msg)
+        attempts = []
+        for name in names:
+            content = read_contained(descriptor, Path("attempts") / name, limit=MAX_REPORT_BYTES)
+            attempt = ProofAttempt.model_validate_json(content)
+            if name != f"{attempt.attempt_id}.json" or attempt.change_id != self._change_id:
+                msg = "proof-attempt storage identity mismatch"
+                raise ValueError(msg)
+            attempts.append(attempt)
+        ordered = tuple(sorted(attempts, key=lambda item: item.observed_at))
+        if len({item.attempt_key for item in ordered}) != len(ordered):
+            msg = "proof-attempt identities must be unique"
+            raise ValueError(msg)
+        self._cached = ordered
+        self._cached_inventory = inventory
+        return ordered
+
+    def read(self) -> tuple[ProofAttempt, ...]:
+        """Read immutable owner observations without rewriting historical registration."""
+        with self._locked(create=False) as descriptor:
+            return self._read(descriptor) if descriptor is not None else ()
+
+    def is_current(self, attempt: ProofAttempt) -> bool:
+        """Return whether an observation uses the currently registered procedure."""
+        procedure = self._procedures.get(attempt.procedure_id)
+        return procedure is not None and procedure.registration_digest == attempt.registration_digest
+
+    def record(
+        self,
+        attempt_key: str,
+        procedure: MaintainedProofProcedure,
+        basis: ProofAttemptBasis,
+        read_observation: Callable[[], ProofAttemptObservation],
+    ) -> ProofAttempt:
+        """Read one existing owner observation, then durably append or replay it."""
+        registered = self._procedures.get(procedure.procedure_id)
+        if registered != procedure:
+            msg = "proof-attempt procedure is not maintained"
+            raise FinalizationReportError(msg)
+        if (
+            not attempt_key
+            or len(attempt_key) > _MAX_ATTEMPT_KEY_LENGTH
+            or any(
+                character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
+                for character in attempt_key
+            )
+        ):
+            msg = "invalid proof-attempt identity"
+            raise FinalizationReportError(msg)
+        with self._locked(create=True) as descriptor:
+            history = self._read(descriptor)
+            prior = next((item for item in history if item.attempt_key == attempt_key), None)
+            if prior is not None:
+                if (
+                    prior.procedure_id != procedure.procedure_id
+                    or prior.registration_digest != procedure.registration_digest
+                    or prior.expected_contract_digest != basis.expected_contract_digest
+                    or prior.expected_frontier_digest != basis.expected_frontier_digest
+                    or prior.expected_change_head != basis.expected_change_head
+                    or prior.expected_reviewed_head != basis.expected_reviewed_head
+                ):
+                    msg = "proof-attempt-conflict"
+                    raise FinalizationReportError(msg)
+                return prior
+            if len(history) >= MAX_PROOF_ATTEMPTS:
+                msg = "proof-attempt-capacity"
+                raise FinalizationReportError(msg)
+            try:
+                observation = read_observation()
+            except (OSError, RuntimeError, ValueError, TypeError) as exc:
+                msg = "proof-attempt-observation-unavailable"
+                raise FinalizationReportError(msg) from exc
+            if not isinstance(observation, ProofAttemptObservation):
+                msg = "proof-attempt-observation-unavailable"
+                raise FinalizationReportError(msg)
+            attempt = ProofAttempt.create(self._change_id, attempt_key, procedure, basis, observation)
+            participant = TransactionParticipant(
+                self._root, Path("attempts") / f"{attempt.attempt_id}.json", _encoded(attempt)
+            )
+            RuntimeTransaction(self._root, attempt.attempt_id, (participant,)).commit_contained(descriptor)
+            self._cached = (*history, attempt)
+            self._cached_inventory = self._inventory(descriptor)
+            return attempt

@@ -11,10 +11,13 @@ from owlbear_delivery.finalization_reports import (
     FinalizationFailureCode,
     FinalizationReportError,
     FinalizationReportStore,
+    MaintainedProofProcedure,
+    ProofAttemptBasis,
+    ProofAttemptObservation,
+    ProofAttemptStore,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
-
 
 _LEGACY_REPORT_JSON = (
     b'{"check_id":null,"exit_status":null,"observed_at":"2026-08-02T00:00:00Z","producer":"finalization-diagnostic",'
@@ -208,3 +211,159 @@ def test_interrupted_report_recovers_and_corruption_preserves_bytes(tmp_path: Pa
     with pytest.raises(FinalizationReportError, match="report-store-unavailable"):
         restarted.read()
     assert path.read_bytes() == b"corrupt report"
+
+
+def _proof_procedure() -> MaintainedProofProcedure:
+    return MaintainedProofProcedure(procedure_id="maintained-check", registration_digest="e" * 64)
+
+
+def _proof_observation(**updates) -> ProofAttemptObservation:
+    values = {
+        "proof_fingerprint_before": "a" * 64,
+        "proof_fingerprint_after": "b" * 64,
+        "paths": ("generated.txt",),
+        "observed_at": datetime.now(UTC),
+    }
+    values.update(updates)
+    return ProofAttemptObservation(
+        **values,
+    )
+
+
+def _proof_basis() -> ProofAttemptBasis:
+    return ProofAttemptBasis(
+        expected_contract_digest="c" * 64,
+        expected_frontier_digest="d" * 64,
+        expected_change_head="e" * 40,
+        expected_reviewed_head="f" * 40,
+    )
+
+
+def test_proof_attempt_store_binds_registered_owner_observation_and_replays(tmp_path: Path) -> None:
+    procedure = _proof_procedure()
+    other = MaintainedProofProcedure(procedure_id="other", registration_digest="f" * 64)
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure, other))
+    calls = 0
+
+    def observe() -> ProofAttemptObservation:
+        nonlocal calls
+        calls += 1
+        return _proof_observation()
+
+    first = store.record("attempt-1", procedure, _proof_basis(), observe)
+    assert calls == 1
+    assert first.procedure_id == procedure.procedure_id
+    assert first.registration_digest == procedure.registration_digest
+    assert first.proof_fingerprint_before != first.proof_fingerprint_after
+    assert store.record("attempt-1", procedure, _proof_basis(), lambda: pytest.fail("replay must not observe")) == first
+    with pytest.raises(FinalizationReportError, match="proof-attempt-conflict"):
+        store.record(
+            "attempt-1",
+            procedure,
+            _proof_basis().model_copy(update={"expected_change_head": "1" * 40}),
+            lambda: pytest.fail("conflicting replay must not observe"),
+        )
+    with pytest.raises(FinalizationReportError, match="proof-attempt-conflict"):
+        store.record(
+            "attempt-1",
+            other,
+            _proof_basis(),
+            _proof_observation,
+        )
+    restarted = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    assert restarted.read() == (first,)
+
+
+def test_proof_attempt_store_rejects_unregistered_or_tampered_records(tmp_path: Path) -> None:
+    procedure = _proof_procedure()
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    attempt = store.record("attempt-1", procedure, _proof_basis(), _proof_observation)
+    path = tmp_path / "proof-attempts/change-a/attempts" / f"{attempt.attempt_id}.json"
+    tampered = path.read_bytes().replace(b'"registration_digest":"' + b"e" * 64, b'"registration_digest":"' + b"f" * 64)
+    path.write_bytes(tampered)
+    with pytest.raises(FinalizationReportError, match="proof-attempt-store-unavailable"):
+        ProofAttemptStore(tmp_path, "change-a", (procedure,)).read()
+
+    with pytest.raises(FinalizationReportError, match="not maintained"):
+        store.record(
+            "attempt-2",
+            MaintainedProofProcedure(procedure_id="unregistered", registration_digest="f" * 64),
+            _proof_basis(),
+            _proof_observation,
+        )
+
+
+def test_proof_attempt_store_preserves_history_across_registration_rotation(tmp_path: Path) -> None:
+    original = _proof_procedure()
+    original_store = ProofAttemptStore(tmp_path, "change-a", (original,))
+    first = original_store.record("attempt-1", original, _proof_basis(), _proof_observation)
+    first_bytes = (tmp_path / "proof-attempts/change-a/attempts" / f"{first.attempt_id}.json").read_bytes()
+
+    rotated = MaintainedProofProcedure(procedure_id=original.procedure_id, registration_digest="f" * 64)
+    rotated_store = ProofAttemptStore(tmp_path, "change-a", (rotated,))
+    assert rotated_store.read() == (first,)
+    assert not rotated_store.is_current(first)
+    second = rotated_store.record("attempt-2", rotated, _proof_basis(), _proof_observation)
+    assert rotated_store.read() == (first, second)
+    assert rotated_store.is_current(second)
+    assert (tmp_path / "proof-attempts/change-a/attempts" / f"{first.attempt_id}.json").read_bytes() == first_bytes
+
+
+@pytest.mark.parametrize("stage", ["after-first-publication", "before-manifest-cleanup"])
+def test_proof_attempt_store_recovers_interrupted_publication_and_replays(tmp_path: Path, stage: str) -> None:
+    procedure = _proof_procedure()
+    basis = _proof_basis()
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    calls = 0
+    original = RuntimeTransaction.commit_contained
+
+    def read_observation() -> ProofAttemptObservation:
+        nonlocal calls
+        calls += 1
+        return _proof_observation()
+
+    def interrupted(transaction, descriptor):
+        def fail(point):
+            if point == stage:
+                message = "injected proof-attempt interruption"
+                raise OSError(message)
+
+        original(transaction, descriptor, failure=fail)
+
+    with (
+        patch.object(RuntimeTransaction, "commit_contained", interrupted),
+        pytest.raises(FinalizationReportError, match="proof-attempt-store-unavailable"),
+    ):
+        store.record("attempt-1", procedure, basis, read_observation)
+    assert calls == 1
+
+    restarted = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    history = restarted.read()
+    assert len(history) == 1
+    record_path = tmp_path / "proof-attempts/change-a/attempts" / f"{history[0].attempt_id}.json"
+    record_bytes = record_path.read_bytes()
+    assert restarted.record("attempt-1", procedure, basis, lambda: pytest.fail("replay must not observe")) == history[0]
+    assert calls == 1
+    assert record_path.read_bytes() == record_bytes
+
+
+def test_proof_attempt_store_rejects_encoded_overcapacity_before_persistence(tmp_path: Path) -> None:
+    procedure = _proof_procedure()
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    exact_path = "é" * 240
+    store.record(
+        "at-capacity-by-path",
+        procedure,
+        _proof_basis(),
+        lambda: _proof_observation(paths=(exact_path,)),
+    )
+    oversized_paths = tuple(f"{index}-" + ("é" * 237) for index in range(32))
+    with pytest.raises(FinalizationReportError, match="proof-attempt-store-unavailable"):
+        store.record(
+            "over-encoded-capacity",
+            procedure,
+            _proof_basis(),
+            lambda: _proof_observation(paths=oversized_paths),
+        )
+    attempts = tuple((tmp_path / "proof-attempts/change-a/attempts").glob("*.json"))
+    assert len(attempts) == 1

@@ -916,6 +916,55 @@ remain unchanged. Historical pre-C and `a5e271b` intent encodings retain their
 identities; only persisted-old to current recapture may omit newly introduced
 fields, without ignoring older authority facts.
 
+### Maintained-procedure authority increment
+
+User [comment 5784139431](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5784139431)
+resumes C from `e78f6f7`. The bounded increment adds local storage for maintained-procedure
+observations and a fail-closed application consumer. Preserve `a292038`'s read boundaries,
+historical identity/replay compatibility and the reviewed interrupted intent-publication repair.
+Diagnostic submissions alone must not manufacture procedure-execution authority. The heterogeneous
+maintained-check workflow remains supported; no arbitrary shell runner or mandatory proof profile
+is authorized.
+
+`ProofAttemptStore` records already-captured observations, not procedure execution. Its read-only
+callback must not run a check; no exactly-once execution or durable pre-execution intent is supplied
+by this storage seam. The immutable record binds Change/attempt, maintained registration,
+contract/frontier, candidate/reviewed heads, before/after fingerprints and changed paths.
+Proof-procedure repair requires matching owner evidence through an application-composed store;
+ordinary diagnostic reporting is unchanged. Production composition remains unavailable until a
+trusted maintained-procedure observer exists. No MCP request can register a procedure or supply
+that dependency.
+
+The sole source/test writer reports **32 focused tests passed**, including **2 overlapping
+transaction-interruption/restart cases** after first publication and before manifest cleanup.
+These use injected transaction failures, not process death. Replays retain the exact observation
+without invoking its read callback again. Coverage also includes wrong Change/basis, unconfigured
+owner rejection, registration rotation, encoded-size rejection and the frozen historical report.
+The parent did not rerun the writer's tests.
+
+Writer tooling: uv 0.12.16 and Python 3.14.7. Reproducible focused selection:
+
+```bash
+uv run --locked pytest \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_finalization_reports.py \
+  /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py \
+  -q -n 1 -k 'proof_attempt or proof_procedure_repair or finalization_report' \
+  -m 'not api and not model and not e2e'
+```
+
+The 32-case run took 3.61 seconds. The overlapping 2-case run used only
+`/home/runner/work/owlbear/owlbear/serve/delivery/tests/test_finalization_reports.py`
+with `-k 'proof_attempt_store_recovers_interrupted_publication'` and the same other pytest
+flags; it took 0.97 seconds. Disposable test/cache/tool directories were removed.
+
+Proof-owned Ruff checks passed. Application Ruff retains four reported pre-existing findings;
+`ruff format --check` on `test_finalization_reports.py` remains non-clean on the reported
+pre-existing legacy `assert store.record(...)` at line 68. Independent
+read-only review found no significant issues after the exact-basis, encoded-size and historical
+registration corrections. Final-source automated validation is pending. No authority invariant,
+full suite, live service/state or provider mutation was run for this slice; broader C and external
+gates remain open. This is not C acceptance.
+
 **C completion blockers (also block D):**
 
 - Exact-path ownership/provenance and disposable/useful/foreign classification before copying.
@@ -926,7 +975,9 @@ fields, without ignoring older authority facts.
 - Integrate exclusive application recovery custody and primitive receipts with the original action;
   these journals alone are neither recovery completion authority nor a resumption gate.
 - Successful-finalization/publication repair branch with draft/readback gating.
-- Durable maintained-procedure proof attempts, not caller-asserted fingerprints.
+- Trusted maintained-procedure observation/registration composition and durable execution boundaries,
+  not caller-asserted fingerprints. The local observation store and consumer guard alone do not
+  establish zero-exit mutation detection, producer provenance or V08 resumption.
 - Builder repair → new candidate → fresh cumulative independent review → original whole-Change
   check/resumption; preserve the original failure budget and historical downstream receipts.
 - Complete remaining binary/deletion/rename/filter, private/staged/foreign, split/sparse/lock

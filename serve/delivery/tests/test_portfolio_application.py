@@ -161,6 +161,10 @@ from owlbear_delivery.finalization_reports import (
     FinalizationFailureCode,
     FinalizationReportError,
     FinalizationReportStore,
+    MaintainedProofProcedure,
+    ProofAttemptBasis,
+    ProofAttemptObservation,
+    ProofAttemptStore,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.portfolio_application import (
@@ -7723,6 +7727,58 @@ def test_completed_outcome_repair_requires_pending_retry_reservation() -> None:
     pending.kind = "original"
     with pytest.raises(PortfolioApplicationError, match="pending mechanical retry reservation"):
         application._validate_completed_outcome_repair_retry(runtime, request)
+
+
+def test_proof_procedure_repair_rejects_diagnostic_without_owner_observation() -> None:
+    application = PortfolioApplication.__new__(PortfolioApplication)
+    application._proof_attempt_store_factory = None
+    report = Mock()
+
+    with pytest.raises(PortfolioApplicationError, match="owner observation is unavailable"):
+        application._require_owner_proof_attempt("change-a", report)
+
+
+def test_proof_procedure_repair_accepts_only_exact_owner_attempt(tmp_path: Path) -> None:
+    procedure = MaintainedProofProcedure(procedure_id="maintained-check", registration_digest="e" * 64)
+    basis = ProofAttemptBasis(
+        expected_contract_digest="c" * 64,
+        expected_frontier_digest="d" * 64,
+        expected_change_head="e" * 40,
+        expected_reviewed_head="f" * 40,
+    )
+    observation = ProofAttemptObservation(
+        proof_fingerprint_before="a" * 64,
+        proof_fingerprint_after="b" * 64,
+        paths=("generated.txt",),
+        observed_at=datetime.now(UTC),
+    )
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    store.record("attempt-1", procedure, basis, lambda: observation)
+
+    def report_for(**updates):
+        request = Mock(
+            change_id="change-a",
+            attempt_key="attempt-1",
+            procedure_id=procedure.procedure_id,
+            expected_contract_digest=basis.expected_contract_digest,
+            expected_frontier_digest=basis.expected_frontier_digest,
+            expected_change_head=basis.expected_change_head,
+            expected_reviewed_head=basis.expected_reviewed_head,
+            proof_fingerprint_before=observation.proof_fingerprint_before,
+            proof_fingerprint_after=observation.proof_fingerprint_after,
+            paths=observation.paths,
+        )
+        for key, value in updates.items():
+            setattr(request, key, value)
+        return Mock(request=request)
+
+    application = PortfolioApplication.__new__(PortfolioApplication)
+    application._proof_attempt_store_factory = lambda _change_id: store
+    with pytest.raises(PortfolioApplicationError, match="owner-observed proof attempt"):
+        application._require_owner_proof_attempt("change-b", report_for())
+    with pytest.raises(PortfolioApplicationError, match="owner-observed proof attempt"):
+        application._require_owner_proof_attempt("change-a", report_for(expected_frontier_digest="0" * 64))
+    application._require_owner_proof_attempt("change-a", report_for())
 
 
 def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_path: Path) -> None:
