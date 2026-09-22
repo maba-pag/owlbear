@@ -4005,14 +4005,7 @@ class ChangeWorkspaceManager:
             cwd=coordination.worktree_path,
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
-        if self._has_ignored_inventory(ignored):
-            return (
-                coordination,
-                head,
-                hashlib.sha256(head.encode() + b"\0" + status).hexdigest(),
-                paths,
-                reason or "workspace-dirty",
-            )
+        ignored_inventory = self._has_ignored_inventory(ignored)
         if expected_paths is not None and paths != expected_paths:
             raise DeliveryWorkerExclusionRequiredError
         if expected_scope_details is not None:
@@ -4032,8 +4025,18 @@ class ChangeWorkspaceManager:
                 if actual_kind != expected_kinds[relative]:
                     raise DeliveryWorkerExclusionRequiredError
         fingerprint = hashlib.sha256(head.encode() + b"\0" + status)
-        if expected_paths is not None:
-            fingerprint.update(self._run_git("diff", "HEAD", "--binary", cwd=coordination.worktree_path).stdout)
+        if expected_paths:
+            # Admission has fenced the path set; keep the content read inside that fence.
+            fingerprint.update(
+                self._run_git(
+                    "diff",
+                    "HEAD",
+                    "--binary",
+                    "--",
+                    *(f":(literal){path}" for path in expected_paths),
+                    cwd=coordination.worktree_path,
+                ).stdout
+            )
         for relative in paths:
             try:
                 metadata = (coordination.worktree_path / relative).lstat()
@@ -4064,7 +4067,9 @@ class ChangeWorkspaceManager:
                     ).encode()
                 )
         fingerprint_hex = fingerprint.hexdigest()
-        return coordination, head, fingerprint_hex, paths, reason
+        return coordination, head, fingerprint_hex, paths, reason or (
+            "workspace-dirty" if status or ignored_inventory else None
+        )
 
     def capture_recovery_workspace_metadata(
         self, change_id: str, promoted_commits: tuple[str, ...]

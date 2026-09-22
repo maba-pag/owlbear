@@ -667,6 +667,28 @@ def test_recovery_workspace_fingerprint_includes_admitted_untracked_bytes(tmp_pa
     assert first[2] != second[2]
 
 
+def test_recovery_workspace_fingerprints_admitted_paths_with_ignored_inventory(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    exclude = Path(_git(worktree, "rev-parse", "--git-path", "info/exclude"))
+    if not exclude.is_absolute():
+        exclude = worktree / exclude
+    exclude.write_text("ignored-recovery.txt\n", encoding="utf-8")
+    (worktree / "ignored-recovery.txt").write_text("do not read\n", encoding="utf-8")
+    tracked = worktree / "shared.txt"
+    tracked.write_text("first\n", encoding="utf-8")
+
+    first = manager.capture_recovery_workspace(coordination.change_id, (), expected_paths=("shared.txt",))
+    tracked.write_text("second\n", encoding="utf-8")
+    second = manager.capture_recovery_workspace(coordination.change_id, (), expected_paths=("shared.txt",))
+    (worktree / "ignored-recovery.txt").write_text("changed but still private\n", encoding="utf-8")
+    ignored_change = manager.capture_recovery_workspace(coordination.change_id, (), expected_paths=("shared.txt",))
+
+    assert first[3:] == second[3:] == (("shared.txt",), "workspace-dirty")
+    assert first[2] != second[2]
+    assert ignored_change[2] == second[2]
+
+
 def test_recovery_workspace_rejects_path_drift_before_content_read(tmp_path: Path) -> None:
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
     worktree = coordination.worktree_path

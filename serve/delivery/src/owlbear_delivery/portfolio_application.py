@@ -8720,7 +8720,6 @@ class PortfolioApplication:
         intent = RecoveryIntent.model_validate_json(read_record(self._target_root, intent_path))
         if intent.recovery_id != recovery_id or intent.invocation.request.change_id != change_id:
             raise DeliveryWorkerExclusionRequiredError
-        self._coordinator.forget_verified_exclusion(recovery_id)
         evidence = verify_evidence(self._recovery_evidence_provider, reference, intent)
         receipt_path = self._target_root / journal_path(change_id, recovery_id, "receipt")
         self._coordinator.recover_pending_transactions()
@@ -8735,6 +8734,7 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             if receipt_path.exists():
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
+            self._coordinator.forget_verified_exclusion(recovery_id)
             if intent.admitted_task_id is None:
                 self._require_legacy_recovery_clean(change_id, intent)
             current_intent = self._capture_recovery_intent(change_id)
