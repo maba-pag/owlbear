@@ -796,22 +796,49 @@ ordinary dirty entry as ignored content, bypassing path/scope rechecks and conte
 fingerprinting. Pending legacy recovery must reject ignored-only dirt, while replay
 of an already completed receipt must not depend on later workspace cleanliness.
 
-Repair checkpoints `970368d` and `b2da6be` distinguish actual `!!` ignored entries
+Final repair source: `5c8e0e0`, following checkpoints `970368d` and `b2da6be`.
+The repair distinguishes actual `!!` ignored entries
 from ordinary dirty paths, include admitted untracked bytes in the post-admission
 fingerprint, and reject reviewed file/directory scope substitution. Metadata-only
 admission does not use the content diff; raw reads follow exact path/scope checks,
 and Git content reads use only literal admitted pathspecs. Completed pre-C/A5
 receipts replay before pending-workspace cleanliness checks and exclusion-cache
 clearing. Pending legacy/no-admission recovery rejects ignored-only dirt as well
-as ordinary dirty paths. Historical identities and old preservation containment
-remain unchanged.
+as ordinary dirty paths. Admitted capture with any true ignored inventory now
+fails closed before content reads, including active-claim/no-current-writer
+recovery; it cannot return a weak status-only authority fingerprint.
+Historical identities and old preservation containment remain unchanged.
 
 The sole writer reported 163 workspace tests and 83 focused admission/replay tests
 passing, plus the Git-admin-path invariant; selections overlap and must not be
-summed. These extend earlier 80/154 and 82-pass checkpoints, not independent parent
-reruns. Final fail-closed mixed-ignored containment, independent review and automated
-validation are being closed out separately; these counts alone are not whole-C
-acceptance.
+summed. Both larger runs used `-q -n 1 -m 'not api and not model and not e2e'`;
+the 83-case run selected recovery, portfolio-application and workspace tests with
+`-k 'admission or admitted or legacy_incomplete or a5 or fingerprint or nonterminal_recovery'`.
+These extend earlier 80/154 and 82-pass checkpoints, not independent parent
+reruns. On published `5c8e0e0`, the writer additionally reported **8 passing**
+blocking cases using `uv run --locked pytest -q -n 1` with:
+
+- `test_recovery_workspace_rejects_ignored_inventory_before_admission_fingerprint`
+  in `test_change_workspace.py`;
+- `test_legacy_incomplete_intent_completes_against_current_provenance` and
+  `test_a5_incomplete_intent_completes_against_current_provenance` in `test_recovery.py`.
+
+The separate Git-admin-path authority invariant passed (**1**), as did
+`git diff --check`. Tests used Python 3.14.7 and synthetic disposable state.
+The independent read-only reviewer covered admission changes since `a5e271b`,
+excluding merged tooling and the broader C obligations below, and reported no
+remaining actionable findings after inspecting the final fail-closed/replay diff.
+Its test evidence is writer-reported, not an independent test run.
+
+Parent validation on committed `5c8e0e0`: secret scans found no secrets; CodeQL
+found **0 Python alerts**. Automated code review was unavailable because its model
+was missing from the registry; the tool's success label is not review evidence.
+Earlier Ruff checks were reported non-clean, but exact diagnostics were not retained;
+no passing final Ruff/format gate is claimed. The whole suite, MegaLinter, live
+services/state and provider mutations were not run. Earlier branch CI at `eca439b`
+required action; final-source external
+CI, pinned-Node and actual host gates remain unproved. None of this bounded proof
+establishes whole-C acceptance.
 
 User comment `5766196814` resumes C from `a5e271b`, preserving the independently
 reviewed intent-publication repair (`5765655406`). The next bounded slice is a
