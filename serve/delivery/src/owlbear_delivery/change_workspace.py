@@ -5474,10 +5474,10 @@ class ChangeWorkspaceManager:
                 )
                 try:
                     opened = os.fstat(successor)
+                    _require_directory_identity(opened, expected, ancestor_changed)
                 except BaseException:
                     os.close(successor)
                     raise
-                _require_directory_identity(opened, expected, ancestor_changed)
                 os.close(parent_fd)
                 parent_fd = successor
                 ancestors.append((current, expected))

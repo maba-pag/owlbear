@@ -598,6 +598,51 @@ def test_recovery_workspace_reader_closes_parent_on_missing_intermediate(tmp_pat
     assert set(opened) == set(closed)
 
 
+def test_recovery_workspace_reader_closes_successor_on_identity_mismatch(tmp_path: Path) -> None:
+    worktree = tmp_path / "worktree"
+    (worktree / "nested").mkdir(parents=True)
+    opened: list[int] = []
+    closed: list[int] = []
+    fstat_calls = 0
+    original_open = os.open
+    original_close = os.close
+    original_fstat = os.fstat
+
+    def tracking_open(path, flags, mode=0o777, *, dir_fd=None):
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        opened.append(descriptor)
+        return descriptor
+
+    def tracking_close(descriptor):
+        closed.append(descriptor)
+        return original_close(descriptor)
+
+    def mismatching_fstat(descriptor):
+        nonlocal fstat_calls
+        fstat_calls += 1
+        metadata = original_fstat(descriptor)
+        if fstat_calls == 2:
+            values = list(metadata)
+            values[1] += 1
+            return os.stat_result(values)
+        return metadata
+
+    with (
+        patch("owlbear_delivery.change_workspace.os.open", side_effect=tracking_open),
+        patch("owlbear_delivery.change_workspace.os.close", side_effect=tracking_close),
+        patch("owlbear_delivery.change_workspace.os.fstat", side_effect=mismatching_fstat),
+        pytest.raises(PreservationFenceError, match="ancestor"),
+    ):
+        ChangeWorkspaceManager._open_worktree_read_parent(  # noqa: SLF001
+            worktree,
+            ("nested",),
+            "nested/file.txt",
+        )
+
+    assert fstat_calls == 2
+    assert set(opened) == set(closed)
+
+
 def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state")
     coordination = _coordination(tmp_path, "repair-release")

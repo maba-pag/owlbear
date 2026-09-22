@@ -840,14 +840,16 @@ to these findings and focused regressions. Historical replay/identity compatibil
 had no actionable review findings. The reviewed intent-publication scanner and
 whole-index privacy rules must remain unchanged.
 
-The follow-up repair shares canonical path validation between admission and intent
+Follow-up checkpoint `8ad62e6` shares canonical path validation between admission and intent
 validation, checks the complete admitted inventory before Git content fingerprinting,
 and uses descriptor-relative no-follow traversal for raw worktree reads. Directory
 identities are checked across the read; symlink leaf text and absent paths remain
 supported without following targets or creating directories. Focused regressions
 cover intermediate symlinks, unsupported spellings, ordinary nested/deleted/symlink
-leaf states and ancestor substitution. Final proof and review are recorded below
-when available; this does not complete the broader C obligations.
+leaf states and ancestor substitution. Independent review confirmed both original
+findings fixed, but identified descriptor cleanup gaps on interrupted traversal;
+these require explicit cleanup proof before final closeout. This does not complete
+the broader C obligations.
 
 Parent validation on committed `5c8e0e0`: secret scans found no secrets; CodeQL
 found **0 Python alerts**. Automated code review was unavailable because its model
