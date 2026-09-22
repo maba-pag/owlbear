@@ -40,6 +40,7 @@ from owlbear_delivery.change_workspace import (
     WriterIdentity,
 )
 from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
     RecoveryEvidenceReference,
     RecoveryIntent,
@@ -442,6 +443,29 @@ def test_recovery_workspace_retains_stronger_custody_guard_with_ignored_inventor
     assert captured[-1] == "active-custody"
 
 
+def test_recovery_workspace_normalizes_active_custody_for_ordinary_untracked_content(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("untracked-recovery")
+    worktree = coordination.worktree_path
+    (worktree / "added.bin").write_bytes(b"ordinary untracked\n")
+    coordinator.acquire(
+        coordination.change_id,
+        ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
+    )
+
+    with patch.object(manager, "_read_worktree_state", wraps=manager._read_worktree_state) as read_state:
+        captured = manager.capture_recovery_workspace(
+            coordination.change_id,
+            (),
+            expected_paths=("added.bin",),
+            expected_scope_details=(("added.bin",), {"added.bin": "file"}),
+        )
+
+    assert captured[3:] == (("added.bin",), "workspace-dirty")
+    assert read_state.call_count == 1
+
+
 def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state")
     coordination = _coordination(tmp_path, "repair-release")
@@ -619,13 +643,45 @@ def test_recovery_workspace_metadata_does_not_read_dirty_content(tmp_path: Path)
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
     (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
 
-    with patch.object(manager, "_run_git", wraps=manager._run_git) as run_git:
+    with (
+        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("dirty content was read")),
+        patch.object(manager, "_run_git", wraps=manager._run_git) as run_git,
+    ):
         _coordination, _head, _status, paths, _reason = manager.capture_recovery_workspace_metadata(
             coordination.change_id, ()
         )
 
     assert paths == ("shared.txt",)
     assert not any(call.args[:1] == ("diff",) for call in run_git.call_args_list)
+
+
+def test_recovery_workspace_fingerprint_includes_admitted_untracked_bytes(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    path = coordination.worktree_path / "added.bin"
+    path.write_bytes(b"first\n")
+    first = manager.capture_recovery_workspace(coordination.change_id, (), expected_paths=("added.bin",))
+    path.write_bytes(b"second\n")
+    second = manager.capture_recovery_workspace(coordination.change_id, (), expected_paths=("added.bin",))
+
+    assert first[3] == second[3] == ("added.bin",)
+    assert first[2] != second[2]
+
+
+def test_recovery_workspace_rejects_path_drift_before_content_read(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    (worktree / "shared.txt").write_bytes(b"dirty preservation\n")
+    (worktree / "foreign.txt").write_bytes(b"foreign\n")
+
+    with (
+        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("dirty content was read")),
+        pytest.raises(DeliveryWorkerExclusionRequiredError),
+    ):
+        manager.capture_recovery_workspace(
+            coordination.change_id,
+            (),
+            expected_paths=("shared.txt",),
+        )
 
 
 def test_old_provenance_dirty_recovery_cannot_upgrade_to_admitted_preservation(tmp_path: Path) -> None:

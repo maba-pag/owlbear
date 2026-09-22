@@ -204,8 +204,8 @@ def test_a5_recovery_fixture_preserves_bytes_and_directional_authority() -> None
     )
 
 
-@pytest.mark.parametrize("dirty", [False, True])
-def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool) -> None:
+@pytest.mark.parametrize("dirty", [False, True, "ignored", "replay"])
+def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool | str) -> None:
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
     )
@@ -238,8 +238,21 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     legacy_path.parent.mkdir(parents=True)
     legacy_path.write_bytes(legacy_bytes)
 
-    if dirty:
+    if dirty == "replay":
+        receipt = application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
+        assert application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy)) == receipt
+        return
+    if dirty == "ignored":
+        worktree = coordinator.show("change-a").worktree_path
+        exclude = Path(_git(worktree, "rev-parse", "--git-path", "info/exclude"))
+        if not exclude.is_absolute():
+            exclude = worktree / exclude
+        exclude.write_text("ignored-recovery.txt\n", encoding="utf-8")
+        (worktree / "ignored-recovery.txt").write_text("ignored\n", encoding="utf-8")
+    elif dirty:
+        (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
+    if dirty:
         with pytest.raises(DeliveryWorkerExclusionRequiredError):
             application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
         return
@@ -252,8 +265,8 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
     assert current.authority_matches(current.model_copy(update={"maintained_surfaces": ("changed",)})) is False
 
 
-@pytest.mark.parametrize("dirty", [False, True])
-def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool) -> None:
+@pytest.mark.parametrize("dirty", [False, True, "replay"])
+def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool | str) -> None:
     """Old clean journals replay; dirty preservation remains separately admission-gated."""
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_downstream=True
@@ -300,6 +313,11 @@ def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Pat
     old_path.parent.mkdir(parents=True)
     old_path.write_bytes(old_bytes)
 
+    if dirty == "replay":
+        receipt = application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
+        (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
+        assert application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent)) == receipt
+        return
     if dirty:
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
         with pytest.raises(DeliveryWorkerExclusionRequiredError):
@@ -484,6 +502,8 @@ def test_recovery_does_not_expand_file_scope_after_directory_replacement(tmp_pat
     (worktree / "src" / "file.py").mkdir()
 
     assert scope == ("src/file.py",)
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application._exact_task_scope_details(task, worktree, kinds)
     assert not application._scope_admits_path(
         worktree,
         scope[0],

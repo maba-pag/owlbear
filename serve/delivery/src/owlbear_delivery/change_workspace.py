@@ -4005,7 +4005,7 @@ class ChangeWorkspaceManager:
             cwd=coordination.worktree_path,
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
-        if ignored:
+        if self._has_ignored_inventory(ignored):
             return (
                 coordination,
                 head,
@@ -4032,7 +4032,8 @@ class ChangeWorkspaceManager:
                 if actual_kind != expected_kinds[relative]:
                     raise DeliveryWorkerExclusionRequiredError
         fingerprint = hashlib.sha256(head.encode() + b"\0" + status)
-        fingerprint.update(self._run_git("diff", "HEAD", "--binary", cwd=coordination.worktree_path).stdout)
+        if expected_paths is not None:
+            fingerprint.update(self._run_git("diff", "HEAD", "--binary", cwd=coordination.worktree_path).stdout)
         for relative in paths:
             try:
                 metadata = (coordination.worktree_path / relative).lstat()
@@ -4042,6 +4043,24 @@ class ChangeWorkspaceManager:
                 fingerprint.update(
                     repr(
                         (relative, metadata.st_mode, metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+                    ).encode()
+                )
+        # The admission caller supplies the exact path set only after checking
+        # the active task scope.  Read those paths now, rather than during the
+        # metadata-only preflight, so untracked bytes participate in the
+        # persisted authority fingerprint without widening the read boundary.
+        if expected_paths is not None:
+            for relative in paths:
+                state = self._read_worktree_state(coordination.worktree_path, relative)
+                fingerprint.update(
+                    repr(
+                        (
+                            relative,
+                            state.kind,
+                            state.mode,
+                            state.identity,
+                            digest(state.content) if state.content is not None else None,
+                        )
                     ).encode()
                 )
         fingerprint_hex = fingerprint.hexdigest()
@@ -4073,7 +4092,7 @@ class ChangeWorkspaceManager:
             cwd=coordination.worktree_path,
             environment={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         ).stdout
-        if ignored:
+        if self._has_ignored_inventory(ignored):
             return coordination, head, status, paths, reason or "workspace-dirty"
         if reason == "active-custody" and coordination.publication_lease is None:
             reason = self._captured_finalization_guard(
@@ -5284,6 +5303,30 @@ class ChangeWorkspaceManager:
                 paths.add(os.fsdecode(records[index]))
                 index += 1
         return tuple(sorted(paths))
+
+    @staticmethod
+    def _has_ignored_inventory(status: bytes) -> bool:
+        if status and not status.endswith(b"\0"):
+            raise PreservationRejectedError("Git returned an unterminated worktree status")
+        records = status.split(b"\0")
+        index = 0
+        ignored = False
+        while index < len(records):
+            record = records[index]
+            index += 1
+            if not record:
+                continue
+            if len(record) < 4:
+                raise PreservationRejectedError("Git returned a malformed worktree status")
+            code = record[:2].decode("ascii", errors="strict")
+            if code == "!!":
+                ignored = True
+                continue
+            if "R" in code or "C" in code:
+                if index >= len(records) or not records[index]:
+                    raise PreservationRejectedError("Git returned an incomplete rename status")
+                index += 1
+        return ignored
 
     @staticmethod
     def _validate_private_paths(paths: tuple[str, ...]) -> None:

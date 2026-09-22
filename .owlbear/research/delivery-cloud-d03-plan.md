@@ -781,8 +781,9 @@ not passing. Final-source external CI, pinned-Node and actual host gates remain 
 
 ### D03-C admission-boundary resume — 2026-09-21
 
-The current repair starts at `9196317`, following partial admission checkpoint
-`c2bca75` and the already-published `dev` merge `416f86c`. The PR comparison base is
+The current repair starts at `eca439b`, following interrupted admission repairs
+`9196317`/`6cdd129`, partial admission checkpoint `c2bca75`, and the already-published
+`dev` merge `416f86c`. The PR comparison base is
 `dev@d7d5d2d`. Preserve the merged tooling changes and the reviewed restoration
 repairs; neither is admission proof. This repair is limited to completing and
 checking the admission boundary, not the remaining C integration below.
@@ -790,6 +791,18 @@ The repair review identified missing replay admission and legacy dirty-completio
 guards, plus content fingerprinting before path admission. These must be resolved
 without changing the index privacy policy or ignored-file containment; an initial
 draft's wider policy changes are not acceptance evidence for this slice.
+Inspection of `eca439b` also identified an ignored-status shortcut that treats any
+ordinary dirty entry as ignored content, bypassing path/scope rechecks and content
+fingerprinting. Pending legacy recovery must reject ignored-only dirt, while replay
+of an already completed receipt must not depend on later workspace cleanliness.
+
+The current source repair distinguishes actual `!!` ignored entries from ordinary
+dirty paths, includes admitted untracked bytes in the post-admission fingerprint,
+and rejects reviewed file/directory scope substitution. Metadata-only admission
+does not use the content diff; raw reads follow exact path/scope checks. The writer's
+initial focused selections reported 80 and 154 passes (overlapping), plus the
+Git-admin-path invariant. Final mixed-ignored and completed-receipt replay review
+findings still require closeout; these counts alone are not admission acceptance.
 
 User comment `5766196814` resumes C from `a5e271b`, preserving the independently
 reviewed intent-publication repair (`5765655406`). The next bounded slice is a

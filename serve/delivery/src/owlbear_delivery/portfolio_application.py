@@ -8407,6 +8407,11 @@ class PortfolioApplication:
         surfaces = tuple(task.maintained_surfaces)
         if len(surfaces) != len(set(surfaces)):
             raise DeliveryWorkerExclusionRequiredError
+        if baseline_kinds is not None and (
+            set(baseline_kinds) != set(surfaces)
+            or any(kind not in {"directory", "file", "missing"} for kind in baseline_kinds.values())
+        ):
+            raise DeliveryWorkerExclusionRequiredError
         kinds: dict[str, Literal["directory", "file", "missing"]] = {}
         for surface in surfaces:
             path = PurePosixPath(surface)
@@ -8434,7 +8439,11 @@ class PortfolioApplication:
                 continue
             except OSError as exc:
                 raise DeliveryWorkerExclusionRequiredError from exc
-            kinds[surface] = "directory" if stat.S_ISDIR(metadata.st_mode) else "file"
+            observed_kind = "directory" if stat.S_ISDIR(metadata.st_mode) else "file"
+            baseline_kind = (baseline_kinds or {}).get(surface)
+            if baseline_kind in {"directory", "file"} and observed_kind != baseline_kind:
+                raise DeliveryWorkerExclusionRequiredError
+            kinds[surface] = observed_kind
         return tuple(sorted(surfaces)), kinds
 
     @staticmethod
@@ -8711,8 +8720,6 @@ class PortfolioApplication:
         intent = RecoveryIntent.model_validate_json(read_record(self._target_root, intent_path))
         if intent.recovery_id != recovery_id or intent.invocation.request.change_id != change_id:
             raise DeliveryWorkerExclusionRequiredError
-        if intent.admitted_task_id is None:
-            self._require_legacy_recovery_clean(change_id, intent)
         self._coordinator.forget_verified_exclusion(recovery_id)
         evidence = verify_evidence(self._recovery_evidence_provider, reference, intent)
         receipt_path = self._target_root / journal_path(change_id, recovery_id, "receipt")
@@ -8728,6 +8735,8 @@ class PortfolioApplication:
             self._coordinator.recover_pending_transactions()
             if receipt_path.exists():
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
+            if intent.admitted_task_id is None:
+                self._require_legacy_recovery_clean(change_id, intent)
             current_intent = self._capture_recovery_intent(change_id)
             if intent.admitted_task_id is None and current_intent.admitted_paths:
                 raise DeliveryWorkerExclusionRequiredError
@@ -8755,11 +8764,14 @@ class PortfolioApplication:
         """Contain old journals to clean recovery until path admission exists."""
         runtime = self._runtime(change_id)
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
-        _coordination, _head, _status, paths, _reason = self._workspace_manager.capture_recovery_workspace_metadata(
+        _coordination, _head, status, paths, reason = self._workspace_manager.capture_recovery_workspace_metadata(
             change_id,
             tuple(result.completed_commit for binding in frontier.bindings for result in binding.results),
         )
-        if paths:
+        # A legacy journal has no persisted path authority.  The metadata
+        # capture deliberately does not expose ignored paths, so retain the
+        # stronger guard reason as well as the ordinary dirty inventory.
+        if status or paths or reason is not None:
             raise DeliveryWorkerExclusionRequiredError
 
     def _verified_recovery_replay(
