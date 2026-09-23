@@ -7,6 +7,27 @@ and external gates remain outstanding. D is not authorized.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 D03-P changed only this file. The programme and shared governance remain unchanged.
 
+### Current handoff
+
+The latest C feature source is `4566935`, recorded at `7311a9e`. A bounded local repair on
+2026-09-23 clears the four reported application Ruff findings and formats the application and
+legacy-report assertion. It removes duplicate scope-kind validation already enforced before the
+loop, extracts the existing ready-result digest check, and removes an unused private argument.
+The 23 affected admission/recovery cases passed locally; this is not cumulative C acceptance.
+
+| Remaining item | Meaning and next action |
+| --- | --- |
+| C implementation | Complete the [listed C obligations](#maintained-procedure-authority-increment): provenance/private index handling, exclusive recovery custody, publication repair, trusted procedure production, original-action resumption and remaining matrices. These are implementation work, not missing MCP tools. |
+| GitHub proof | Latest inspected runs at `7311a9e` are `action_required` with zero jobs. They have not failed tests. Maintainer approval is required; the PR also remains draft, so its workflows intentionally skip draft proof jobs. Do not mark ready merely to disguise unfinished C work. |
+| Independent acceptance | Narrow reviews cover individual repairs, not completed C. Complete and review C before requesting D; do not automatically advance phases. |
+| Host exclusion | Actual host termination/exclusion remains a host acceptance gap, not permission to release a possibly live worker. The existing gap allocation allows B-E work with fail-closed behavior. |
+
+Continue only the current C implementation against the approved contract. Preserve completed
+repairs and tests, use focused proof, and keep phase incompleteness distinct from tool unavailability.
+No merge, live activation, approval bypass, or successor-phase authorization is implied.
+
+### Authority references
+
 - Original source inspection: `96f21ec5d87de2a8003d4010281fc4dc47b7d645`, branch `copilot/d03-p`.
 - Published package: draft [PR #326](https://github.com/maba-pag/owlbear/pull/326), targeting `dev`.
   Subsequent phases belong on that PR; do not create another package PR.
@@ -959,9 +980,9 @@ The 32-case run took 3.61 seconds. The overlapping 2-case run used only
 with `-k 'proof_attempt_store_recovers_interrupted_publication'` and the same other pytest
 flags; it took 0.97 seconds. Disposable test/cache/tool directories were removed.
 
-Proof-owned Ruff checks passed. Application Ruff retains four reported pre-existing findings;
-`ruff format --check` on `test_finalization_reports.py` remains non-clean on the reported
-pre-existing legacy `assert store.record(...)` at line 68. Independent
+Proof-owned Ruff checks passed at this checkpoint. The four reported application Ruff findings
+and legacy-report formatting failure are resolved by the bounded repair in
+[Current handoff](#current-handoff). Independent
 read-only review found no significant issues after the exact-basis, encoded-size and historical
 registration corrections. Final-source automated validation declined to run because its circuit
 breaker had tripped after two timeouts and instructed no retry. No final-source CodeQL or automated

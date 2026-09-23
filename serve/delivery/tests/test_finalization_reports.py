@@ -65,11 +65,14 @@ def test_legacy_report_fixture_reads_replays_and_rejects_tampering(tmp_path: Pat
     store = FinalizationReportStore(tmp_path, "change-a")
     report = store.read().reports[0]
     assert report.report_id == report_id
-    assert store.record(
-        _request(attempt_key="legacy-report"),
-        datetime.now(UTC),
-        lambda: pytest.fail("legacy replay must not validate a new basis"),
-    ) == report
+    assert (
+        store.record(
+            _request(attempt_key="legacy-report"),
+            datetime.now(UTC),
+            lambda: pytest.fail("legacy replay must not validate a new basis"),
+        )
+        == report
+    )
 
     tampered = _LEGACY_REPORT_JSON.replace(b'"checks_state":"failed"', b'"checks_state":"unknown"')
     (reports / f"{report_id}.json").write_bytes(tampered)

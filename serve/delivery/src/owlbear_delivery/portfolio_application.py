@@ -7973,11 +7973,7 @@ class PortfolioApplication:
             pending = ledger.pending_attempts()
         except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError) as exc:
             self._fail("completed-outcome repair retry authority is unavailable", exc)
-        episodes = tuple(
-            episode
-            for episode in summary.episodes
-            if request.original_action_id in episode.attempt_ids
-        )
+        episodes = tuple(episode for episode in summary.episodes if request.original_action_id in episode.attempt_ids)
         if len(episodes) != 1:
             self._fail("completed-outcome repair is not bound to one retry episode")
         episode = episodes[0]
@@ -8461,8 +8457,6 @@ class PortfolioApplication:
                         raise DeliveryWorkerExclusionRequiredError
             except FileNotFoundError:
                 baseline_kind = (baseline_kinds or {}).get(surface, "missing")
-                if baseline_kind not in {"directory", "file", "missing"}:
-                    raise DeliveryWorkerExclusionRequiredError
                 kinds[surface] = baseline_kind
                 continue
             except OSError as exc:
@@ -8546,10 +8540,7 @@ class PortfolioApplication:
         )
         # Recovery A never rewrites files, moves heads, repairs corruption, or interprets
         # unpromoted output as proof of a completed effect.
-        if (
-            reason not in {None, "workspace-dirty"}
-            or coordination.publication_lease is not None
-        ):
+        if reason not in {None, "workspace-dirty"} or coordination.publication_lease is not None:
             raise DeliveryWorkerExclusionRequiredError
         baseline_kinds = (
             self._workspace_manager.baseline_scope_kinds(
@@ -8628,15 +8619,9 @@ class PortfolioApplication:
             if binding.active_claim != owner:
                 raise DeliveryWorkerExclusionRequiredError
         proposal = self._repair_proposal(DeliveryPortfolioSnapshot.capture(runtime.contract, runtime.frontier_bytes()))
-        result_digest = None
-        if kind == "ready-readback":
-            result = self._read_engine_result(
-                ExecuteDeliveryChangeAction(change_id=change_id, operation_id=request.owner_id)
-            )
-            if result is not None and result.kind != "blocked":
-                raise DeliveryWorkerExclusionRequiredError
-            path = self._coordinator.continuation_record_path(change_id, request.owner_id, result=True)
-            result_digest = digest(path.read_bytes() if result is not None else b"")
+        result_digest = (
+            self._recovery_ready_result_digest(change_id, request.owner_id) if kind == "ready-readback" else None
+        )
         maintained_surfaces = tuple(
             sorted(
                 {
@@ -8742,6 +8727,13 @@ class PortfolioApplication:
             raise DeliveryWorkerExclusionRequiredError
         return claim, claim.claim_id, "clean-claim", claim.attempt_id, None
 
+    def _recovery_ready_result_digest(self, change_id: str, owner_id: str) -> str:
+        result = self._read_engine_result(ExecuteDeliveryChangeAction(change_id=change_id, operation_id=owner_id))
+        if result is not None and result.kind != "blocked":
+            raise DeliveryWorkerExclusionRequiredError
+        path = self._coordinator.continuation_record_path(change_id, owner_id, result=True)
+        return digest(path.read_bytes() if result is not None else b"")
+
     def _complete_recovery(
         self, change_id: str, recovery_id: str, reference: RecoveryEvidenceReference
     ) -> RecoveryReceipt:
@@ -8766,7 +8758,7 @@ class PortfolioApplication:
                 return self._verified_recovery_replay(intent, evidence, receipt_path)
             self._coordinator.forget_verified_exclusion(recovery_id)
             if intent.admitted_task_id is None:
-                self._require_legacy_recovery_clean(change_id, intent)
+                self._require_legacy_recovery_clean(change_id)
             current_intent = self._capture_recovery_intent(change_id)
             if intent.admitted_task_id is None and current_intent.admitted_paths:
                 raise DeliveryWorkerExclusionRequiredError
@@ -8790,7 +8782,7 @@ class PortfolioApplication:
             self._coordinator.record_verified_exclusion(recovery_id)
             return receipt
 
-    def _require_legacy_recovery_clean(self, change_id: str, intent: RecoveryIntent) -> None:
+    def _require_legacy_recovery_clean(self, change_id: str) -> None:
         """Contain old journals to clean recovery until path admission exists."""
         runtime = self._runtime(change_id)
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
