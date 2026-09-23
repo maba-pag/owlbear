@@ -40,8 +40,8 @@ from owlbear_delivery.change_workspace import (
     RecoverOutOfBandHead,
     SyncChangeWithTarget,
     UnavailablePreservationProvenanceProvider,
-    WriterIdentity,
     WorktreePreservationReceipt,
+    WriterIdentity,
 )
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
@@ -371,7 +371,7 @@ class _TestPreservationProvenanceProvider:
             except FileNotFoundError:
                 return "absent", None, None
             if stat.S_ISLNK(metadata.st_mode):
-                content = os.fsencode(os.readlink(candidate))
+                content = os.fsencode(candidate.readlink())
                 return "symlink", hashlib.sha256(content).hexdigest(), 0o777
             content = candidate.read_bytes()
             return "regular", hashlib.sha256(content).hexdigest(), stat.S_IMODE(metadata.st_mode)
@@ -987,6 +987,28 @@ def test_preservation_requires_owner_before_state_to_match_captured_bytes(tmp_pa
     assert not preservation_root.exists()
 
 
+def test_preservation_capture_reverifies_owner_evidence_before_private_custody(tmp_path: Path) -> None:
+    provider = _TestPreservationProvenanceProvider(verification_available=False)
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path,
+        provenance_provider=provider,
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+
+    with pytest.raises(PreservationRejectedError, match="reverified"):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    preservation_root = (
+        manager.runtime_root
+        / "changes"
+        / coordination.change_id
+        / "recovery-receipts"
+        / intent.recovery_id
+        / "preservation"
+    )
+    assert not preservation_root.exists()
+
+
 def test_preservation_owner_evidence_binds_recovery_and_workspace(tmp_path: Path) -> None:
     class WrongRecoveryBindingProvider(_TestPreservationProvenanceProvider):
         def classify(self, **kwargs):
@@ -1021,13 +1043,13 @@ def test_restore_requires_independent_provenance_reverification_before_objects(t
 
 def test_private_path_policy_remains_conservative_for_dirty_paths() -> None:
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_private_paths(
+        ChangeWorkspaceManager._validate_private_paths(  # noqa: SLF001 - exercise the policy boundary directly.
             ("custom-tokens.css", "components/password-component.tsx")
         )
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_private_paths(("config/password",))
+        ChangeWorkspaceManager._validate_private_paths(("config/password",))  # noqa: SLF001 - policy boundary test.
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_private_paths(("config/private.txt",))
+        ChangeWorkspaceManager._validate_private_paths(("config/private.txt",))  # noqa: SLF001 - policy boundary test.
 
 
 def _raw_index_for_test(path: str, *, extension: bytes = b"") -> bytes:
@@ -1047,31 +1069,31 @@ def _raw_index_for_test(path: str, *, extension: bytes = b"") -> bytes:
 def test_raw_index_privacy_uses_structural_paths(path: str) -> None:
     expected_entries = ((path, 0o100644, 0, "01" * 20),)
     head_entries = ((path, 0o100644, "01" * 20),)
-    names = ChangeWorkspaceManager._validate_index_extensions(
+    names = ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
         _raw_index_for_test(path),
         expected_entries=expected_entries,
         head_entries=head_entries,
     )
-    ChangeWorkspaceManager._validate_index_path_names(names)
+    ChangeWorkspaceManager._validate_index_path_names(names)  # noqa: SLF001 - parser boundary test.
 
 
 def test_raw_index_qualification_binds_exact_git_and_head_entries() -> None:
     content = _raw_index_for_test("ordinary.txt")
     index_entries = (("ordinary.txt", 0o100644, 0, "01" * 20),)
     head_entries = (("ordinary.txt", 0o100644, "01" * 20),)
-    ChangeWorkspaceManager._validate_index_extensions(
+    ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
         content,
         expected_entries=index_entries,
         head_entries=head_entries,
     )
     with pytest.raises(PreservationRejectedError, match="Git inventory"):
-        ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
             content,
             expected_entries=(("ordinary.txt", 0o100644, 0, "02" * 20),),
             head_entries=head_entries,
         )
     with pytest.raises(PreservationRejectedError, match="reviewed HEAD"):
-        ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
             content,
             expected_entries=index_entries,
             head_entries=(("ordinary.txt", 0o100644, "02" * 20),),
@@ -1083,20 +1105,54 @@ def test_raw_index_cache_tree_extension_is_fully_parsed() -> None:
     extension = b"TREE" + len(tree).to_bytes(4, "big") + tree
     index_entries = (("ordinary.txt", 0o100644, 0, "01" * 20),)
     head_entries = (("ordinary.txt", 0o100644, "01" * 20),)
-    names = ChangeWorkspaceManager._validate_index_extensions(
+    names = ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
         _raw_index_for_test("ordinary.txt", extension=extension),
         expected_entries=index_entries,
         head_entries=head_entries,
     )
-    ChangeWorkspaceManager._validate_index_path_names(names)
+    ChangeWorkspaceManager._validate_index_path_names(names)  # noqa: SLF001 - parser boundary test.
     private_tree = b"config/password\0" + b"1 0\n" + b"\x02" * 20
     private_extension = b"TREE" + len(private_tree).to_bytes(4, "big") + private_tree
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_index_path_names(
-            ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_path_names(  # noqa: SLF001 - parser boundary test.
+            ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
                 _raw_index_for_test("ordinary.txt", extension=private_extension),
                 expected_entries=index_entries,
                 head_entries=head_entries,
+            )
+        )
+
+
+def test_raw_index_cache_tree_invalid_nodes_omit_their_object_id() -> None:
+    tree = b"\0-1 1\n" + b"nested\0" + b"1 0\n" + b"\x02" * 20
+    extension = b"TREE" + len(tree).to_bytes(4, "big") + tree
+    index_entries = (("ordinary.txt", 0o100644, 0, "01" * 20),)
+    head_entries = (("ordinary.txt", 0o100644, "01" * 20),)
+
+    names = ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
+        _raw_index_for_test("ordinary.txt", extension=extension),
+        expected_entries=index_entries,
+        head_entries=head_entries,
+    )
+
+    assert names == ("ordinary.txt", "nested")
+
+
+def test_raw_index_accepts_git_invalidated_cache_tree_and_honors_subtrees() -> None:
+    tree = b"\0-1 1\nnested\0-1 1\ndeeper\0-1 0\n"
+    extension = b"TREE" + len(tree).to_bytes(4, "big") + tree
+
+    names = ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
+        _raw_index_for_test("ordinary.txt", extension=extension),
+    )
+
+    assert names == ("ordinary.txt", "nested", "deeper")
+    malformed_tree = tree + b"orphan\0-1 0\n"
+    with pytest.raises(PreservationRejectedError, match="subtree"):
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
+            _raw_index_for_test(
+                "ordinary.txt",
+                extension=b"TREE" + len(malformed_tree).to_bytes(4, "big") + malformed_tree,
             )
         )
 
@@ -1108,12 +1164,16 @@ def test_raw_index_rejects_nonzero_padding_and_bad_checksum() -> None:
     content[path_end] = 1
     content[-20:] = hashlib.sha1(content[:-20], usedforsecurity=False).digest()
     with pytest.raises(PreservationRejectedError, match="padding"):
-        ChangeWorkspaceManager._validate_index_extensions(bytes(content))
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
+            bytes(content)
+        )
 
     invalid_checksum = bytearray(_raw_index_for_test("ordinary.txt"))
     invalid_checksum[-1] ^= 1
     with pytest.raises(PreservationRejectedError, match="checksum"):
-        ChangeWorkspaceManager._validate_index_extensions(bytes(invalid_checksum))
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
+            bytes(invalid_checksum)
+        )
 
 
 def test_raw_index_rejects_extended_entry_flags_before_path_parsing() -> None:
@@ -1122,33 +1182,33 @@ def test_raw_index_rejects_extended_entry_flags_before_path_parsing() -> None:
     content[-20:] = hashlib.sha1(content[:-20], usedforsecurity=False).digest()
 
     with pytest.raises(PreservationRejectedError, match="extended"):
-        ChangeWorkspaceManager._validate_index_extensions(bytes(content))
+        ChangeWorkspaceManager._validate_index_extensions(bytes(content))  # noqa: SLF001 - parser boundary test.
 
 
 def test_raw_index_private_and_unknown_extensions_remain_contained() -> None:
     index_entries = (("password", 0o100644, 0, "01" * 20),)
     head_entries = (("password", 0o100644, "01" * 20),)
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_index_path_names(
-            ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_path_names(  # noqa: SLF001 - parser boundary test.
+            ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
                 _raw_index_for_test("password"),
                 expected_entries=index_entries,
                 head_entries=head_entries,
             )
         )
     with pytest.raises(PreservationRejectedError, match="containment"):
-        ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
             _raw_index_for_test("ordinary.txt", extension=b"UNKN" + (3).to_bytes(4, "big") + b"raw")
         )
     with pytest.raises(PreservationRejectedError, match="containment"):
-        ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
             _raw_index_for_test("ordinary.txt", extension=b"EOIE" + (0).to_bytes(4, "big"))
         )
 
 
 def test_raw_index_scans_all_bytes_for_high_confidence_credentials() -> None:
     with pytest.raises(PreservationRejectedError, match="private"):
-        ChangeWorkspaceManager._validate_index_extensions(
+        ChangeWorkspaceManager._validate_index_extensions(  # noqa: SLF001 - parser boundary test.
             _raw_index_for_test("ordinary.txt", extension=b"UNKN" + (13).to_bytes(4, "big") + b"github_pat_abc")
         )
 
@@ -1167,7 +1227,22 @@ def test_legacy_preservation_receipt_loads_but_cannot_authorize_restore(tmp_path
         / "manifest.json"
     )
     manifest = json.loads(manifest_path.read_bytes())
+    index_path = manager._resolve_managed_index(coordination.worktree_path).path  # noqa: SLF001
+    index = index_path.read_bytes()
+    legacy_index = index[:-20] + b"REUC" + (0).to_bytes(4, "big")
+    legacy_index += hashlib.sha1(legacy_index, usedforsecurity=False).digest()
+    index_path.write_bytes(legacy_index)
     legacy_receipt = manifest["receipt"]
+    old_index_digest = legacy_receipt["index_digest"]
+    new_index_digest = hashlib.sha256(legacy_index).hexdigest()
+    legacy_receipt["index_digest"] = new_index_digest
+    legacy_receipt["index_size"] = len(legacy_index)
+    manifest["objects"] = sorted(
+        new_index_digest if object_name == old_index_digest else object_name for object_name in manifest["objects"]
+    )
+    old_index_path = manifest_path.parent / "objects" / f"{old_index_digest}.raw"
+    old_index_path.rename(manifest_path.parent / "objects" / f"{new_index_digest}.raw")
+    (manifest_path.parent / "objects" / f"{new_index_digest}.raw").write_bytes(legacy_index)
     legacy_receipt.pop("provenance")
     for entry in legacy_receipt["paths"]:
         entry.pop("provenance")
@@ -1178,7 +1253,7 @@ def test_legacy_preservation_receipt_loads_but_cannot_authorize_restore(tmp_path
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
-    loaded = WorktreePreservationReceipt.model_validate(legacy_receipt)
+    loaded = WorktreePreservationReceipt.model_validate_json(json.dumps(legacy_receipt))
     assert loaded.provenance is None
     manifest["receipt"] = legacy_receipt
     manifest_path.write_text(

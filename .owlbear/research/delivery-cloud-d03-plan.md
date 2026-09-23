@@ -35,7 +35,8 @@ The workspace owner now requires a configured trusted provenance provider before
 Its default is unavailable: task admission, a digest, a diagnostic string or a `ProofAttemptStore`
 observation alone grants no copying or disposal authority. Evidence binds the Change/recovery,
 registered worktree, captured fingerprint, task, HEAD, complete raw index and each exact dirty
-path's type/content/mode. The configured owner must independently reverify it on replay.
+path's type/content/mode. The configured owner must independently reverify it immediately before
+the first preservation write and on replay.
 Useful content is retained for Builder repair; only proven disposable paths may be restored.
 Foreign, ambiguous, private or stale evidence remains contained before preservation writes.
 
@@ -43,7 +44,9 @@ Index qualification compares parsed mode/object/path/stage entries with Git's in
 HEAD, validates the checksum and entry padding, and refuses unsupported layouts/extensions rather
 than converting or refreshing the index. The entire raw index still needs privacy qualification;
 ordinary maintained source filenames are not a generic privacy exemption.
-Historical receipt identities must remain inspectable without acquiring new restoration authority.
+Invalidated Git cache-tree nodes omit their object ID; their declared subtree counts still delimit
+the complete extension. Historical receipts retain their original index-extension inspection
+boundary without acquiring new capture or restoration authority.
 
 This is a consumer boundary, not a production last-writer journal. Production producer/registration,
 exclusive application custody, useful-content Builder routing, publication repair and original-action

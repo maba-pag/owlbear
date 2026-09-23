@@ -756,7 +756,7 @@ class _TestPreservationProvenanceProvider:
             except FileNotFoundError:
                 return "absent", None, None
             if stat.S_ISLNK(metadata.st_mode):
-                content = os.fsencode(os.readlink(candidate))
+                content = os.fsencode(candidate.readlink())
                 return "symlink", hashlib.sha256(content).hexdigest(), 0o777
             content = candidate.read_bytes()
             return "regular", hashlib.sha256(content).hexdigest(), stat.S_IMODE(metadata.st_mode)
