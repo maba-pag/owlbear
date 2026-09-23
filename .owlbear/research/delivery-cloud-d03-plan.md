@@ -9,22 +9,46 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The latest C feature source is `4566935`, recorded at `7311a9e`. A bounded local repair on
-2026-09-23 clears the four reported application Ruff findings and formats the application and
-legacy-report assertion. It removes duplicate scope-kind validation already enforced before the
-loop, extracts the existing ready-result digest check, and removes an unused private argument.
-The 23 affected admission/recovery cases passed locally; this is not cumulative C acceptance.
+This resume starts from `f9330ffc`, preserving feature source `4566935` and the reviewed recovery,
+admission/read-boundary and intent-publication repairs. User
+[comment 5789187453](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5789187453)
+requests the exact-path provenance and private-index classification obligation only. Task scope
+and content hashes alone must not establish last-writer evidence or permission to discard bytes.
+Classification must precede preservation writes, and unknown/private evidence stays contained.
+The bounded static repair at `f9330ffc` remains prior proof, not this increment's acceptance.
 
 | Remaining item | Meaning and next action |
 | --- | --- |
-| C implementation | Complete the [listed C obligations](#maintained-procedure-authority-increment): provenance/private index handling, exclusive recovery custody, publication repair, trusted procedure production, original-action resumption and remaining matrices. These are implementation work, not missing MCP tools. |
-| GitHub proof | Latest inspected runs at `7311a9e` are `action_required` with zero jobs. They have not failed tests. Maintainer approval is required; the PR also remains draft, so its workflows intentionally skip draft proof jobs. Do not mark ready merely to disguise unfinished C work. |
+| C implementation | Complete production provenance composition and the [listed C obligations](#maintained-procedure-authority-increment): exclusive recovery custody, publication repair, trusted procedure production, original-action resumption and remaining matrices. The classification boundary below is not an evidence producer or whole-C acceptance. |
+| GitHub proof | Inspected Source, Cockpit and Agent ecosystem runs at `f9330ffc` are `skipped` on the draft PR. Earlier `7311a9e` runs were `action_required`, not failed tests or current proof. Do not approve obsolete runs or mark ready merely to disguise unfinished C work. |
 | Independent acceptance | Narrow reviews cover individual repairs, not completed C. Complete and review C before requesting D; do not automatically advance phases. |
 | Host exclusion | Actual host termination/exclusion remains a host acceptance gap, not permission to release a possibly live worker. The existing gap allocation allows B-E work with fail-closed behavior. |
 
 Continue only the current C implementation against the approved contract. Preserve completed
 repairs and tests, use focused proof, and keep phase incompleteness distinct from tool unavailability.
 No merge, live activation, approval bypass, or successor-phase authorization is implied.
+
+#### Provenance classification increment
+
+The workspace owner now requires a configured trusted provenance provider before raw preservation.
+Its default is unavailable: task admission, a digest, a diagnostic string or a `ProofAttemptStore`
+observation alone grants no copying or disposal authority. Evidence binds the Change/recovery,
+registered worktree, captured fingerprint, task, HEAD, complete raw index and each exact dirty
+path's type/content/mode. The configured owner must independently reverify it on replay.
+Useful content is retained for Builder repair; only proven disposable paths may be restored.
+Foreign, ambiguous, private or stale evidence remains contained before preservation writes.
+
+Index qualification compares parsed mode/object/path/stage entries with Git's inventory and exact
+HEAD, validates the checksum and entry padding, and refuses unsupported layouts/extensions rather
+than converting or refreshing the index. The entire raw index still needs privacy qualification;
+ordinary maintained source filenames are not a generic privacy exemption.
+Historical receipt identities must remain inspectable without acquiring new restoration authority.
+
+This is a consumer boundary, not a production last-writer journal. Production producer/registration,
+exclusive application custody, useful-content Builder routing, publication repair and original-action
+resumption remain implementation obligations. The global ignored-inventory refusal remains
+conservative and over-restrictive. No live service/state, provider effect or protection was changed.
+Focused proof and final review of this increment are still pending; do not substitute earlier tests.
 
 ### Authority references
 

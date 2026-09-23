@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Annotated, Literal, Never, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Never, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -125,6 +125,175 @@ class _ManagedIndexIdentity:
     inode: int
     mode: int
     link_count: int
+
+
+class PreservationPathProvenance(BaseModel):
+    """Trusted producer classification for one exact dirty path."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    path: str = Field(min_length=1, max_length=_MAX_PRESERVED_PATH_LENGTH)
+    disposition: Literal["useful", "disposable", "foreign", "ambiguous", "private"]
+    producer_id: str = Field(min_length=1, max_length=256)
+    before_kind: Literal["absent", "regular", "symlink"] | None = None
+    before_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    before_mode: int | None = Field(default=None, ge=0)
+
+    @field_validator("path")
+    @classmethod
+    def _validate_path(cls, value: str) -> str:
+        _validate_relative_preservation_path(value)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_before_state(self) -> Self:
+        if self.before_kind is None:
+            if self.before_digest is not None or self.before_mode is not None:
+                raise ValueError("legacy provenance state cannot carry before-state facts")
+            return self
+        if (self.before_kind == "absent") != (self.before_digest is None):
+            raise ValueError("provenance absent state must not carry a content digest")
+        if self.before_kind == "absent" and self.before_mode is not None:
+            raise ValueError("provenance absent state must not carry a mode")
+        if self.before_kind != "absent" and (self.before_digest is None or self.before_mode is None):
+            raise ValueError("provenance present state requires digest and mode")
+        return self
+
+
+class PreservationProvenanceEvidence(BaseModel):
+    """Owner evidence binding exact paths to a producer and index/head boundary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    evidence_id: str = Field(min_length=1, max_length=256)
+    change_id: ChangeId | None = None
+    recovery_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    worktree_path: Path | None = None
+    workspace_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    index_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    task_id: str | None = Field(default=None, min_length=1, max_length=256)
+    task_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    paths: tuple[PreservationPathProvenance, ...] = Field(default=(), max_length=_MAX_PRESERVED_PATHS)
+
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _normalize_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def _validate_evidence(self) -> Self:
+        path_names = tuple(item.path for item in self.paths)
+        if path_names != tuple(sorted(set(path_names))):
+            raise ValueError("preservation provenance paths must be sorted and unique")
+        if (self.task_id is None) != (self.task_digest is None):
+            raise ValueError("preservation provenance task identity requires id and digest")
+        if self.paths and self.task_id is None:
+            raise ValueError("dirty-path provenance requires task identity")
+        return self
+
+
+class PreservationProvenanceProvider(Protocol):
+    """Trusted owner seam that can identify producers before raw bytes are copied."""
+
+    def classify(  # noqa: PLR0913 - exact evidence binds the full owner/index boundary.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> PreservationProvenanceEvidence | None:
+        """Return independent producer evidence, or ``None`` when unavailable."""
+        ...
+
+    def verify(  # noqa: PLR0913 - reverify the full persisted owner boundary.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        evidence: PreservationProvenanceEvidence,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> PreservationProvenanceEvidence | None:
+        """Reverify persisted producer evidence against the current exact boundary."""
+        ...
+
+
+class UnavailablePreservationProvenanceProvider:
+    """Default boundary: missing producer evidence cannot authorize raw custody."""
+
+    def classify(  # noqa: PLR0913 - mirror the trusted provider boundary.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> None:
+        """Return no evidence until a trusted producer is configured."""
+        _ = (
+            change_id,
+            intent,
+            recovery_id,
+            worktree_path,
+            current_metadata,
+            exact_head,
+            index_digest,
+            index_entries,
+            head_entries,
+            paths,
+        )
+        return None
+
+    def verify(  # noqa: PLR0913 - mirror the trusted verification boundary.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        evidence: PreservationProvenanceEvidence,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> None:
+        """Return no independent verification until a trusted producer is configured."""
+        _ = (
+            change_id,
+            intent,
+            evidence,
+            recovery_id,
+            worktree_path,
+            current_metadata,
+            exact_head,
+            index_digest,
+            index_entries,
+            head_entries,
+            paths,
+        )
+        return None
 
 
 @dataclass(frozen=True)
@@ -817,6 +986,7 @@ class PreservationEntry(_WorkspaceModel):
     after_mode: int | None = Field(default=None, ge=0)
     before_object: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     after_object: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    provenance: PreservationPathProvenance | None = None
     # Device, inode, link count, size, mode, legacy atime slot, mtime and ctime.
     # New captures zero the atime slot; old captures retain it only as metadata.
     # Ordinary reads (including readlink) must not invalidate either version.
@@ -850,6 +1020,12 @@ class PreservationEntry(_WorkspaceModel):
     @classmethod
     def _normalize_identity(cls, value: object) -> object:
         return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def _validate_provenance(self) -> Self:
+        if self.provenance is not None and self.provenance.path != self.path:
+            raise ValueError("preservation path provenance does not match its path")
+        return self
 
 
 class WorktreePreservationReceipt(_WorkspaceModel):
@@ -890,6 +1066,7 @@ class WorktreePreservationReceipt(_WorkspaceModel):
     index_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     index_size: int = Field(ge=1, le=_MAX_PRESERVED_TOTAL_BYTES)
     paths: tuple[PreservationEntry, ...] = Field(max_length=_MAX_PRESERVED_PATHS)
+    provenance: PreservationProvenanceEvidence | None = None
     storage_ref: str = Field(min_length=1)
 
     @field_validator("paths", mode="before")
@@ -911,6 +1088,8 @@ class WorktreePreservationReceipt(_WorkspaceModel):
             raise ValueError("preserved maintained surfaces must be sorted and unique")
         if self.last_write_provenance != tuple(sorted(set(self.last_write_provenance))):
             raise ValueError("preserved last-write provenance must be sorted and unique")
+        if self.provenance is not None and tuple(item.path for item in self.provenance.paths) != path_names:
+            raise ValueError("preservation provenance must cover every preserved path exactly")
         expected_storage = (
             f"changes/{self.change_id}/recovery-receipts/{self.recovery_id}/preservation"
         )
@@ -957,6 +1136,7 @@ class WorktreePreservationReceipt(_WorkspaceModel):
         index_digest: str,
         index_size: int,
         paths: tuple[PreservationEntry, ...],
+        provenance: PreservationProvenanceEvidence | None = None,
     ) -> Self:
         values = {
             "preservation_id": preservation_id,
@@ -992,6 +1172,7 @@ class WorktreePreservationReceipt(_WorkspaceModel):
             "index_digest": index_digest,
             "index_size": index_size,
             "paths": paths,
+            "provenance": provenance,
             "storage_ref": f"changes/{change_id}/recovery-receipts/{recovery_id}/preservation",
         }
         candidate = cls.model_construct(receipt_id="0" * 64, schema_version=1, **values)
@@ -2116,13 +2297,14 @@ class PortfolioCoordinator:
 class ChangeWorkspaceManager:
     """Own one warm writable Git worktree and non-rewriting integration per change."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - construction binds repository, worktree, target and owner evidence.
         self,
         repository: Path,
         worktree_root: Path,
         coordinator: PortfolioCoordinator,
         integration_target: str,
         remote: str = "origin",
+        preservation_provenance_provider: PreservationProvenanceProvider | None = None,
     ) -> None:
         self._repository = repository.resolve()
         if worktree_root.is_symlink() or (worktree_root.exists() and not worktree_root.is_dir()):
@@ -2131,6 +2313,9 @@ class ChangeWorkspaceManager:
         self._coordinator = coordinator
         self._integration_target = integration_target
         self._remote = remote
+        self._preservation_provenance_provider = (
+            preservation_provenance_provider or UnavailablePreservationProvenanceProvider()
+        )
         self._git("check-ref-format", self._target_ref())
 
     @property
@@ -4196,6 +4381,7 @@ class ChangeWorkspaceManager:
         self._validate_private_paths(paths)
 
         index_bytes = self._read_managed_index(index)
+        self._validate_private_content(index_bytes)
         shared_index = self._preservation_git(
             "rev-parse",
             "--shared-index-path",
@@ -4206,13 +4392,36 @@ class ChangeWorkspaceManager:
             raise PreservationRejectedError("managed index split-state could not be established")
         if shared_index.returncode == 0 and shared_index.stdout.strip():
             raise PreservationRejectedError("split-index dependencies require containment")
-        entries = self._index_entries(worktree)
+        index_records = self._index_entry_records(worktree)
+        entries = tuple((path, mode, stage) for path, mode, stage, _object_id in index_records)
         self._validate_index_entries(entries)
-        self._validate_index_extensions(index_bytes)
-        raw_states: dict[str, tuple[_PreservedPathState, _PreservedPathState]] = {}
+        head_entries = self._head_entries(worktree, branch_head)
+        index_path_names = self._validate_index_extensions(
+            index_bytes,
+            expected_entries=index_records,
+            head_entries=head_entries,
+        )
         if len(index_bytes) > _MAX_PRESERVED_FILE_BYTES:
             raise PreservationRejectedError("managed Git index exceeds the per-file preservation limit")
-        self._validate_private_content(index_bytes)
+        index_bytes_digest = hashlib.sha256(index_bytes).hexdigest()
+        current_metadata = tuple(
+            (path, *self._read_worktree_metadata(worktree, path))
+            for path in paths
+        )
+        provenance = self._classify_preservation(
+            change_id=change_id,
+            intent=intent,
+            recovery_id=recovery_id,
+            worktree_path=worktree,
+            current_metadata=current_metadata,
+            exact_head=branch_head,
+            index_digest=index_bytes_digest,
+            index_entries=index_records,
+            head_entries=head_entries,
+            paths=paths,
+        )
+        self._validate_index_path_names(index_path_names)
+        raw_states: dict[str, tuple[_PreservedPathState, _PreservedPathState]] = {}
         total = len(index_bytes)
         for path in paths:
             self._validate_preservation_path(worktree, path)
@@ -4225,6 +4434,7 @@ class ChangeWorkspaceManager:
                         raise PreservationRejectedError("a preserved file exceeds the per-file limit")
                     total += len(state.content)
             raw_states[path] = (current, baseline)
+        self._validate_provenance_states(provenance, {path: state[0] for path, state in raw_states.items()})
         if total > _MAX_PRESERVED_TOTAL_BYTES:
             raise PreservationRejectedError("raw preservation exceeds the total bounded limit")
         reread_states = {
@@ -4233,6 +4443,10 @@ class ChangeWorkspaceManager:
         }
         if any(not self._same_state(reread_states[path], raw_states[path][0]) for path in paths):
             raise PreservationFenceError("worktree path bytes or metadata changed during preservation capture")
+        self._validate_provenance_states(
+            provenance,
+            {path: reread_states[path] for path in paths},
+        )
         # Recheck the complete authority, manifest inputs, and every root descriptor after
         # the complete read and before the first preservation write.
         current_coordination = self._coordinator.show(change_id)
@@ -4303,10 +4517,11 @@ class ChangeWorkspaceManager:
         }
         if any(not self._same_state(final_states[path], raw_states[path][0]) for path in paths):
             raise PreservationFenceError("worktree path bytes or metadata changed before preservation write")
+        self._validate_provenance_states(provenance, final_states)
 
         entries_meta: list[PreservationEntry] = []
-        index_bytes_digest = hashlib.sha256(index_bytes).hexdigest()
         objects: dict[str, bytes] = {index_bytes_digest: index_bytes}
+        provenance_by_path = {item.path: item for item in provenance.paths}
         for path in paths:
             current, baseline = raw_states[path]
             before_object = self._preservation_object_name(current.content)
@@ -4327,6 +4542,7 @@ class ChangeWorkspaceManager:
                     before_object=before_object if current.content is not None else None,
                     after_object=after_object if baseline.content is not None else None,
                     before_identity=current.identity,
+                    provenance=provenance_by_path[path],
                 )
             )
         preservation_material = [
@@ -4334,6 +4550,7 @@ class ChangeWorkspaceManager:
             change_id.encode(),
             index_bytes,
             status,
+            json.dumps(provenance.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode(),
         ]
         for entry in entries_meta:
             preservation_material.extend(
@@ -4346,6 +4563,11 @@ class ChangeWorkspaceManager:
                     repr(entry.before_mode).encode(),
                     repr(entry.after_mode).encode(),
                     repr(entry.before_identity).encode(),
+                    json.dumps(
+                        entry.provenance.model_dump(mode="json") if entry.provenance is not None else None,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode(),
                 )
             )
         preservation_id = hashlib.sha256(b"\0".join(preservation_material)).hexdigest()
@@ -4383,6 +4605,7 @@ class ChangeWorkspaceManager:
             index_digest=index_bytes_digest,
             index_size=len(index_bytes),
             paths=tuple(sorted(entries_meta, key=lambda item: item.path)),
+            provenance=provenance,
         )
         self._write_preservation_store(
             receipt,
@@ -4410,7 +4633,12 @@ class ChangeWorkspaceManager:
         receipt, index_metadata, inventory = self._read_preservation_manifest(change_id, preservation_id)
         if receipt.change_id != change_id or receipt.preservation_id != preservation_id:
             raise PreservationFenceError("preservation identity does not match its private manifest")
-        self._verify_preservation_fences(change_id, receipt, index_metadata)
+        self._verify_preservation_fences(
+            change_id,
+            receipt,
+            index_metadata,
+            allow_legacy_provenance=True,
+        )
         objects: dict[str, bytes] = {}
         for object_name in inventory:
             content = self._read_private_preservation_object(receipt, object_name)
@@ -4431,12 +4659,22 @@ class ChangeWorkspaceManager:
         self._require_preservation_identity(preservation_id)
         self._require_preservation_environment()
         receipt, index_metadata, inventory = self._read_preservation_manifest(change_id, preservation_id)
+        provenance_by_path = (
+            {item.path: item for item in receipt.provenance.paths} if receipt.provenance is not None else {}
+        )
         if paths is None:
-            selected = tuple(entry.path for entry in receipt.paths)
+            selected = tuple(
+                entry.path for entry in receipt.paths if provenance_by_path.get(entry.path, None) is not None
+                and provenance_by_path[entry.path].disposition == "disposable"
+            )
         else:
             selected = tuple(paths)
             if selected != tuple(sorted(set(selected))) or not set(selected) <= {entry.path for entry in receipt.paths}:
                 raise PreservationRejectedError("restoration paths must be an exact subset of the preservation")
+            if any(provenance_by_path.get(path) is None for path in selected):
+                raise PreservationRejectedError("restoration provenance is unavailable")
+            if any(provenance_by_path[path].disposition != "disposable" for path in selected):
+                raise PreservationRejectedError("only proven disposable paths may be restored automatically")
         worktree, _index = self._verify_preservation_fences(
             change_id, receipt, index_metadata, selected_paths=selected
         )
@@ -4655,6 +4893,151 @@ class ChangeWorkspaceManager:
             raise PreservationFenceError("verified recovery authority no longer matches the managed workspace")
         return intent, receipt
 
+    def _classify_preservation(  # noqa: PLR0913 - preserve each exact evidence input at the gate.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> PreservationProvenanceEvidence:
+        """Ask the configured owner for exact producer classifications before copying bytes."""
+        try:
+            evidence = self._preservation_provenance_provider.classify(
+                change_id=change_id,
+                intent=intent,
+                recovery_id=recovery_id,
+                worktree_path=worktree_path,
+                current_metadata=current_metadata,
+                exact_head=exact_head,
+                index_digest=index_digest,
+                index_entries=index_entries,
+                head_entries=head_entries,
+                paths=paths,
+            )
+            if evidence is not None and not isinstance(evidence, PreservationProvenanceEvidence):
+                evidence = PreservationProvenanceEvidence.model_validate(evidence)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise PreservationRejectedError("trusted path provenance is unavailable") from exc
+        if evidence is None:
+            raise PreservationRejectedError("trusted path provenance is unavailable")
+        self._validate_preservation_provenance(
+            intent,
+            evidence=evidence,
+            change_id=change_id,
+            recovery_id=recovery_id,
+            worktree_path=worktree_path,
+            exact_head=exact_head,
+            index_digest=index_digest,
+            paths=paths,
+        )
+        return evidence
+
+    @staticmethod
+    def _validate_preservation_provenance(
+        intent: RecoveryIntent,
+        *,
+        evidence: PreservationProvenanceEvidence | None,
+        change_id: str,
+        recovery_id: str,
+        worktree_path: Path,
+        exact_head: str,
+        index_digest: str,
+        paths: tuple[str, ...],
+    ) -> None:
+        """Require exact producer evidence; task scope and hashes are not substitutes."""
+        if (
+            evidence is None
+            or evidence.change_id != change_id
+            or evidence.recovery_id != recovery_id
+            or evidence.worktree_path != worktree_path
+            or evidence.workspace_fingerprint != intent.workspace_fingerprint
+            or evidence.exact_head != exact_head
+            or evidence.index_digest != index_digest
+            or tuple(item.path for item in evidence.paths) != paths
+            or (paths and (intent.admitted_task_id is None or intent.admitted_task_digest is None))
+            or (
+                paths
+                and (
+                    evidence.task_id != intent.admitted_task_id
+                    or evidence.task_digest != intent.admitted_task_digest
+                )
+            )
+            or any(item.disposition not in {"useful", "disposable"} for item in evidence.paths)
+            or any(not item.producer_id for item in evidence.paths)
+        ):
+            raise PreservationRejectedError("path provenance is foreign, ambiguous, private, or stale")
+
+    @staticmethod
+    def _validate_provenance_states(
+        evidence: PreservationProvenanceEvidence,
+        states: dict[str, _PreservedPathState],
+    ) -> None:
+        """Require independently produced before-state facts to match the bytes just read."""
+        for item in evidence.paths:
+            state = states.get(item.path)
+            if state is None:
+                raise PreservationRejectedError("path provenance does not cover the captured worktree state")
+            if (
+                item.before_kind != state.kind
+                or item.before_digest != ChangeWorkspaceManager._state_digest(state)
+                or item.before_mode != state.mode
+            ):
+                raise PreservationFenceError("captured bytes or metadata do not match trusted path provenance")
+
+    def _reverify_preservation_provenance(  # noqa: PLR0913 - reverify the complete persisted owner boundary.
+        self,
+        *,
+        change_id: str,
+        intent: RecoveryIntent,
+        evidence: PreservationProvenanceEvidence,
+        recovery_id: str,
+        worktree_path: Path,
+        current_metadata: tuple[tuple[str, str, int | None], ...],
+        exact_head: str,
+        index_digest: str,
+        index_entries: tuple[tuple[str, int, int, str], ...],
+        head_entries: tuple[tuple[str, int, str], ...],
+        paths: tuple[str, ...],
+    ) -> None:
+        """Reverify immutable producer evidence instead of trusting private manifest bytes alone."""
+        try:
+            verified = self._preservation_provenance_provider.verify(
+                change_id=change_id,
+                intent=intent,
+                evidence=evidence,
+                recovery_id=recovery_id,
+                worktree_path=worktree_path,
+                current_metadata=current_metadata,
+                exact_head=exact_head,
+                index_digest=index_digest,
+                index_entries=index_entries,
+                head_entries=head_entries,
+                paths=paths,
+            )
+            if verified is not None and not isinstance(verified, PreservationProvenanceEvidence):
+                verified = PreservationProvenanceEvidence.model_validate(verified)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise PreservationRejectedError("trusted path provenance could not be reverified") from exc
+        if verified is None or verified != evidence:
+            raise PreservationRejectedError("trusted path provenance could not be reverified")
+        self._validate_preservation_provenance(
+            intent,
+            evidence=verified,
+            change_id=change_id,
+            recovery_id=recovery_id,
+            worktree_path=worktree_path,
+            exact_head=exact_head,
+            index_digest=index_digest,
+            paths=paths,
+        )
+
     @staticmethod
     def _require_admitted_paths(intent: RecoveryIntent, paths: tuple[str, ...]) -> None:
         """Reject dirty paths outside the persisted active-task admission before raw reads."""
@@ -4712,6 +5095,7 @@ class ChangeWorkspaceManager:
         index_metadata: tuple[int, int, int, int],
         *,
         selected_paths: tuple[str, ...] = (),
+        allow_legacy_provenance: bool = False,
     ) -> tuple[Path, _ManagedIndexIdentity]:
         """Revalidate every durable identity before a read or exact-path effect."""
         coordination = self._coordinator.show(change_id)
@@ -4735,6 +5119,18 @@ class ChangeWorkspaceManager:
             or receipt.last_write_provenance != intent.last_write_provenance
         ):
             raise PreservationFenceError("preservation authority no longer matches its registered roots")
+        if receipt.provenance is not None or not allow_legacy_provenance:
+            provenance = receipt.provenance
+            self._validate_preservation_provenance(
+                intent,
+                evidence=provenance,
+                change_id=change_id,
+                recovery_id=receipt.recovery_id,
+                worktree_path=worktree,
+                exact_head=receipt.branch_head,
+                index_digest=receipt.index_digest,
+                paths=recorded_paths,
+            )
         branch_head = self._resolve(coordination.branch)
         if branch_head != receipt.branch_head or branch_head != intent.exact_head:
             raise PreservationFenceError("Change branch head changed since preservation")
@@ -4771,7 +5167,35 @@ class ChangeWorkspaceManager:
             or administration_identity[:2] != (receipt.administration_device, receipt.administration_inode)
         ):
             raise PreservationFenceError("Git common directory identity changed")
-        self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        index_bytes = self._verify_index_metadata(index, receipt.index_digest, index_metadata)
+        if receipt.provenance is not None:
+            index_records = self._index_entry_records(worktree)
+            entries = tuple((path, mode, stage) for path, mode, stage, _object_id in index_records)
+            self._validate_index_entries(entries)
+            head_entries = self._head_entries(worktree, branch_head)
+            index_path_names = self._validate_index_extensions(
+                index_bytes,
+                expected_entries=index_records,
+                head_entries=head_entries,
+            )
+            self._reverify_preservation_provenance(
+                change_id=change_id,
+                intent=intent,
+                evidence=receipt.provenance,
+                recovery_id=receipt.recovery_id,
+                worktree_path=worktree,
+                current_metadata=tuple(
+                    (path, *self._read_worktree_metadata(worktree, path))
+                    for path in recorded_paths
+                ),
+                exact_head=branch_head,
+                index_digest=receipt.index_digest,
+                index_entries=index_records,
+                head_entries=head_entries,
+                paths=recorded_paths,
+            )
+            self._validate_index_path_names(index_path_names)
+            self._verify_index_metadata(index, receipt.index_digest, index_metadata)
         self._verify_preservation_inventory(worktree, receipt)
         return worktree, index
 
@@ -5200,30 +5624,60 @@ class ChangeWorkspaceManager:
         identity: _ManagedIndexIdentity,
         expected_digest: str,
         metadata: tuple[int, int, int, int],
-    ) -> None:
+    ) -> bytes:
         if (identity.mode, identity.device, identity.inode, identity.link_count) != metadata:
             raise PreservationFenceError("managed Git index identity changed")
         content = self._read_managed_index(identity)
         if hashlib.sha256(content).hexdigest() != expected_digest:
             raise PreservationFenceError("managed Git index digest changed")
+        return content
 
     def _index_entries(self, worktree: Path) -> tuple[tuple[str, int, int], ...]:
+        return tuple((path, mode, stage) for path, mode, stage, _object_id in self._index_entry_records(worktree))
+
+    def _index_entry_records(self, worktree: Path) -> tuple[tuple[str, int, int, str], ...]:
         output = self._preservation_git("ls-files", "--sparse", "--stage", "-z", cwd=worktree).stdout
-        result: list[tuple[str, int, int]] = []
+        result: list[tuple[str, int, int, str]] = []
         for record in output.split(b"\0"):
             if not record:
                 continue
             header, separator, raw_path = record.partition(b"\t")
             fields = header.split()
-            if not separator or len(fields) != 3:
+            if not separator or len(fields) != 3 or len(fields[1]) not in {40, 64}:
                 raise PreservationRejectedError("managed index inventory is malformed")
             try:
                 mode = int(fields[0], 8)
                 stage = int(fields[2])
+                object_id = fields[1].decode("ascii")
                 path = os.fsdecode(raw_path)
             except (UnicodeError, ValueError) as exc:
                 raise PreservationRejectedError("managed index inventory is not canonical") from exc
-            result.append((path, mode, stage))
+            if any(character not in "0123456789abcdef" for character in object_id):
+                raise PreservationRejectedError("managed index inventory is not canonical")
+            result.append((path, mode, stage, object_id))
+        return tuple(result)
+
+    def _head_entries(self, worktree: Path, head: str) -> tuple[tuple[str, int, str], ...]:
+        output = self._preservation_git("ls-tree", "-r", "-z", "--full-tree", head, cwd=worktree).stdout
+        result: list[tuple[str, int, str]] = []
+        for record in output.split(b"\0"):
+            if not record:
+                continue
+            header, separator, raw_path = record.partition(b"\t")
+            fields = header.split()
+            if not separator or len(fields) != 3 or len(fields[2]) not in {40, 64}:
+                raise PreservationRejectedError("reviewed HEAD inventory is malformed")
+            try:
+                mode = int(fields[0], 8)
+                object_id = fields[2].decode("ascii")
+                path = os.fsdecode(raw_path)
+            except (UnicodeError, ValueError) as exc:
+                raise PreservationRejectedError("reviewed HEAD inventory is not canonical") from exc
+            if fields[1] not in {b"blob", b"commit"} or any(
+                character not in "0123456789abcdef" for character in object_id
+            ):
+                raise PreservationRejectedError("reviewed HEAD inventory is not canonical")
+            result.append((path, mode, object_id))
         return tuple(result)
 
     @staticmethod
@@ -5236,70 +5690,151 @@ class ChangeWorkspaceManager:
             if mode not in {0o100644, 0o100755, 0o120000}:
                 raise PreservationRejectedError("unsupported managed index entry type")
             _validate_relative_preservation_path(path)
-        ChangeWorkspaceManager._validate_private_paths(tuple(path for path, _mode, _stage in entries))
 
     @staticmethod
-    def _validate_index_extensions(content: bytes) -> None:
+    def _validate_index_extensions(
+        content: bytes,
+        *,
+        expected_entries: tuple[tuple[str, int, int, str], ...] | None = None,
+        head_entries: tuple[tuple[str, int, str], ...] | None = None,
+    ) -> tuple[str, ...]:
         """Accept only self-contained index extensions with no private path cache."""
         if len(content) < 32 or content[:4] != b"DIRC":
             raise PreservationRejectedError("managed index header is invalid")
-        lowered_content = content.lower()
-        if any(
-            marker.encode() in lowered_content
-            for marker in (".env", "credential", "password", "passwd", "secret", "token", "private")
-        ):
-            raise PreservationRejectedError("managed index contains private metadata")
+        ChangeWorkspaceManager._validate_private_content(content)
         version = int.from_bytes(content[4:8], "big")
         entry_count = int.from_bytes(content[8:12], "big")
         if version not in {2, 3}:
             raise PreservationRejectedError("managed index version is outside the v1 boundary")
         cursor = 12
         checksum_start = len(content) - 20
+        if hashlib.sha1(content[:checksum_start], usedforsecurity=False).digest() != content[checksum_start:]:
+            raise PreservationRejectedError("managed index checksum is invalid")
+        records: list[tuple[str, int, int, str]] = []
         for _index in range(entry_count):
             if cursor + 62 > checksum_start:
                 raise PreservationRejectedError("managed index entry table is truncated")
             entry_start = cursor
+            mode = int.from_bytes(content[cursor + 24 : cursor + 28], "big")
+            object_id = content[cursor + 40 : cursor + 60].hex()
             flags = int.from_bytes(content[cursor + 60 : cursor + 62], "big")
+            if flags & 0xC000:
+                raise PreservationRejectedError("managed index extended entries require containment")
             cursor += 62
             if flags & 0x0FFF < 0x0FFF:
                 path_end = cursor + (flags & 0x0FFF)
                 if path_end >= checksum_start or content[path_end] != 0:
                     raise PreservationRejectedError("managed index entry path is malformed")
+                raw_path = content[cursor:path_end]
                 cursor = path_end + 1
             else:
                 try:
                     path_end = content.index(b"\0", cursor, checksum_start)
                 except ValueError as exc:
                     raise PreservationRejectedError("managed index entry path is unterminated") from exc
+                raw_path = content[cursor:path_end]
                 cursor = path_end + 1
-            cursor = entry_start + ((cursor - entry_start + 7) & ~7)
-        known = {b"TREE", b"REUC", b"EOIE", b"IEOT"}
+            try:
+                path = os.fsdecode(raw_path)
+            except UnicodeError as exc:
+                raise PreservationRejectedError("managed index entry path is not canonical") from exc
+            _validate_relative_preservation_path(path)
+            stage = (flags >> 12) & 0x3
+            if mode not in {0o100644, 0o100755, 0o120000} or stage != 0:
+                raise PreservationRejectedError("managed index entry requires containment")
+            records.append((path, mode, stage, object_id))
+            aligned_cursor = entry_start + ((cursor - entry_start + 7) & ~7)
+            if aligned_cursor > checksum_start or any(content[cursor:aligned_cursor]):
+                raise PreservationRejectedError("managed index entry padding is malformed")
+            cursor = aligned_cursor
+        if expected_entries is not None and tuple(records) != expected_entries:
+            raise PreservationRejectedError("managed index entries do not match Git inventory")
+        if head_entries is not None and tuple(
+            (path, mode, object_id) for path, mode, _stage, object_id in records
+        ) != head_entries:
+            raise PreservationRejectedError("managed index entries do not match reviewed HEAD")
+        path_names = [path for path, _mode, _stage, _object_id in records]
         while cursor < checksum_start:
             if cursor + 8 > checksum_start:
                 raise PreservationRejectedError("managed index extension header is truncated")
             extension = content[cursor : cursor + 4]
             size = int.from_bytes(content[cursor + 4 : cursor + 8], "big")
             cursor += 8
-            if extension not in known or cursor + size > checksum_start:
+            if extension != b"TREE" or cursor + size > checksum_start:
                 raise PreservationRejectedError("managed index extension requires containment")
             extension_content = content[cursor : cursor + size]
-            lowered = extension_content.lower()
-            if any(
-                marker.encode() in lowered
-                for marker in (
-                    ".env",
-                    "credential",
-                    "password",
-                    "passwd",
-                    "secret",
-                    "token",
-                    "private",
-                )
-            ):
-                raise PreservationRejectedError("managed index extension contains private metadata")
+            path_names.extend(ChangeWorkspaceManager._validate_index_tree_extension(extension_content))
             cursor += size
         if cursor != checksum_start:
             raise PreservationRejectedError("managed index extension table is malformed")
+        return tuple(path_names)
+
+    @staticmethod
+    def _validate_index_tree_extension(content: bytes) -> tuple[str, ...]:
+        """Validate cache-tree records instead of treating extension bytes as trusted paths."""
+        if not content:
+            raise PreservationRejectedError("managed Git cache-tree extension is empty")
+        cursor = 0
+        paths: list[str] = []
+        while cursor < len(content):
+            try:
+                path_end = content.index(b"\0", cursor)
+            except ValueError as exc:
+                raise PreservationRejectedError("managed Git cache-tree path is unterminated") from exc
+            raw_path = content[cursor:path_end]
+            cursor = path_end + 1
+            try:
+                path = os.fsdecode(raw_path)
+            except UnicodeError as exc:
+                raise PreservationRejectedError("managed Git cache-tree path is not canonical") from exc
+            if path:
+                _validate_relative_preservation_path(path)
+                paths.append(path)
+            try:
+                line_end = content.index(b"\n", cursor)
+            except ValueError as exc:
+                raise PreservationRejectedError("managed Git cache-tree record is unterminated") from exc
+            counts = content[cursor:line_end].split(b" ")
+            if len(counts) != 2 or any(
+                not item
+                or (item.startswith(b"-") and len(item) == 1)
+                or any(byte < 48 or byte > 57 for byte in item.removeprefix(b"-"))
+                for item in counts
+            ):
+                raise PreservationRejectedError("managed Git cache-tree counts are malformed")
+            cursor = line_end + 1
+            if cursor + 20 > len(content):
+                raise PreservationRejectedError("managed Git cache-tree object is truncated")
+            cursor += 20
+        return tuple(paths)
+
+    @staticmethod
+    def _validate_index_path_names(paths: tuple[str, ...]) -> None:
+        """Apply conservative index-name screening only after the exact index boundary is trusted."""
+        for path in paths:
+            _validate_relative_preservation_path(path)
+            components = {component.casefold() for component in PurePosixPath(path).parts}
+            if any(
+                component in _PRIVATE_PATH_MARKERS
+                or component.startswith(".env.")
+                or component.startswith("id_rsa.")
+                or component.startswith("id_ed25519.")
+                or component.startswith("id_ecdsa.")
+                or component.startswith(
+                    (
+                        "credential.",
+                        "credentials.",
+                        "password.",
+                        "passwd.",
+                        "private.",
+                        "secret.",
+                        "secrets.",
+                        "token.",
+                    )
+                )
+                for component in components
+            ):
+                raise PreservationRejectedError("private or secret-like index path requires containment")
 
     @staticmethod
     def _preservation_status_paths(status: bytes) -> tuple[str, ...]:
@@ -5488,6 +6023,32 @@ class ChangeWorkspaceManager:
             raise
 
     @staticmethod
+    def _read_worktree_metadata(worktree: Path, path: str) -> tuple[str, int | None]:
+        """Read only safe type/mode metadata for the owner lookup boundary."""
+        ChangeWorkspaceManager._validate_preservation_path(worktree, path)
+        relative = PurePosixPath(path)
+        opened = ChangeWorkspaceManager._open_worktree_read_parent(worktree, relative.parts[:-1], path)
+        if opened is None:
+            return "absent", None
+        parent_fd, ancestors = opened
+        try:
+            try:
+                metadata = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+                return "absent", None
+            ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+            if stat.S_ISLNK(metadata.st_mode):
+                return "symlink", 0o777
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                raise PreservationRejectedError("special or multiply-linked worktree path requires containment")
+            if metadata.st_size > _MAX_PRESERVED_FILE_BYTES:
+                raise PreservationRejectedError("worktree path exceeds the per-file preservation limit")
+            return "regular", stat.S_IMODE(metadata.st_mode)
+        finally:
+            os.close(parent_fd)
+
+    @staticmethod
     def _read_worktree_leaf(
         parent_fd: int,
         name: str,
@@ -5649,7 +6210,10 @@ class ChangeWorkspaceManager:
             raise PreservationFenceError("private preservation object inventory changed")
         self._validate_private_paths(tuple(entry.path for entry in receipt.paths))
         for object_name, content in objects.items():
-            self._validate_private_content(content)
+            if object_name == receipt.index_digest:
+                self._validate_index_extensions(content)
+            else:
+                self._validate_private_content(content)
             stored = self._read_private_preservation_object(receipt, object_name)
             if stored != content or hashlib.sha256(stored).hexdigest() != object_name:
                 raise PreservationFenceError("private preservation object failed verification")
@@ -7366,6 +7930,25 @@ def _quarantine_digest(receipt: DirtyWorktreeQuarantineReceipt) -> str:
 
 def _preservation_receipt_digest(receipt: WorktreePreservationReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    if "provenance" not in receipt.model_fields_set:
+        payload.pop("provenance", None)
+    elif receipt.provenance is not None:
+        evidence_payload = payload.get("provenance")
+        if isinstance(evidence_payload, dict):
+            for field in ("change_id", "recovery_id", "worktree_path", "workspace_fingerprint"):
+                if field not in receipt.provenance.model_fields_set:
+                    evidence_payload.pop(field, None)
+            evidence_paths = evidence_payload.get("paths")
+            if isinstance(evidence_paths, list):
+                for item_payload, item in zip(evidence_paths, receipt.provenance.paths, strict=True):
+                    if isinstance(item_payload, dict):
+                        for field in ("before_kind", "before_digest", "before_mode"):
+                            if field not in item.model_fields_set:
+                                item_payload.pop(field, None)
+    if "paths" in payload:
+        for item, entry in zip(payload["paths"], receipt.paths, strict=True):
+            if "provenance" not in entry.model_fields_set:
+                item.pop("provenance", None)
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 

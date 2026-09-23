@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -15,7 +16,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import Barrier, Event, Lock
 from typing import Literal
 from unittest.mock import Mock, patch, sentinel
@@ -149,7 +150,11 @@ from owlbear_delivery import (
     classify_publication_check,
     load_delivery_application,
 )
-from owlbear_delivery.change_workspace import ChangeContinuationAction
+from owlbear_delivery.change_workspace import (
+    ChangeContinuationAction,
+    PreservationPathProvenance,
+    PreservationProvenanceEvidence,
+)
 from owlbear_delivery.delivery_contract_discovery import (
     DeliveryDiscoveryErrorCode,
     contract_fingerprint,
@@ -739,6 +744,54 @@ def _repository(tmp_path: Path) -> Path:
     return repository
 
 
+class _TestPreservationProvenanceProvider:
+    def classify(self, **kwargs):
+        intent = kwargs["intent"]
+        worktree = kwargs["worktree_path"]
+
+        def before_state(path: str) -> tuple[str, str | None, int | None]:
+            candidate = worktree / PurePosixPath(path)
+            try:
+                metadata = candidate.lstat()
+            except FileNotFoundError:
+                return "absent", None, None
+            if stat.S_ISLNK(metadata.st_mode):
+                content = os.fsencode(os.readlink(candidate))
+                return "symlink", hashlib.sha256(content).hexdigest(), 0o777
+            content = candidate.read_bytes()
+            return "regular", hashlib.sha256(content).hexdigest(), stat.S_IMODE(metadata.st_mode)
+
+        def path_provenance(path: str) -> PreservationPathProvenance:
+            kind, before_digest, before_mode = before_state(path)
+            return PreservationPathProvenance(
+                path=path,
+                disposition="disposable",
+                producer_id="test-owner",
+                before_kind=kind,
+                before_digest=before_digest,
+                before_mode=before_mode,
+            )
+
+        return PreservationProvenanceEvidence(
+            evidence_id="test-owner-evidence",
+            change_id=kwargs["change_id"],
+            recovery_id=kwargs["recovery_id"],
+            worktree_path=worktree,
+            workspace_fingerprint=intent.workspace_fingerprint,
+            exact_head=kwargs["exact_head"],
+            index_digest=kwargs["index_digest"],
+            task_id=intent.admitted_task_id,
+            task_digest=intent.admitted_task_digest,
+            paths=tuple(
+                path_provenance(path)
+                for path in kwargs["paths"]
+            ),
+        )
+
+    def verify(self, **kwargs):
+        return kwargs["evidence"]
+
+
 def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None = None) -> str:
     target_repository = tmp_path / "target-repository"
     _git(tmp_path, "clone", str(remote), str(target_repository))
@@ -795,7 +848,13 @@ def _portfolio(
     state_root = tmp_path / "state"
     package_root = tmp_path / "packages"
     coordinator = PortfolioCoordinator(state_root)
-    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    manager = ChangeWorkspaceManager(
+        repository,
+        tmp_path / "worktrees",
+        coordinator,
+        "main",
+        preservation_provenance_provider=_TestPreservationProvenanceProvider(),
+    )
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
     runtimes = {}
@@ -878,7 +937,13 @@ def _reopen_portfolio(
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages"
     coordinator = PortfolioCoordinator(state_root)
-    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    manager = ChangeWorkspaceManager(
+        repository,
+        tmp_path / "worktrees",
+        coordinator,
+        "main",
+        preservation_provenance_provider=_TestPreservationProvenanceProvider(),
+    )
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
     hooks = (

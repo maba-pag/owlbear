@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import Mock, patch
 
 import pytest
@@ -31,13 +31,17 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PortfolioCoordinator,
     PreservationFenceError,
+    PreservationPathProvenance,
+    PreservationProvenanceEvidence,
     PreservationRejectedError,
     PromoteExternalHead,
     PublicationBaselineUnavailableError,
     PublicationLease,
     RecoverOutOfBandHead,
     SyncChangeWithTarget,
+    UnavailablePreservationProvenanceProvider,
     WriterIdentity,
+    WorktreePreservationReceipt,
 )
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
@@ -322,10 +326,91 @@ def _repository(tmp_path: Path, *, target: str = "release") -> tuple[Path, str]:
     return repository, initial
 
 
-def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remote: str = "origin"):
+def _manager(
+    tmp_path: Path,
+    repository: Path,
+    *,
+    target: str = "release",
+    remote: str = "origin",
+    provenance_provider: object | None = None,
+):
     coordinator = PortfolioCoordinator(tmp_path / "state")
-    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target, remote=remote)
+    manager = ChangeWorkspaceManager(
+        repository,
+        tmp_path / "worktrees",
+        coordinator,
+        target,
+        remote=remote,
+        preservation_provenance_provider=provenance_provider or _TestPreservationProvenanceProvider(),
+    )
     return coordinator, manager
+
+
+class _TestPreservationProvenanceProvider:
+    def __init__(
+        self,
+        *,
+        disposition: str = "disposable",
+        stale_task_digest: bool = False,
+        stale_head: bool = False,
+        verification_available: bool = True,
+    ):
+        self.disposition = disposition
+        self.stale_task_digest = stale_task_digest
+        self.stale_head = stale_head
+        self.verification_available = verification_available
+
+    def classify(self, **kwargs):
+        intent = kwargs["intent"]
+        worktree = kwargs["worktree_path"]
+
+        def before_state(path: str) -> tuple[str, str | None, int | None]:
+            candidate = worktree / PurePosixPath(path)
+            try:
+                metadata = candidate.lstat()
+            except FileNotFoundError:
+                return "absent", None, None
+            if stat.S_ISLNK(metadata.st_mode):
+                content = os.fsencode(os.readlink(candidate))
+                return "symlink", hashlib.sha256(content).hexdigest(), 0o777
+            content = candidate.read_bytes()
+            return "regular", hashlib.sha256(content).hexdigest(), stat.S_IMODE(metadata.st_mode)
+
+        def path_provenance(path: str) -> PreservationPathProvenance:
+            kind, before_digest, before_mode = before_state(path)
+            return PreservationPathProvenance(
+                path=path,
+                disposition=self.disposition,
+                producer_id="test-owner",
+                before_kind=kind,
+                before_digest=before_digest,
+                before_mode=before_mode,
+            )
+
+        return PreservationProvenanceEvidence(
+            evidence_id="test-owner-evidence",
+            change_id=kwargs["change_id"],
+            recovery_id=kwargs["recovery_id"],
+            worktree_path=worktree,
+            workspace_fingerprint=intent.workspace_fingerprint,
+            exact_head=("0" * 40 if self.stale_head else kwargs["exact_head"]),
+            index_digest=kwargs["index_digest"],
+            task_id=intent.admitted_task_id,
+            task_digest=(
+                ("0" * 64 if self.stale_task_digest else intent.admitted_task_digest)
+                if intent.admitted_task_digest is not None
+                else None
+            ),
+            paths=tuple(
+                path_provenance(path)
+                for path in kwargs["paths"]
+            ),
+        )
+
+    def verify(self, **kwargs):
+        if not self.verification_available:
+            return None
+        return kwargs["evidence"]
 
 
 @pytest.mark.parametrize(
@@ -667,7 +752,12 @@ def test_finalization_repair_release_reuses_completed_recovery_custody(tmp_path:
     assert participant.content == coordinator.coordination_bytes(coordination.change_id)
 
 
-def _preservation_workspace(tmp_path: Path, *, nested: bool = False):
+def _preservation_workspace(
+    tmp_path: Path,
+    *,
+    nested: bool = False,
+    provenance_provider: object | None = None,
+):
     repository, initial = _repository(tmp_path, target="release")
     if nested:
         (repository / "nested" / "deeper").mkdir(parents=True)
@@ -677,7 +767,7 @@ def _preservation_workspace(tmp_path: Path, *, nested: bool = False):
         initial = _git(repository, "rev-parse", "HEAD")
         _git(repository, "branch", "-f", "release", initial)
         _git(repository, "update-ref", "refs/remotes/origin/release", initial)
-    coordinator, manager = _manager(tmp_path, repository)
+    coordinator, manager = _manager(tmp_path, repository, provenance_provider=provenance_provider)
     coordination = manager.ensure("preserve-change")
     frontier_path = manager.runtime_root / "changes" / coordination.change_id / "frontier.json"
     frontier = b'{"frontier":"preservation"}\n'
@@ -808,6 +898,317 @@ def test_preservation_rejects_foreign_dirty_path_before_private_capture(tmp_path
 
     private_root = manager.runtime_root / "changes" / intent.invocation.request.change_id / "recovery-receipts"
     assert not (private_root / intent.recovery_id / "preservation").exists()
+
+
+@pytest.mark.parametrize(
+    ("provider", "message"),
+    [
+        (_TestPreservationProvenanceProvider(stale_task_digest=True), "stale"),
+        (_TestPreservationProvenanceProvider(stale_head=True), "stale"),
+        (_TestPreservationProvenanceProvider(disposition="foreign"), "foreign"),
+        (_TestPreservationProvenanceProvider(disposition="ambiguous"), "foreign"),
+        (_TestPreservationProvenanceProvider(disposition="private"), "foreign"),
+    ],
+)
+def test_preservation_requires_trusted_exact_path_provenance_before_copying(
+    tmp_path: Path,
+    provider: _TestPreservationProvenanceProvider,
+    message: str,
+) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path, provenance_provider=provider
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+
+    with (
+        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("raw path was read")),
+        pytest.raises(PreservationRejectedError, match=message),
+    ):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    private_root = manager.runtime_root / "changes" / coordination.change_id / "recovery-receipts"
+    assert not (private_root / intent.recovery_id / "preservation").exists()
+
+
+def test_preservation_default_owner_boundary_is_unavailable(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path,
+        provenance_provider=UnavailablePreservationProvenanceProvider(),
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+
+    with pytest.raises(PreservationRejectedError, match="trusted path provenance"):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+
+def test_preservation_restores_only_proven_disposable_paths(tmp_path: Path) -> None:
+    provider = _TestPreservationProvenanceProvider(disposition="useful")
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path, provenance_provider=provider
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"useful code\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    assert preservation.provenance is not None
+    assert preservation.provenance.paths[0].disposition == "useful"
+    manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert (coordination.worktree_path / "shared.txt").read_bytes() == b"useful code\n"
+    with pytest.raises(PreservationRejectedError, match="disposable"):
+        manager.restore_preservation(
+            coordination.change_id,
+            preservation.preservation_id,
+            paths=("shared.txt",),
+        )
+
+
+def test_preservation_requires_owner_before_state_to_match_captured_bytes(tmp_path: Path) -> None:
+    class MismatchedStateProvider(_TestPreservationProvenanceProvider):
+        def classify(self, **kwargs):
+            evidence = super().classify(**kwargs)
+            item = evidence.paths[0].model_copy(update={"before_digest": "f" * 64})
+            return evidence.model_copy(update={"paths": (item, *evidence.paths[1:])})
+
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path,
+        provenance_provider=MismatchedStateProvider(),
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+
+    with pytest.raises(PreservationFenceError, match="trusted path provenance"):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    preservation_root = (
+        manager.runtime_root
+        / "changes"
+        / coordination.change_id
+        / "recovery-receipts"
+        / intent.recovery_id
+        / "preservation"
+    )
+    assert not preservation_root.exists()
+
+
+def test_preservation_owner_evidence_binds_recovery_and_workspace(tmp_path: Path) -> None:
+    class WrongRecoveryBindingProvider(_TestPreservationProvenanceProvider):
+        def classify(self, **kwargs):
+            evidence = super().classify(**kwargs)
+            return evidence.model_copy(update={"recovery_id": "0" * 64})
+
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path,
+        provenance_provider=WrongRecoveryBindingProvider(),
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+
+    with pytest.raises(PreservationRejectedError, match="path provenance"):
+        manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+
+def test_restore_requires_independent_provenance_reverification_before_objects(tmp_path: Path) -> None:
+    provider = _TestPreservationProvenanceProvider()
+    _coordinator, manager, coordination, intent = _preservation_workspace(
+        tmp_path, provenance_provider=provider
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    provider.verification_available = False
+
+    with (
+        patch.object(manager, "_read_private_preservation_object", side_effect=AssertionError("object was read")),
+        pytest.raises(PreservationRejectedError, match="reverified"),
+    ):
+        manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+
+def test_private_path_policy_remains_conservative_for_dirty_paths() -> None:
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_private_paths(
+            ("custom-tokens.css", "components/password-component.tsx")
+        )
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_private_paths(("config/password",))
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_private_paths(("config/private.txt",))
+
+
+def _raw_index_for_test(path: str, *, extension: bytes = b"") -> bytes:
+    encoded_path = path.encode()
+    entry = bytearray(62)
+    entry[24:28] = (0o100644).to_bytes(4, "big")
+    entry[40:60] = b"\x01" * 20
+    entry[60:62] = len(encoded_path).to_bytes(2, "big")
+    entry.extend(encoded_path)
+    entry.append(0)
+    entry.extend(b"\0" * ((-len(entry)) % 8))
+    content = b"DIRC" + (2).to_bytes(4, "big") + (1).to_bytes(4, "big") + entry + extension
+    return content + hashlib.sha1(content, usedforsecurity=False).digest()
+
+
+@pytest.mark.parametrize("path", ["custom-tokens.css", "components/password-component.tsx"])
+def test_raw_index_privacy_uses_structural_paths(path: str) -> None:
+    expected_entries = ((path, 0o100644, 0, "01" * 20),)
+    head_entries = ((path, 0o100644, "01" * 20),)
+    names = ChangeWorkspaceManager._validate_index_extensions(
+        _raw_index_for_test(path),
+        expected_entries=expected_entries,
+        head_entries=head_entries,
+    )
+    ChangeWorkspaceManager._validate_index_path_names(names)
+
+
+def test_raw_index_qualification_binds_exact_git_and_head_entries() -> None:
+    content = _raw_index_for_test("ordinary.txt")
+    index_entries = (("ordinary.txt", 0o100644, 0, "01" * 20),)
+    head_entries = (("ordinary.txt", 0o100644, "01" * 20),)
+    ChangeWorkspaceManager._validate_index_extensions(
+        content,
+        expected_entries=index_entries,
+        head_entries=head_entries,
+    )
+    with pytest.raises(PreservationRejectedError, match="Git inventory"):
+        ChangeWorkspaceManager._validate_index_extensions(
+            content,
+            expected_entries=(("ordinary.txt", 0o100644, 0, "02" * 20),),
+            head_entries=head_entries,
+        )
+    with pytest.raises(PreservationRejectedError, match="reviewed HEAD"):
+        ChangeWorkspaceManager._validate_index_extensions(
+            content,
+            expected_entries=index_entries,
+            head_entries=(("ordinary.txt", 0o100644, "02" * 20),),
+        )
+
+
+def test_raw_index_cache_tree_extension_is_fully_parsed() -> None:
+    tree = b"\0" + b"1 0\n" + b"\x02" * 20
+    extension = b"TREE" + len(tree).to_bytes(4, "big") + tree
+    index_entries = (("ordinary.txt", 0o100644, 0, "01" * 20),)
+    head_entries = (("ordinary.txt", 0o100644, "01" * 20),)
+    names = ChangeWorkspaceManager._validate_index_extensions(
+        _raw_index_for_test("ordinary.txt", extension=extension),
+        expected_entries=index_entries,
+        head_entries=head_entries,
+    )
+    ChangeWorkspaceManager._validate_index_path_names(names)
+    private_tree = b"config/password\0" + b"1 0\n" + b"\x02" * 20
+    private_extension = b"TREE" + len(private_tree).to_bytes(4, "big") + private_tree
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_index_path_names(
+            ChangeWorkspaceManager._validate_index_extensions(
+                _raw_index_for_test("ordinary.txt", extension=private_extension),
+                expected_entries=index_entries,
+                head_entries=head_entries,
+            )
+        )
+
+
+def test_raw_index_rejects_nonzero_padding_and_bad_checksum() -> None:
+    content = bytearray(_raw_index_for_test("ordinary.txt"))
+    entry_start = 12
+    path_end = entry_start + 62 + len(b"ordinary.txt") + 1
+    content[path_end] = 1
+    content[-20:] = hashlib.sha1(content[:-20], usedforsecurity=False).digest()
+    with pytest.raises(PreservationRejectedError, match="padding"):
+        ChangeWorkspaceManager._validate_index_extensions(bytes(content))
+
+    invalid_checksum = bytearray(_raw_index_for_test("ordinary.txt"))
+    invalid_checksum[-1] ^= 1
+    with pytest.raises(PreservationRejectedError, match="checksum"):
+        ChangeWorkspaceManager._validate_index_extensions(bytes(invalid_checksum))
+
+
+def test_raw_index_rejects_extended_entry_flags_before_path_parsing() -> None:
+    content = bytearray(_raw_index_for_test("ordinary.txt"))
+    content[12 + 60 : 12 + 62] = (0x4000).to_bytes(2, "big")
+    content[-20:] = hashlib.sha1(content[:-20], usedforsecurity=False).digest()
+
+    with pytest.raises(PreservationRejectedError, match="extended"):
+        ChangeWorkspaceManager._validate_index_extensions(bytes(content))
+
+
+def test_raw_index_private_and_unknown_extensions_remain_contained() -> None:
+    index_entries = (("password", 0o100644, 0, "01" * 20),)
+    head_entries = (("password", 0o100644, "01" * 20),)
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_index_path_names(
+            ChangeWorkspaceManager._validate_index_extensions(
+                _raw_index_for_test("password"),
+                expected_entries=index_entries,
+                head_entries=head_entries,
+            )
+        )
+    with pytest.raises(PreservationRejectedError, match="containment"):
+        ChangeWorkspaceManager._validate_index_extensions(
+            _raw_index_for_test("ordinary.txt", extension=b"UNKN" + (3).to_bytes(4, "big") + b"raw")
+        )
+    with pytest.raises(PreservationRejectedError, match="containment"):
+        ChangeWorkspaceManager._validate_index_extensions(
+            _raw_index_for_test("ordinary.txt", extension=b"EOIE" + (0).to_bytes(4, "big"))
+        )
+
+
+def test_raw_index_scans_all_bytes_for_high_confidence_credentials() -> None:
+    with pytest.raises(PreservationRejectedError, match="private"):
+        ChangeWorkspaceManager._validate_index_extensions(
+            _raw_index_for_test("ordinary.txt", extension=b"UNKN" + (13).to_bytes(4, "big") + b"github_pat_abc")
+        )
+
+
+def test_legacy_preservation_receipt_loads_but_cannot_authorize_restore(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    (coordination.worktree_path / "shared.txt").write_bytes(b"legacy preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    manifest_path = (
+        manager.runtime_root
+        / "changes"
+        / coordination.change_id
+        / "recovery-receipts"
+        / intent.recovery_id
+        / "preservation"
+        / "manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_bytes())
+    legacy_receipt = manifest["receipt"]
+    legacy_receipt.pop("provenance")
+    for entry in legacy_receipt["paths"]:
+        entry.pop("provenance")
+    legacy_receipt["receipt_id"] = hashlib.sha256(
+        json.dumps(
+            {key: value for key, value in legacy_receipt.items() if key != "receipt_id"},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    loaded = WorktreePreservationReceipt.model_validate(legacy_receipt)
+    assert loaded.provenance is None
+    manifest["receipt"] = legacy_receipt
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    assert manager.verify_preservation(coordination.change_id, preservation.preservation_id).provenance is None
+
+    with pytest.raises(PreservationRejectedError, match="path provenance"):
+        manager.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+
+def test_legacy_provenance_shape_remains_inspectable_but_lacks_authority() -> None:
+    legacy = PreservationProvenanceEvidence(
+        evidence_id="legacy-owner-evidence",
+        exact_head="a" * 40,
+        index_digest="b" * 64,
+        task_id="legacy-task",
+        task_digest="c" * 64,
+        paths=(
+            PreservationPathProvenance(
+                path="shared.txt",
+                disposition="disposable",
+                producer_id="legacy-owner",
+            ),
+        ),
+    )
+
+    assert legacy.change_id is None
+    assert legacy.paths[0].before_kind is None
 
 
 def test_preservation_status_paths_include_both_rename_names() -> None:
@@ -1165,11 +1566,17 @@ def _kill_during_restoration_before_replace(tmp_path: Path, preservation, reposi
         "import os, signal, sys\n"
         "from pathlib import Path\n"
         "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "class TestPreservationProvenanceProvider:\n"
+        "    def verify(self, **kwargs):\n"
+        "        return kwargs['evidence']\n"
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
         "coordinator.record_verified_exclusion(sys.argv[5])\n"
-        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "manager = ChangeWorkspaceManager(\n"
+        "    repository, root / 'worktrees', coordinator, 'release', remote='origin',\n"
+        "    preservation_provenance_provider=TestPreservationProvenanceProvider(),\n"
+        ")\n"
         "os.replace = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
     )
@@ -1196,11 +1603,17 @@ def _kill_during_restoration_intent_link(tmp_path: Path, preservation, repositor
         "import os, signal, sys\n"
         "from pathlib import Path\n"
         "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "class TestPreservationProvenanceProvider:\n"
+        "    def verify(self, **kwargs):\n"
+        "        return kwargs['evidence']\n"
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
         "coordinator.record_verified_exclusion(sys.argv[5])\n"
-        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "manager = ChangeWorkspaceManager(\n"
+        "    repository, root / 'worktrees', coordinator, 'release', remote='origin',\n"
+        "    preservation_provenance_provider=TestPreservationProvenanceProvider(),\n"
+        ")\n"
         "os.link = lambda *args, **kwargs: os.kill(os.getpid(), signal.SIGKILL)\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
     )
@@ -1229,11 +1642,17 @@ def _kill_after_restoration_replace_before_private_unlink(
         "import os, signal, sys\n"
         "from pathlib import Path\n"
         "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "class TestPreservationProvenanceProvider:\n"
+        "    def verify(self, **kwargs):\n"
+        "        return kwargs['evidence']\n"
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
         "coordinator.record_verified_exclusion(sys.argv[5])\n"
-        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "manager = ChangeWorkspaceManager(\n"
+        "    repository, root / 'worktrees', coordinator, 'release', remote='origin',\n"
+        "    preservation_provenance_provider=TestPreservationProvenanceProvider(),\n"
+        ")\n"
         "def kill_before_private_unlink(*args, **kwargs):\n"
         "    os.kill(os.getpid(), signal.SIGKILL)\n"
         "manager._remove_private_staging = kill_before_private_unlink\n"
@@ -1263,6 +1682,9 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         "import os, signal, sys, time\n"
         "from pathlib import Path\n"
         "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "class TestPreservationProvenanceProvider:\n"
+        "    def verify(self, **kwargs):\n"
+        "        return kwargs['evidence']\n"
         "root = Path(sys.argv[1])\n"
         "repository = Path(sys.argv[2])\n"
         "ready = Path(sys.argv[6])\n"
@@ -1294,7 +1716,10 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         "os.fdopen = fdopen\n"
         "coordinator = PortfolioCoordinator(root / 'state')\n"
         "coordinator.record_verified_exclusion(sys.argv[5])\n"
-        "manager = ChangeWorkspaceManager(repository, root / 'worktrees', coordinator, 'release', remote='origin')\n"
+        "manager = ChangeWorkspaceManager(\n"
+        "    repository, root / 'worktrees', coordinator, 'release', remote='origin',\n"
+        "    preservation_provenance_provider=TestPreservationProvenanceProvider(),\n"
+        ")\n"
         "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
     )
     process = subprocess.Popen(  # noqa: S603 - the child is a controlled test process.
