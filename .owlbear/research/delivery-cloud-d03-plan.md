@@ -9,9 +9,10 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-This resume continues interrupted checkpoint `78b0c16`, whose provenance/index increment
-starts from `f9330ffc`, preserving feature source `4566935` and the reviewed recovery,
-admission/read-boundary and intent-publication repairs. User
+Reviewed source **`92160aa523caa2803bd841d019f5a73a92936755`** completes the bounded repair and
+validation of interrupted checkpoint `78b0c16`, whose provenance/index increment starts from
+`f9330ffc`. It preserves feature source `4566935` and the reviewed recovery, admission/read-boundary
+and intent-publication repairs. User
 [comment 5789187453](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5789187453)
 requests the exact-path provenance and private-index classification obligation only. Task scope
 and content hashes alone must not establish last-writer evidence or permission to discard bytes.
@@ -21,7 +22,7 @@ The bounded static repair at `f9330ffc` remains prior proof, not this increment'
 | Remaining item | Meaning and next action |
 | --- | --- |
 | C implementation | Complete production provenance composition and the [listed C obligations](#maintained-procedure-authority-increment): exclusive recovery custody, publication repair, trusted procedure production, original-action resumption and remaining matrices. The classification boundary below is not an evidence producer or whole-C acceptance. |
-| GitHub proof | Source, Cockpit and Agent ecosystem runs at interrupted head `78b0c16` are `action_required`; earlier `f9330ffc` runs were skipped. Neither is passing product proof. Do not approve obsolete runs or mark ready merely to disguise unfinished C work. |
+| GitHub proof | Source, Cockpit and Agent ecosystem runs at source `92160aa` are `action_required`, not passing or failed product tests. Required external gates remain outstanding; do not approve obsolete runs or mark ready merely to disguise unfinished C work. |
 | Independent acceptance | Narrow reviews cover individual repairs, not completed C. Complete and review C before requesting D; do not automatically advance phases. |
 | Host exclusion | Actual host termination/exclusion remains a host acceptance gap, not permission to release a possibly live worker. The existing gap allocation allows B-E work with fail-closed behavior. |
 
@@ -52,8 +53,52 @@ This is a consumer boundary, not a production last-writer journal. Production pr
 exclusive application custody, useful-content Builder routing, publication repair and original-action
 resumption remain implementation obligations. The global ignored-inventory refusal remains
 conservative and over-restrictive. No live service/state, provider effect or protection was changed.
-The interrupted checkpoint left focused proof and final review pending. This resume validates
-that increment and repairs supported findings; earlier recovery proof is not classification proof.
+
+#### Proof and limits at `92160aa`
+
+- The delegated writer ran the two affected workspace/application test files: **604 passed**.
+  This includes provenance refusal/revocation, useful versus disposable paths, index classification,
+  invalidated cache-tree grammar, historical inspection and existing recovery/admission regressions.
+  The provider fixtures are synthetic trusted authority, not proof of a production producer.
+
+  ```bash
+  cd /home/runner/work/owlbear/owlbear
+  uv run --locked pytest \
+    /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_change_workspace.py \
+    /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py -q
+  ```
+
+- Writer tooling: uv `0.12.18`, locked Python `3.14.7`, Ruff `0.16.5`. Scoped Ruff comparison against
+  `f9330ffc`, covering the workspace owner and the two test files above, found
+  **0 increment-added diagnostics** (382 baseline, 370 candidate). Remaining
+  baseline-equivalent diagnostics mean this is **not** a clean whole-file lint pass.
+  Writer `git diff --check` passed. The parent did not rerun delegated checks.
+
+  ```bash
+  uv run --locked ruff check \
+    /home/runner/work/owlbear/owlbear/serve/delivery/src/owlbear_delivery/change_workspace.py \
+    /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_change_workspace.py \
+    /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_portfolio_application.py \
+    --output-format json
+  ```
+
+- Independent read-only review confirmed the exact published source and found no significant
+  remaining issues in this increment. Its three findings were repaired: legacy extension inspection,
+  invalidated cache-tree parsing and provider revalidation before custody. Interrupted hardlink
+  cleanup still precedes strict provenance metadata checks.
+- Parent validation: secret scans clean; CodeQL Python **0 alerts**. Automated Code Review was
+  **unavailable** because its binary was absent, despite the wrapper reporting success. The
+  independent review above is separate evidence, not a claim that the unavailable tool ran.
+- Inspected source-head runs:
+  [Source](https://github.com/maba-pag/owlbear/actions/runs/35915236793),
+  [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/35915236797) and
+  [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/35915236776) require action.
+  No approval, gate bypass, broad suite, live host check or service activation was performed.
+
+The missing production evidence owner/registration and remaining C recovery integration are
+**implementation gaps**, not unavailable-tool excuses. Continue C with independently owned
+last-writer evidence and production composition; do not derive disposal authority from task scope,
+caller-supplied hashes or the test provider. Keep C partial until its full contract and gates hold.
 
 ### Authority references
 
