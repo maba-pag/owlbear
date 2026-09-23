@@ -9,7 +9,8 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-This resume starts from `f9330ffc`, preserving feature source `4566935` and the reviewed recovery,
+This resume continues interrupted checkpoint `78b0c16`, whose provenance/index increment
+starts from `f9330ffc`, preserving feature source `4566935` and the reviewed recovery,
 admission/read-boundary and intent-publication repairs. User
 [comment 5789187453](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5789187453)
 requests the exact-path provenance and private-index classification obligation only. Task scope
@@ -20,7 +21,7 @@ The bounded static repair at `f9330ffc` remains prior proof, not this increment'
 | Remaining item | Meaning and next action |
 | --- | --- |
 | C implementation | Complete production provenance composition and the [listed C obligations](#maintained-procedure-authority-increment): exclusive recovery custody, publication repair, trusted procedure production, original-action resumption and remaining matrices. The classification boundary below is not an evidence producer or whole-C acceptance. |
-| GitHub proof | Inspected Source, Cockpit and Agent ecosystem runs at `f9330ffc` are `skipped` on the draft PR. Earlier `7311a9e` runs were `action_required`, not failed tests or current proof. Do not approve obsolete runs or mark ready merely to disguise unfinished C work. |
+| GitHub proof | Source, Cockpit and Agent ecosystem runs at interrupted head `78b0c16` are `action_required`; earlier `f9330ffc` runs were skipped. Neither is passing product proof. Do not approve obsolete runs or mark ready merely to disguise unfinished C work. |
 | Independent acceptance | Narrow reviews cover individual repairs, not completed C. Complete and review C before requesting D; do not automatically advance phases. |
 | Host exclusion | Actual host termination/exclusion remains a host acceptance gap, not permission to release a possibly live worker. The existing gap allocation allows B-E work with fail-closed behavior. |
 
@@ -48,7 +49,8 @@ This is a consumer boundary, not a production last-writer journal. Production pr
 exclusive application custody, useful-content Builder routing, publication repair and original-action
 resumption remain implementation obligations. The global ignored-inventory refusal remains
 conservative and over-restrictive. No live service/state, provider effect or protection was changed.
-Focused proof and final review of this increment are still pending; do not substitute earlier tests.
+The interrupted checkpoint left focused proof and final review pending. This resume validates
+that increment and repairs supported findings; earlier recovery proof is not classification proof.
 
 ### Authority references
 
