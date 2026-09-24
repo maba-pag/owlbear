@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import signal
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -242,6 +245,63 @@ def _proof_basis() -> ProofAttemptBasis:
     )
 
 
+def _sigkill_during_proof_publication(tmp_path: Path, destination_suffix: str) -> None:
+    child = """
+import os
+import signal
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+from owlbear_delivery import runtime_transaction
+from owlbear_delivery.finalization_reports import (
+    MaintainedProofProcedure,
+    ProofAttemptBasis,
+    ProofAttemptObservation,
+    ProofAttemptStore,
+)
+
+root = Path(sys.argv[1])
+suffix = sys.argv[2]
+procedure = MaintainedProofProcedure(procedure_id="maintained-check", registration_digest="e" * 64)
+basis = ProofAttemptBasis(
+    expected_contract_digest="c" * 64,
+    expected_frontier_digest="d" * 64,
+    expected_change_head="e" * 40,
+    expected_reviewed_head="f" * 40,
+)
+observation = ProofAttemptObservation(
+    proof_fingerprint_before="a" * 64,
+    proof_fingerprint_after="b" * 64,
+    paths=("generated.txt",),
+    observed_at=datetime(2026, 8, 4, tzinfo=timezone.utc),
+)
+real_link = runtime_transaction.os.link
+
+def link(source, destination, *, src_dir_fd=None, dst_dir_fd=None, follow_symlinks=True):
+    if str(destination).endswith(suffix):
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_link(
+        source,
+        destination,
+        src_dir_fd=src_dir_fd,
+        dst_dir_fd=dst_dir_fd,
+        follow_symlinks=follow_symlinks,
+    )
+
+with patch.object(runtime_transaction.os, "link", link):
+    ProofAttemptStore(root, "change-a", (procedure,)).record(
+        "attempt-1", procedure, basis, lambda: observation
+    )
+"""
+    result = subprocess.run(  # noqa: S603 - the child is a fixed synthetic crash harness.
+        [sys.executable, "-c", child, str(tmp_path), destination_suffix],
+        check=False,
+    )
+    assert result.returncode == -signal.SIGKILL
+
+
 def test_proof_attempt_store_binds_registered_owner_observation_and_replays(tmp_path: Path) -> None:
     procedure = _proof_procedure()
     other = MaintainedProofProcedure(procedure_id="other", registration_digest="f" * 64)
@@ -348,6 +408,71 @@ def test_proof_attempt_store_recovers_interrupted_publication_and_replays(tmp_pa
     assert restarted.record("attempt-1", procedure, basis, lambda: pytest.fail("replay must not observe")) == history[0]
     assert calls == 1
     assert record_path.read_bytes() == record_bytes
+
+
+def test_proof_attempt_store_recovers_sigkill_during_observation_publication(tmp_path: Path) -> None:
+    _sigkill_during_proof_publication(tmp_path, ".json")
+    attempts = tmp_path / "proof-attempts/change-a/attempts"
+    temporary = tuple(attempts.glob(".tmp-*"))
+    assert len(temporary) == 1
+    temporary_bytes = temporary[0].read_bytes()
+
+    store = ProofAttemptStore(tmp_path, "change-a", (_proof_procedure(),))
+    history = store.read()
+    assert len(history) == 1
+    assert temporary[0].read_bytes() == temporary_bytes
+    assert store.read() == history
+    assert temporary[0].exists()
+
+
+def test_proof_attempt_store_retains_sigkill_during_manifest_publication(tmp_path: Path) -> None:
+    _sigkill_during_proof_publication(tmp_path, ".yaml")
+    transactions = tmp_path / "proof-attempts/change-a/transactions"
+    temporary = tuple(transactions.glob(".tmp-*"))
+    assert len(temporary) == 1
+    temporary_bytes = temporary[0].read_bytes()
+
+    store = ProofAttemptStore(tmp_path, "change-a", (_proof_procedure(),))
+    assert store.read() == ()
+    assert temporary[0].read_bytes() == temporary_bytes
+    store.record("attempt-1", _proof_procedure(), _proof_basis(), _proof_observation)
+    assert len(store.read()) == 1
+    assert temporary[0].exists()
+
+
+def test_proof_attempt_store_bounds_retained_temporary_inventory(tmp_path: Path) -> None:
+    attempts = tmp_path / "proof-attempts/change-a/attempts"
+    attempts.mkdir(parents=True)
+    for index in range(257):
+        (attempts / f".tmp-{index:024x}").write_bytes(b"retained")
+    with pytest.raises(FinalizationReportError, match="proof-attempt-store-unavailable"):
+        ProofAttemptStore(tmp_path, "change-a", (_proof_procedure(),)).read()
+
+
+def test_proof_attempt_store_does_not_add_to_full_retained_temporary_inventory(tmp_path: Path) -> None:
+    attempts = tmp_path / "proof-attempts/change-a/attempts"
+    attempts.mkdir(parents=True)
+    for index in range(256):
+        temporary = attempts / f".tmp-{index:024x}"
+        temporary.write_bytes(b"retained")
+        temporary.chmod(0o600)
+    store = ProofAttemptStore(tmp_path, "change-a", (_proof_procedure(),))
+    with pytest.raises(FinalizationReportError, match="proof-attempt-capacity"):
+        store.record("attempt-1", _proof_procedure(), _proof_basis(), _proof_observation)
+    assert not tuple(attempts.glob("*.json"))
+
+
+def test_proof_attempt_store_rejects_full_retained_manifest_temporary_inventory(tmp_path: Path) -> None:
+    transactions = tmp_path / "proof-attempts/change-a/transactions"
+    transactions.mkdir(parents=True)
+    for index in range(256):
+        temporary = transactions / f".tmp-{index:024x}"
+        temporary.write_bytes(b"retained")
+        temporary.chmod(0o600)
+    store = ProofAttemptStore(tmp_path, "change-a", (_proof_procedure(),))
+    with pytest.raises(FinalizationReportError, match="proof-attempt-store-unavailable"):
+        store.record("attempt-1", _proof_procedure(), _proof_basis(), _proof_observation)
+    assert not tuple((tmp_path / "proof-attempts/change-a/attempts").glob("*.json"))
 
 
 def test_proof_attempt_store_rejects_encoded_overcapacity_before_persistence(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
+import re
 import secrets
 import stat
 from dataclasses import dataclass
@@ -21,6 +22,10 @@ if TYPE_CHECKING:
 _MAX_CONTAINED_MANIFEST_BYTES = 131_072
 _MAX_CONTAINED_MANIFESTS = 256
 _MAX_CONTAINED_PARTICIPANTS = 2
+_MAX_CONTAINED_TEMPORARIES = 256
+_MAX_CONTAINED_TEMPORARY_BYTES = _MAX_CONTAINED_MANIFEST_BYTES * _MAX_CONTAINED_TEMPORARIES
+_CONTAINED_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
+_CONTAINED_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
 
 
 class TransactionConflictError(RuntimeError):
@@ -239,9 +244,15 @@ class RuntimeTransaction:
                 contained_directory(root_fd, Path("transactions")) as directory_fd,
                 os.scandir(directory_fd) as entries,
             ):
-                names = tuple(sorted(entry.name for entry in entries))
+                _contained_temporary_usage(directory_fd, additional_bytes=0)
+                names = []
+                for entry in entries:
+                    if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name):
+                        continue
+                    names.append(entry.name)
         except FileNotFoundError:
             return
+        names = tuple(sorted(names))
         if len(names) > _MAX_CONTAINED_MANIFESTS:
             raise TransactionManifestError
         for name in names:
@@ -444,6 +455,40 @@ def read_contained(root_fd: int, path: Path, *, limit: int) -> bytes | None:
         return content
 
 
+def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> tuple[int, int]:
+    if additional_bytes < 0 or additional_bytes > _MAX_CONTAINED_MANIFEST_BYTES:
+        raise TransactionManifestError
+    temporary_count = 0
+    temporary_bytes = 0
+    try:
+        with os.scandir(directory_fd) as entries:
+            for entry in entries:
+                if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
+                    continue
+                try:
+                    metadata = entry.stat(follow_symlinks=False)
+                except OSError as exc:
+                    raise TransactionManifestError from exc
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_nlink != 1
+                    or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
+                    or metadata.st_size < 0
+                    or metadata.st_size > _MAX_CONTAINED_MANIFEST_BYTES
+                ):
+                    raise TransactionManifestError
+                temporary_count += 1
+                temporary_bytes += metadata.st_size
+    except OSError as exc:
+        raise TransactionManifestError from exc
+    if (
+        temporary_count + (1 if additional_bytes else 0) > _MAX_CONTAINED_TEMPORARIES
+        or temporary_bytes + additional_bytes > _MAX_CONTAINED_TEMPORARY_BYTES
+    ):
+        raise TransactionManifestError
+    return temporary_count, temporary_bytes
+
+
 def write_contained(root_fd: int, path: Path, content: bytes, *, expected: bytes | None = None) -> None:
     """Atomically publish exact bytes without following directory or file links."""
     with _contained_parent(root_fd, path, create=True) as parent_fd:
@@ -452,6 +497,7 @@ def write_contained(root_fd: int, path: Path, content: bytes, *, expected: bytes
             return
         if current != expected:
             raise TransactionConflictError
+        _contained_temporary_usage(parent_fd, additional_bytes=len(content))
         temporary = f".tmp-{secrets.token_hex(12)}"
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
         try:

@@ -9,6 +9,16 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
+The current bounded repair starts at **`4ea5457`**, following the
+[existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
+and [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5809465434).
+It addresses Git environment overrides before admission, durable repair-to-original-action
+retry accounting, hard-death proof-store publication replay, and bounded pre-journal
+staging artifacts. These repairs do not establish production custody/proof/publication
+composition or whole-C resumption. The reviewed identity, admission/no-follow,
+intent-publication, post-replacement replay and provenance/index boundaries remain required.
+Implementation and focused proof are in progress; no acceptance is claimed.
+
 Reviewed source **`92160aa523caa2803bd841d019f5a73a92936755`** completes the bounded repair and
 validation of interrupted checkpoint `78b0c16`, whose provenance/index increment starts from
 `f9330ffc`. It preserves feature source `4566935` and the reviewed recovery, admission/read-boundary

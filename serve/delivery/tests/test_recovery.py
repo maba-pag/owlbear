@@ -34,6 +34,7 @@ from owlbear_delivery import (
     DeliveryResultSubmission,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
+    PreservationRejectedError,
     PortfolioApplicationError,
     PrepareCompletedOutcomeRepair,
 )
@@ -1176,6 +1177,41 @@ def test_closed_engine_without_owner_effect_receipt_stays_contained(tmp_path):
         application._propose_recovery("change-a")
     assert coordinator.show("change-a").continuation_action == action
     provider.set_pull_request_draft_state.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    ],
+)
+def test_recovery_application_entry_rejects_inherited_git_overrides_before_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    override: str,
+) -> None:
+    application, _runtimes, coordinator, _state = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
+    manager = application._workspace_manager
+    coordination = coordinator.show("change-a")
+    alternate = tmp_path / "alternate-worktree"
+    _git(
+        manager.repository,
+        "worktree",
+        "add",
+        "--detach",
+        str(alternate),
+        _git(manager.repository, "rev-parse", coordination.branch),
+    )
+    (coordination.worktree_path / "shared.txt").write_text("managed dirty\n", encoding="utf-8")
+    monkeypatch.setenv(override, str(alternate))
+
+    with pytest.raises(PreservationRejectedError, match="inherited Git repository/index overrides"):
+        application._propose_recovery("change-a")
 
 
 @pytest.mark.parametrize("orphan_child", [False, True])

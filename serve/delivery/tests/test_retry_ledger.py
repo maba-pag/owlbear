@@ -17,7 +17,9 @@ from owlbear_delivery.recovery import (
     RetryLedgerCorruptError,
     RetryLedgerSummary,
     RetryStopCode,
+    digest,
 )
+from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 _START = datetime(2026, 8, 4, tzinfo=UTC)
 _HEAD = "a" * 40
@@ -409,6 +411,61 @@ def test_repair_commit_and_task_alias_keep_original_failed_episode(tmp_path: Pat
     assert second.episode_id == first.episode_id
     assert second.attempts == 2
     assert ledger.episode(renamed).key == key
+
+
+def test_completed_repair_settles_without_reset_and_resumes_new_head(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="original")
+    ledger.record_failure(original, failure_code="failed-check", now=_START)
+    repair = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="repair",
+    )
+    participant = ledger.repair_binding_participant(
+        original_attempt_id="original",
+        repair_attempt_id="repair",
+        repair_task_id="repair-task",
+        outcome_id="OUT-001",
+        now=_START + timedelta(seconds=1),
+    )
+    RuntimeTransaction(tmp_path, "repair-binding", (participant,)).commit()
+
+    restarted = RetryLedger(tmp_path, "change-a")
+    assert tuple(item.attempt_id for item in restarted.pending_attempts()) == ("repair",)
+    settled = restarted.record_repair_acceptance("OUT-001", ("repair-task",), now=_START + timedelta(seconds=2))
+    assert len(settled) == 1
+    episode = restarted.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 2
+    assert episode.repair_attempts == 1
+    assert episode.reset_count == 0
+    assert digest("original:failed".encode()) in episode.outcome_ids
+    assert "repair" not in {item.attempt_id for item in restarted.pending_attempts()}
+
+    new_head = key.model_copy(update={"exact_head": "d" * 40, "finalization_id": "final-2"})
+    resumed = restarted.reserve(
+        new_head,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=2),
+        attempt_id="resumed",
+        resume_attempt_id="original",
+    )
+    assert resumed.allowed
+    assert resumed.episode_id == key.identity
+    exhausted = restarted.record_failure(resumed, failure_code="failed-again", now=_START + timedelta(seconds=2))
+    assert exhausted.stop_code is RetryStopCode.EXHAUSTED
+    blocked = restarted.reserve(
+        key.model_copy(update={"exact_head": "e" * 40, "finalization_id": "final-3"}),
+        failure_class="mechanical",
+        now=_START + timedelta(days=1),
+        attempt_id="fresh-head",
+        resume_attempt_id="original",
+    )
+    assert not blocked.allowed
+    assert blocked.reason_code == RetryStopCode.EXHAUSTED.value
 
 
 def test_accepted_other_task_does_not_reset_failed_task_episode(tmp_path: Path) -> None:

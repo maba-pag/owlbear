@@ -27,6 +27,7 @@ _MAX_RECORD_BYTES = 65_536
 _DIGEST_LENGTH = 64
 MAX_RECOVERY_INTENTS = 256
 _MAX_PROVENANCE_VALUE_LENGTH = 512
+_MAX_REPAIR_BINDINGS = 256
 MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
@@ -559,6 +560,52 @@ class RetryAttemptOutcome(_RecoveryModel):
     stop_code: RetryStopCode | None = None
 
 
+class RetryRepairBinding(_RecoveryModel):
+    """Durable linkage from a Builder repair reservation back to its failed action."""
+
+    schema_version: Literal[1] = 1
+    binding_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
+    episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    original_attempt_id: str = Field(min_length=1, max_length=256)
+    repair_attempt_id: str = Field(min_length=1, max_length=256)
+    repair_task_id: str = Field(min_length=1, max_length=256)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    created_at: str = Field(min_length=1, max_length=64)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        episode_id: str,
+        original_attempt_id: str,
+        repair_attempt_id: str,
+        repair_task_id: str,
+        outcome_id: str,
+        created_at: str,
+    ) -> RetryRepairBinding:
+        values = {
+            "change_id": change_id,
+            "episode_id": episode_id,
+            "original_attempt_id": original_attempt_id,
+            "repair_attempt_id": repair_attempt_id,
+            "repair_task_id": repair_task_id,
+            "outcome_id": outcome_id,
+            "created_at": created_at,
+        }
+        candidate = cls.model_construct(binding_id="0" * _DIGEST_LENGTH, **values)
+        binding_id = digest((candidate.model_dump_json(exclude={"binding_id"}) + "\n").encode())
+        return cls(binding_id=binding_id, **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        expected = digest((self.model_dump_json(exclude={"binding_id"}) + "\n").encode())
+        if self.binding_id != expected:
+            raise ValueError("retry repair binding identity does not match its content")
+        return self
+
+
 class RetryOwnerResult(_RecoveryModel):
     """Exact result evidence committed by the owner with its authority change."""
 
@@ -689,6 +736,7 @@ class RetryLedger:
         self._summary_path = self._directory / "current.json"
         self._attempts_path = self._directory / "attempts"
         self._outcomes_path = self._directory / "outcomes"
+        self._repair_bindings_path = self._directory / "repair-bindings"
 
     @property
     def summary_path(self) -> Path:
@@ -817,6 +865,130 @@ class RetryLedger:
             ),
         )
 
+    def repair_binding_participant(
+        self,
+        *,
+        original_attempt_id: str,
+        repair_attempt_id: str,
+        repair_task_id: str,
+        outcome_id: str,
+        now: datetime | str,
+        allow_settled: bool = False,
+    ) -> TransactionParticipant:
+        """Prepare an immutable repair-to-original link for the owning transaction."""
+        summary, _previous = self._read_with_bytes()
+        episode = _episode_for_attempt(summary, repair_attempt_id)
+        if episode is None or original_attempt_id not in episode.attempt_ids:
+            raise RetryLedgerConflictError("repair attempts do not share one retry episode")
+        original = self._read_attempt(original_attempt_id)
+        repair = self._read_attempt(repair_attempt_id)
+        if (
+            original.episode_id != episode.episode_id
+            or repair.episode_id != episode.episode_id
+            or original.key != episode.key
+            or repair.key != episode.key
+            or original.kind != "original"
+            or repair.kind != "repair"
+            or original.failure_class is not RetryFailureClass.MECHANICAL
+            or repair.failure_class is not RetryFailureClass.MECHANICAL
+            or digest(f"{original_attempt_id}:failed".encode()) not in episode.outcome_ids
+            or (not allow_settled and repair_attempt_id not in _pending_attempts(episode))
+        ):
+            raise RetryLedgerConflictError("repair-to-original link does not match retry authority")
+        binding = RetryRepairBinding.create(
+            change_id=self.change_id,
+            episode_id=episode.episode_id,
+            original_attempt_id=original_attempt_id,
+            repair_attempt_id=repair_attempt_id,
+            repair_task_id=repair_task_id,
+            outcome_id=outcome_id,
+            created_at=_retry_timestamp(_retry_time(now)),
+        )
+        relative = self._repair_bindings_path / f"{binding.binding_id}.json"
+        try:
+            existing = RetryRepairBinding.model_validate_json(read_record(self.runtime_root, relative))
+        except FileNotFoundError:
+            existing = None
+        except (OSError, TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if allow_settled and existing is None:
+            raise RetryLedgerConflictError("completed repair is missing its durable repair link")
+        if existing is not None and existing != binding:
+            raise RetryLedgerConflictError("repair-to-original link conflicts with existing authority")
+        return TransactionParticipant(self.runtime_root, relative, encoded(binding))
+
+    def repair_bindings(self) -> tuple[RetryRepairBinding, ...]:
+        """Read bounded immutable repair links, never treating task IDs as authority."""
+        try:
+            RuntimeTransaction.recover_all(self.runtime_root)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        directory = self.runtime_root / self._repair_bindings_path
+        try:
+            paths = tuple(sorted(directory.iterdir(), key=lambda item: item.name))
+        except FileNotFoundError:
+            return ()
+        except OSError as exc:
+            raise RetryLedgerCorruptError from exc
+        if len(paths) > _MAX_REPAIR_BINDINGS:
+            raise RetryLedgerCorruptError
+        bindings = []
+        for path in paths:
+            if not path.is_file() or path.name != f"{path.stem}.json" or len(path.stem) != _DIGEST_LENGTH:
+                raise RetryLedgerCorruptError
+            try:
+                binding = RetryRepairBinding.model_validate_json(
+                    read_record(self.runtime_root, path.relative_to(self.runtime_root))
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                raise RetryLedgerCorruptError from exc
+            if binding.binding_id != path.stem or binding.change_id != self.change_id:
+                raise RetryLedgerCorruptError
+            self._validate_repair_binding(binding)
+            bindings.append(binding)
+        return tuple(bindings)
+
+    def repair_binding_for_attempt(
+        self,
+        attempt_id: str,
+        *,
+        outcome_id: str | None = None,
+    ) -> RetryRepairBinding | None:
+        """Resolve a repair reservation through its durable binding."""
+        matches = tuple(
+            binding
+            for binding in self.repair_bindings()
+            if binding.repair_attempt_id == attempt_id
+            and (outcome_id is None or binding.outcome_id == outcome_id)
+        )
+        if len(matches) > 1:
+            raise RetryLedgerCorruptError
+        return matches[0] if matches else None
+
+    def record_repair_acceptance(
+        self,
+        outcome_id: str,
+        completed_task_ids: tuple[str, ...],
+        *,
+        now: datetime | str | None = None,
+    ) -> tuple[RetryEpisodeSummary, ...]:
+        """Settle accepted Builder repairs without resetting the failed action episode."""
+        completed = set(completed_task_ids)
+        settled = []
+        for binding in self.repair_bindings():
+            if binding.outcome_id != outcome_id or binding.repair_task_id not in completed:
+                continue
+            summary = self.read()
+            self._validate_repair_binding(binding, summary)
+            settled.append(
+                self.record_success(
+                    binding.repair_attempt_id,
+                    now=now if now is not None else self._clock(),
+                    accepted_progress=False,
+                )
+            )
+        return tuple(settled)
+
     def reconcile_owner_results(self) -> None:
         """Finish accounting from exact durable receipts, without caller replay or refund."""
         for episode in self.read().episodes:
@@ -826,10 +998,29 @@ class RetryLedger:
                     result = RetryOwnerResult.model_validate_json(path.read_bytes())
                 except FileNotFoundError:
                     continue
+                attempt = self._read_attempt(attempt_id)
                 if result.attempt_id != attempt_id or result.episode_id != episode.episode_id:
                     raise RetryLedgerCorruptError
+                if (
+                    attempt.episode_id != episode.episode_id
+                    or attempt.attempt_id != attempt_id
+                    or attempt.key != episode.key
+                ):
+                    raise RetryLedgerCorruptError
                 if result.accepted:
-                    self.record_accepted_progress(attempt_id, now=result.observed_at)
+                    repair_binding = (
+                        self.repair_binding_for_attempt(attempt_id, outcome_id=attempt.key.outcome_id)
+                        if attempt.key.outcome_id is not None
+                        else None
+                    )
+                    if repair_binding is not None:
+                        self.record_repair_acceptance(
+                            attempt.key.outcome_id,
+                            (attempt.key.task_lineage,) if attempt.key.task_lineage is not None else (),
+                            now=result.observed_at,
+                        )
+                    else:
+                        self.record_accepted_progress(attempt_id, now=result.observed_at)
                 else:
                     self.record_failure(attempt_id, failure_code=result.failure_code, now=result.observed_at)
 
@@ -860,6 +1051,7 @@ class RetryLedger:
         automatic: bool = True,
         original: bool = False,
         operation_alias: str | None = None,
+        resume_attempt_id: str | None = None,
     ) -> RetryReservation:
         """Reserve one attempt atomically before dispatch/effect entry.
 
@@ -873,6 +1065,27 @@ class RetryLedger:
         summary, previous = self._read_with_bytes()
         current = _matching_episode(summary, key)
         requested_key = key
+        if resume_attempt_id is not None:
+            links = tuple(item for item in self.repair_bindings() if item.original_attempt_id == resume_attempt_id)
+            if not links:
+                raise RetryLedgerConflictError("original action has no completed repair link")
+            linked = links[0]
+            linked_episode = _episode_for_attempt(summary, linked.repair_attempt_id)
+            if (
+                linked_episode is None
+                or linked_episode.episode_id != linked.episode_id
+                or any(item.episode_id != linked.episode_id for item in links)
+                or linked_episode.key.change_id != key.change_id
+                or linked_episode.key.action_kind != key.action_kind
+                or linked_episode.key.target_head != key.target_head
+            ):
+                raise RetryLedgerConflictError("replacement action does not match the repaired episode")
+            if current is not None and (
+                current.episode_id != linked.episode_id
+            ):
+                raise RetryLedgerConflictError("replacement action does not match the repaired episode")
+            if current is None:
+                current = linked_episode
         if current is not None:
             key = current.key
         if current is not None and current.failure_class is not policy:
@@ -1401,6 +1614,41 @@ class RetryLedger:
             ),
         )
         return updated
+
+    def _read_attempt(self, attempt_id: str) -> RetryAttempt:
+        try:
+            attempt = RetryAttempt.model_validate_json(
+                read_record(self.runtime_root, self._attempts_path / f"{attempt_id}.json")
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RetryLedgerCorruptError from exc
+        if attempt.attempt_id != attempt_id:
+            raise RetryLedgerCorruptError
+        return attempt
+
+    def _validate_repair_binding(
+        self,
+        binding: RetryRepairBinding,
+        summary: RetryLedgerSummary | None = None,
+    ) -> None:
+        """Require an immutable repair link to match the ledger's attempt authority."""
+        episode = _episode_for_attempt(summary or self.read(), binding.repair_attempt_id)
+        if episode is None or episode.episode_id != binding.episode_id:
+            raise RetryLedgerCorruptError
+        original = self._read_attempt(binding.original_attempt_id)
+        repair = self._read_attempt(binding.repair_attempt_id)
+        if (
+            original.episode_id != episode.episode_id
+            or repair.episode_id != episode.episode_id
+            or original.key != episode.key
+            or repair.key != episode.key
+            or original.kind != "original"
+            or repair.kind != "repair"
+            or original.failure_class is not RetryFailureClass.MECHANICAL
+            or repair.failure_class is not RetryFailureClass.MECHANICAL
+            or digest(f"{binding.original_attempt_id}:failed".encode()) not in episode.outcome_ids
+        ):
+            raise RetryLedgerCorruptError
 
     def _read_with_bytes(self) -> tuple[RetryLedgerSummary, bytes | None]:
         try:

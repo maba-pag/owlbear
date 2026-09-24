@@ -1308,6 +1308,41 @@ def test_recovery_workspace_metadata_does_not_read_dirty_content(tmp_path: Path)
     assert not any(call.args[:1] == ("diff",) for call in run_git.call_args_list)
 
 
+@pytest.mark.parametrize(
+    "override",
+    [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    ],
+)
+def test_recovery_git_reads_reject_inherited_repository_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    override: str,
+) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    alternate = tmp_path / "alternate-worktree"
+    _git(
+        manager.repository,
+        "worktree",
+        "add",
+        "--detach",
+        str(alternate),
+        _git(manager.repository, "rev-parse", coordination.branch),
+    )
+    (coordination.worktree_path / "shared.txt").write_bytes(b"managed dirty\n")
+    monkeypatch.setenv(override, str(alternate))
+
+    with pytest.raises(PreservationRejectedError, match="inherited Git repository/index overrides"):
+        manager.capture_recovery_workspace_metadata(coordination.change_id, ())
+    with pytest.raises(PreservationRejectedError, match="inherited Git repository/index overrides"):
+        manager.baseline_scope_kinds(coordination.worktree_path, "a" * 40, ("shared.txt",))
+
+
 def test_recovery_workspace_fingerprint_includes_admitted_untracked_bytes(tmp_path: Path) -> None:
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
     path = coordination.worktree_path / "added.bin"
@@ -1968,6 +2003,30 @@ def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert (worktree / "shared.txt").read_bytes() == b"base\n"
     assert not staging.exists()
+
+
+def test_private_staging_retention_is_bounded_without_deleting_evidence(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    operation_id = _restoration_operation_id(preservation)
+    relative = Path(operation_id) / "paths" / digest("shared.txt".encode())
+    staging_dir = manager.runtime_root / preservation.storage_ref / "restoration" / relative
+    staging_dir.mkdir(parents=True)
+    for index in range(256):
+        (staging_dir / f"stage-{index:032x}").write_bytes(b"retained")
+    before = {path: path.read_bytes() for path in staging_dir.iterdir()}
+
+    state = manager._read_worktree_state(worktree, "shared.txt")  # noqa: SLF001
+    with pytest.raises(PreservationFenceError, match="retained bound"):
+        manager._create_private_staging(  # noqa: SLF001
+            preservation,
+            operation_id,
+            "shared.txt",
+            state,
+        )
+    assert {path: path.read_bytes() for path in staging_dir.iterdir()} == before
 
 
 def test_nonterminal_recovery_retains_staging_evidence_when_private_source_disappears(tmp_path: Path) -> None:

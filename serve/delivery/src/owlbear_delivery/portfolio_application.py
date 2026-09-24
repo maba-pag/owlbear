@@ -2060,7 +2060,18 @@ class PortfolioApplication:
                 runtime.require_result_replay(binding.outcome_id, attempt.operation_alias, result)
             except (DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError):
                 continue
-            ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
+            repair_binding = ledger.repair_binding_for_attempt(
+                attempt.attempt_id,
+                outcome_id=binding.outcome_id,
+            )
+            if repair_binding is not None:
+                ledger.record_repair_acceptance(
+                    binding.outcome_id,
+                    (result.task_id,),
+                    now=self._clock(),
+                )
+            else:
+                ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
             return
 
     def _import_legacy_worker_budgets(self, runtime: DeliveryRuntime) -> None:
@@ -3044,7 +3055,15 @@ class PortfolioApplication:
                 else ledger.attempt_for_operation(claim_id)
             )
             if attempt_id is not None:
-                ledger.record_accepted_progress(attempt_id, now=self._clock())
+                repair_binding = ledger.repair_binding_for_attempt(attempt_id, outcome_id=outcome_id)
+                if repair_binding is not None:
+                    ledger.record_repair_acceptance(
+                        outcome_id,
+                        tuple(result.task_id for result in binding.results),
+                        now=self._clock(),
+                    )
+                else:
+                    ledger.record_accepted_progress(attempt_id, now=self._clock())
 
     def _record_retry_release(
         self,
@@ -7303,6 +7322,20 @@ class PortfolioApplication:
             )
         runtime = self._runtime(request.change_id)
         finalizer_attempt_id = self._identity_factory()
+        retry_ledger = runtime.retry_ledger(clock=self._clock)
+        resume_attempt_id = None
+        coordination = self._workspace_manager.show(request.change_id)
+        prior_finalization = coordination.finalization_attempt
+        if (
+            runtime.finalization() is None
+            and prior_finalization is not None
+            and prior_finalization.finished_at is not None
+        ):
+            if any(
+                binding.original_attempt_id == prior_finalization.writer.attempt_id
+                for binding in retry_ledger.repair_bindings()
+            ):
+                resume_attempt_id = prior_finalization.writer.attempt_id
         key = RetryEpisodeKey.engine(
             request.change_id,
             WorkItemActionKind.FINALIZE.value,
@@ -7317,6 +7350,7 @@ class PortfolioApplication:
             attempt_id=finalizer_attempt_id,
             automatic=True,
             operation_alias=finalizer_attempt_id,
+            resume_attempt_id=resume_attempt_id,
         )
         if not reservation.allowed:
             retry_status = "waiting" if reservation.reason_code in {"retry-backoff", "acceptance-wait"} else "blocked"
@@ -8530,6 +8564,7 @@ class PortfolioApplication:
         return task.task_id, task.digest, scope, admitted_paths
 
     def _capture_recovery_intent(self, change_id: str) -> RecoveryIntent:
+        self._workspace_manager.require_preservation_environment()
         runtime = self._runtime(change_id)
         frontier = parse_delivery_frontier(runtime.frontier_bytes())[0]
         coordination = self._coordinator.show(change_id)

@@ -76,6 +76,8 @@ _RESTORATION_STAGE_PATTERN = re.compile(r"^stage-[0-9a-f]{32}$")
 _RESTORATION_RECORD_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 _RESTORATION_RECORD_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
 _MAX_RESTORATION_INCOMPLETE_ARTIFACTS = 256
+_MAX_RESTORATION_STAGING_ARTIFACTS = 256
+_MAX_RESTORATION_STAGING_BYTES = _MAX_PRESERVED_TOTAL_BYTES
 _PRESERVATION_ENV_OVERRIDES = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -2311,6 +2313,7 @@ class ChangeWorkspaceManager:
         remote: str = "origin",
         preservation_provenance_provider: PreservationProvenanceProvider | None = None,
     ) -> None:
+        self._require_preservation_environment()
         self._repository = repository.resolve()
         if worktree_root.is_symlink() or (worktree_root.exists() and not worktree_root.is_dir()):
             _workspace_failure("Change worktree root is not a safe directory")
@@ -2340,6 +2343,7 @@ class ChangeWorkspaceManager:
 
     def observed_target_head(self) -> str:
         """Read the current engine target ref without fetching or changing it."""
+        self._require_preservation_environment()
         return self._resolve(self._target_ref())
 
     def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
@@ -2932,6 +2936,7 @@ class ChangeWorkspaceManager:
     @classmethod
     def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None:
         """Restore one absent managed worktree from its retained branch."""
+        cls._require_preservation_environment()
         resolved_repository = repository.resolve()
         cls._register_worktree(
             worktree,
@@ -2942,6 +2947,7 @@ class ChangeWorkspaceManager:
     @classmethod
     def remove_worktree(cls, repository: Path, worktree: Path, *, force: bool = False) -> None:
         """Remove one managed worktree through Git's registration-aware operation."""
+        cls._require_preservation_environment()
         arguments = ["worktree", "remove"]
         if force:
             arguments.append("--force")
@@ -4147,6 +4153,7 @@ class ChangeWorkspaceManager:
         promoted_commits: tuple[str, ...],
     ) -> tuple[ChangeCoordination, str, str, tuple[str, ...], str | None]:
         """Capture bounded workspace facts without changing checkout or custody."""
+        self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         head = self.observed_change_head(change_id)
         self._require_worktree(change_id, coordination.worktree_path, coordination.branch, head)
@@ -4272,6 +4279,7 @@ class ChangeWorkspaceManager:
         self, change_id: str, promoted_commits: tuple[str, ...]
     ) -> tuple[ChangeCoordination, str, bytes, tuple[str, ...], str | None]:
         """Capture recovery status and custody facts without reading dirty content."""
+        self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         head = self.observed_change_head(change_id)
         self._require_worktree(change_id, coordination.worktree_path, coordination.branch, head)
@@ -4306,6 +4314,7 @@ class ChangeWorkspaceManager:
         self, worktree: Path, head: str, scopes: tuple[str, ...]
     ) -> dict[str, str]:
         """Classify missing task surfaces from the exact reviewed tree."""
+        self._require_preservation_environment()
         kinds: dict[str, str] = {}
         for scope in scopes:
             output = self._run_git("ls-tree", "-z", head, "--", scope, cwd=worktree).stdout
@@ -5531,6 +5540,11 @@ class ChangeWorkspaceManager:
         if inherited:
             raise PreservationRejectedError("inherited Git repository/index overrides are not accepted")
 
+    @staticmethod
+    def require_preservation_environment() -> None:
+        """Reject inherited Git repository and index overrides before custody reads."""
+        ChangeWorkspaceManager._require_preservation_environment()
+
     def _preservation_git(
         self,
         *arguments: str,
@@ -6584,6 +6598,46 @@ class ChangeWorkspaceManager:
                 raise PreservationFenceError("private restoration staging changed while it was read")
             return _PreservedPathState("regular", content, stat.S_IMODE(metadata.st_mode), identity)
 
+    @staticmethod
+    def _validate_private_staging_inventory(parent_fd: int, additional_bytes: int) -> None:
+        """Bound retained stages before allocating another markerless artifact."""
+        if additional_bytes < 0 or additional_bytes > _MAX_PRESERVED_FILE_BYTES:
+            raise PreservationFenceError("private restoration staging artifact exceeds its bound")
+        try:
+            with os.scandir(parent_fd) as scanned:
+                stage_count = 0
+                stage_bytes = 0
+                for entry in scanned:
+                    if entry.name == "staging.json":
+                        continue
+                    if _RESTORATION_STAGE_PATTERN.fullmatch(entry.name) is None:
+                        raise PreservationFenceError("private restoration staging inventory is malformed")
+                    try:
+                        metadata = entry.stat(follow_symlinks=False)
+                    except OSError as exc:
+                        raise PreservationFenceError(
+                            "private restoration staging inventory is unavailable"
+                        ) from exc
+                    if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode)) or metadata.st_nlink < 1:
+                        raise PreservationFenceError("private restoration staging artifact is not a file")
+                    size = metadata.st_size
+                    if stat.S_ISLNK(metadata.st_mode):
+                        try:
+                            size = len(os.fsencode(os.readlink(entry.name, dir_fd=parent_fd)))
+                        except OSError as exc:
+                            raise PreservationFenceError("private restoration staging link is unreadable") from exc
+                    if size < 0 or size > _MAX_PRESERVED_FILE_BYTES:
+                        raise PreservationFenceError("private restoration staging artifact exceeds its bound")
+                    stage_count += 1
+                    stage_bytes += size
+                    if (
+                        stage_count >= _MAX_RESTORATION_STAGING_ARTIFACTS
+                        or stage_bytes > _MAX_RESTORATION_STAGING_BYTES - additional_bytes
+                    ):
+                        raise PreservationFenceError("private restoration staging exceeds its retained bound")
+        except OSError as exc:
+            raise PreservationFenceError("private restoration staging inventory is unavailable") from exc
+
     def _create_private_staging(
         self,
         receipt: WorktreePreservationReceipt,
@@ -6602,6 +6656,7 @@ class ChangeWorkspaceManager:
                 Path(receipt.storage_ref) / "restoration" / relative,
                 create=True,
             ) as parent_fd:
+                self._validate_private_staging_inventory(parent_fd, len(state.content))
                 for _attempt in range(8):
                     source = f"stage-{secrets.token_hex(16)}"
                     created = False
@@ -6935,6 +6990,7 @@ class ChangeWorkspaceManager:
         head: str,
         promoted_commits: tuple[str, ...],
     ) -> str | None:
+        self._require_preservation_environment()
         if coordination.writer is not None or coordination.publication_lease is not None:
             return "active-custody"
         if any(
@@ -6958,11 +7014,13 @@ class ChangeWorkspaceManager:
 
     def observed_change_head(self, change_id: str) -> str:
         """Read the current managed Change branch head without mutating any checkout."""
+        self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         return self._resolve(coordination.branch)
 
     def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot:
         """Inspect exact recovery state without changing the branch, worktree, or custody."""
+        self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         branch_head = self._resolve(coordination.branch)
         attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
@@ -7826,6 +7884,7 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool:
+        ChangeWorkspaceManager._require_preservation_environment()
         result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
             (resolve_git_executable(), "-C", str(cwd), "merge-base", "--is-ancestor", ancestor, descendant),
             check=False,
@@ -7869,6 +7928,7 @@ class ChangeWorkspaceManager:
         input_bytes: bytes | None = None,
         environment: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
+        self._require_preservation_environment()
         command = arguments
         while command[:1] in (("-C",), ("--no-optional-locks",)):
             command = command[2:] if command[0] == "-C" else command[1:]

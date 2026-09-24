@@ -2767,7 +2767,7 @@ class DeliveryRuntime:
         else:
             prior_task_ids = binding.task_ids
             prior_result_ids = tuple(result.result_id for result in binding.results)
-        finished_at = datetime.now(UTC).isoformat()
+        finished_at = persisted.finished_at if persisted is not None else datetime.now(UTC).isoformat()
         receipt = CompletedOutcomeRepairReceipt.create(
             self._contract.change_id,
             request,
@@ -2775,6 +2775,14 @@ class DeliveryRuntime:
             prior_task_ids,
             prior_result_ids,
             finished_at,
+        )
+        repair_binding = self.retry_ledger().repair_binding_participant(
+            original_attempt_id=request.original_action_id,
+            repair_attempt_id=request.attempt_id,
+            repair_task_id=repair_task_id,
+            outcome_id=request.outcome_id,
+            now=finished_at,
+            allow_settled=existing is not None,
         )
         repair = DeliveryTaskDefinition(
             task_id=repair_task_id,
@@ -2845,6 +2853,7 @@ class DeliveryRuntime:
                 journal_path(self._contract.change_id, repair_id, "receipt"),
                 encoded(receipt),
             ),
+            repair_binding,
         )
         custody = self._workspace_manager.prepare_finalization_repair_release(
             self._contract.change_id,

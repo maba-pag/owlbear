@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import stat
 from contextlib import contextmanager
 from datetime import datetime
@@ -35,6 +36,10 @@ _MAX_PATH_LENGTH = 240
 _MAX_IDENTIFIER_LENGTH = 128
 _MAX_ATTEMPT_KEY_LENGTH = 128
 type _ReportFileSignature = tuple[str, int, int, int, int, int]
+_PROOF_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
+_PROOF_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_MAX_PROOF_TEMPORARIES = 256
+_MAX_PROOF_TEMPORARY_BYTES = MAX_REPORT_BYTES * _MAX_PROOF_TEMPORARIES
 
 
 class FinalizationReportError(RuntimeError):
@@ -647,8 +652,30 @@ class ProofAttemptStore:
     def _inventory(descriptor: int) -> tuple[_ReportFileSignature, ...]:
         try:
             with contained_directory(descriptor, Path("attempts")) as attempts_fd, os.scandir(attempts_fd) as entries:
-                return tuple(
-                    sorted(
+                temporary_count = 0
+                temporary_bytes = 0
+                signatures = []
+                attempt_count = 0
+                for entry in entries:
+                    metadata = entry.stat(follow_symlinks=False)
+                    if _PROOF_TEMPORARY_PATTERN.fullmatch(entry.name):
+                        if (
+                            not stat.S_ISREG(metadata.st_mode)
+                            or metadata.st_nlink != 1
+                            or stat.S_IMODE(metadata.st_mode) != _PROOF_TEMPORARY_MODE
+                            or metadata.st_size < 0
+                            or metadata.st_size > MAX_REPORT_BYTES
+                        ):
+                            raise ValueError("proof-attempt temporary artifact is invalid")
+                        temporary_count += 1
+                        temporary_bytes += metadata.st_size
+                        if temporary_count > _MAX_PROOF_TEMPORARIES or temporary_bytes > _MAX_PROOF_TEMPORARY_BYTES:
+                            raise ValueError("proof-attempt temporary artifacts exceed capacity")
+                    elif entry.name.endswith(".json"):
+                        attempt_count += 1
+                    else:
+                        raise ValueError("proof-attempt storage inventory is malformed")
+                    signatures.append(
                         (
                             entry.name,
                             metadata.st_mode,
@@ -657,21 +684,18 @@ class ProofAttemptStore:
                             metadata.st_mtime_ns,
                             metadata.st_ctime_ns,
                         )
-                        for entry in entries
-                        for metadata in (entry.stat(follow_symlinks=False),)
                     )
-                )
         except FileNotFoundError:
             return ()
+        if attempt_count > MAX_PROOF_ATTEMPTS:
+            raise ValueError("proof-attempt history exceeds capacity")
+        return tuple(sorted(signatures))
 
     def _read(self, descriptor: int) -> tuple[ProofAttempt, ...]:
         inventory = self._inventory(descriptor)
         if self._cached is not None and inventory == self._cached_inventory:
             return self._cached
-        names = tuple(item[0] for item in inventory)
-        if len(names) > MAX_PROOF_ATTEMPTS:
-            msg = "proof-attempt history exceeds capacity"
-            raise ValueError(msg)
+        names = tuple(item[0] for item in inventory if item[0].endswith(".json"))
         attempts = []
         for name in names:
             content = read_contained(descriptor, Path("attempts") / name, limit=MAX_REPORT_BYTES)
@@ -747,8 +771,22 @@ class ProofAttemptStore:
                 msg = "proof-attempt-observation-unavailable"
                 raise FinalizationReportError(msg)
             attempt = ProofAttempt.create(self._change_id, attempt_key, procedure, basis, observation)
+            encoded_attempt = _encoded(attempt)
+            inventory = self._inventory(descriptor)
+            temporary_count = sum(
+                1 for signature in inventory if _PROOF_TEMPORARY_PATTERN.fullmatch(signature[0]) is not None
+            )
+            temporary_bytes = sum(
+                signature[3] for signature in inventory if _PROOF_TEMPORARY_PATTERN.fullmatch(signature[0]) is not None
+            )
+            if (
+                temporary_count >= _MAX_PROOF_TEMPORARIES
+                or temporary_bytes > _MAX_PROOF_TEMPORARY_BYTES - len(encoded_attempt)
+            ):
+                msg = "proof-attempt-capacity"
+                raise FinalizationReportError(msg)
             participant = TransactionParticipant(
-                self._root, Path("attempts") / f"{attempt.attempt_id}.json", _encoded(attempt)
+                self._root, Path("attempts") / f"{attempt.attempt_id}.json", encoded_attempt
             )
             RuntimeTransaction(self._root, attempt.attempt_id, (participant,)).commit_contained(descriptor)
             self._cached = (*history, attempt)
