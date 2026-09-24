@@ -9,8 +9,10 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The current resume starts at **`d7b8369`**, preserving partial checkpoint **`9bc8cfb`**
-from review baseline **`4ea5457`**, following the
+The current verification starts at **`6db0fec3cc15c84f36498b39813a12b5cdcda0f6`**,
+following the [verification request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5823084965).
+It preserves the partial repairs from **`9bc8cfb`**, **`d7b8369`** and review baseline
+**`4ea5457`**, following the
 [existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
 and [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5809465434).
 It addresses Git environment overrides before admission, durable repair-to-original-action
@@ -22,11 +24,44 @@ Published source checkpoint **`b6205a6`** closes post-link proof-publication rep
 recovers pending retry transactions before owner-result reconciliation, fences continuation
 finalization identity, and extends early Git environment refusal. It also repairs the staging
 inventory rejecting its own `intent.json`, without trusting or deleting markerless artifacts.
-Independent review still identifies failed/unaccepted repair bindings authorizing resumption;
-that finding remains open until a successful owner-settlement requirement and discriminating
-regression are implemented and re-reviewed. This is not bounded-repair or whole-C acceptance.
+Final continuation source **`6db0fec`**, following **`e1f59ae`**, adds the previously missing
+successful owner-settlement requirement: the exact linked repair attempt must have a durable
+successful outcome before a replacement original action can resume. The binding alone is not
+authority. Change/action/target/finalization identity fences and the original episode's consumed
+budget remain in force. Owner-result reconciliation now inspects settled attempts as well as
+pending ones, rejecting contradictory terminal non-success evidence. The application recovers
+the linked original episode's finalization identity for continuation after restart.
 
-Fresh delegated proof at this checkpoint: **277 passed** in the focused proof/retry/workspace
+Fresh independent read-only review of **`b6205a6..6db0fec`** and the coupled binding/readiness
+paths confirms that the original failed/unaccepted-binding finding is addressed. Pending,
+failed, contained or contradictory repair evidence does not authorize original-action resumption.
+This supersedes the stale statement that the successful-settlement gate is still unimplemented.
+The reviewer did not run tests. Executable verification remains blocked, and the new finding
+below prevents bounded-repair acceptance; this is not whole-C acceptance.
+
+**Open medium finding — readiness and acquisition disagree on finalizer retry identity.**
+In `portfolio_application.py`, `_with_retry_readiness()` (lines 5836–5842 at `6db0fec`)
+uses no finalization identity when the current finalization receipt is absent, whereas
+`_launch_continuation_finalizer()` (lines 7319–7342) uses the review-repair invalidation or
+linked original episode's identity. After a head-changing review repair, readiness can miss the
+existing episode and show stale attempts/backoff/exhaustion data. Acquisition still fails closed,
+but clients may repeatedly attempt an action projected as ready. The next bounded repair must
+align the semantic identity used by both paths and add a readiness/acquisition regression,
+preserving the accepted-repair and target/finalization fences. No source repair is claimed here.
+
+Fresh delegated checks at **`6db0fec`**: `compileall` passed for the two changed source modules
+and their two test modules using system Python **3.12.3**; `git diff --check` passed and the
+checkout remained clean. These are syntax/whitespace checks, not locked-runtime test evidence.
+The focused pytest command selected the unaccepted-binding, contradictory-terminal-result,
+accepted-repair/budget, application restart and transaction-crash regressions in
+`test_retry_ledger.py` and `test_recovery.py`. It could not start because `uv` was absent;
+one bounded uv **0.12.18** installation attempt failed DNS resolution. **No pytest cases
+were collected or passed.** Scoped Ruff was also blocked. `pytest`, `pydantic` and
+`owlbear_delivery` were unavailable, so PR-worktree import provenance could not be verified.
+The parent did not rerun delegated checks. Focused executable proof on the locked toolchain
+remains required; do not substitute the older totals below.
+
+Prior delegated proof at **`b6205a6`**: **277 passed** in the focused proof/retry/workspace
 selection, **101 passed** in the transaction/recovery selection, **82 passed** in
 `serve/delivery/tests/test_recovery.py`, **44 passed** in the portfolio continuation/retry
 selection and **4 passed** authority invariant nodes. These selections overlap; do not sum them.
@@ -34,11 +69,15 @@ The writer used locked Python **3.14.7**, uv **0.12.18**, and reported `git diff
 The temporary uv installation was removed. The parent did not rerun delegated checks.
 Older proof below remains evidence only for its named revisions.
 
-Parent secret scanning passed before publication. Automated Code Review was **unavailable**
+Prior parent secret scanning passed before publication. Automated Code Review was **unavailable**
 because its configured model was missing; the wrapper's success label is not review evidence.
-CodeQL **timed out**, so this checkpoint has no completed current CodeQL result. Independent
-read-only review is separate evidence. Source, Cockpit and Agent ecosystem runs inspected at
-`d7b8369` require action, not passing proof; no approval or bypass was performed.
+CodeQL **timed out**; those results are not final-source validation. Source, Cockpit and Agent
+ecosystem runs freshly inspected at **`6db0fec`** are **`action_required`**, not passing proof;
+no approval or bypass was performed. Historical `dev` failures do not establish a failure in
+this final continuation delta. No live services, records or provider effects were activated.
+For this documentation-only verification update, secret scanning passed; automated Code Review
+was again unavailable because its configured model could not load, and CodeQL skipped the
+non-code changes. Neither result supplies final-source executable or security-scan proof.
 
 #### Production and acceptance gaps retained by this repair
 
