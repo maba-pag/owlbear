@@ -9,7 +9,7 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The current bounded repair starts at **`4ea5457`**, following the
+The current bounded repair starts at **`4ea5457`**, with checkpoint **`9bc8cfb`**, following the
 [existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
 and [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5809465434).
 It addresses Git environment overrides before admission, durable repair-to-original-action
@@ -17,7 +17,21 @@ retry accounting, hard-death proof-store publication replay, and bounded pre-jou
 staging artifacts. These repairs do not establish production custody/proof/publication
 composition or whole-C resumption. The reviewed identity, admission/no-follow,
 intent-publication, post-replacement replay and provenance/index boundaries remain required.
-Implementation and focused proof are in progress; no acceptance is claimed.
+This is an **unverified partial repair**, not acceptance. The candidate adds early environment
+refusal, bounded retained temporaries/stages, and durable repair bindings for retry continuation.
+Independent read-only rechecks confirmed the environment guards, directory-descriptor lifetime
+and incoming staging-capacity corrections. They still identified post-link temporary replay
+and linked retry-settlement crash gaps; continuation finalization-identity matching also needs
+resolution. Those findings block repair acceptance.
+
+The writer reports compile/AST and whitespace checks passed, but **no focused pytest run**:
+`uv` and `pytest` were unavailable in its environment. Added regressions are not passing proof.
+The parent did not rerun delegated checks. Earlier test totals below are prior-checkpoint evidence,
+not validation of this candidate. Secret scanning passed for the published checkpoint.
+The current repair needs focused executable proof and final independent review before it can
+be called complete.
+
+#### Prior provenance checkpoint
 
 Reviewed source **`92160aa523caa2803bd841d019f5a73a92936755`** completes the bounded repair and
 validation of interrupted checkpoint `78b0c16`, whose provenance/index increment starts from

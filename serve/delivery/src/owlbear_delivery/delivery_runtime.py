@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
@@ -52,6 +53,7 @@ if TYPE_CHECKING:
 
 
 _MAX_WORKER_RETRIES = 3
+_MAX_COMPLETED_REPAIR_RECEIPTS = 256
 
 
 class DeliveryStage(StrEnum):
@@ -3491,10 +3493,111 @@ class DeliveryRuntime:
                     failure_code="worker-returned" if isinstance(request, ReturnDelivery) else "worker-blocked",
                 ),
             )
+        if isinstance(request, AdvanceDelivery):
+            result_participants = (
+                *result_participants,
+                *self._repair_owner_result_participants(
+                    binding,
+                    retry_observed_at=retry_observed_at or datetime.now(UTC),
+                ),
+            )
         self._replace(
             previous, replacement, transition_request_digest=request_digest, additional_participants=result_participants
         )
         return _find_binding(replacement, request.outcome_id)
+
+    def _repair_owner_result_participants(
+        self,
+        binding: OutcomeAuthorityBinding,
+        *,
+        retry_observed_at: datetime | str,
+    ) -> tuple[TransactionParticipant, ...]:
+        """Publish exact completed-repair accounting only with its accepted task result."""
+        if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim is None:
+            return ()
+        task_id = binding.active_claim.task_id
+        candidate = binding.result_candidate
+        if task_id is None or candidate is None or candidate.result.task_id != task_id:
+            return ()
+        ledger = self.retry_ledger()
+        bindings = tuple(
+            item
+            for item in ledger.repair_bindings()
+            if item.outcome_id == binding.outcome_id and item.repair_task_id == task_id
+        )
+        if not bindings:
+            return ()
+        if len(bindings) != 1:
+            raise DeliveryRuntimeConflictError("completed-outcome repair has multiple retry bindings")
+        repair_binding = bindings[0]
+        receipt = self._completed_outcome_repair_receipt(binding.outcome_id, task_id)
+        if (
+            receipt is None
+            or receipt.episode_id != repair_binding.episode_id
+            or receipt.attempt_id != repair_binding.repair_attempt_id
+            or receipt.outcome_id != repair_binding.outcome_id
+            or receipt.repair_task_id != repair_binding.repair_task_id
+        ):
+            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt identity is unavailable")
+        return ledger.owner_result_participants(
+            receipt.attempt_id,
+            accepted=True,
+            accepted_progress=False,
+            repair_outcome_id=receipt.outcome_id,
+            repair_task_id=receipt.repair_task_id,
+            completed_commit=candidate.result.completed_commit,
+            now=retry_observed_at,
+        )
+
+    def _completed_outcome_repair_receipt(
+        self,
+        outcome_id: str,
+        repair_task_id: str,
+    ) -> CompletedOutcomeRepairReceipt | None:
+        """Find one validated repair receipt without deriving authority from a task name."""
+        base = self._target_root / "changes" / self._contract.change_id / "recovery-receipts"
+        try:
+            entries = tuple(sorted(base.iterdir(), key=lambda item: item.name))
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt inventory is unavailable") from exc
+        if len(entries) > _MAX_COMPLETED_REPAIR_RECEIPTS:
+            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt inventory exceeds its bound")
+        matches: list[CompletedOutcomeRepairReceipt] = []
+        for entry in entries:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            if len(entry.name) != 64 or any(character not in "0123456789abcdef" for character in entry.name):
+                continue
+            try:
+                content = read_record(
+                    self._target_root,
+                    journal_path(self._contract.change_id, entry.name, "receipt"),
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, DeliveryWorkerExclusionRequiredError) as exc:
+                raise DeliveryRuntimeReferenceError("completed-outcome repair receipt is unavailable") from exc
+            try:
+                receipt = CompletedOutcomeRepairReceipt.model_validate_json(content)
+            except (TypeError, ValueError):
+                try:
+                    payload = json.loads(content)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    payload = None
+                if isinstance(payload, dict) and "repair_task_id" in payload:
+                    raise DeliveryRuntimeReferenceError("completed-outcome repair receipt is malformed")
+                continue
+            if (
+                receipt.change_id == self._contract.change_id
+                and receipt.outcome_id == outcome_id
+                and receipt.repair_task_id == repair_task_id
+            ):
+                matches.append(receipt)
+        if len(matches) > 1:
+            raise DeliveryRuntimeConflictError("completed-outcome repair has multiple matching receipts")
+        return matches[0] if matches else None
 
     def require_result_replay(self, outcome_id: str, claim_id: str, result: DeliveryTaskResult) -> None:
         """Require immutable original claim provenance before replaying a promoted result."""

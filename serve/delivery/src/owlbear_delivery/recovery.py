@@ -615,6 +615,26 @@ class RetryOwnerResult(_RecoveryModel):
     accepted: bool
     observed_at: str
     failure_code: str = "worker-blocked"
+    accepted_progress: bool = True
+    repair_outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    repair_task_id: str | None = Field(default=None, min_length=1, max_length=256)
+    completed_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+    @model_validator(mode="after")
+    def _validate_repair_acceptance(self) -> Self:
+        repair_fields = (self.repair_outcome_id, self.repair_task_id, self.completed_commit)
+        if not self.accepted and (not self.accepted_progress or any(value is not None for value in repair_fields)):
+            raise ValueError("rejected retry owner result cannot carry repair acceptance")
+        if self.accepted and self.repair_task_id is None:
+            if not self.accepted_progress or any(value is not None for value in repair_fields):
+                raise ValueError("ordinary accepted retry owner result must reset its episode")
+        elif self.accepted and (
+            self.accepted_progress
+            or self.repair_outcome_id is None
+            or self.completed_commit is None
+        ):
+            raise ValueError("repair owner result must identify accepted progress without reset")
+        return self
 
 
 class RetryEpisodeSummary(_RecoveryModel):
@@ -846,7 +866,16 @@ class RetryLedger:
         return episode
 
     def owner_result_participants(
-        self, attempt_id: str, *, accepted: bool, now: datetime | str, failure_code: str = "worker-blocked"
+        self,
+        attempt_id: str,
+        *,
+        accepted: bool,
+        now: datetime | str,
+        failure_code: str = "worker-blocked",
+        accepted_progress: bool = True,
+        repair_outcome_id: str | None = None,
+        repair_task_id: str | None = None,
+        completed_commit: str | None = None,
     ) -> tuple[TransactionParticipant, ...]:
         """Prepare evidence for the owner's transaction, not a separate accounting write."""
         episode = _episode_for_attempt(self.read(), attempt_id)
@@ -858,6 +887,10 @@ class RetryLedger:
             accepted=accepted,
             observed_at=_retry_timestamp(_retry_time(now)),
             failure_code=failure_code,
+            accepted_progress=accepted_progress,
+            repair_outcome_id=repair_outcome_id,
+            repair_task_id=repair_task_id,
+            completed_commit=completed_commit,
         )
         return (
             TransactionParticipant(
@@ -965,29 +998,92 @@ class RetryLedger:
             raise RetryLedgerCorruptError
         return matches[0] if matches else None
 
-    def record_repair_acceptance(
-        self,
-        outcome_id: str,
-        completed_task_ids: tuple[str, ...],
-        *,
-        now: datetime | str | None = None,
-    ) -> tuple[RetryEpisodeSummary, ...]:
-        """Settle accepted Builder repairs without resetting the failed action episode."""
-        completed = set(completed_task_ids)
-        settled = []
-        for binding in self.repair_bindings():
-            if binding.outcome_id != outcome_id or binding.repair_task_id not in completed:
-                continue
-            summary = self.read()
-            self._validate_repair_binding(binding, summary)
-            settled.append(
-                self.record_success(
-                    binding.repair_attempt_id,
-                    now=now if now is not None else self._clock(),
-                    accepted_progress=False,
-                )
+    def record_repair_owner_result(self, result: RetryOwnerResult) -> RetryEpisodeSummary:
+        """Consume one exact repair-task result without resetting its failed episode."""
+        if (
+            not result.accepted
+            or result.accepted_progress
+            or result.repair_outcome_id is None
+            or result.repair_task_id is None
+            or result.completed_commit is None
+        ):
+            raise RetryLedgerConflictError("repair owner result is not an accepted no-reset result")
+        summary, previous = self._read_with_bytes()
+        episode = _episode_for_attempt(summary, result.attempt_id)
+        if episode is None or episode.episode_id != result.episode_id:
+            raise RetryLedgerConflictError("repair owner result is not bound to its retry episode")
+        matches = tuple(
+            binding
+            for binding in self.repair_bindings()
+            if binding.repair_attempt_id == result.attempt_id
+        )
+        if len(matches) != 1:
+            raise RetryLedgerConflictError("repair owner result has no unique durable repair binding")
+        binding = matches[0]
+        self._validate_repair_binding(binding, summary)
+        if (
+            binding.episode_id != result.episode_id
+            or binding.outcome_id != result.repair_outcome_id
+            or binding.repair_task_id != result.repair_task_id
+        ):
+            raise RetryLedgerConflictError("repair owner result identity conflicts with its durable receipt")
+        success_id = digest(f"{result.attempt_id}:succeeded".encode())
+        if (
+            digest(f"{result.attempt_id}:failed".encode()) in episode.outcome_ids
+            or digest(f"{result.attempt_id}:contained".encode()) in episode.outcome_ids
+        ):
+            raise RetryLedgerConflictError("repair owner result arrived after a terminal non-success outcome")
+        aliases = episode.aliases
+        if not any(alias.alias_kind == "commit" and alias.value == result.completed_commit for alias in aliases):
+            aliases = (
+                *aliases,
+                RetryEpisodeAlias(
+                    alias_kind="commit",
+                    value=result.completed_commit,
+                    observed_at=result.observed_at,
+                ),
             )
-        return tuple(settled)
+        if success_id in episode.outcome_ids and aliases == episode.aliases:
+            return episode
+        updated = episode.model_copy(
+            update={
+                "outcome_ids": (
+                    (*episode.outcome_ids, success_id) if success_id not in episode.outcome_ids else episode.outcome_ids
+                ),
+                "aliases": aliases,
+                "last_status": "succeeded",
+                "next_eligible_at": None,
+                "stop_code": None,
+            }
+        )
+        outcome = (
+            RetryAttemptOutcome(
+                attempt_id=result.attempt_id,
+                episode_id=episode.episode_id,
+                status="succeeded",
+                observed_at=result.observed_at,
+            )
+            if success_id not in episode.outcome_ids
+            else None
+        )
+        self._commit_summary(
+            previous,
+            summary.model_copy(
+                update={
+                    "version": summary.version + 1,
+                    "updated_at": result.observed_at,
+                    "episodes": _replace_episode(summary.episodes, updated),
+                }
+            ),
+            RetryAttemptOutcome if outcome is not None else None,
+            outcome,
+            outcome_id=success_id if outcome is not None else None,
+        )
+        return updated
+
+    def record_repair_acceptance(self, result: RetryOwnerResult) -> RetryEpisodeSummary:
+        """Compatibility name for exact owner-result repair settlement."""
+        return self.record_repair_owner_result(result)
 
     def reconcile_owner_results(self) -> None:
         """Finish accounting from exact durable receipts, without caller replay or refund."""
@@ -1007,20 +1103,14 @@ class RetryLedger:
                     or attempt.key != episode.key
                 ):
                     raise RetryLedgerCorruptError
-                if result.accepted:
-                    repair_binding = (
-                        self.repair_binding_for_attempt(attempt_id, outcome_id=attempt.key.outcome_id)
-                        if attempt.key.outcome_id is not None
-                        else None
+                if result.repair_task_id is not None:
+                    self.record_repair_owner_result(result)
+                elif result.accepted:
+                    self.record_success(
+                        attempt_id,
+                        now=result.observed_at,
+                        accepted_progress=result.accepted_progress,
                     )
-                    if repair_binding is not None:
-                        self.record_repair_acceptance(
-                            attempt.key.outcome_id,
-                            (attempt.key.task_lineage,) if attempt.key.task_lineage is not None else (),
-                            now=result.observed_at,
-                        )
-                    else:
-                        self.record_accepted_progress(attempt_id, now=result.observed_at)
                 else:
                     self.record_failure(attempt_id, failure_code=result.failure_code, now=result.observed_at)
 
@@ -1080,9 +1170,7 @@ class RetryLedger:
                 or linked_episode.key.target_head != key.target_head
             ):
                 raise RetryLedgerConflictError("replacement action does not match the repaired episode")
-            if current is not None and (
-                current.episode_id != linked.episode_id
-            ):
+            if current is not None and current.episode_id != linked.episode_id:
                 raise RetryLedgerConflictError("replacement action does not match the repaired episode")
             if current is None:
                 current = linked_episode
@@ -1763,7 +1851,20 @@ def _replace_episode(
 def _matching_episode(summary: RetryLedgerSummary, key: RetryEpisodeKey) -> RetryEpisodeSummary | None:
     exact = next((item for item in summary.episodes if item.episode_id == key.identity), None)
     if key.outcome_id is None:
-        return exact
+        if exact is not None:
+            return exact
+        candidates = tuple(
+            item
+            for item in summary.episodes
+            if item.total_attempts
+            and item.key.action_kind == key.action_kind
+            and item.key.target_head == key.target_head
+            and item.key.finalization_id == key.finalization_id
+            and any(alias.alias_kind == "commit" and alias.value == key.exact_head for alias in item.aliases)
+        )
+        if len(candidates) > 1:
+            raise RetryLedgerConflictError("multiple engine retry episodes cover this commit alias")
+        return candidates[0] if candidates else None
     candidates = tuple(
         item
         for item in summary.episodes

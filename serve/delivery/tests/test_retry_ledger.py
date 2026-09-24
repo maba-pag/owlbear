@@ -16,6 +16,7 @@ from owlbear_delivery.recovery import (
     RetryLedgerConflictError,
     RetryLedgerCorruptError,
     RetryLedgerSummary,
+    RetryOwnerResult,
     RetryStopCode,
     digest,
 )
@@ -435,8 +436,49 @@ def test_completed_repair_settles_without_reset_and_resumes_new_head(tmp_path: P
 
     restarted = RetryLedger(tmp_path, "change-a")
     assert tuple(item.attempt_id for item in restarted.pending_attempts()) == ("repair",)
-    settled = restarted.record_repair_acceptance("OUT-001", ("repair-task",), now=_START + timedelta(seconds=2))
-    assert len(settled) == 1
+    worker_key = RetryEpisodeKey.worker(
+        "change-a",
+        "builder-claim",
+        _HEAD,
+        contract_digest="c" * 64,
+        outcome_id="OUT-001",
+        task_lineage="repair-task",
+        procedure_class="builder",
+        original_candidate="candidate",
+        target_head=_TARGET,
+    )
+    worker = restarted.reserve(
+        worker_key,
+        failure_class="transient",
+        now=_START + timedelta(seconds=2),
+        attempt_id="builder-repair",
+    )
+    restarted.record_accepted_progress(worker, now=_START + timedelta(seconds=2))
+    owner_result = RetryOwnerResult(
+        attempt_id="repair",
+        episode_id=key.identity,
+        accepted=True,
+        accepted_progress=False,
+        observed_at=(_START + timedelta(seconds=2)).isoformat().replace("+00:00", "Z"),
+        repair_outcome_id="OUT-001",
+        repair_task_id="repair-task",
+        completed_commit=_HEAD,
+    )
+    participants = restarted.owner_result_participants(
+        "repair",
+        accepted=True,
+        accepted_progress=False,
+        repair_outcome_id="OUT-001",
+        repair_task_id="repair-task",
+        completed_commit=_HEAD,
+        now=_START + timedelta(seconds=2),
+    )
+    RuntimeTransaction(tmp_path, "repair-owner-result", participants).commit()
+    assert RetryOwnerResult.model_validate_json(
+        (tmp_path / "changes" / "change-a" / "retry-ledger" / "owner-results" / "repair.json").read_bytes()
+    ) == owner_result
+    restarted = RetryLedger(tmp_path, "change-a")
+    restarted.reconcile_owner_results()
     episode = restarted.episode(key)
     assert episode is not None
     assert episode.total_attempts == 2
@@ -466,6 +508,75 @@ def test_completed_repair_settles_without_reset_and_resumes_new_head(tmp_path: P
     )
     assert not blocked.allowed
     assert blocked.reason_code == RetryStopCode.EXHAUSTED.value
+
+
+def test_repair_owner_acceptance_keeps_budget_until_original_success(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="original")
+    ledger.record_failure(original, failure_code="failed-check", now=_START)
+    repair = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="repair",
+    )
+    participant = ledger.repair_binding_participant(
+        original_attempt_id="original",
+        repair_attempt_id="repair",
+        repair_task_id="repair-task",
+        outcome_id="OUT-001",
+        now=_START + timedelta(seconds=1),
+    )
+    RuntimeTransaction(tmp_path, "repair-binding", (participant,)).commit()
+    owner = ledger.owner_result_participants(
+        "repair",
+        accepted=True,
+        accepted_progress=False,
+        repair_outcome_id="OUT-001",
+        repair_task_id="repair-task",
+        completed_commit=_HEAD,
+        now=_START + timedelta(seconds=2),
+    )
+    RuntimeTransaction(tmp_path, "repair-owner", owner).commit()
+    restarted = RetryLedger(tmp_path, "change-a")
+    restarted.reconcile_owner_results()
+    repaired = restarted.episode(key)
+    assert repaired is not None
+    assert repaired.reset_count == 0
+    assert repaired.total_attempts == 2
+    assert any(alias.value == _HEAD for alias in repaired.aliases)
+
+    successor = restarted.reserve(
+        key.model_copy(update={"exact_head": "d" * 40}),
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=3),
+        attempt_id="successor",
+        resume_attempt_id="original",
+    )
+    restarted.record_accepted_progress(successor, now=_START + timedelta(seconds=3))
+    settled = restarted.episode(key)
+    assert settled is not None
+    assert settled.reset_count == 1
+    assert settled.total_attempts == 0
+
+
+def test_engine_commit_alias_does_not_cross_action_contexts(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    attempt = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="failed")
+    ledger.record_failure(attempt, failure_code="failed-check", now=_START)
+    ledger.record_alias(key, alias_kind="commit", value=_HEAD, now=_START)
+
+    unrelated = key.model_copy(update={"action_kind": "sync-target"})
+    fresh = ledger.reserve(
+        unrelated,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=2),
+        attempt_id="unrelated",
+    )
+    assert fresh.allowed
+    assert fresh.episode_id != key.identity
 
 
 def test_accepted_other_task_does_not_reset_failed_task_episode(tmp_path: Path) -> None:

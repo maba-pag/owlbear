@@ -2064,13 +2064,7 @@ class PortfolioApplication:
                 attempt.attempt_id,
                 outcome_id=binding.outcome_id,
             )
-            if repair_binding is not None:
-                ledger.record_repair_acceptance(
-                    binding.outcome_id,
-                    (result.task_id,),
-                    now=self._clock(),
-                )
-            else:
+            if repair_binding is None:
                 ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
             return
 
@@ -3056,13 +3050,7 @@ class PortfolioApplication:
             )
             if attempt_id is not None:
                 repair_binding = ledger.repair_binding_for_attempt(attempt_id, outcome_id=outcome_id)
-                if repair_binding is not None:
-                    ledger.record_repair_acceptance(
-                        outcome_id,
-                        tuple(result.task_id for result in binding.results),
-                        now=self._clock(),
-                    )
-                else:
+                if repair_binding is None:
                     ledger.record_accepted_progress(attempt_id, now=self._clock())
 
     def _record_retry_release(
