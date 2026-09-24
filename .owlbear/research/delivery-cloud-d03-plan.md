@@ -9,7 +9,8 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The current bounded repair starts at **`4ea5457`**, with checkpoint **`9bc8cfb`**, following the
+The current resume starts at **`d7b8369`**, preserving partial checkpoint **`9bc8cfb`**
+from review baseline **`4ea5457`**, following the
 [existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
 and [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5809465434).
 It addresses Git environment overrides before admission, durable repair-to-original-action
@@ -28,8 +29,24 @@ The writer reports compile/AST and whitespace checks passed, but **no focused py
 `uv` and `pytest` were unavailable in its environment. Added regressions are not passing proof.
 The parent did not rerun delegated checks. Earlier test totals below are prior-checkpoint evidence,
 not validation of this candidate. Secret scanning passed for the published checkpoint.
-The current repair needs focused executable proof and final independent review before it can
-be called complete.
+Those are the interrupted session's limits, not fresh verification. This resume must
+close the post-link publication and linked retry-settlement/finalization-identity gaps,
+run focused executable proof, and obtain final independent review before the bounded
+repair can be called complete.
+
+#### Production and acceptance gaps retained by this repair
+
+- The loader has no production trusted provenance producer; capture/restore have no
+  production callers composed with exclusive application recovery custody.
+- `ProofAttemptStore` persists captured observations. It does not execute maintained
+  procedures, supply a production registry/factory, or detect zero-exit mutation itself.
+- Successful-finalization/publication repair, including draft/readback and invalidation,
+  remains unimplemented.
+- Bounded retry accounting is not proof of a complete new-candidate → cumulative
+  independent review → original whole-Change proof/resumption production path.
+- Remaining privacy, filesystem, index and restart matrices, the conservative global
+  ignored-inventory refusal, actual host exclusion and external CI/static/pinned Node
+  acceptance gates remain outstanding. None authorizes D or live activation.
 
 #### Prior provenance checkpoint
 

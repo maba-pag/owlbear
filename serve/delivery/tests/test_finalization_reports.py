@@ -245,7 +245,9 @@ def _proof_basis() -> ProofAttemptBasis:
     )
 
 
-def _sigkill_during_proof_publication(tmp_path: Path, destination_suffix: str) -> None:
+def _sigkill_during_proof_publication(
+    tmp_path: Path, destination_suffix: str, *, after_link: bool = False
+) -> None:
     child = """
 import os
 import signal
@@ -264,6 +266,7 @@ from owlbear_delivery.finalization_reports import (
 
 root = Path(sys.argv[1])
 suffix = sys.argv[2]
+after_link = sys.argv[3] == "after"
 procedure = MaintainedProofProcedure(procedure_id="maintained-check", registration_digest="e" * 64)
 basis = ProofAttemptBasis(
     expected_contract_digest="c" * 64,
@@ -281,14 +284,18 @@ real_link = runtime_transaction.os.link
 
 def link(source, destination, *, src_dir_fd=None, dst_dir_fd=None, follow_symlinks=True):
     if str(destination).endswith(suffix):
-        os.kill(os.getpid(), signal.SIGKILL)
-    return real_link(
+        if not after_link:
+            os.kill(os.getpid(), signal.SIGKILL)
+    result = real_link(
         source,
         destination,
         src_dir_fd=src_dir_fd,
         dst_dir_fd=dst_dir_fd,
         follow_symlinks=follow_symlinks,
     )
+    if str(destination).endswith(suffix) and after_link:
+        os.kill(os.getpid(), signal.SIGKILL)
+    return result
 
 with patch.object(runtime_transaction.os, "link", link):
     ProofAttemptStore(root, "change-a", (procedure,)).record(
@@ -296,7 +303,7 @@ with patch.object(runtime_transaction.os, "link", link):
     )
 """
     result = subprocess.run(  # noqa: S603 - the child is a fixed synthetic crash harness.
-        [sys.executable, "-c", child, str(tmp_path), destination_suffix],
+        [sys.executable, "-c", child, str(tmp_path), destination_suffix, "after" if after_link else "before"],
         check=False,
     )
     assert result.returncode == -signal.SIGKILL
@@ -437,6 +444,28 @@ def test_proof_attempt_store_retains_sigkill_during_manifest_publication(tmp_pat
     assert temporary[0].read_bytes() == temporary_bytes
     store.record("attempt-1", _proof_procedure(), _proof_basis(), _proof_observation)
     assert len(store.read()) == 1
+    assert temporary[0].exists()
+
+
+@pytest.mark.parametrize("destination_suffix", [".json", ".yaml"])
+def test_proof_attempt_store_replays_sigkill_after_publication_link_without_reobserving(
+    tmp_path: Path, destination_suffix: str
+) -> None:
+    _sigkill_during_proof_publication(tmp_path, destination_suffix, after_link=True)
+    root = (
+        tmp_path / "proof-attempts/change-a/attempts"
+        if destination_suffix == ".json"
+        else tmp_path / "proof-attempts/change-a/transactions"
+    )
+    temporary = tuple(root.glob(".tmp-*"))
+    assert len(temporary) == 1
+    temporary_bytes = temporary[0].read_bytes()
+    procedure = _proof_procedure()
+    store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
+    history = store.read()
+    assert len(history) == 1
+    assert store.record("attempt-1", procedure, _proof_basis(), lambda: pytest.fail("replay must not observe")) == history[0]
+    assert temporary[0].read_bytes() == temporary_bytes
     assert temporary[0].exists()
 
 

@@ -1087,7 +1087,8 @@ class RetryLedger:
 
     def reconcile_owner_results(self) -> None:
         """Finish accounting from exact durable receipts, without caller replay or refund."""
-        for episode in self.read().episodes:
+        summary, _previous = self._read_with_bytes()
+        for episode in summary.episodes:
             for attempt_id in _pending_attempts(episode):
                 path = self.runtime_root / self._directory / "owner-results" / f"{attempt_id}.json"
                 try:
@@ -1168,6 +1169,7 @@ class RetryLedger:
                 or linked_episode.key.change_id != key.change_id
                 or linked_episode.key.action_kind != key.action_kind
                 or linked_episode.key.target_head != key.target_head
+                or linked_episode.key.finalization_id != key.finalization_id
             ):
                 raise RetryLedgerConflictError("replacement action does not match the repaired episode")
             if current is not None and current.episode_id != linked.episode_id:

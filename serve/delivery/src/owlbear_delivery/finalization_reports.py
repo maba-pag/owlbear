@@ -651,17 +651,31 @@ class ProofAttemptStore:
     @staticmethod
     def _inventory(descriptor: int) -> tuple[_ReportFileSignature, ...]:
         try:
-            with contained_directory(descriptor, Path("attempts")) as attempts_fd, os.scandir(attempts_fd) as entries:
+            with contained_directory(descriptor, Path("attempts")) as attempts_fd, os.scandir(attempts_fd) as scanned:
+                entries = tuple(scanned)
                 temporary_count = 0
                 temporary_bytes = 0
                 signatures = []
                 attempt_count = 0
+                metadata_by_name = {}
+                published_identities = set()
                 for entry in entries:
                     metadata = entry.stat(follow_symlinks=False)
+                    metadata_by_name[entry.name] = metadata
+                    if _PROOF_TEMPORARY_PATTERN.fullmatch(entry.name) is None and stat.S_ISREG(metadata.st_mode):
+                        published_identities.add((metadata.st_dev, metadata.st_ino))
+                for entry in entries:
+                    metadata = metadata_by_name[entry.name]
                     if _PROOF_TEMPORARY_PATTERN.fullmatch(entry.name):
                         if (
                             not stat.S_ISREG(metadata.st_mode)
-                            or metadata.st_nlink != 1
+                            or (
+                                metadata.st_nlink != 1
+                                and not (
+                                    metadata.st_nlink == 2
+                                    and (metadata.st_dev, metadata.st_ino) in published_identities
+                                )
+                            )
                             or stat.S_IMODE(metadata.st_mode) != _PROOF_TEMPORARY_MODE
                             or metadata.st_size < 0
                             or metadata.st_size > MAX_REPORT_BYTES

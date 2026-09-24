@@ -1343,6 +1343,29 @@ def test_recovery_git_reads_reject_inherited_repository_overrides(
         manager.baseline_scope_kinds(coordination.worktree_path, "a" * 40, ("shared.txt",))
 
 
+@pytest.mark.parametrize("operation", ["ensure", "recover", "validate_recovery"])
+def test_recovery_admission_rejects_inherited_git_overrides_before_coordination_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
+    alternate = tmp_path / "alternate-worktree"
+    branch_head = _git(manager.repository, "rev-parse", coordination.branch)
+    _git(manager.repository, "worktree", "add", "--detach", str(alternate), branch_head)
+    monkeypatch.setenv("GIT_DIR", str(alternate))
+
+    if operation == "ensure":
+        call = lambda: manager.ensure(coordination.change_id)  # noqa: E731 - focused admission probe.
+    elif operation == "recover":
+        call = lambda: manager.recover(coordination.change_id, branch_head)  # noqa: E731
+    else:
+        call = lambda: manager.validate_recovery(coordination.change_id, branch_head)  # noqa: E731
+
+    with pytest.raises(PreservationRejectedError, match="inherited Git repository/index overrides"):
+        call()
+
+
 def test_recovery_workspace_fingerprint_includes_admitted_untracked_bytes(tmp_path: Path) -> None:
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
     path = coordination.worktree_path / "added.bin"
@@ -1861,6 +1884,48 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
     assert process.returncode == -signal.SIGKILL, stderr
 
 
+def _kill_after_private_staging_before_journal(tmp_path: Path, preservation, repository: Path) -> None:
+    script = (
+        "import os, signal, sys\n"
+        "from pathlib import Path\n"
+        "from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator\n"
+        "class TestPreservationProvenanceProvider:\n"
+        "    def verify(self, **kwargs):\n"
+        "        return kwargs['evidence']\n"
+        "root = Path(sys.argv[1])\n"
+        "repository = Path(sys.argv[2])\n"
+        "coordinator = PortfolioCoordinator(root / 'state')\n"
+        "coordinator.record_verified_exclusion(sys.argv[5])\n"
+        "manager = ChangeWorkspaceManager(\n"
+        "    repository, root / 'worktrees', coordinator, 'release', remote='origin',\n"
+        "    preservation_provenance_provider=TestPreservationProvenanceProvider(),\n"
+        ")\n"
+        "real_create = manager._create_private_staging\n"
+        "def create(*args, **kwargs):\n"
+        "    result = real_create(*args, **kwargs)\n"
+        "    os.kill(os.getpid(), signal.SIGKILL)\n"
+        "    return result\n"
+        "manager._create_private_staging = create\n"
+        "manager.restore_preservation(sys.argv[3], sys.argv[4])\n"
+    )
+    result = subprocess.run(  # noqa: S603 - the child is a controlled test process.
+        (
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            str(repository),
+            preservation.change_id,
+            preservation.preservation_id,
+            preservation.recovery_id,
+        ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == -signal.SIGKILL, result.stderr
+
+
 def test_nonterminal_recovery_replays_after_operation_intent_publication_death(tmp_path: Path) -> None:
     _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     worktree = coordination.worktree_path
@@ -2003,6 +2068,60 @@ def test_nonterminal_recovery_replays_after_partial_private_staging_write_death(
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert (worktree / "shared.txt").read_bytes() == b"base\n"
     assert not staging.exists()
+
+
+def test_nonterminal_recovery_replays_and_retains_prejournal_private_stage_orphan(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+
+    _kill_after_private_staging_before_journal(tmp_path, preservation, manager.repository)
+    operation_dir = (
+        manager.runtime_root / preservation.storage_ref / "restoration" / _restoration_operation_id(preservation)
+    )
+    path_dir = operation_dir / "paths" / digest("shared.txt".encode())
+    orphaned = tuple(path_dir.glob("stage-*"))
+    assert len(orphaned) == 1
+    assert not (path_dir / "staging.json").exists()
+    assert worktree.joinpath("shared.txt").read_bytes() == b"dirty preservation\n"
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
+    assert worktree.joinpath("shared.txt").read_bytes() == b"base\n"
+    assert orphaned[0].exists()
+    assert (path_dir / "staging.json").exists()
+    assert len(tuple(path_dir.glob("stage-*"))) == 1
+
+
+def test_nonterminal_recovery_fails_closed_at_prejournal_private_stage_bound(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    operation_id = _restoration_operation_id(preservation)
+    path_dir = (
+        manager.runtime_root
+        / preservation.storage_ref
+        / "restoration"
+        / operation_id
+        / "paths"
+        / digest("shared.txt".encode())
+    )
+    _kill_after_private_staging_before_journal(tmp_path, preservation, manager.repository)
+    for stage in path_dir.glob("stage-*"):
+        stage.unlink()
+    for index in range(255):
+        (path_dir / f"stage-{index:032x}").write_bytes(b"retained")
+
+    _kill_after_private_staging_before_journal(tmp_path, preservation, manager.repository)
+    assert len(tuple(path_dir.glob("stage-*"))) == 256
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    with pytest.raises(PreservationFenceError, match="retained bound"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+    assert worktree.joinpath("shared.txt").read_bytes() == b"dirty preservation\n"
 
 
 def test_private_staging_retention_is_bounded_without_deleting_evidence(tmp_path: Path) -> None:

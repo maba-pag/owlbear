@@ -461,24 +461,38 @@ def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> t
     temporary_count = 0
     temporary_bytes = 0
     try:
-        with os.scandir(directory_fd) as entries:
-            for entry in entries:
-                if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
-                    continue
-                try:
-                    metadata = entry.stat(follow_symlinks=False)
-                except OSError as exc:
-                    raise TransactionManifestError from exc
-                if (
-                    not stat.S_ISREG(metadata.st_mode)
-                    or metadata.st_nlink != 1
-                    or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
-                    or metadata.st_size < 0
-                    or metadata.st_size > _MAX_CONTAINED_MANIFEST_BYTES
-                ):
-                    raise TransactionManifestError
-                temporary_count += 1
-                temporary_bytes += metadata.st_size
+        with os.scandir(directory_fd) as scanned:
+            entries = tuple(scanned)
+        published_identities = set()
+        metadata_by_name = {}
+        for entry in entries:
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise TransactionManifestError from exc
+            metadata_by_name[entry.name] = metadata
+            if (
+                _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None
+                and stat.S_ISREG(metadata.st_mode)
+            ):
+                published_identities.add((metadata.st_dev, metadata.st_ino))
+        for entry in entries:
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
+                continue
+            metadata = metadata_by_name[entry.name]
+            linked_to_published = (
+                metadata.st_nlink == 2 and (metadata.st_dev, metadata.st_ino) in published_identities
+            )
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or (metadata.st_nlink != 1 and not linked_to_published)
+                or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
+                or metadata.st_size < 0
+                or metadata.st_size > _MAX_CONTAINED_MANIFEST_BYTES
+            ):
+                raise TransactionManifestError
+            temporary_count += 1
+            temporary_bytes += metadata.st_size
     except OSError as exc:
         raise TransactionManifestError from exc
     if (

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -487,7 +488,16 @@ def test_completed_repair_settles_without_reset_and_resumes_new_head(tmp_path: P
     assert digest("original:failed".encode()) in episode.outcome_ids
     assert "repair" not in {item.attempt_id for item in restarted.pending_attempts()}
 
-    new_head = key.model_copy(update={"exact_head": "d" * 40, "finalization_id": "final-2"})
+    with pytest.raises(RetryLedgerConflictError, match="replacement action does not match"):
+        restarted.reserve(
+            key.model_copy(update={"exact_head": "d" * 40, "finalization_id": "final-2"}),
+            failure_class="mechanical",
+            now=_START + timedelta(seconds=2),
+            attempt_id="mismatched-finalization",
+            resume_attempt_id="original",
+        )
+
+    new_head = key.model_copy(update={"exact_head": "d" * 40})
     resumed = restarted.reserve(
         new_head,
         failure_class="mechanical",
@@ -500,7 +510,7 @@ def test_completed_repair_settles_without_reset_and_resumes_new_head(tmp_path: P
     exhausted = restarted.record_failure(resumed, failure_code="failed-again", now=_START + timedelta(seconds=2))
     assert exhausted.stop_code is RetryStopCode.EXHAUSTED
     blocked = restarted.reserve(
-        key.model_copy(update={"exact_head": "e" * 40, "finalization_id": "final-3"}),
+        key.model_copy(update={"exact_head": "e" * 40}),
         failure_class="mechanical",
         now=_START + timedelta(days=1),
         attempt_id="fresh-head",
@@ -559,6 +569,91 @@ def test_repair_owner_acceptance_keeps_budget_until_original_success(tmp_path: P
     assert settled is not None
     assert settled.reset_count == 1
     assert settled.total_attempts == 0
+
+
+@pytest.mark.parametrize("transaction_id", ["repair-binding", "repair-owner"])
+@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
+def test_repair_link_and_settlement_replay_after_transaction_crash(
+    tmp_path: Path, transaction_id: str, crash_stage: str
+) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="original")
+    ledger.record_failure(original, failure_code="failed-check", now=_START)
+    repair = ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="repair",
+    )
+    binding = ledger.repair_binding_participant(
+        original_attempt_id="original",
+        repair_attempt_id="repair",
+        repair_task_id="repair-task",
+        outcome_id="OUT-001",
+        now=_START + timedelta(seconds=1),
+    )
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction, *, failure=None):
+        if transaction._transaction_id != transaction_id:
+            return original_commit(transaction, failure=failure)
+
+        def stop(stage):
+            if stage == crash_stage:
+                raise OSError("injected repair transaction crash")
+
+        return original_commit(transaction, failure=stop)
+
+    if transaction_id == "repair-binding":
+        with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(
+            OSError, match="injected repair transaction crash"
+        ):
+            RuntimeTransaction(tmp_path, transaction_id, (binding,)).commit()
+        restarted = RetryLedger(tmp_path, "change-a")
+        assert len(restarted.repair_bindings()) == 1
+    else:
+        RuntimeTransaction(tmp_path, transaction_id, (binding,)).commit()
+        owner = ledger.owner_result_participants(
+            "repair",
+            accepted=True,
+            accepted_progress=False,
+            repair_outcome_id="OUT-001",
+            repair_task_id="repair-task",
+            completed_commit=_HEAD,
+            now=_START + timedelta(seconds=2),
+        )
+        with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(
+            OSError, match="injected repair transaction crash"
+        ):
+            RuntimeTransaction(tmp_path, transaction_id, owner).commit()
+        restarted = RetryLedger(tmp_path, "change-a")
+
+    if transaction_id == "repair-binding":
+        owner = restarted.owner_result_participants(
+            "repair",
+            accepted=True,
+            accepted_progress=False,
+            repair_outcome_id="OUT-001",
+            repair_task_id="repair-task",
+            completed_commit=_HEAD,
+            now=_START + timedelta(seconds=2),
+        )
+        RuntimeTransaction(tmp_path, "repair-owner", owner).commit()
+    restarted.reconcile_owner_results()
+    settled = restarted.episode(key)
+    assert settled is not None
+    assert settled.reset_count == 0
+    assert settled.total_attempts == 2
+    assert "repair" not in {item.attempt_id for item in restarted.pending_attempts()}
+    successor = restarted.reserve(
+        key.model_copy(update={"exact_head": "d" * 40}),
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=3),
+        attempt_id="successor",
+        resume_attempt_id="original",
+    )
+    assert successor.allowed
 
 
 def test_engine_commit_alias_does_not_cross_action_contexts(tmp_path: Path) -> None:

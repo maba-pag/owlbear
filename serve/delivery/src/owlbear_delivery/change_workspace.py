@@ -2369,6 +2369,7 @@ class ChangeWorkspaceManager:
         recovery_reviewed_head: str | None = None,
     ) -> ChangeCoordination:
         """Ensure one healthy warm branch and worktree without repairing degraded state."""
+        self._require_preservation_environment()
         if not _is_change_id(change_id):
             msg = "change identity is not a safe worktree identity"
             raise ValueError(msg)
@@ -2418,6 +2419,7 @@ class ChangeWorkspaceManager:
 
     def recover(self, change_id: str, recovery_reviewed_head: str) -> ChangeCoordination:
         """Recreate one absent managed Change worktree from exact reviewed authority."""
+        self._require_preservation_environment()
         if not _is_change_id(change_id):
             msg = "change identity is not a safe worktree identity"
             raise ValueError(msg)
@@ -2473,6 +2475,7 @@ class ChangeWorkspaceManager:
 
     def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None:
         """Require exact reviewed authority when coordination is missing for a surviving branch."""
+        self._require_preservation_environment()
         if not _is_change_id(change_id):
             msg = "change identity is not a safe worktree identity"
             raise ValueError(msg)
@@ -2508,6 +2511,7 @@ class ChangeWorkspaceManager:
         request: RecoverOutOfBandHead,
     ) -> OutOfBandHeadRecoveryReceipt:
         """Preserve an out-of-band head and restore the managed branch to review authority."""
+        self._require_preservation_environment()
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
             existing = coordination.out_of_band_head_recovery
@@ -3159,6 +3163,7 @@ class ChangeWorkspaceManager:
 
     def refresh_integration_target(self, change_id: str) -> ChangeCoordination:
         """Persist the current target head at an operational Git boundary."""
+        self._require_preservation_environment()
         coordination = self._coordinator.show(change_id)
         target_head = self._resolve(self._target_ref())
         if target_head == coordination.target_head:
@@ -3173,6 +3178,7 @@ class ChangeWorkspaceManager:
         operation_id: str,
     ) -> PublicationBaselineRecoveryReceipt:
         """Persist one explicitly confirmed baseline for publication authority."""
+        self._require_preservation_environment()
         if _COMMIT_PATTERN.fullmatch(expected_change_head) is None:
             message = "expected Change head is not an exact commit identity"
             raise ValueError(message)
@@ -6608,7 +6614,7 @@ class ChangeWorkspaceManager:
                 stage_count = 0
                 stage_bytes = 0
                 for entry in scanned:
-                    if entry.name == "staging.json":
+                    if entry.name in {"intent.json", "result.json", "staging.json"}:
                         continue
                     if _RESTORATION_STAGE_PATTERN.fullmatch(entry.name) is None:
                         raise PreservationFenceError("private restoration staging inventory is malformed")
