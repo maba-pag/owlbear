@@ -18,21 +18,27 @@ retry accounting, hard-death proof-store publication replay, and bounded pre-jou
 staging artifacts. These repairs do not establish production custody/proof/publication
 composition or whole-C resumption. The reviewed identity, admission/no-follow,
 intent-publication, post-replacement replay and provenance/index boundaries remain required.
-This is an **unverified partial repair**, not acceptance. The candidate adds early environment
-refusal, bounded retained temporaries/stages, and durable repair bindings for retry continuation.
-Independent read-only rechecks confirmed the environment guards, directory-descriptor lifetime
-and incoming staging-capacity corrections. They still identified post-link temporary replay
-and linked retry-settlement crash gaps; continuation finalization-identity matching also needs
-resolution. Those findings block repair acceptance.
+Published source checkpoint **`b6205a6`** closes post-link proof-publication replay,
+recovers pending retry transactions before owner-result reconciliation, fences continuation
+finalization identity, and extends early Git environment refusal. It also repairs the staging
+inventory rejecting its own `intent.json`, without trusting or deleting markerless artifacts.
+Independent review still identifies failed/unaccepted repair bindings authorizing resumption;
+that finding remains open until a successful owner-settlement requirement and discriminating
+regression are implemented and re-reviewed. This is not bounded-repair or whole-C acceptance.
 
-The writer reports compile/AST and whitespace checks passed, but **no focused pytest run**:
-`uv` and `pytest` were unavailable in its environment. Added regressions are not passing proof.
-The parent did not rerun delegated checks. Earlier test totals below are prior-checkpoint evidence,
-not validation of this candidate. Secret scanning passed for the published checkpoint.
-Those are the interrupted session's limits, not fresh verification. This resume must
-close the post-link publication and linked retry-settlement/finalization-identity gaps,
-run focused executable proof, and obtain final independent review before the bounded
-repair can be called complete.
+Fresh delegated proof at this checkpoint: **277 passed** in the focused proof/retry/workspace
+selection, **101 passed** in the transaction/recovery selection, **82 passed** in
+`serve/delivery/tests/test_recovery.py`, **44 passed** in the portfolio continuation/retry
+selection and **4 passed** authority invariant nodes. These selections overlap; do not sum them.
+The writer used locked Python **3.14.7**, uv **0.12.18**, and reported `git diff --check` clean.
+The temporary uv installation was removed. The parent did not rerun delegated checks.
+Older proof below remains evidence only for its named revisions.
+
+Parent secret scanning passed before publication. Automated Code Review was **unavailable**
+because its configured model was missing; the wrapper's success label is not review evidence.
+CodeQL **timed out**, so this checkpoint has no completed current CodeQL result. Independent
+read-only review is separate evidence. Source, Cockpit and Agent ecosystem runs inspected at
+`d7b8369` require action, not passing proof; no approval or bypass was performed.
 
 #### Production and acceptance gaps retained by this repair
 

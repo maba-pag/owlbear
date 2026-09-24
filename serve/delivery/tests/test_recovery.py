@@ -49,6 +49,7 @@ from owlbear_delivery.recovery import (
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
+    digest,
     encoded,
     journal_path,
 )
@@ -778,6 +779,118 @@ def test_completed_outcome_repair_replays_with_retry_authority_and_preserves_res
     assert tuple(result.result_id for result in replayed.results) == ("RESULT-001",)
     assert reopened._runtime("change-a").show_binding("OUT-002") == downstream_before
     assert reopened_coordinator.show("change-a").writer is None
+
+
+def test_completed_repair_result_resumes_original_finalizer_after_restart(tmp_path: Path) -> None:
+    """Prove the reviewed Builder repair settles only its linked finalizer episode."""
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, _coordinator, state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    host = _host(application)
+    first = application.acquire_change_action(_continuation_request(application))
+    assert first.kind == "acquired"
+    original = first.finalization.attempt
+    original_action_id = original.writer.attempt_id
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=original_action_id)
+    )
+    recovery_intent = application._propose_recovery("change-a")
+    application._complete_recovery("change-a", recovery_intent.recovery_id, host.seal(recovery_intent))
+    preservation = application._workspace_manager.capture_preservation("change-a", recovery_intent.recovery_id)
+    now[0] = "2026-08-04T00:00:02Z"
+    key = RetryEpisodeKey.engine(
+        "change-a",
+        "finalize",
+        original.exact_head,
+        application._workspace_manager.observed_target_head(),
+        None,
+    )
+    repair_reservation = runtimes["change-a"].retry_ledger(clock=lambda: now[0]).reserve(
+        key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now=now[0],
+        attempt_id="repair-attempt",
+        automatic=True,
+        operation_alias="repair-attempt",
+    )
+    before = runtimes["change-a"].frontier_bytes()
+    request = PrepareCompletedOutcomeRepair(
+        outcome_id="OUT-001",
+        owning_task_id="TASK-001",
+        episode_id=repair_reservation.episode_id,
+        attempt_id=repair_reservation.attempt_id,
+        defect_code=report.request.code.value,
+        finding_boundary="implementation",
+        original_action_id=original_action_id,
+        preservation_id=preservation.preservation_id,
+        expected_frontier_digest=hashlib.sha256(before).hexdigest(),
+    )
+    application.repair_completed_outcome("change-a", request)
+    before_restart = RetryLedger(state, "change-a").episode(key)
+    assert before_restart is not None
+    assert before_restart.total_attempts == 2
+    assert before_restart.reset_count == 0
+    assert digest(f"{request.attempt_id}:succeeded".encode()) not in before_restart.outcome_ids
+    assert request.attempt_id in {item.attempt_id for item in RetryLedger(state, "change-a").pending_attempts()}
+
+    reopened, _reopened_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state,
+        runtimes,
+        clock=lambda: now[0],
+    )
+    continuation = reopened.acquire_change_action(_continuation_request(reopened))
+    if continuation.kind == "reconciled":
+        continuation = reopened.acquire_change_action(_continuation_request(reopened))
+    assert continuation.kind == "acquired"
+    builder = continuation.launch
+    assert builder is not None
+    assert builder.claim.worker_role.value == "builder"
+    task = next(
+        item
+        for item in reopened._runtime("change-a").show_binding(builder.outcome_id).tasks
+        if item.task_id == builder.claim.task_id
+    )
+    _git(builder.worktree_path, "commit", "--allow-empty", "-m", "accept completed-outcome repair")
+    completed_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    submission = DeliveryResultSubmission(
+        change_id="change-a",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        result=_task_result(
+            "repair-result",
+            "change-a",
+            reopened._runtime("change-a").authority_digest,
+            task,
+            completed_commit,
+        ),
+    )
+    accepted = reopened.submit_result(submission)
+    assert accepted.result_id == "repair-result"
+
+    restarted, restarted_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state,
+        runtimes,
+        clock=lambda: now[0],
+    )
+    resumed = restarted.acquire_change_action(_continuation_request(restarted))
+    if resumed.kind == "reconciled":
+        resumed = restarted.acquire_change_action(_continuation_request(restarted))
+    assert resumed.kind == "acquired"
+    resumed_finalizer = resumed.finalization.attempt
+    assert resumed_finalizer.writer.attempt_id != original_action_id
+    assert restarted_coordinator.show("change-a").finalization_attempt == resumed_finalizer
+    resumed_episode = RetryLedger(state, "change-a").episode(key)
+    assert resumed_episode is not None
+    assert resumed_episode.episode_id == key.identity
+    assert resumed_episode.total_attempts == 3
+    assert resumed_episode.reset_count == 0
+    assert digest(f"{request.attempt_id}:succeeded".encode()) in resumed_episode.outcome_ids
+    assert digest(f"{original_action_id}:failed".encode()) in resumed_episode.outcome_ids
 
 
 @pytest.mark.parametrize("writer_recorded", [False, True])

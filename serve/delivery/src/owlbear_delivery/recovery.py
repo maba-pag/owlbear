@@ -787,6 +787,10 @@ class RetryLedger:
             raise ValueError("retry key belongs to another Change")
         return _matching_episode(self.read(), key)
 
+    def episode_for_attempt(self, attempt_id: str) -> RetryEpisodeSummary | None:
+        """Return the immutable episode owning one attempt alias."""
+        return _episode_for_attempt(self.read(), attempt_id)
+
     def import_legacy_failures(
         self,
         key: RetryEpisodeKey,
@@ -998,6 +1002,15 @@ class RetryLedger:
             raise RetryLedgerCorruptError
         return matches[0] if matches else None
 
+    def repair_binding_for_original_attempt(self, attempt_id: str) -> RetryRepairBinding | None:
+        """Resolve the unique durable repair link for one failed original action."""
+        matches = tuple(
+            binding for binding in self.repair_bindings() if binding.original_attempt_id == attempt_id
+        )
+        if len(matches) > 1:
+            raise RetryLedgerCorruptError
+        return matches[0] if matches else None
+
     def record_repair_owner_result(self, result: RetryOwnerResult) -> RetryEpisodeSummary:
         """Consume one exact repair-task result without resetting its failed episode."""
         if (
@@ -1089,7 +1102,10 @@ class RetryLedger:
         """Finish accounting from exact durable receipts, without caller replay or refund."""
         summary, _previous = self._read_with_bytes()
         for episode in summary.episodes:
-            for attempt_id in _pending_attempts(episode):
+            # Owner-result files are durable evidence of the owner transaction and
+            # may outlive the projected pending state after a crash.  Reconcile all
+            # known attempts so a settled repair cannot hide contradictory evidence.
+            for attempt_id in episode.attempt_ids:
                 path = self.runtime_root / self._directory / "owner-results" / f"{attempt_id}.json"
                 try:
                     result = RetryOwnerResult.model_validate_json(path.read_bytes())
@@ -1157,21 +1173,21 @@ class RetryLedger:
         current = _matching_episode(summary, key)
         requested_key = key
         if resume_attempt_id is not None:
-            links = tuple(item for item in self.repair_bindings() if item.original_attempt_id == resume_attempt_id)
-            if not links:
+            linked = self.repair_binding_for_original_attempt(resume_attempt_id)
+            if linked is None:
                 raise RetryLedgerConflictError("original action has no completed repair link")
-            linked = links[0]
             linked_episode = _episode_for_attempt(summary, linked.repair_attempt_id)
             if (
                 linked_episode is None
                 or linked_episode.episode_id != linked.episode_id
-                or any(item.episode_id != linked.episode_id for item in links)
                 or linked_episode.key.change_id != key.change_id
                 or linked_episode.key.action_kind != key.action_kind
                 or linked_episode.key.target_head != key.target_head
                 or linked_episode.key.finalization_id != key.finalization_id
             ):
                 raise RetryLedgerConflictError("replacement action does not match the repaired episode")
+            if digest(f"{linked.repair_attempt_id}:succeeded".encode()) not in linked_episode.outcome_ids:
+                raise RetryLedgerConflictError("replacement action has no accepted repair result")
             if current is not None and current.episode_id != linked.episode_id:
                 raise RetryLedgerConflictError("replacement action does not match the repaired episode")
             if current is None:

@@ -7314,22 +7314,39 @@ class PortfolioApplication:
         resume_attempt_id = None
         coordination = self._workspace_manager.show(request.change_id)
         prior_finalization = coordination.finalization_attempt
+        finalization = runtime.finalization()
+        invalidation = runtime.finalization_invalidation()
+        finalization_id = (
+            finalization.finalization_id
+            if finalization is not None
+            else (
+                invalidation.finalization_id
+                if (
+                    invalidation is not None
+                    and invalidation.reason == "review-repair"
+                )
+                else None
+            )
+        )
         if (
-            runtime.finalization() is None
+            finalization is None
             and prior_finalization is not None
             and prior_finalization.finished_at is not None
         ):
-            if any(
-                binding.original_attempt_id == prior_finalization.writer.attempt_id
-                for binding in retry_ledger.repair_bindings()
-            ):
+            repair_binding = retry_ledger.repair_binding_for_original_attempt(prior_finalization.writer.attempt_id)
+            if repair_binding is not None:
                 resume_attempt_id = prior_finalization.writer.attempt_id
+                repair_episode = retry_ledger.episode_for_attempt(repair_binding.repair_attempt_id)
+                if repair_episode is None:
+                    message = "repair binding episode is unavailable"
+                    raise RetryLedgerConflictError(message)
+                finalization_id = repair_episode.key.finalization_id
         key = RetryEpisodeKey.engine(
             request.change_id,
             WorkItemActionKind.FINALIZE.value,
             context.change_head,
             self._workspace_manager.observed_target_head(),
-            runtime.finalization().finalization_id if runtime.finalization() is not None else None,
+            finalization_id,
         )
         reservation = runtime.retry_ledger(clock=self._clock).reserve(
             key,

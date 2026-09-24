@@ -571,6 +571,71 @@ def test_repair_owner_acceptance_keeps_budget_until_original_success(tmp_path: P
     assert settled.total_attempts == 0
 
 
+def test_unaccepted_repair_binding_cannot_authorize_original_resume(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="original")
+    ledger.record_failure(original, failure_code="failed-check", now=_START)
+    ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="repair",
+    )
+    binding = ledger.repair_binding_participant(
+        original_attempt_id="original",
+        repair_attempt_id="repair",
+        repair_task_id="repair-task",
+        outcome_id="OUT-001",
+        now=_START + timedelta(seconds=1),
+    )
+    RuntimeTransaction(tmp_path, "repair-binding", (binding,)).commit()
+
+    with pytest.raises(RetryLedgerConflictError, match="no accepted repair result"):
+        ledger.reserve(
+            key.model_copy(update={"exact_head": "d" * 40}),
+            failure_class="mechanical",
+            now=_START + timedelta(seconds=2),
+            attempt_id="resumed",
+            resume_attempt_id="original",
+        )
+
+
+def test_reconcile_owner_result_does_not_hide_terminal_attempt_conflict(tmp_path: Path) -> None:
+    ledger = RetryLedger(tmp_path, "change-a")
+    key = _engine_key(action="finalize")
+    original = ledger.reserve(key, failure_class="mechanical", now=_START, attempt_id="original")
+    ledger.record_failure(original, failure_code="failed-check", now=_START)
+    ledger.reserve(
+        key,
+        failure_class="mechanical",
+        now=_START + timedelta(seconds=1),
+        attempt_id="repair",
+    )
+    binding = ledger.repair_binding_participant(
+        original_attempt_id="original",
+        repair_attempt_id="repair",
+        repair_task_id="repair-task",
+        outcome_id="OUT-001",
+        now=_START + timedelta(seconds=1),
+    )
+    RuntimeTransaction(tmp_path, "repair-binding", (binding,)).commit()
+    owner = ledger.owner_result_participants(
+        "repair",
+        accepted=True,
+        accepted_progress=False,
+        repair_outcome_id="OUT-001",
+        repair_task_id="repair-task",
+        completed_commit=_HEAD,
+        now=_START + timedelta(seconds=2),
+    )
+    RuntimeTransaction(tmp_path, "repair-owner", owner).commit()
+    ledger.record_recovery_release("repair", now=_START + timedelta(seconds=2))
+
+    with pytest.raises(RetryLedgerConflictError, match="terminal non-success"):
+        ledger.reconcile_owner_results()
+
+
 @pytest.mark.parametrize("transaction_id", ["repair-binding", "repair-owner"])
 @pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
 def test_repair_link_and_settlement_replay_after_transaction_crash(
