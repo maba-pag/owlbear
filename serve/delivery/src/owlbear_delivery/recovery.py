@@ -869,7 +869,7 @@ class RetryLedger:
         )
         return episode
 
-    def owner_result_participants(
+    def owner_result_participants(  # noqa: PLR0913 - owner-result evidence carries the complete retry contract.
         self,
         attempt_id: str,
         *,
@@ -902,7 +902,7 @@ class RetryLedger:
             ),
         )
 
-    def repair_binding_participant(
+    def repair_binding_participant(  # noqa: PLR0913 - durable binding identity is intentionally explicit.
         self,
         *,
         original_attempt_id: str,
@@ -995,8 +995,7 @@ class RetryLedger:
         matches = tuple(
             binding
             for binding in self.repair_bindings()
-            if binding.repair_attempt_id == attempt_id
-            and (outcome_id is None or binding.outcome_id == outcome_id)
+            if binding.repair_attempt_id == attempt_id and (outcome_id is None or binding.outcome_id == outcome_id)
         )
         if len(matches) > 1:
             raise RetryLedgerCorruptError
@@ -1004,9 +1003,7 @@ class RetryLedger:
 
     def repair_binding_for_original_attempt(self, attempt_id: str) -> RetryRepairBinding | None:
         """Resolve the unique durable repair link for one failed original action."""
-        matches = tuple(
-            binding for binding in self.repair_bindings() if binding.original_attempt_id == attempt_id
-        )
+        matches = tuple(binding for binding in self.repair_bindings() if binding.original_attempt_id == attempt_id)
         if len(matches) > 1:
             raise RetryLedgerCorruptError
         return matches[0] if matches else None
@@ -1025,11 +1022,7 @@ class RetryLedger:
         episode = _episode_for_attempt(summary, result.attempt_id)
         if episode is None or episode.episode_id != result.episode_id:
             raise RetryLedgerConflictError("repair owner result is not bound to its retry episode")
-        matches = tuple(
-            binding
-            for binding in self.repair_bindings()
-            if binding.repair_attempt_id == result.attempt_id
-        )
+        matches = tuple(binding for binding in self.repair_bindings() if binding.repair_attempt_id == result.attempt_id)
         if len(matches) != 1:
             raise RetryLedgerConflictError("repair owner result has no unique durable repair binding")
         binding = matches[0]

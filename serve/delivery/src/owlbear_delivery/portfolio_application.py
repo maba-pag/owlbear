@@ -7321,18 +7321,11 @@ class PortfolioApplication:
             if finalization is not None
             else (
                 invalidation.finalization_id
-                if (
-                    invalidation is not None
-                    and invalidation.reason == "review-repair"
-                )
+                if (invalidation is not None and invalidation.reason == "review-repair")
                 else None
             )
         )
-        if (
-            finalization is None
-            and prior_finalization is not None
-            and prior_finalization.finished_at is not None
-        ):
+        if finalization is None and prior_finalization is not None and prior_finalization.finished_at is not None:
             repair_binding = retry_ledger.repair_binding_for_original_attempt(prior_finalization.writer.attempt_id)
             if repair_binding is not None:
                 resume_attempt_id = prior_finalization.writer.attempt_id

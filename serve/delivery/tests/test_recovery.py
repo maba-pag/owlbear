@@ -781,7 +781,9 @@ def test_completed_outcome_repair_replays_with_retry_authority_and_preserves_res
     assert reopened_coordinator.show("change-a").writer is None
 
 
-def test_completed_repair_result_resumes_original_finalizer_after_restart(tmp_path: Path) -> None:
+def test_completed_repair_result_resumes_original_finalizer_after_restart(  # noqa: PLR0915 - full restart lifecycle proof.
+    tmp_path: Path,
+) -> None:
     """Prove the reviewed Builder repair settles only its linked finalizer episode."""
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, _coordinator, state = _portfolio(
