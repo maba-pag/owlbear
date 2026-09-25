@@ -31,16 +31,18 @@ proves a difference, not authorship, disposability or procedure execution. An ad
 scope and last-write metadata are necessary inputs, not sufficient permission to discard bytes.
 Do not silently replace those requirements with caller statements or a generic shell runner.
 
-The next deliverable is a bounded amendment to C's implementation design in this file, with a
-source-backed call graph and one application-entry acceptance scenario for the real default
-composition. Enumerate and justify the minimum C-only source/test-path additions, including
-loader wiring and the selected producer owner, before implementation. This does not authorize
-D/E work, new public forwarding, a general framework or a separate planning artifact.
-Resolve whether existing boundaries can produce each required fact; distinguish a
-missing implementation from a genuinely new safety/policy decision. For the latter, return exactly
-the decision, options, trade-offs and recommendation before implementation. Do not require new
-policy merely because an optional provider is currently unwired. Independently review the design
-against the approved contract, then implement one complete path under that reviewed design.
+The [decision amendment](#c-composition-decision-amendment-2026-09-25) distinguishes existing typed
+agent reports from missing independently trusted execution, closure and path evidence. It is **not a
+completed composition design**. The inspected default composition still cannot reach the required
+repair path. Missing schema, registration and wiring are implementation obligations, not policy
+choices. The question is whether to change the workflow's agent-execution rule to bounded
+engine-controlled invocation, or retain it with a real trusted host adapter.
+
+**Next: user decision on that execution allocation, then finish the concrete C design.** Neither
+choice alone supplies provenance or exclusion; both must retain every safety gate. No product
+implementation, separate primitive increment, new package, D/E work or live activation is authorized
+by this amendment. Fresh independent review rejected authority shortcuts; its remaining factual and
+scope findings were corrected. Review and document checks are not whole-C acceptance.
 
 The resulting path must connect custody, trusted observation, classification, preservation or
 Builder repair as appropriate, accepted repair and fresh review, and resumption of the original
@@ -74,8 +76,8 @@ module rewrite is authorized by this control.
 
 | Outcome within C | Current source evidence | Required exit evidence |
 | --- | --- | --- |
-| Trusted producer and execution contract | Loader leaves provenance unavailable and proof factory unset; finalization skill runs heterogeneous checks externally | Reviewed producer/custody design with real control points and negative authority cases; no unresolved decision disguised as configuration |
-| One application recovery path | Workspace capture/restore primitives exist without application callers; completed-outcome repair is partial | Default application entry reaches preservation/repair and original-check resumption, retaining bytes/index/head, review and retry identity across restart |
+| Trusted producer and execution contract | Loader leaves provenance unavailable and proof factory unset; [decision amendment](#c-composition-decision-amendment-2026-09-25) independently reviewed and corrected; execution allocation awaits the user, concrete producer design remains incomplete | Reviewed producer/custody design with real control points and negative authority cases; no unresolved decision disguised as configuration |
+| One application recovery path | Capture/restore have no application callers; completed-outcome repair requires preservation and settled custody that default composition cannot supply | Default application entry reaches preservation/repair and original-check resumption, retaining bytes/index/head, review and retry identity across restart |
 | Successful-publication repair | Existing draft/readback owners available; composed C branch still absent | Exact publication readback/draft/invalidation before repair; refusal causes no task or custody release |
 | C acceptance matrix | Many primitive and narrow repair checks reported; no cumulative assembled C pass | Missing V06/V07/V08/V13 cases exercised at their owning boundaries, plus direct-consumer regressions and scoped static proof |
 | D/E and final acceptance | Not started; no authorization inferred from this ledger | C accepted first; D/E retain their original allocation, with required external and host evidence explicitly separate |
@@ -139,6 +141,177 @@ than reclassifying them as a new baseline. Broad cleanup is not the integration 
 
 Repository paths in links resolve from this file. Command paths below use the actual cloud checkout
 `/home/runner/work/owlbear/owlbear`; later workers must resolve their own checkout before invocation.
+
+## C composition decision amendment (2026-09-25)
+
+Diagnosis only, written against source at `a50d5244bd8793aff364b4b723c7681ded753ce6`; no product
+code, tests or services were changed. It amends C's implementation design, not the approved
+[Contract](#contract) or [phase allocations](#phases-and-proof). **It is not an executable repair
+design:** the inspected composition cannot supply the required execution and path authority.
+Missing records and wiring are implementation work, not policy blockers. The proposed change to who
+executes checks is the decision below; neither alternative is approved or sufficient by itself.
+
+### Source constraints: who executes, who observes, who may assert
+
+| Role | Owner in source | May assert | Hard limit |
+| --- | --- | --- | --- |
+| Executor of maintained checks | Finalizer agent, [`w-change-finalization`](../../share/skills/w-change-finalization/SKILL.md) Steps 1-2 | Typed agent observations and declared procedure identities | Step 0 forbids a separate proof executor; those receipts do not independently attest process execution or closure |
+| Durable before-start record | `_launch_finalization_candidate` (`portfolio_application.py:7414-7443`) -> `ChangeFinalizationAttempt` persisted by `PortfolioCoordinator.acquire` (`change_workspace.py:1985`) | Writer, contract/frontier digests, exact and target head | Stores no workspace observation or per-check start today |
+| Independent observer | `capture_finalization_workspace` (`change_workspace.py:4156`) | Head, porcelain status, `diff HEAD --binary`, per-path metadata digest, computed inside the engine call | State transitions only: no process, exit status or writer identity |
+| Second independent read | Composed provenance provider via `_classify_preservation` (`change_workspace.py:4935-4979`); absent by default and **not composed here** | Per-path current `kind`/`sha256`/`mode`, cross-checked by `_validate_provenance_states` (`:5019-5037`) | A time-of-check/time-of-use cross-check; blind to a foreign write that finished before the first read |
+| Procedure registration | `MaintainedProofProcedure` (`finalization_reports.py:182`) defines the identity model; no production registrar constructs it | No default maintained-procedure execution authority today | Task proof-boundary prose is not a procedure registration or evidence that it ran |
+| Completed record | `ProofAttemptStore.record` (`finalization_reports.py:739`), `FinalizationReportStore.record` | One immutable record per `attempt_key` | Mutation only: `ProofAttemptObservation` needs distinct fingerprints and at most 32 paths, so no prestart form exists |
+| Custody and exclusion | `PortfolioCoordinator`; `_require_preservation_authority` (`change_workspace.py:4864-4904`); host evidence provider (`portfolio_application.py:8421-8460`) | Single-writer fence; release of a **proven** owner | §A evidence is host-confirmed closure or enforced exclusion only; `confirmed_lost`, PID lookups, silence, timeouts and caller acknowledgements are excluded |
+
+Six facts fix the boundary. (1) No durable engine preimage: `ChangeFinalizationAttempt` holds no
+fingerprint, so `proof_fingerprint_before` is caller-authored and compared only with the caller's own
+`expected_workspace_fingerprint`; the after fingerprint is independently recomputed
+(`portfolio_application.py:3177-3183`). (2) Both producers are
+uncomposed: `_compose_application` passes neither `preservation_provenance_provider` nor
+`proof_attempt_store_factory` (`delivery_application_loader.py:1125-1195`), so `_classify_preservation`
+always rejects and `_require_owner_proof_attempt` always fails. (3) Path authority is refused to a
+finalizer: `_recovery_admitted_task` returns a task only for `kind == "clean-claim"`, and
+`_recovery_admission_fields` raises whenever paths exist without one. (4) Preservation authority is
+unreachable and live capture unauthorized: `_require_preservation_authority` refuses a live writer,
+recovery owner, publication lease or unfinished continuation **and** requires a host-verified intent
+and receipt with `closed`/`excluded` evidence, while `_register_recovery_invocation` returns early
+under the default `UnavailableRecoveryEvidenceProvider`. (5) The composed failure path retains custody: repair
+needs `writer is None` and `attempt.finished_at is not None` (`:7963-7968`), yet only the success path
+ends one (`change_workspace.py:2615-2650`, `:2162`) and the retained-state note keeps writer and
+attempt after a failure, leaving `prepare_finalization_repair_release` and `repair_completed_outcome`
+without a reachable caller. (6) Repair cannot avoid preservation:
+`PrepareCompletedOutcomeRepair` and `CompletedOutcomeRepairReceipt` both require a 64-hex
+`preservation_id` (`delivery_runtime.py:1261`, `:1279`), so even a clean-workspace repair needs fact 4.
+
+### Why agent-only execution cannot close C
+
+**Closure.** §A accepts host-confirmed closure or enforced exclusion, records that no supported VS Code
+provider was found, and excludes `host_id`, `session_id`, `process_id`, `confirmed_lost`, PID lookups,
+silence, timeouts and any caller-authored acknowledgement that grants release. A finalizer reporting "I
+have stopped" is such an acknowledgement, and its checks are tool jobs the engine never joined, so a
+late write can land in a worktree a Builder already holds. §A's single exception - *"For synchronous
+engine actions, an owning call that has returned and joined its tool jobs can record closure evidence
+itself"* - fits an engine-owned invocation, not an external agent.
+
+**Ownership.** Even given closure, per-path classification cannot be minted. A person or tool editing a
+file inside the admitted maintained surface during the finalizer window satisfies clean `F0`, unbroken
+custody, scope, a real difference, the provider's second read and the re-verify at
+`change_workspace.py:4473-4485`, because a stable concurrent write is simply the current state.
+Re-observation detects drift *during* recovery, never an earlier foreign write, and unauthenticated
+`mtime` does not separate the cases: the acceptance positive and the foreign-edit negative are the
+*same* plain edit, byte-identical to every predicate, so no test can discriminate them either. The
+Contract already says "Whitespace alone proves no ownership" and lists maintained-surface and
+last-write evidence as bindings rather than permission. So neither `disposable` nor `useful` is
+provable, and `useful` is not the harmless half: it routes automatic Builder repair and charges the
+episode.
+
+**Execution.** `ProofAttemptObservation` has no prestart form, `attempt_key` is unique in both
+histories (`finalization_reports.py:453`, `:722`), the report key must equal the live writer attempt id
+(`portfolio_application.py:3140`), and `_require_owner_proof_attempt` matches exactly one current
+attempt on key, procedure, four basis values, both fingerprints and the exact `paths` tuple
+(`:7997-8026`) - so substituting a per-check `<attempt>.<procedure>` key would violate the current
+parent-attempt binding. Separate child records require deliberate schema and matcher changes, not a
+second interpretation of the historical key. Typed observations already exist (`delivery_runtime.py`
+`DeliveryObservationReceipt` and finalization validation); persisting an agent's declared procedure/outcome is
+not independent evidence of its execution, descendants or closure. **The missing fact is trusted
+execution observation, not the ability to encode an identity or reported outcome. An unavailable host
+provider is not permission to mint equivalent authority.**
+
+### Decision required
+
+Schema, wiring and registration remain implementation obligations. The product choice is whether to
+change the current agent-execution rule to obtain independent invocation evidence, or retain that rule
+and supply a real host observer. Neither caller-provided identities/outcomes nor new durable fields
+provide per-write qualification or §A closure evidence. **The one question: which execution
+trust model should the remaining D03-C design use: bounded engine-controlled invocation (A), or
+agent execution supervised by a trusted host adapter (B)?**
+
+| Alternative | Pros | Cons and risks | Confidence |
+| --- | --- | --- | --- |
+| **A. Bounded engine-controlled maintained invocation.** Finalizer selects a typed maintained operation; its engine-owned adapter, not an arbitrary command string or target proof profile, executes it | Places invocation identity, prestart durability and observed process completion under one owner; can reuse the action-receipt lineage and §A's synchronous-action closure rule for jobs actually joined | Changes the agent-execution rule in `w-change-finalization` Steps 0/2. Concrete adapters and registration authority still need specification. Joining one process does not establish descendant closure, finalizer exclusion, path authorship or privacy; timeout is not closure. These remain separate gates | Medium on suitability; no complete producer or host feasibility proof yet |
+| **B. Agent execution supervised by a trusted host adapter.** Keep heterogeneous checks agent-run; require host-issued invocation/completion evidence and enforceable worker exclusion | Preserves the current executor; can observe actual dispatched jobs rather than trust reports | No supported adapter exists in the inspected composition. Must identify a real host API and its descendant/exclusion guarantees; closure alone still supplies no per-path authorship, privacy qualification or discard permission | High on the current integration gap; feasibility and coverage unverified |
+
+Both must keep the approved safety requirements - classification before any copy, foreign, ambiguous and private
+material left in place, exclusion before effects, no disposition inferred from scope, snapshots or
+custody. A additionally changes the existing workflow's execution allocation and therefore requires
+explicit user approval and a skill amendment; that change is not implicitly authorized here.
+
+**Recommendation: A as the design direction within C**, because it makes the execution producer
+explicit instead of adding another observation consumer. Confidence is medium: this choice does not
+solve provenance or permit release of an external finalizer. Before implementation, specify an actual
+maintained adapter and registration source, distinguish joined tool jobs from every remaining writer,
+and demonstrate the classification gate without assuming an imaginary host capability. B remains an
+alternative if a supported host can supply those facts. **Until the decision and those details are
+resolved, keep today's refusals and C partial.** No new package, acceptance reallocation, target proof
+profile, shell runner, standalone primitive increment or successor phase is authorized.
+
+### Conditional owner path - not executable until the boundary is approved
+
+**The following is an implementation boundary to finish after the decision, not an executable design
+or permission to implement it.** Under A the order is: maintained adapter and its registration
+authority; the engine invocation owner with durable before and end records and independently verified
+closure/exclusion for every relevant writer; the Steps 0/2 skill reconciliation; only then a route from a
+registered check's nonzero result to Builder repair, accepted candidate, fresh review and resumption of
+the original check in the same retry episode. Under B: the host execution and exclusion adapter.
+
+Reuse the engine's immutable action-lineage pattern, extending its schemas deliberately:
+`intent.json` with custody from `acquire_continuation_action`, `started.json` written once by
+`start_continuation_action` under a strict identity comparison, and `result.json` through the same
+`continuation_record_path` owner (`change_workspace.py:1840-1905`) - and already treats a started
+action without a result as an unknown outcome never re-invoked (`portfolio_application.py:7192-7215`).
+An adapter invocation would be a sibling family under that root with the identity pattern extended
+for the new operation kind: intent carries the declaration digest, procedure identity, basis and
+before fingerprint; started marks effect entry; result carries the engine-captured exit and after
+fingerprint; a missing result contains rather than replays. `ProofAttempt` stays as approved - one
+historical record per mutating finalization attempt, keyed by the writer attempt id.
+
+Likely C owners remain `change_workspace.py` (custody and preservation), `finalization_reports.py`
+(registration/observation history), `portfolio_application.py` (actual recovery callers),
+`delivery_runtime.py` (repair/settlement), and `delivery_application_loader.py` (default composition).
+Reuse `recovery.py`, `runtime_transaction.py` and the retry ledger rather than creating substitute
+authority. Add only the selected producer's concrete owner and focused tests under `serve/delivery/tests/`.
+Required report-model/MCP/skill companions accompany any schema change; new public forwarding stays E.
+
+### Acceptance obligation after the decision
+
+The next implementation assignment must close **one assembled path**, not just populate a factory:
+real default loader -> actual maintained invocation -> durable independently observed outcome and
+custody -> privacy-qualified preservation or admissible Builder repair -> accepted candidate plus
+fresh review -> the original check with the same retry episode. Its exact positive fixture cannot be
+specified honestly before choosing the real producer; this remains a design deliverable, not a pass.
+Tests may replace external effects below that producer, never inject its observations or provenance.
+
+Required discriminators: zero-exit mutation; a stable foreign edit inside an admitted path during the
+same window; private/ignored and staged/index contamination; stale/forged procedure or observation
+identity; multiple checks under one parent attempt; crashes before start, during execution and after
+completion publication; and repair acceptance followed by fresh review and original-check resumption.
+An unknown execution is contained, not replayed. Restarts retain identity, custody and budget; no new
+task, commit, check label or report replenishes the episode. All existing raw-index, no-follow,
+privacy, classification-before-copy and proven-exclusion gates remain mandatory.
+
+### Rejected, recorded so they are not re-proposed
+
+Reproduce-after-restore or capture of unattributed bytes (classification precedes any copy; foreign,
+ambiguous and private material stays in place; offering to reproduce a defect proves no authorship); a
+live-sync exception under a live writer (reintroduces the caller-confirmation bypass §A removes); a
+caller-authored release even over a clean workspace (§A excludes it; self-surrender is no proof that
+descendants and tool jobs stopped); calling unattributed bytes `useful` to copy them or routing them
+to an unclaimed Builder around custody.
+
+Still open in the [ledger](#completion-ledger): every repair and preservation route pending the
+decision, successful-publication repair, the four interrupted-engine rows, and the V06, V07 and V13
+matrices.
+
+### Review and verification of this amendment
+
+Fresh independent Opus source/design review and Luna document/source review informed the correction.
+Final Opus re-review found no remaining significant factual or safety findings; it explicitly retained
+the unresolved producer, provenance, custody settlement and positive acceptance design. Authority
+shortcuts were rejected, not approved. Writer and parent changed only this plan; parent comparison
+confirmed `## Contract` onward byte-identical to `a50d524`, and local links/anchors and whitespace
+checks passed. No product tests, builds, installs or live actions were run. Hosted source/Cockpit/
+ecosystem runs at `a50d524` were skipped, not passing evidence. This review accepts the diagnosis
+only; it does not accept C or resolve the user decision.
 
 ## Contract
 
