@@ -9,8 +9,13 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The current verification starts at **`6db0fec3cc15c84f36498b39813a12b5cdcda0f6`**,
-following the [verification request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5823084965).
+The current readiness repair starts at **`dbb5751`**, with source
+**`6db0fec3cc15c84f36498b39813a12b5cdcda0f6`**, following the
+[repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5828310357).
+Its bounded scope is shared readiness/acquisition finalization retry identity and
+the pending accepted-repair, restart, budget and transaction-crash proof. The prior
+[verification request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5823084965)
+established the findings below by inspection, not executable proof.
 It preserves the partial repairs from **`9bc8cfb`**, **`d7b8369`** and review baseline
 **`4ea5457`**, following the
 [existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
@@ -32,24 +37,22 @@ budget remain in force. Owner-result reconciliation now inspects settled attempt
 pending ones, rejecting contradictory terminal non-success evidence. The application recovers
 the linked original episode's finalization identity for continuation after restart.
 
-Fresh independent read-only review of **`b6205a6..6db0fec`** and the coupled binding/readiness
+Prior independent read-only review of **`b6205a6..6db0fec`** and the coupled binding/readiness
 paths confirms that the original failed/unaccepted-binding finding is addressed. Pending,
 failed, contained or contradictory repair evidence does not authorize original-action resumption.
 This supersedes the stale statement that the successful-settlement gate is still unimplemented.
-The reviewer did not run tests. Executable verification remains blocked, and the new finding
-below prevents bounded-repair acceptance; this is not whole-C acceptance.
+The reviewer did not run tests. Executable verification was blocked at that checkpoint;
+neither that review nor the current bounded repair establishes whole-C acceptance.
 
-**Open medium finding — readiness and acquisition disagree on finalizer retry identity.**
-In `portfolio_application.py`, `_with_retry_readiness()` (lines 5836–5842 at `6db0fec`)
-uses no finalization identity when the current finalization receipt is absent, whereas
-`_launch_continuation_finalizer()` (lines 7319–7342) uses the review-repair invalidation or
-linked original episode's identity. After a head-changing review repair, readiness can miss the
-existing episode and show stale attempts/backoff/exhaustion data. Acquisition still fails closed,
-but clients may repeatedly attempt an action projected as ready. The next bounded repair must
-align the semantic identity used by both paths and add a readiness/acquisition regression,
-preserving the accepted-repair and target/finalization fences. No source repair is claimed here.
+**Bounded readiness/acquisition repair.** Both finalizer paths now derive their retry identity
+through one helper, retaining current receipt, review-repair invalidation and linked original
+episode semantics. Readiness no longer silently uses a `None` finalization identity when
+acquisition uses the prior episode. Outcome-worker and other engine-action identity selection
+remain unchanged. Projection reads repair bindings without completing pending transactions;
+mutating callers retain transaction recovery by default. The successful-settlement,
+Change/action/target/finalization and consumed-budget fences remain unchanged.
 
-Fresh delegated checks at **`6db0fec`**: `compileall` passed for the two changed source modules
+Prior delegated checks at **`6db0fec`**: `compileall` passed for the two changed source modules
 and their two test modules using system Python **3.12.3**; `git diff --check` passed and the
 checkout remained clean. These are syntax/whitespace checks, not locked-runtime test evidence.
 The focused pytest command selected the unaccepted-binding, contradictory-terminal-result,
@@ -59,7 +62,7 @@ one bounded uv **0.12.18** installation attempt failed DNS resolution. **No pyte
 were collected or passed.** Scoped Ruff was also blocked. `pytest`, `pydantic` and
 `owlbear_delivery` were unavailable, so PR-worktree import provenance could not be verified.
 The parent did not rerun delegated checks. Focused executable proof on the locked toolchain
-remains required; do not substitute the older totals below.
+was still required at that checkpoint; do not substitute the older totals below.
 
 Prior delegated proof at **`b6205a6`**: **277 passed** in the focused proof/retry/workspace
 selection, **101 passed** in the transaction/recovery selection, **82 passed** in

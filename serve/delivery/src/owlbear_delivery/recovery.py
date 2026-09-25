@@ -954,12 +954,13 @@ class RetryLedger:
             raise RetryLedgerConflictError("repair-to-original link conflicts with existing authority")
         return TransactionParticipant(self.runtime_root, relative, encoded(binding))
 
-    def repair_bindings(self) -> tuple[RetryRepairBinding, ...]:
-        """Read bounded immutable repair links, never treating task IDs as authority."""
-        try:
-            RuntimeTransaction.recover_all(self.runtime_root)
-        except (OSError, RuntimeError, ValueError) as exc:
-            raise RetryLedgerCorruptError from exc
+    def repair_bindings(self, *, recover_transactions: bool = True) -> tuple[RetryRepairBinding, ...]:
+        """Read bounded repair links, optionally completing pending ledger transactions first."""
+        if recover_transactions:
+            try:
+                RuntimeTransaction.recover_all(self.runtime_root)
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise RetryLedgerCorruptError from exc
         directory = self.runtime_root / self._repair_bindings_path
         try:
             paths = tuple(sorted(directory.iterdir(), key=lambda item: item.name))
@@ -990,20 +991,30 @@ class RetryLedger:
         attempt_id: str,
         *,
         outcome_id: str | None = None,
+        recover_transactions: bool = True,
     ) -> RetryRepairBinding | None:
         """Resolve a repair reservation through its durable binding."""
         matches = tuple(
             binding
-            for binding in self.repair_bindings()
+            for binding in self.repair_bindings(recover_transactions=recover_transactions)
             if binding.repair_attempt_id == attempt_id and (outcome_id is None or binding.outcome_id == outcome_id)
         )
         if len(matches) > 1:
             raise RetryLedgerCorruptError
         return matches[0] if matches else None
 
-    def repair_binding_for_original_attempt(self, attempt_id: str) -> RetryRepairBinding | None:
+    def repair_binding_for_original_attempt(
+        self,
+        attempt_id: str,
+        *,
+        recover_transactions: bool = True,
+    ) -> RetryRepairBinding | None:
         """Resolve the unique durable repair link for one failed original action."""
-        matches = tuple(binding for binding in self.repair_bindings() if binding.original_attempt_id == attempt_id)
+        matches = tuple(
+            binding
+            for binding in self.repair_bindings(recover_transactions=recover_transactions)
+            if binding.original_attempt_id == attempt_id
+        )
         if len(matches) > 1:
             raise RetryLedgerCorruptError
         return matches[0] if matches else None

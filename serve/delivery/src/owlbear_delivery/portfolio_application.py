@@ -5818,7 +5818,46 @@ class PortfolioApplication:
         )
         return WorkItemProjector(snapshot, decisions)
 
-    def _with_retry_readiness(  # noqa: C901 - maps one persisted policy to the shared readiness contract.
+    def _derive_finalization_retry_identity(  # noqa: PLR0913 - identity inputs mirror both read and acquire fences.
+        self,
+        change_id: str,
+        *,
+        finalization: DeliveryFinalizationReceipt | None,
+        invalidation: DeliveryFinalizationInvalidationReceipt | None,
+        coordination: ChangeCoordination | None = None,
+        retry_ledger: RetryLedger | None = None,
+        recover_transactions: bool = True,
+    ) -> tuple[str | None, str | None]:
+        """Resolve finalizer retry identity and any linked original attempt without mutation."""
+        finalization_id = (
+            finalization.finalization_id
+            if finalization is not None
+            else (
+                invalidation.finalization_id
+                if invalidation is not None and invalidation.reason == "review-repair"
+                else None
+            )
+        )
+        resume_attempt_id = None
+        if finalization is None:
+            coordination = coordination or self._workspace_manager.show(change_id)
+            prior_finalization = coordination.finalization_attempt
+            if prior_finalization is not None and prior_finalization.finished_at is not None:
+                ledger = retry_ledger or RetryLedger(self._target_root, change_id, clock=self._clock)
+                repair_binding = ledger.repair_binding_for_original_attempt(
+                    prior_finalization.writer.attempt_id,
+                    recover_transactions=recover_transactions,
+                )
+                if repair_binding is not None:
+                    resume_attempt_id = prior_finalization.writer.attempt_id
+                    repair_episode = ledger.episode_for_attempt(repair_binding.repair_attempt_id)
+                    if repair_episode is None:
+                        message = "repair binding episode is unavailable"
+                        raise RetryLedgerConflictError(message)
+                    finalization_id = repair_episode.key.finalization_id
+        return finalization_id, resume_attempt_id
+
+    def _with_retry_readiness(  # noqa: C901, PLR0912 - maps one persisted policy to the shared readiness contract.
         self,
         snapshot: DeliveryPortfolioSnapshot,
         card: WorkItemCardView,
@@ -5834,13 +5873,7 @@ class PortfolioApplication:
         if exact_head is None:
             return decision
         finalization = snapshot.frontier.finalization
-        key = RetryEpisodeKey.engine(
-            snapshot.contract.change_id,
-            action.value,
-            exact_head,
-            decision.basis.target_head,
-            finalization.finalization_id if finalization is not None else None,
-        )
+        key: RetryEpisodeKey | None = None
         if card.scope is WorkItemScope.OUTCOME and card.work_item_id != snapshot.contract.change_id:
             outcome = next((item for item in snapshot.contract.outcomes if item.outcome_id == card.work_item_id), None)
             binding = next((item for item in snapshot.frontier.bindings if item.outcome_id == card.work_item_id), None)
@@ -5887,8 +5920,25 @@ class PortfolioApplication:
             else RetryFailureClass.MECHANICAL
         )
         try:
+            if key is None:
+                if action is WorkItemActionKind.FINALIZE:
+                    finalization_id, _resume_attempt_id = self._derive_finalization_retry_identity(
+                        snapshot.contract.change_id,
+                        finalization=finalization,
+                        invalidation=snapshot.frontier.finalization_invalidation,
+                        recover_transactions=False,
+                    )
+                else:
+                    finalization_id = finalization.finalization_id if finalization is not None else None
+                key = RetryEpisodeKey.engine(
+                    snapshot.contract.change_id,
+                    action.value,
+                    exact_head,
+                    decision.basis.target_head,
+                    finalization_id,
+                )
             episode = RetryLedger(self._target_root, snapshot.contract.change_id, clock=self._clock).episode(key)
-        except (OSError, RetryLedgerCorruptError, RuntimeError, ValueError):
+        except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
             return decision.model_copy(
                 update={
                     "status": "unavailable",
@@ -7311,29 +7361,16 @@ class PortfolioApplication:
         runtime = self._runtime(request.change_id)
         finalizer_attempt_id = self._identity_factory()
         retry_ledger = runtime.retry_ledger(clock=self._clock)
-        resume_attempt_id = None
         coordination = self._workspace_manager.show(request.change_id)
-        prior_finalization = coordination.finalization_attempt
         finalization = runtime.finalization()
         invalidation = runtime.finalization_invalidation()
-        finalization_id = (
-            finalization.finalization_id
-            if finalization is not None
-            else (
-                invalidation.finalization_id
-                if (invalidation is not None and invalidation.reason == "review-repair")
-                else None
-            )
+        finalization_id, resume_attempt_id = self._derive_finalization_retry_identity(
+            request.change_id,
+            finalization=finalization,
+            invalidation=invalidation,
+            coordination=coordination,
+            retry_ledger=retry_ledger,
         )
-        if finalization is None and prior_finalization is not None and prior_finalization.finished_at is not None:
-            repair_binding = retry_ledger.repair_binding_for_original_attempt(prior_finalization.writer.attempt_id)
-            if repair_binding is not None:
-                resume_attempt_id = prior_finalization.writer.attempt_id
-                repair_episode = retry_ledger.episode_for_attempt(repair_binding.repair_attempt_id)
-                if repair_episode is None:
-                    message = "repair binding episode is unavailable"
-                    raise RetryLedgerConflictError(message)
-                finalization_id = repair_episode.key.finalization_id
         key = RetryEpisodeKey.engine(
             request.change_id,
             WorkItemActionKind.FINALIZE.value,

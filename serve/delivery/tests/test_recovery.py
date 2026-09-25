@@ -16,6 +16,7 @@ import pytest
 from serve.delivery.tests.test_portfolio_application import (
     _attach_local_target,
     _awaiting_acceptance_fixture,
+    _commit_reviewed_head,
     _continuation_request,
     _engine_action,
     _execute_engine,
@@ -34,9 +35,9 @@ from owlbear_delivery import (
     DeliveryResultSubmission,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
-    PreservationRejectedError,
     PortfolioApplicationError,
     PrepareCompletedOutcomeRepair,
+    PreservationRejectedError,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
 from owlbear_delivery.recovery import (
@@ -53,7 +54,8 @@ from owlbear_delivery.recovery import (
     encoded,
     journal_path,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError
+from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError, TransactionParticipant
+from owlbear_delivery.work_items import WorkItemActionKind
 
 _LEGACY_RECOVERY_ID = "11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"
 _LEGACY_INTENT_JSON = (
@@ -786,13 +788,21 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
 ) -> None:
     """Prove the reviewed Builder repair settles only its linked finalizer episode."""
     now = ["2026-08-04T00:00:00Z"]
-    application, runtimes, _coordinator, state = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-        clock=lambda: now[0],
+    application, runtime, _provider, _provider_state, _exact_head, state = _awaiting_acceptance_fixture(tmp_path)
+    runtimes = {"change-a": runtime}
+    application._clock = lambda: now[0]
+    invalidation = application.prepare_review_repair("change-a")
+    _commit_reviewed_head(
+        application,
+        application._workspace_manager.show("change-a"),
+        "review-repair.txt",
+        "review repair\n",
+        "review repair",
     )
     host = _host(application)
     first = application.acquire_change_action(_continuation_request(application))
+    if first.kind == "reconciled":
+        first = application.acquire_change_action(_continuation_request(application))
     assert first.kind == "acquired"
     original = first.finalization.attempt
     original_action_id = original.writer.attempt_id
@@ -808,7 +818,7 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
         "finalize",
         original.exact_head,
         application._workspace_manager.observed_target_head(),
-        None,
+        invalidation.finalization_id,
     )
     repair_reservation = runtimes["change-a"].retry_ledger(clock=lambda: now[0]).reserve(
         key,
@@ -879,6 +889,9 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
         runtimes,
         clock=lambda: now[0],
     )
+    readiness = restarted.get_change("change-a").readiness
+    assert readiness.operation is WorkItemActionKind.FINALIZE
+    assert readiness.attempts == 2
     resumed = restarted.acquire_change_action(_continuation_request(restarted))
     if resumed.kind == "reconciled":
         resumed = restarted.acquire_change_action(_continuation_request(restarted))
@@ -886,6 +899,10 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
     resumed_finalizer = resumed.finalization.attempt
     assert resumed_finalizer.writer.attempt_id != original_action_id
     assert restarted_coordinator.show("change-a").finalization_attempt == resumed_finalizer
+    assert RetryLedger(state, "change-a").repair_binding_for_original_attempt(original_action_id) is not None
+    assert (
+        RetryLedger(state, "change-a").repair_binding_for_original_attempt(resumed_finalizer.writer.attempt_id) is None
+    )
     resumed_episode = RetryLedger(state, "change-a").episode(key)
     assert resumed_episode is not None
     assert resumed_episode.episode_id == key.identity
@@ -1003,6 +1020,112 @@ def test_verified_clean_finalizer_recovery_keeps_failed_history(tmp_path, eviden
             "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
         )
     assert coordinator.show("change-a").writer == replacement.finalization.attempt.writer
+
+
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(  # noqa: PLR0915
+    tmp_path: Path, *, exhausted: bool
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _provider, _state, _exact_head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    application._clock = lambda: now[0]
+    host = _host(application)
+    invalidation = application.prepare_review_repair("change-a")
+    coordination = application._workspace_manager.show("change-a")
+    repaired_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "review-fix.txt",
+        "review fix\n",
+        "repair review",
+    )
+
+    acquired = application.acquire_change_action(_continuation_request(application))
+    if acquired.kind == "reconciled":
+        acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired"
+    attempt = acquired.finalization.attempt
+    assert attempt.exact_head == repaired_head
+    assert application.report_finalization_failure(_failure_request(application, attempt_key=attempt.writer.attempt_id))
+    intent = application._propose_recovery("change-a")
+    application._complete_recovery("change-a", intent.recovery_id, host.seal(intent))
+
+    key = RetryEpisodeKey.engine(
+        "change-a",
+        "finalize",
+        repaired_head,
+        application._workspace_manager.observed_target_head(),
+        invalidation.finalization_id,
+    )
+    episode = RetryLedger(state_root, "change-a").episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    if exhausted:
+        for timestamp in ("2026-08-04T00:00:01Z", "2026-08-04T00:00:03Z"):
+            now[0] = timestamp
+            retry = application.acquire_change_action(_continuation_request(application))
+            if retry.kind == "reconciled":
+                retry = application.acquire_change_action(_continuation_request(application))
+            assert retry.kind == "acquired"
+            retry_attempt = retry.finalization.attempt
+            assert application.report_finalization_failure(
+                _failure_request(application, attempt_key=retry_attempt.writer.attempt_id)
+            )
+            retry_intent = application._propose_recovery("change-a")
+            application._complete_recovery("change-a", retry_intent.recovery_id, host.seal(retry_intent))
+        episode = RetryLedger(state_root, "change-a").episode(key)
+        assert episode is not None
+        assert episode.total_attempts == 3
+    repair_binding_reads = []
+    original_repair_bindings = RetryLedger.repair_bindings
+
+    def read_repair_bindings(ledger, *, recover_transactions=True):
+        repair_binding_reads.append(recover_transactions)
+        return original_repair_bindings(ledger, recover_transactions=recover_transactions)
+
+    with patch.object(RetryLedger, "repair_bindings", read_repair_bindings):
+        readiness = application.get_change("change-a").readiness
+    assert repair_binding_reads == [False]
+    assert readiness.reason_code == ("retry-exhausted" if exhausted else "retry-backoff")
+    assert readiness.attempts == (3 if exhausted else 1)
+    assert readiness.next_eligible_at == ("2026-08-04T00:00:01Z" if not exhausted else None)
+    assert not readiness.executable
+    snapshot = application._delivery_snapshot(runtime)
+    projector = application._read_projector(snapshot)
+    card = application._selected_change_card(snapshot, projector.group_view().items)
+    assert card.readiness is not None
+    pending_path = state_root / "readiness-pending.txt"
+    pending_transaction = RuntimeTransaction(
+        state_root,
+        f"readiness-pending-{exhausted}",
+        (TransactionParticipant(state_root, Path("readiness-pending.txt"), b"must-not-appear"),),
+    )
+
+    def interrupt(stage: str) -> None:
+        if stage == "after-first-publication":
+            message = "injected pending readiness transaction"
+            raise OSError(message)
+
+    with pytest.raises(OSError, match="injected pending readiness transaction"):
+        pending_transaction.commit(failure=interrupt)
+    pending_manifests = tuple((path, path.read_bytes()) for path in (state_root / "transactions").glob("*.yaml"))
+    assert pending_manifests
+    assert pending_path.read_bytes() == b"must-not-appear"
+    repair_binding_reads.clear()
+    with patch.object(RetryLedger, "repair_bindings", read_repair_bindings):
+        readiness = application._with_retry_readiness(snapshot, card, card.readiness)
+    assert repair_binding_reads == [False]
+    assert pending_path.read_bytes() == b"must-not-appear"
+    assert tuple((path, path.read_bytes()) for path, _content in pending_manifests) == pending_manifests
+    assert readiness.attempts == (3 if exhausted else 1)
+
+    blocked = application.acquire_change_action(_continuation_request(application))
+    assert blocked.kind == ("human" if exhausted else "waiting")
+    assert blocked.reason_code == ("retry-exhausted" if exhausted else "retry-backoff")
+    assert blocked.readiness is not None
+    assert blocked.readiness.attempts == (3 if exhausted else 1)
+    assert RetryLedger(state_root, "change-a").episode(key).total_attempts == (3 if exhausted else 1)
+    assert runtime.finalization() is None
 
 
 def test_finalizer_budget_survives_recovery_reports_and_restart(tmp_path):
