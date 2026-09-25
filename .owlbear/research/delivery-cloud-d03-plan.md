@@ -16,7 +16,7 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Implementation candidate against decision checkpoint `2e377a6`.** The default-loader regression
+**Implementation checkpoint `7da4c06`, against decision checkpoint `2e377a6`.** The default-loader regression
 exercises the existing engine and publication owners, rather than replacing them: a lost provider
 response is resolved by exact readback, and a fresh application returns the durable engine result
 without another provider mutation. An unresolved provider result retains its original operation;
@@ -41,17 +41,35 @@ decision, producer framework or host backend is needed for the approved bounded 
 
 The source writer observed **12 focused application cases passing** with locked dependencies under
 `uv 0.11.0` and managed Python **3.14.3**. The selection covered the default-loader replay/readback
-and workspace variants plus affected containment/readiness diagnostics. Earlier selections overlap
-and are not added to that count. Imports of the application, recovery, work-item and test modules
-succeeded in that environment. The parent did not rerun delegated checks.
+and workspace variants plus affected containment/readiness diagnostics. After strengthening the
+oracles, **five loader cases** passed; the journal-guidance repair then passed **10 affected cases**.
+These selections overlap and are not added together. Imports of the application, recovery, work-item
+and test modules succeeded in that environment; the editable installation points at this checkout.
+The parent did not rerun delegated checks.
+
+The 12-case selection in `serve/delivery/tests/test_portfolio_application.py` was
+`engine_failure_retains_exact_action_without_retry_or_release or continuation_preserves_failed_activation_identity or repair_change_diagnoses_but_exclusion_required_to_apply or get_change_composes_detail_health_and_repair_proposal or loader_composed_engine_preflight_contains_workspace_variants or loader_composed_engine_replay_contains_unknown_owner_and_preserves_sibling_progress`,
+run with `uv run --locked --python 3.14.3 pytest -q -n 1`.
 
 Python **3.14.7**, required by `.python-version`, was unavailable in the environment; this is not an
 all-pinned-toolchain pass. The actual default loader and owning implementations are used after
 synthetic fixture setup; only the external publication provider is faked, with Git publication
 directed to a disposable local bare remote. No live host, provider or service acceptance is claimed.
-Independent review requested distinct journal-integrity guidance and stronger diagnostic,
-publication and budget oracles. Final review and static-check results must accompany this candidate
-before bounded C acceptance; D/E, merge and activation remain unauthorized.
+Independent review led to distinct journal-integrity guidance and stronger diagnostic, publication
+and budget oracles. Known stale preflight is rejected before effect entry; it is not confused with
+an entered unknown operation, which retains custody. Full four-file Ruff lint passed after adding a
+docstring and one narrow argument-count exception to `RetryRepairBinding.create`: the exception
+preserves its independently bound identity fields and historical call signature. Six formatter hunks
+in the PR-added recovery module were corrected. The application, work-item and recovery source
+formatter checks pass; the test module retains only two formatting differences verified against
+`dev@d7d5d2d`, not attributed to this increment. No broad lint suppression or module rewrite was added.
+
+The final loader-instance correction passed **both parameterized replay cases** and scoped test lint.
+Independent read-only review of the complete candidate against `2e377a6` found no significant issues
+after its findings were addressed. No unresolved bounded-C product defect is identified in this
+candidate; it is ready for PR review under the revised contract, not the old full-automation promise.
+Pinned-interpreter verification, external checks and package acceptance remain pending. Automated
+validation is recorded at publication; D/E, merge and activation remain unauthorized.
 
 ### Completion ledger
 

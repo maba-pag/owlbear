@@ -32,9 +32,7 @@ MAX_ADMITTED_PATH_LENGTH = 4096
 _ADMITTED_AUTHORITY_FIELDS = frozenset(
     {"admitted_task_id", "admitted_task_digest", "admitted_task_scope", "admitted_paths"}
 )
-ADMITTED_PATH_CHARS = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-"
-)
+ADMITTED_PATH_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/@+-")
 
 
 class _RecoveryModel(BaseModel):
@@ -145,8 +143,7 @@ class RecoveryIntent(_RecoveryModel):
             (self.last_write_provenance, "last-write provenance"),
         ):
             if len(values) != len(set(values)) or any(
-                not value or len(value) > _MAX_PROVENANCE_VALUE_LENGTH or not value.isprintable()
-                for value in values
+                not value or len(value) > _MAX_PROVENANCE_VALUE_LENGTH or not value.isprintable() for value in values
             ):
                 message = f"{label} must contain bounded unique values"
                 raise ValueError(message)
@@ -155,9 +152,7 @@ class RecoveryIntent(_RecoveryModel):
             (self.admitted_paths, "admitted paths"),
         ):
             if values != tuple(sorted(set(values))) or any(
-                not value
-                or not is_canonical_admitted_path(value)
-                for value in values
+                not value or not is_canonical_admitted_path(value) for value in values
             ):
                 message = f"{label} must contain sorted, unique relative paths"
                 raise ValueError(message)
@@ -171,8 +166,7 @@ class RecoveryIntent(_RecoveryModel):
             message = "admitted paths require an admitted task identity"
             raise ValueError(message)
         if not all(
-            any(_scope_contains_path(scope, path) for scope in self.admitted_task_scope)
-            for path in self.admitted_paths
+            any(_scope_contains_path(scope, path) for scope in self.admitted_task_scope) for path in self.admitted_paths
         ):
             message = "admitted paths must be within the admitted task scope"
             raise ValueError(message)
@@ -189,9 +183,7 @@ class RecoveryIntent(_RecoveryModel):
         return not {
             "maintained_surfaces",
             "last_write_provenance",
-        }.intersection(self.model_fields_set) and not _ADMITTED_AUTHORITY_FIELDS.intersection(
-            self.model_fields_set
-        )
+        }.intersection(self.model_fields_set) and not _ADMITTED_AUTHORITY_FIELDS.intersection(self.model_fields_set)
 
     def authority_matches(self, other: RecoveryIntent) -> bool:
         """Compare a re-captured authority without changing a legacy identity."""
@@ -632,9 +624,7 @@ class RetryOwnerResult(_RecoveryModel):
             if not self.accepted_progress or any(value is not None for value in repair_fields):
                 raise ValueError("ordinary accepted retry owner result must reset its episode")
         elif self.accepted and (
-            self.accepted_progress
-            or self.repair_outcome_id is None
-            or self.completed_commit is None
+            self.accepted_progress or self.repair_outcome_id is None or self.completed_commit is None
         ):
             raise ValueError("repair owner result must identify accepted progress without reset")
         return self

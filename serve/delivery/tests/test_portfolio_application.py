@@ -8552,10 +8552,11 @@ def _make_provider_readback_unavailable(provider: _Provider, b_number: int) -> N
 
 def _execute_loader_failure_case(
     fixture: tuple[Path, Path, Path, _Provider, PortfolioApplication, str, str],
+    reloaded: PortfolioApplication,
     action_b: ChangeContinuationAction,
     failure_mode: str,
 ) -> tuple[PortfolioApplication, DeliveryEngineActionResult, object, object, object, str, bool]:
-    repository, _runtime_root, remote, provider, reloaded, _head_a, _head_b = fixture
+    repository, _runtime_root, remote, provider, _application, _head_a, _head_b = fixture
     runtime_b = reloaded._runtimes["change-b"]
     budget_before = runtime_b.retry_ledger().read()
     if failure_mode == "unknown-result":
@@ -8691,6 +8692,7 @@ def test_loader_composed_engine_replay_contains_unknown_owner_and_preserves_sibl
         unknown_result,
     ) = _execute_loader_failure_case(
         fixture,
+        reloaded,
         action_b,
         failure_mode,
     )
