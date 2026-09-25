@@ -2,92 +2,70 @@
 
 ## Status and authority
 
-**D03-C: resumed partial checkpoint; not accepted. C's remaining recovery/integration blockers
-and external gates remain outstanding. D is not authorized.**
+**D03-C: bounded-recovery contract approved on 2026-09-25; implementation acceptance pending.
+No C acceptance, D/E start, merge or live activation is implied.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
-D03-P changed only this file. The programme and shared governance remain unchanged.
+The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
+record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Course correction, 2026-09-25.** Reviewed source: `ab8bb110c12334bea3f8bd0ce2077b32c5e67c9c`.
-The user authorized correction of PR #326's course. C remains incomplete; this does not waive
-the approved safety contract, authorize live activation or accept D03. Preserve the useful
-repairs already present. Do not restart the package, split away unfinished obligations, or
-interpret a narrow review as completion of C.
+The user selected **"Bounded recovery now; explicit containment otherwise"**, after the
+[capability experiment](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5840061085)
+showed descendant escape and indistinguishable stable foreign writes. This supersedes the prior
+A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
+It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-The execution problem is incomplete composition, not a shortage of defensive primitives.
-`delivery_application_loader._compose_application` supplies neither a preservation provenance
-provider nor `proof_attempt_store_factory`. `ChangeWorkspaceManager.capture_preservation` and
-`restore_preservation` have no production application callers. `ProofAttemptStore` stores
-observations; it is not the missing trusted procedure producer. Retry continuation and readiness
-repairs are supporting work, not proof of the complete recovery workflow.
-
-**Controlling next outcome: repair the C composition design before more product code.**
-The current finalization workflow has agents execute heterogeneous maintained checks; it explicitly
-has no target proof profile or separate proof executor. The plan must name the actual producer,
-execution boundary, durable start/completion observations and independently verifiable evidence
-that will satisfy `PreservationProvenanceProvider` and `ProofAttemptStore`. A before/after digest
-proves a difference, not authorship, disposability or procedure execution. An admitted task's path
-scope and last-write metadata are necessary inputs, not sufficient permission to discard bytes.
-Do not silently replace those requirements with caller statements or a generic shell runner.
-
-The [decision amendment](#c-composition-decision-amendment-2026-09-25) distinguishes existing typed
-agent reports from missing independently trusted execution, closure and path evidence. It is **not a
-completed composition design**. The inspected default composition still cannot reach the required
-repair path. Missing schema, registration and wiring are implementation obligations, not policy
-choices. The question is whether to change the workflow's agent-execution rule to bounded
-engine-controlled invocation, or retain it with a real trusted host adapter.
-
-**Next: user decision on that execution allocation, then finish the concrete C design.** Neither
-choice alone supplies provenance or exclusion; both must retain every safety gate. No product
-implementation, separate primitive increment, new package, D/E work or live activation is authorized
-by this amendment. Fresh independent review rejected authority shortcuts; its remaining factual and
-scope findings were corrected. Review and document checks are not whole-C acceptance.
-
-The resulting path must connect custody, trusted observation, classification, preservation or
-Builder repair as appropriate, accepted repair and fresh review, and resumption of the original
-check with the same failure budget. Retain unknown/foreign/private content in place. Reuse the
-existing stores, workspace owner and retry ledger; add no further consumer-only provider or journal.
-
-Completion requires production caller/composition evidence and a discriminating application-entry
-test, not test-provider injection above the owner being claimed. Use the actual application loader;
-synthetic host/provider fixtures may sit below the real owner. No private workspace-method reach-in
-may stand in for the claimed application route. New public transport forwarding remains D03-E;
-strict companions for a C proof-reporting change still ship with that change. Keep privacy, symlink/index,
-worker exclusion, restart, publication and retry refusals intact. Test only the affected contracts;
-do not run whole-project suites or repeat unchanged hundreds-test selections for a new session.
-Required external CI and actual host exclusion remain separate gates, not reasons to stop supported
-source development or permission to mark unimplemented work complete.
-
-This section controls the next assignment. Archived increment reports are historical
-evidence only; their repeated next requests and stale current-status claims are superseded here.
-Keep the PR description synchronized with the next published result. Update the current outcome,
-its exact evidence and the next missing boundary instead of appending another session narrative.
-
-**Execution controls:** one source writer; review the exact changed boundary independently. Do not
-re-review already settled repairs without a concrete regression. Retain existing negative cases;
-tests through injected authority do not prove default composition. Evaluate introduced lint and
-format defects against the PR comparison base, not just the previous partial checkpoint. Inspect
-new suppressions as well as diagnostics; do not hide debt behind a new `noqa` or a renamed baseline.
-Repair defects introduced by the completed path before its handoff. No broad unrelated cleanup or
-module rewrite is authorized by this control.
+**Next: implement and prove bounded recovery through existing application owners.** Start from
+`7ed768b95571762504e3ca9c1e508eb6a48c06ed`, preserve valid source work, and use the revised C
+acceptance below. No further general architecture review is needed to choose an executor.
+First exercise existing engine-result and pending-state-publication replay at the application
+entry; close the specific routing/diagnostic/proof gaps that remain. Prefer reusing working code
+over writing a new mechanism to demonstrate progress.
 
 ### Completion ledger
 
-| Outcome within C | Current source evidence | Required exit evidence |
-| --- | --- | --- |
-| Trusted producer and execution contract | Loader leaves provenance unavailable and proof factory unset; [decision amendment](#c-composition-decision-amendment-2026-09-25) independently reviewed and corrected; execution allocation awaits the user, concrete producer design remains incomplete | Reviewed producer/custody design with real control points and negative authority cases; no unresolved decision disguised as configuration |
-| One application recovery path | Capture/restore have no application callers; completed-outcome repair requires preservation and settled custody that default composition cannot supply | Default application entry reaches preservation/repair and original-check resumption, retaining bytes/index/head, review and retry identity across restart |
-| Successful-publication repair | Existing draft/readback owners available; composed C branch still absent | Exact publication readback/draft/invalidation before repair; refusal causes no task or custody release |
-| C acceptance matrix | Many primitive and narrow repair checks reported; no cumulative assembled C pass | Missing V06/V07/V08/V13 cases exercised at their owning boundaries, plus direct-consumer regressions and scoped static proof |
-| D/E and final acceptance | Not started; no authorization inferred from this ledger | C accepted first; D/E retain their original allocation, with required external and host evidence explicitly separate |
+| Outcome | Required behavior and evidence |
+| --- | --- |
+| Supported recovery | Exact engine-owned durable result or matching publication receipt is replayed/reconciled once under existing custody. A lost response followed by restart returns the same result and resumes only the selected Change; it does not re-invoke an already completed effect |
+| Unknown execution | Started without authoritative result, absent exclusion, conflicting receipt or stale basis remains contained. No cleanup, copying, custody release, blind retry or replacement worker; bytes/index/head and failure budget remain unchanged |
+| Unattributed mutation | Stable foreign, ignored/private or staged edits cannot become automatic preservation or Builder authority through snapshots, scope, caller assertions or a successful exit code. Keep the original material in place |
+| Actionable diagnosis | Current public application read/repair result states missing evidence and the responsible owner/resume condition. No nonexistent repair promise, command assembly, fake approval, inferred termination or unsupported clickable action |
+| Continued progress | Unrelated eligible Changes still run; same-Change unknown custody remains occupied. Repeated requests do not mint new equivalent attempts or reset budgets |
+| Package integration | D retains offline diagnosis; E retains strict registered/HTTP forwarding and cumulative proof for this revised boundary. Unsupported host recovery is explicitly contained, not a hidden package prerequisite |
 
-Source reference points: `delivery_application_loader._compose_application`,
-`PortfolioApplicationDependencies.proof_attempt_store_factory`,
-`PortfolioApplication._require_owner_proof_attempt`,
-`ChangeWorkspaceManager.capture_preservation` / `restore_preservation`,
-`ProofAttemptStore.record`, and `share/skills/w-change-finalization/SKILL.md` Steps 0-2a.
-The evidence index below preserves historical references; none is a substitute for these exits.
+### Next assignment and verified baseline
+
+Source anchors: `PortfolioApplication.execute_change_action`, `_read_engine_result`,
+`_replay_pending_state_publication`, `_reconcile_pending_state_publication`, `repair_change`,
+`get_change`/readiness, `PortfolioCoordinator`, and the existing retry and transaction owners.
+Existing tests include
+`test_engine_mark_ready_replays_lost_response_and_acceptance_waits_without_merge`,
+`test_engine_unknown_result_after_effect_never_reenters_owner`,
+`test_selected_acquisition_replays_only_its_pending_publication` and
+`test_change_worktree_recovery_contains_unknown_custody_without_target_mutation`.
+Use real default composition for claims about wiring; external provider/host fakes may be below
+the owner under test. Do not inject successful provenance or call private workspace primitives to
+stand in for the public route. Existing passing behavior is evidence, not a reason to duplicate it.
+
+Keep one writer. Run only affected positive/negative tests and direct-consumer checks; compare
+introduced lint/format defects and suppressions cumulatively rather than resetting the baseline.
+Independently review the exact result against this bounded contract. Keep the plan and PR summary
+current; no new narrative appendix or blanket hundreds-test reruns. A successful agent session
+or skipped CI does not mean C passed.
+
+The coordinating session ran 10 application cases at `7ed768b` with PR-worktree import provenance
+verified: known mark-ready lost-response replay, unknown owner-result non-reentry, selected-Change
+publication replay, head/target/dirty/untracked preflight refusals, and unknown-custody worktree
+refusal. Result: **10 passed, 399 deselected, 7.89s**. These use existing application fixtures;
+they do not establish real default-loader composition or complete the revised C acceptance.
+No production code, live state or provider effect was changed by this scope amendment.
+
+The prior A/B design discussion and stronger automation requirement are retained in the
+[immutable pre-decision plan](https://github.com/maba-pag/owlbear/blob/7ed768b95571762504e3ca9c1e508eb6a48c06ed/.owlbear/research/delivery-cloud-d03-plan.md).
+They are no longer an active user decision, a request for another feasibility experiment, or a
+prerequisite for bounded C. A broader capability needs its own concrete proposal and approval;
+it is not a promised later D03/D08 deliverable.
 
 ### Evidence index
 
@@ -142,179 +120,14 @@ than reclassifying them as a new baseline. Broad cleanup is not the integration 
 Repository paths in links resolve from this file. Command paths below use the actual cloud checkout
 `/home/runner/work/owlbear/owlbear`; later workers must resolve their own checkout before invocation.
 
-## C composition decision amendment (2026-09-25)
-
-Diagnosis only, written against source at `a50d5244bd8793aff364b4b723c7681ded753ce6`; no product
-code, tests or services were changed. It amends C's implementation design, not the approved
-[Contract](#contract) or [phase allocations](#phases-and-proof). **It is not an executable repair
-design:** the inspected composition cannot supply the required execution and path authority.
-Missing records and wiring are implementation work, not policy blockers. The proposed change to who
-executes checks is the decision below; neither alternative is approved or sufficient by itself.
-
-### Source constraints: who executes, who observes, who may assert
-
-| Role | Owner in source | May assert | Hard limit |
-| --- | --- | --- | --- |
-| Executor of maintained checks | Finalizer agent, [`w-change-finalization`](../../share/skills/w-change-finalization/SKILL.md) Steps 1-2 | Typed agent observations and declared procedure identities | Step 0 forbids a separate proof executor; those receipts do not independently attest process execution or closure |
-| Durable before-start record | `_launch_finalization_candidate` (`portfolio_application.py:7414-7443`) -> `ChangeFinalizationAttempt` persisted by `PortfolioCoordinator.acquire` (`change_workspace.py:1985`) | Writer, contract/frontier digests, exact and target head | Stores no workspace observation or per-check start today |
-| Independent observer | `capture_finalization_workspace` (`change_workspace.py:4156`) | Head, porcelain status, `diff HEAD --binary`, per-path metadata digest, computed inside the engine call | State transitions only: no process, exit status or writer identity |
-| Second independent read | Composed provenance provider via `_classify_preservation` (`change_workspace.py:4935-4979`); absent by default and **not composed here** | Per-path current `kind`/`sha256`/`mode`, cross-checked by `_validate_provenance_states` (`:5019-5037`) | A time-of-check/time-of-use cross-check; blind to a foreign write that finished before the first read |
-| Procedure registration | `MaintainedProofProcedure` (`finalization_reports.py:182`) defines the identity model; no production registrar constructs it | No default maintained-procedure execution authority today | Task proof-boundary prose is not a procedure registration or evidence that it ran |
-| Completed record | `ProofAttemptStore.record` (`finalization_reports.py:739`), `FinalizationReportStore.record` | One immutable record per `attempt_key` | Mutation only: `ProofAttemptObservation` needs distinct fingerprints and at most 32 paths, so no prestart form exists |
-| Custody and exclusion | `PortfolioCoordinator`; `_require_preservation_authority` (`change_workspace.py:4864-4904`); host evidence provider (`portfolio_application.py:8421-8460`) | Single-writer fence; release of a **proven** owner | §A evidence is host-confirmed closure or enforced exclusion only; `confirmed_lost`, PID lookups, silence, timeouts and caller acknowledgements are excluded |
-
-Six facts fix the boundary. (1) No durable engine preimage: `ChangeFinalizationAttempt` holds no
-fingerprint, so `proof_fingerprint_before` is caller-authored and compared only with the caller's own
-`expected_workspace_fingerprint`; the after fingerprint is independently recomputed
-(`portfolio_application.py:3177-3183`). (2) Both producers are
-uncomposed: `_compose_application` passes neither `preservation_provenance_provider` nor
-`proof_attempt_store_factory` (`delivery_application_loader.py:1125-1195`), so `_classify_preservation`
-always rejects and `_require_owner_proof_attempt` always fails. (3) Path authority is refused to a
-finalizer: `_recovery_admitted_task` returns a task only for `kind == "clean-claim"`, and
-`_recovery_admission_fields` raises whenever paths exist without one. (4) Preservation authority is
-unreachable and live capture unauthorized: `_require_preservation_authority` refuses a live writer,
-recovery owner, publication lease or unfinished continuation **and** requires a host-verified intent
-and receipt with `closed`/`excluded` evidence, while `_register_recovery_invocation` returns early
-under the default `UnavailableRecoveryEvidenceProvider`. (5) The composed failure path retains custody: repair
-needs `writer is None` and `attempt.finished_at is not None` (`:7963-7968`), yet only the success path
-ends one (`change_workspace.py:2615-2650`, `:2162`) and the retained-state note keeps writer and
-attempt after a failure, leaving `prepare_finalization_repair_release` and `repair_completed_outcome`
-without a reachable caller. (6) Repair cannot avoid preservation:
-`PrepareCompletedOutcomeRepair` and `CompletedOutcomeRepairReceipt` both require a 64-hex
-`preservation_id` (`delivery_runtime.py:1261`, `:1279`), so even a clean-workspace repair needs fact 4.
-
-### Why agent-only execution cannot close C
-
-**Closure.** §A accepts host-confirmed closure or enforced exclusion, records that no supported VS Code
-provider was found, and excludes `host_id`, `session_id`, `process_id`, `confirmed_lost`, PID lookups,
-silence, timeouts and any caller-authored acknowledgement that grants release. A finalizer reporting "I
-have stopped" is such an acknowledgement, and its checks are tool jobs the engine never joined, so a
-late write can land in a worktree a Builder already holds. §A's single exception - *"For synchronous
-engine actions, an owning call that has returned and joined its tool jobs can record closure evidence
-itself"* - fits an engine-owned invocation, not an external agent.
-
-**Ownership.** Even given closure, per-path classification cannot be minted. A person or tool editing a
-file inside the admitted maintained surface during the finalizer window satisfies clean `F0`, unbroken
-custody, scope, a real difference, the provider's second read and the re-verify at
-`change_workspace.py:4473-4485`, because a stable concurrent write is simply the current state.
-Re-observation detects drift *during* recovery, never an earlier foreign write, and unauthenticated
-`mtime` does not separate the cases: the acceptance positive and the foreign-edit negative are the
-*same* plain edit, byte-identical to every predicate, so no test can discriminate them either. The
-Contract already says "Whitespace alone proves no ownership" and lists maintained-surface and
-last-write evidence as bindings rather than permission. So neither `disposable` nor `useful` is
-provable, and `useful` is not the harmless half: it routes automatic Builder repair and charges the
-episode.
-
-**Execution.** `ProofAttemptObservation` has no prestart form, `attempt_key` is unique in both
-histories (`finalization_reports.py:453`, `:722`), the report key must equal the live writer attempt id
-(`portfolio_application.py:3140`), and `_require_owner_proof_attempt` matches exactly one current
-attempt on key, procedure, four basis values, both fingerprints and the exact `paths` tuple
-(`:7997-8026`) - so substituting a per-check `<attempt>.<procedure>` key would violate the current
-parent-attempt binding. Separate child records require deliberate schema and matcher changes, not a
-second interpretation of the historical key. Typed observations already exist (`delivery_runtime.py`
-`DeliveryObservationReceipt` and finalization validation); persisting an agent's declared procedure/outcome is
-not independent evidence of its execution, descendants or closure. **The missing fact is trusted
-execution observation, not the ability to encode an identity or reported outcome. An unavailable host
-provider is not permission to mint equivalent authority.**
-
-### Decision required
-
-Schema, wiring and registration remain implementation obligations. The product choice is whether to
-change the current agent-execution rule to obtain independent invocation evidence, or retain that rule
-and supply a real host observer. Neither caller-provided identities/outcomes nor new durable fields
-provide per-write qualification or §A closure evidence. **The one question: which execution
-trust model should the remaining D03-C design use: bounded engine-controlled invocation (A), or
-agent execution supervised by a trusted host adapter (B)?**
-
-| Alternative | Pros | Cons and risks | Confidence |
-| --- | --- | --- | --- |
-| **A. Bounded engine-controlled maintained invocation.** Finalizer selects a typed maintained operation; its engine-owned adapter, not an arbitrary command string or target proof profile, executes it | Places invocation identity, prestart durability and observed process completion under one owner; can reuse the action-receipt lineage and §A's synchronous-action closure rule for jobs actually joined | Changes the agent-execution rule in `w-change-finalization` Steps 0/2. Concrete adapters and registration authority still need specification. Joining one process does not establish descendant closure, finalizer exclusion, path authorship or privacy; timeout is not closure. These remain separate gates | Medium on suitability; no complete producer or host feasibility proof yet |
-| **B. Agent execution supervised by a trusted host adapter.** Keep heterogeneous checks agent-run; require host-issued invocation/completion evidence and enforceable worker exclusion | Preserves the current executor; can observe actual dispatched jobs rather than trust reports | No supported adapter exists in the inspected composition. Must identify a real host API and its descendant/exclusion guarantees; closure alone still supplies no per-path authorship, privacy qualification or discard permission | High on the current integration gap; feasibility and coverage unverified |
-
-Both must keep the approved safety requirements - classification before any copy, foreign, ambiguous and private
-material left in place, exclusion before effects, no disposition inferred from scope, snapshots or
-custody. A additionally changes the existing workflow's execution allocation and therefore requires
-explicit user approval and a skill amendment; that change is not implicitly authorized here.
-
-**Recommendation: A as the design direction within C**, because it makes the execution producer
-explicit instead of adding another observation consumer. Confidence is medium: this choice does not
-solve provenance or permit release of an external finalizer. Before implementation, specify an actual
-maintained adapter and registration source, distinguish joined tool jobs from every remaining writer,
-and demonstrate the classification gate without assuming an imaginary host capability. B remains an
-alternative if a supported host can supply those facts. **Until the decision and those details are
-resolved, keep today's refusals and C partial.** No new package, acceptance reallocation, target proof
-profile, shell runner, standalone primitive increment or successor phase is authorized.
-
-### Conditional owner path - not executable until the boundary is approved
-
-**The following is an implementation boundary to finish after the decision, not an executable design
-or permission to implement it.** Under A the order is: maintained adapter and its registration
-authority; the engine invocation owner with durable before and end records and independently verified
-closure/exclusion for every relevant writer; the Steps 0/2 skill reconciliation; only then a route from a
-registered check's nonzero result to Builder repair, accepted candidate, fresh review and resumption of
-the original check in the same retry episode. Under B: the host execution and exclusion adapter.
-
-Reuse the engine's immutable action-lineage pattern, extending its schemas deliberately:
-`intent.json` with custody from `acquire_continuation_action`, `started.json` written once by
-`start_continuation_action` under a strict identity comparison, and `result.json` through the same
-`continuation_record_path` owner (`change_workspace.py:1840-1905`) - and already treats a started
-action without a result as an unknown outcome never re-invoked (`portfolio_application.py:7192-7215`).
-An adapter invocation would be a sibling family under that root with the identity pattern extended
-for the new operation kind: intent carries the declaration digest, procedure identity, basis and
-before fingerprint; started marks effect entry; result carries the engine-captured exit and after
-fingerprint; a missing result contains rather than replays. `ProofAttempt` stays as approved - one
-historical record per mutating finalization attempt, keyed by the writer attempt id.
-
-Likely C owners remain `change_workspace.py` (custody and preservation), `finalization_reports.py`
-(registration/observation history), `portfolio_application.py` (actual recovery callers),
-`delivery_runtime.py` (repair/settlement), and `delivery_application_loader.py` (default composition).
-Reuse `recovery.py`, `runtime_transaction.py` and the retry ledger rather than creating substitute
-authority. Add only the selected producer's concrete owner and focused tests under `serve/delivery/tests/`.
-Required report-model/MCP/skill companions accompany any schema change; new public forwarding stays E.
-
-### Acceptance obligation after the decision
-
-The next implementation assignment must close **one assembled path**, not just populate a factory:
-real default loader -> actual maintained invocation -> durable independently observed outcome and
-custody -> privacy-qualified preservation or admissible Builder repair -> accepted candidate plus
-fresh review -> the original check with the same retry episode. Its exact positive fixture cannot be
-specified honestly before choosing the real producer; this remains a design deliverable, not a pass.
-Tests may replace external effects below that producer, never inject its observations or provenance.
-
-Required discriminators: zero-exit mutation; a stable foreign edit inside an admitted path during the
-same window; private/ignored and staged/index contamination; stale/forged procedure or observation
-identity; multiple checks under one parent attempt; crashes before start, during execution and after
-completion publication; and repair acceptance followed by fresh review and original-check resumption.
-An unknown execution is contained, not replayed. Restarts retain identity, custody and budget; no new
-task, commit, check label or report replenishes the episode. All existing raw-index, no-follow,
-privacy, classification-before-copy and proven-exclusion gates remain mandatory.
-
-### Rejected, recorded so they are not re-proposed
-
-Reproduce-after-restore or capture of unattributed bytes (classification precedes any copy; foreign,
-ambiguous and private material stays in place; offering to reproduce a defect proves no authorship); a
-live-sync exception under a live writer (reintroduces the caller-confirmation bypass §A removes); a
-caller-authored release even over a clean workspace (§A excludes it; self-surrender is no proof that
-descendants and tool jobs stopped); calling unattributed bytes `useful` to copy them or routing them
-to an unclaimed Builder around custody.
-
-Still open in the [ledger](#completion-ledger): every repair and preservation route pending the
-decision, successful-publication repair, the four interrupted-engine rows, and the V06, V07 and V13
-matrices.
-
-### Review and verification of this amendment
-
-Fresh independent Opus source/design review and Luna document/source review informed the correction.
-Final Opus re-review found no remaining significant factual or safety findings; it explicitly retained
-the unresolved producer, provenance, custody settlement and positive acceptance design. Authority
-shortcuts were rejected, not approved. Writer and parent changed only this plan; parent comparison
-confirmed `## Contract` onward byte-identical to `a50d524`, and local links/anchors and whitespace
-checks passed. No product tests, builds, installs or live actions were run. Hosted source/Cockpit/
-ecosystem runs at `a50d524` were skipped, not passing evidence. This review accepts the diagnosis
-only; it does not accept C or resolve the user decision. Automated validation could not run its code
-review binary; CodeQL skipped this documentation-only repair. Neither is product validation evidence.
-
 ## Contract
+
+The [current handoff](#current-handoff) and the programme's explicitly approved bounded recovery
+revision govern this contract. The full-automation analysis retained in Git history is not an
+unresolved A/B decision or a requirement to build an execution backend. The remaining detailed
+preservation clauses below constrain any use of those primitives; they do not require enabling
+automatic dirty recovery when its authority is unavailable. U1-U8 and all no-loss/privacy/exclusion
+requirements remain in force. This is reduced automation coverage, not equivalent full-C delivery.
 
 ### Result, requirements and exclusions
 
@@ -484,6 +297,19 @@ next actor, next eligible time and one intelligible stop reason through shared r
 Change must not prevent independent Changes from using otherwise available capacity.
 
 ### C. Preservation, proof failure and resumption
+
+**Bounded C completion rule:** prove an existing supported engine-owned replay/reconciliation
+path through real application composition, and contain every unsupported/unknown recovery path
+truthfully. Default provenance and proof-attempt producers may remain unavailable. No new runner,
+write-attribution system or host adapter is required. A missing authoritative result never permits
+re-entry of an effect just because another receipt might suggest it completed; retain existing
+owner-specific readback rules and custody checks. The user is not asked to manufacture authority.
+
+The detailed capture/restoration and completed-outcome Builder rules in this section remain safety
+constraints on those optional paths. They are not a demand to activate them or a completion gate
+when the default host cannot establish their evidence. Keep their negative tests and historical
+records; do not delete code or broaden its authority merely to reduce the PR. Ordinary code repair
+remains Builder work only when the existing custody and review owners can admit it safely.
 
 Only the workspace owner applies an exact-path proposal under proven exclusion/no competing Builder
 claim and exclusive recovery custody. Bind Change version, actual worktree registration/realpath,
@@ -783,40 +609,38 @@ Closeout includes owning runtime retry tests and
 `/home/runner/work/owlbear/owlbear/serve/delivery/tests/test_delivery_runtime.py`, plus an application
 acceptance-waiting test proving fresh operation IDs retain the semantic budget.
 
-### D03-C — Nonterminal preservation and proof repair
+### D03-C — Bounded recovery and explicit containment
 
-**Editable sources:** `serve/delivery/src/owlbear_delivery/{recovery.py,change_workspace.py,
-portfolio_application.py,delivery_runtime.py,finalization_reports.py,work_items.py,__init__.py}`.
-If proof reporting gains a field/category, its strict companions ship in this phase:
-`serve/delivery-mcp/src/owlbear_delivery_mcp/{target_models.py,target_server.py}` and
-`share/skills/w-change-finalization/SKILL.md`. Tests stay with those contracts:
-`test_change_workspace.py`, `test_recovery.py`, `test_finalization_reports.py`,
-`test_portfolio_application.py`, and affected MCP report validation tests.
+This is the revised implementation assignment approved on 2026-09-25, not acceptance of the older
+full-automation promise. Keep the phase ID; do not invent a new package or migrate the excluded
+promise to D08.
 
-Implement the C exact-path/raw-byte contract and use existing Builder/result/review repair routes.
-Do not route D03 through `quarantine_dirty_worktree`'s broad cleanup unchanged. A fixed mechanical
-proposal may restore only proven disposable drift; a code/procedure finding issues bounded Builder
-work retaining the original action and cumulative review baseline.
+**Editable sources:** `serve/delivery/src/owlbear_delivery/{portfolio_application.py,
+delivery_application_loader.py,recovery.py,change_workspace.py,delivery_runtime.py,
+finalization_reports.py,work_items.py,__init__.py}` and owning tests in `serve/delivery/tests/`.
+Touch only the real missing boundary discovered by the checks below. A changed report contract
+requires its strict MCP/skill companions in the same result; do not add a public endpoint or
+workflow merely to make a test convenient. Broader registered forwarding remains E.
 
-**Oracles:** V06 exact formatting bytes/index/HEAD survive preservation then preflight resumes;
-binary/deletion/rename/mode/symlink and Git-filter fixtures retain raw identity; V07 any staged,
-foreign, secret-like, root/path/head/index drift leaves all affected bytes untouched and unpublished;
-V08 a zero-exit mutating proof is not pass, and repairs the procedure before rerun; V13 failures
-before/after each preservation, restore and receipt step neither lose data nor falsely free custody.
-New Builder commit rejects old proof; interrupted partial restoration rejects third-party edits.
-Index-specific cases: linked worktree versus main-checkout index isolation; a different staged blob
-from both HEAD and worktree bytes; private paths in an otherwise clean index; inherited Git overrides;
-symlink/lock/split/sparse index containment; same-size raw-index edits between proposal and apply and
-between partial restore and restart. Assert exact raw index bytes remain unchanged on successful
-worktree-only restoration, and newer staging is never overwritten on stale replay. These belong in
-the `nonterminal_recovery` selection below, with the mandatory authority checks above.
+**First proof:** execute the current handoff's named positive replay and negative containment
+tests on the PR source with verified import provenance. Reuse working behavior. Then exercise the
+same result through the default application loader with only external effects faked below the
+owning implementation. Fix missing composition, incorrect retry/receipt consumption, or misleading
+public readiness/repair diagnostics found by that scenario. Do not bypass unavailable authority.
 
-Inner loop:
-`uv run --locked pytest /home/runner/work/owlbear/owlbear/serve/delivery/tests/test_change_workspace.py -q -n 1 -k 'nonterminal_recovery' -m 'not api and not model and not e2e'`.
+**Completion oracles:** known completed engine effect plus lost response/restart returns its exact
+result without a second provider mutation; only the selected Change's pending publication is
+reconciled; started-without-result, contradictory/stale evidence and uncertain workers remain
+contained; staged/private/foreign/ignored or raw-index drift stays untouched and unpublished;
+repeated requests preserve budgets and occupied custody while unrelated eligible Changes progress.
+Mutation during proof is never a pass, even with exit zero. The read/repair result must tell the
+truth about unavailable recovery, its owner and resume condition without promising nonexistent
+automation or asking users to run commands/kill processes. No new test-provider authority.
 
-Closeout runs the new `proof_mutated`/`recovery_resume` selections in `test_recovery.py`, plus existing
-quarantine replay/changed-byte tests in `test_change_workspace.py` and exact-head review-repair
-application tests. Only changed report schema requires its corresponding MCP selection now.
+Run only affected tests and necessary direct-consumer checks. Preserve existing safety tests for
+optional preservation paths. Require scoped static proof and independent exact-result review
+before C acceptance; no new blanket test campaign or increment-relative lint baseline. Publish a
+concise capability table distinguishing supported automatic recovery from contained cases.
 
 ### D03-D — Read-only offline entry
 
@@ -854,6 +678,11 @@ Run the three authority nodes with
 
 ### D03-E — Registered handoff and cumulative package proof
 
+The approved bounded acceptance applies across C, D and E; their IDs and ownership remain unchanged.
+Positive proof is required for supported engine-owned recovery. Unsupported worker/dirty recovery
+requires explicit no-mutation containment through the same registered/readiness surfaces, not a
+new host backend. Such containment does not mark the individual Change recovered or complete.
+
 **Editable sources:** existing MCP `target_models.py`/`target_server.py`; Cockpit
 `serve/cockpit/src/owlbear_cockpit/{target_models.py,routes/target_work.py}`; core
 `portfolio_application.py`, `work_items.py`, `diagnostics.py`, exports and recovery owner only for
@@ -881,8 +710,10 @@ components/WorkItemDetail.tsx,__tests__/WorkPortfolio.test.tsx}`, not a UI redes
 Assembled proof uses real application state and `Client(assemble_target_server(...))`, the existing
 HTTP test client and temporary repos; fakes are below host/provider owners, not substitutes for
 recovery, workspace or runtime methods. Verify all four interrupted engine rows, finalizer failure
-before checks, claim activation both ways, bounded Builder repair, offline degraded entry and a fresh
-continuation returning to the original action. Unknown outcomes remain contained throughout every
+before checks, claim activation both ways and offline degraded entry. Show a fresh continuation
+for a supported exact-result/publication replay. For Builder repair or original-action resumption
+whose custody/provenance cannot be established, assert explicit containment instead of fabricating
+authority or counting it as recovered. Unknown outcomes remain contained throughout every
 adapter. Include exact stale/foreign/forged fields, absent host capability and independent Change
 progress. Review response copy for checks-not-run, preserved bytes, current owner and next action.
 
@@ -908,11 +739,11 @@ Closeout, split into bounded selections:
 
 | Claim | Cloud-required proof | Other environment |
 | --- | --- | --- |
-| V06/V07/V13 | C raw bytes, path/index/head fences, privacy containment and every durable failure boundary | External CI broad regressions |
-| V08/V09 | B/C persisted procedure failure, episode budget, restart/backoff/exhaustion and resumed review | External CI broad regressions |
-| V10 | A controlled still-writing process and descendant, real owner recovery, restart and late-result rejection; absent host remains blocked | Actual VS Code invocation exclusion/descendant closure must be demonstrated on the host, not inferred from fixture success |
+| V06/V07/V13 | C supported engine replay plus unchanged bytes/index/head, privacy and custody for contained cases; preserve negative proof for existing optional restoration paths | External CI broad regressions; general automatic dirty recovery is excluded from bounded D03 |
+| V08/V09 | B/C mutation is not success, bounded diagnostics and retry accounting; unsupported repair stays contained | External CI broad regressions |
+| V10 | A controlled still-writing process/descendant and absent-host fixtures prove no cleanup, release or replacement, including after restart | Actual host exclusion is required only to enable that broader recovery capability; it is not a bounded D03 completion gate or an automatic D08 assignment |
 | V18/V20 | D malformed-runtime read-only CLI; E real degraded API/entry and provenance-negative cases | D07 owns supported repair/migration, D08 owns final host acceptance |
-| End-to-end repair | E actual registered MCP/HTTP -> core -> workspace/provider fake -> restart/continuation | Named host dispatch/exclusion and external transport in D08-H |
+| End-to-end repair | E registered MCP/HTTP -> real core -> provider boundary -> supported replay/continuation, plus unsupported-path containment | Existing ordinary dispatch/transport host acceptance remains; general external-worker/dirty recovery is not silently deferred to D08-H |
 
 ## Progress and verification gaps
 
