@@ -1,11 +1,11 @@
 ---
 name: "challenge-implementation_opus"
-description: "Use Claude Opus 5 to review an implementation against its plan, intent, and material behavioral risks"
+description: "Use Claude Opus 5.5 to review an implementation against its plan, intent, and material behavioral risks"
 argument-hint: "Describe the implementation or provide its plan, commit, diff, or review scope"
 agent: "agent"
 ---
 
-Challenge an existing implementation with a fresh Claude Opus 5 subagent. Determine whether the
+Challenge an existing implementation with a fresh Claude Opus 5.5 subagent. Determine whether the
 reviewed implementation fulfills the accepted plan and user intent, and whether it introduces other
 concrete material defects in the implemented workflow or its directly connected boundaries. Treat
 the subagent as an independent evidence source, not the final authority: the calling model owns
@@ -137,7 +137,7 @@ Use `runSubagent` for a new review on every invocation, with these exact choices
 - Omit `agentName`. Do not use `Explore`, `planner-challenger`, `build-reviewer`, or another named or
   prepared role. The fresh, un-specialized subagent still inherits active workspace instructions;
   never describe it as context-free.
-- Set `model` to exactly `Claude Opus 5 (copilot)`.
+- Set `model` to exactly `Claude Opus 5.5 (copilot)`.
 - Set `description` to a short phrase such as `Challenge implementation`.
 - Require read-only work: no edits, branches, commits, destructive commands, external mutations,
   publication, finalization, or lifecycle transitions. Apply the same constraints to the caller.
@@ -200,7 +200,7 @@ Then issue one scoped caller verdict:
 
 Keep the final report compact: lead with material findings and reconciled dispositions, or state
 that none were found; then give the verdict, exact scope, plan/intent conformance, smallest proposed
-repair sequence, proof limits, and blockers. Confirm whether the fresh unnamed Claude Opus 5 review
+repair sequence, proof limits, and blockers. Confirm whether the fresh unnamed Claude Opus 5.5 review
 actually ran. Do not reproduce the entire memo.
 
 Stop after the review and repair proposal. Do not edit, commit, publish, finalize, or perform lifecycle

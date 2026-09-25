@@ -4,7 +4,7 @@ description: "Delivery portfolio loop - dispatch acquired workers and forward th
 argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-6 Luna (copilot)
 tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_changes, owlbear-delivery/acquire_actions, owlbear-delivery/acquire_change_action, owlbear-delivery/execute_change_action, owlbear-delivery/delivery_health, owlbear-delivery/get_change, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner

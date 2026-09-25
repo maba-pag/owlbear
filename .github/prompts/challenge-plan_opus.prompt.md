@@ -1,11 +1,11 @@
 ---
 name: "challenge-plan_opus"
-description: "Use Claude Opus 5 to challenge a technical plan and reconcile material risks with user intent"
+description: "Use Claude Opus 5.5 to challenge a technical plan and reconcile material risks with user intent"
 argument-hint: "Describe or paste the plan, decision, or compatibility proposal to challenge"
 agent: "agent"
 ---
 
-Challenge the plan or proposal with a fresh Claude Opus 5 subagent before recommending
+Challenge the plan or proposal with a fresh Claude Opus 5.5 subagent before recommending
 implementation. Treat the subagent as an independent evidence source, not a replacement planner:
 the calling model owns the contextual judgment and final plan.
 
@@ -108,7 +108,7 @@ Use `runSubagent` for a new challenge on every invocation, with these exact choi
  named/prepared role. This creates a fresh, un-specialized subagent, but it still receives active
  workspace instructions; do not describe it as context-free or assume it has the caller's full
  context.
-- Set `model` to exactly `Claude Opus 5 (copilot)`.
+- Set `model` to exactly `Claude Opus 5.5 (copilot)`.
 - Set `description` to a short phrase such as `Challenge technical plan`.
 - Tell the subagent to be read-only: no file edits, branches, commits, destructive commands,
  external mutations, publication, finalization, or lifecycle transitions. Apply the same constraint
@@ -197,7 +197,7 @@ Judge the supplied plan, not a silently assumed repaired version:
 
 Keep the final report compact: lead with material findings and reconciled dispositions, or state
 that none were found; then give the recommendation, reviewed scope, plan deltas, refined sequence,
-proof boundaries, and exact blockers. Confirm whether a fresh unnamed Claude Opus 5 review actually
+proof boundaries, and exact blockers. Confirm whether a fresh unnamed Claude Opus 5.5 review actually
 ran. Do not reproduce the entire memo.
 
 Stop after the challenge and proposed plan revision. Do not edit, commit, publish, finalize, or perform

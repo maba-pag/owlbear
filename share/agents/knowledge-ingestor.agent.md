@@ -4,7 +4,7 @@ description: "Knowledge source lifecycle agent - register, ingest, refresh, and 
 argument-hint: "Manage source: {source path, URL, source ID, or lifecycle goal}"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-6 Luna (copilot)
 tools:
   [vscode/toolSearch, vscode/askQuestions, read/readFile, search/fileSearch, search/listDirectory, search/textSearch, web, owlbear-browser/acquire, 'markitdown/*', owlbear-knowledge/register_knowledge_source, owlbear-knowledge/knowledge_ingest, owlbear-knowledge/knowledge_search, owlbear-knowledge/list_knowledge_sources, owlbear-knowledge/refresh_knowledge_source, owlbear-knowledge/delete_knowledge_source, owlbear-knowledge/knowledge_stats, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---
