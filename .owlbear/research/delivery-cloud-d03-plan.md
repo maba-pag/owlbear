@@ -16,12 +16,42 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Next: implement and prove bounded recovery through existing application owners.** Start from
-`7ed768b95571762504e3ca9c1e508eb6a48c06ed`, preserve valid source work, and use the revised C
-acceptance below. No further general architecture review is needed to choose an executor.
-First exercise existing engine-result and pending-state-publication replay at the application
-entry; close the specific routing/diagnostic/proof gaps that remain. Prefer reusing working code
-over writing a new mechanism to demonstrate progress.
+**Implementation candidate against decision checkpoint `2e377a6`.** The default-loader regression
+exercises the existing engine and publication owners, rather than replacing them: a lost provider
+response is resolved by exact readback, and a fresh application returns the durable engine result
+without another provider mutation. An unresolved provider result retains its original operation;
+repeated execution does not replenish its retry budget, and a separate eligible Change can acquire
+work. Public containment messages identify missing owner evidence instead of promising a future
+"D03 repair" or treating caller confirmation as authority.
+
+Acceptance remains pending final review and the verification limits below. The loader,
+execution, transaction and exclusion mechanisms are not replaced by this candidate. No executor
+decision, producer framework or host backend is needed for the approved bounded scope.
+
+| Capability | Candidate behavior |
+| --- | --- |
+| Exact completed engine result | Replay through a newly default-composed application; no duplicate provider mutation |
+| Started operation without its result, even with a ready receipt | Contain without invoking the owner again; retain operation custody and consumed budget |
+| Provider mutation with unavailable readback | Contain the recorded failure; repeated calls neither mutate again nor consume another attempt |
+| Dirty, staged or private worktree before effect entry | Reject stale preflight without entering the effect or changing content/index; no recovery success is claimed |
+| Unrelated eligible Change | Continue through selected application acquisition without releasing the contained Change |
+| Worker closure or dirty-content authority unavailable | Keep existing fail-closed boundaries; diagnosis is not release, preservation or permission |
+
+### Candidate proof and limits
+
+The source writer observed **12 focused application cases passing** with locked dependencies under
+`uv 0.11.0` and managed Python **3.14.3**. The selection covered the default-loader replay/readback
+and workspace variants plus affected containment/readiness diagnostics. Earlier selections overlap
+and are not added to that count. Imports of the application, recovery, work-item and test modules
+succeeded in that environment. The parent did not rerun delegated checks.
+
+Python **3.14.7**, required by `.python-version`, was unavailable in the environment; this is not an
+all-pinned-toolchain pass. The actual default loader and owning implementations are used after
+synthetic fixture setup; only the external publication provider is faked, with Git publication
+directed to a disposable local bare remote. No live host, provider or service acceptance is claimed.
+Independent review requested distinct journal-integrity guidance and stronger diagnostic,
+publication and budget oracles. Final review and static-check results must accompany this candidate
+before bounded C acceptance; D/E, merge and activation remain unauthorized.
 
 ### Completion ledger
 
@@ -83,11 +113,10 @@ Consult only the entry needed for a specific claim. Do not replay its superseded
 | C finalizer readiness | `9d78f94`, handoff `ab8bb110`; reported 10/6/9/7-case selections and overlapping final three cases; independent narrow review | No additive test total or cumulative C pass; some successor/re-repair matrices remain unproved |
 | Last bounded local repair | `f9330ffc`; 24 focused tests, scoped Ruff and independent review | Superseded source requires affected proof; this is not evidence for later changes |
 
-This course correction performed source and history inspection plus independent read-only review;
-no product tests or hosted workflow executions are claimed for it. Latest inspected source-head
-Source/Cockpit/ecosystem runs at `ab8bb110` are `action_required`; PR draft guards also prevent
-normal PR proof execution. Approval, draft state, external CI and host verification are distinct
-from incomplete implementation. Keep the draft and protections intact; do not approve obsolete runs.
+The historical course correction supplied source/history inspection and read-only review, not
+product execution proof. Source/Cockpit/ecosystem runs inspected at the decision checkpoint
+`2e377a6` were skipped, not passed. Approval, draft state and external CI remain distinct from
+implementation acceptance. Keep the draft and protections intact; do not approve obsolete runs.
 
 The raw patch also adds many lint suppressions. Their existence is not automatically a defect, but
 increment-relative clean results cannot establish cumulative quality. The next implementation must

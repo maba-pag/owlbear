@@ -897,7 +897,10 @@ def _portfolio(
     return application, runtimes, coordinator, state_root
 
 
-def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
+def _seed_loader_composed_completed_change(
+    tmp_path: Path,
+    change_stages: tuple[tuple[str, DeliveryStage], ...] = (("change-a", DeliveryStage.COMPLETED),),
+) -> tuple[Path, Path]:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"
     package_root = repository / ".owlbear/delivery/packages"
@@ -905,25 +908,26 @@ def _seed_loader_composed_completed_change(tmp_path: Path) -> tuple[Path, Path]:
     coordinator = PortfolioCoordinator(runtime_root)
     manager = ChangeWorkspaceManager(repository, worktree_root, coordinator, "main", "origin")
     store = DesignPackageStore(package_root, repository, transaction_root=runtime_root)
-    intent = b"loader-composed intent\n"
-    design = b"loader-composed design\n"
-    contract = _contract("change-a", intent, design)
-    package = store.create("change-a", intent, design)
-    store.publish_contract("change-a", package.package_id, _canonical(contract), lambda *_content: None)
-    coordination = manager.ensure("change-a")
-    runtime = _runtime(
-        runtime_root,
-        contract,
-        manager,
-        DeliveryStage.COMPLETED,
-        coordination.last_reviewed_commit,
-    )
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
-    change_root = runtime_root / "changes" / "change-a"
-    (change_root / "contract.json").write_bytes(_canonical(contract))
-    (change_root / "admission.json").write_bytes(
-        _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
-    )
+    for change_id, stage in change_stages:
+        intent = f"loader-composed intent {change_id}\n".encode()
+        design = f"loader-composed design {change_id}\n".encode()
+        contract = _contract(change_id, intent, design)
+        package = store.create(change_id, intent, design)
+        store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
+        coordination = manager.ensure(change_id)
+        runtime = _runtime(
+            runtime_root,
+            contract,
+            manager,
+            stage,
+            coordination.last_reviewed_commit,
+        )
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        change_root = runtime_root / "changes" / change_id
+        (change_root / "contract.json").write_bytes(_canonical(contract))
+        (change_root / "admission.json").write_bytes(
+            _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
+        )
     return repository, runtime_root
 
 
@@ -1213,10 +1217,10 @@ def test_public_mutation_distinguishes_engine_custody_from_coordination_damage(
         assert path.read_bytes() == b"{"
 
 
-def _engine_action(application: PortfolioApplication) -> ChangeContinuationAction:
-    acquired = application.acquire_change_action(_continuation_request(application))
+def _engine_action(application: PortfolioApplication, change_id: str = "change-a") -> ChangeContinuationAction:
+    acquired = application.acquire_change_action(_continuation_request(application, change_id))
     if acquired.kind == "reconciled":
-        acquired = application.acquire_change_action(_continuation_request(application))
+        acquired = application.acquire_change_action(_continuation_request(application, change_id))
     assert acquired.kind == "acquired", acquired
     assert acquired.engine_action is not None, acquired
     return acquired.engine_action
@@ -1236,6 +1240,21 @@ def _attach_local_target(application: PortfolioApplication, tmp_path: Path) -> P
     _git(repository, "remote", operation, "origin", str(remote))
     _git(repository, "push", "origin", "HEAD:refs/heads/main")
     return remote
+
+
+def _workspace_mutation_snapshot(worktree: Path) -> tuple[dict[str, bytes], bytes, tuple[str, ...], str]:
+    index_path = Path(_git(worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    refs = tuple(
+        line
+        for line in _git(worktree, "show-ref").splitlines()
+        if not line.endswith("refs/remotes/origin/owlbear/delivery-state")
+    )
+    return (
+        _file_bytes(worktree),
+        index_path.read_bytes(),
+        refs,
+        _git(worktree, "status", "--porcelain=v1", "--untracked-files=all"),
+    )
 
 
 def _attach_engine_publication(application: PortfolioApplication, tmp_path: Path) -> tuple[_Provider, Path]:
@@ -1634,6 +1653,8 @@ def test_engine_finished_action_requires_original_journal_before_advancing(tmp_p
     assert result.reason_code == "engine-action-blocked"
     assert result.failure.attempt_id == action.operation_id
     assert result.failure.code == DeliveryRuntimeReconciliationError.code
+    assert "original intent/result journal cannot be verified" in result.failure.retry_condition
+    assert "do not reconstruct or retry effects" in result.failure.retry_condition
     assert coordinator.show("change-a").continuation_action.operation_id == action.operation_id
     assert not coordinator.continuation_record_path("change-a", reopened._continuation_operation_id(request)).exists()
     assert provider.set_pull_request_draft_state.call_count == 1
@@ -1654,7 +1675,12 @@ def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: 
     assert result.kind == "blocked"
     assert result.reason_code == ("engine-action-interrupted" if interrupted else "engine-action-failed")
     assert result.failure.attempt_id == action.operation_id
-    assert "D03" in result.failure.retry_condition
+    if interrupted:
+        assert "authoritative result for this operation is unavailable" in result.failure.retry_condition
+    else:
+        assert "Automatic retry is unavailable for this recorded failure" in result.failure.retry_condition
+    assert "release custody" in result.failure.retry_condition
+    assert "start a replacement" in result.failure.retry_condition
     reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
     assert _execute_engine(reopened, action) == result
     stopped = reopened.acquire_change_action(_continuation_request(reopened))
@@ -2649,7 +2675,7 @@ def test_continuation_preserves_failed_activation_identity(tmp_path: Path, *, wr
     assert stopped.failure.claim_id == claim.claim_id
     assert stopped.failure.attempt_id == claim.attempt_id
     assert "injected writer persistence failure" in stopped.failure.detail
-    assert "D03" in stopped.failure.retry_condition
+    assert "host/worker evidence is missing" in stopped.failure.retry_condition
     assert not stopped.readiness.executable
     with pytest.raises(ValueError, match="reason_code"):
         DeliveryContinuationResult.model_validate(stopped.model_dump() | {"reason_code": stopped.failure.code})
@@ -8408,6 +8434,305 @@ def test_loader_composed_finalization_admits_descendant_and_replays_after_reload
     assert reloaded.finalize_change("change-a", finalization_request) == finalization
 
 
+def _prepare_loader_finalized_change(application: PortfolioApplication, change_id: str) -> str:
+    runtime = application._runtimes[change_id]
+    application.sync_change_with_current_target(change_id, f"before-{change_id}")
+    coordination = application._coordinator.show(change_id)
+    exact_head = _commit_local_descendant(coordination, f"{change_id}-finalization.txt")
+    finalization = application.finalize_change(change_id, _finalization_request(change_id, exact_head))
+    publisher = application._draft_pull_request_publisher
+    assert publisher is not None
+    publisher.publish(
+        CreateOrReconcileDraftPullRequest(
+            change_id=change_id,
+            operation_id=f"create-{change_id}",
+            published_head=exact_head,
+            title=f"Delivery {change_id}",
+            generated_summary=f"Finalized {change_id}.",
+        )
+    )
+    checkpoint = runtime.checkpoint_publication_state()
+    assert checkpoint.pending_checkpoint is not None
+    runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
+    runtime.acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+    runtime.record_publication_identity(
+        DeliveryChangePublicationIdentity(
+            change_id=change_id,
+            repository="example/project",
+            number=7 if change_id == "change-a" else 8,
+            node_id=f"PR_node_{7 if change_id == 'change-a' else 8}",
+            head_sha=exact_head,
+        )
+    )
+    state_publisher = application._delivery_state_publisher
+    assert state_publisher is not None
+    state_publisher.publish(
+        change_id=change_id,
+        package_id=application._package_store.read_verified(change_id).package_id,
+        coordination=application._coordinator.show(change_id),
+        runtime=runtime,
+        admission=DeliveryAdmissionReceipt.model_validate_json(
+            (application._target_root / "changes" / change_id / "admission.json").read_bytes()
+        ),
+        operation_id=f"seed-state-{change_id}",
+        captured_at=datetime(2026, 8, 4, tzinfo=UTC),
+    )
+    runtime.acknowledge_pending_publication(hashlib.sha256(runtime.frontier_bytes()).hexdigest())
+    assert runtime.pending_state_publication() is None
+    assert finalization.exact_head == exact_head
+    return exact_head
+
+
+def _loader_composed_engine_fixture(tmp_path: Path):
+    repository, runtime_root = _seed_loader_composed_completed_change(
+        tmp_path,
+        (
+            ("change-a", DeliveryStage.COMPLETED),
+            ("change-b", DeliveryStage.COMPLETED),
+            ("change-c", DeliveryStage.PLANNING),
+        ),
+    )
+    provider = _Provider(lose_draft_state_response=True)
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    remote = _attach_local_target(application, tmp_path)
+    head_a = _prepare_loader_finalized_change(application, "change-a")
+    head_b = _prepare_loader_finalized_change(application, "change-b")
+    return repository, runtime_root, remote, provider, application, head_a, head_b
+
+
+def _execute_with_result_publication_crash(
+    application: PortfolioApplication,
+    target_action: ChangeContinuationAction,
+) -> None:
+    original_finish = application._coordinator.finish_continuation_action
+
+    def crash_at_result_publication(action, result, finished_at, *, release):
+        if action.operation_id == target_action.operation_id:
+            message = "injected result publication crash"
+            raise RuntimeError(message)
+        original_finish(action, result, finished_at, release=release)
+
+    with (
+        patch.object(application._coordinator, "finish_continuation_action", crash_at_result_publication),
+        pytest.raises(RuntimeError, match="injected result publication crash"),
+    ):
+        _execute_engine(application, target_action)
+
+
+def _make_provider_readback_unavailable(provider: _Provider, b_number: int) -> None:
+    original_read = provider.read_pull_request
+    fail_read = False
+
+    def read_change_b(repository_name: str, number: int) -> PublicationPullRequest:
+        if fail_read and number == b_number:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                "read_pull_request",
+                "provider readback unavailable",
+                retry_safe=False,
+            )
+        return original_read(repository_name, number)
+
+    original_set = provider.set_pull_request_draft_state
+
+    def mutate_change_b(request):
+        nonlocal fail_read
+        try:
+            return original_set(request)
+        finally:
+            fail_read = True
+
+    provider.read_pull_request = read_change_b
+    provider.set_pull_request_draft_state = mutate_change_b
+
+
+def _execute_loader_failure_case(
+    fixture: tuple[Path, Path, Path, _Provider, PortfolioApplication, str, str],
+    action_b: ChangeContinuationAction,
+    failure_mode: str,
+) -> tuple[PortfolioApplication, DeliveryEngineActionResult, object, object, object, str, bool]:
+    repository, _runtime_root, remote, provider, reloaded, _head_a, _head_b = fixture
+    runtime_b = reloaded._runtimes["change-b"]
+    budget_before = runtime_b.retry_ledger().read()
+    if failure_mode == "unknown-result":
+        provider.lose_draft_state_response = False
+        _execute_with_result_publication_crash(reloaded, action_b)
+        assert provider.draft_state_calls == 2
+        result_path = reloaded._coordinator.continuation_record_path("change-b", action_b.operation_id, result=True)
+        assert (runtime_b.ready_receipt() is not None, not result_path.exists()) == (True, True)
+        _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+        _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+        restarted = load_delivery_application(
+            _startup_config(),
+            workspace_root=repository,
+            publication_provider=provider,
+        )
+        contained = _execute_engine(restarted, action_b)
+    else:
+        _make_provider_readback_unavailable(provider, 8)
+        restarted = reloaded
+        contained = _execute_engine(restarted, action_b)
+    remote_state_head = _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
+    workspace = _workspace_mutation_snapshot(restarted._coordinator.show("change-b").worktree_path)
+    budget_after = restarted._runtimes["change-b"].retry_ledger().read()
+    return (
+        restarted,
+        contained,
+        budget_before,
+        budget_after,
+        workspace,
+        remote_state_head,
+        failure_mode == "unknown-result",
+    )
+
+
+def _mutate_loader_workspace(worktree: Path, variant: str) -> Path:
+    if variant == "dirty":
+        path = worktree / "product.txt"
+        path.write_text("foreign tracked changes\n", encoding="utf-8")
+    elif variant == "staged":
+        path = worktree / "staged.txt"
+        path.write_text("pre-existing staged changes\n", encoding="utf-8")
+        _git(worktree, "add", path.name)
+    else:
+        path = worktree / ".private-input"
+        path.write_text("private input\n", encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("workspace_variant", ["dirty", "staged", "private"])
+def test_loader_composed_engine_preflight_contains_workspace_variants(
+    tmp_path: Path,
+    workspace_variant: str,
+) -> None:
+    _repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    action = _engine_action(application, "change-b")
+    worktree = application._coordinator.show("change-b").worktree_path
+    changed_path = _mutate_loader_workspace(worktree, workspace_variant)
+    workspace_before = _workspace_mutation_snapshot(worktree)
+    budget_before = application._runtimes["change-b"].retry_ledger().read()
+    remote_state_before = _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
+    sibling_frontier = application._runtimes["change-a"].frontier_bytes()
+    sibling_publication = application._runtimes["change-a"].checkpoint_publication_state()
+
+    result = _execute_engine(application, action)
+
+    assert result.kind == "stale"
+    assert result.reason_code == "readiness-changed"
+    assert provider.draft_state_calls == 0
+    assert application._runtimes["change-b"].ready_receipt() is None
+    assert _workspace_mutation_snapshot(worktree) == workspace_before
+    assert application._runtimes["change-b"].retry_ledger().read() == budget_before
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == remote_state_before
+    assert application._runtimes["change-a"].frontier_bytes() == sibling_frontier
+    assert application._runtimes["change-a"].checkpoint_publication_state() == sibling_publication
+    started_path = application._coordinator.continuation_record_path("change-b", action.operation_id).with_name(
+        "started.json"
+    )
+    assert not started_path.exists()
+    assert _execute_engine(application, action) == result
+    assert provider.draft_state_calls == 0
+    assert application._runtimes["change-b"].retry_ledger().read() == budget_before
+    assert changed_path.exists()
+
+
+@pytest.mark.parametrize("failure_mode", ["unknown-result", "unknown-readback"])
+def test_loader_composed_engine_replay_contains_unknown_owner_and_preserves_sibling_progress(  # noqa: PLR0915 - one parameterized loader oracle covers both unknown-result modes.
+    tmp_path: Path,
+    failure_mode: str,
+) -> None:
+    fixture = _loader_composed_engine_fixture(tmp_path)
+    repository, _runtime_root, remote, provider, application, head_a, head_b = fixture
+
+    action_a = _engine_action(application, "change-a")
+    completed = _execute_engine(application, action_a)
+    assert (
+        completed.kind,
+        completed.ready.head_sha if completed.ready is not None else None,
+        provider.draft_state_calls,
+    ) == ("completed", head_a, 1)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    sibling_frontier = reloaded._runtimes["change-b"].frontier_bytes()
+    sibling_publication = reloaded._runtimes["change-b"].checkpoint_publication_state()
+    remote_state_head = _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
+    replayed = _execute_engine(reloaded, action_a)
+    assert replayed == completed
+    assert provider.draft_state_calls == 1
+    assert reloaded.get_change("change-a").continuation_action is not None
+    assert reloaded.get_change("change-a").continuation_action.finished_at is not None
+    assert (
+        reloaded._runtimes["change-b"].frontier_bytes(),
+        reloaded._runtimes["change-b"].checkpoint_publication_state(),
+    ) == (sibling_frontier, sibling_publication)
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == remote_state_head
+    assert reloaded._runtimes["change-b"].pending_state_publication() is None
+
+    action_b = _engine_action(reloaded, "change-b")
+    (
+        restarted,
+        contained,
+        budget_before,
+        budget_after,
+        workspace_after_containment,
+        remote_state_head_after_effect,
+        unknown_result,
+    ) = _execute_loader_failure_case(
+        fixture,
+        action_b,
+        failure_mode,
+    )
+    assert (contained.kind, provider.draft_state_calls) == ("blocked", 2)
+    assert contained.reason_code == ("engine-action-interrupted" if unknown_result else "engine-action-failed")
+    assert contained.ready is None
+    assert contained.action == action_b
+    assert contained.failure is not None
+    if unknown_result:
+        assert contained.failure.detail == "Original owner result is unknown."
+    else:
+        assert "provider readback unavailable" in contained.failure.detail
+        assert "release custody" in contained.failure.retry_condition
+        assert "replacement" in contained.failure.retry_condition
+    assert restarted.get_change("change-b").continuation_action == action_b
+    assert restarted.get_change("change-b").continuation_action.finished_at is None
+    if unknown_result:
+        assert restarted._runtimes["change-b"].ready_receipt() is not None
+    else:
+        assert restarted._runtimes["change-b"].ready_receipt() is None
+    budget_after = restarted._runtimes["change-b"].retry_ledger().read()
+    if unknown_result:
+        assert budget_after == budget_before
+    else:
+        assert budget_after.version == budget_before.version + 1
+
+    repeated = _execute_engine(restarted, action_b)
+    assert repeated == contained
+    assert provider.draft_state_calls == 2
+    assert restarted._runtimes["change-b"].retry_ledger().read() == budget_after
+    assert (
+        _workspace_mutation_snapshot(restarted._coordinator.show("change-b").worktree_path)
+        == workspace_after_containment
+    )
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == remote_state_head_after_effect
+    sibling = restarted.acquire_change_action(_continuation_request(restarted, "change-c"))
+    assert sibling.kind == "acquired"
+    assert sibling.launch is not None
+    assert sibling.launch.change_id == "change-c"
+    assert restarted._runtimes["change-b"].finalization().exact_head == head_b
+
+
 def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     host_config_path = repository / ".owlbear/delivery/runtime/host.json"
@@ -11139,8 +11464,8 @@ def test_repair_change_diagnoses_but_exclusion_required_to_apply(tmp_path: Path)
     assert proposal.outcome_id == package.outcome_id
     assert proposal.claim_id == package.claim.claim_id
 
-    assert "host-owned exclusion" in proposal.summary
-    assert "Custody and files remain unchanged" in proposal.consequence
+    assert "pending verified owner evidence" in proposal.summary
+    assert "host/worker closure" in proposal.consequence
     with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.repair_change("change-a", proposal.proposal_id)
 
@@ -11197,6 +11522,7 @@ def test_get_change_composes_detail_health_and_repair_proposal(tmp_path: Path, *
     assert view.repair is not None
     assert view.repair.proposal is not None
     assert view.repair.proposal.outcome_id == view.detail.card.work_item_id
+    assert view.readiness.action is None
 
 
 def test_get_change_retains_unresolved_outcome_evidence_with_publication_detail(tmp_path: Path) -> None:

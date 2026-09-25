@@ -411,7 +411,9 @@ class DeliveryWorkerExclusionRequiredError(RuntimeError):
             "Custody and files are unchanged. Recovery requires supported worker exclusion "
             "covering the invocation, all descendant writers and outstanding tool jobs, with "
             "no ability to resume, or restart-durable exclusion from every managed filesystem, "
-            "Git and mutation resource. Timeout and caller confirmation are not evidence."
+            "Git and mutation resource. Automatic recovery is unavailable while this evidence is "
+            "missing; the original Change remains contained until the exclusion is verified. Timeout "
+            "and caller confirmation are not evidence."
         )
 
 
@@ -574,7 +576,7 @@ class RetryRepairBinding(_RecoveryModel):
     created_at: str = Field(min_length=1, max_length=64)
 
     @classmethod
-    def create(
+    def create(  # noqa: PLR0913 - binding identity is defined by these exact durable fields.
         cls,
         *,
         change_id: str,
@@ -585,6 +587,7 @@ class RetryRepairBinding(_RecoveryModel):
         outcome_id: str,
         created_at: str,
     ) -> RetryRepairBinding:
+        """Create a binding whose identity is derived from its durable fields."""
         values = {
             "change_id": change_id,
             "episode_id": episode_id,

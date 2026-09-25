@@ -6721,7 +6721,9 @@ class PortfolioApplication:
                                 code=DeliveryWorkerExclusionRequiredError.code,
                                 detail=str(DeliveryWorkerExclusionRequiredError()),
                                 retry_condition=(
-                                    "Supported host-owned exclusion evidence is required before recovery."
+                                    "Automatic recovery is unavailable while host/worker evidence is missing. "
+                                    "Resume awaits verified closure that excludes all descendants and tool jobs "
+                                    "and records settlement."
                                 ),
                             )
                         )
@@ -6865,7 +6867,9 @@ class PortfolioApplication:
                     code=exc.code,
                     detail=str(exc),
                     retry_condition=(
-                        "Preserve original action journals for D03 reconciliation; do not reconstruct or retry effects."
+                        "The original intent/result journal cannot be verified. The Delivery engine owner must "
+                        "establish matching authoritative records and required custody before resume; do not "
+                        "reconstruct or retry effects."
                         if action is not None
                         else "Restore readable custody through maintenance diagnosis; do not release unknown writers."
                     ),
@@ -7243,6 +7247,16 @@ class PortfolioApplication:
     def _engine_action_failure(
         action: ChangeContinuationAction, reason: str, detail: str, code: str | None = None
     ) -> DeliveryEngineActionResult:
+        retry_condition = (
+            "Preserve exact operation custody and owner journals. The authoritative result for this operation is "
+            "unavailable; automatic recovery is unavailable while evidence is missing. Resume awaits verified "
+            "host/worker closure and settlement; do not release custody, infer worker termination, or start a "
+            "replacement."
+            if reason == "engine-action-interrupted"
+            else "Preserve exact operation custody and owner journals. Automatic retry is unavailable for this "
+            "recorded failure; the responsible owner must resolve the reported condition before resume. Do not "
+            "release custody, infer worker termination, or start a replacement."
+        )
         return DeliveryEngineActionResult(
             action=action,
             kind="blocked",
@@ -7253,10 +7267,7 @@ class PortfolioApplication:
                 attempt_id=action.operation_id,
                 code=code or "ERR_DELIVERY_ENGINE_ACTION_BLOCKED",
                 detail=_checkpoint_error_detail(detail, "Engine operation did not complete."),
-                retry_condition=(
-                    "Preserve exact operation custody and owner journals. D03 repair/reconciliation is required; "
-                    "do not release custody, infer worker termination, or start a replacement operation."
-                ),
+                retry_condition=retry_condition,
             ),
         )
 
@@ -7534,8 +7545,8 @@ class PortfolioApplication:
                                 "no worker was dispatched by this call."
                             ),
                             retry_condition=(
-                                "Inspect get_change before continuing. Do not redispatch an existing worker or recover "
-                                "its claim without establishing that the worker has stopped."
+                                "Inspect get_change before continuing. The responsible worker owner must provide "
+                                "closure or exclusion evidence before resume; do not redispatch or release its claim."
                             ),
                         ),
                     ),
@@ -7856,10 +7867,11 @@ class PortfolioApplication:
                     attempt_id=claim.attempt_id,
                     claim_id=claim.claim_id,
                     expected_frontier_digest=snapshot.version,
-                    summary="Recovery requires supported host-owned exclusion of the stale Builder invocation.",
+                    summary="Recovery is contained pending verified owner evidence for the stale Builder invocation.",
                     consequence=(
-                        "Custody and files remain unchanged without verified exclusion of every descendant writer "
-                        "and outstanding tool job. Caller confirmation alone cannot authorize recovery."
+                        "Custody and files remain unchanged. Resume awaits independently verified host/worker closure "
+                        "or exclusion and settlement; caller confirmation, timeout, or a stop assertion cannot "
+                        "authorize recovery."
                     ),
                 )
                 for binding in snapshot.frontier.bindings
@@ -9243,8 +9255,10 @@ class PortfolioApplication:
                 code=getattr(exc, "code", PortfolioApplicationError.code),
                 detail=str(exc) or "worker launch preparation failed after claim activation",
                 retry_condition=(
-                    "Retain the exact claim and any writer custody. D03 closed-worker recovery is required; "
-                    "do not redispatch, infer termination, or use confirmed_lost recovery."
+                    "Retain the exact claim and any writer custody. Automatic recovery is unavailable while "
+                    "host/worker evidence is missing. Resume awaits verified closure that excludes all descendants "
+                    "and tool jobs and records settlement. Do not redispatch, infer termination, or use caller "
+                    "confirmation as recovery evidence."
                     if claim.continuation
                     else "Recover the exact failed claim after reconciling writer custody."
                 ),

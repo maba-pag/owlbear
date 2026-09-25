@@ -546,11 +546,16 @@ class WorkItemProjector:
                             "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
                             "claim-custody-unreconciled": (
                                 "The exact Build claim has unreconciled writer custody. Preserve it; "
-                                "D03 closed-worker recovery is required before replacement."
+                                "automatic recovery is unavailable while host/worker evidence is missing. Resume "
+                                "awaits verified closure that excludes all descendants and tool jobs and records "
+                                "settlement."
                             ),
                             "finalization-failed": (
-                                "Finalization failed with custody retained. D03 closed-worker recovery is required; "
-                                "diagnostic retirement cannot release custody or authorize retry."
+                                "Finalization failed with custody retained. The authoritative result for this "
+                                "operation is unavailable; automatic recovery is unavailable while host/worker "
+                                "evidence is missing. Resume awaits verified closure evidence for this invocation "
+                                "that excludes all descendants and tool jobs and records settlement. Diagnostic "
+                                "retirement cannot release custody or authorize retry."
                             ),
                             "review-repair": "Review repair requires a new Change commit before verification.",
                             "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
