@@ -16,7 +16,7 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Implementation checkpoint `7da4c06`, against decision checkpoint `2e377a6`.** The default-loader regression
+**Final source `02bcf7b`, against decision checkpoint `2e377a6`.** The default-loader regression
 exercises the existing engine and publication owners, rather than replacing them: a lost provider
 response is resolved by exact readback, and a fresh application returns the durable engine result
 without another provider mutation. An unresolved provider result retains its original operation;
@@ -68,8 +68,10 @@ The final loader-instance correction passed **both parameterized replay cases** 
 Independent read-only review of the complete candidate against `2e377a6` found no significant issues
 after its findings were addressed. No unresolved bounded-C product defect is identified in this
 candidate; it is ready for PR review under the revised contract, not the old full-automation promise.
-Pinned-interpreter verification, external checks and package acceptance remain pending. Automated
-validation is recorded at publication; D/E, merge and activation remain unauthorized.
+Pinned-interpreter verification, external checks and package acceptance remain pending. Final-source
+automated validation stopped at its timeout circuit breaker and prohibited retry; no final-source
+CodeQL or automated-review pass is claimed. Source/Cockpit/ecosystem CI at `02bcf7b` is
+`action_required`, not passing proof. Secret scans passed. D/E, merge and activation remain unauthorized.
 
 ### Completion ledger
 
