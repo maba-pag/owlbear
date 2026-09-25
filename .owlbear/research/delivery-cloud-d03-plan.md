@@ -9,8 +9,8 @@ D03-P changed only this file. The programme and shared governance remain unchang
 
 ### Current handoff
 
-The current readiness repair starts at **`dbb5751`**, with source
-**`6db0fec3cc15c84f36498b39813a12b5cdcda0f6`**, following the
+The current readiness repair is **`9d78f94f993dc16029dfea2b17705fa12fdf1540`**, starting at
+**`dbb5751`** with prior source **`6db0fec3cc15c84f36498b39813a12b5cdcda0f6`**, following the
 [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5828310357).
 Its bounded scope is shared readiness/acquisition finalization retry identity and
 the pending accepted-repair, restart, budget and transaction-crash proof. The prior
@@ -20,7 +20,7 @@ It preserves the partial repairs from **`9bc8cfb`**, **`d7b8369`** and review ba
 **`4ea5457`**, following the
 [existing/missing implementation review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5803071146)
 and [repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5809465434).
-It addresses Git environment overrides before admission, durable repair-to-original-action
+Earlier checkpoints address Git environment overrides before admission, durable repair-to-original-action
 retry accounting, hard-death proof-store publication replay, and bounded pre-journal
 staging artifacts. These repairs do not establish production custody/proof/publication
 composition or whole-C resumption. The reviewed identity, admission/no-follow,
@@ -52,6 +52,49 @@ remain unchanged. Projection reads repair bindings without completing pending tr
 mutating callers retain transaction recovery by default. The successful-settlement,
 Change/action/target/finalization and consumed-budget fences remain unchanged.
 
+**Current delegated proof at `9d78f94`.** The sole source/test writer used uv **0.12.18**
+and locked Python **3.14.7**, with
+`uv run --locked --python 3.14.7 --project serve/delivery pytest -q` and explicit nodes.
+Both `owlbear_delivery.__file__` and `portfolio_application.__file__` resolved under this
+checkout's `serve/delivery/src/owlbear_delivery/`. The parent did not rerun delegated checks.
+
+| Focused selection | Writer-observed result |
+| --- | --- |
+| `test_retry_ledger.py`: accepted repair/new head, owner acceptance/budget, unaccepted binding, contradictory terminal result, repair-link/settlement transaction interruption | **10 passed**, 3.25s; includes all six interruption-stage/transaction combinations |
+| `test_recovery.py`: completed-outcome repair replay, accepted repair/finalizer restart, review-repair readiness/acquisition, finalizer budget/restart and interrupted report accounting | **6 passed**, 8.96s |
+| `test_portfolio_application.py`: exact-runtime delegation, acceptance budget/readiness and legacy worker budgets | **9 passed**, 5.24s |
+| `test_retry_ledger.py`: explicit acceptance observation, engine commit aliases, unrelated task progress, isolated engine contexts and transient budget/CAS | **7 passed**, 3.20s |
+| Final `test_completed_repair_result_resumes_original_finalizer_after_restart` and `test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity` | **3 passed**, 6.25s; overlaps the six-case recovery selection |
+
+The earlier **35-pass** ledger-file run overlaps the bounded ledger selections above; do not sum
+these results. The final three cases assert a non-null original finalization identity, accepted
+head-changing repair/restart with attempts **2 → 3** in the same episode, and matching backoff/
+exhaustion projection and acquisition. They also assert pending transaction manifest bytes remain
+unchanged during the readiness overlay. No red run against the untouched `dbb5751` baseline is
+claimed. An intermediate worker-key regression was observed and repaired before publication.
+
+Scoped application Ruff check passed. The combined check retains six pre-existing findings:
+`recovery.py` `D102`/`PLR0913`, and two each of `FBT001`/`E501` in `test_recovery.py`.
+The application format check passed; recovery source/tests retain pre-existing format differences.
+The writer reports no new remaining diagnostics/format hunks, and passing compileall and whitespace
+checks. These scoped results do not establish aggregate static acceptance.
+
+Final independent read-only review found **no actionable introduced defect**. An earlier proposed
+stale-binding/precedence finding was not retained for the required fresh-acquisition lifecycle:
+resumption installs a successor finalizer attempt, so a later invalidation does not look up the
+old failed attempt's binding. The reviewer did not run tests. Successor finalization followed by
+another review repair, same-process owner-result/commit-alias projection, and an interrupted
+binding/summary publication specifically remain unproved by these new tests; the pending
+transaction regression tests non-recovery, not all transaction matrices.
+
+Final-source CodeQL found **zero Python alerts**. Automated Code Review could not load its
+configured model; the wrapper's success label is not a review pass. Secret scanning passed before
+source publication. Source, Cockpit and Agent ecosystem runs inspected at **`9d78f94`** are
+**`action_required`**, not passing proof. No approval, protection change, live service or
+production-state mutation was performed. **C remains partial; D was not started.**
+
+#### Prior verification evidence
+
 Prior delegated checks at **`6db0fec`**: `compileall` passed for the two changed source modules
 and their two test modules using system Python **3.12.3**; `git diff --check` passed and the
 checkout remained clean. These are syntax/whitespace checks, not locked-runtime test evidence.
@@ -78,7 +121,7 @@ CodeQL **timed out**; those results are not final-source validation. Source, Coc
 ecosystem runs freshly inspected at **`6db0fec`** are **`action_required`**, not passing proof;
 no approval or bypass was performed. Historical `dev` failures do not establish a failure in
 this final continuation delta. No live services, records or provider effects were activated.
-For this documentation-only verification update, secret scanning passed; automated Code Review
+For documentation-only verification checkpoint **`dbb5751`**, secret scanning passed; automated Code Review
 was again unavailable because its configured model could not load, and CodeQL skipped the
 non-code changes. Neither result supplies final-source executable or security-scan proof.
 
