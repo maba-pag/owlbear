@@ -311,7 +311,8 @@ shortcuts were rejected, not approved. Writer and parent changed only this plan;
 confirmed `## Contract` onward byte-identical to `a50d524`, and local links/anchors and whitespace
 checks passed. No product tests, builds, installs or live actions were run. Hosted source/Cockpit/
 ecosystem runs at `a50d524` were skipped, not passing evidence. This review accepts the diagnosis
-only; it does not accept C or resolve the user decision.
+only; it does not accept C or resolve the user decision. Automated validation could not run its code
+review binary; CodeQL skipped this documentation-only repair. Neither is product validation evidence.
 
 ## Contract
 
