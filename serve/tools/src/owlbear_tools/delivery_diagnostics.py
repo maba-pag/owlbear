@@ -22,9 +22,7 @@ MAX_LOG_BYTES = 64 << 10
 
 SUPPORTED_VERSIONS = {
     "config": 2,
-    "contract": 2,
     "frontier": 18,
-    "admission": 1,
     "coordination": 1,
     "snapshot": 2,
     "host": 1,
@@ -40,11 +38,16 @@ _SAFE_LOCATORS = {
     "host": ".owlbear/delivery/runtime/host.json",
     "host_local": ".owlbear/delivery/runtime/host.local.json",
     "frontier": ".owlbear/delivery/runtime/changes/<redacted>/frontier.json",
-    "contract": ".owlbear/delivery/runtime/changes/<redacted>/contract.json",
-    "admission": ".owlbear/delivery/runtime/changes/<redacted>/admission.json",
     "coordination": ".owlbear/delivery/runtime/coordination/changes/<redacted>.json",
     "snapshot": ".owlbear/delivery/state/<redacted>/snapshot.json",
     "transaction": ".owlbear/delivery/runtime/transactions/<opaque>.yaml",
+    "transaction_legacy": ".owlbear/delivery/runtime/changes/<redacted>/transactions/<opaque>.yaml",
+    "transaction_package": ".owlbear/delivery/packages/<redacted>/transactions/<opaque>.yaml",
+    "transaction_package_root": ".owlbear/delivery/packages/transactions/<opaque>.yaml",
+    "transaction_finalization": (
+        ".owlbear/delivery/runtime/finalization-reports/<redacted>/transactions/<opaque>.yaml"
+    ),
+    "transaction_proof": ".owlbear/delivery/runtime/proof-attempts/<redacted>/transactions/<opaque>.yaml",
     "log": ".owlbear/delivery/runtime/logs/<opaque>",
 }
 
@@ -77,9 +80,7 @@ class _Inspection:
             "config": 0,
             "host": 0,
             "host_local": 0,
-            "contract": 0,
             "frontier": 0,
-            "admission": 0,
             "coordination": 0,
             "snapshot": 0,
             "packages": 0,
@@ -166,6 +167,7 @@ class _Inspection:
                 "owlbear_tools": "unknown",
             },
             "counts": dict(self.counts),
+            "bytes_inspected": self.total_bytes,
             "diagnostic_codes": sorted(self.diagnostics),
             "pending_effects": "unknown" if self.transaction_scan_unknown else self.counts["pending_transactions"] > 0,
             "writes_performed": False,
@@ -192,12 +194,11 @@ def _absolute_without_following(path: Path) -> Path:
     return Path(os.path.normpath(os.fspath(candidate)))
 
 
-def _has_delivery_marker(root_fd: int) -> bool:
+def _has_project_marker(root_fd: int) -> bool:
     try:
         owlbear_fd = os.open(".owlbear", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd)
         try:
-            delivery = os.stat("delivery", dir_fd=owlbear_fd, follow_symlinks=False)
-            return stat.S_ISDIR(delivery.st_mode)
+            return True
         finally:
             os.close(owlbear_fd)
     except OSError:
@@ -212,7 +213,7 @@ def _discover_project_root(start: Path) -> Path:
             continue
         root_fd, descriptors = opened
         try:
-            if _has_delivery_marker(root_fd):
+            if _has_project_marker(root_fd):
                 return candidate
         finally:
             for descriptor in reversed(descriptors):
@@ -329,8 +330,10 @@ def _close_directory(
         current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         if not _same_identity(current, opened):
             inspection.diagnostic("REPLACED_DURING_INSPECTION")
+            inspection.transaction_scan_unknown = True
     except OSError:
         inspection.diagnostic("DIRECTORY_UNREADABLE")
+        inspection.transaction_scan_unknown = True
     finally:
         os.close(fd)
 
@@ -350,6 +353,7 @@ def _directory_names(fd: int, inspection: _Inspection) -> list[str]:
                 names.append(entry.name)
     except OSError:
         inspection.diagnostic("DIRECTORY_UNREADABLE")
+        inspection.transaction_scan_unknown = True
     return names
 
 
@@ -398,22 +402,21 @@ def _safe_read(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
         remaining = min(limit, MAX_TOTAL_BYTES - inspection.total_bytes)
         chunks: list[bytes] = []
         consumed = 0
-        while consumed <= remaining:
-            chunk = os.read(fd, min(65_536, remaining - consumed + 1))
+        charged = False
+        while consumed < remaining:
+            chunk = os.read(fd, min(65_536, remaining - consumed))
             if not chunk:
                 break
             chunks.append(chunk)
             consumed += len(chunk)
-            if consumed > remaining:
-                inspection.diagnostic("TOTAL_LIMIT_EXCEEDED" if remaining < limit else "OVERSIZED_RECORD")
-                return None, size
         after_fd = os.fstat(fd)
+        inspection.total_bytes += consumed
+        charged = True
         try:
             after_path = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         except OSError:
             inspection.diagnostic("REPLACED_DURING_READ")
             return None, size
-        inspection.total_bytes += consumed
         if not _same_file_state(opened, after_fd) or not _same_file_state(before, after_path):
             inspection.diagnostic("REPLACED_DURING_READ")
             return None, size
@@ -422,6 +425,8 @@ def _safe_read(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             return None, size
         return b"".join(chunks), size
     except OSError:
+        if not charged:
+            inspection.total_bytes += consumed
         inspection.diagnostic(f"{kind.upper()}_UNREADABLE")
         return None, size
     finally:
@@ -495,7 +500,7 @@ def _scan_change_records(
     *,
     selected: str | None,
 ) -> None:
-    changes = _open_directory(runtime_fd, "changes", inspection, "CHANGES")
+    changes = _open_optional_pending_directory(runtime_fd, "changes", inspection, "CHANGES")
     if changes is None:
         return
     fd, opened = changes
@@ -503,23 +508,23 @@ def _scan_change_records(
         for name in _directory_names(fd, inspection):
             if not _CHANGE_ID.fullmatch(name):
                 inspection.diagnostic("UNSAFE_ENTRY_NAME")
+                inspection.transaction_scan_unknown = True
                 continue
             if selected is not None and name != selected:
                 continue
             inspection.selected_change_seen = True
             child = _open_directory(fd, name, inspection, "CHANGE")
             if child is None:
+                inspection.transaction_scan_unknown = True
                 continue
             child_fd, child_opened = child
             try:
-                _inspect_file(child_fd, "contract.json", inspection, "contract", required=True)
-                _inspect_file(child_fd, "admission.json", inspection, "admission", required=True)
                 _inspect_file(child_fd, "frontier.json", inspection, "frontier", required=True)
                 transactions = _open_optional_transactions(child_fd, inspection)
                 if transactions is not None:
                     transactions_fd, transactions_opened = transactions
                     try:
-                        _scan_transaction_entries(transactions_fd, inspection)
+                        _scan_transaction_entries(transactions_fd, inspection, kind="transaction_legacy")
                     finally:
                         _close_directory(
                             child_fd,
@@ -568,6 +573,7 @@ def _scan_snapshots(delivery_fd: int, inspection: _Inspection, *, selected: str 
         for name in _directory_names(state_fd, inspection):
             if not _CHANGE_ID.fullmatch(name):
                 inspection.diagnostic("UNSAFE_ENTRY_NAME")
+                inspection.transaction_scan_unknown = True
                 continue
             if selected is not None and name != selected:
                 continue
@@ -584,7 +590,41 @@ def _scan_snapshots(delivery_fd: int, inspection: _Inspection, *, selected: str 
         _close_directory(delivery_fd, "state", state_fd, state_opened, inspection)
 
 
-def _scan_transaction_entries(transactions_fd: int, inspection: _Inspection) -> None:
+def _verify_opaque_transaction(
+    transactions_fd: int,
+    name: str,
+    info: os.stat_result,
+    inspection: _Inspection,
+) -> bool:
+    transaction_fd: int | None = None
+    try:
+        transaction_fd = os.open(
+            name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=transactions_fd,
+        )
+        opened = os.fstat(transaction_fd)
+        after_path = os.stat(name, dir_fd=transactions_fd, follow_symlinks=False)
+        if not _same_file_state(info, opened) or not _same_file_state(info, after_path):
+            inspection.diagnostic("REPLACED_DURING_READ")
+            inspection.transaction_scan_unknown = True
+            return False
+    except OSError:
+        inspection.diagnostic("TRANSACTION_UNREADABLE")
+        inspection.transaction_scan_unknown = True
+        return False
+    finally:
+        if transaction_fd is not None:
+            os.close(transaction_fd)
+    return True
+
+
+def _scan_transaction_entries(
+    transactions_fd: int,
+    inspection: _Inspection,
+    *,
+    kind: str = "transaction",
+) -> None:
     """Inspect only opaque YAML entries in one fixed transaction directory."""
     names = _directory_names(transactions_fd, inspection)
     if inspection.entry_budget_exhausted:
@@ -598,7 +638,7 @@ def _scan_transaction_entries(transactions_fd: int, inspection: _Inspection) -> 
             inspection.diagnostic("TRANSACTION_UNREADABLE")
             inspection.transaction_scan_unknown = True
             continue
-        inspection.record("transaction", size_bytes=int(info.st_size), status="pending-opaque")
+        inspection.record(kind, size_bytes=int(info.st_size), status="pending-opaque")
         if stat.S_ISLNK(info.st_mode):
             inspection.diagnostic("SYMLINK_REJECTED")
             inspection.transaction_scan_unknown = True
@@ -606,6 +646,8 @@ def _scan_transaction_entries(transactions_fd: int, inspection: _Inspection) -> 
         if not stat.S_ISREG(info.st_mode):
             inspection.diagnostic("SPECIAL_FILE_REJECTED")
             inspection.transaction_scan_unknown = True
+            continue
+        if not _verify_opaque_transaction(transactions_fd, name, info, inspection):
             continue
         inspection.counts["pending_transactions"] += 1
         if info.st_size > MAX_RECORD_BYTES:
@@ -633,6 +675,26 @@ def _open_optional_transactions(parent_fd: int, inspection: _Inspection) -> tupl
     return opened
 
 
+def _open_optional_pending_directory(
+    parent_fd: int,
+    name: str,
+    inspection: _Inspection,
+    code_prefix: str,
+) -> tuple[int, os.stat_result] | None:
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError as exc:
+        if exc.errno == errno.ENOENT:
+            return None
+        inspection.diagnostic(f"{code_prefix}_UNREADABLE")
+        inspection.transaction_scan_unknown = True
+        return None
+    opened = _open_directory(parent_fd, name, inspection, code_prefix)
+    if opened is None:
+        inspection.transaction_scan_unknown = True
+    return opened
+
+
 def _scan_transactions(runtime_fd: int, inspection: _Inspection) -> None:
     transactions = _open_optional_transactions(runtime_fd, inspection)
     if transactions is None:
@@ -647,7 +709,7 @@ def _scan_transactions(runtime_fd: int, inspection: _Inspection) -> None:
 def _scan_nested_transaction_families(runtime_fd: int, inspection: _Inspection) -> None:
     """Inspect known nested transaction families without traversing arbitrary runtime data."""
     for family_name in ("finalization-reports", "proof-attempts"):
-        family = _open_directory(runtime_fd, family_name, inspection, family_name.upper())
+        family = _open_optional_pending_directory(runtime_fd, family_name, inspection, family_name.upper())
         if family is None:
             continue
         family_fd, family_opened = family
@@ -667,7 +729,15 @@ def _scan_nested_transaction_families(runtime_fd: int, inspection: _Inspection) 
                     if transactions is not None:
                         transactions_fd, transactions_opened = transactions
                         try:
-                            _scan_transaction_entries(transactions_fd, inspection)
+                            _scan_transaction_entries(
+                                transactions_fd,
+                                inspection,
+                                kind=(
+                                    "transaction_finalization"
+                                    if family_name == "finalization-reports"
+                                    else "transaction_proof"
+                                ),
+                            )
                         finally:
                             _close_directory(
                                 entry_fd,
@@ -682,15 +752,28 @@ def _scan_nested_transaction_families(runtime_fd: int, inspection: _Inspection) 
             _close_directory(runtime_fd, family_name, family_fd, family_opened, inspection)
 
 
+def _scan_package_root_transactions(packages_fd: int, inspection: _Inspection) -> None:
+    transactions = _open_optional_transactions(packages_fd, inspection)
+    if transactions is None:
+        return
+    transactions_fd, transactions_opened = transactions
+    try:
+        _scan_transaction_entries(transactions_fd, inspection, kind="transaction_package_root")
+    finally:
+        _close_directory(packages_fd, "transactions", transactions_fd, transactions_opened, inspection)
+
+
 def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:  # noqa: PLR0912
-    packages = _open_directory(delivery_fd, "packages", inspection, "PACKAGES")
+    packages = _open_optional_pending_directory(delivery_fd, "packages", inspection, "PACKAGES")
     if packages is None:
         return
     packages_fd, packages_opened = packages
     try:
-        for name in _directory_names(packages_fd, inspection):
+        _scan_package_root_transactions(packages_fd, inspection)
+        for name in (entry for entry in _directory_names(packages_fd, inspection) if entry != "transactions"):
             if not _CHANGE_ID.fullmatch(name):
                 inspection.diagnostic("UNSAFE_ENTRY_NAME")
+                inspection.transaction_scan_unknown = True
                 continue
             if selected is not None and name != selected:
                 continue
@@ -698,9 +781,11 @@ def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str |
                 info = os.stat(name, dir_fd=packages_fd, follow_symlinks=False)
             except OSError:
                 inspection.diagnostic("PACKAGES_UNREADABLE")
+                inspection.transaction_scan_unknown = True
                 continue
             if stat.S_ISLNK(info.st_mode):
                 inspection.diagnostic("SYMLINK_REJECTED")
+                inspection.transaction_scan_unknown = True
             elif stat.S_ISDIR(info.st_mode):
                 inspection.counts["packages"] += 1
                 package = _open_directory(packages_fd, name, inspection, "PACKAGE")
@@ -711,7 +796,7 @@ def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str |
                         if transactions is not None:
                             transactions_fd, transactions_opened = transactions
                             try:
-                                _scan_transaction_entries(transactions_fd, inspection)
+                                _scan_transaction_entries(transactions_fd, inspection, kind="transaction_package")
                             finally:
                                 _close_directory(
                                     package_fd,
@@ -722,8 +807,11 @@ def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str |
                                 )
                     finally:
                         _close_directory(packages_fd, name, package_fd, package_opened, inspection)
+                else:
+                    inspection.transaction_scan_unknown = True
             else:
                 inspection.diagnostic("SPECIAL_FILE_REJECTED")
+                inspection.transaction_scan_unknown = True
     finally:
         _close_directory(delivery_fd, "packages", packages_fd, packages_opened, inspection)
 
@@ -763,12 +851,15 @@ def _scan_logs(runtime_fd: int, inspection: _Inspection) -> None:  # noqa: C901,
                 start = max(0, int(info.st_size) - MAX_LOG_BYTES)
                 budget = MAX_TOTAL_BYTES - inspection.total_bytes
                 os.lseek(log_fd, start, os.SEEK_SET)
-                tail = os.read(log_fd, min(MAX_LOG_BYTES, budget) + 1)
+                tail = os.read(log_fd, min(MAX_LOG_BYTES, budget))
+                inspection.total_bytes += len(tail)
                 after = os.fstat(log_fd)
-                inspection.total_bytes += min(len(tail), budget)
-                if len(tail) > budget:
-                    inspection.diagnostic("TOTAL_LIMIT_EXCEEDED")
-                elif not _same_file_state(opened, after) or not _same_file_state(info, after):
+                after_path = os.stat(name, dir_fd=logs_fd, follow_symlinks=False)
+                if (
+                    not _same_file_state(opened, after)
+                    or not _same_file_state(info, after)
+                    or not _same_file_state(info, after_path)
+                ):
                     inspection.diagnostic("REPLACED_DURING_READ")
             except OSError:
                 inspection.diagnostic("LOG_UNREADABLE")
@@ -777,6 +868,50 @@ def _scan_logs(runtime_fd: int, inspection: _Inspection) -> None:  # noqa: C901,
                     os.close(log_fd)
     finally:
         _close_directory(runtime_fd, "logs", logs_fd, logs_opened, inspection)
+
+
+def _scan_runtime(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
+    runtime = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
+    if runtime is None:
+        inspection.transaction_scan_unknown = True
+        return
+    runtime_fd, runtime_opened = runtime
+    try:
+        _inspect_file(runtime_fd, "host.json", inspection, "host")
+        _inspect_file(runtime_fd, "host.local.json", inspection, "host_local")
+        _scan_change_records(runtime_fd, inspection, selected=selected)
+        _scan_coordination(runtime_fd, inspection, selected=selected)
+        _scan_transactions(runtime_fd, inspection)
+        _scan_nested_transaction_families(runtime_fd, inspection)
+        _scan_logs(runtime_fd, inspection)
+    finally:
+        _close_directory(delivery_fd, "runtime", runtime_fd, runtime_opened, inspection)
+
+
+def _inspect_delivery_tree(root_fd: int, inspection: _Inspection, *, selected: str | None) -> str | None:
+    owlbear = _open_directory(root_fd, ".owlbear", inspection, "OWLBEAR", required=True)
+    if owlbear is None:
+        inspection.diagnostic("DELIVERY_ROOT_UNAVAILABLE")
+        return "unavailable"
+    owlbear_fd, owlbear_opened = owlbear
+    try:
+        delivery_diagnostics_before = len(inspection.diagnostics)
+        delivery = _open_directory(owlbear_fd, "delivery", inspection, "DELIVERY")
+        if delivery is None:
+            if len(inspection.diagnostics) == delivery_diagnostics_before:
+                inspection.diagnostic("DELIVERY_STATE_MISSING")
+            return "degraded"
+        delivery_fd, delivery_opened = delivery
+        try:
+            _inspect_file(delivery_fd, "config.json", inspection, "config", required=True)
+            _scan_runtime(delivery_fd, inspection, selected=selected)
+            _scan_snapshots(delivery_fd, inspection, selected=selected)
+            _scan_packages(delivery_fd, inspection, selected=selected)
+        finally:
+            _close_directory(owlbear_fd, "delivery", delivery_fd, delivery_opened, inspection)
+    finally:
+        _close_directory(root_fd, ".owlbear", owlbear_fd, owlbear_opened, inspection)
+    return None
 
 
 def inspect_delivery(project_root: Path | str | None = None, change_id: str | None = None) -> dict[str, object]:
@@ -795,45 +930,26 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
             "diagnostic_codes": ["ROOT_UNAVAILABLE"],
         }
     root_fd, root_descriptors = opened
+    forced_status: str | None = None
+    forced_complete = True
     try:
-        owlbear = _open_directory(root_fd, ".owlbear", inspection, "OWLBEAR", required=True)
-        if owlbear is None:
-            inspection.diagnostic("DELIVERY_ROOT_UNAVAILABLE")
-            return inspection.result(status="unavailable", complete=False)
-        owlbear_fd, owlbear_opened = owlbear
-        try:
-            delivery = _open_directory(owlbear_fd, "delivery", inspection, "DELIVERY", required=True)
-            if delivery is None:
-                inspection.diagnostic("DELIVERY_ROOT_UNAVAILABLE")
-                return inspection.result(status="unavailable", complete=False)
-            delivery_fd, delivery_opened = delivery
-            try:
-                _inspect_file(delivery_fd, "config.json", inspection, "config", required=True)
-                host = _open_directory(delivery_fd, "runtime", inspection, "RUNTIME", required=True)
-                if host is not None:
-                    runtime_fd, runtime_opened = host
-                    try:
-                        _inspect_file(runtime_fd, "host.json", inspection, "host")
-                        _inspect_file(runtime_fd, "host.local.json", inspection, "host_local")
-                        _scan_change_records(runtime_fd, inspection, selected=change_id)
-                        _scan_coordination(runtime_fd, inspection, selected=change_id)
-                        _scan_transactions(runtime_fd, inspection)
-                        _scan_nested_transaction_families(runtime_fd, inspection)
-                        _scan_logs(runtime_fd, inspection)
-                    finally:
-                        _close_directory(delivery_fd, "runtime", runtime_fd, runtime_opened, inspection)
-                _scan_snapshots(delivery_fd, inspection, selected=change_id)
-                _scan_packages(delivery_fd, inspection, selected=change_id)
-            finally:
-                _close_directory(owlbear_fd, "delivery", delivery_fd, delivery_opened, inspection)
-        finally:
-            _close_directory(root_fd, ".owlbear", owlbear_fd, owlbear_opened, inspection)
+        forced_status = _inspect_delivery_tree(root_fd, inspection, selected=change_id)
+        forced_complete = forced_status != "unavailable"
+        if forced_status == "degraded":
+            forced_complete = False
     finally:
+        try:
+            root_stable = _root_descriptors_are_stable(root, root_descriptors)
+        except OSError:
+            root_stable = False
+        if not root_stable:
+            inspection.diagnostic("REPLACED_DURING_INSPECTION")
+            forced_complete = False
         for descriptor in reversed(root_descriptors):
             os.close(descriptor)
     if change_id is not None and not inspection.selected_change_seen:
         inspection.diagnostic("CHANGE_NOT_FOUND")
-    return inspection.result()
+    return inspection.result(status=forced_status, complete=forced_complete)
 
 
 def _text(result: dict[str, object]) -> str:

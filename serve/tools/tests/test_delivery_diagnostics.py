@@ -37,8 +37,6 @@ def _complete_root(tmp_path: Path) -> Path:
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "contract.json").write_bytes(b'{"schema_version":2}\n')
-    (change / "admission.json").write_bytes(b'{"schema_version":1}\n')
     (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
     (root / ".owlbear/delivery/runtime/coordination/changes/example.json").write_bytes(
         b'{"schema_version":1,"change_id":"example"}\n'
@@ -49,15 +47,22 @@ def _complete_root(tmp_path: Path) -> Path:
     return root
 
 
-def _run_cli(root: Path, *arguments: str, poison_path: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     script = Path(__file__).parents[1] / "src/owlbear_tools/delivery_diagnostics.py"
-    environment = os.environ.copy()
-    if poison_path is not None:
-        environment["PYTHONPATH"] = os.fspath(poison_path)
+    isolated_runner = (
+        "import importlib.abc,runpy,sys\n"
+        "class Blocker(importlib.abc.MetaPathFinder):\n"
+        " def find_spec(self,fullname,path=None,target=None):\n"
+        "  if fullname.split('.')[0] in {'owlbear','fastapi','pydantic','uvicorn'}:\n"
+        "   raise ImportError('blocked unavailable package')\n"
+        "sys.meta_path.insert(0,Blocker())\n"
+        "target=sys.argv[1]\n"
+        "sys.argv = [target, *sys.argv[2:]]\n"
+        "runpy.run_path(target,run_name='__main__')\n"
+    )
     return subprocess.run(  # noqa: S603 - executable and arguments are fixed by this test
-        [sys.executable, "-I", "-B", os.fspath(script), *arguments],
+        [sys.executable, "-I", "-B", "-c", isolated_runner, os.fspath(script), *arguments],
         cwd=root if root.is_dir() else root.parent,
-        env=environment,
         capture_output=True,
         text=True,
         timeout=5,
@@ -69,8 +74,6 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
-    (change / "contract.json").write_text('{"schema_version":2}\n', encoding="utf-8")
-    (change / "admission.json").write_text('{"schema_version":1}\n', encoding="utf-8")
     (change / "frontier.json").write_text('{"schema_version":18,"bindings":[]}\n', encoding="utf-8")
     coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
     coordination.write_text('{"schema_version":1,"change_id":"example"}\n', encoding="utf-8")
@@ -97,8 +100,6 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     [
         (".owlbear/delivery/config.json", "{", "CONFIG_MALFORMED"),
         (".owlbear/delivery/config.json", '{"schema_version":99}', "CONFIG_UNSUPPORTED"),
-        (".owlbear/delivery/runtime/changes/example/contract.json", "{", "CONTRACT_MALFORMED"),
-        (".owlbear/delivery/runtime/changes/example/admission.json", '{"schema_version":99}', "ADMISSION_UNSUPPORTED"),
         (".owlbear/delivery/runtime/changes/example/frontier.json", '{"schema_version":18}', "FRONTIER_MALFORMED"),
         (
             ".owlbear/delivery/runtime/changes/example/frontier.json",
@@ -120,19 +121,6 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
     assert "safe/project" not in json.dumps(result)
 
 
-def test_change_authority_missing_files_are_reported(tmp_path: Path) -> None:
-    root = _root(tmp_path)
-    change = root / ".owlbear/delivery/runtime/changes/example"
-    change.mkdir()
-    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
-
-    result = inspect_delivery(root)
-
-    assert "CONTRACT_MISSING" in result["diagnostic_codes"]
-    assert "ADMISSION_MISSING" in result["diagnostic_codes"]
-    assert result["status"] == "degraded"
-
-
 def test_missing_root_and_invalid_change_id_have_exit_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result = inspect_delivery(tmp_path / "missing")
     assert result["status"] == "unavailable"
@@ -140,6 +128,26 @@ def test_missing_root_and_invalid_change_id_have_exit_two(tmp_path: Path, monkey
     monkeypatch.setattr("sys.argv", ["delivery-diagnose", "inspect", "--change-id", "../secret"])
     with pytest.raises(SystemExit, match="2"):
         main()
+
+
+def test_project_marker_with_missing_delivery_state_is_degraded(tmp_path: Path) -> None:
+    (tmp_path / ".owlbear").mkdir()
+
+    result = inspect_delivery(tmp_path)
+
+    assert result["status"] == "degraded"
+    assert result["diagnostic_codes"] == ["DELIVERY_STATE_MISSING"]
+
+
+def test_valid_project_with_missing_delivery_records_is_not_unavailable(tmp_path: Path) -> None:
+    (tmp_path / ".owlbear/delivery").mkdir(parents=True)
+
+    result = inspect_delivery(tmp_path)
+
+    assert result["status"] == "degraded"
+    assert "ROOT_UNAVAILABLE" not in result["diagnostic_codes"]
+    assert "CONFIG_MISSING" in result["diagnostic_codes"]
+    assert "RUNTIME_UNREADABLE" in result["diagnostic_codes"]
 
 
 def test_invalid_cli_input_uses_bounded_error_without_echo(
@@ -154,9 +162,8 @@ def test_invalid_cli_input_uses_bounded_error_without_echo(
 
 def test_standalone_cli_valid_text_and_json_are_isolated_and_bounded(tmp_path: Path) -> None:
     root = _complete_root(tmp_path)
-    poison = tmp_path / "poison"
-    poison.mkdir()
-    (poison / "owlbear_tools.py").write_text("raise RuntimeError('poison imported')\n", encoding="utf-8")
+    before_membership = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+    before_bytes = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
     readonly_files = [
         root / ".owlbear/delivery/config.json",
         root / ".owlbear/delivery/runtime/host.json",
@@ -171,7 +178,7 @@ def test_standalone_cli_valid_text_and_json_are_isolated_and_bounded(tmp_path: P
         path.chmod(0o555)
 
     try:
-        text = _run_cli(root, "inspect", "--project-root", os.fspath(root), poison_path=poison)
+        text = _run_cli(root, "inspect", "--project-root", os.fspath(root))
         payload = _run_cli(
             root,
             "inspect",
@@ -179,7 +186,6 @@ def test_standalone_cli_valid_text_and_json_are_isolated_and_bounded(tmp_path: P
             os.fspath(root),
             "--format",
             "json",
-            poison_path=poison,
         )
     finally:
         for path in readonly_files:
@@ -187,6 +193,8 @@ def test_standalone_cli_valid_text_and_json_are_isolated_and_bounded(tmp_path: P
         for path in readonly_dirs:
             path.chmod(0o755)
 
+    after_membership = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+    after_bytes = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
     assert text.returncode == 0
     assert text.stdout.startswith("status: healthy-structure\n")
     assert "writes_performed: false" in text.stdout
@@ -194,7 +202,9 @@ def test_standalone_cli_valid_text_and_json_are_isolated_and_bounded(tmp_path: P
     result = json.loads(payload.stdout)
     assert result["status"] == "healthy-structure"
     assert result["writes_performed"] is False
-    assert "poison imported" not in payload.stderr
+    assert "blocked unavailable package" not in payload.stderr
+    assert after_membership == before_membership
+    assert after_bytes == before_bytes
 
 
 @pytest.mark.parametrize(
@@ -222,6 +232,12 @@ def test_standalone_cli_missing_root_and_error_redaction(tmp_path: Path) -> None
     unavailable = _run_cli(missing, "inspect", "--project-root", os.fspath(missing), "--format", "json")
     assert unavailable.returncode == 2
     assert json.loads(unavailable.stdout)["status"] == "unavailable"
+
+    marked = tmp_path / "marked-project"
+    (marked / ".owlbear").mkdir(parents=True)
+    missing_state = _run_cli(marked, "inspect", "--project-root", os.fspath(marked), "--format", "json")
+    assert missing_state.returncode == 1
+    assert json.loads(missing_state.stdout)["status"] == "degraded"
 
     invalid = _run_cli(
         tmp_path,
@@ -282,6 +298,26 @@ def test_known_nested_transaction_families_are_inspected(tmp_path: Path) -> None
     assert result["counts"]["pending_transactions"] == 4
     assert result["pending_effects"] is True
     assert "hidden" not in json.dumps(result)
+    locators = {record["locator"] for record in result["records"] if record["kind"].startswith("transaction")}
+    assert ".owlbear/delivery/runtime/changes/<redacted>/transactions/<opaque>.yaml" in locators
+    assert ".owlbear/delivery/packages/<redacted>/transactions/<opaque>.yaml" in locators
+    assert ".owlbear/delivery/runtime/finalization-reports/<redacted>/transactions/<opaque>.yaml" in locators
+
+
+def test_package_root_transactions_are_inspected_with_root_locator(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    transactions = root / ".owlbear/delivery/packages/transactions"
+    transactions.mkdir(parents=True)
+    (transactions / "active.yaml").write_text("secret: hidden\n", encoding="utf-8")
+
+    result = inspect_delivery(root)
+
+    assert result["counts"]["pending_transactions"] == 1
+    assert result["pending_effects"] is True
+    assert ".owlbear/delivery/packages/transactions/<opaque>.yaml" in {
+        record["locator"] for record in result["records"]
+    }
+    assert "hidden" not in json.dumps(result)
 
 
 def test_optional_host_local_and_selected_package_scope_are_bounded(tmp_path: Path) -> None:
@@ -299,10 +335,97 @@ def test_optional_host_local_and_selected_package_scope_are_bounded(tmp_path: Pa
     assert result["counts"]["packages"] == 1
 
 
+def test_failed_present_pending_families_make_pending_effects_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    family = root / ".owlbear/delivery/runtime/finalization-reports"
+    family.mkdir()
+    packages = root / ".owlbear/delivery/packages"
+    packages.mkdir()
+    real_open_directory = diagnostics._open_directory  # noqa: SLF001
+
+    def deny_pending_family(
+        parent_fd: int,
+        name: str,
+        inspection: object,
+        code_prefix: str,
+        *,
+        required: bool = False,
+    ) -> object:
+        if name in {"finalization-reports", "packages"}:
+            return None
+        return real_open_directory(parent_fd, name, inspection, code_prefix, required=required)
+
+    monkeypatch.setattr(diagnostics, "_open_directory", deny_pending_family)
+
+    result = inspect_delivery(root)
+
+    assert result["pending_effects"] == "unknown"
+    assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
+
+
+def test_unavailable_runtime_makes_pending_effects_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _root(tmp_path)
+    real_open_directory = diagnostics._open_directory  # noqa: SLF001
+
+    def deny_runtime(
+        parent_fd: int,
+        name: str,
+        inspection: object,
+        code_prefix: str,
+        *,
+        required: bool = False,
+    ) -> object:
+        if name == "runtime":
+            return None
+        return real_open_directory(parent_fd, name, inspection, code_prefix, required=required)
+
+    monkeypatch.setattr(diagnostics, "_open_directory", deny_runtime)
+
+    result = inspect_delivery(root)
+
+    assert result["pending_effects"] == "unknown"
+    assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
+
+
+def test_replaced_scanner_ancestor_makes_pending_effects_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    child = root / "child"
+    child.mkdir()
+    parent_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    child_fd = os.open("child", os.O_RDONLY | os.O_DIRECTORY, dir_fd=parent_fd)
+    opened = os.fstat(child_fd)
+    real_stat = diagnostics.os.stat
+
+    def replaced(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        current = real_stat(path, *args, **kwargs)
+        if path == "child" and kwargs.get("dir_fd") == parent_fd:
+            values = list(current)
+            values[1] += 1
+            return os.stat_result(values)
+        return current
+
+    monkeypatch.setattr(diagnostics.os, "stat", replaced)
+    inspection = diagnostics._Inspection(root, None)  # noqa: SLF001
+    try:
+        diagnostics._close_directory(parent_fd, "child", child_fd, opened, inspection)  # noqa: SLF001
+    finally:
+        os.close(parent_fd)
+
+    assert inspection.transaction_scan_unknown is True
+
+
 def test_symlink_fifo_and_read_only_membership(tmp_path: Path) -> None:
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"
     change.mkdir()
+    (root / ".owlbear/delivery/runtime/changes/unsafe name").mkdir()
+    packages = root / ".owlbear/delivery/packages"
+    packages.mkdir()
+    (packages / "unsafe").symlink_to(root)
     (change / "frontier.json").symlink_to(root / "secret.json")
     os.mkfifo(root / ".owlbear/delivery/runtime/coordination/changes/example.json")
     before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
@@ -313,6 +436,7 @@ def test_symlink_fifo_and_read_only_membership(tmp_path: Path) -> None:
     assert before == after
     assert "SYMLINK_REJECTED" in result["diagnostic_codes"]
     assert "SPECIAL_FILE_REJECTED" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
     assert result["writes_performed"] is False
 
 
@@ -364,6 +488,46 @@ def test_total_byte_limit_is_independent_of_record_and_entry_limits(tmp_path: Pa
     assert result["inspection_complete"] is False
 
 
+def test_total_byte_budget_stays_bounded_when_file_grows_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    baseline = int(inspect_delivery(root)["bytes_inspected"])
+    monkeypatch.setattr(diagnostics, "MAX_TOTAL_BYTES", baseline + 16)
+    frontier = root / ".owlbear/delivery/runtime/changes/example/frontier.json"
+    frontier.parent.mkdir()
+    frontier.write_bytes(b"{}")
+    real_open = diagnostics.os.open
+    real_read = diagnostics.os.read
+    frontier_fd: int | None = None
+    grown = False
+
+    def capture_frontier_fd(path: object, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal frontier_fd
+        descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "frontier.json" and dir_fd is not None:
+            frontier_fd = descriptor
+        return descriptor
+
+    def grow_after_read(fd: int, size: int) -> bytes:
+        nonlocal grown
+        data = real_read(fd, size)
+        if fd == frontier_fd and data and not grown:
+            frontier.write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+            grown = True
+        return data
+
+    monkeypatch.setattr(diagnostics.os, "open", capture_frontier_fd)
+    monkeypatch.setattr(diagnostics.os, "read", grow_after_read)
+
+    result = inspect_delivery(root)
+
+    assert grown is True
+    assert {"CHANGED_DURING_READ", "REPLACED_DURING_READ"} & set(result["diagnostic_codes"])
+    assert result["bytes_inspected"] <= diagnostics.MAX_TOTAL_BYTES
+    assert result["inspection_complete"] is False
+
+
 def test_unreadable_record_is_reported_without_treating_it_as_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -398,3 +562,114 @@ def test_helper_substitution_probe_is_deterministic(tmp_path: Path, monkeypatch:
     result = inspect_delivery(root)
 
     assert "REPLACED_DURING_READ" in result["diagnostic_codes"]
+
+
+def test_real_file_substitution_during_open_is_detected_without_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    config = root / ".owlbear/delivery/config.json"
+    replacement = (
+        b'{"schema_version":2,"remote":"replacement","target_branch":"dev","github_repository":"safe/project"}\n'
+    )
+    original = config.read_bytes()
+    real_open = diagnostics.os.open
+    swapped = False
+
+    def swap_before_open(path: object, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal swapped
+        if path == "config.json" and dir_fd is not None and not swapped:
+            config.replace(config.with_name("config.original"))
+            config.write_bytes(replacement)
+            swapped = True
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(diagnostics.os, "open", swap_before_open)
+    result = inspect_delivery(root)
+
+    assert swapped is True
+    assert "REPLACED_DURING_READ" in result["diagnostic_codes"]
+    assert (root / ".owlbear/delivery/config.original").read_bytes() == original
+
+
+def test_log_path_substitution_after_read_is_detected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _root(tmp_path)
+    logs = root / ".owlbear/delivery/runtime/logs"
+    logs.mkdir()
+    log = logs / "entry.log"
+    original = b"original log\n"
+    log.write_bytes(original)
+    real_open = diagnostics.os.open
+    real_read = diagnostics.os.read
+    log_fd: int | None = None
+    swapped = False
+
+    def capture_log_fd(path: object, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal log_fd
+        descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "entry.log" and dir_fd is not None:
+            log_fd = descriptor
+        return descriptor
+
+    def swap_log_path(fd: int, size: int) -> bytes:
+        nonlocal swapped
+        if fd == log_fd and not swapped:
+            log.replace(log.with_name("entry.original"))
+            log.write_bytes(b"replacement log\n")
+            swapped = True
+        return real_read(fd, size)
+
+    monkeypatch.setattr(diagnostics.os, "open", capture_log_fd)
+    monkeypatch.setattr(diagnostics.os, "read", swap_log_path)
+    result = inspect_delivery(root)
+
+    assert swapped is True
+    assert "REPLACED_DURING_READ" in result["diagnostic_codes"]
+    assert (logs / "entry.original").read_bytes() == original
+
+
+def test_opaque_transaction_replacement_is_detected_without_yaml_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    transactions = root / ".owlbear/delivery/runtime/transactions"
+    transactions.mkdir()
+    pending = transactions / "pending.yaml"
+    pending.write_text("secret: opaque\n", encoding="utf-8")
+    real_stat = diagnostics.os.stat
+    stat_calls = 0
+
+    def swap_on_poststat(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        nonlocal stat_calls
+        if path == "pending.yaml" and kwargs.get("dir_fd") is not None:
+            stat_calls += 1
+            if stat_calls == 2:
+                pending.replace(transactions / "pending.original")
+                pending.write_text("secret: replacement\n", encoding="utf-8")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(diagnostics.os, "stat", swap_on_poststat)
+    result = inspect_delivery(root)
+
+    assert stat_calls >= 2
+    assert "REPLACED_DURING_READ" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert "replacement" not in json.dumps(result)
+
+
+def test_root_ancestor_replacement_is_revalidated_before_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _complete_root(tmp_path)
+    real_scan_runtime = diagnostics._scan_runtime  # noqa: SLF001
+
+    def replace_after_scan(delivery_fd: int, inspection: object, *, selected: str | None) -> None:
+        real_scan_runtime(delivery_fd, inspection, selected=selected)
+        root.rename(root.with_name("replaced-root"))
+        root.mkdir()
+
+    monkeypatch.setattr(diagnostics, "_scan_runtime", replace_after_scan)
+    result = inspect_delivery(root)
+
+    assert "REPLACED_DURING_INSPECTION" in result["diagnostic_codes"]
+    assert result["inspection_complete"] is False

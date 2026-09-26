@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-D: implementation and focused verification in progress.**
+**D03-D: implemented; final independent validation pending.**
 D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
 remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
@@ -18,6 +18,27 @@ optional recovery backend. The implementation must remain below Delivery runtime
 recognize only bounded structure, report pending transactions without replay, and never turn
 diagnosis into recovery authority. The approved [D contract](#d-offline-diagnosis) and
 [phase scope](#d03-d--read-only-offline-entry) remain unchanged.
+
+Checkpoint `01b0581` adds the stdlib-only tools entry, ordinary-session prompt and focused tests.
+The final candidate retains fixed `inspect`, optional project-root/Change selection and text/JSON
+output. It recognizes only supported structural envelopes, redacts untrusted content, and reports
+opaque pending transactions including the legacy `packages/transactions` root without replay.
+Reads are bounded globally to 256 entries and 8 MiB, with 1 MiB records and 64 KiB log tails.
+Read-only review drove real replacement fixtures and descriptor/path rechecks for records, logs,
+opaque transactions and project ancestors, strict byte caps, and unknown pending state when
+relevant trees cannot be inspected. No Delivery lifecycle or recovery owner was changed.
+
+Final writer-observed proof uses Python **3.14.7**, pytest **9.1.1**, locked dependencies,
+one worker and no pytest cache: **33 passed** for the diagnostic module plus the new bootstrap
+boundary; **2 passed** for the exact prompt nodes; **3 passed** for the exact synchronous
+authority nodes. Scoped Ruff lint/format, isolated compile/CLI and whitespace checks passed.
+The parent did not rerun delegated checks. Earlier below-floor runs and overlapping intermediate
+counts are not additional proof. The tested source SHA-256 is
+`e36bb932054c6b5a6000db3e40fe23945d201a015cc55a710c90cafd81f5983f`;
+the tests are `1e1d5b3487032d225806cc2ca1c892507a869f9b853011134f855444dfb0a2fa`.
+Exact-result independent re-review and automated validation remain pending at this checkpoint.
+This D-only proof does not resolve C's previously unrun exact-pin checks, required external CI,
+E's cumulative/transport proof, package acceptance or live activation.
 
 ### Bounded C baseline
 
