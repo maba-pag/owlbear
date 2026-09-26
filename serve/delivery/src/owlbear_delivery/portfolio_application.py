@@ -4734,7 +4734,7 @@ class PortfolioApplication:
                 continue
             if not self._is_work_portfolio_visible(snapshot):
                 continue
-            projections.extend(WorkItemProjector(snapshot).list_items())
+            projections.extend(self._read_projector(snapshot).list_items())
         return tuple(
             sorted(
                 projections,

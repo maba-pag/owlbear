@@ -1752,6 +1752,15 @@ def test_readiness_distinguishes_retained_engine_journal_states_without_writes( 
     }
     view = reloaded.get_change("change-a")
     repeated = reloaded.get_change("change-a")
+    listed_items = reloaded.list_work_items()
+    listed = next(item for item in listed_items if item.change_id == "change-a" and item.work_item_id == "change-a")
+    shown = reloaded.show_work_item("change-a", "change-a")
+    assert listed.next_action == view.detail.card.next_step
+    assert shown.projection.next_action == view.detail.card.next_step
+    assert "merge" not in listed.next_action.casefold()
+    assert "mark" not in listed.next_action.casefold()
+    assert reloaded.list_work_items() == listed_items
+    assert reloaded.show_work_item("change-a", "change-a") == shown
 
     expected_reason = {
         "pending": "engine-action-pending",
@@ -1822,8 +1831,7 @@ def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path)
     assert view.detail.card.needs_headline == view.detail.card.next_step
     assert "merge" not in view.detail.card.needs_headline.casefold()
     assert "mark-ready" not in view.detail.card.needs_headline.casefold()
-    projected = application._read_projector(application._delivery_snapshot(runtime))
-    compatibility = next(item for item in projected.list_items() if item.change_id == "change-a")
+    compatibility = next(item for item in application.list_work_items() if item.change_id == "change-a")
     assert compatibility.next_action == view.detail.card.next_step
     assert "merge" not in compatibility.next_action.casefold()
     assert "mark-ready" not in compatibility.next_action.casefold()
@@ -1854,12 +1862,11 @@ def test_readiness_contains_unexecuted_acceptance_observation(tmp_path: Path) ->
     assert "merge" not in view.detail.card.next_step.casefold()
     assert "mark-ready" not in view.detail.card.next_step.casefold()
 
-    projected = application._read_projector(application._delivery_snapshot(runtime))
-    compatibility = next(item for item in projected.list_items() if item.change_id == "change-a")
+    compatibility = next(item for item in application.list_work_items() if item.change_id == "change-a")
     assert "merge" not in compatibility.next_action.casefold()
     assert "mark-ready" not in compatibility.next_action.casefold()
-    assert "merge" not in projected.show("change-a").projection.next_action.casefold()
-    assert "mark-ready" not in projected.show("change-a").projection.next_action.casefold()
+    assert "merge" not in application.show_work_item("change-a", "change-a").projection.next_action.casefold()
+    assert "mark-ready" not in application.show_work_item("change-a", "change-a").projection.next_action.casefold()
 
 
 @pytest.mark.parametrize("started_state", ["matching", "mismatched", "invalid"])
@@ -3309,7 +3316,7 @@ def test_selected_acquisition_repeated_call_reports_active_without_second_launch
     assert repeated.launch_packages == ()
     assert repeated.failures[0].code == "ERR_DELIVERY_ACTION_ALREADY_ACTIVE"
     assert repeated.failures[0].claim_id is None
-    assert "Do not redispatch" in repeated.failures[0].retry_condition
+    assert "do not redispatch or release its claim" in repeated.failures[0].retry_condition.casefold()
     assert runtimes["change-a"].frontier_bytes() == claimed
 
 
