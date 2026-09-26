@@ -17,6 +17,7 @@ build-backend = "hatchling.build"
 packages = ["src/owlbear_tools"]
 
 [project.scripts]
+delivery-diagnose = "owlbear_tools.delivery_diagnostics:main"
 commit-owned = "owlbear_tools.commit_owned:main"
 doc-index = "owlbear_tools.doc_index:main"
 indexes = "owlbear_tools.indexes:main"

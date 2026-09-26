@@ -460,6 +460,17 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
 
 
+def test_repair_delivery_prompt_is_an_ordinary_read_only_entry() -> None:
+    prompt = (_PROMPTS_ROOT / "repair-delivery.prompt.md").read_text(encoding="utf-8")
+    assert "delivery-diagnose inspect" in prompt
+    assert "PYTHONDONTWRITEBYTECODE=1" in prompt
+    assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "process commands" in prompt
+    assert "D07's supported route" in prompt
+    assert "automatic fix" in prompt
+    assert "manual repair" in prompt
+
+
 def test_inspect_change_prompt_uses_effective_read_only_allowlist() -> None:
     path = _PROMPTS_ROOT / "inspect-change.prompt.md"
     metadata = _frontmatter(path)

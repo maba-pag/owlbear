@@ -2,13 +2,24 @@
 
 ## Status and authority
 
-**D03-C: ready for bounded acceptance subject to the named external gates below.
-No acceptance decision, D/E start, merge or live activation is implied.**
+**D03-D: implementation and focused verification in progress.**
+D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
+remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
+
+The [D-only request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5849763790)
+authorizes the fixed read-only offline `inspect` entry, its ordinary-session prompt and focused
+bootstrap/privacy/no-write proof. It does not reopen the superseded executor decision or require an
+optional recovery backend. The implementation must remain below Delivery runtime construction,
+recognize only bounded structure, report pending transactions without replay, and never turn
+diagnosis into recovery authority. The approved [D contract](#d-offline-diagnosis) and
+[phase scope](#d03-d--read-only-offline-entry) remain unchanged.
+
+### Bounded C baseline
 
 The user selected **"Bounded recovery now; explicit containment otherwise"**, after the
 [capability experiment](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5840061085)
