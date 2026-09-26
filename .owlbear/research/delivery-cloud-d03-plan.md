@@ -16,7 +16,8 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Read-side repair of bounded candidate `14b904e`; scope approval remains `2e377a6`.**
+**Read-side repair `bdb6669` with projection follow-up `2caa5d7`, against bounded candidate
+`14b904e`; scope approval remains `2e377a6`.**
 The [acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5840869700)
 identified a read-side containment diagnosis defect: an unfinished engine action disables execution,
 but public cards can still recommend mark-ready or merge. The
@@ -26,7 +27,8 @@ reads without executing or reconciling them. It distinguishes unstarted, unknown
 recorded-failure and unverifiable-journal states and replaces misleading publication guidance.
 Present start markers must match even alongside a recorded result. Static diagnostic text names
 the engine/publication/checkpoint owner without exposing arbitrary journal failure text. Three
-readiness reasons have matching Cockpit types, labels and rendered-reason coverage.
+readiness reasons have matching Cockpit types, labels and rendered-reason coverage. Retained
+operations also replace stale publication headlines and compatibility `next_action` guidance.
 
 The default-loader regression
 exercises the existing engine and publication owners, rather than replacing them: a lost provider
@@ -36,7 +38,7 @@ repeated execution does not replenish its retry budget, and a separate eligible 
 work. Public containment messages identify missing owner evidence instead of promising a future
 "D03 repair" or treating caller confirmation as authority.
 
-Acceptance remains pending final review and the verification limits below. The loader,
+Acceptance remains pending package re-review and the verification limits below. The loader,
 execution, transaction and exclusion mechanisms are not replaced by this candidate. No executor
 decision, producer framework or host backend is needed for the approved bounded scope.
 
@@ -59,14 +61,22 @@ Both failure cases reload the actual application; the unknown-result case checks
 before any execution call can create a result. Repeated reads preserve intent/start/result bytes,
 coordination, frontier, retry ledger, worktree/raw index, provider mutation count and publication
 state. The known-result replay and unrelated Change progression assertions remain in place.
-Earlier affected selections overlap these cases and are not additive.
+Earlier affected selections overlap these cases and are not additive. The final projection
+follow-up reports **two focused cases passing**: recorded failure and an acquired but unexecuted
+`observe-acceptance` action with a ready receipt and actual `AWAITING_MERGE` state. Card headlines,
+next steps and compatibility list/show guidance contain no merge/mark-ready instruction.
 
 The writer also reports **24 work-item cases**, **one TypeScript/backend reason-parity case**,
 and scoped Ruff/format checks passing. Earlier Cockpit WorkPortfolio coverage (**112 cases**),
 Biome and a TypeScript/Vite build passed before the final label-only changes. These were run on
 Python **3.12.3** and Node **22.23.2**, not the pinned runtimes; no locked/pinned-toolchain pass is
-claimed. The parent inspected the changes and did not rerun delegated checks. Final independent
-review and automated validation remain pending at this checkpoint.
+claimed. The parent inspected the changes and did not rerun delegated checks. Independent
+read-only review found a stale headline/compatibility projection leak; the follow-up fixes it.
+A fresh independent re-review of the final source against `14b904e` reported no significant issues.
+CodeQL reported zero Python/JavaScript alerts at `bdb6669`; automated Code Review could not load
+its configured model. Final automated validation at `2caa5d7` reached its time-limit circuit
+breaker, which prohibited retry. No final-follow-up CodeQL or automated-review pass is claimed.
+Secret scans passed before both source commits.
 
 An overbroad writer portfolio-module run reported 419 passes and one existing assertion failure:
 `test_selected_acquisition_repeated_call_reports_active_without_second_launch` expects
