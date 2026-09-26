@@ -681,9 +681,7 @@ def _runtime(
                 results=(downstream_result,) if has_result else (),
             )
         )
-    frontier = DeliveryFrontier(
-        bindings=tuple(bindings)
-    )
+    frontier = DeliveryFrontier(bindings=tuple(bindings))
     path = state_root / "changes" / contract.change_id / "frontier.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_canonical(frontier))
@@ -782,10 +780,7 @@ class _TestPreservationProvenanceProvider:
             index_digest=kwargs["index_digest"],
             task_id=intent.admitted_task_id,
             task_digest=intent.admitted_task_digest,
-            paths=tuple(
-                path_provenance(path)
-                for path in kwargs["paths"]
-            ),
+            paths=tuple(path_provenance(path) for path in kwargs["paths"]),
         )
 
     def verify(self, **kwargs):
@@ -1789,9 +1784,9 @@ def test_readiness_distinguishes_retained_engine_journal_states_without_writes( 
     assert (reloaded_started_path.read_bytes() if reloaded_started_path.exists() else None) == before["started"]
     assert (reloaded_result_path.read_bytes() if reloaded_result_path.is_file() else None) == before["result"]
     assert reloaded_result_path.is_dir() is (journal_state == "invalid-result")
-    assert (
-        reloaded_coordinator.runtime_root / "coordination/changes/change-a.json"
-    ).read_bytes() == before["coordination"]
+    assert (reloaded_coordinator.runtime_root / "coordination/changes/change-a.json").read_bytes() == before[
+        "coordination"
+    ]
     assert reloaded_runtime.frontier_bytes() == before["frontier"]
     assert reloaded_runtime.retry_ledger().read() == before["ledger"]
     assert _workspace_mutation_snapshot(reloaded_worktree) == before["workspace"]
@@ -8790,9 +8785,7 @@ def _execute_loader_failure_case(
             "intent": intent_path.read_bytes(),
             "started": started_path.read_bytes(),
             "result": result_path.read_bytes() if result_path.is_file() else None,
-            "coordination": (
-                restarted._coordinator.runtime_root / "coordination/changes/change-b.json"
-            ).read_bytes(),
+            "coordination": (restarted._coordinator.runtime_root / "coordination/changes/change-b.json").read_bytes(),
             "frontier": restarted._runtimes["change-b"].frontier_bytes(),
             "ledger": restarted._runtimes["change-b"].retry_ledger().read(),
             "workspace": _workspace_mutation_snapshot(worktree),
@@ -8811,9 +8804,9 @@ def _execute_loader_failure_case(
         assert intent_path.read_bytes() == before_read["intent"]
         assert started_path.read_bytes() == before_read["started"]
         assert (result_path.read_bytes() if result_path.is_file() else None) == before_read["result"]
-        assert (
-            restarted._coordinator.runtime_root / "coordination/changes/change-b.json"
-        ).read_bytes() == before_read["coordination"]
+        assert (restarted._coordinator.runtime_root / "coordination/changes/change-b.json").read_bytes() == before_read[
+            "coordination"
+        ]
         assert restarted._runtimes["change-b"].frontier_bytes() == before_read["frontier"]
         assert restarted._runtimes["change-b"].retry_ledger().read() == before_read["ledger"]
         assert _workspace_mutation_snapshot(worktree) == before_read["workspace"]

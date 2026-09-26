@@ -2,8 +2,8 @@
 
 ## Status and authority
 
-**D03-C: bounded-recovery contract approved on 2026-09-25; implementation acceptance pending.
-No C acceptance, D/E start, merge or live activation is implied.**
+**D03-C: ready for bounded acceptance subject to the named external gates below.
+No acceptance decision, D/E start, merge or live activation is implied.**
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 record the same explicit scope revision. Shared governance is unchanged.
@@ -16,8 +16,8 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Read-side repair `bdb6669` with projection follow-up `2caa5d7`, against bounded candidate
-`14b904e`; scope approval remains `2e377a6`.**
+**Verified repair `7b93a91`, following `bdb6669` / `2caa5d7` and handoff `755ad93`;
+scope approval remains `2e377a6`.**
 The [acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5840869700)
 identified a read-side containment diagnosis defect: an unfinished engine action disables execution,
 but public cards can still recommend mark-ready or merge. The
@@ -29,6 +29,12 @@ Present start markers must match even alongside a recorded result. Static diagno
 the engine/publication/checkpoint owner without exposing arbitrary journal failure text. Three
 readiness reasons have matching Cockpit types, labels and rendered-reason coverage. Retained
 operations also replace stale publication headlines and compatibility `next_action` guidance.
+The final verification reproduced a remaining public `list_work_items` leak: that method still
+constructed a projector without readiness, despite private-projector tests passing. It now uses
+the existing read-only projector, as public show and Cockpit grouped views already do. The loader
+matrix calls and repeats the actual public list/show methods inside its state-invariance boundary.
+The named repeated-acquisition test now checks the full redispatch/claim-release prohibition
+case-insensitively; its no-second-launch and unchanged-frontier assertions remain intact.
 
 The default-loader regression
 exercises the existing engine and publication owners, rather than replacing them: a lost provider
@@ -38,7 +44,9 @@ repeated execution does not replenish its retry budget, and a separate eligible 
 work. Public containment messages identify missing owner evidence instead of promising a future
 "D03 repair" or treating caller confirmation as authority.
 
-Acceptance remains pending package re-review and the verification limits below. The loader,
+Fresh independent review of `7b93a913660da21cf7e72ef7808d664fd4498a17` found no high-confidence
+source defects in the accepted diagnosis finding or connected replay/containment boundaries.
+The bounded candidate is ready for acceptance subject to the external gates below. The loader,
 execution, transaction and exclusion mechanisms are not replaced by this candidate. No executor
 decision, producer framework or host backend is needed for the approved bounded scope.
 
@@ -55,69 +63,48 @@ decision, producer framework or host backend is needed for the approved bounded 
 
 ### Candidate proof and limits
 
-**Read-side repair evidence:** the source writer reports **8 final focused loader cases passing**:
-the six-state pending/start/invalid-or-mismatched journal matrix and the two replay/readback cases.
-Both failure cases reload the actual application; the unknown-result case checks public reads
-before any execution call can create a result. Repeated reads preserve intent/start/result bytes,
-coordination, frontier, retry ledger, worktree/raw index, provider mutation count and publication
-state. The known-result replay and unrelated Change progression assertions remain in place.
-Earlier affected selections overlap these cases and are not additive. The final projection
-follow-up reports **two focused cases passing**: recorded failure and an acquired but unexecuted
-`observe-acceptance` action with a ready receipt and actual `AWAITING_MERGE` state. Card headlines,
-next steps and compatibility list/show guidance contain no merge/mark-ready instruction.
+**Fresh writer-observed verification, 2026-09-26:** uv **0.11.0**, locked dependencies and
+supported Python **3.14.3**; Delivery and GitHub-adapter imports verified in this checkout.
+Python **3.14.7** was unavailable in the installed uv download catalogue. Frontend checks used
+pinned Node **24.21.0**, `npm ci` with the unchanged lock, and Vitest **5.0.1**.
 
-The writer also reports **24 work-item cases**, **one TypeScript/backend reason-parity case**,
-and scoped Ruff/format checks passing. Earlier Cockpit WorkPortfolio coverage (**112 cases**),
-Biome and a TypeScript/Vite build passed before the final label-only changes. These were run on
-Python **3.12.3** and Node **22.23.2**, not the pinned runtimes; no locked/pinned-toolchain pass is
-claimed. The parent inspected the changes and did not rerun delegated checks. Independent
-read-only review found a stale headline/compatibility projection leak; the follow-up fixes it.
-A fresh independent re-review of the final source against `14b904e` reported no significant issues.
-CodeQL reported zero Python/JavaScript alerts at `bdb6669`; automated Code Review could not load
-its configured model. Final automated validation at `2caa5d7` reached its time-limit circuit
-breaker, which prohibited retry. No final-follow-up CodeQL or automated-review pass is claimed.
-Secret scans passed before both source commits.
+| Focused check | Result and scope |
+| --- | --- |
+| Named repeated acquisition | Reproduced the capitalization assertion failure alone; strengthened full-prohibition assertion passed without changing acquisition behavior |
+| Existing diagnosis/loader selection | 17 passed: six journal states, recorded failure, awaiting-merge pending observation, three start/result consistency cases, two loader replay/readback cases, three preflight dirt variants and TypeScript reason parity |
+| Public application list/show regression after repair | 9 passed: named acquisition plus six journal states and the recorded-failure/awaiting-merge cases; public list/show now agree with get-change guidance and repeated reads preserve recorded state |
+| Connected consumers after repair | 6 passed: no integration-target resolution from reads, grouped list, empty default loader, both replay/readback cases and selected pending-publication isolation |
+| Cockpit presentation | Four selected tests passed across two invocations: readiness reason labels, coherent readiness/control mapping, read-only unavailable inspection and retained-operation provenance without caller-confirmed recovery |
+| Static checks | Scoped Ruff lint and application/work-item source format passed; Biome passed on the three read-side frontend files; whitespace checks passed |
 
-An overbroad writer portfolio-module run reported 419 passes and one existing assertion failure:
-`test_selected_acquisition_repeated_call_reports_active_without_second_launch` expects
-`"Do not redispatch"` while the baseline `14b904e` guidance contains `"do not redispatch"`.
-Neither that assertion nor its acquisition guidance is changed here. This is an unresolved baseline
-test failure, not a passing full-module result; the module was not rerun for this repair.
+Selections overlap and are **not additive**. The 17-case run precedes the one-line public-list
+repair; the 9/6 selections verify its affected paths afterward. No whole portfolio module or
+workspace suite was run. Real loader/owners are used after synthetic setup; only the external
+provider is substituted and publication targets a disposable bare remote. No live host pass is claimed.
 
-**Prior candidate evidence, not proof of the read-side repair:** the source writer observed
-**12 focused application cases passing** with locked dependencies under
-`uv 0.11.0` and managed Python **3.14.3**. The selection covered the default-loader replay/readback
-and workspace variants plus affected containment/readiness diagnostics. After strengthening the
-oracles, **five loader cases** passed; the journal-guidance repair then passed **10 affected cases**.
-These selections overlap and are not added together. Imports of the application, recovery, work-item
-and test modules succeeded in that environment; the editable installation points at this checkout.
-The parent did not rerun delegated checks.
+The old two-hunk test-format baseline claim was not supported by direct comparison with
+`dev@d7d5d2d`. All five remaining test-format hunks, including three in the read-side tests, were
+formatted without changing their AST; the test module and both source modules now pass format
+checks. No lint suppression, assertion removal or execution/custody relaxation was added.
 
-The 12-case selection in `serve/delivery/tests/test_portfolio_application.py` was
-`engine_failure_retains_exact_action_without_retry_or_release or continuation_preserves_failed_activation_identity or repair_change_diagnoses_but_exclusion_required_to_apply or get_change_composes_detail_health_and_repair_proposal or loader_composed_engine_preflight_contains_workspace_variants or loader_composed_engine_replay_contains_unknown_owner_and_preserves_sibling_progress`,
-run with `uv run --locked --python 3.14.3 pytest -q -n 1`.
+Independent read-only source review of `7b93a91` confirmed the public list/show paths, preserved
+ordering/filtering and lack of reconciliation or release. The reviewer did not rerun writer tests.
+CodeQL at `7b93a91` reported **zero Python alerts**. Automated Code Review could not load its
+configured model; its success wrapper is not a review pass. Subsequent test formatting is
+AST-equivalent, not a new execution implementation.
 
-Python **3.14.7**, required by `.python-version`, was unavailable in the environment; this is not an
-all-pinned-toolchain pass. The actual default loader and owning implementations are used after
-synthetic fixture setup; only the external publication provider is faked, with Git publication
-directed to a disposable local bare remote. No live host, provider or service acceptance is claimed.
-Independent review led to distinct journal-integrity guidance and stronger diagnostic, publication
-and budget oracles. Known stale preflight is rejected before effect entry; it is not confused with
-an entered unknown operation, which retains custody. Full four-file Ruff lint passed after adding a
-docstring and one narrow argument-count exception to `RetryRepairBinding.create`: the exception
-preserves its independently bound identity fields and historical call signature. Six formatter hunks
-in the PR-added recovery module were corrected. The application, work-item and recovery source
-formatter checks pass; the test module retains only two formatting differences verified against
-`dev@d7d5d2d`, not attributed to this increment. No broad lint suppression or module rewrite was added.
+**Named external gates:** exact Python **3.14.7** compatibility remains unrun; required source,
+Cockpit and ecosystem CI inspected at `755ad93` was `action_required`. Supported Python evidence
+does not claim exact-pin proof. No final JavaScript CodeQL pass is claimed here; this repair changes
+no frontend source. Package acceptance remains a separate decision. D/E registered/HTTP cumulative
+proof and applicable host transport acceptance retain their allocation, not optional backend demands.
 
-The final loader-instance correction passed **both parameterized replay cases** and scoped test lint.
-The writer's independent narrow review against `2e377a6` reported no significant issues after its
-findings were addressed. The subsequent acceptance review found the read-side defect linked above;
-that finding supersedes the earlier no-unresolved-defect assessment.
-Pinned-interpreter verification, external checks and package acceptance remain pending. Final-source
-automated validation stopped at its timeout circuit breaker and prohibited retry; no final-source
-CodeQL or automated-review pass is claimed. Source/Cockpit/ecosystem CI at `02bcf7b` is
-`action_required`, not passing proof. Secret scans passed. D/E, merge and activation remain unauthorized.
+**Prior evidence only:** `755ad93` records overlapping eight/two loader-projection, 24 work-item and
+112 frontend case reports on below-floor Python 3.12.3/Node 22.23.2; those do not establish supported
+runtime compatibility. Earlier bounded-candidate 12/five/ten/two selections under Python 3.14.3
+are not fresh passes or cumulative totals. See the immutable
+[previous handoff](https://github.com/maba-pag/owlbear/blob/755ad93277dee734689a4f7c71b89a0e4f8b638b/.owlbear/research/delivery-cloud-d03-plan.md#candidate-proof-and-limits)
+for their exact limits. The named capitalization failure is now resolved, not dismissed as baseline.
 
 ### Completion ledger
 
