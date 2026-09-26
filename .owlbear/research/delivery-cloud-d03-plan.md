@@ -16,7 +16,19 @@ showed descendant escape and indistinguishable stable foreign writes. This super
 A/B execution-allocation decision and full automatic dirty-recovery completion requirement.
 It does not approve A, B, a weaker provenance provider, or a new runtime/security platform.
 
-**Final source `02bcf7b`, against decision checkpoint `2e377a6`.** The default-loader regression
+**Read-side repair of bounded candidate `14b904e`; scope approval remains `2e377a6`.**
+The [acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5840869700)
+identified a read-side containment diagnosis defect: an unfinished engine action disables execution,
+but public cards can still recommend mark-ready or merge. The
+[authorized repair](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5843311091)
+now validates captured intent/start/result bytes through bounded, no-follow operation-directory
+reads without executing or reconciling them. It distinguishes unstarted, unknown-result,
+recorded-failure and unverifiable-journal states and replaces misleading publication guidance.
+Present start markers must match even alongside a recorded result. Static diagnostic text names
+the engine/publication/checkpoint owner without exposing arbitrary journal failure text. Three
+readiness reasons have matching Cockpit types, labels and rendered-reason coverage.
+
+The default-loader regression
 exercises the existing engine and publication owners, rather than replacing them: a lost provider
 response is resolved by exact readback, and a fresh application returns the durable engine result
 without another provider mutation. An unresolved provider result retains its original operation;
@@ -31,15 +43,39 @@ decision, producer framework or host backend is needed for the approved bounded 
 | Capability | Candidate behavior |
 | --- | --- |
 | Exact completed engine result | Replay through a newly default-composed application; no duplicate provider mutation |
+| Acquired but unstarted engine action | Report pending, not lost/failed; retain the exact operation and non-executable read controls |
 | Started operation without its result, even with a ready receipt | Contain without invoking the owner again; retain operation custody and consumed budget |
 | Provider mutation with unavailable readback | Contain the recorded failure; repeated calls neither mutate again nor consume another attempt |
+| Missing, malformed, mismatched or unreadable operation journals | Report unverifiable evidence; no mark-ready/merge instruction, effect execution or reconstruction |
 | Dirty, staged or private worktree before effect entry | Reject stale preflight without entering the effect or changing content/index; no recovery success is claimed |
 | Unrelated eligible Change | Continue through selected application acquisition without releasing the contained Change |
 | Worker closure or dirty-content authority unavailable | Keep existing fail-closed boundaries; diagnosis is not release, preservation or permission |
 
 ### Candidate proof and limits
 
-The source writer observed **12 focused application cases passing** with locked dependencies under
+**Read-side repair evidence:** the source writer reports **8 final focused loader cases passing**:
+the six-state pending/start/invalid-or-mismatched journal matrix and the two replay/readback cases.
+Both failure cases reload the actual application; the unknown-result case checks public reads
+before any execution call can create a result. Repeated reads preserve intent/start/result bytes,
+coordination, frontier, retry ledger, worktree/raw index, provider mutation count and publication
+state. The known-result replay and unrelated Change progression assertions remain in place.
+Earlier affected selections overlap these cases and are not additive.
+
+The writer also reports **24 work-item cases**, **one TypeScript/backend reason-parity case**,
+and scoped Ruff/format checks passing. Earlier Cockpit WorkPortfolio coverage (**112 cases**),
+Biome and a TypeScript/Vite build passed before the final label-only changes. These were run on
+Python **3.12.3** and Node **22.23.2**, not the pinned runtimes; no locked/pinned-toolchain pass is
+claimed. The parent inspected the changes and did not rerun delegated checks. Final independent
+review and automated validation remain pending at this checkpoint.
+
+An overbroad writer portfolio-module run reported 419 passes and one existing assertion failure:
+`test_selected_acquisition_repeated_call_reports_active_without_second_launch` expects
+`"Do not redispatch"` while the baseline `14b904e` guidance contains `"do not redispatch"`.
+Neither that assertion nor its acquisition guidance is changed here. This is an unresolved baseline
+test failure, not a passing full-module result; the module was not rerun for this repair.
+
+**Prior candidate evidence, not proof of the read-side repair:** the source writer observed
+**12 focused application cases passing** with locked dependencies under
 `uv 0.11.0` and managed Python **3.14.3**. The selection covered the default-loader replay/readback
 and workspace variants plus affected containment/readiness diagnostics. After strengthening the
 oracles, **five loader cases** passed; the journal-guidance repair then passed **10 affected cases**.
@@ -65,9 +101,9 @@ formatter checks pass; the test module retains only two formatting differences v
 `dev@d7d5d2d`, not attributed to this increment. No broad lint suppression or module rewrite was added.
 
 The final loader-instance correction passed **both parameterized replay cases** and scoped test lint.
-Independent read-only review of the complete candidate against `2e377a6` found no significant issues
-after its findings were addressed. No unresolved bounded-C product defect is identified in this
-candidate; it is ready for PR review under the revised contract, not the old full-automation promise.
+The writer's independent narrow review against `2e377a6` reported no significant issues after its
+findings were addressed. The subsequent acceptance review found the read-side defect linked above;
+that finding supersedes the earlier no-unresolved-defect assessment.
 Pinned-interpreter verification, external checks and package acceptance remain pending. Final-source
 automated validation stopped at its timeout circuit breaker and prohibited retry; no final-source
 CodeQL or automated-review pass is claimed. Source/Cockpit/ecosystem CI at `02bcf7b` is
@@ -80,7 +116,7 @@ CodeQL or automated-review pass is claimed. Source/Cockpit/ecosystem CI at `02bc
 | Supported recovery | Exact engine-owned durable result or matching publication receipt is replayed/reconciled once under existing custody. A lost response followed by restart returns the same result and resumes only the selected Change; it does not re-invoke an already completed effect |
 | Unknown execution | Started without authoritative result, absent exclusion, conflicting receipt or stale basis remains contained. No cleanup, copying, custody release, blind retry or replacement worker; bytes/index/head and failure budget remain unchanged |
 | Unattributed mutation | Stable foreign, ignored/private or staged edits cannot become automatic preservation or Builder authority through snapshots, scope, caller assertions or a successful exit code. Keep the original material in place |
-| Actionable diagnosis | Current public application read/repair result states missing evidence and the responsible owner/resume condition. No nonexistent repair promise, command assembly, fake approval, inferred termination or unsupported clickable action |
+| Actionable diagnosis | Public reads distinguish an unstarted retained action, started-without-result, exact recorded failure and unverifiable journals against the original action. Containment replaces mark-ready/merge guidance and names missing evidence, responsible owner and resume condition; repeated reads do not execute, reconcile or mutate authority. No nonexistent repair promise, command assembly, fake approval, inferred termination or unsupported clickable action |
 | Continued progress | Unrelated eligible Changes still run; same-Change unknown custody remains occupied. Repeated requests do not mint new equivalent attempts or reset budgets |
 | Package integration | D retains offline diagnosis; E retains strict registered/HTTP forwarding and cumulative proof for this revised boundary. Unsupported host recovery is explicitly contained, not a hidden package prerequisite |
 

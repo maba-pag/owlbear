@@ -1693,6 +1693,176 @@ def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: 
     assert provider.set_pull_request_draft_state.call_count == 0
 
 
+@pytest.mark.parametrize(
+    "journal_state",
+    ["pending", "started", "invalid-intent", "mismatched-intent", "invalid-result", "mismatched-result"],
+)
+def test_readiness_distinguishes_retained_engine_journal_states_without_writes(  # noqa: PLR0915
+    tmp_path: Path, journal_state: str
+) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    action = _engine_action(application, "change-a")
+    coordinator = application._coordinator
+    intent_path = coordinator.continuation_record_path("change-a", action.operation_id)
+    result_path = intent_path.with_name("result.json")
+    if journal_state == "started":
+        with coordinator.continuation_execution(action):
+            assert coordinator.start_continuation_action(action)
+    elif journal_state == "invalid-intent":
+        intent_path.write_bytes(b"{")
+    elif journal_state == "mismatched-intent":
+        intent = ChangeContinuationAction.model_validate_json(intent_path.read_bytes())
+        intent_path.write_bytes(_canonical(intent.model_copy(update={"session_id": "foreign-session"})))
+    elif journal_state == "invalid-result":
+        result_path.mkdir()
+    elif journal_state == "mismatched-result":
+        foreign_action = action.model_copy(update={"session_id": "foreign-session"})
+        foreign_result = application._engine_action_failure(
+            foreign_action,
+            "engine-action-failed",
+            "provider unavailable",
+        )
+        result_path.write_bytes(_canonical(foreign_result))
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    reloaded_runtime = reloaded._runtimes["change-a"]
+    reloaded_coordinator = reloaded._coordinator
+    reloaded_intent_path = reloaded_coordinator.continuation_record_path("change-a", action.operation_id)
+    reloaded_started_path = reloaded_intent_path.with_name("started.json")
+    reloaded_result_path = reloaded_intent_path.with_name("result.json")
+    reloaded_worktree = reloaded_coordinator.show("change-a").worktree_path
+    before = {
+        "intent": reloaded_intent_path.read_bytes(),
+        "started": reloaded_started_path.read_bytes() if reloaded_started_path.exists() else None,
+        "result": reloaded_result_path.read_bytes() if reloaded_result_path.is_file() else None,
+        "coordination": (reloaded_coordinator.runtime_root / "coordination/changes/change-a.json").read_bytes(),
+        "frontier": reloaded_runtime.frontier_bytes(),
+        "ledger": reloaded_runtime.retry_ledger().read(),
+        "workspace": _workspace_mutation_snapshot(reloaded_worktree),
+        "remote": _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state"),
+        "provider_calls": provider.draft_state_calls,
+    }
+    view = reloaded.get_change("change-a")
+    repeated = reloaded.get_change("change-a")
+
+    expected_reason = {
+        "pending": "engine-action-pending",
+        "started": "engine-action-interrupted",
+        "invalid-intent": "engine-action-blocked",
+        "mismatched-intent": "engine-action-blocked",
+        "invalid-result": "engine-action-blocked",
+        "mismatched-result": "engine-action-blocked",
+    }[journal_state]
+    assert view.readiness.reason_code == expected_reason
+    assert repeated.readiness == view.readiness
+    assert view.readiness.status == ("running" if journal_state == "pending" else "blocked")
+    assert not view.readiness.executable
+    assert view.readiness.action is None
+    if journal_state == "pending":
+        assert "Delivery engine owner" in view.detail.card.next_step
+        assert "unstarted exact operation" in view.detail.card.next_step
+    elif journal_state == "started":
+        assert "Delivery engine owner" in view.detail.card.next_step
+        assert "all descendant writers and jobs" in view.detail.card.next_step
+    else:
+        assert "journals cannot be verified" in view.detail.card.next_step
+        assert "do not reconstruct or retry" in view.detail.card.next_step
+    assert provider.draft_state_calls == before["provider_calls"]
+    assert reloaded_intent_path.read_bytes() == before["intent"]
+    assert (reloaded_started_path.read_bytes() if reloaded_started_path.exists() else None) == before["started"]
+    assert (reloaded_result_path.read_bytes() if reloaded_result_path.is_file() else None) == before["result"]
+    assert reloaded_result_path.is_dir() is (journal_state == "invalid-result")
+    assert (
+        reloaded_coordinator.runtime_root / "coordination/changes/change-a.json"
+    ).read_bytes() == before["coordination"]
+    assert reloaded_runtime.frontier_bytes() == before["frontier"]
+    assert reloaded_runtime.retry_ledger().read() == before["ledger"]
+    assert _workspace_mutation_snapshot(reloaded_worktree) == before["workspace"]
+    assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == before["remote"]
+    assert provider.draft_state_calls == before["provider_calls"]
+
+
+def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+    action = _engine_action(application)
+    provider.observe_checks.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        action.operation_id,
+        "provider unavailable",
+        retry_safe=True,
+    )
+    result = _execute_engine(application, action)
+    assert result.reason_code == "engine-action-failed"
+    before = {
+        "result": application._coordinator.continuation_record_path(
+            "change-a", action.operation_id, result=True
+        ).read_bytes(),
+        "coordination": (state_root / "coordination/changes/change-a.json").read_bytes(),
+        "frontier": runtime.frontier_bytes(),
+        "ledger": runtime.retry_ledger().read(),
+    }
+
+    view = application.get_change("change-a")
+
+    assert view.readiness.status == "blocked"
+    assert view.readiness.reason_code == "engine-action-failed"
+    assert not view.readiness.executable
+    assert view.readiness.action is None
+    assert "publication owner" in view.detail.card.next_step
+    assert "provider/readback failure" in view.detail.card.next_step
+    assert "provider unavailable" not in view.detail.card.next_step
+    assert application.get_change("change-a").readiness == view.readiness
+    assert (
+        application._coordinator.continuation_record_path("change-a", action.operation_id, result=True).read_bytes()
+        == before["result"]
+    )
+    assert (state_root / "coordination/changes/change-a.json").read_bytes() == before["coordination"]
+    assert runtime.frontier_bytes() == before["frontier"]
+    assert runtime.retry_ledger().read() == before["ledger"]
+
+
+@pytest.mark.parametrize("started_state", ["matching", "mismatched", "invalid"])
+def test_readiness_validates_started_journal_with_recorded_result(tmp_path: Path, started_state: str) -> None:
+    application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    action = _engine_action(application)
+    provider.observe_checks.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        action.operation_id,
+        "provider unavailable",
+        retry_safe=True,
+    )
+    result = _execute_engine(application, action)
+    assert result.reason_code == "engine-action-failed"
+    started_path = application._coordinator.continuation_record_path("change-a", action.operation_id).with_name(
+        "started.json"
+    )
+    if started_state == "matching":
+        started_path.write_bytes(_canonical(action))
+    elif started_state == "mismatched":
+        started_path.write_bytes(_canonical(action.model_copy(update={"session_id": "foreign-session"})))
+    else:
+        started_path.write_bytes(b"{")
+
+    view = application.get_change("change-a")
+
+    assert view.readiness.reason_code == (
+        "engine-action-failed" if started_state == "matching" else "engine-action-blocked"
+    )
+    assert view.readiness.status == "blocked"
+    assert not view.readiness.executable
+    assert view.readiness.action is None
+
+
 @pytest.mark.parametrize("restart", [False, True])
 def test_engine_result_transaction_recovers_without_repeating_provider(tmp_path: Path, *, restart: bool) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
@@ -8572,11 +8742,55 @@ def _execute_loader_failure_case(
             workspace_root=repository,
             publication_provider=provider,
         )
+        intent_path = restarted._coordinator.continuation_record_path("change-b", action_b.operation_id)
+        started_path = intent_path.with_name("started.json")
+        result_path = intent_path.with_name("result.json")
+        worktree = restarted._coordinator.show("change-b").worktree_path
+        before_read = {
+            "intent": intent_path.read_bytes(),
+            "started": started_path.read_bytes(),
+            "result": result_path.read_bytes() if result_path.is_file() else None,
+            "coordination": (
+                restarted._coordinator.runtime_root / "coordination/changes/change-b.json"
+            ).read_bytes(),
+            "frontier": restarted._runtimes["change-b"].frontier_bytes(),
+            "ledger": restarted._runtimes["change-b"].retry_ledger().read(),
+            "workspace": _workspace_mutation_snapshot(worktree),
+            "remote": _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state"),
+            "provider_calls": provider.draft_state_calls,
+        }
+        read_view = restarted.get_change("change-b")
+        repeated_read_view = restarted.get_change("change-b")
+        assert read_view.readiness.reason_code == "engine-action-interrupted"
+        assert read_view.readiness.status == "blocked"
+        assert not read_view.readiness.executable
+        assert read_view.readiness.action is None
+        assert "Delivery engine owner" in read_view.detail.card.next_step
+        assert "all descendant writers and jobs" in read_view.detail.card.next_step
+        assert repeated_read_view.readiness == read_view.readiness
+        assert intent_path.read_bytes() == before_read["intent"]
+        assert started_path.read_bytes() == before_read["started"]
+        assert (result_path.read_bytes() if result_path.is_file() else None) == before_read["result"]
+        assert (
+            restarted._coordinator.runtime_root / "coordination/changes/change-b.json"
+        ).read_bytes() == before_read["coordination"]
+        assert restarted._runtimes["change-b"].frontier_bytes() == before_read["frontier"]
+        assert restarted._runtimes["change-b"].retry_ledger().read() == before_read["ledger"]
+        assert _workspace_mutation_snapshot(worktree) == before_read["workspace"]
+        assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == before_read["remote"]
+        assert provider.draft_state_calls == before_read["provider_calls"]
         contained = _execute_engine(restarted, action_b)
     else:
         _make_provider_readback_unavailable(provider, 8)
         restarted = reloaded
         contained = _execute_engine(restarted, action_b)
+        _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+        _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+        restarted = load_delivery_application(
+            _startup_config(),
+            workspace_root=repository,
+            publication_provider=provider,
+        )
     remote_state_head = _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
     workspace = _workspace_mutation_snapshot(restarted._coordinator.show("change-b").worktree_path)
     budget_after = restarted._runtimes["change-b"].retry_ledger().read()
@@ -8709,6 +8923,26 @@ def test_loader_composed_engine_replay_contains_unknown_owner_and_preserves_sibl
         assert "replacement" in contained.failure.retry_condition
     assert restarted.get_change("change-b").continuation_action == action_b
     assert restarted.get_change("change-b").continuation_action.finished_at is None
+    intent_path = restarted._coordinator.continuation_record_path("change-b", action_b.operation_id)
+    result_path = restarted._coordinator.continuation_record_path("change-b", action_b.operation_id, result=True)
+    intent_before = intent_path.read_bytes()
+    result_before = result_path.read_bytes() if result_path.is_file() else None
+    read_view = restarted.get_change("change-b")
+    repeated_read_view = restarted.get_change("change-b")
+    assert read_view.readiness.reason_code == (
+        "engine-action-interrupted" if unknown_result else "engine-action-failed"
+    )
+    assert read_view.detail.card.next_step
+    assert repeated_read_view.readiness == read_view.readiness
+    assert intent_path.read_bytes() == intent_before
+    assert (result_path.read_bytes() if result_path.is_file() else None) == result_before
+    if unknown_result:
+        assert "Delivery engine owner" in read_view.detail.card.next_step
+        assert "all descendant writers and jobs" in read_view.detail.card.next_step
+        assert "do not retry" in read_view.detail.card.next_step
+    else:
+        assert "publication owner" in read_view.detail.card.next_step
+        assert "provider/readback failure" in read_view.detail.card.next_step
     if unknown_result:
         assert restarted._runtimes["change-b"].ready_receipt() is not None
     else:

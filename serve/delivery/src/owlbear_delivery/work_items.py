@@ -277,6 +277,9 @@ DeliveryReadinessReason = Literal[
     "execution-occupancy-unavailable",
     "engine-action-pending",
     "engine-action-blocked",
+    "engine-action-interrupted",
+    "engine-action-failed",
+    "engine-action-incomplete",
     "target-sync-required",
     "claim-custody-unreconciled",
     "runtime-unavailable",
@@ -526,23 +529,48 @@ class WorkItemProjector:
         self,
         snapshot: DeliveryPortfolioSnapshot,
         readiness: tuple[DeliveryReadiness, ...] = (),
+        *,
+        readiness_guidance: tuple[str | None, ...] = (),
     ) -> None:
         self._snapshot = snapshot
         self._outcomes = {item.outcome_id: item for item in snapshot.contract.outcomes}
         self._bindings = {item.outcome_id: item for item in snapshot.frontier.bindings}
         self._cards = self._project_cards()
         if readiness:
+            guidance = readiness_guidance or (None,) * len(readiness)
             self._cards = tuple(
                 card.model_copy(
                     update={
                         "readiness": decision,
                         "action": decision.action or WorkItemAction(),
                         "next_actor": decision.next_actor,
-                        "next_step": {
+                        "next_step": guidance_item
+                        or {
                             "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
                             "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
                             "workspace-preflight-failed": "Managed workspace preflight did not pass.",
                             "active-custody": "An active operation retains Change custody.",
+                            "engine-action-pending": (
+                                "The Delivery engine owner retains an unstarted exact operation; no failure or closure "
+                                "evidence exists. Resume the exact operation only through its owner."
+                            ),
+                            "engine-action-interrupted": (
+                                "The retained Delivery operation started without an authoritative result. Preserve "
+                                "custody and journals; resume awaits verified owner closure and settlement."
+                            ),
+                            "engine-action-failed": (
+                                "The retained Delivery operation has a recorded failure. Preserve custody and "
+                                "journals; the responsible owner must resolve it before resume."
+                            ),
+                            "engine-action-incomplete": (
+                                "The Delivery checkpoint owner must resolve the recorded checkpoint condition before "
+                                "the exact operation can resume; preserve custody and journals; do not retry."
+                            ),
+                            "engine-action-blocked": (
+                                "The original intent/start/result journals cannot be verified. The Delivery engine "
+                                "owner must establish matching authoritative records and custody before resume; do "
+                                "not reconstruct or retry."
+                            ),
                             "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
                             "claim-custody-unreconciled": (
                                 "The exact Build claim has unreconciled writer custody. Preserve it; "
@@ -572,7 +600,7 @@ class WorkItemProjector:
                         }.get(decision.reason_code, card.next_step),
                     }
                 )
-                for card, decision in zip(self._cards, readiness, strict=True)
+                for card, decision, guidance_item in zip(self._cards, readiness, guidance, strict=True)
             )
         self._items = {card.work_item_id: self._compatibility_projection(card) for card in self._cards}
 

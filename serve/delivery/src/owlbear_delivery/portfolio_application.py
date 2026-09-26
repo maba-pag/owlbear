@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import logging
+import os
 import stat
 import subprocess
 import time
@@ -207,6 +208,9 @@ from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionParticipant,
+    TransactionPathError,
+    contained_directory,
+    read_contained,
 )
 from owlbear_delivery.storage_io import atomic_write, locked_roots
 from owlbear_delivery.target_contract import (
@@ -315,7 +319,20 @@ _CHECKPOINT_RETRY_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_RECONCILIATION"
 _CHECKPOINT_REVIEW_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_AWAITS_REVIEW"
 _CHECKPOINT_MISSING_HEAD_ERROR_CODE = "ERR_DELIVERY_CHECKPOINT_HEAD_MISSING"
 _MAX_CHECKPOINT_ERROR_DETAIL_LENGTH = 240
+_MAX_CONTINUATION_JOURNAL_BYTES = 65_536
 _PUBLICATION_OBSERVATION_CACHE_SECONDS = 15
+_PUBLICATION_READBACK_FAILURE_CODES = frozenset(
+    {
+        "unavailable",
+        "authentication_required",
+        "rate_limited",
+        "timeout",
+        "conflict",
+        "not_found",
+        "invalid_response",
+        "response_unknown",
+    }
+)
 _MAX_HEALTH_DETAIL_LENGTH = 240
 _MAX_HEALTH_DIAGNOSTICS = 64
 _INTENT_SUMMARY_HEADING = "Problem And Product Promise"
@@ -5802,7 +5819,7 @@ class PortfolioApplication:
             frontier_digest=snapshot.version,
             candidate_head=snapshot.frontier.finalization.exact_head if snapshot.frontier.finalization else None,
         )
-        basis, workspace_reason = self._capture_action_basis(snapshot, cards, basis)
+        basis, workspace_reason, readiness_guidance = self._capture_action_basis(snapshot, cards, basis)
         try:
             reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
         except FinalizationReportError:
@@ -5816,7 +5833,11 @@ class PortfolioApplication:
             self._with_retry_readiness(snapshot, card, decision)
             for card, decision in zip(cards, decisions, strict=True)
         )
-        return WorkItemProjector(snapshot, decisions)
+        return WorkItemProjector(
+            snapshot,
+            decisions,
+            readiness_guidance=tuple(readiness_guidance for _card in cards),
+        )
 
     def _derive_finalization_retry_identity(  # noqa: PLR0913 - identity inputs mirror both read and acquire fences.
         self,
@@ -6013,18 +6034,18 @@ class PortfolioApplication:
 
     def _capture_action_basis(
         self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...], basis: DeliveryReadinessBasis
-    ) -> tuple[DeliveryReadinessBasis, str | None]:
+    ) -> tuple[DeliveryReadinessBasis, str | None, str | None]:
         try:
             coordination = self._workspace_manager.show(snapshot.contract.change_id)
         except (OSError, RuntimeError, ValueError):
-            return basis, "coordination-unavailable"
+            return basis, "coordination-unavailable", None
         if not self._coordinator.recovery_exclusions_verified(coordination):
-            return basis, "coordination-unavailable"
+            return basis, "coordination-unavailable", None
         action = coordination.continuation_action
         basis = basis.model_copy(update={"continuation_id": action.operation_id if action else None})
         if action is not None and action.finished_at is None:
-            result_path = self._coordinator.continuation_record_path(action.change_id, action.operation_id, result=True)
-            return basis, "engine-action-blocked" if result_path.exists() else "engine-action-pending"
+            reason, guidance = self._continuation_journal_readiness(action)
+            return basis, reason, guidance
         needs_workspace = self._supports_finalization(snapshot.frontier) or any(
             card.action.kind
             in {
@@ -6048,7 +6069,7 @@ class PortfolioApplication:
                     reason = "checkpoint-pending"
                 elif sync is None or sync.target_head != basis.target_head:
                     reason = "target-sync-required"
-            return basis, reason
+            return basis, reason, None
         if any(
             self._captured_action(snapshot.frontier, card).kind is WorkItemActionKind.START_ORCHESTRATION
             for card in cards
@@ -6065,8 +6086,106 @@ class PortfolioApplication:
             )
             for binding in snapshot.frontier.bindings
         ):
-            return basis, "claim-custody-unreconciled"
-        return basis, None
+            return basis, "claim-custody-unreconciled", None
+        return basis, None, None
+
+    @staticmethod
+    def _read_continuation_journal(operation_fd: int, name: str) -> bytes | None:
+        """Read one bounded contained journal without following links."""
+        try:
+            return read_contained(operation_fd, Path(name), limit=_MAX_CONTINUATION_JOURNAL_BYTES)
+        except (OSError, TransactionPathError):
+            return b""
+
+    def _continuation_journal_readiness(  # noqa: C901, PLR0911, PLR0912 - each journal state fails closed distinctly.
+        self, action: ChangeContinuationAction
+    ) -> tuple[str, str | None]:
+        """Classify retained engine custody from exact journals without reconciling it."""
+        intent_path = self._coordinator.continuation_record_path(action.change_id, action.operation_id)
+
+        try:
+            root_fd = os.open(self._coordinator.runtime_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError:
+            return "engine-action-blocked", None
+        try:
+            relative_intent = intent_path.relative_to(self._coordinator.runtime_root)
+            with contained_directory(root_fd, relative_intent.parent) as operation_fd:
+                intent = self._read_continuation_journal(operation_fd, "intent.json")
+                if intent in {None, b""}:
+                    return "engine-action-blocked", None
+                try:
+                    original = ChangeContinuationAction.model_validate_json(intent)
+                except (TypeError, ValueError):
+                    return "engine-action-blocked", None
+                if original != action.model_copy(update={"finished_at": None}):
+                    return "engine-action-blocked", None
+
+                result = self._read_continuation_journal(operation_fd, "result.json")
+                if result is None:
+                    started = self._read_continuation_journal(operation_fd, "started.json")
+                    if started is None:
+                        return "engine-action-pending", None
+                    if started == _canonical_model_bytes(action):
+                        return (
+                            "engine-action-interrupted",
+                            (
+                                "The Delivery engine owner has no exact authoritative result/readback. Preserve "
+                                "custody and journals; verified host/worker closure and settlement of all descendant "
+                                "writers and jobs is required before resume; do not retry or infer termination."
+                            ),
+                        )
+                    return "engine-action-blocked", None
+
+                if result == b"":
+                    return "engine-action-blocked", None
+                started = self._read_continuation_journal(operation_fd, "started.json")
+                if started is not None and (started == b"" or started != _canonical_model_bytes(action)):
+                    return "engine-action-blocked", None
+                try:
+                    recorded = DeliveryEngineActionResult.model_validate_json(result)
+                except (TypeError, ValueError):
+                    return "engine-action-blocked", None
+                if (
+                    recorded.action != original
+                    or recorded.action.operation_id != action.operation_id
+                    or recorded.action.change_id != action.change_id
+                ):
+                    return "engine-action-blocked", None
+                if recorded.kind != "blocked":
+                    return "engine-action-blocked", None
+                if recorded.reason_code == "engine-action-interrupted":
+                    return (
+                        recorded.reason_code,
+                        (
+                            "The Delivery engine owner has no exact authoritative result/readback. Preserve custody "
+                            "and journals; verified host/worker closure and settlement of all descendant writers and "
+                            "jobs is required before resume; do not retry or infer termination."
+                        ),
+                    )
+                if recorded.failure is None:
+                    return recorded.reason_code, None
+                if recorded.failure.code in _PUBLICATION_READBACK_FAILURE_CODES:
+                    guidance = (
+                        "The publication owner has a recorded provider/readback failure; no exact authoritative "
+                        "publication readback is available. Preserve custody and journals; the publication owner "
+                        "must resolve this condition before resume; do not retry or release custody."
+                    )
+                else:
+                    state = (
+                        "recorded failure"
+                        if recorded.reason_code == "engine-action-failed"
+                        else "recorded incomplete result"
+                    )
+                    guidance = (
+                        f"The Delivery engine owner has a {state}; its exact authoritative result/readback is "
+                        "retained. Preserve custody and journals; the engine owner must resolve this condition "
+                        "before resume; do not retry or release custody."
+                    )
+                return recorded.reason_code, guidance
+        except (OSError, TransactionPathError, ValueError):
+            return "engine-action-blocked", None
+        finally:
+            os.close(root_fd)
 
     @staticmethod
     def _with_finalization_report(
@@ -6205,7 +6324,13 @@ class PortfolioApplication:
         action = prerequisites.get(workspace_reason, action) if finalization else action
         operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
         status, reason = "ready", "ready"
-        if workspace_reason in {"engine-action-pending", "engine-action-blocked"}:
+        if workspace_reason in {
+            "engine-action-pending",
+            "engine-action-interrupted",
+            "engine-action-failed",
+            "engine-action-incomplete",
+            "engine-action-blocked",
+        }:
             status = "running" if workspace_reason == "engine-action-pending" else "blocked"
             reason = workspace_reason
         elif workspace_reason == "coordination-unavailable":
