@@ -1,0 +1,9 @@
+#!python
+
+import sys
+
+sys.dont_write_bytecode = True
+
+from owlbear_tools.delivery_diagnostics import main
+
+raise SystemExit(main())

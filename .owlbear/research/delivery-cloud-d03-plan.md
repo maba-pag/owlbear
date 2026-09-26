@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-D: implemented; final independent validation pending.**
+**D03-D: acceptance repairs in progress; not yet accepted.**
 D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
 remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
@@ -11,13 +11,14 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The [D-only request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5849763790)
-authorizes the fixed read-only offline `inspect` entry, its ordinary-session prompt and focused
-bootstrap/privacy/no-write proof. It does not reopen the superseded executor decision or require an
-optional recovery backend. The implementation must remain below Delivery runtime construction,
-recognize only bounded structure, report pending transactions without replay, and never turn
-diagnosis into recovery authority. The approved [D contract](#d-offline-diagnosis) and
-[phase scope](#d03-d--read-only-offline-entry) remain unchanged.
+The [D repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5850248740)
+addresses the [acceptance findings](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5850210697)
+against `5feb888`: installed startup must prevent bytecode before package imports; unavailable or
+skipped inspection must not imply absence/completeness; schema-less local host overrides must match
+the owner's structural default; initial descriptor-stat failure must remain bounded. The ordinary
+session prompt also requires a supported command-execution route. This remains D-only work below
+Delivery runtime construction, without transaction replay or recovery authority. The approved
+[D contract](#d-offline-diagnosis) and [phase scope](#d03-d--read-only-offline-entry) remain unchanged.
 
 Checkpoint `01b0581` adds the stdlib-only tools entry, ordinary-session prompt and focused tests.
 The final candidate retains fixed `inspect`, optional project-root/Change selection and text/JSON
@@ -28,7 +29,7 @@ Read-only review drove real replacement fixtures and descriptor/path rechecks fo
 opaque transactions and project ancestors, strict byte caps, and unknown pending state when
 relevant trees cannot be inspected. No Delivery lifecycle or recovery owner was changed.
 
-Final writer-observed proof uses Python **3.14.7**, pytest **9.1.1**, locked dependencies,
+**Prior candidate evidence, not repair acceptance:** writer-observed proof used Python **3.14.7**, pytest **9.1.1**, locked dependencies,
 one worker and no pytest cache: **33 passed** for the diagnostic module plus the new bootstrap
 boundary; **2 passed** for the exact prompt nodes; **3 passed** for the exact synchronous
 authority nodes. Scoped Ruff lint/format, isolated compile/CLI and whitespace checks passed.

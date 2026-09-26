@@ -124,7 +124,8 @@ def test_malformed_and_unsupported_records_are_bounded(tmp_path: Path, relative:
 def test_missing_root_and_invalid_change_id_have_exit_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result = inspect_delivery(tmp_path / "missing")
     assert result["status"] == "unavailable"
-    assert result["diagnostic_codes"] == ["ROOT_UNAVAILABLE"]
+    assert {"ROOT_UNAVAILABLE", "PENDING_EFFECTS_UNKNOWN"} <= set(result["diagnostic_codes"])
+    assert result["pending_effects"] == "unknown"
     monkeypatch.setattr("sys.argv", ["delivery-diagnose", "inspect", "--change-id", "../secret"])
     with pytest.raises(SystemExit, match="2"):
         main()
@@ -148,6 +149,28 @@ def test_valid_project_with_missing_delivery_records_is_not_unavailable(tmp_path
     assert "ROOT_UNAVAILABLE" not in result["diagnostic_codes"]
     assert "CONFIG_MISSING" in result["diagnostic_codes"]
     assert "RUNTIME_UNREADABLE" in result["diagnostic_codes"]
+
+
+def test_missing_delivery_tree_is_distinct_from_unsafe_delivery_tree(tmp_path: Path) -> None:
+    missing = tmp_path / "missing"
+    (missing / ".owlbear").mkdir(parents=True)
+
+    missing_result = inspect_delivery(missing)
+
+    assert missing_result["diagnostic_codes"] == ["DELIVERY_STATE_MISSING"]
+    assert missing_result["pending_effects"] is False
+
+    unsafe = tmp_path / "unsafe"
+    (unsafe / ".owlbear").mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (unsafe / ".owlbear/delivery").symlink_to(outside, target_is_directory=True)
+
+    unsafe_result = inspect_delivery(unsafe)
+
+    assert "SYMLINK_REJECTED" in unsafe_result["diagnostic_codes"]
+    assert unsafe_result["pending_effects"] == "unknown"
+    assert unsafe_result["inspection_complete"] is False
 
 
 def test_invalid_cli_input_uses_bounded_error_without_echo(
@@ -333,6 +356,29 @@ def test_optional_host_local_and_selected_package_scope_are_bounded(tmp_path: Pa
 
     assert "HOST_LOCAL_UNSUPPORTED" in result["diagnostic_codes"]
     assert result["counts"]["packages"] == 1
+
+
+def test_host_local_optional_null_overrides_are_structurally_valid(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    (root / ".owlbear/delivery/runtime/host.local.json").write_bytes(
+        b'{"execution_capacity":null,"claim_timeout_seconds":null}\n'
+    )
+    result = inspect_delivery(root)
+    host_local = next(record for record in result["records"] if record["kind"] == "host_local")
+
+    assert "HOST_LOCAL_MALFORMED" not in result["diagnostic_codes"]
+    assert host_local["status"] == "supported"
+
+
+def test_missing_frontier_is_incomplete_without_unknown_pending_effects(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    (root / ".owlbear/delivery/runtime/changes/example").mkdir()
+
+    result = inspect_delivery(root)
+
+    assert "FRONTIER_MISSING" in result["diagnostic_codes"]
+    assert result["inspection_complete"] is False
+    assert result["pending_effects"] is False
 
 
 def test_failed_present_pending_families_make_pending_effects_unknown(

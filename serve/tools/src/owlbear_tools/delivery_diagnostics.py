@@ -89,6 +89,7 @@ class _Inspection:
         }
         self.selected_change_seen = False
         self.transaction_scan_unknown = False
+        self.incomplete = False
         self.entries_seen = 0
         self.entry_budget_exhausted = False
 
@@ -127,11 +128,15 @@ class _Inspection:
             "REPLACED_DURING_READ",
             "CHANGED_DURING_READ",
             "TRUNCATED_DURING_READ",
+            "SYMLINK_REJECTED",
+            "SPECIAL_FILE_REJECTED",
+            "UNSAFE_ENTRY_NAME",
         }
         if "ENTRY_LIMIT_EXCEEDED" in self.diagnostics:
             self.transaction_scan_unknown = True
         complete = complete and not (
-            self.transaction_scan_unknown
+            self.incomplete
+            or self.transaction_scan_unknown
             or any(
                 code in incomplete_codes
                 or code.endswith(("_UNREADABLE", "_MISSING"))
@@ -389,6 +394,8 @@ def _safe_read(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
     if size > MAX_TOTAL_BYTES - inspection.total_bytes:
         inspection.diagnostic("TOTAL_LIMIT_EXCEEDED")
         return None, size
+    consumed = 0
+    charged = False
     try:
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent_fd)
     except OSError as exc:
@@ -401,8 +408,6 @@ def _safe_read(  # noqa: C901, PLR0911, PLR0912, PLR0913, PLR0915
             return None, size
         remaining = min(limit, MAX_TOTAL_BYTES - inspection.total_bytes)
         chunks: list[bytes] = []
-        consumed = 0
-        charged = False
         while consumed < remaining:
             chunk = os.read(fd, min(65_536, remaining - consumed))
             if not chunk:
@@ -449,6 +454,8 @@ def _json_shape(
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
         return
     schema = value.get("schema_version")
+    if kind == "host_local" and "schema_version" not in value:
+        schema = expected_schema
     if isinstance(schema, bool) or not isinstance(schema, int) or schema != expected_schema:
         inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
         inspection.records[-1]["status"] = "unsupported"
@@ -469,12 +476,31 @@ def _json_shape(
     elif kind == "snapshot" and not isinstance(value.get("frontier"), dict):
         inspection.diagnostic("SNAPSHOT_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
-    elif kind == "host" and any(
-        field in value and (not isinstance(value[field], int) or isinstance(value[field], bool) or value[field] <= 0)
-        for field in ("execution_capacity", "claim_timeout_seconds")
-    ):
-        inspection.diagnostic("HOST_MALFORMED")
-        inspection.records[-1]["status"] = "malformed"
+    elif kind in {"host", "host_local"}:
+        allowed = {"schema_version", "execution_capacity", "claim_timeout_seconds"}
+        invalid_fields = (
+            set(value) - allowed
+            or {
+                field
+                for field in ("execution_capacity", "claim_timeout_seconds")
+                if field in value
+                and (
+                    isinstance(value[field], bool)
+                    or (value[field] is None and kind != "host_local")
+                    or (
+                        value[field] is not None
+                        and (not isinstance(value[field], int) or value[field] <= 0)
+                    )
+                )
+            }
+        )
+        if invalid_fields:
+            inspection.diagnostic(f"{kind.upper()}_MALFORMED")
+            inspection.records[-1]["status"] = "malformed"
+            return
+        inspection.records[-1]["schema_version"] = expected_schema
+        inspection.records[-1]["status"] = "supported"
+        return
     else:
         inspection.records[-1]["schema_version"] = expected_schema
         inspection.records[-1]["status"] = "supported"
@@ -492,6 +518,8 @@ def _inspect_file(
     if content is not None:
         _json_shape(content, kind=kind, expected_schema=SUPPORTED_VERSIONS[kind], inspection=inspection)
         inspection.counts[kind] += 1
+    elif kind == "frontier":
+        inspection.incomplete = True
 
 
 def _scan_change_records(
@@ -553,6 +581,7 @@ def _scan_coordination(runtime_fd: int, inspection: _Inspection, *, selected: st
             for name in _directory_names(changes_fd, inspection):
                 if not name.endswith(".json") or not _CHANGE_ID.fullmatch(name[:-5]):
                     inspection.diagnostic("UNSAFE_ENTRY_NAME")
+                    inspection.transaction_scan_unknown = True
                     continue
                 if selected is not None and name[:-5] != selected:
                     continue
@@ -580,6 +609,7 @@ def _scan_snapshots(delivery_fd: int, inspection: _Inspection, *, selected: str 
             inspection.selected_change_seen = True
             child = _open_directory(state_fd, name, inspection, "SNAPSHOT")
             if child is None:
+                inspection.transaction_scan_unknown = True
                 continue
             child_fd, child_opened = child
             try:
@@ -892,6 +922,7 @@ def _inspect_delivery_tree(root_fd: int, inspection: _Inspection, *, selected: s
     owlbear = _open_directory(root_fd, ".owlbear", inspection, "OWLBEAR", required=True)
     if owlbear is None:
         inspection.diagnostic("DELIVERY_ROOT_UNAVAILABLE")
+        inspection.transaction_scan_unknown = True
         return "unavailable"
     owlbear_fd, owlbear_opened = owlbear
     try:
@@ -900,6 +931,8 @@ def _inspect_delivery_tree(root_fd: int, inspection: _Inspection, *, selected: s
         if delivery is None:
             if len(inspection.diagnostics) == delivery_diagnostics_before:
                 inspection.diagnostic("DELIVERY_STATE_MISSING")
+            else:
+                inspection.transaction_scan_unknown = True
             return "degraded"
         delivery_fd, delivery_opened = delivery
         try:
@@ -926,9 +959,9 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
     inspection = _Inspection(root, change_id)
     opened = _open_root(root)
     if opened is None:
-        return inspection.result(status="unavailable", complete=False) | {
-            "diagnostic_codes": ["ROOT_UNAVAILABLE"],
-        }
+        inspection.transaction_scan_unknown = True
+        inspection.diagnostic("ROOT_UNAVAILABLE")
+        return inspection.result(status="unavailable", complete=False)
     root_fd, root_descriptors = opened
     forced_status: str | None = None
     forced_complete = True
@@ -944,6 +977,7 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
             root_stable = False
         if not root_stable:
             inspection.diagnostic("REPLACED_DURING_INSPECTION")
+            inspection.transaction_scan_unknown = True
             forced_complete = False
         for descriptor in reversed(root_descriptors):
             os.close(descriptor)

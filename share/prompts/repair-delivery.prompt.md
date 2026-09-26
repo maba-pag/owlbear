@@ -1,6 +1,7 @@
 ---
 description: "Run bounded read-only offline Delivery diagnosis"
-mode: ask
+agent: agent
+tools: [execute/runInTerminal]
 ---
 
 Run the fixed `delivery-diagnose inspect` operation for the current project, optionally scoped to
@@ -11,6 +12,9 @@ initialization, or lifecycle commands. If neither the installed entry nor an alr
 Python source fallback is available, report the diagnostic as unavailable. Treat its output as
 structural evidence only: it does not establish healthy
 execution, user confirmation, provenance, worker termination, approval, or merge readiness.
+If the terminal is unavailable, report unavailable; do not substitute another tool. The tool
+declaration is not an automation-permission bypass and does not claim to prevent arbitrary shell
+use.
 
 Use no Delivery, MCP, Cockpit, runtime-parser, mutating, Git, network, provider, lock,
 or filesystem-repair commands; “process commands” here means termination or control, not the

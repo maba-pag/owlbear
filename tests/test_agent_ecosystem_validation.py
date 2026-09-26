@@ -461,10 +461,18 @@ def test_prompt_validator_accepts_current_prompt_roots() -> None:
 
 
 def test_repair_delivery_prompt_is_an_ordinary_read_only_entry() -> None:
-    prompt = (_PROMPTS_ROOT / "repair-delivery.prompt.md").read_text(encoding="utf-8")
+    path = _PROMPTS_ROOT / "repair-delivery.prompt.md"
+    prompt = path.read_text(encoding="utf-8")
+    metadata = _frontmatter(path)
+    assert metadata["agent"] == "agent"
+    assert metadata["tools"] == ["execute/runInTerminal"]
+    assert "mode" not in metadata
     assert "delivery-diagnose inspect" in prompt
     assert "PYTHONDONTWRITEBYTECODE=1" in prompt
     assert "python -B serve/tools/src/owlbear_tools/delivery_diagnostics.py inspect" in prompt
+    assert "terminal is unavailable" in prompt
+    assert "do not substitute another tool" in prompt
+    assert "automation-permission bypass" in prompt
     assert "process commands" in prompt
     assert "D07's supported route" in prompt
     assert "automatic fix" in prompt
