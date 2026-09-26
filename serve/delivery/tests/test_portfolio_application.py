@@ -1819,6 +1819,14 @@ def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path)
     assert "publication owner" in view.detail.card.next_step
     assert "provider/readback failure" in view.detail.card.next_step
     assert "provider unavailable" not in view.detail.card.next_step
+    assert view.detail.card.needs_headline == view.detail.card.next_step
+    assert "merge" not in view.detail.card.needs_headline.casefold()
+    assert "mark-ready" not in view.detail.card.needs_headline.casefold()
+    projected = application._read_projector(application._delivery_snapshot(runtime))
+    compatibility = next(item for item in projected.list_items() if item.change_id == "change-a")
+    assert compatibility.next_action == view.detail.card.next_step
+    assert "merge" not in compatibility.next_action.casefold()
+    assert "mark-ready" not in compatibility.next_action.casefold()
     assert application.get_change("change-a").readiness == view.readiness
     assert (
         application._coordinator.continuation_record_path("change-a", action.operation_id, result=True).read_bytes()
@@ -1827,6 +1835,31 @@ def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path)
     assert (state_root / "coordination/changes/change-a.json").read_bytes() == before["coordination"]
     assert runtime.frontier_bytes() == before["frontier"]
     assert runtime.retry_ledger().read() == before["ledger"]
+
+
+def test_readiness_contains_unexecuted_acceptance_observation(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=True
+    )
+    action = _engine_action(application)
+
+    assert action.kind == "observe-acceptance"
+    assert runtime.ready_receipt() is not None
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+
+    view = application.get_change("change-a")
+    assert not view.readiness.executable
+    assert "merge" not in view.detail.card.needs_headline.casefold()
+    assert "mark-ready" not in view.detail.card.needs_headline.casefold()
+    assert "merge" not in view.detail.card.next_step.casefold()
+    assert "mark-ready" not in view.detail.card.next_step.casefold()
+
+    projected = application._read_projector(application._delivery_snapshot(runtime))
+    compatibility = next(item for item in projected.list_items() if item.change_id == "change-a")
+    assert "merge" not in compatibility.next_action.casefold()
+    assert "mark-ready" not in compatibility.next_action.casefold()
+    assert "merge" not in projected.show("change-a").projection.next_action.casefold()
+    assert "mark-ready" not in projected.show("change-a").projection.next_action.casefold()
 
 
 @pytest.mark.parametrize("started_state", ["matching", "mismatched", "invalid"])

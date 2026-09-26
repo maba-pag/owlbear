@@ -538,66 +538,72 @@ class WorkItemProjector:
         self._cards = self._project_cards()
         if readiness:
             guidance = readiness_guidance or (None,) * len(readiness)
+            retained_reasons = {
+                "engine-action-pending",
+                "engine-action-interrupted",
+                "engine-action-failed",
+                "engine-action-incomplete",
+                "engine-action-blocked",
+            }
+            readiness_fallbacks = {
+                "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
+                "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
+                "workspace-preflight-failed": "Managed workspace preflight did not pass.",
+                "active-custody": "An active operation retains Change custody.",
+                "engine-action-pending": (
+                    "The Delivery engine owner retains an unstarted exact operation; no failure or closure "
+                    "evidence exists. Resume the exact operation only through its owner."
+                ),
+                "engine-action-interrupted": (
+                    "The Delivery engine owner has no exact authoritative result/readback. Preserve custody and "
+                    "journals; verified host/worker closure and settlement of all descendant writers and jobs is "
+                    "required before resume; do not retry or infer termination."
+                ),
+                "engine-action-failed": (
+                    "The Delivery engine owner has a recorded failure; its exact authoritative result/readback is "
+                    "retained. Preserve custody and journals; the engine owner must resolve this condition before "
+                    "resume; do not retry or release custody."
+                ),
+                "engine-action-incomplete": (
+                    "The Delivery checkpoint owner must resolve the recorded checkpoint condition before the exact "
+                    "operation can resume; preserve custody and journals; do not retry."
+                ),
+                "engine-action-blocked": (
+                    "The original intent/start/result journals cannot be verified. The Delivery engine owner must "
+                    "establish matching authoritative records and custody before resume; do not reconstruct or retry."
+                ),
+                "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
+                "claim-custody-unreconciled": (
+                    "The exact Build claim has unreconciled writer custody. Preserve it; automatic recovery is "
+                    "unavailable while host/worker evidence is missing. Resume awaits verified closure that excludes "
+                    "all descendants and tool jobs and records settlement."
+                ),
+                "finalization-failed": (
+                    "Finalization failed with custody retained. The authoritative result for this operation is "
+                    "unavailable; automatic recovery is unavailable while host/worker evidence is missing. Resume "
+                    "awaits verified closure evidence for this invocation that excludes all descendants and tool "
+                    "jobs and records settlement. Diagnostic retirement cannot release custody or authorize retry."
+                ),
+                "review-repair": "Review repair requires a new Change commit before verification.",
+                "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
+                "retry-exhausted": "Automatic recovery is exhausted; preserve state for an explicit decision.",
+                "acceptance-wait": "Acceptance remains unchanged; observe later without repeating the effect.",
+                "retry-containment": "Automatic recovery is contained pending an owning decision.",
+                "retry-ledger-unavailable": "Retry authority could not be read; preserve state before continuing.",
+            }
             self._cards = tuple(
                 card.model_copy(
                     update={
                         "readiness": decision,
                         "action": decision.action or WorkItemAction(),
                         "next_actor": decision.next_actor,
-                        "next_step": guidance_item
-                        or {
-                            "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
-                            "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
-                            "workspace-preflight-failed": "Managed workspace preflight did not pass.",
-                            "active-custody": "An active operation retains Change custody.",
-                            "engine-action-pending": (
-                                "The Delivery engine owner retains an unstarted exact operation; no failure or closure "
-                                "evidence exists. Resume the exact operation only through its owner."
-                            ),
-                            "engine-action-interrupted": (
-                                "The retained Delivery operation started without an authoritative result. Preserve "
-                                "custody and journals; resume awaits verified owner closure and settlement."
-                            ),
-                            "engine-action-failed": (
-                                "The retained Delivery operation has a recorded failure. Preserve custody and "
-                                "journals; the responsible owner must resolve it before resume."
-                            ),
-                            "engine-action-incomplete": (
-                                "The Delivery checkpoint owner must resolve the recorded checkpoint condition before "
-                                "the exact operation can resume; preserve custody and journals; do not retry."
-                            ),
-                            "engine-action-blocked": (
-                                "The original intent/start/result journals cannot be verified. The Delivery engine "
-                                "owner must establish matching authoritative records and custody before resume; do "
-                                "not reconstruct or retry."
-                            ),
-                            "coordination-unavailable": "Change custody cannot be read; preserve state for diagnosis.",
-                            "claim-custody-unreconciled": (
-                                "The exact Build claim has unreconciled writer custody. Preserve it; "
-                                "automatic recovery is unavailable while host/worker evidence is missing. Resume "
-                                "awaits verified closure that excludes all descendants and tool jobs and records "
-                                "settlement."
-                            ),
-                            "finalization-failed": (
-                                "Finalization failed with custody retained. The authoritative result for this "
-                                "operation is unavailable; automatic recovery is unavailable while host/worker "
-                                "evidence is missing. Resume awaits verified closure evidence for this invocation "
-                                "that excludes all descendants and tool jobs and records settlement. Diagnostic "
-                                "retirement cannot release custody or authorize retry."
-                            ),
-                            "review-repair": "Review repair requires a new Change commit before verification.",
-                            "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
-                            "retry-exhausted": (
-                                "Automatic recovery is exhausted; preserve state for an explicit decision."
-                            ),
-                            "acceptance-wait": (
-                                "Acceptance remains unchanged; observe later without repeating the effect."
-                            ),
-                            "retry-containment": "Automatic recovery is contained pending an owning decision.",
-                            "retry-ledger-unavailable": (
-                                "Retry authority could not be read; preserve state before continuing."
-                            ),
-                        }.get(decision.reason_code, card.next_step),
+                        "needs": WorkItemNeed.NONE if decision.reason_code in retained_reasons else card.needs,
+                        "needs_headline": (
+                            guidance_item or readiness_fallbacks.get(decision.reason_code, card.needs_headline)
+                            if decision.reason_code in retained_reasons
+                            else card.needs_headline
+                        ),
+                        "next_step": guidance_item or readiness_fallbacks.get(decision.reason_code, card.next_step),
                     }
                 )
                 for card, decision, guidance_item in zip(self._cards, readiness, guidance, strict=True)
@@ -1290,7 +1296,19 @@ class WorkItemProjector:
             dependency_ids=outcome.dependency_ids if outcome is not None else (),
             task_count=len(binding.tasks) if binding is not None else 0,
             reviewed_task_count=len(binding.results) if binding is not None else 0,
-            next_action=card.action.label or card.needs_headline or card.progress.label,
+            next_action=(
+                card.next_step
+                if card.readiness is not None
+                and card.readiness.reason_code
+                in {
+                    "engine-action-pending",
+                    "engine-action-interrupted",
+                    "engine-action-failed",
+                    "engine-action-incomplete",
+                    "engine-action-blocked",
+                }
+                else card.action.label or card.needs_headline or card.progress.label
+            ),
         )
 
     def _dependency_view(self, outcome_id: str) -> WorkItemDependencyView:
