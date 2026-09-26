@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-D: acceptance repairs implemented; final validation pending.**
+**D03-D: repaired source ready for acceptance; external gates remain.**
 D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
 remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
@@ -20,7 +20,8 @@ session prompt also requires a supported command-execution route. This remains D
 Delivery runtime construction, without transaction replay or recovery authority. The approved
 [D contract](#d-offline-diagnosis) and [phase scope](#d03-d--read-only-offline-entry) remain unchanged.
 
-Repair checkpoint `2d4eecd` fixes structural accounting and introduces an installed launcher.
+Repair checkpoint `2d4eecd` fixes structural accounting and introduces an installed launcher;
+final source and committed regression proof are at `15351d8`.
 The subsequent whole-project installed-console regression exposed a remaining startup write:
 Python site initialization could compile the virtual-environment hook before a Python launcher
 disabled bytecode. The final POSIX shared-script launcher starts the installed environment's sibling
@@ -54,7 +55,9 @@ The seven-case selection overlaps the diagnostic module. Intermediate 35-case ru
 by separate test workers; the coordinating session did not rerun delegated tests. Read-only source
 review found no high-confidence defect before the final launcher change; follow-up identified a
 portability issue, corrected and covered by the final installed invocation. Final read-only re-review
-found no significant issues. Automated validation remains pending. The reduced test environment
+found no significant issues. CodeQL on `15351d8` reported **zero Python alerts**; automated Code Review
+could not load its configured model, so its success wrapper is not a review pass. Secret and
+whitespace checks passed. The reduced test environment
 reported eight configuration/marker warnings for absent optional pytest plugins in the final
 seven-case run; no async or timeout-plugin behavior is claimed by these synchronous checks.
 
