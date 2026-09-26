@@ -170,7 +170,7 @@ class TargetCockpitService:
         outcome_id: str,
         body: ConfirmLostClaimBody,
     ) -> object:
-        """Recover one exact claim only after explicit lost confirmation."""
+        """Request exact recovery; host-owned exclusion remains an engine requirement."""
         return self._invoke(
             lambda: self._application.recover_claim(
                 change_id,

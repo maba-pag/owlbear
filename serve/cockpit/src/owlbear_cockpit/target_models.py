@@ -398,7 +398,7 @@ class ClearBlockBody(_TargetHTTPModel):
 
 
 class ConfirmLostClaimBody(_TargetHTTPModel):
-    """Explicit confirmation for removal of one exact failed claim."""
+    """Legacy recovery request; confirmation does not prove worker exclusion."""
 
     confirmed_lost: Literal[True]
     attempt_id: str = Field(min_length=1)

@@ -450,7 +450,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
             setConfirmOpen(true);
           }}
         >
-          Recover confirmed-lost claim
+          Request claim recovery
         </PButton>
       )}
       {confirmOpen ? (
@@ -461,14 +461,15 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
           dismissButton={false}
           disableBackdropClick
           onDismiss={() => setConfirmOpen(false)}
-          aria={{ role: "alertdialog", "aria-label": "Confirm lost claim" }}
+          aria={{ role: "alertdialog", "aria-label": "Request claim recovery" }}
         >
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">
-              Confirm lost claim
+              Request claim recovery
             </PHeading>
             <p className="text-sm">
-              Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.
+              This request does not stop a worker or prove it has stopped. Delivery keeps custody and files unchanged
+              unless supported host evidence proves every old writer is closed or excluded.
             </p>
             <dl className="grid gap-static-xs break-all text-sm">
               <dt>Attempt</dt>
@@ -482,7 +483,7 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
                 Cancel
               </PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>
-                {pendingAction === "recover" ? "Recovering..." : "Confirm lost and recover"}
+                {pendingAction === "recover" ? "Requesting..." : "Request recovery"}
               </PButton>
             </div>
           </ConfirmationContent>
@@ -835,6 +836,9 @@ function ReadinessAttempt({ attempt }: { attempt: NonNullable<DeliveryReadiness[
         </dd>
         <dt className="text-contrast-medium">Checks</dt>
         <dd>{READINESS_CHECKS_LABELS[attempt.report.request.checks_state]}</dd>
+        <IdentityRow label="Procedure" value={attempt.report.request.procedure_id} />
+        <IdentityRow label="Proof fingerprint before" value={attempt.report.request.proof_fingerprint_before} />
+        <IdentityRow label="Proof fingerprint after" value={attempt.report.request.proof_fingerprint_after} />
         <IdentityRow label="Report" value={attempt.report.report_id} />
         <IdentityRow label="Observed at" value={attempt.report.observed_at} />
       </dl>
@@ -869,6 +873,9 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
         </p>
       ) : null}
       <dl className="mt-static-xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md text-xs">
+        <IdentityRow label="Automatic attempts" value={readiness.attempts ?? null} />
+        <IdentityRow label="Next eligible at" value={readiness.next_eligible_at ?? null} />
+        <IdentityRow label="Stop reason" value={readiness.stop_reason ?? null} />
         <ReadinessBasisRows basis={readiness.basis} />
       </dl>
       {readiness.last_attempt ? <ReadinessAttempt attempt={readiness.last_attempt} /> : null}

@@ -51,7 +51,9 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
 - **Leave active claims occupied.** Acquisition does not revoke active claims; use the exact
-  recovery operation only for a failed or orphaned claim after dispatch failure.
+  recovery operation only with supported host-owned exclusion. Timeout, dispatch failure and
+  `confirmed_lost` never prove an invocation or its descendant writers and tool jobs stopped.
+  Report `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` unchanged and do not retry or redispatch.
 - **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
   claim-bound dispatch failures to the matching exact recovery operation.
 - **Hand off one issued finalization intact.** Declare the `finalizer` capability only when this host
@@ -65,7 +67,7 @@ housekeeping is the explicit non-Delivery dispatch defined by `w-orchestration`.
   `transition_delivery`; accept an already-applied `kind: submitted` Builder result without
   forwarding it again; route claim-bound dispatch failures only to recovery.
 - **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
-  use exact Integration claim recovery only when a legacy claim's identities are supplied.
+  legacy Integration claim identities are not worker-exclusion evidence and cannot authorize release.
 - **Route only admitted Change repair.** When `get_change` returns one exact engine-authored repair
   proposal for a Change-specific acquisition failure or health diagnostic, dispatch `repairer` with
   that view; do not route Integration attention, provider waiting, or authority gaps to it.

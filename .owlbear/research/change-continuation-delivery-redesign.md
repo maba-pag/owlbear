@@ -1,16 +1,23 @@
 # Change-Scoped Continuation and Recoverable Delivery
 
 > **Owning request:** User-authorized direct implementation of the Delivery redesign on `dev`.
-> **Updated:** 2026-09-14
+> **Updated:** 2026-09-25
 > **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03's D02 prerequisite is satisfied; D03 has not started. Stop this session before D03. The accepted checkpoint below supersedes older blocked and pending-work instructions. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
+**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03-C is active on [PR #326](https://github.com/maba-pag/owlbear/pull/326), with the explicit bounded-recovery revision in section 1.1; it is not accepted. The current package plan owns the next C assignment. D/E and live activation have not been started or accepted by this revision. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
 ## 0. Direct Implementation Decision
+
+### D03 Current Checkpoint: 2026-09-25
+
+Continue the [bounded C implementation assignment](delivery-cloud-d03-plan.md#current-handoff)
+on the existing PR branch. The [approved recovery boundary](#11-requirements-from-the-user)
+supersedes the former full-automation requirement. Older D02 stop instructions below are historical;
+their accepted evidence remains intact. No D03 acceptance, merge, D/E dispatch or activation is implied.
 
 ### D02 Accepted Checkpoint: 2026-09-14
 
@@ -699,6 +706,28 @@ Do not replace this with one unrestricted agent that designs, edits state, rewri
 
 ### 1.1 Requirements from the user
 
+**Approved recovery boundary, 2026-09-25.** After reviewing PR #326's failed execution-control
+experiment, the user explicitly selected **"Bounded recovery now; explicit containment otherwise"**
+in the local coordinating session. This is a deliberate product-scope revision, not a claim that
+the prior full-automation contract was implemented. It supersedes automatic dirty-worktree and
+external-worker recovery promises in sections 6-7, WP3 and V03/V06/V08/V10/V13 where the required
+authority cannot be independently established. Other programme requirements are unchanged.
+
+- Automatically reconcile only engine-owned effects for which existing owners can establish exact
+  identity, completion and any required custody/exclusion. An engine label alone is not evidence.
+- A started operation with unknown outcome, possibly live worker, unattributed edit, or private,
+  staged or foreign content remains contained in place. Do not copy, restore, clean, rehash into
+  authority, release custody or launch a replacement merely to make progress.
+- Containment reports what is known, which authority is missing, the responsible owner and an
+  honest resume condition. It is not a product success, a fake approval question or a request for
+  users to run commands, calculate hashes, kill processes or edit files. Unrelated Changes continue.
+- No new engine proof runner, sandbox platform or host adapter is required for this bounded
+  deliverable. Existing fail-closed interfaces may remain unavailable; they do not justify a pass
+  or require more consumer-only infrastructure. Enabling broader automatic recovery requires a
+  separate concrete capability design and explicit approval; it is not silently assigned to D08.
+- The accepted reduction is automation coverage, never data safety. End-to-end acceptance must
+  demonstrate at least one real supported recovery path plus the negative containment path.
+
 - U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
 - U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.
 - U3: Agents prepare checks and environments. Human-only steps are meaningful decisions, permission, direct authentication/consent, and outcome confirmation.
@@ -947,7 +976,7 @@ No live host means no autonomous LLM execution. Existing Python supervision may 
 
 For each failure fingerprint, persist the attempt budget across sessions. Proposed initial policy: at most two automatic equivalent repairs and three transient service attempts per action/version; use a short bounded backoff and one human-readable stop reason. These are configurable defaults requiring review, not measured optimal values. Renaming a task, restarting chat, or changing an error's wording must not reset the budget. Genuine accepted progress or an approved new approach can reset the relevant budget, not all Change history.
 
-Worker liveness must be proved by a supported host termination acknowledgement or enforced writer exclusion. A wall-clock timeout, heartbeat absence, tool-response failure, or a caller-written `confirmed_lost=true` alone does not prove termination. When unknown, leave custody intact and surface a safe cancellation/containment prompt that performs the actual stop protocol. Never instruct the user to kill processes manually.
+Worker closure or exclusion must be proved by a supported host acknowledgement or enforced resource boundary. A wall-clock timeout, heartbeat absence, tool-response failure, or a caller-written `confirmed_lost=true` alone does not prove termination. When unknown, leave custody intact and surface truthful containment. Offer cancellation only where an actual supported stop protocol exists; otherwise identify the unavailable capability without an executable stop promise. Never instruct the user to kill processes manually.
 
 ### 6.2 Human-readable result contract
 
@@ -964,16 +993,22 @@ A raw `proof_failed` is not a complete user response. Example for a D1-like fixt
 ```text
 Verification has not started. The reviewed commit is intact.
 A research note changed after review; the difference is end-of-file formatting.
-Delivery is preserving those bytes and checking that no other writer owns them.
-If the repair is authorized, it will restore the reviewed checkout and resume verification.
+The changed bytes remain in place; ownership and safe recovery are not established.
+This Change is contained. No files were copied/restored and no replacement worker was started.
 No tests or merge approval have been recorded by this attempt.
 ```
 
-Report automatic recovery as completed only after a successful receipt. If ownership is unclear, replace the fourth line with a concrete choice that preserves the file; do not imply safe restoration from formatting alone.
+Report automatic recovery as completed only after a successful authoritative receipt. Offer a user choice only where it has a real supported no-loss consequence; do not invent an approval that supplies missing ownership or exclusion evidence.
 
 ## 7. Preservation-First Worktree and Code Recovery
 
 ### 7.1 Worktree recovery is an engine action, not a finalizer privilege
+
+The [approved bounded recovery revision](#11-requirements-from-the-user) governs this section.
+The algorithm below remains the safety contract for any path that genuinely has the required
+authority; supporting it for arbitrary agent/tool edits is no longer a D03 completion promise.
+When the authority is unavailable, leave all original bytes and ownership intact and return
+explicit containment. Do not implement a permissive default provenance provider to enable it.
 
 Extend the workspace owner's existing quarantine and exact-custody mechanisms to nonterminal Changes with no active Builder claim. The repair proposal must bind the observed Change version, branch/HEAD, reviewed head, index state, changed-path set, content digests, and current ownership. A generic `restore all` operation is forbidden.
 
@@ -981,8 +1016,8 @@ The algorithm for a dirty preflight is:
 
 1. Acquire exclusive operation custody using the same mechanism as other managed-Change mutations. Reject active or unknown writers. Check that the real path and Git registration match the managed worktree.
 2. Read tracked/staged/untracked changes, including binary files, deletions, renames, modes, and symlinks. Paths must stay inside the permitted root. A pre-existing staged change is not silently treated as agent-owned.
-3. Preserve changed bytes and relevant index/worktree metadata using an existing quarantine representation extended only where necessary. Preservation must survive process restart and be independently verifiable before any restoration occurs. Do not blindly include ignored secrets, credential stores, virtual environments, or browser profiles in a Git commit.
-4. Classify with evidence from the task's maintained surfaces, last known write action, and exact diff. Whitespace-only differences are a fact about bytes, not proof of authorship or irrelevance.
+3. Classify and privacy-qualify before copying any content, using independently established ownership plus the task's maintained surfaces, last known write action, and exact diff. Whitespace-only differences are a fact about bytes, not proof of authorship or irrelevance. Foreign, ambiguous, staged or private content stays in place.
+4. Preserve only qualified changed bytes and relevant index/worktree metadata using the existing bounded representation. Preservation must survive process restart and be independently verifiable before restoration. Do not copy ignored secrets, credential stores, virtual environments or browser profiles into preservation objects or Git commits.
 5. Known post-proof disposable drift may be restored through an engine-authored, exact-path proposal under the approved preservation policy. Useful admitted changes are handed to a Builder repair action and reviewed. Foreign/ambiguous changes remain untouched until a meaningful no-loss handling choice is made.
 6. Recheck the same byte and head fences immediately before applying the proposal. A changed file invalidates the proposal; it is not overwritten using a fresh hash without review.
 7. Verify clean managed state and unchanged reviewed authority, retain the preservation reference, complete the repair attempt, and resume preflight. A new commit instead invalidates old finalization proof and requires fresh cumulative review.
@@ -993,13 +1028,13 @@ Preservation failure means no cleanup. Exceeding configured snapshot size/type l
 
 Builder performs mutating formatting and generated-file updates before its final commit. Finalizer uses non-mutating commands. Managed research/proof documentation required for acceptance is committed before review; logs and screenshots go to an owned ignored evidence location, not tracked source files.
 
-Take before/after worktree fingerprints around proof commands. If a supposedly read-only command modifies tracked files, persist `proof-mutated-worktree`, name the command and paths, and route a Builder repair for the proof procedure or the intended generated output. Do not alternate forever between restoring formatting and rerunning a formatter that changes it again.
+Take before/after worktree fingerprints around proof commands. If a supposedly read-only command modifies tracked files, persist `proof-mutated-worktree` with bounded procedure/path diagnostics. Fingerprints establish drift, not authorship. Route Builder repair only when its scope, custody and supporting authority are independently established; otherwise leave the bytes and owner contained. Do not alternate forever between restoring formatting and rerunning a formatter that changes it again.
 
 Exact-commit review remains meaningful. The proposed flow does not exempt Markdown, end-of-file edits, or generated files from review merely because they seem harmless.
 
 ### 7.3 Code repair and review findings
 
-A failed automated check within admitted scope creates a bounded repair action with the reproduced failure, exact candidate, maintained surfaces, constraints, and cumulative diff baseline. Reuse Builder and the existing independent review role. The controller does not write implementation code.
+A failed automated check within admitted scope creates a bounded repair action only when existing owners can safely establish its custody and supporting authority. Otherwise it remains explicitly contained with the original failure. A supported repair retains the reproduced failure, exact candidate, maintained surfaces, constraints and cumulative diff baseline. Reuse Builder and independent review; the controller does not write implementation code.
 
 Local implementation findings permit repair within the existing promise. Missing or contradictory requirements route to a Designer decision. Missing proof infrastructure is implementation work unless it changes the promised outcome or needs new permission. No proof request can silently redefine the acceptance contract.
 
@@ -1464,14 +1499,14 @@ Tests below are required scenarios for the proposed programme, not claims that c
 | --- | --- | --- | --- |
 | V01 | New concrete Change approved and continued | Plan/build/review/finalize/publish/approve-merge/observe-completion succeeds with only prompt/form/approval user actions | Full engine/MCP/HTTP fixture plus Cockpit journey and separate actual Copilot smoke |
 | V02 | Dirty completed-task worktree with no finalization | Card and acquisition agree on recovery/preflight, not executable finalization | Work-item/application/adapter test |
-| V03 | Finalizer fails before tests | Persisted failure says checks not run; next session obtains a repair action, not identical finalization | Finalization result and fresh-session integration |
+| V03 | Finalizer fails before tests | Persisted failure says checks not run; next session obtains an authorized repair action or explicit containment when custody/evidence is unavailable, never identical blind finalization | Finalization result and fresh-session integration |
 | V04 | Two sessions continue the same Change | One mutation owner; second returns busy and cannot change branch or frontier | Barrier-controlled concurrent acquisition |
 | V05 | Two different Changes, limited capacity/shared target | No cross-Change claim leakage; capacity is respected; each target update rechecks current evidence | Multi-application integration with provider fake |
-| V06 | D1-like formatting drift with proven ownership | Exact bytes preserved before scoped restoration; reviewed head unchanged; verification resumes | Workspace integration and failure injection |
+| V06 | D1-like formatting drift | With independently proven ownership/custody: exact bytes preserved before scoped restoration. Otherwise: no copying/restoration, explicit containment and unchanged bytes/index/head. General automatic dirty recovery is not promised in bounded D03 | Workspace integration and failure injection |
 | V07 | Drift changes after proposal, or file is foreign/staged/secret-like | No overwrite or secret publication; stale proposal/containment and explanatory action | Workspace negative cases |
-| V08 | Formatting command mutates files during proof | Command and paths retained; repair fixes output/procedure before new exact-head proof | Managed proof command integration |
+| V08 | Formatting command mutates files during proof | No proof pass; bounded procedure/path diagnostic. Repair only with established authority; otherwise explicit containment without repeating the mutating check | Diagnostic and custody integration |
 | V09 | Repeated same check failure across fresh sessions | Durable budget exhausts; no more automatic equivalent attempts; other Changes remain runnable | Runtime restart/clock fixture |
-| V10 | Worker exceeds lease but may still write | No cleanup/reuse until supported termination or exclusion evidence; old writer cannot contaminate replacement | Controlled live-worker fixture, not only timestamp tests |
+| V10 | Worker exceeds lease but may still write | No cleanup/reuse/replacement without supported termination or exclusion evidence. Unavailable host evidence yields explicit containment, not a requirement to invent a new host backend for bounded D03 | Controlled live-worker negative fixture, not only timestamp tests |
 | V11 | Target advances/conflict during final verification | Old proof not attributed to new candidate; bounded repair/review and fresh approval where necessary | Workspace/provider interleaving |
 | V12 | Push or merge succeeds remotely but response is lost | Readback identifies original effect; no duplicate mutation/completion | Provider adapter fault fixture |
 | V13 | Quarantine/restoration fails midway or disk write fails | No false cleanup success; preserved evidence and original error remain; replay does not discard foreign work | Runtime/workspace failure injection |

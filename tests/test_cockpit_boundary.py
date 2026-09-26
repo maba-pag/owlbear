@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
+
+from owlbear_delivery.finalization_reports import FinalizationFailureCode, ReportFinalizationFailure
+from owlbear_delivery.work_items import DeliveryReadinessReason
 
 # Mined from #924: Cockpit source import boundary.
 # Mined from #1390: Cockpit excludes Delivery lifecycle and finalization routes.
@@ -34,6 +39,27 @@ _FINALIZATION_IMPORT_NAMES: frozenset[str] = frozenset(
         "finalize_change",
     }
 )
+
+
+def test_delivery_readiness_reason_typescript_parity(project_root: Path) -> None:
+    """Every core recovery/readiness reason is represented by the frontend contract."""
+    source = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    union = re.search(r"export type DeliveryReadinessReasonCode\s*=\s*(.*?);", source, re.DOTALL)
+    assert union is not None
+    assert set(re.findall(r'"([^"]+)"', union.group(1))) == set(get_args(DeliveryReadinessReason))
+
+
+def test_finalization_failure_typescript_parity(project_root: Path) -> None:
+    """Every core finalization diagnostic code and category is represented in Cockpit."""
+    source = (project_root / "serve/cockpit/web/src/api/workItems.ts").read_text()
+    code_union = re.search(r"export type FinalizationFailureCode\s*=\s*(.*?);", source, re.DOTALL)
+    category_union = re.search(r"export type FinalizationFailureCategory\s*=\s*(.*?);", source, re.DOTALL)
+    assert code_union is not None
+    assert category_union is not None
+    assert set(re.findall(r'"([^"]+)"', code_union.group(1))) == {code.value for code in FinalizationFailureCode}
+    assert set(re.findall(r'"([^"]+)"', category_union.group(1))) == set(
+        get_args(ReportFinalizationFailure.model_fields["category"].annotation)
+    )
 
 
 def _collect_forbidden_imports(

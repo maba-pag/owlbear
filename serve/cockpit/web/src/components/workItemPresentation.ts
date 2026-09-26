@@ -32,8 +32,11 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "claim-activation-failed": "Delivery could not activate custody for the selected action.",
   "coordination-unavailable": "This Change has no readable coordination record.",
   "execution-occupancy-unavailable": "Delivery could not read current execution occupancy.",
-  "engine-action-pending": "An engine-owned action is acquired and not yet finished.",
-  "engine-action-blocked": "A retained engine action is blocked and keeps its custody.",
+  "engine-action-pending": "A retained engine action is acquired but has not started.",
+  "engine-action-blocked": "A retained engine action journal is unverifiable; custody remains retained.",
+  "engine-action-interrupted": "A retained engine action started without an authoritative result.",
+  "engine-action-failed": "A retained engine action has a recorded failure.",
+  "engine-action-incomplete": "A retained engine action has a recorded incomplete result.",
   "target-sync-required": "The Change must be synchronized with its integration target first.",
   "claim-custody-unreconciled": "Claim custody has not been reconciled with the workspace.",
   "runtime-unavailable": "Delivery could not compose this Change runtime.",
@@ -49,6 +52,11 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "publication-wait": "Publication is waiting on an external result.",
   "checkpoint-pending": "A durable checkpoint is still pending.",
   "report-store-unavailable": "Finalization diagnostics could not be read.",
+  "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
+  "retry-exhausted": "Automatic recovery is exhausted; preserve state for an explicit decision.",
+  "acceptance-wait": "Acceptance is unchanged; observe later without repeating the effect.",
+  "retry-containment": "Automatic recovery is contained pending an owning decision.",
+  "retry-ledger-unavailable": "Retry authority could not be read safely.",
 };
 
 /** Truthful check labels: absence of a run is never reported as a pass. */

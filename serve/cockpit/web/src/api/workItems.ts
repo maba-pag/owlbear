@@ -73,6 +73,9 @@ export type DeliveryReadinessReasonCode =
   | "execution-occupancy-unavailable"
   | "engine-action-pending"
   | "engine-action-blocked"
+  | "engine-action-interrupted"
+  | "engine-action-failed"
+  | "engine-action-incomplete"
   | "target-sync-required"
   | "claim-custody-unreconciled"
   | "runtime-unavailable"
@@ -87,15 +90,25 @@ export type DeliveryReadinessReasonCode =
   | "review-repair"
   | "publication-wait"
   | "checkpoint-pending"
-  | "report-store-unavailable";
+  | "report-store-unavailable"
+  | "retry-backoff"
+  | "retry-exhausted"
+  | "acceptance-wait"
+  | "retry-containment"
+  | "retry-ledger-unavailable";
 export type FinalizationFailureCode =
   | "workspace-dirty"
   | "workspace-preflight-failed"
   | "maintained-check-failed"
   | "maintained-check-unavailable"
   | "independent-review-failed"
-  | "independent-review-unavailable";
-export type FinalizationFailureCategory = "custody-preflight" | "maintained-check" | "independent-review";
+  | "independent-review-unavailable"
+  | "proof-mutated-worktree";
+export type FinalizationFailureCategory =
+  | "custody-preflight"
+  | "maintained-check"
+  | "independent-review"
+  | "proof-mutation";
 
 export interface DeliveryReadinessBasis {
   contract_digest: string | null;
@@ -123,6 +136,9 @@ export interface FinalizationReport {
     checks_state: "not-run" | "failed" | "unknown";
     check_id: string | null;
     exit_status: number | null;
+    procedure_id: string | null;
+    proof_fingerprint_before: string | null;
+    proof_fingerprint_after: string | null;
     paths: string[];
   };
 }
@@ -143,6 +159,9 @@ export interface DeliveryReadiness {
   basis: DeliveryReadinessBasis;
   action: WorkItemAction | null;
   last_attempt: FinalizationAttempt | null;
+  attempts?: number;
+  next_eligible_at?: string | null;
+  stop_reason?: string | null;
 }
 
 export interface WorkItemCardView {
@@ -851,6 +870,7 @@ export function clearWorkItemBlock(
   });
 }
 
+/** The legacy flag requests recovery; it is not host-owned worker exclusion evidence. */
 export function recoverWorkItemClaim(
   changeId: string,
   outcomeId: string,
