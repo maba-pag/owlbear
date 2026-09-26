@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -719,3 +720,212 @@ def test_root_ancestor_replacement_is_revalidated_before_return(
 
     assert "REPLACED_DURING_INSPECTION" in result["diagnostic_codes"]
     assert result["inspection_complete"] is False
+    assert result["pending_effects"] == "unknown"
+    assert result["status"] == "degraded"
+
+
+@pytest.mark.parametrize("part", [".owlbear", ".owlbear/delivery", ".owlbear/delivery/runtime"])
+def test_cli_unsafe_ancestry_is_unknown_without_reading_target(tmp_path: Path, part: str) -> None:
+    root = _complete_root(tmp_path / "project")
+    rejected = root / part
+    retained = tmp_path / "retained"
+    rejected.rename(retained)
+    rejected.symlink_to(retained, target_is_directory=True)
+    before = {path: path.read_bytes() for path in retained.rglob("*") if path.is_file()}
+
+    completed = _run_cli(root, "inspect", "--project-root", str(root), "--format", "json")
+    result = json.loads(completed.stdout)
+
+    assert completed.returncode == (2 if part == ".owlbear" else 1)
+    assert result["inspection_complete"] is False
+    assert result["pending_effects"] == "unknown"
+    assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
+    assert before == {path: path.read_bytes() for path in retained.rglob("*") if path.is_file()}
+
+
+@pytest.mark.parametrize("kind", ["symlink", "fifo", "unsafe-name"])
+def test_cli_rejected_records_are_incomplete(tmp_path: Path, kind: str) -> None:
+    root = _complete_root(tmp_path)
+    frontier = root / ".owlbear/delivery/runtime/changes/example/frontier.json"
+    if kind == "unsafe-name":
+        record = root / ".owlbear/delivery/runtime/coordination/changes/unsafe name.json"
+        record.write_bytes(b"private-placeholder")
+    else:
+        frontier.unlink()
+        if kind == "fifo":
+            os.mkfifo(frontier)
+        else:
+            target = tmp_path / "not-inspected"
+            target.write_bytes(b"private-placeholder")
+            frontier.symlink_to(target)
+    before = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+    completed = _run_cli(root, "inspect", "--project-root", str(root), "--format", "json")
+    result = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "private-placeholder" not in completed.stdout
+    assert before == sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+
+@pytest.mark.parametrize(
+    ("content", "status"),
+    [
+        ('{"execution_capacity":3}', "healthy-structure"),
+        ('{"schema_version":99,"execution_capacity":3}', "unsupported"),
+        ('{"execution_capacity":true}', "degraded"),
+        ('{"execution_capacity":0}', "degraded"),
+        ('{"execution_capacity":"3"}', "degraded"),
+        ('{"unexpected":3}', "degraded"),
+    ],
+)
+def test_cli_local_override_structural_compatibility(tmp_path: Path, content: str, status: str) -> None:
+    root = _complete_root(tmp_path)
+    override = root / ".owlbear/delivery/runtime/host.local.json"
+    override.write_text(content, encoding="utf-8")
+
+    completed = _run_cli(root, "inspect", "--project-root", str(root), "--format", "json")
+    result = json.loads(completed.stdout)
+
+    assert completed.returncode == (0 if status == "healthy-structure" else 1)
+    assert result["status"] == status
+    assert override.read_text(encoding="utf-8") == content
+    if status == "healthy-structure":
+        record = next(record for record in result["records"] if record["kind"] == "host_local")
+        assert record["schema_version"] == 1
+
+
+def test_initial_fstat_failure_is_bounded_and_closes_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _complete_root(tmp_path)
+    real_open = diagnostics.os.open
+    real_fstat = diagnostics.os.fstat
+    real_close = diagnostics.os.close
+    failed_fd = None
+    closed = False
+    failed = False
+
+    def capture_open(path: object, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+        nonlocal failed_fd
+        fd = real_open(path, flags, mode, dir_fd=dir_fd)
+        if path == "config.json":
+            failed_fd = fd
+        return fd
+
+    def fail_first_record_stat(fd: int) -> os.stat_result:
+        nonlocal failed
+        if fd == failed_fd and not failed:
+            failed = True
+            message = "private failure text"
+            raise OSError(message)
+        return real_fstat(fd)
+
+    def capture_close(fd: int) -> None:
+        nonlocal closed
+        if fd == failed_fd and failed:
+            closed = True
+        real_close(fd)
+
+    monkeypatch.setattr(diagnostics.os, "open", capture_open)
+    monkeypatch.setattr(diagnostics.os, "fstat", fail_first_record_stat)
+    monkeypatch.setattr(diagnostics.os, "close", capture_close)
+    result_code = main(["inspect", "--project-root", str(root), "--format", "json"])
+    output = capsys.readouterr().out
+    result = json.loads(output)
+
+    assert failed
+    assert closed
+    assert result_code == 1
+    assert "CONFIG_UNREADABLE" in result["diagnostic_codes"]
+    assert result["inspection_complete"] is False
+    assert "private failure text" not in output
+    expected_bytes = sum(
+        path.stat().st_size for path in (root / ".owlbear/delivery").rglob("*.json") if path.name != "config.json"
+    )
+    assert result["bytes_inspected"] == expected_bytes
+
+
+@pytest.mark.parametrize("part", ["root", ".owlbear", ".owlbear/delivery"])
+def test_cli_replaced_ancestry_reports_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], part: str
+) -> None:
+    root = _complete_root(tmp_path / "project")
+    original = root if part == "root" else root / part
+    retained = tmp_path / "original-tree"
+    before = {path.relative_to(original): path.read_bytes() for path in original.rglob("*") if path.is_file()}
+    real_scan = diagnostics._scan_runtime  # noqa: SLF001
+
+    def replace_after_scan(fd: int, inspection: diagnostics._Inspection, *, selected: str | None) -> None:
+        real_scan(fd, inspection, selected=selected)
+        original.rename(retained)
+        original.mkdir()
+
+    monkeypatch.setattr(diagnostics, "_scan_runtime", replace_after_scan)
+    exit_code = main(["inspect", "--project-root", str(root), "--format", "json"])
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert result["pending_effects"] == "unknown"
+    assert before == {path.relative_to(retained): path.read_bytes() for path in retained.rglob("*") if path.is_file()}
+
+
+def test_installed_console_creates_no_bytecode_or_project_writes(tmp_path: Path) -> None:
+    """Exercise the built wheel's actual launcher, not an import-target imitation."""
+    uv = shutil.which("uv")
+    assert uv is not None, "the maintained uv build/install tool is required"
+    tools = Path(__file__).parents[1]
+    wheels = tmp_path / "wheels"
+    subprocess.run(  # noqa: S603 - maintained offline build with fixed arguments
+        [uv, "build", "--offline", "--wheel", "--out-dir", str(wheels), str(tools)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    root = _complete_root(tmp_path / "project")
+    environment = root / ".venv"
+    subprocess.run(  # noqa: S603 - disposable virtual environment only
+        [uv, "venv", "--offline", "--python", sys.executable, str(environment)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    python = environment / "bin/python"
+    wheel = next(wheels.glob("*.whl"))
+    subprocess.run(  # noqa: S603 - install only the locally built wheel, without dependencies
+        [uv, "pip", "install", "--offline", "--no-deps", "--python", str(python), str(wheel)],
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert not list(root.rglob("__pycache__"))
+    before = {
+        path.relative_to(root): path.read_bytes() if path.is_file() and not path.is_symlink() else None
+        for path in root.rglob("*")
+    }
+    env = dict(os.environ)
+    env.pop("PYTHONDONTWRITEBYTECODE", None)
+    env.pop("PYTHONPYCACHEPREFIX", None)
+    launcher = environment / "bin/delivery-diagnose"
+    completed = subprocess.run(  # noqa: S603 - actual installed command under inspected root
+        [str(launcher), "inspect", "--project-root", str(root), "--format", "json"],
+        env=env,
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout)["status"] == "healthy-structure"
+    assert not list(root.rglob("__pycache__"))
+    assert not list(root.rglob("*.pyc"))
+    assert before == {
+        path.relative_to(root): path.read_bytes() if path.is_file() and not path.is_symlink() else None
+        for path in root.rglob("*")
+    }

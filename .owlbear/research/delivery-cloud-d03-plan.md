@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-D: acceptance repairs in progress; not yet accepted.**
+**D03-D: acceptance repairs implemented; final validation pending.**
 D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
 remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
@@ -20,26 +20,50 @@ session prompt also requires a supported command-execution route. This remains D
 Delivery runtime construction, without transaction replay or recovery authority. The approved
 [D contract](#d-offline-diagnosis) and [phase scope](#d03-d--read-only-offline-entry) remain unchanged.
 
-Checkpoint `01b0581` adds the stdlib-only tools entry, ordinary-session prompt and focused tests.
-The final candidate retains fixed `inspect`, optional project-root/Change selection and text/JSON
-output. It recognizes only supported structural envelopes, redacts untrusted content, and reports
-opaque pending transactions including the legacy `packages/transactions` root without replay.
-Reads are bounded globally to 256 entries and 8 MiB, with 1 MiB records and 64 KiB log tails.
-Read-only review drove real replacement fixtures and descriptor/path rechecks for records, logs,
-opaque transactions and project ancestors, strict byte caps, and unknown pending state when
-relevant trees cannot be inspected. No Delivery lifecycle or recovery owner was changed.
+Repair checkpoint `2d4eecd` fixes structural accounting and introduces an installed launcher.
+The subsequent whole-project installed-console regression exposed a remaining startup write:
+Python site initialization could compile the virtual-environment hook before a Python launcher
+disabled bytecode. The final POSIX shared-script launcher starts the installed environment's sibling
+Python with `-I -B` before initialization. It does not depend on the prompt's environment guard.
+The direct `python -B` source fallback remains supported. No Delivery lifecycle owner changed.
 
-**Prior candidate evidence, not repair acceptance:** writer-observed proof used Python **3.14.7**, pytest **9.1.1**, locked dependencies,
-one worker and no pytest cache: **33 passed** for the diagnostic module plus the new bootstrap
-boundary; **2 passed** for the exact prompt nodes; **3 passed** for the exact synchronous
-authority nodes. Scoped Ruff lint/format, isolated compile/CLI and whitespace checks passed.
-The parent did not rerun delegated checks. Earlier below-floor runs and overlapping intermediate
-counts are not additional proof. The tested source SHA-256 is
-`e36bb932054c6b5a6000db3e40fe23945d201a015cc55a710c90cafd81f5983f`;
-the tests are `1e1d5b3487032d225806cc2ca1c892507a869f9b853011134f855444dfb0a2fa`.
-Exact-result independent re-review and automated validation remain pending at this checkpoint.
-This D-only proof does not resolve C's previously unrun exact-pin checks, required external CI,
-E's cumulative/transport proof, package acceptance or live activation.
+Unavailable or replaced transaction ancestry now reports unknown pending effects. Rejected records
+are incomplete; verified missing Delivery/transaction trees remain distinct from unreadable trees.
+Only local host overrides receive the owner's default schema 1, including valid nullable overrides;
+explicit unsupported versions and malformed fields remain rejected. Initial descriptor-stat errors
+retain bounded diagnostics, consistent byte accounting and descriptor cleanup.
+
+The ordinary-session prompt uses the built-in `agent` with only `execute/runInTerminal`, rather than
+Ask routing without a terminal tool. It retains fixed-command/no-repair limits and reports unavailable
+when the terminal is missing. This is a supported prompt-file routing configuration, not command
+enforcement or proof of live host dispatch. No Agent Host migration or new agent was introduced.
+
+**Fresh repair evidence:** delegated checks used Python **3.14.7**, pytest **9.1.1**, uv **0.12.19**
+and one pytest worker without its cache. The isolated environment used the repository's direct test
+tool pins and Hatchling **1.32.4**; it was not a complete workspace `--locked` environment.
+
+| Check | Observed result |
+| --- | --- |
+| Diagnostic module after startup repair | **52 passed**, including actual offline wheel build/install, initially cache-free project-local environment, whole-tree membership/content comparison, direct CLI rejection/override cases, real root/ancestor replacement and initial-fstat failure |
+| Final portability-adjusted launcher and companions | **7 passed**: actual installed console, stdlib bootstrap, two exact prompt nodes and all three exact authority nodes |
+| Scoped static checks | Ruff check and format check passed on diagnostic source/tests and prompt tests; POSIX launcher shell syntax passed |
+| Packaging | Writer verified wheel and sdist launcher inclusion; final installed-command regression rebuilt and installed the actual wheel without dependencies and without bytecode environment flags |
+
+The seven-case selection overlaps the diagnostic module. Intermediate 35-case runs and earlier
+3.12.3/3.14.6 smoke checks are not additional final proof. Parent-authored regressions were executed
+by separate test workers; the coordinating session did not rerun delegated tests. Read-only source
+review found no high-confidence defect before the final launcher change; follow-up identified a
+portability issue, corrected and covered by the final installed invocation. Final read-only re-review
+found no significant issues. Automated validation remains pending. The reduced test environment
+reported eight configuration/marker warnings for absent optional pytest plugins in the final
+seven-case run; no async or timeout-plugin behavior is claimed by these synchronous checks.
+
+The original candidate's 33/2/3 counts are prior evidence only, preserved at
+[`5feb888`](https://github.com/maba-pag/owlbear/blob/5feb888/.owlbear/research/delivery-cloud-d03-plan.md).
+This D-only proof does not resolve C's unrun exact-pin checks, required external CI, E's cumulative
+transport proof, package acceptance or live activation. Current source/Cockpit/dependency CI inspected
+at `5feb888` remains `action_required`. Windows launcher behavior and live prompt dispatch were not
+tested; the exercised installed environment is POSIX.
 
 ### Bounded C baseline
 

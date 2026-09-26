@@ -453,9 +453,7 @@ def _json_shape(
     if not isinstance(value, dict):
         inspection.diagnostic(f"{kind.upper()}_MALFORMED")
         return
-    schema = value.get("schema_version")
-    if kind == "host_local" and "schema_version" not in value:
-        schema = expected_schema
+    schema = value.get("schema_version", expected_schema if kind == "host_local" else None)
     if isinstance(schema, bool) or not isinstance(schema, int) or schema != expected_schema:
         inspection.diagnostic(f"{kind.upper()}_UNSUPPORTED")
         inspection.records[-1]["status"] = "unsupported"
@@ -476,31 +474,17 @@ def _json_shape(
     elif kind == "snapshot" and not isinstance(value.get("frontier"), dict):
         inspection.diagnostic("SNAPSHOT_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
-    elif kind in {"host", "host_local"}:
-        allowed = {"schema_version", "execution_capacity", "claim_timeout_seconds"}
-        invalid_fields = (
-            set(value) - allowed
-            or {
-                field
-                for field in ("execution_capacity", "claim_timeout_seconds")
-                if field in value
-                and (
-                    isinstance(value[field], bool)
-                    or (value[field] is None and kind != "host_local")
-                    or (
-                        value[field] is not None
-                        and (not isinstance(value[field], int) or value[field] <= 0)
-                    )
-                )
-            }
+    elif kind in {"host", "host_local"} and (
+        set(value) - {"schema_version", "execution_capacity", "claim_timeout_seconds"}
+        or any(
+            field in value
+            and not (kind == "host_local" and value[field] is None)
+            and (not isinstance(value[field], int) or isinstance(value[field], bool) or value[field] <= 0)
+            for field in ("execution_capacity", "claim_timeout_seconds")
         )
-        if invalid_fields:
-            inspection.diagnostic(f"{kind.upper()}_MALFORMED")
-            inspection.records[-1]["status"] = "malformed"
-            return
-        inspection.records[-1]["schema_version"] = expected_schema
-        inspection.records[-1]["status"] = "supported"
-        return
+    ):
+        inspection.diagnostic(f"{kind.upper()}_MALFORMED")
+        inspection.records[-1]["status"] = "malformed"
     else:
         inspection.records[-1]["schema_version"] = expected_schema
         inspection.records[-1]["status"] = "supported"
