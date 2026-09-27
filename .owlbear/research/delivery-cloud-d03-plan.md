@@ -12,29 +12,32 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The first bounded deliverable was independently approved and published as `bf4bc48`; this
-remaining-E slice is an uncommitted working diff on that revision. It adds registered
-malformed-journal and unavailable-readback containment, activation restart/no-loss and sibling
+The first bounded deliverable was independently approved and published as `bf4bc48`; the
+remaining-E implementation checkpoint is published as `468c448`. This uncommitted handoff update
+records the final focused proof and the latest review repair. That checkpoint adds registered
+malformed-journal and unavailable-readback containment, bounded activation snapshots and sibling
 acquisition checks through MCP/HTTP, the HTTP finalizer handoff through existing acquire/execute plus
 core report surfaces, and state-appropriate readiness prompts with inert Cockpit rendering. It
-also addresses the latest prompt review finding by recomputing prompt text after non-executable
-refusal copies and proving activation frontier/workspace preservation across loader restart.
-It changes no recovery authority or optional provider; `2e377a6` remains controlling.
+recomputes prompt text after non-executable refusal copies. Activation snapshots compare the
+explicitly captured fields; they are not a general no-loss guarantee. The checkpoint changes no
+recovery authority or optional provider; `2e377a6` remains controlling.
 
 | Bounded capability | Current evidence | Remaining obligation |
 | --- | --- | --- |
 | Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review | Not rerun in this remaining-E slice; include in cumulative package proof |
 | Malformed operation journal and unavailable provider readback | New canonical-loader MCP cases cover invalid/foreign intent, invalid result journal, and unknown readback; no repeated effect and diagnostic readiness asserted | HTTP-specific malformed/readback variants and wider stale/forged-field matrix not covered in this slice |
 | Finalizer failure before checks | Existing registered MCP case plus new HTTP acquire/execute and core failure-report case; verifies `checks_state=not-run` and retained writer | Restart/no-mutation finalizer proof remains |
-| Failed claim activation with/without writer | New MCP/HTTP variants preserve claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition changes only sibling owner state | Broader activation/transport matrix remains |
+| Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Bounded snapshots do not constitute a general no-loss guarantee; broader activation/transport matrix remains |
 | Degraded/offline entry | Earlier registered malformed-coordination MCP/HTTP readiness coverage remains prior evidence | Full degraded-runtime/offline entry matrix was not rerun |
 | Readiness prompts and rendering | Prompt is rederived on retry, acquisition-reconciliation, engine/finalizer reservation, and claim-activation refusal copies; fallback refusal regression plus executable-ready, retry, pending/interrupted, diagnostic, and busy/wait/terminal matrix. Shared detail renders prompt inertly in normal/unavailable views | Frontend tests/build unrun; no UI/browser proof claimed |
 | Recovery contract and cumulative package | Existing A–D records remain historical evidence | Strict recovery mappings/positive recovery evidence, role/boundary checks, full C–E closeout and package acceptance are not established by this slice |
 
-**Verification at base `bf4bc48`:** retained `.git/d03e-venv` Python **3.14.7** and uv **0.12.15**;
-`owlbear_delivery` imports resolve to this checkout. The focused selection across
+**Verification for `468c448`:** retained `.git/d03e-venv` Python **3.14.7** and uv **0.12.15**;
+`owlbear_delivery` imports resolve to this checkout. The focused selection ran against the exact
+implementation immediately before its publication (later local changes are formatting/documentation
+only) across
 `test_target_server.py`, `test_cockpit_work_items.py`, and `test_portfolio_application.py` passed
-**28 tests in 16.74s**, with one existing Starlette/AnyIO `BlockingPortal` deprecation warning.
+**29 tests in 18.27s**, with one existing Starlette/AnyIO `BlockingPortal` deprecation warning.
 Command: `.git/d03e-venv/bin/python -m pytest serve/delivery-mcp/tests/test_target_server.py
 tests/test_cockpit_work_items.py serve/delivery/tests/test_portfolio_application.py -q -n 1 -k
 'registered_loader_contains_malformed_engine_journals or registered_loader_contains_unavailable_provider_readback
@@ -42,11 +45,14 @@ or registered_default_loader_contains_failed_claim_activation or http_default_lo
 or http_finalizer_handoff_contains_failure_before_checks or captured_readiness_agrees_across_public_reads or
 acceptance_retry_budget_never_infers_explicit_observation or engine_action_prompt_is_applicable_to_final_readiness_state or
 continuation_activation_failure_fallback_clears_runnable_prompt'
--m 'not api and not model and not e2e' --tb=short --basetemp=.git/d03e-e-final-pytest`.
+-m 'not api and not model and not e2e' --tb=short --basetemp=.git/d03e-final-deliverable-pytest`.
 Scoped `ruff check`, source-only `ruff format --check`, and `git diff --check` passed.
 Full `ruff format --check` on the touched test modules reports pre-existing unformatted lines in
 approved `bf4bc48`; the newly added lines identified by that check were formatted without
 reformatting the approved slice.
+After publication, the retained-journal regression was corrected to assert distinct pending,
+interrupted-owner, and diagnostic prompts (not absence): its exact six-case selection passed in
+**10.78s**, and scoped Ruff plus `git diff --check` passed.
 
 Cockpit tests/build were not run: available Node is **22.23.2** while
 `serve/cockpit/web/.nvmrc` pins **24.21.0**, `node_modules` is absent, and one bounded environment
@@ -56,10 +62,11 @@ review/CodeQL, required CI, and cumulative C–E proof remain for the parent. Se
 for all seven changed files. `parallel_validation` reported no review comments but could not load
 its configured review model; CodeQL timed out and the tool instructed no retry, so neither is
 claimed as a successful final pass for the repaired diff. Parent read-only review is still required.
-No commit, package acceptance, merge, D04 or live activation is claimed.
+Package acceptance, merge, D04 and live activation are not claimed.
 
-**Next outcome:** parent read-only review and scoped publication decision. Keep unresolved rows above
-visible; do not substitute another executor/backend design or imply package acceptance.
+**Next outcome:** parent read-only review of `468c448` and the remaining formatting/handoff diff.
+Keep unresolved rows above visible; do not substitute another executor/backend design or imply
+package acceptance.
 
 ### D repaired baseline
 

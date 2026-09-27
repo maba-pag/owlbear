@@ -1261,9 +1261,7 @@ def _loader_activation_state_snapshot(application: PortfolioApplication) -> dict
         changes[change_id] = {
             "frontier": runtime.frontier_bytes(),
             "retry_ledger": runtime.retry_ledger().read(),
-            "coordination": (
-                coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json"
-            ).read_bytes(),
+            "coordination": (coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json").read_bytes(),
             "workspace": _workspace_mutation_snapshot(coordination.worktree_path),
         }
     return {
@@ -2011,15 +2009,27 @@ def test_readiness_distinguishes_retained_engine_journal_states_without_writes( 
     assert repeated.readiness == view.readiness
     assert view.readiness.status == ("running" if journal_state == "pending" else "blocked")
     assert not view.readiness.executable
-    assert view.readiness.prompt is None
     assert view.readiness.action is None
     if journal_state == "pending":
+        assert view.readiness.prompt == (
+            "/continue-change change-a Resume the exact engine-selected operation after rereading readiness; "
+            "do not replace it or infer closure."
+        )
         assert "Delivery engine owner" in view.detail.card.next_step
         assert "unstarted exact operation" in view.detail.card.next_step
     elif journal_state == "started":
+        assert view.readiness.prompt == (
+            "/continue-change change-a only after the Delivery engine owner verifies host/worker closure and settles "
+            "all descendant writers and jobs; preserve custody and journals, and do not retry or infer termination."
+        )
         assert "Delivery engine owner" in view.detail.card.next_step
         assert "all descendant writers and jobs" in view.detail.card.next_step
     else:
+        assert view.readiness.prompt == (
+            "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. "
+            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
+            "condition separately before Delivery rereads it."
+        )
         assert "journals cannot be verified" in view.detail.card.next_step
         assert "do not reconstruct or retry" in view.detail.card.next_step
     assert provider.draft_state_calls == before["provider_calls"]
@@ -5138,9 +5148,7 @@ def test_engine_action_prompt_is_applicable_to_final_readiness_state(
 
 
 def test_continuation_activation_failure_fallback_clears_runnable_prompt(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
-    )
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
     readiness = application.get_change("change-a").readiness
     assert readiness.executable
     assert readiness.prompt is not None
