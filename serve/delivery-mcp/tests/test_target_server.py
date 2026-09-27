@@ -17,8 +17,12 @@ import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
 from serve.delivery.tests.test_portfolio_application import (
+    _assert_checkpoint_branch_operation,
+    _assert_loader_observation_only,
+    _assert_loader_retry_recording,
     _failure_request,
     _loader_composed_engine_fixture,
+    _loader_engine_state_snapshot,
     _loader_registered_engine_action_fixture,
     _seed_loader_composed_completed_change,
     _startup_config,
@@ -309,7 +313,7 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
     action_kind: str,
 ) -> None:
     """Every non-mark-ready owner row preserves exact effects across the registered boundary."""
-    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+    repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
         tmp_path,
         action_kind,  # type: ignore[arg-type]
     )
@@ -368,19 +372,71 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
         registered_action = acquired.structured_content["engine_action"]
         action = ChangeContinuationAction.model_validate(registered_action)
         assert action.kind == action_kind
+        before_owner_execution = _loader_engine_state_snapshot(
+            application,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
         executed = await client.call_tool(
             "execute_change_action",
             {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+        before_immediate_replay = _loader_engine_state_snapshot(
+            application,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
         )
         replayed = await client.call_tool(
             "execute_change_action",
             {"change_id": "change-a", "operation_id": action.operation_id},
         )
+    after_immediate_replay = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
     assert not executed.is_error
     assert not replayed.is_error
     assert executed.structured_content == replayed.structured_content
     assert executed.structured_content["kind"] == "completed", executed.structured_content
+    assert after_immediate_replay == before_immediate_replay
+    assert after_immediate_replay["provider_mutations"] == before_immediate_replay["provider_mutations"]
+    assert after_immediate_replay["provider_reads"] == before_immediate_replay["provider_reads"]
     engine_result = executed.structured_content
+    operation_journal = before_immediate_replay["continuation_operation_journal"]
+    assert operation_journal["intent"]
+    assert operation_journal["started"]
+    assert operation_journal["result"]
+    completed_record = json.loads(operation_journal["result"])
+    assert completed_record["kind"] == "completed"
+    assert completed_record["action"]["operation_id"] == action.operation_id
+    if action_kind in {"reconcile-checkpoint", "sync-target"}:
+        published_head = (
+            action.exact_head
+            if action_kind == "reconcile-checkpoint"
+            else engine_result["target_sync"]["merged_head"]
+        )
+        _assert_checkpoint_branch_operation(
+            before_owner_execution,
+            before_immediate_replay,
+            change_id=action.change_id,
+            published_head=published_head,
+            expected_remote_head=before_owner_execution["checkpoint_publication"].published_head,
+        )
+    else:
+        assert any(
+            path.startswith(f"{action.change_id}/") and path != f"{action.change_id}/display.json" and content
+            for path, content in before_immediate_replay["completion_journal"]
+        )
     assert engine_result["action"]["operation_id"] == action.operation_id
     assert engine_result["action"]["kind"] == action.kind
     if action_kind == "reconcile-checkpoint":
@@ -417,13 +473,31 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
         workspace_root=repository,
         publication_provider=provider,
     )
+    after_loader_before_replay = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    assert after_loader_before_replay == after_immediate_replay
     async with Client(assemble_target_server(reloaded)) as client:
         restarted = await client.call_tool(
             "execute_change_action",
             {"change_id": "change-a", "operation_id": action.operation_id},
         )
+    after_loader_replay = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
     assert not restarted.is_error
     assert restarted.structured_content == executed.structured_content
+    assert after_loader_replay == after_loader_before_replay
     retained = reloaded.get_change("change-a").continuation_action
     assert retained is not None
     assert retained.model_copy(update={"finished_at": None}) == action
@@ -561,6 +635,14 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     failure_message = "registered result publication interruption"
     provider.read_pull_request = Mock(wraps=provider.read_pull_request)
     provider.observe_checks = Mock(wraps=provider.observe_checks)
+    before_owner_execution = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
 
     def interrupt_finish(action_record, result, finished_at, *, release):
         if action_record.operation_id == action.operation_id:
@@ -578,10 +660,41 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
                 {"change_id": "change-a", "operation_id": action.operation_id},
             )
     assert failed.is_error
-    coordination_path = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
-    journal_path = application._coordinator.continuation_record_path(  # noqa: SLF001
-        "change-a", action.operation_id
+    before_reload = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
     )
+    operation_journal_before_reload = before_reload["continuation_operation_journal"]
+    assert operation_journal_before_reload["intent"]
+    assert operation_journal_before_reload["started"]
+    assert operation_journal_before_reload["result"] is None
+    assert any(
+        action.operation_id in episode.attempt_ids
+        for episode in before_reload["retry_ledger"].episodes
+    )
+    if action_kind in {"reconcile-checkpoint", "sync-target"}:
+        if action_kind == "reconcile-checkpoint":
+            published_head = action.exact_head
+        else:
+            target_sync = application._runtimes["change-a"].target_sync_receipt()  # noqa: SLF001
+            assert target_sync is not None
+            published_head = target_sync.merged_head
+        _assert_checkpoint_branch_operation(
+            before_owner_execution,
+            before_reload,
+            change_id=action.change_id,
+            published_head=published_head,
+            expected_remote_head=before_owner_execution["checkpoint_publication"].published_head,
+        )
+    else:
+        assert any(
+            path.startswith(f"{action.change_id}/") and path != f"{action.change_id}/display.json" and content
+            for path, content in before_reload["completion_journal"]
+        )
     _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
     _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
     reloaded = load_core_delivery_application(
@@ -589,31 +702,42 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
         workspace_root=repository,
         publication_provider=provider,
     )
-    async with Client(assemble_target_server(reloaded)) as client:
-        before_containment = (
-            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-            reloaded._runtimes["change-a"].retry_ledger().read(),  # noqa: SLF001
-            coordination_path.read_bytes(),
-            journal_path.read_bytes(),
-            journal_path.with_name("started.json").read_bytes(),
-            journal_path.with_name("result.json").read_bytes()
-            if journal_path.with_name("result.json").exists()
-            else None,
-            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-            _remote_refs(remote),
-            provider.create_calls,
-            provider.update_calls,
-            provider.draft_state_calls,
-            provider.read_pull_request.call_count,
-            tuple(provider.read_pull_request.call_args_list),
-            provider.observe_checks.call_count,
-            tuple(provider.observe_checks.call_args_list),
-            reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-            tuple(
-                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
-                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
-            ),
+    after_loader = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    expected_after_loader = dict(before_reload)
+    if action_kind == "observe-acceptance":
+        _assert_loader_retry_recording(
+            before_reload,
+            after_loader,
+            action_id=action.operation_id,
+            accepted_progress=True,
         )
+        expected_after_loader["retry_ledger"] = after_loader["retry_ledger"]
+        expected_after_loader["retry_journal"] = after_loader["retry_journal"]
+    else:
+        _assert_loader_retry_recording(
+            before_reload,
+            after_loader,
+            action_id=action.operation_id,
+            accepted_progress=False,
+        )
+    assert after_loader == expected_after_loader
+    async with Client(assemble_target_server(reloaded)) as client:
+        before_containment = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
+        )
+        _assert_loader_observation_only(after_loader, before_containment)
         contained = await client.call_tool(
             "execute_change_action",
             {"change_id": "change-a", "operation_id": action.operation_id},
@@ -622,57 +746,25 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
         assert contained.structured_content is not None
         assert contained.structured_content["kind"] == "blocked"
         assert contained.structured_content["reason_code"] == "engine-action-interrupted"
-        after_containment = (
-            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-            reloaded._runtimes["change-a"].retry_ledger().read(),  # noqa: SLF001
-            coordination_path.read_bytes(),
-            journal_path.read_bytes(),
-            journal_path.with_name("started.json").read_bytes(),
-            journal_path.with_name("result.json").read_bytes()
-            if journal_path.with_name("result.json").exists()
-            else None,
-            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-            _remote_refs(remote),
-            provider.create_calls,
-            provider.update_calls,
-            provider.draft_state_calls,
-            provider.read_pull_request.call_count,
-            tuple(provider.read_pull_request.call_args_list),
-            provider.observe_checks.call_count,
-            tuple(provider.observe_checks.call_args_list),
-            reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-            tuple(
-                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
-                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
-            ),
+        after_containment = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
         )
         contained_replay = await client.call_tool(
             "execute_change_action",
             {"change_id": "change-a", "operation_id": action.operation_id},
         )
-        after_replay_execution = (
-            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-            reloaded._runtimes["change-a"].retry_ledger().read(),  # noqa: SLF001
-            coordination_path.read_bytes(),
-            journal_path.read_bytes(),
-            journal_path.with_name("started.json").read_bytes(),
-            journal_path.with_name("result.json").read_bytes()
-            if journal_path.with_name("result.json").exists()
-            else None,
-            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-            _remote_refs(remote),
-            provider.create_calls,
-            provider.update_calls,
-            provider.draft_state_calls,
-            provider.read_pull_request.call_count,
-            tuple(provider.read_pull_request.call_args_list),
-            provider.observe_checks.call_count,
-            tuple(provider.observe_checks.call_args_list),
-            reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-            tuple(
-                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
-                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
-            ),
+        after_replay_execution = _loader_engine_state_snapshot(
+            reloaded,
+            runtime_root=runtime_root,
+            remote_refs=_remote_refs(remote),
+            provider=provider,
+            change_id="change-a",
+            operation_id=action.operation_id,
         )
         guidance = await client.call_tool("get_change", {"change_id": "change-a"})
         listed = await client.call_tool("list_work_items", {})
@@ -686,38 +778,19 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
             "show_work_item",
             {"change_id": "change-a", "work_item_id": "change-a"},
         )
-    after_replay = (
-        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-        reloaded._runtimes["change-a"].retry_ledger().read(),  # noqa: SLF001
-        coordination_path.read_bytes(),
-        journal_path.read_bytes(),
-        journal_path.with_name("started.json").read_bytes(),
-        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
-        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-        _remote_refs(remote),
-        provider.create_calls,
-        provider.update_calls,
-        provider.draft_state_calls,
-        provider.read_pull_request.call_count,
-        tuple(provider.read_pull_request.call_args_list),
-        provider.observe_checks.call_count,
-        tuple(provider.observe_checks.call_args_list),
-        reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-        tuple(
-            (path.relative_to(runtime_root).as_posix(), path.read_bytes())
-            for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
-        ),
-    )
-    actual_retry = reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
-    if action_kind in {"reconcile-checkpoint", "sync-target"}:
-        assert after_containment[16], "canonical branch-operation journal must be recorded"
-    assert after_containment[0] == before_containment[0]
-    assert after_containment[3:5] == before_containment[3:5]
-    assert after_containment[6:12] == before_containment[6:12]
-    assert after_containment[14:17] == before_containment[14:17]
-    assert actual_retry == after_containment[1]
-    assert after_replay_execution[8:15] == after_containment[8:15]
-    assert (after_replay[:8], after_replay[15:]) == (after_containment[:8], after_containment[15:])
+    operation_journal_after_containment = after_containment["continuation_operation_journal"]
+    assert operation_journal_after_containment["intent"] == operation_journal_before_reload["intent"]
+    assert operation_journal_after_containment["started"] == operation_journal_before_reload["started"]
+    assert operation_journal_after_containment["result"]
+    containment_record = json.loads(operation_journal_after_containment["result"])
+    assert containment_record["kind"] == "blocked"
+    assert containment_record["reason_code"] == "engine-action-interrupted"
+    assert containment_record["action"]["operation_id"] == action.operation_id
+    expected_containment = dict(before_containment)
+    expected_containment["continuation_operation_journal"] = operation_journal_after_containment
+    assert after_containment == expected_containment
+    assert after_containment["retry_ledger"] == before_containment["retry_ledger"]
+    assert after_replay_execution == after_containment
     assert contained_replay.structured_content == contained.structured_content
     assert not guidance.is_error
     assert not listed.is_error
@@ -754,6 +827,15 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     assert reloaded.get_change("change-a").continuation_action.finished_at is None
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    after_read_only_views = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    _assert_loader_observation_only(after_containment, after_read_only_views)
 
 
 @pytest.mark.asyncio

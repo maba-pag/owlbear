@@ -1252,6 +1252,224 @@ def _workspace_mutation_snapshot(worktree: Path) -> tuple[dict[str, bytes], byte
     )
 
 
+def _loader_engine_state_snapshot(  # noqa: PLR0913
+    application: PortfolioApplication,
+    *,
+    runtime_root: Path,
+    remote_refs: str,
+    provider: _Provider,
+    change_id: str,
+    operation_id: str,
+) -> dict[str, object]:
+    """Capture durable owner effects and replay evidence around loader boundaries."""
+
+    def json_tree(root: Path) -> tuple[tuple[str, bytes], ...]:
+        if not root.exists():
+            return ()
+        return tuple(
+            (path.relative_to(root).as_posix(), path.read_bytes())
+            for path in sorted(root.rglob("*.json"))
+            if path.is_file()
+        )
+
+    coordinator = application._coordinator
+    runtime = application._runtimes[change_id]
+    worktree = coordinator.show(change_id).worktree_path
+    workspace = _workspace_mutation_snapshot(worktree)
+    operation_path = coordinator.continuation_record_path(change_id, operation_id)
+    operation_journal = {
+        "intent": operation_path.read_bytes() if operation_path.is_file() else None,
+        "started": (
+            operation_path.with_name("started.json").read_bytes()
+            if operation_path.with_name("started.json").is_file()
+            else None
+        ),
+        "result": (
+            operation_path.with_name("result.json").read_bytes()
+            if operation_path.with_name("result.json").is_file()
+            else None
+        ),
+    }
+    siblings = {}
+    for sibling_id, sibling_runtime in application._runtimes.items():
+        if sibling_id == change_id:
+            continue
+        sibling_coordination = coordinator.show(sibling_id)
+        sibling_workspace = _workspace_mutation_snapshot(sibling_coordination.worktree_path)
+        siblings[sibling_id] = {
+            "frontier": sibling_runtime.frontier_bytes(),
+            "retry_ledger": sibling_runtime.retry_ledger().read(),
+            "retry_journal": json_tree(
+                runtime_root / "changes" / sibling_id / "retry-ledger"
+            ),
+            "coordination": (
+                coordinator.runtime_root / "coordination" / "changes" / f"{sibling_id}.json"
+            ).read_bytes(),
+            "continuation_action": sibling_coordination.continuation_action,
+            "workspace": sibling_workspace,
+            "raw_index": sibling_workspace[1],
+            "checkpoint_publication": sibling_runtime.checkpoint_publication_state(),
+            "publication_history": sibling_runtime.publication_history(),
+        }
+    return {
+        "frontier": runtime.frontier_bytes(),
+        "retry_ledger": runtime.retry_ledger().read(),
+        "retry_journal": json_tree(runtime_root / "changes" / change_id / "retry-ledger"),
+        "coordination": (
+            coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json"
+        ).read_bytes(),
+        "continuation_action": coordinator.show(change_id).continuation_action,
+        "workspace": workspace,
+        "raw_index": workspace[1],
+        "remote_refs": remote_refs,
+        "provider_mutations": (
+            provider.create_calls,
+            provider.update_calls,
+            provider.draft_state_calls,
+        ),
+        "provider_reads": {
+            "read_pull_request": (
+                provider.read_pull_request.call_count,
+                tuple(provider.read_pull_request.call_args_list),
+            ),
+            "observe_checks": (
+                provider.observe_checks.call_count,
+                tuple(provider.observe_checks.call_args_list),
+            ),
+        },
+        "continuation_operation_journal": operation_journal,
+        "checkpoint_publication": runtime.checkpoint_publication_state(),
+        "publication_history": runtime.publication_history(),
+        "branch_publication_journal": json_tree(
+            runtime_root / "publications" / "change-branches" / "operations"
+        ),
+        "publication_journal": json_tree(runtime_root / "publications"),
+        "completion_journal": json_tree(runtime_root / "completions"),
+        "siblings": siblings,
+    }
+
+
+def _assert_checkpoint_branch_operation(
+    before: dict[str, object],
+    after: dict[str, object],
+    *,
+    change_id: str,
+    published_head: str,
+    expected_remote_head: str | None,
+) -> None:
+    """Require the exact action-bound branch operation, whether new or replayed."""
+    operation_payload = json.dumps(("branch", change_id, published_head), separators=(",", ":"))
+    operation_id = f"checkpoint-branch-{hashlib.sha256(operation_payload.encode()).hexdigest()}"
+    operation_path = f"{hashlib.sha256(operation_id.encode()).hexdigest()}.json"
+    before_journal = dict(before["branch_publication_journal"])
+    after_journal = dict(after["branch_publication_journal"])
+    assert operation_path in after_journal
+    if operation_path in before_journal:
+        assert before_journal[operation_path] == after_journal[operation_path]
+    else:
+        assert after_journal[operation_path]
+    operation = json.loads(after_journal[operation_path])
+    assert operation["operation_id"] == operation_id
+    assert operation["change_id"] == change_id
+    assert operation["branch"] == f"owlbear/change/{change_id}"
+    assert operation["expected_remote_head"] == expected_remote_head
+    assert operation["published_head"] == published_head
+
+
+def _assert_loader_observation_only(before: dict[str, object], after: dict[str, object]) -> None:
+    """Allow boundary startup to record only its read-only provider observations."""
+    before_reads = before["provider_reads"]
+    after_reads = after["provider_reads"]
+    before_pull_reads = before_reads["read_pull_request"]
+    after_pull_reads = after_reads["read_pull_request"]
+    assert after_pull_reads[0] >= before_pull_reads[0]
+    assert after_pull_reads[1][: before_pull_reads[0]] == before_pull_reads[1]
+    added_calls = after_pull_reads[1][before_pull_reads[0] :]
+    assert all(call.args in {("example/project", 7), ("example/project", 8)} for call in added_calls)
+    assert after_reads["observe_checks"] == before_reads["observe_checks"]
+    assert after["provider_mutations"] == before["provider_mutations"]
+
+    before_publications = dict(before["publication_journal"])
+    after_publications = dict(after["publication_journal"])
+    assert set(before_publications) <= set(after_publications)
+    changed_publications = {
+        path
+        for path in before_publications.keys() & after_publications.keys()
+        if before_publications[path] != after_publications[path]
+    }
+    added_publications = after_publications.keys() - before_publications.keys()
+    assert all(
+        path.startswith("pull-requests/pull-request-observations/")
+        for path in changed_publications | added_publications
+    )
+    expected = dict(before)
+    expected["provider_reads"] = after_reads
+    expected["publication_journal"] = after["publication_journal"]
+    assert after == expected
+
+
+def _assert_loader_retry_recording(
+    before: dict[str, object],
+    after: dict[str, object],
+    *,
+    action_id: str,
+    accepted_progress: bool,
+) -> None:
+    """Check the retry ledger replay performed while composing the fresh loader."""
+    before_ledger = before["retry_ledger"]
+    after_ledger = after["retry_ledger"]
+    before_journal = dict(before["retry_journal"])
+    after_journal = dict(after["retry_journal"])
+    if not accepted_progress:
+        assert after_ledger == before_ledger
+        assert after_journal == before_journal
+        return
+
+    before_episodes = {episode.episode_id: episode for episode in before_ledger.episodes}
+    after_episodes = {episode.episode_id: episode for episode in after_ledger.episodes}
+    episode_id = next(
+        episode.episode_id for episode in before_ledger.episodes if action_id in episode.attempt_ids
+    )
+    previous = before_episodes[episode_id]
+    recorded = after_episodes[episode_id]
+    assert recorded.attempt_ids == previous.attempt_ids
+    assert recorded.outcome_ids[:-1] == previous.outcome_ids
+    assert len(recorded.outcome_ids) == len(previous.outcome_ids) + 1
+    assert recorded.accepted_attempt_ids == (*previous.accepted_attempt_ids, action_id)
+    assert recorded.total_attempts == 0
+    assert recorded.repair_attempts == 0
+    assert recorded.observation_attempts == 0
+    assert recorded.explicit_observations == 0
+    assert recorded.last_status is None
+    assert recorded.last_failure_at is None
+    assert recorded.next_eligible_at is None
+    assert recorded.stop_code is None
+    assert recorded.reset_count == previous.reset_count + 1
+    assert recorded.legacy_failures == previous.legacy_failures
+    assert {
+        key: value for key, value in before_episodes.items() if key != episode_id
+    } == {
+        key: value for key, value in after_episodes.items() if key != episode_id
+    }
+    assert after_ledger.version == before_ledger.version + 1
+
+    added = after_journal.keys() - before_journal.keys()
+    changed = {
+        path
+        for path in before_journal.keys() & after_journal.keys()
+        if before_journal[path] != after_journal[path]
+    }
+    assert len(added) == 1
+    outcome_path = next(iter(added))
+    outcome_id = recorded.outcome_ids[-1]
+    assert outcome_path == f"outcomes/{outcome_id}.json"
+    assert changed == {"current.json"}
+    outcome = json.loads(after_journal[outcome_path])
+    assert outcome["attempt_id"] == action_id
+    assert outcome["episode_id"] == episode_id
+    assert outcome["status"] == "succeeded"
+
+
 def _attach_engine_publication(application: PortfolioApplication, tmp_path: Path) -> tuple[_Provider, Path]:
     repository = application._workspace_manager.repository
     remote = _attach_local_target(application, tmp_path)
