@@ -318,6 +318,7 @@ class DeliveryReadiness(_ProjectionModel):
     attempts: int = Field(default=0, ge=0)
     next_eligible_at: str | None = None
     stop_reason: str | None = None
+    prompt: str | None = None
 
     @model_validator(mode="after")
     def _validate_action(self) -> DeliveryReadiness:

@@ -8224,6 +8224,12 @@ class PortfolioApplication:
                 reason_code=reason,
                 checks_state="unknown",
                 basis=DeliveryReadinessBasis(contract_digest=contract_fingerprint(contract) if contract else None),
+                prompt=(
+                    f"Do not release, retry, or redispatch Change {change_id}: canonical Delivery authority "
+                    f"is unavailable ({reason}); checks are unknown. Preserve existing custody and journals. "
+                    f"Use /repair-delivery {change_id} to diagnose the unavailable authority, then re-inspect "
+                    "before any action."
+                ),
             ),
         )
 

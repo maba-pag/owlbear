@@ -162,6 +162,7 @@ export interface DeliveryReadiness {
   attempts?: number;
   next_eligible_at?: string | null;
   stop_reason?: string | null;
+  prompt?: string | null;
 }
 
 export interface WorkItemCardView {
