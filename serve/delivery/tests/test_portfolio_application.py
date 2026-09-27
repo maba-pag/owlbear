@@ -8709,6 +8709,82 @@ def _loader_composed_engine_fixture(tmp_path: Path):
     return repository, runtime_root, remote, provider, application, head_a, head_b
 
 
+def _advance_loader_target(application: PortfolioApplication) -> str:
+    """Move the disposable remote-tracking target without changing Change custody."""
+    repository = application._workspace_manager.repository
+    base = _git(repository, "rev-parse", "refs/remotes/origin/main")
+    tree = _git(repository, "rev-parse", f"{base}^{{tree}}")
+    commit = subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), "commit-tree", tree, "-p", base),  # noqa: S607
+        input="registered target advance\n",
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    _git(repository, "update-ref", "refs/remotes/origin/main", commit)
+    _git(repository, "push", "origin", f"{commit}:refs/heads/main")
+    return commit
+
+
+def _loader_registered_engine_action_fixture(
+    tmp_path: Path,
+    action_kind: Literal["reconcile-checkpoint", "sync-target", "observe-acceptance"],
+) -> tuple[Path, Path, Path, _Provider, PortfolioApplication]:
+    """Compose one registered continuation action from the canonical loader fixture."""
+    repository, runtime_root, remote, provider, application, head_a, _head_b = _loader_composed_engine_fixture(tmp_path)
+    application._change_branch_publisher = ChangeBranchPublisher(
+        repository,
+        application._coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "branch-operations",
+    )
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    runtime = application._runtimes["change-a"]
+    if action_kind == "reconcile-checkpoint":
+        published_head = runtime.checkpoint_publication_state().published_head
+        _git(
+            application._coordinator.show("change-a").worktree_path,
+            "push",
+            "origin",
+            f"{head_a}:refs/heads/owlbear/change/change-a",
+        )
+        _set_checkpoint(
+            runtime,
+            runtime_root,
+            DeliveryPendingCheckpoint(
+                head=head_a,
+                triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+            ),
+            published_head=published_head,
+        )
+    elif action_kind == "sync-target":
+        frontier_path = runtime_root / "changes" / "change-a" / "frontier.json"
+        frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes(), strict=False)
+        frontier_path.write_bytes(_canonical(frontier.model_copy(update={"finalization": None})))
+        _git(
+            application._coordinator.show("change-a").worktree_path,
+            "push",
+            "origin",
+            f"{head_a}:refs/heads/owlbear/change/change-a",
+        )
+        _advance_loader_target(application)
+    else:
+        ready = _execute_engine(application, _engine_action(application))
+        assert ready.kind == "completed"
+        assert provider.pull_requests
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": head_a,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
+    return repository, runtime_root, remote, provider, application
+
+
 def _execute_with_result_publication_crash(
     application: PortfolioApplication,
     target_action: ChangeContinuationAction,

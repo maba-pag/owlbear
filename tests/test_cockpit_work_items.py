@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from serve.delivery.tests.test_portfolio_application import (
     _git,
     _loader_composed_engine_fixture,
+    _loader_registered_engine_action_fixture,
     _startup_config,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
@@ -964,6 +965,243 @@ def test_http_default_loader_contains_unknown_result_after_restart(tmp_path: Pat
     assert retained.operation_id == action["operation_id"]
     assert retained.finished_at is None
     assert _remote_refs(remote) == remote_refs_before_containment
+
+
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+def test_http_loader_replays_and_contains_interrupted_engine_rows(
+    tmp_path: Path,
+    action_kind: str,
+) -> None:
+    """Every non-mark-ready owner row preserves exact effects across the HTTP boundary."""
+    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, action_kind  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert acquired.status_code == 200
+        action = ChangeContinuationAction.model_validate(acquired.json()["engine_action"])
+        assert action.kind == action_kind
+        executed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        replayed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    assert executed.status_code == replayed.status_code == 200
+    assert executed.json() == replayed.json()
+    assert executed.json()["kind"] == "completed"
+    effects_after_completion = (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    )
+    frontier_after_completion = runtime.frontier_bytes()
+    retry_after_completion = runtime.retry_ledger().read()
+    workspace_after_completion = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    remote_after_completion = _remote_refs(remote)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        restarted = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    assert restarted.status_code == 200
+    assert restarted.json() == executed.json()
+    retained = reloaded.get_change("change-a").continuation_action
+    assert retained is not None
+    assert retained.model_copy(update={"finished_at": None}) == action
+    assert (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == effects_after_completion
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_after_completion  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == retry_after_completion  # noqa: SLF001
+    assert _workspace_mutation_snapshot(
+        reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    ) == workspace_after_completion
+    assert _remote_refs(remote) == remote_after_completion
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+
+    sibling = reloaded.get_change("change-c")
+    with TestClient(assemble_target_app(reloaded)) as client:
+        subsequent = client.post(
+            "/api/changes/change-c/continuation/acquire",
+            json={
+                "expected_basis": sibling.readiness.basis.model_dump(mode="json"),
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert subsequent.status_code == 200
+    assert subsequent.json()["kind"] == "acquired"
+
+
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+def test_http_loader_contains_unknown_custody_without_repeating_effects(
+    tmp_path: Path,
+    action_kind: str,
+) -> None:  # noqa: PLR0915
+    """A result-publication interruption remains blocked and retains its exact action."""
+    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, action_kind  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert acquired.status_code == 200
+    action = ChangeContinuationAction.model_validate(acquired.json()["engine_action"])
+    assert action.kind == action_kind
+    coordination_path = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    journal_path = application._coordinator.continuation_record_path(  # noqa: SLF001
+        "change-a", action.operation_id
+    )
+    original_finish = application._coordinator.finish_continuation_action  # noqa: SLF001
+    failure_message = "HTTP result publication interruption"
+
+    def interrupt_finish(action_record, result, finished_at, *, release):
+        if action_record.operation_id == action.operation_id:
+            raise RuntimeError(failure_message)
+        return original_finish(action_record, result, finished_at, release=release)
+
+    with (
+        patch.object(
+            application._coordinator,  # noqa: SLF001
+            "finish_continuation_action",
+            interrupt_finish,
+        ),
+        TestClient(assemble_target_app(application)) as client,
+        pytest.raises(RuntimeError, match="HTTP result publication interruption"),
+    ):
+        client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+    before_restart = (
+        runtime.frontier_bytes(),
+        runtime.retry_ledger().read(),
+        coordination_path.read_bytes(),
+        journal_path.read_bytes(),
+        journal_path.with_name("started.json").read_bytes(),
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
+        _workspace_mutation_snapshot(application._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+        _remote_refs(remote),
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    restart_retry = reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
+    with TestClient(assemble_target_app(reloaded)) as client:
+        contained = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        contained_replay = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action.operation_id},
+        )
+        guidance = client.get("/api/work-items")
+        listed = client.get("/api/work-items")
+        shown = client.get("/api/changes/change-a/work-items/publication")
+        repeated_guidance = client.get("/api/work-items")
+        repeated_listed = client.get("/api/work-items")
+        repeated_shown = client.get("/api/changes/change-a/work-items/publication")
+    assert contained.status_code == 200
+    assert contained.json()["kind"] == "blocked"
+    assert contained.json()["reason_code"] == "engine-action-interrupted"
+    assert contained_replay.status_code == 200
+    assert contained_replay.json() == contained.json()
+    expected_retry = (
+        reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
+        if action_kind == "observe-acceptance"
+        else restart_retry
+    )
+    assert guidance.status_code == listed.status_code == shown.status_code == 200
+    assert guidance.json()["groups"]
+    assert listed.json()["totals"]
+    assert shown.json()["item"]["acceptance"] == []
+    assert guidance.json() == repeated_guidance.json()
+    assert listed.json() == repeated_listed.json()
+    assert shown.json() == repeated_shown.json()
+    assert reloaded.get_change("change-a").continuation_action == action
+    assert reloaded.get_change("change-a").continuation_action.finished_at is None
+    assert (
+        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+        expected_retry,
+        coordination_path.read_bytes(),
+        journal_path.read_bytes(),
+        journal_path.with_name("started.json").read_bytes(),
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
+        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+        _remote_refs(remote),
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    if action_kind != "observe-acceptance":
+        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
+        with TestClient(assemble_target_app(reloaded)) as client:
+            next_acquired = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": next_basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "fresh-session",
+                },
+            )
+        assert next_acquired.status_code == 200
+        assert next_acquired.json()["kind"] == "acquired"
+        next_action = ChangeContinuationAction.model_validate(next_acquired.json()["engine_action"])
+        assert next_action.change_id == action.change_id
+        assert next_action.operation_id != action.operation_id
+
+
 def _remote_refs(repository: Path) -> str:
     result = subprocess.run(  # noqa: S603
         (  # noqa: S607

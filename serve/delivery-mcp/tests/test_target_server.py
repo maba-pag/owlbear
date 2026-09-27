@@ -17,6 +17,7 @@ from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
 from serve.delivery.tests.test_portfolio_application import (
     _loader_composed_engine_fixture,
+    _loader_registered_engine_action_fixture,
     _startup_config,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
@@ -295,6 +296,275 @@ async def test_registered_default_loader_contains_unknown_result_after_restart(t
     assert retained.operation_id == action["operation_id"]
     assert retained.finished_at is None
     assert _remote_refs(remote) == remote_refs_before_containment
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
+    tmp_path: Path,
+    action_kind: str,
+) -> None:
+    """Every non-mark-ready owner row preserves exact effects across the registered boundary."""
+    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, action_kind  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+
+    async with Client(assemble_target_server(application)) as client:
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert not acquired.is_error
+        assert acquired.structured_content is not None
+        registered_action = acquired.structured_content["engine_action"]
+        action = ChangeContinuationAction.model_validate(registered_action)
+        assert action.kind == action_kind
+        executed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+        replayed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+    assert not executed.is_error
+    assert not replayed.is_error
+    assert executed.structured_content == replayed.structured_content
+    assert executed.structured_content["kind"] == "completed", executed.structured_content
+    effects_after_completion = (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    )
+    frontier_after_completion = runtime.frontier_bytes()
+    retry_after_completion = runtime.retry_ledger().read()
+    workspace_after_completion = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    remote_after_completion = _remote_refs(remote)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    async with Client(assemble_target_server(reloaded)) as client:
+        restarted = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+    assert not restarted.is_error
+    assert restarted.structured_content == executed.structured_content
+    retained = reloaded.get_change("change-a").continuation_action
+    assert retained is not None
+    assert retained.model_copy(update={"finished_at": None}) == action
+    assert (
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == effects_after_completion
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_after_completion  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == retry_after_completion  # noqa: SLF001
+    assert _workspace_mutation_snapshot(
+        reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    ) == workspace_after_completion
+    assert _remote_refs(remote) == remote_after_completion
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+
+    # A fresh action on an independent Change remains acquireable after replay.
+    sibling = reloaded.get_change("change-c")
+    sibling_basis = sibling.readiness.basis.model_dump(mode="json")
+    async with Client(assemble_target_server(reloaded)) as client:
+        subsequent = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-c",
+                "expected_basis": sibling_basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert not subsequent.is_error
+    assert subsequent.structured_content is not None
+    assert subsequent.structured_content["kind"] == "acquired"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+async def test_registered_loader_contains_unknown_custody_without_repeating_effects(
+    tmp_path: Path,
+    action_kind: str,
+) -> None:  # noqa: PLR0915
+    """A result-publication interruption remains blocked and retains its exact action."""
+    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, action_kind  # type: ignore[arg-type]
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
+    sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
+    async with Client(assemble_target_server(application)) as client:
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": basis,
+                "capabilities": ["planner", "builder", "finalizer", "engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert not acquired.is_error
+    assert acquired.structured_content is not None
+    action = ChangeContinuationAction.model_validate(acquired.structured_content["engine_action"])
+    assert action.kind == action_kind
+    original_finish = application._coordinator.finish_continuation_action  # noqa: SLF001
+    failure_message = "registered result publication interruption"
+
+    def interrupt_finish(action_record, result, finished_at, *, release):
+        if action_record.operation_id == action.operation_id:
+            raise RuntimeError(failure_message)
+        return original_finish(action_record, result, finished_at, release=release)
+
+    with patch.object(
+        application._coordinator,  # noqa: SLF001
+        "finish_continuation_action",
+        interrupt_finish,
+    ):
+        async with Client(assemble_target_server(application)) as client:
+            failed = await client.call_tool(
+                "execute_change_action",
+                {"change_id": "change-a", "operation_id": action.operation_id},
+            )
+    assert failed.is_error
+    coordination_path = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
+    journal_path = application._coordinator.continuation_record_path(  # noqa: SLF001
+        "change-a", action.operation_id
+    )
+    before_restart = (
+        runtime.frontier_bytes(),
+        runtime.retry_ledger().read(),
+        coordination_path.read_bytes(),
+        journal_path.read_bytes(),
+        journal_path.with_name("started.json").read_bytes(),
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
+        _workspace_mutation_snapshot(application._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+        _remote_refs(remote),
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    restart_retry = reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
+    async with Client(assemble_target_server(reloaded)) as client:
+        contained = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+        contained_replay = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action.operation_id},
+        )
+        guidance = await client.call_tool("get_change", {"change_id": "change-a"})
+        listed = await client.call_tool("list_work_items", {})
+        shown = await client.call_tool(
+            "show_work_item",
+            {"change_id": "change-a", "work_item_id": "change-a"},
+        )
+        repeated_guidance = await client.call_tool("get_change", {"change_id": "change-a"})
+        repeated_listed = await client.call_tool("list_work_items", {})
+        repeated_shown = await client.call_tool(
+            "show_work_item",
+            {"change_id": "change-a", "work_item_id": "change-a"},
+        )
+    assert not contained.is_error
+    assert contained.structured_content is not None
+    assert contained.structured_content["kind"] == "blocked"
+    assert contained.structured_content["reason_code"] == "engine-action-interrupted"
+    expected_retry = (
+        reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
+        if action_kind == "observe-acceptance"
+        else restart_retry
+    )
+    assert (
+        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+        expected_retry,
+        coordination_path.read_bytes(),
+        journal_path.read_bytes(),
+        journal_path.with_name("started.json").read_bytes(),
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
+        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+        _remote_refs(remote),
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    assert contained_replay.structured_content == contained.structured_content
+    assert not guidance.is_error
+    assert not listed.is_error
+    assert not shown.is_error
+    assert guidance.structured_content
+    assert listed.structured_content
+    assert shown.structured_content
+    assert guidance.structured_content == repeated_guidance.structured_content
+    assert listed.structured_content == repeated_listed.structured_content
+    assert shown.structured_content == repeated_shown.structured_content
+    assert reloaded.get_change("change-a").continuation_action == action
+    assert reloaded.get_change("change-a").continuation_action.finished_at is None
+    assert (
+        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+        expected_retry,
+        coordination_path.read_bytes(),
+        journal_path.read_bytes(),
+        journal_path.with_name("started.json").read_bytes(),
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
+        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+        _remote_refs(remote),
+        provider.create_calls,
+        provider.update_calls,
+        provider.draft_state_calls,
+    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
+    assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    if action_kind != "observe-acceptance":
+        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
+        async with Client(assemble_target_server(reloaded)) as client:
+            next_acquired = await client.call_tool(
+                "acquire_change_action",
+                {
+                    "change_id": "change-a",
+                    "expected_basis": next_basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "fresh-session",
+                },
+            )
+        assert not next_acquired.is_error
+        assert next_acquired.structured_content is not None
+        assert next_acquired.structured_content["kind"] == "acquired"
+        next_action = ChangeContinuationAction.model_validate(next_acquired.structured_content["engine_action"])
+        assert next_action.change_id == action.change_id
+        assert next_action.operation_id != action.operation_id
 
 
 DELIVERY_TOOLS = {
