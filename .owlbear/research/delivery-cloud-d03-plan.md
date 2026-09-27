@@ -12,7 +12,8 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-Implementation began at `cc6b7be`; `9769042` is the first registered replay/input-rejection checkpoint.
+Implementation began at `cc6b7be`; `9769042` is the first registered replay/input-rejection checkpoint,
+and `30f24e0` contains the strengthened MCP/HTTP replay and containment proof described here.
 The current additions use `Client(assemble_target_server(...))` and the existing HTTP `TestClient`
 with the C default-loader fixture, real application/workspace/transaction/retry/publication owners,
 a disposable bare remote and the existing external provider fake. No production API, schema,
@@ -43,8 +44,9 @@ read-only review confirmed both assurance gaps closed and found no significant i
 An additional delegated run reported five unchanged C loader/preflight cases passing but gave an
 inconsistent interpreter label; it is not credited as closing C's historical exact-pin gap. D's
 52-case/overlapping seven-case proof remains prior worker evidence, not a fresh E run.
-Automated Code Review at `9769042` could not load its configured model; CodeQL skipped the
-test/documentation-only checkpoint. Required source/Cockpit/ecosystem/dependency CI at `cc6b7be`
+Automated Code Review at `9769042` and `30f24e0` could not load its configured model; neither
+success wrapper is a review pass. CodeQL skipped the test/documentation-only checkpoints.
+Secret scanning passed for all three changed files. Required source/Cockpit/ecosystem/dependency CI at `cc6b7be`
 was `action_required`, not passing proof. No live transport/prompt or Windows launcher proof ran.
 
 **Next assignment:** finish the explicit missing E rows above, not another executor/backend design.
