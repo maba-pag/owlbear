@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-E: three-action transport checkpoint; review repairs and remaining E handoffs are incomplete.**
+**D03-E: registered containment and diagnostic-prompt checkpoint; cumulative acceptance is incomplete.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
 Bounded C's and D's recorded evidence and named external limits below are preserved.
@@ -12,31 +12,51 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The [resume request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853407632)
-selects E from `7713a1e`. Checkpoint `1b7d7e8` adds tests for `reconcile-checkpoint`, `sync-target`
-and `observe-acceptance` through registered MCP and HTTP, using an extension of the existing loader
-fixture. It is **not completion of the first bounded deliverable**: independent review identified
-canonical publisher/acquisition bypasses and insufficient continuation, effect and guidance assertions.
-Those findings must be repaired and verified before claiming the requested assembled proof.
-No production API, schema, permission, prompt or recovery owner changed. The bounded contract at
-`2e377a6` remains controlling; no optional provenance or host provider is enabled.
+The [current resume request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5859362930)
+was inspected at `5150c72`, following the user-stop repair `5cddd70`. No other active worker was
+observed before edits. Checkpoint `d12de8a` adds registered containment cases and a nullable
+`DeliveryReadiness.prompt`, mirrored in Cockpit's TypeScript contract. Unavailable Change readiness
+offers `/repair-delivery` for diagnosis, not authority restoration or recovery. No recovery authority,
+permission or optional provenance/host provider is enabled; `2e377a6` remains controlling.
+
+The first bounded deliverable is **not yet accepted**. Independent source review confirmed the
+canonical publisher correction and fresh nonterminal continuation, but identified insufficient
+successful-replay effect/journal assertions and missing pre-first-containment invariants. The writer
+has strengthened pre/post-containment assertions and meaningful owner/custody guidance;
+do not treat those as proof that reload or the first containment call preserved every protected field.
+Final read-only review confirmed the canonical journal root and nonempty reconcile/sync snapshots,
+and the distinct pending-action prompt without a host-closure prerequisite. The new MCP finalizer
+fixture retains canonical loader composition; its final assertion requires the observed
+`busy` / `active-custody` outcome with checks not run. Successful immediate-replay effects,
+omitted pre-containment fields and reload invariants remain review gaps.
 
 | Bounded capability | Entry and evidence | Remaining obligation |
 | --- | --- | --- |
 | Exact completed mark-ready result after a lost provider response | Prior `30f24e0`: `test_registered_default_loader_replays_engine_action` and `test_http_default_loader_replays_engine_action_after_restart`; one provider effect, exact replay through a fresh default-composed application | Preserved baseline, not fresh proof or proof for other actions |
 | Started mark-ready without an engine result | Prior `30f24e0`: `test_registered_default_loader_contains_unknown_result_after_restart` and `test_http_default_loader_contains_unknown_result_after_restart`; retained custody and no repeated provider effect | Preserved baseline; wider readback/journal/guidance matrix remains required |
 | Caller-authored execution authority | Existing strict MCP/HTTP schemas; rejection cases extended for commands, budgets, receipts and stop assertions | High-level MCP `repair` and HTTP's existing claim-recovery compatibility are distinct; no new HTTP high-level repair endpoint or opaque-evidence authority was added |
-| Checkpoint, target-sync and acceptance interruptions | `1b7d7e8`: parameterized MCP/HTTP exact-result replay and result-publication interruption cases | Open review: retain canonical branch-publication journal, acquire through the registered entry, assert action-specific effects, exact retained journals and meaningful public guidance |
-| Fresh continuation and sibling progress | Preliminary transport assertions exist in `1b7d7e8` | Same selected Change must acquire a genuinely fresh continuation after supported nonterminal replay; sibling acquisition alone is insufficient. Add applicable stale/malformed/unavailable cases |
-| Failed finalizer before checks and failed activation with/without writer record | Prior core/optional-provider cases remain historical evidence, not new E proof | Add real transport containment cases without fabricating worker closure or release |
-| Degraded/offline inspection | D's installed/direct-entry and privacy/no-write proof is preserved below | Real degraded MCP/HTTP entry and the engine-authored continuation/diagnostic prompt handoff remain unimplemented |
+| Checkpoint, target-sync and acceptance interruptions | Existing MCP/HTTP cases now compare actual post-containment ledger/journal/workspace/ref state; provider read calls, canonical publication journals/lineage and meaningful guidance assertions added. Exact four-function/twelve-case selection passed; read-only review confirmed journal-root repair | Close successful immediate-replay, reload and omitted pre-first-containment invariant findings; passing cases do not supply missing assertions |
+| Fresh continuation and sibling progress | Existing successful reconcile/sync cases acquire a fresh same-Change action; acceptance completion is terminal. New MCP/HTTP stale-basis cases reject acquisition | Malformed/stale operation journals, unavailable provider readback and retained-path sibling progress still need complete registered assertions |
+| Failed finalizer before checks | New canonical-fixture MCP case records `checks_state=not-run` and retains writer custody | HTTP handoff coverage and restart/no-mutation assurance remain incomplete; do not invent an HTTP failure-report endpoint |
+| Failed activation with/without writer | New MCP/HTTP parameterized acquisition-failure cases retain issued attempt/claim identity and distinguish writer presence | Complete restart, repeated-read/acquisition, protected-state and sibling-progress proof |
+| Degraded/offline inspection | New malformed-coordination MCP/HTTP cases report unavailable custody; unavailable readiness carries the diagnostic prompt | Corrupted coordination is not the full degraded-runtime/offline entry matrix. D's installed/direct-entry proof remains prior evidence |
+| Engine-authored prompt | Nullable readiness field and TypeScript mirror; unavailable/interrupted MCP/HTTP assertions. Pending guidance does not require closure; failed/incomplete/blocked guidance is diagnostic-only | Complete remaining state/continuation applicability tests and Cockpit rendering; the TypeScript mirror alone does not display the prompt |
 
-**Current verification:** the parent installed uv **0.12.19** outside the repository and prepared
-`/tmp/d03-e-venv` with Python **3.14.7**, using `uv sync --locked --package owlbear-delivery-mcp
---package owlbear-cockpit`. The executing interpreter reported 3.14.7 and pytest 9.1.1; Delivery,
-MCP and Cockpit imports resolve to this checkout. The writer reports preliminary MCP **8** and HTTP
-**7** passes plus scoped Ruff/whitespace checks. These selections overlap and do not close the
-independent review findings. The coordinating session did not rerun the delegated tests.
+**Current verification:** uv **0.12.19** and `.venv-d03e` were prepared for scoped locked checks.
+The parent independently executed that environment's interpreter: Python **3.14.7**, pytest **9.1.1**,
+and Delivery/MCP/Cockpit imports resolve to this checkout. The environment is ignored by Git.
+The writer reports **5 MCP** selected finalizer/activation/stale/unavailable cases passing in
+**7.66s**, **4 HTTP** activation/stale/unavailable cases in **3.91s** (one warning), overlapping
+**3 MCP / 3 HTTP** interrupted-action cases, and scoped Ruff check/format passes.
+These are overlapping writer-reported selections, not additive totals or final cumulative proof.
+Their referenced shell sessions were reclaimed before parent retrieval. The final exact selection
+ran both `test_*_loader_replays_and_contains_interrupted_engine_rows` and
+`test_*_loader_contains_unknown_custody_without_repeating_effects` in the MCP and HTTP files:
+**12 passed, 1 warning in 29.60s**. The parent read the captured stdout, retained outside the repository
+at `/tmp/d03-e-final-canonical.log`; the warning is Starlette's deprecated AnyIO `BlockingPortal`
+alias. The writer also reports the final deterministic finalizer/unavailable selections and scoped
+Ruff checks passing. The parent did not rerun delegated tests. Frontend type/build verification and
+full E cumulative proof are not established here.
 
 **Prior mark-ready evidence:** `30f24e0` preserves four strengthened transport cases and the earlier
 overlapping 11/9 selections. Independent review of that slice confirmed its custody/ref assertions.
@@ -46,10 +66,11 @@ An additional delegated run reported five unchanged C loader/preflight cases pas
 inconsistent interpreter label; it is not credited as closing C's historical exact-pin gap. D's
 52-case/overlapping seven-case proof remains prior worker evidence, not a fresh E run.
 Automated Code Review at `9769042` and `30f24e0` could not load its configured model; neither
-success wrapper is a review pass. CodeQL skipped those test/documentation-only checkpoints.
-Secret scanning passed for the three test files in `1b7d7e8`. Required source/Cockpit/ecosystem/dependency
-CI at `7713a1e` was `action_required`, not passing proof. No live transport/prompt or Windows launcher
-proof ran. C's historical exact-pin gap is not closed by the new transport selections.
+success wrapper is a review pass. Final validation in this resume declined for its time limit and
+instructed no retry; no final-source CodeQL or automated-review pass is claimed.
+Secret scanning passed for all five files in `d12de8a`. Required source/Cockpit/ecosystem/dependency
+CI inspected at `5150c72` was `action_required`, not passing proof. No live transport/prompt or Windows
+launcher proof ran. C's historical exact-pin gap is not closed by the new transport selections.
 
 **Next outcome:** repair and independently review the first three-action deliverable, then finish
 the explicit missing E rows above. Do not substitute another executor/backend design or mark-ready-only

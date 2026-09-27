@@ -1150,7 +1150,7 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
     action_kind: str,
 ) -> None:
     """A result-publication interruption remains blocked and retains its exact action."""
-    repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
+    repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
         tmp_path,
         action_kind,  # type: ignore[arg-type]
     )
@@ -1234,6 +1234,30 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
         publication_provider=provider,
     )
     with TestClient(assemble_target_app(reloaded)) as client:
+        before_containment = (
+            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+            reloaded._runtimes["change-a"].retry_ledger().read(),  # noqa: SLF001
+            coordination_path.read_bytes(),
+            journal_path.read_bytes(),
+            journal_path.with_name("started.json").read_bytes(),
+            journal_path.with_name("result.json").read_bytes()
+            if journal_path.with_name("result.json").exists()
+            else None,
+            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+            _remote_refs(remote),
+            provider.create_calls,
+            provider.update_calls,
+            provider.draft_state_calls,
+            provider.read_pull_request.call_count,
+            tuple(provider.read_pull_request.call_args_list),
+            provider.observe_checks.call_count,
+            tuple(provider.observe_checks.call_args_list),
+            reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
+            tuple(
+                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
+                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
+            ),
+        )
         contained = client.post(
             "/api/changes/change-a/continuation/execute",
             json={"operation_id": action.operation_id},
@@ -1260,7 +1284,10 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
             provider.observe_checks.call_count,
             tuple(provider.observe_checks.call_args_list),
             reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-            tuple((path.name, path.read_bytes()) for path in sorted((tmp_path / "branch-operations").glob("*.json"))),
+            tuple(
+                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
+                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
+            ),
         )
         contained_replay = client.post(
             "/api/changes/change-a/continuation/execute",
@@ -1285,7 +1312,10 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
             provider.observe_checks.call_count,
             tuple(provider.observe_checks.call_args_list),
             reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-            tuple((path.name, path.read_bytes()) for path in sorted((tmp_path / "branch-operations").glob("*.json"))),
+            tuple(
+                (path.relative_to(runtime_root).as_posix(), path.read_bytes())
+                for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
+            ),
         )
         guidance = client.get("/api/work-items")
         listed = client.get("/api/work-items")
@@ -1310,11 +1340,20 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
         provider.observe_checks.call_count,
         tuple(provider.observe_checks.call_args_list),
         reloaded._runtimes["change-a"].publication_history(),  # noqa: SLF001
-        tuple((path.name, path.read_bytes()) for path in sorted((tmp_path / "branch-operations").glob("*.json"))),
+        tuple(
+            (path.relative_to(runtime_root).as_posix(), path.read_bytes())
+            for path in sorted((runtime_root / "publications/change-branches/operations").rglob("*.json"))
+        ),
     )
     assert contained_replay.status_code == 200
     assert contained_replay.json() == contained.json()
     actual_retry = reloaded._runtimes["change-a"].retry_ledger().read()  # noqa: SLF001
+    if action_kind in {"reconcile-checkpoint", "sync-target"}:
+        assert after_containment[16], "canonical branch-operation journal must be recorded"
+    assert after_containment[0] == before_containment[0]
+    assert after_containment[3:5] == before_containment[3:5]
+    assert after_containment[6:12] == before_containment[6:12]
+    assert after_containment[14:17] == before_containment[14:17]
     assert actual_retry == after_containment[1]
     assert after_replay_execution[8:15] == after_containment[8:15]
     assert (after_replay[:8], after_replay[15:]) == (after_containment[:8], after_containment[15:])
@@ -1330,6 +1369,10 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
     assert readiness["checks_state"] == reloaded.get_change("change-a").readiness.checks_state
     assert readiness["executable"] is False
     assert readiness["action"] is None
+    assert readiness["prompt"] == (
+        "/continue-change change-a only after the Delivery engine owner verifies host/worker closure and settles "
+        "all descendant writers and jobs; preserve custody and journals, and do not retry or infer termination."
+    )
     next_step = shown.json()["item"]["card"]["next_step"]
     assert "Delivery engine owner" in next_step
     assert "Preserve custody and journals" in next_step
@@ -1446,7 +1489,9 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
     assert readiness["prompt"] == (
         "Do not release, retry, or redispatch Change change-a: canonical Delivery authority is unavailable "
         "(coordination-unavailable); checks are unknown. Preserve existing custody and journals. Use "
-        "/repair-delivery change-a to diagnose the unavailable authority, then re-inspect before any action."
+        "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. This does "
+        "not repair authority or prove host/worker closure; the responsible owner must resolve the condition "
+        "separately before Delivery rereads it."
     )
     assert provider.draft_state_calls == 0
 

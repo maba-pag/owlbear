@@ -6305,6 +6305,27 @@ class PortfolioApplication:
         return "ready", "ready"
 
     @classmethod
+    def _engine_action_prompt(cls, change_id: str, reason: str) -> str | None:
+        if reason == "engine-action-pending":
+            return (
+                f"/continue-change {change_id} Resume the exact engine-selected operation after rereading "
+                "readiness; do not replace it or infer closure."
+            )
+        if reason == "engine-action-interrupted":
+            return (
+                f"/continue-change {change_id} only after the Delivery engine owner verifies host/worker closure "
+                "and settles all descendant writers and jobs; preserve custody and journals, and do not retry or "
+                "infer termination."
+            )
+        if reason not in {"engine-action-failed", "engine-action-incomplete", "engine-action-blocked"}:
+            return None
+        return (
+            f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "
+            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
+            "condition separately before Delivery rereads it."
+        )
+
+    @classmethod
     def _card_readiness(
         cls,
         snapshot: DeliveryPortfolioSnapshot,
@@ -6359,6 +6380,7 @@ class PortfolioApplication:
         else:
             status, reason = cls._action_prerequisites(operation, workspace_reason)
         executable = status == "ready" and operation is not None
+        prompt = cls._engine_action_prompt(snapshot.contract.change_id, reason)
         return DeliveryReadiness(
             status=status,
             operation=operation,
@@ -6368,6 +6390,7 @@ class PortfolioApplication:
             checks_state="passed" if frontier.finalization is not None else "not-run",
             basis=basis,
             action=action if executable else None,
+            prompt=prompt,
         )
 
     def _worktree_cleanup_view(
@@ -8227,8 +8250,9 @@ class PortfolioApplication:
                 prompt=(
                     f"Do not release, retry, or redispatch Change {change_id}: canonical Delivery authority "
                     f"is unavailable ({reason}); checks are unknown. Preserve existing custody and journals. "
-                    f"Use /repair-delivery {change_id} to diagnose the unavailable authority, then re-inspect "
-                    "before any action."
+                    f"Use /repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and "
+                    "journals. This does not repair authority or prove host/worker closure; the responsible owner "
+                    "must resolve the condition separately before Delivery rereads it."
                 ),
             ),
         )
