@@ -968,7 +968,7 @@ def test_http_default_loader_contains_unknown_result_after_restart(tmp_path: Pat
 
 
 @pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
-def test_http_loader_replays_and_contains_interrupted_engine_rows(
+def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0915
     tmp_path: Path,
     action_kind: str,
 ) -> None:
@@ -977,6 +977,26 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(
         tmp_path, action_kind  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        with TestClient(assemble_target_app(application)) as client:
+            prepared = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert prepared.status_code == 200
+            assert prepared.json()["engine_action"]["kind"] == "mark-ready"
+            prepared_result = client.post(
+                "/api/changes/change-a/continuation/execute",
+                json={"operation_id": prepared.json()["engine_action"]["operation_id"]},
+            )
+        assert prepared_result.status_code == 200
+        assert prepared_result.json()["kind"] == "completed", prepared_result.json()
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
@@ -1004,6 +1024,24 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(
     assert executed.status_code == replayed.status_code == 200
     assert executed.json() == replayed.json()
     assert executed.json()["kind"] == "completed"
+    engine_result = executed.json()
+    assert engine_result["action"]["operation_id"] == action.operation_id
+    assert engine_result["action"]["kind"] == action.kind
+    if action_kind == "reconcile-checkpoint":
+        checkpoint = engine_result["checkpoint"]
+        assert checkpoint["change_id"] == action.change_id
+        assert checkpoint["attempted_head"] == action.exact_head
+        assert checkpoint["reconciled"] is True
+    elif action_kind == "sync-target":
+        target_sync = engine_result["target_sync"]
+        assert target_sync["change_id"] == action.change_id
+        assert target_sync["expected_target"] == action.target_head
+        assert target_sync["target_head"] == action.target_head
+        assert target_sync["merged_head"]
+    else:
+        acceptance = engine_result["acceptance"]
+        assert acceptance["completion_id"]
+        assert acceptance["acceptance_observation_id"]
     effects_after_completion = (
         provider.create_calls,
         provider.update_calls,
@@ -1046,6 +1084,35 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(
     assert _remote_refs(remote) == remote_after_completion
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    if action_kind != "observe-acceptance":
+        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
+        with TestClient(assemble_target_app(reloaded)) as client:
+            next_acquired = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": next_basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "fresh-session",
+                },
+            )
+        assert next_acquired.status_code == 200
+        assert next_acquired.json()["kind"] == "acquired"
+        next_engine_action = next_acquired.json()["engine_action"]
+        if next_engine_action is not None:
+            next_action = ChangeContinuationAction.model_validate(next_engine_action)
+            assert next_action.change_id == action.change_id
+            assert next_action.operation_id != action.operation_id
+        else:
+            next_finalization = next_acquired.json()["finalization"]
+            next_launch = next_acquired.json()["launch"]
+            assert next_finalization is not None or next_launch is not None
+            next_owner_id = (
+                next_finalization["attempt"]["writer"]["attempt_id"]
+                if next_finalization is not None
+                else next_launch["claim"]["attempt_id"]
+            )
+            assert next_owner_id != action.operation_id
 
     sibling = reloaded.get_change("change-c")
     with TestClient(assemble_target_app(reloaded)) as client:
@@ -1063,15 +1130,35 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(
 
 
 @pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
-def test_http_loader_contains_unknown_custody_without_repeating_effects(
+def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa: PLR0915
     tmp_path: Path,
     action_kind: str,
-) -> None:  # noqa: PLR0915
+) -> None:
     """A result-publication interruption remains blocked and retains its exact action."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
         tmp_path, action_kind  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        with TestClient(assemble_target_app(application)) as client:
+            prepared = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert prepared.status_code == 200
+            assert prepared.json()["engine_action"]["kind"] == "mark-ready"
+            prepared_result = client.post(
+                "/api/changes/change-a/continuation/execute",
+                json={"operation_id": prepared.json()["engine_action"]["operation_id"]},
+            )
+        assert prepared_result.status_code == 200
+        assert prepared_result.json()["kind"] == "completed"
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
@@ -1149,6 +1236,14 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(
         repeated_guidance = client.get("/api/work-items")
         repeated_listed = client.get("/api/work-items")
         repeated_shown = client.get("/api/changes/change-a/work-items/publication")
+    expected_coordination = coordination_path.read_bytes()
+    expected_intent = journal_path.read_bytes()
+    expected_started = journal_path.with_name("started.json").read_bytes()
+    expected_result = (
+        journal_path.with_name("result.json").read_bytes()
+        if journal_path.with_name("result.json").exists()
+        else None
+    )
     assert contained.status_code == 200
     assert contained.json()["kind"] == "blocked"
     assert contained.json()["reason_code"] == "engine-action-interrupted"
@@ -1163,6 +1258,8 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(
     assert guidance.json()["groups"]
     assert listed.json()["totals"]
     assert shown.json()["item"]["acceptance"] == []
+    assert shown.json()["item"]["card"]["change_id"] == "change-a"
+    assert shown.json()["item"]["readiness"]["basis"]["continuation_id"] == action.operation_id
     assert guidance.json() == repeated_guidance.json()
     assert listed.json() == repeated_listed.json()
     assert shown.json() == repeated_shown.json()
@@ -1180,26 +1277,17 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(
         provider.create_calls,
         provider.update_calls,
         provider.draft_state_calls,
-    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    ) == (
+        *before_restart[:1],
+        expected_retry,
+        expected_coordination,
+        expected_intent,
+        expected_started,
+        expected_result,
+        *before_restart[6:],
+    )
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
-    if action_kind != "observe-acceptance":
-        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
-        with TestClient(assemble_target_app(reloaded)) as client:
-            next_acquired = client.post(
-                "/api/changes/change-a/continuation/acquire",
-                json={
-                    "expected_basis": next_basis,
-                    "capabilities": ["planner", "builder", "finalizer", "engine"],
-                    "host_id": "synthetic-host",
-                    "session_id": "fresh-session",
-                },
-            )
-        assert next_acquired.status_code == 200
-        assert next_acquired.json()["kind"] == "acquired"
-        next_action = ChangeContinuationAction.model_validate(next_acquired.json()["engine_action"])
-        assert next_action.change_id == action.change_id
-        assert next_action.operation_id != action.operation_id
 
 
 def _remote_refs(repository: Path) -> str:

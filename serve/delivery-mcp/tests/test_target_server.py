@@ -300,7 +300,7 @@ async def test_registered_default_loader_contains_unknown_result_after_restart(t
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
-async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
+async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0915
     tmp_path: Path,
     action_kind: str,
 ) -> None:
@@ -309,6 +309,40 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
         tmp_path, action_kind  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        async with Client(assemble_target_server(application)) as client:
+            prepared = await client.call_tool(
+                "acquire_change_action",
+                {
+                    "change_id": "change-a",
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert not prepared.is_error
+            assert prepared.structured_content is not None
+            prepared_action = ChangeContinuationAction.model_validate(prepared.structured_content["engine_action"])
+            assert prepared_action.kind == "mark-ready"
+            prepared_result = await client.call_tool(
+                "execute_change_action",
+                {
+                    "change_id": "change-a",
+                    "operation_id": prepared_action.operation_id,
+                },
+            )
+        assert not prepared_result.is_error
+        assert prepared_result.structured_content["kind"] == "completed", prepared_result.structured_content
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
@@ -341,6 +375,24 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
     assert not replayed.is_error
     assert executed.structured_content == replayed.structured_content
     assert executed.structured_content["kind"] == "completed", executed.structured_content
+    engine_result = executed.structured_content
+    assert engine_result["action"]["operation_id"] == action.operation_id
+    assert engine_result["action"]["kind"] == action.kind
+    if action_kind == "reconcile-checkpoint":
+        checkpoint = engine_result["checkpoint"]
+        assert checkpoint["change_id"] == action.change_id
+        assert checkpoint["attempted_head"] == action.exact_head
+        assert checkpoint["reconciled"] is True
+    elif action_kind == "sync-target":
+        target_sync = engine_result["target_sync"]
+        assert target_sync["change_id"] == action.change_id
+        assert target_sync["expected_target"] == action.target_head
+        assert target_sync["target_head"] == action.target_head
+        assert target_sync["merged_head"]
+    else:
+        acceptance = engine_result["acceptance"]
+        assert acceptance["completion_id"]
+        assert acceptance["acceptance_observation_id"]
     effects_after_completion = (
         provider.create_calls,
         provider.update_calls,
@@ -383,6 +435,37 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
     assert _remote_refs(remote) == remote_after_completion
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
+    if action_kind != "observe-acceptance":
+        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
+        async with Client(assemble_target_server(reloaded)) as client:
+            next_acquired = await client.call_tool(
+                "acquire_change_action",
+                {
+                    "change_id": "change-a",
+                    "expected_basis": next_basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "fresh-session",
+                },
+            )
+        assert not next_acquired.is_error
+        assert next_acquired.structured_content is not None
+        assert next_acquired.structured_content["kind"] == "acquired"
+        next_engine_action = next_acquired.structured_content["engine_action"]
+        if next_engine_action is not None:
+            next_action = ChangeContinuationAction.model_validate(next_engine_action)
+            assert next_action.change_id == action.change_id
+            assert next_action.operation_id != action.operation_id
+        else:
+            next_finalization = next_acquired.structured_content["finalization"]
+            next_launch = next_acquired.structured_content["launch"]
+            assert next_finalization is not None or next_launch is not None
+            next_owner_id = (
+                next_finalization["attempt"]["writer"]["attempt_id"]
+                if next_finalization is not None
+                else next_launch["claim"]["attempt_id"]
+            )
+            assert next_owner_id != action.operation_id
 
     # A fresh action on an independent Change remains acquireable after replay.
     sibling = reloaded.get_change("change-c")
@@ -405,15 +488,49 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
-async def test_registered_loader_contains_unknown_custody_without_repeating_effects(
+async def test_registered_loader_contains_unknown_custody_without_repeating_effects(  # noqa: PLR0915
     tmp_path: Path,
     action_kind: str,
-) -> None:  # noqa: PLR0915
+) -> None:
     """A result-publication interruption remains blocked and retains its exact action."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
         tmp_path, action_kind  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    if action_kind == "observe-acceptance":
+        async with Client(assemble_target_server(application)) as client:
+            prepared = await client.call_tool(
+                "acquire_change_action",
+                {
+                    "change_id": "change-a",
+                    "expected_basis": basis,
+                    "capabilities": ["planner", "builder", "finalizer", "engine"],
+                    "host_id": "synthetic-host",
+                    "session_id": "preparation-session",
+                },
+            )
+            assert not prepared.is_error
+            assert prepared.structured_content is not None
+            prepared_action = ChangeContinuationAction.model_validate(prepared.structured_content["engine_action"])
+            assert prepared_action.kind == "mark-ready"
+            prepared_result = await client.call_tool(
+                "execute_change_action",
+                {
+                    "change_id": "change-a",
+                    "operation_id": prepared_action.operation_id,
+                },
+            )
+        assert not prepared_result.is_error
+        assert prepared_result.structured_content["kind"] == "completed"
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
+        basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
     sibling_publication = application._runtimes["change-c"].checkpoint_publication_state()  # noqa: SLF001
@@ -497,6 +614,14 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
             "show_work_item",
             {"change_id": "change-a", "work_item_id": "change-a"},
         )
+    expected_coordination = coordination_path.read_bytes()
+    expected_intent = journal_path.read_bytes()
+    expected_started = journal_path.with_name("started.json").read_bytes()
+    expected_result = (
+        journal_path.with_name("result.json").read_bytes()
+        if journal_path.with_name("result.json").exists()
+        else None
+    )
     assert not contained.is_error
     assert contained.structured_content is not None
     assert contained.structured_content["kind"] == "blocked"
@@ -518,7 +643,15 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
         provider.create_calls,
         provider.update_calls,
         provider.draft_state_calls,
-    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    ) == (
+        *before_restart[:1],
+        expected_retry,
+        expected_coordination,
+        expected_intent,
+        expected_started,
+        expected_result,
+        *before_restart[6:],
+    )
     assert contained_replay.structured_content == contained.structured_content
     assert not guidance.is_error
     assert not listed.is_error
@@ -526,6 +659,13 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     assert guidance.structured_content
     assert listed.structured_content
     assert shown.structured_content
+    assert guidance.structured_content["change_id"] == "change-a"
+    assert listed.structured_content["result"]
+    assert shown.structured_content["projection"]["change_id"] == "change-a"
+    assert shown.structured_content["projection"]["work_item_id"] == "change-a"
+    assert guidance.structured_content["continuation_action"]["operation_id"] == action.operation_id
+    assert guidance.structured_content["continuation_action"]["kind"] == action.kind
+    assert guidance.structured_content["readiness"]["reason_code"] == "engine-action-interrupted"
     assert guidance.structured_content == repeated_guidance.structured_content
     assert listed.structured_content == repeated_listed.structured_content
     assert shown.structured_content == repeated_shown.structured_content
@@ -543,28 +683,17 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
         provider.create_calls,
         provider.update_calls,
         provider.draft_state_calls,
-    ) == (*before_restart[:1], expected_retry, *before_restart[2:])
+    ) == (
+        *before_restart[:1],
+        expected_retry,
+        expected_coordination,
+        expected_intent,
+        expected_started,
+        expected_result,
+        *before_restart[6:],
+    )
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
-    if action_kind != "observe-acceptance":
-        next_basis = reloaded.get_change("change-a").readiness.basis.model_dump(mode="json")
-        async with Client(assemble_target_server(reloaded)) as client:
-            next_acquired = await client.call_tool(
-                "acquire_change_action",
-                {
-                    "change_id": "change-a",
-                    "expected_basis": next_basis,
-                    "capabilities": ["planner", "builder", "finalizer", "engine"],
-                    "host_id": "synthetic-host",
-                    "session_id": "fresh-session",
-                },
-            )
-        assert not next_acquired.is_error
-        assert next_acquired.structured_content is not None
-        assert next_acquired.structured_content["kind"] == "acquired"
-        next_action = ChangeContinuationAction.model_validate(next_acquired.structured_content["engine_action"])
-        assert next_action.change_id == action.change_id
-        assert next_action.operation_id != action.operation_id
 
 
 DELIVERY_TOOLS = {

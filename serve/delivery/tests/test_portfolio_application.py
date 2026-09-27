@@ -8732,13 +8732,6 @@ def _loader_registered_engine_action_fixture(
 ) -> tuple[Path, Path, Path, _Provider, PortfolioApplication]:
     """Compose one registered continuation action from the canonical loader fixture."""
     repository, runtime_root, remote, provider, application, head_a, _head_b = _loader_composed_engine_fixture(tmp_path)
-    application._change_branch_publisher = ChangeBranchPublisher(
-        repository,
-        application._coordinator,
-        remote="origin",
-        target_branch="main",
-        operation_root=tmp_path / "branch-operations",
-    )
     provider.read_pull_request = Mock(wraps=provider.read_pull_request)
     provider.observe_checks = Mock(wraps=provider.observe_checks)
     runtime = application._runtimes["change-a"]
@@ -8771,17 +8764,7 @@ def _loader_registered_engine_action_fixture(
         )
         _advance_loader_target(application)
     else:
-        ready = _execute_engine(application, _engine_action(application))
-        assert ready.kind == "completed"
         assert provider.pull_requests
-        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
-            update={
-                "state": "closed",
-                "merged": True,
-                "merge_commit_sha": head_a,
-                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
-            }
-        )
     return repository, runtime_root, remote, provider, application
 
 
