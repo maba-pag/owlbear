@@ -810,8 +810,8 @@ def test_http_verified_completed_recovery_replay(tmp_path: Path) -> None:
 
 
 def test_http_default_loader_replays_engine_action_after_restart(tmp_path: Path) -> None:
-    repository, _runtime_root, remote, provider, application, _head_a, _head_b = (
-        _loader_composed_engine_fixture(tmp_path)
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     with TestClient(assemble_target_app(application)) as client:
@@ -873,8 +873,8 @@ def test_http_default_loader_replays_engine_action_after_restart(tmp_path: Path)
 
 
 def test_http_default_loader_contains_unknown_result_after_restart(tmp_path: Path) -> None:
-    repository, _runtime_root, remote, provider, application, _head_a, _head_b = (
-        _loader_composed_engine_fixture(tmp_path)
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     with TestClient(assemble_target_app(application)) as client:
@@ -974,7 +974,8 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0
 ) -> None:
     """Every non-mark-ready owner row preserves exact effects across the HTTP boundary."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
-        tmp_path, action_kind  # type: ignore[arg-type]
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     if action_kind == "observe-acceptance":
@@ -989,13 +990,22 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0
                 },
             )
             assert prepared.status_code == 200
-            assert prepared.json()["engine_action"]["kind"] == "mark-ready"
+            prepared_action = ChangeContinuationAction.model_validate(prepared.json()["engine_action"])
+            assert prepared_action.kind == "mark-ready"
             prepared_result = client.post(
                 "/api/changes/change-a/continuation/execute",
-                json={"operation_id": prepared.json()["engine_action"]["operation_id"]},
+                json={"operation_id": prepared_action.operation_id},
             )
         assert prepared_result.status_code == 200
         assert prepared_result.json()["kind"] == "completed", prepared_result.json()
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
@@ -1078,9 +1088,12 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0
     ) == effects_after_completion
     assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_after_completion  # noqa: SLF001
     assert reloaded._runtimes["change-a"].retry_ledger().read() == retry_after_completion  # noqa: SLF001
-    assert _workspace_mutation_snapshot(
-        reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
-    ) == workspace_after_completion
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_after_completion
+    )
     assert _remote_refs(remote) == remote_after_completion
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
@@ -1136,7 +1149,8 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
 ) -> None:
     """A result-publication interruption remains blocked and retains its exact action."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
-        tmp_path, action_kind  # type: ignore[arg-type]
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     if action_kind == "observe-acceptance":
@@ -1151,13 +1165,22 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
                 },
             )
             assert prepared.status_code == 200
-            assert prepared.json()["engine_action"]["kind"] == "mark-ready"
+            prepared_action = ChangeContinuationAction.model_validate(prepared.json()["engine_action"])
+            assert prepared_action.kind == "mark-ready"
             prepared_result = client.post(
                 "/api/changes/change-a/continuation/execute",
-                json={"operation_id": prepared.json()["engine_action"]["operation_id"]},
+                json={"operation_id": prepared_action.operation_id},
             )
         assert prepared_result.status_code == 200
         assert prepared_result.json()["kind"] == "completed"
+        provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+            update={
+                "state": "closed",
+                "merged": True,
+                "merge_commit_sha": prepared_action.exact_head,
+                "merged_at": datetime(2026, 8, 4, tzinfo=UTC),
+            }
+        )
         basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     runtime = application._runtimes["change-a"]  # noqa: SLF001
     sibling_frontier = application._runtimes["change-c"].frontier_bytes()  # noqa: SLF001
@@ -1240,9 +1263,7 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
     expected_intent = journal_path.read_bytes()
     expected_started = journal_path.with_name("started.json").read_bytes()
     expected_result = (
-        journal_path.with_name("result.json").read_bytes()
-        if journal_path.with_name("result.json").exists()
-        else None
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None
     )
     assert contained.status_code == 200
     assert contained.json()["kind"] == "blocked"
@@ -1266,25 +1287,30 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
     assert reloaded.get_change("change-a").continuation_action == action
     assert reloaded.get_change("change-a").continuation_action.finished_at is None
     assert (
-        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-        expected_retry,
-        coordination_path.read_bytes(),
-        journal_path.read_bytes(),
-        journal_path.with_name("started.json").read_bytes(),
-        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
-        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-        _remote_refs(remote),
-        provider.create_calls,
-        provider.update_calls,
-        provider.draft_state_calls,
-    ) == (
-        *before_restart[:1],
-        expected_retry,
-        expected_coordination,
-        expected_intent,
-        expected_started,
-        expected_result,
-        *before_restart[6:],
+        (
+            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+            expected_retry,
+            coordination_path.read_bytes(),
+            journal_path.read_bytes(),
+            journal_path.with_name("started.json").read_bytes(),
+            journal_path.with_name("result.json").read_bytes()
+            if journal_path.with_name("result.json").exists()
+            else None,
+            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+            _remote_refs(remote),
+            provider.create_calls,
+            provider.update_calls,
+            provider.draft_state_calls,
+        )
+        == (
+            *before_restart[:1],
+            expected_retry,
+            expected_coordination,
+            expected_intent,
+            expected_started,
+            expected_result,
+            *before_restart[6:],
+        )
     )
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001

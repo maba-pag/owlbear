@@ -8,6 +8,7 @@ import json
 import subprocess
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -126,8 +127,8 @@ async def test_registered_verified_completed_recovery_replay(tmp_path: Path, kin
 @pytest.mark.asyncio
 async def test_registered_default_loader_replays_engine_action(tmp_path: Path) -> None:
     """The registered boundary executes and replays a loader-composed engine action."""
-    repository_root, _runtime_root, remote, provider, application, _head_a, _head_b = (
-        _loader_composed_engine_fixture(tmp_path)
+    repository_root, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     async with Client(assemble_target_server(application)) as client:
@@ -204,8 +205,8 @@ async def test_registered_default_loader_replays_engine_action(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_registered_default_loader_contains_unknown_result_after_restart(tmp_path: Path) -> None:
     """A registered execution crash is contained by the fresh default loader."""
-    repository_root, _runtime_root, remote, provider, application, _head_a, _head_b = (
-        _loader_composed_engine_fixture(tmp_path)
+    repository_root, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     async with Client(assemble_target_server(application)) as client:
@@ -306,7 +307,8 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
 ) -> None:
     """Every non-mark-ready owner row preserves exact effects across the registered boundary."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
-        tmp_path, action_kind  # type: ignore[arg-type]
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     if action_kind == "observe-acceptance":
@@ -429,9 +431,12 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
     ) == effects_after_completion
     assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_after_completion  # noqa: SLF001
     assert reloaded._runtimes["change-a"].retry_ledger().read() == retry_after_completion  # noqa: SLF001
-    assert _workspace_mutation_snapshot(
-        reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
-    ) == workspace_after_completion
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_after_completion
+    )
     assert _remote_refs(remote) == remote_after_completion
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
@@ -494,7 +499,8 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
 ) -> None:
     """A result-publication interruption remains blocked and retains its exact action."""
     repository, _runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
-        tmp_path, action_kind  # type: ignore[arg-type]
+        tmp_path,
+        action_kind,  # type: ignore[arg-type]
     )
     basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
     if action_kind == "observe-acceptance":
@@ -618,9 +624,7 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     expected_intent = journal_path.read_bytes()
     expected_started = journal_path.with_name("started.json").read_bytes()
     expected_result = (
-        journal_path.with_name("result.json").read_bytes()
-        if journal_path.with_name("result.json").exists()
-        else None
+        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None
     )
     assert not contained.is_error
     assert contained.structured_content is not None
@@ -632,25 +636,30 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
         else restart_retry
     )
     assert (
-        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-        expected_retry,
-        coordination_path.read_bytes(),
-        journal_path.read_bytes(),
-        journal_path.with_name("started.json").read_bytes(),
-        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
-        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-        _remote_refs(remote),
-        provider.create_calls,
-        provider.update_calls,
-        provider.draft_state_calls,
-    ) == (
-        *before_restart[:1],
-        expected_retry,
-        expected_coordination,
-        expected_intent,
-        expected_started,
-        expected_result,
-        *before_restart[6:],
+        (
+            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+            expected_retry,
+            coordination_path.read_bytes(),
+            journal_path.read_bytes(),
+            journal_path.with_name("started.json").read_bytes(),
+            journal_path.with_name("result.json").read_bytes()
+            if journal_path.with_name("result.json").exists()
+            else None,
+            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+            _remote_refs(remote),
+            provider.create_calls,
+            provider.update_calls,
+            provider.draft_state_calls,
+        )
+        == (
+            *before_restart[:1],
+            expected_retry,
+            expected_coordination,
+            expected_intent,
+            expected_started,
+            expected_result,
+            *before_restart[6:],
+        )
     )
     assert contained_replay.structured_content == contained.structured_content
     assert not guidance.is_error
@@ -672,25 +681,30 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     assert reloaded.get_change("change-a").continuation_action == action
     assert reloaded.get_change("change-a").continuation_action.finished_at is None
     assert (
-        reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
-        expected_retry,
-        coordination_path.read_bytes(),
-        journal_path.read_bytes(),
-        journal_path.with_name("started.json").read_bytes(),
-        journal_path.with_name("result.json").read_bytes() if journal_path.with_name("result.json").exists() else None,
-        _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
-        _remote_refs(remote),
-        provider.create_calls,
-        provider.update_calls,
-        provider.draft_state_calls,
-    ) == (
-        *before_restart[:1],
-        expected_retry,
-        expected_coordination,
-        expected_intent,
-        expected_started,
-        expected_result,
-        *before_restart[6:],
+        (
+            reloaded._runtimes["change-a"].frontier_bytes(),  # noqa: SLF001
+            expected_retry,
+            coordination_path.read_bytes(),
+            journal_path.read_bytes(),
+            journal_path.with_name("started.json").read_bytes(),
+            journal_path.with_name("result.json").read_bytes()
+            if journal_path.with_name("result.json").exists()
+            else None,
+            _workspace_mutation_snapshot(reloaded._coordinator.show("change-a").worktree_path),  # noqa: SLF001
+            _remote_refs(remote),
+            provider.create_calls,
+            provider.update_calls,
+            provider.draft_state_calls,
+        )
+        == (
+            *before_restart[:1],
+            expected_retry,
+            expected_coordination,
+            expected_intent,
+            expected_started,
+            expected_result,
+            *before_restart[6:],
+        )
     )
     assert reloaded._runtimes["change-c"].frontier_bytes() == sibling_frontier  # noqa: SLF001
     assert reloaded._runtimes["change-c"].checkpoint_publication_state() == sibling_publication  # noqa: SLF001
