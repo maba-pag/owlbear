@@ -2,14 +2,23 @@
 
 ## Status and authority
 
-**D03-D: repaired source ready for acceptance; external gates remain.**
-D alone was explicitly authorized from `b654984`; E, package acceptance, merge and live activation
-remain unauthorized. Bounded C's recorded evidence and named external limits below are preserved.
+**D03-E: registered handoff and cumulative bounded proof in progress.**
+The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
+authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
+Bounded C's and D's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
+
+E must establish supported replay and unsupported containment through the existing registered MCP
+and HTTP boundaries using real application, workspace, transaction and retry owners. Forwarding
+fakes, same-instance result equality and successful syntax checks alone do not meet that outcome.
+The bounded contract at `2e377a6` remains controlling; no optional provenance or host provider is
+enabled, and no general automatic dirty-worktree recovery is promised.
+
+### D repaired baseline
 
 The [D repair request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5850248740)
 addresses the [acceptance findings](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5850210697)

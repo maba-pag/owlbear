@@ -14,7 +14,11 @@ from typing import Any
 import pytest
 from mcp import Client
 from pydantic import BaseModel, ConfigDict, ValidationError
-from serve.delivery.tests.test_portfolio_application import acceptance_budget_case
+from serve.delivery.tests.test_portfolio_application import (
+    acceptance_budget_case,
+    _loader_composed_engine_fixture,
+    _startup_config,
+)
 from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 import owlbear_delivery_mcp.server as live_server
@@ -42,6 +46,9 @@ from owlbear_delivery import (
     PortfolioApplication,
 )
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
+from owlbear_delivery.delivery_application_loader import (
+    load_delivery_application as load_core_delivery_application,
+)
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
@@ -111,6 +118,60 @@ async def test_registered_verified_completed_recovery_replay(tmp_path: Path, kin
     recovered = payload["recovery"] if kind == "proposal" else payload
     assert recovered["status"] == "recovered"
     unchanged()
+
+
+@pytest.mark.asyncio
+async def test_registered_default_loader_replays_engine_action(tmp_path: Path) -> None:
+    """The registered boundary executes and replays a loader-composed engine action."""
+    repository_root, _runtime_root, remote, provider, application, _head_a, _head_b = (
+        _loader_composed_engine_fixture(tmp_path)
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    async with Client(assemble_target_server(application)) as client:
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert not acquired.is_error
+        assert acquired.structured_content is not None
+        action = acquired.structured_content["engine_action"]
+        executed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action["operation_id"]},
+        )
+        replayed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action["operation_id"]},
+        )
+    calls_after_first_execution = provider.draft_state_calls
+    _git(repository_root, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository_root, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository_root,
+        publication_provider=provider,
+    )
+    async with Client(assemble_target_server(reloaded)) as client:
+        restarted = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": action["operation_id"]},
+        )
+    assert acquired.structured_content["kind"] == "acquired"
+    assert action["kind"] == "mark-ready"
+    assert not executed.is_error
+    assert not replayed.is_error
+    assert executed.structured_content == replayed.structured_content
+    assert executed.structured_content is not None
+    assert executed.structured_content["kind"] == "completed"
+    assert not restarted.is_error
+    assert restarted.structured_content == executed.structured_content
+    assert provider.draft_state_calls == calls_after_first_execution == 1
 
 
 DELIVERY_TOOLS = {
@@ -705,6 +766,22 @@ async def test_registered_continuation_forwards_non_acquired_envelopes_without_a
         (
             "execute_change_action",
             {"change_id": "change-a", "operation_id": CONTINUATION_ID, "confirmed_success": True},
+        ),
+        (
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID, "commands": ["git status"]},
+        ),
+        (
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID, "budget": 1},
+        ),
+        (
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID, "receipt": {"success": True}},
+        ),
+        (
+            "execute_change_action",
+            {"change_id": "change-a", "operation_id": CONTINUATION_ID, "stop_assertion": True},
         ),
     ],
 )
