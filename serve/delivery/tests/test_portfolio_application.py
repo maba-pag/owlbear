@@ -52,6 +52,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
     DeliveryAcceptanceWaitingError,
+    DeliveryAcquisitionFailure,
     DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
     DeliveryAdmissionConflictError,
@@ -1252,6 +1253,29 @@ def _workspace_mutation_snapshot(worktree: Path) -> tuple[dict[str, bytes], byte
     )
 
 
+def _loader_activation_state_snapshot(application: PortfolioApplication) -> dict[str, object]:
+    coordinator = application._coordinator
+    changes = {}
+    for change_id, runtime in application._runtimes.items():
+        coordination = coordinator.show(change_id)
+        changes[change_id] = {
+            "frontier": runtime.frontier_bytes(),
+            "retry_ledger": runtime.retry_ledger().read(),
+            "coordination": (
+                coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json"
+            ).read_bytes(),
+            "workspace": _workspace_mutation_snapshot(coordination.worktree_path),
+        }
+    return {
+        "changes": changes,
+        "repository_refs": _git(
+            application._workspace_manager.repository,
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+        ),
+    }
+
+
 def _loader_engine_state_snapshot(  # noqa: PLR0913
     application: PortfolioApplication,
     *,
@@ -1987,6 +2011,7 @@ def test_readiness_distinguishes_retained_engine_journal_states_without_writes( 
     assert repeated.readiness == view.readiness
     assert view.readiness.status == ("running" if journal_state == "pending" else "blocked")
     assert not view.readiness.executable
+    assert view.readiness.prompt is None
     assert view.readiness.action is None
     if journal_state == "pending":
         assert "Delivery engine owner" in view.detail.card.next_step
@@ -2171,6 +2196,7 @@ def test_acceptance_retry_budget_never_infers_explicit_observation(tmp_path: Pat
         assert episode.total_attempts == index + 1
         assert episode.explicit_observations == 0
         assert application.get_change("change-a").readiness.executable is False
+        assert application.get_change("change-a").readiness.prompt is None
     calls = provider.read_pull_request.call_count
     now += timedelta(days=1)
     stopped = application.acquire_change_action(_continuation_request(application, session_id="another-session"))
@@ -2429,6 +2455,7 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
         assert not application.get_change("change-a").readiness.executable
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
+    assert reopened.get_change("change-a").readiness.prompt is None
     assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
     sibling = reopened.acquire_change_action(_continuation_request(reopened, "change-b"))
     assert sibling.launch is not None
@@ -5057,6 +5084,15 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
     assert card.readiness == detail.readiness == change.readiness == context.readiness
     assert context.readiness.executable is not dirty
     assert context.readiness.reason_code == ("workspace-dirty" if dirty else "ready")
+    if dirty:
+        assert context.readiness.prompt is None
+    else:
+        assert context.readiness.prompt == (
+            "/continue-change change-a reread get_change and pass its readiness basis unchanged "
+            "to acquire_change_action; declare only capabilities this session can dispatch and "
+            "execute only the acquired operation. Yield on busy, "
+            "waiting, and human; do not dispatch siblings or infer progress."
+        )
     assert context.readiness.checks_state == "not-run"
     assert runtimes["change-a"].frontier_bytes() == before
     if not dirty:
@@ -5064,6 +5100,65 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
     with pytest.raises(PortfolioApplicationError):
         application.finalize_change("change-a", _finalization_request("change-a", coordination.last_reviewed_commit))
     assert runtimes["change-a"].finalization() is None
+
+
+@pytest.mark.parametrize(
+    ("reason", "executable", "prompt_prefix"),
+    [
+        ("ready", True, "/continue-change"),
+        ("request-action", True, "/continue-change"),
+        ("ready", False, None),
+        ("engine-action-pending", False, "/continue-change"),
+        ("engine-action-interrupted", False, "/continue-change"),
+        ("engine-action-failed", False, "/repair-delivery"),
+        ("engine-action-incomplete", False, "/repair-delivery"),
+        ("engine-action-blocked", False, "/repair-delivery"),
+        ("active-custody", False, None),
+        ("dependency-wait", False, None),
+        ("publication-wait", False, None),
+        ("change-terminal", False, None),
+        ("retry-backoff", False, None),
+        ("retry-exhausted", False, None),
+        ("acceptance-wait", False, None),
+        ("retry-ledger-unavailable", False, None),
+    ],
+)
+def test_engine_action_prompt_is_applicable_to_final_readiness_state(
+    *,
+    reason: str,
+    executable: bool,
+    prompt_prefix: str | None,
+) -> None:
+    prompt = PortfolioApplication._engine_action_prompt("change-a", reason, executable=executable)
+    if prompt_prefix is None:
+        assert prompt is None
+    else:
+        assert prompt is not None
+        assert prompt.startswith(prompt_prefix)
+
+
+def test_continuation_activation_failure_fallback_clears_runnable_prompt(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
+    )
+    readiness = application.get_change("change-a").readiness
+    assert readiness.executable
+    assert readiness.prompt is not None
+    assert readiness.prompt.startswith("/continue-change")
+    candidate = application._candidates("change-a")[0]
+    failure = DeliveryAcquisitionFailure(
+        change_id="change-a",
+        outcome_id=candidate.binding.outcome_id,
+        code="ERR_DELIVERY_CLAIM_ACTIVATION_FAILED",
+        detail="injected activation failure",
+        retry_condition="closure is unverified",
+    )
+    with patch.object(application, "_delivery_snapshot", side_effect=OSError("snapshot unavailable")):
+        result = application._continuation_launch_failure(candidate, readiness, failure)
+    assert result.kind == "unavailable"
+    assert result.reason_code == "claim-activation-failed"
+    assert result.readiness.executable is False
+    assert result.readiness.prompt is None
 
 
 @pytest.mark.parametrize("failure", [PermissionError("private detail"), subprocess.TimeoutExpired("git", 10)])

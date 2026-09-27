@@ -5960,7 +5960,7 @@ class PortfolioApplication:
                 )
             episode = RetryLedger(self._target_root, snapshot.contract.change_id, clock=self._clock).episode(key)
         except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
-            return decision.model_copy(
+            unavailable = decision.model_copy(
                 update={
                     "status": "unavailable",
                     "reason_code": "retry-ledger-unavailable",
@@ -5969,6 +5969,7 @@ class PortfolioApplication:
                     "stop_reason": "retry-ledger-unavailable",
                 }
             )
+            return self._with_engine_action_prompt(snapshot.contract.change_id, unavailable)
         if episode is None or episode.failure_class is not failure_class:
             return decision
         updates: dict[str, object] = {
@@ -6030,7 +6031,16 @@ class PortfolioApplication:
                     "next_actor": WorkItemNextActor.YOU,
                 }
             )
-        return decision.model_copy(update=updates)
+        return self._with_engine_action_prompt(snapshot.contract.change_id, decision.model_copy(update=updates))
+
+    @classmethod
+    def _with_engine_action_prompt(cls, change_id: str, readiness: DeliveryReadiness) -> DeliveryReadiness:
+        prompt = cls._engine_action_prompt(
+            change_id,
+            readiness.reason_code,
+            executable=readiness.executable,
+        )
+        return readiness.model_copy(update={"prompt": prompt})
 
     def _capture_action_basis(
         self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...], basis: DeliveryReadinessBasis
@@ -6305,7 +6315,13 @@ class PortfolioApplication:
         return "ready", "ready"
 
     @classmethod
-    def _engine_action_prompt(cls, change_id: str, reason: str) -> str | None:
+    def _engine_action_prompt(cls, change_id: str, reason: str, *, executable: bool) -> str | None:
+        if executable:
+            return (
+                f"/continue-change {change_id} reread get_change and pass its readiness basis unchanged to "
+                "acquire_change_action; declare only capabilities this session can dispatch and execute only the "
+                "acquired operation. Yield on busy, waiting, and human; do not dispatch siblings or infer progress."
+            )
         if reason == "engine-action-pending":
             return (
                 f"/continue-change {change_id} Resume the exact engine-selected operation after rereading "
@@ -6380,7 +6396,7 @@ class PortfolioApplication:
         else:
             status, reason = cls._action_prerequisites(operation, workspace_reason)
         executable = status == "ready" and operation is not None
-        prompt = cls._engine_action_prompt(snapshot.contract.change_id, reason)
+        prompt = cls._engine_action_prompt(snapshot.contract.change_id, reason, executable=executable)
         return DeliveryReadiness(
             status=status,
             operation=operation,
@@ -7000,13 +7016,16 @@ class PortfolioApplication:
                 change_id=request.change_id,
                 kind="unavailable",
                 reason_code=reason,
-                readiness=view.readiness.model_copy(
-                    update={
-                        "status": "unavailable",
-                        "reason_code": reason,
-                        "executable": False,
-                        "action": None,
-                    }
+                readiness=self._with_engine_action_prompt(
+                    request.change_id,
+                    view.readiness.model_copy(
+                        update={
+                            "status": "unavailable",
+                            "reason_code": reason,
+                            "executable": False,
+                            "action": None,
+                        }
+                    ),
                 ),
                 failure=DeliveryAcquisitionFailure(
                     change_id=request.change_id,
@@ -7184,21 +7203,24 @@ class PortfolioApplication:
         reservation = self._reserve_engine_attempt(runtime, readiness, self._continuation_operation_id(request))
         if reservation is not None and not reservation.allowed:
             retry_status = "waiting" if reservation.reason_code in {"retry-backoff", "acceptance-wait"} else "blocked"
-            retry_readiness = readiness.model_copy(
-                update={
-                    "status": retry_status,
-                    "reason_code": (
-                        reservation.reason_code
-                        if reservation.reason_code
-                        in {"retry-backoff", "retry-exhausted", "acceptance-wait", "retry-containment"}
-                        else "retry-exhausted"
-                    ),
-                    "executable": False,
-                    "action": None,
-                    "attempts": reservation.attempts,
-                    "next_eligible_at": reservation.next_eligible_at,
-                    "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
-                }
+            retry_readiness = self._with_engine_action_prompt(
+                request.change_id,
+                readiness.model_copy(
+                    update={
+                        "status": retry_status,
+                        "reason_code": (
+                            reservation.reason_code
+                            if reservation.reason_code
+                            in {"retry-backoff", "retry-exhausted", "acceptance-wait", "retry-containment"}
+                            else "retry-exhausted"
+                        ),
+                        "executable": False,
+                        "action": None,
+                        "attempts": reservation.attempts,
+                        "next_eligible_at": reservation.next_eligible_at,
+                        "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
+                    }
+                ),
             )
             return DeliveryContinuationResult(
                 change_id=request.change_id,
@@ -7554,16 +7576,19 @@ class PortfolioApplication:
                 in {"retry-backoff", "retry-exhausted", "acceptance-wait", "retry-containment"}
                 else "retry-exhausted"
             )
-            blocked = readiness.model_copy(
-                update={
-                    "status": retry_status,
-                    "reason_code": retry_reason,
-                    "executable": False,
-                    "action": None,
-                    "attempts": reservation.attempts,
-                    "next_eligible_at": reservation.next_eligible_at,
-                    "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
-                }
+            blocked = self._with_engine_action_prompt(
+                request.change_id,
+                readiness.model_copy(
+                    update={
+                        "status": retry_status,
+                        "reason_code": retry_reason,
+                        "executable": False,
+                        "action": None,
+                        "attempts": reservation.attempts,
+                        "next_eligible_at": reservation.next_eligible_at,
+                        "stop_reason": reservation.stop_code.value if reservation.stop_code is not None else None,
+                    }
+                ),
             )
             return DeliveryContinuationResult(
                 change_id=request.change_id,
@@ -7660,13 +7685,16 @@ class PortfolioApplication:
             change_id=candidate.change_id,
             kind="unavailable",
             reason_code="claim-activation-failed",
-            readiness=current.model_copy(
-                update={
-                    "status": "blocked",
-                    "reason_code": "claim-activation-failed",
-                    "executable": False,
-                    "action": None,
-                }
+            readiness=self._with_engine_action_prompt(
+                candidate.change_id,
+                current.model_copy(
+                    update={
+                        "status": "blocked",
+                        "reason_code": "claim-activation-failed",
+                        "executable": False,
+                        "action": None,
+                    }
+                ),
             ),
             failure=failure,
         )

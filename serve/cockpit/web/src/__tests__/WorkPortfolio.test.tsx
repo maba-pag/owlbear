@@ -5451,6 +5451,7 @@ it("offers the finalize command only while engine readiness is executable", asyn
       executable: true,
       reason_code: "ready",
       action: executableAction,
+      prompt: "/continue-change change-alpha reread get_change and pass its readiness basis unchanged.",
     }),
   });
   renderPage("/delivery/change-alpha/publication");
@@ -5461,6 +5462,12 @@ it("offers the finalize command only while engine readiness is executable", asyn
     }),
   ).toBeInTheDocument();
   expect(within(executableInspector).queryByTestId("readiness-not-executable")).not.toBeInTheDocument();
+  const prompt = within(executableInspector).getByTestId("readiness-prompt");
+  expect(prompt.tagName).toBe("PRE");
+  expect(prompt).toHaveTextContent(
+    "/continue-change change-alpha reread get_change and pass its readiness basis unchanged.",
+  );
+  expect(prompt.querySelector("a, button")).toBeNull();
 
   currentDetail = detail({
     card: publicationCardForChecks({
@@ -5493,7 +5500,11 @@ it("offers the finalize command only while engine readiness is executable", asyn
 });
 
 it("offers read-only inspection for an unavailable Change without controls", async () => {
-  currentUnavailableDetail = unavailableChange("change-alpha", "Portfolio redesign");
+  const unavailable = unavailableChange("change-alpha", "Portfolio redesign");
+  currentUnavailableDetail = {
+    ...unavailable,
+    readiness: { ...unavailable.readiness, prompt: "/repair-delivery Diagnose Change change-alpha read-only." },
+  };
   renderPage("/delivery/change-alpha/outcome:OUT-001");
 
   const inspector = await screen.findByTestId("work-item-detail");
@@ -5504,6 +5515,10 @@ it("offers read-only inspection for an unavailable Change without controls", asy
   expect(within(inspector).getByTestId("unavailable-change-diagnostics")).toHaveTextContent("runtime-unavailable");
   expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Unavailable");
   expect(within(inspector).getByTestId("readiness-checks-state")).toHaveTextContent("Unknown");
+  const prompt = within(inspector).getByTestId("readiness-prompt");
+  expect(prompt.tagName).toBe("PRE");
+  expect(prompt).toHaveTextContent("/repair-delivery Diagnose Change change-alpha read-only.");
+  expect(prompt.querySelector("a, button")).toBeNull();
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
 

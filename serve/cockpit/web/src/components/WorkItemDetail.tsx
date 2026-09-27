@@ -867,6 +867,14 @@ function ReadinessSection({ readiness }: { readiness: DeliveryReadiness | null |
       <p className="mt-static-xs text-sm leading-relaxed" data-readiness-reason={readiness.reason_code}>
         {READINESS_REASON_LABELS[readiness.reason_code]}
       </p>
+      {readiness.prompt ? (
+        <pre
+          className="mt-static-xs whitespace-pre-wrap break-words rounded-md bg-contrast-low p-static-xs text-xs"
+          data-testid="readiness-prompt"
+        >
+          <code>{readiness.prompt}</code>
+        </pre>
+      ) : null}
       {!readiness.executable ? (
         <p className="mt-static-xs text-xs text-contrast-medium" data-testid="readiness-not-executable">
           Delivery offers no runnable operation for this Work Item right now.

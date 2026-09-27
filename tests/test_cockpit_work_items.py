@@ -17,7 +17,9 @@ from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
+    _failure_request,
     _git,
+    _loader_activation_state_snapshot,
     _loader_composed_engine_fixture,
     _loader_engine_state_snapshot,
     _loader_registered_engine_action_fixture,
@@ -84,6 +86,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionConflictError,
     DeliveryChangeStage,
 )
+from owlbear_delivery.finalization_reports import FinalizationFailureCode
 from owlbear_delivery.portfolio_operating import (
     DeliveryHealthDiagnostic,
     DeliveryHealthStatus,
@@ -1471,14 +1474,14 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
 
 
 @pytest.mark.parametrize("writer_recorded", [False, True])
-def test_http_default_loader_contains_failed_claim_activation(
+def test_http_default_loader_contains_failed_claim_activation(  # noqa: PLR0915 - verify persisted activation and independent restart progress.
     tmp_path: Path,
     *,
     writer_recorded: bool,
 ) -> None:
     repository, _runtime_root = _seed_loader_composed_completed_change(
         tmp_path,
-        (("change-a", DeliveryStage.IMPLEMENTATION),),
+        (("change-a", DeliveryStage.IMPLEMENTATION), ("change-b", DeliveryStage.IMPLEMENTATION)),
     )
     application = load_core_delivery_application(_startup_config(), workspace_root=repository)
     coordinator = application._coordinator  # noqa: SLF001
@@ -1509,9 +1512,164 @@ def test_http_default_loader_contains_failed_claim_activation(
     assert payload["kind"] == "unavailable"
     assert payload["reason_code"] == "claim-activation-failed"
     assert payload["launch"] is None
+    assert payload["readiness"]["prompt"] is None
     assert payload["failure"]["claim_id"]
     assert payload["failure"]["attempt_id"]
     assert (coordinator.show("change-a").writer is not None) is writer_recorded
+    failed_claim = application._runtimes["change-a"].show_binding("OUT-001").active_claim  # noqa: SLF001
+    failed_episode = application._runtimes["change-a"].retry_ledger().read().episodes[0]  # noqa: SLF001
+    assert failed_claim is not None
+    assert (failed_claim.claim_id, failed_claim.attempt_id) == (
+        payload["failure"]["claim_id"],
+        payload["failure"]["attempt_id"],
+    )
+    assert failed_episode.attempt_ids == (failed_claim.attempt_id,)
+    before_reload = _loader_activation_state_snapshot(application)
+    reloaded = load_core_delivery_application(_startup_config(), workspace_root=repository)
+    assert _loader_activation_state_snapshot(reloaded) == before_reload
+    reloaded_coordinator = reloaded._coordinator  # noqa: SLF001
+    reloaded_runtime = reloaded._runtimes["change-a"]  # noqa: SLF001
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert (reloaded_coordinator.show("change-a").writer is not None) is writer_recorded
+    coordination_path = reloaded_coordinator.runtime_root / "coordination/changes/change-a.json"
+    coordination_before = coordination_path.read_bytes()
+    with TestClient(assemble_target_app(reloaded)) as client:
+        first_read = client.get("/api/work-items")
+        second_read = client.get("/api/work-items")
+        assert first_read.status_code == second_read.status_code == 200
+        assert second_read.json() == first_read.json()
+        first_readiness = next(
+            item["readiness"]
+            for group in first_read.json()["groups"]
+            for item in group["items"]
+            if item["change_id"] == "change-a" and item["scope"] == "outcome"
+        )
+        assert first_readiness["executable"] is False
+        assert first_readiness["prompt"] is None
+        blocked = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": first_readiness["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "retry-after-restart",
+            },
+        )
+    after_refusal = _loader_activation_state_snapshot(reloaded)
+    assert after_refusal == before_reload
+    with TestClient(assemble_target_app(reloaded)) as client:
+        sibling_read = client.get("/api/work-items")
+        assert sibling_read.status_code == 200
+        sibling_readiness = next(
+            item["readiness"]
+            for group in sibling_read.json()["groups"]
+            for item in group["items"]
+            if item["change_id"] == "change-b" and item["scope"] == "outcome"
+        )
+        sibling_result = client.post(
+            "/api/changes/change-b/continuation/acquire",
+            json={
+                "expected_basis": sibling_readiness["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "sibling-after-restart",
+            },
+        )
+    assert blocked.status_code == 200
+    assert blocked.json()["launch"] is None
+    assert blocked.json()["reason_code"] == ("active-custody" if writer_recorded else "claim-custody-unreconciled")
+    assert coordination_path.read_bytes() == coordination_before
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert sibling_result.status_code == 200
+    assert sibling_result.json()["kind"] == "acquired"
+    assert sibling_result.json()["launch"] is not None
+    assert reloaded._runtimes["change-b"].show_binding("OUT-001").active_claim is not None  # noqa: SLF001
+    after_sibling_progress = _loader_activation_state_snapshot(reloaded)
+    before_changes = before_reload["changes"]
+    after_changes = after_sibling_progress["changes"]
+    assert after_changes["change-a"] == before_changes["change-a"]
+    assert after_changes["change-b"]["frontier"] != before_changes["change-b"]["frontier"]
+    assert after_changes["change-b"]["workspace"] == before_changes["change-b"]["workspace"]
+    assert after_sibling_progress["repository_refs"] == before_reload["repository_refs"]
+
+
+def test_http_finalizer_handoff_contains_failure_before_checks(tmp_path: Path) -> None:
+    _repository, _runtime_root, _remote, _provider, application = _loader_registered_engine_action_fixture(
+        tmp_path, "sync-target"
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        synchronized = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "sync-session",
+            },
+        )
+        assert synchronized.status_code == 200
+        sync_action = synchronized.json()["engine_action"]
+        assert sync_action is not None
+        assert sync_action["kind"] == "sync-target"
+        executed_sync = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": sync_action["operation_id"]},
+        )
+        assert executed_sync.status_code == 200
+        assert executed_sync.json()["kind"] == "completed"
+
+        detail = client.get("/api/changes/change-a/work-items/publication")
+        assert detail.status_code == 200
+        finalizer_basis = detail.json()["item"]["readiness"]["basis"]
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": finalizer_basis,
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-session",
+            },
+        )
+        assert acquired.status_code == 200
+        finalization = acquired.json()["finalization"]
+        assert finalization is not None
+        (
+            application._coordinator.show("change-a").worktree_path / "product.txt"  # noqa: SLF001
+        ).write_text("dirty before checks\n", encoding="utf-8")
+        finalization_basis = application.show_finalization_context("change-a").readiness.basis
+        failure = _failure_request(
+            application,
+            attempt_key=finalization["attempt"]["writer"]["attempt_id"],
+            category="custody-preflight",
+            code=FinalizationFailureCode.WORKSPACE_DIRTY,
+            checks_state="not-run",
+            expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
+            paths=("product.txt",),
+        )
+        report = application.report_finalization_failure(failure)
+
+        current = client.get("/api/changes/change-a/work-items/publication")
+        assert current.status_code == 200
+        current_readiness = current.json()["item"]["readiness"]
+        stopped = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": current_readiness["basis"],
+                "capabilities": ["finalizer"],
+                "host_id": "synthetic-host",
+                "session_id": "finalizer-session-2",
+            },
+        )
+    assert stopped.status_code == 200
+    assert stopped.json()["kind"] == "busy"
+    assert stopped.json()["reason_code"] == "active-custody"
+    assert stopped.json()["finalization"] is None
+    assert stopped.json()["readiness"]["checks_state"] == "not-run"
+    assert application.get_change("change-a").readiness.last_attempt.report == report
+    assert application._coordinator.show("change-a").writer is not None  # noqa: SLF001
 
 
 def test_http_default_loader_rejects_stale_basis_without_acquisition(tmp_path: Path) -> None:
@@ -1582,6 +1740,8 @@ def _remote_refs(repository: Path) -> str:
     result = subprocess.run(  # noqa: S603
         (  # noqa: S607
             "git",
+            "-c",
+            "safe.bareRepository=all",
             "-C",
             str(repository),
             "for-each-ref",

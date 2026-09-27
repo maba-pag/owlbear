@@ -20,10 +20,14 @@ from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
+    _canonical,
+    _engine_action,
     _failure_request,
+    _loader_activation_state_snapshot,
     _loader_composed_engine_fixture,
     _loader_engine_state_snapshot,
     _loader_registered_engine_action_fixture,
+    _make_provider_readback_unavailable,
     _seed_loader_composed_completed_change,
     _startup_config,
     _workspace_mutation_snapshot,
@@ -207,6 +211,147 @@ async def test_registered_default_loader_replays_engine_action(tmp_path: Path) -
         == workspace_before_restart
     )
     assert _remote_refs(remote) == remote_refs_before_restart
+
+
+@pytest.mark.asyncio
+async def test_registered_loader_contains_unavailable_provider_readback_without_repeating_effects(
+    tmp_path: Path,
+) -> None:
+    _repository, runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    basis = application.get_change("change-b").readiness.basis.model_dump(mode="json")
+    async with Client(assemble_target_server(application)) as client:
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-b",
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "readback-session",
+            },
+        )
+    assert not acquired.is_error
+    assert acquired.structured_content is not None
+    action = acquired.structured_content["engine_action"]
+    assert action["kind"] == "mark-ready"
+    _make_provider_readback_unavailable(provider, 8)
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    async with Client(assemble_target_server(application)) as client:
+        failed = await client.call_tool(
+            "execute_change_action",
+            {"change_id": "change-b", "operation_id": action["operation_id"]},
+        )
+    assert not failed.is_error
+    assert failed.structured_content is not None
+    assert failed.structured_content["kind"] == "blocked"
+    assert failed.structured_content["reason_code"] == "engine-action-failed"
+    assert "provider readback unavailable" in failed.structured_content["failure"]["detail"]
+    assert "release custody" in failed.structured_content["failure"]["retry_condition"]
+    assert provider.draft_state_calls == 1
+
+    after_containment = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-b",
+        operation_id=action["operation_id"],
+    )
+    async with Client(assemble_target_server(application)) as client:
+        first = await client.call_tool("get_change", {"change_id": "change-b"})
+        second = await client.call_tool("get_change", {"change_id": "change-b"})
+        listed = await client.call_tool("list_work_items", {})
+    assert first.structured_content == second.structured_content
+    assert first.structured_content is not None
+    assert first.structured_content["readiness"]["reason_code"] == "engine-action-failed"
+    assert first.structured_content["readiness"]["prompt"].startswith("/repair-delivery")
+    assert not listed.is_error
+    after_reads = _loader_engine_state_snapshot(
+        application,
+        runtime_root=runtime_root,
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-b",
+        operation_id=action["operation_id"],
+    )
+    _assert_loader_observation_only(after_containment, after_reads)
+    assert provider.draft_state_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("journal_state", ["invalid-intent", "mismatched-intent", "invalid-result"])
+async def test_registered_loader_contains_malformed_engine_journals_without_effects(
+    tmp_path: Path,
+    journal_state: str,
+) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    action = _engine_action(application, "change-a")
+    intent_path = application._coordinator.continuation_record_path(  # noqa: SLF001
+        "change-a", action.operation_id
+    )
+    result_path = intent_path.with_name("result.json")
+    if journal_state == "invalid-intent":
+        intent_path.write_bytes(b"{")
+    elif journal_state == "mismatched-intent":
+        intent_path.write_bytes(_canonical(action.model_copy(update={"session_id": "foreign-session"})))
+    else:
+        result_path.mkdir()
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    provider.read_pull_request = Mock(wraps=provider.read_pull_request)
+    provider.observe_checks = Mock(wraps=provider.observe_checks)
+    before = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    async with Client(assemble_target_server(reloaded)) as client:
+        detail = await client.call_tool("get_change", {"change_id": "change-a"})
+        repeated = await client.call_tool("get_change", {"change_id": "change-a"})
+        assert detail.structured_content == repeated.structured_content
+        assert detail.structured_content is not None
+        readiness = detail.structured_content["readiness"]
+        assert readiness["reason_code"] == "engine-action-blocked"
+        assert readiness["executable"] is False
+        assert readiness["action"] is None
+        assert readiness["prompt"].startswith("/repair-delivery")
+        acquired = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": readiness["basis"],
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "must-not-retry",
+            },
+        )
+    assert not acquired.is_error
+    assert acquired.structured_content is not None
+    assert acquired.structured_content["engine_action"] is None
+    after = _loader_engine_state_snapshot(
+        reloaded,
+        runtime_root=reloaded._coordinator.runtime_root,  # noqa: SLF001
+        remote_refs=_remote_refs(remote),
+        provider=provider,
+        change_id="change-a",
+        operation_id=action.operation_id,
+    )
+    _assert_loader_observation_only(before, after)
+    assert provider.draft_state_calls == 0
+    assert result_path.is_dir() is (journal_state == "invalid-result")
 
 
 @pytest.mark.asyncio
@@ -923,14 +1068,14 @@ async def test_registered_default_loader_contains_failed_finalizer_before_checks
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("writer_recorded", [False, True])
-async def test_registered_default_loader_contains_failed_claim_activation(
+async def test_registered_default_loader_contains_failed_claim_activation(  # noqa: PLR0915 - verify persisted activation and independent restart progress.
     tmp_path: Path,
     *,
     writer_recorded: bool,
 ) -> None:
     repository, _runtime_root = _seed_loader_composed_completed_change(
         tmp_path,
-        (("change-a", DeliveryStage.IMPLEMENTATION),),
+        (("change-a", DeliveryStage.IMPLEMENTATION), ("change-b", DeliveryStage.IMPLEMENTATION)),
     )
     application = load_core_delivery_application(_startup_config(), workspace_root=repository)
     coordinator = application._coordinator  # noqa: SLF001
@@ -960,9 +1105,79 @@ async def test_registered_default_loader_contains_failed_claim_activation(
     assert result.structured_content["kind"] == "unavailable"
     assert result.structured_content["reason_code"] == "claim-activation-failed"
     assert result.structured_content["launch"] is None
+    assert result.structured_content["readiness"]["prompt"] is None
     assert result.structured_content["failure"]["claim_id"]
     assert result.structured_content["failure"]["attempt_id"]
     assert (coordinator.show("change-a").writer is not None) is writer_recorded
+
+    failure = result.structured_content["failure"]
+    failed_claim = application._runtimes["change-a"].show_binding("OUT-001").active_claim  # noqa: SLF001
+    failed_episode = application._runtimes["change-a"].retry_ledger().read().episodes[0]  # noqa: SLF001
+    assert failed_claim is not None
+    assert (failed_claim.claim_id, failed_claim.attempt_id) == (failure["claim_id"], failure["attempt_id"])
+    assert failed_episode.attempt_ids == (failed_claim.attempt_id,)
+    before_reload = _loader_activation_state_snapshot(application)
+    reloaded = load_core_delivery_application(_startup_config(), workspace_root=repository)
+    assert _loader_activation_state_snapshot(reloaded) == before_reload
+    reloaded_coordinator = reloaded._coordinator  # noqa: SLF001
+    reloaded_runtime = reloaded._runtimes["change-a"]  # noqa: SLF001
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert (reloaded_coordinator.show("change-a").writer is not None) is writer_recorded
+    coordination_path = reloaded_coordinator.runtime_root / "coordination/changes/change-a.json"
+    coordination_before = coordination_path.read_bytes()
+    async with Client(assemble_target_server(reloaded)) as client:
+        first_read = await client.call_tool("get_change", {"change_id": "change-a"})
+        second_read = await client.call_tool("get_change", {"change_id": "change-a"})
+        assert first_read.structured_content == second_read.structured_content
+        assert first_read.structured_content is not None
+        assert first_read.structured_content["readiness"]["executable"] is False
+        assert first_read.structured_content["readiness"]["prompt"] is None
+        blocked = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-a",
+                "expected_basis": first_read.structured_content["readiness"]["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "retry-after-restart",
+            },
+        )
+    after_refusal = _loader_activation_state_snapshot(reloaded)
+    assert after_refusal == before_reload
+    async with Client(assemble_target_server(reloaded)) as client:
+        sibling_read = await client.call_tool("get_change", {"change_id": "change-b"})
+        assert sibling_read.structured_content is not None
+        sibling = await client.call_tool(
+            "acquire_change_action",
+            {
+                "change_id": "change-b",
+                "expected_basis": sibling_read.structured_content["readiness"]["basis"],
+                "capabilities": ["builder"],
+                "host_id": "synthetic-host",
+                "session_id": "sibling-after-restart",
+            },
+        )
+    assert blocked.structured_content is not None
+    assert blocked.structured_content["launch"] is None
+    assert blocked.structured_content["reason_code"] == (
+        "active-custody" if writer_recorded else "claim-custody-unreconciled"
+    )
+    assert coordination_path.read_bytes() == coordination_before
+    assert reloaded_runtime.show_binding("OUT-001").active_claim == failed_claim
+    assert reloaded_runtime.retry_ledger().read().episodes == (failed_episode,)
+    assert not sibling.is_error
+    assert sibling.structured_content is not None
+    assert sibling.structured_content["kind"] == "acquired"
+    assert sibling.structured_content["launch"] is not None
+    assert reloaded._runtimes["change-b"].show_binding("OUT-001").active_claim is not None  # noqa: SLF001
+    after_sibling_progress = _loader_activation_state_snapshot(reloaded)
+    before_changes = before_reload["changes"]
+    after_changes = after_sibling_progress["changes"]
+    assert after_changes["change-a"] == before_changes["change-a"]
+    assert after_changes["change-b"]["frontier"] != before_changes["change-b"]["frontier"]
+    assert after_changes["change-b"]["workspace"] == before_changes["change-b"]["workspace"]
+    assert after_sibling_progress["repository_refs"] == before_reload["repository_refs"]
 
 
 @pytest.mark.asyncio
@@ -1325,6 +1540,8 @@ def _remote_refs(repository: Path) -> str:
     result = subprocess.run(  # noqa: S603
         (  # noqa: S607
             "git",
+            "-c",
+            "safe.bareRepository=all",
             "-C",
             str(repository),
             "for-each-ref",
