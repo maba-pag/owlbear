@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +13,13 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from serve.delivery.tests.test_portfolio_application import acceptance_budget_case
+from serve.delivery.tests.test_portfolio_application import (
+    _git,
+    _loader_composed_engine_fixture,
+    _startup_config,
+    _workspace_mutation_snapshot,
+    acceptance_budget_case,
+)
 from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_cockpit.deps import get_target_context
@@ -57,7 +64,13 @@ from owlbear_delivery.completed_history import (
     CompletedChangePage,
     ReceiptCompletedChangeRecord,
 )
-from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import (
+    DeliveryApplicationLoadError,
+    DeliveryStartupConfig,
+)
+from owlbear_delivery.delivery_application_loader import (
+    load_delivery_application as load_core_delivery_application,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryChangeDispositionBusyError,
@@ -793,6 +806,178 @@ def test_http_verified_completed_recovery_replay(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "recovered"
     unchanged()
+
+
+def test_http_default_loader_replays_engine_action_after_restart(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = (
+        _loader_composed_engine_fixture(tmp_path)
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+        assert acquired.status_code == 200
+        action = acquired.json()["engine_action"]
+        executed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+        replayed = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    workspace_before_restart = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    frontier_before_restart = runtime.frontier_bytes()
+    ledger_before_restart = runtime.retry_ledger().read()
+    remote_refs_before_restart = _remote_refs(remote)
+
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        restarted = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    assert action["kind"] == "mark-ready"
+    assert executed.status_code == replayed.status_code == restarted.status_code == 200
+    assert executed.json()["kind"] == "completed"
+    assert executed.json() == replayed.json() == restarted.json()
+    assert provider.draft_state_calls == 1
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_before_restart  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == ledger_before_restart  # noqa: SLF001
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_before_restart
+    )
+    assert _remote_refs(remote) == remote_refs_before_restart
+
+
+def test_http_default_loader_contains_unknown_result_after_restart(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, application, _head_a, _head_b = (
+        _loader_composed_engine_fixture(tmp_path)
+    )
+    basis = application.get_change("change-a").readiness.basis.model_dump(mode="json")
+    with TestClient(assemble_target_app(application)) as client:
+        acquired = client.post(
+            "/api/changes/change-a/continuation/acquire",
+            json={
+                "expected_basis": basis,
+                "capabilities": ["engine"],
+                "host_id": "synthetic-host",
+                "session_id": "synthetic-session",
+            },
+        )
+    assert acquired.status_code == 200
+    action = acquired.json()["engine_action"]
+    assert action["kind"] == "mark-ready"
+
+    provider.lose_draft_state_response = False
+    original_finish = application._coordinator.finish_continuation_action  # noqa: SLF001
+    failure_message = "injected result publication crash"
+
+    def crash_at_result_publication(
+        action_record: ChangeContinuationAction,
+        result: DeliveryEngineActionResult,
+        finished_at: object,
+        *,
+        release: bool,
+    ) -> None:
+        if action_record.operation_id == action["operation_id"]:
+            raise RuntimeError(failure_message)
+        original_finish(action_record, result, finished_at, release=release)
+
+    with (
+        patch.object(
+            application._coordinator,  # noqa: SLF001
+            "finish_continuation_action",
+            crash_at_result_publication,
+        ),
+        TestClient(assemble_target_app(application)) as client,
+        pytest.raises(RuntimeError, match=failure_message),
+    ):
+        client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    runtime = application._runtimes["change-a"]  # noqa: SLF001
+    workspace_before_containment = _workspace_mutation_snapshot(
+        application._coordinator.show("change-a").worktree_path  # noqa: SLF001
+    )
+    frontier_before_containment = runtime.frontier_bytes()
+    ledger_before_containment = runtime.retry_ledger().read()
+    coordination_before_containment = (
+        application._coordinator.runtime_root  # noqa: SLF001
+        / "coordination/changes/change-a.json"
+    ).read_bytes()
+    remote_refs_before_containment = _remote_refs(remote)
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    with TestClient(assemble_target_app(reloaded)) as client:
+        contained = client.post(
+            "/api/changes/change-a/continuation/execute",
+            json={"operation_id": action["operation_id"]},
+        )
+
+    assert contained.status_code == 200
+    assert contained.json()["kind"] == "blocked"
+    assert contained.json()["reason_code"] == "engine-action-interrupted"
+    assert provider.draft_state_calls == 1
+    assert reloaded._runtimes["change-a"].frontier_bytes() == frontier_before_containment  # noqa: SLF001
+    assert reloaded._runtimes["change-a"].retry_ledger().read() == ledger_before_containment  # noqa: SLF001
+    assert (
+        _workspace_mutation_snapshot(
+            reloaded._coordinator.show("change-a").worktree_path  # noqa: SLF001
+        )
+        == workspace_before_containment
+    )
+    assert (
+        reloaded._coordinator.runtime_root  # noqa: SLF001
+        / "coordination/changes/change-a.json"
+    ).read_bytes() == coordination_before_containment
+    retained = reloaded._coordinator.show("change-a").continuation_action  # noqa: SLF001
+    assert retained is not None
+    assert retained.operation_id == action["operation_id"]
+    assert retained.finished_at is None
+    assert _remote_refs(remote) == remote_refs_before_containment
+def _remote_refs(repository: Path) -> str:
+    result = subprocess.run(  # noqa: S603
+        (  # noqa: S607
+            "git",
+            "-C",
+            str(repository),
+            "for-each-ref",
+            "--format=%(refname) %(objectname)",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return f"{result.returncode}\n{result.stdout}\n{result.stderr}"
 
 
 def _client(

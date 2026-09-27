@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-E: registered handoff and cumulative bounded proof in progress.**
+**D03-E: mark-ready transport checkpoint; required E coverage and handoff remain incomplete.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
 Bounded C's and D's recorded evidence and named external limits below are preserved.
@@ -12,11 +12,44 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-E must establish supported replay and unsupported containment through the existing registered MCP
-and HTTP boundaries using real application, workspace, transaction and retry owners. Forwarding
-fakes, same-instance result equality and successful syntax checks alone do not meet that outcome.
-The bounded contract at `2e377a6` remains controlling; no optional provenance or host provider is
-enabled, and no general automatic dirty-worktree recovery is promised.
+Implementation began at `cc6b7be`; `9769042` is the first registered replay/input-rejection checkpoint.
+The current additions use `Client(assemble_target_server(...))` and the existing HTTP `TestClient`
+with the C default-loader fixture, real application/workspace/transaction/retry/publication owners,
+a disposable bare remote and the existing external provider fake. No production API, schema,
+permission, prompt or recovery owner changed. The bounded contract at `2e377a6` remains controlling;
+no optional provenance or host provider is enabled.
+
+| Bounded capability | Entry and evidence | Remaining obligation |
+| --- | --- | --- |
+| Exact completed mark-ready result after a lost provider response | New `test_registered_default_loader_replays_engine_action` and `test_http_default_loader_replays_engine_action_after_restart`: registered acquisition/execution and exact replay through a fresh default-composed application; one provider effect | Not proof for the other three engine-action rows or a fresh subsequent continuation |
+| Started mark-ready without an engine result | New `test_registered_default_loader_contains_unknown_result_after_restart` and `test_http_default_loader_contains_unknown_result_after_restart`: result-publication fault after the owner effect, reload and blocked registered execution without another provider effect | Registered get/list/show guidance, unavailable readback, malformed journals and independent Change progress still need their E transport assertions |
+| Caller-authored execution authority | Existing strict MCP/HTTP schemas; rejection cases extended for commands, budgets, receipts and stop assertions | High-level MCP `repair` and HTTP's existing claim-recovery compatibility are distinct; no new HTTP high-level repair endpoint or opaque-evidence authority was added |
+| Checkpoint, target-sync and acceptance interruptions | Prior core evidence remains below; current E additions exercise mark-ready only | Real registered interrupted `reconcile-checkpoint`, `sync-target` and retained `observe-acceptance` cases remain unimplemented |
+| Failed finalizer before checks and failed activation with/without writer record | Prior core/optional-provider cases remain historical evidence, not new E proof | Add real transport containment cases without fabricating worker closure or release |
+| Degraded/offline inspection | D's installed/direct-entry and privacy/no-write proof is preserved below | Real degraded MCP/HTTP entry and the engine-authored continuation/diagnostic prompt handoff remain unimplemented |
+
+**Current verification:** the parent installed uv **0.12.19** outside the repository and prepared
+`/tmp/d03-e-venv` with Python **3.14.7**, using `uv sync --locked --package owlbear-delivery-mcp
+--package owlbear-cockpit`. Imports were verified against this checkout. The writer reports the
+four new transport cases passing, plus overlapping MCP/HTTP selections of 11/9 cases and scoped
+Ruff checks. These are not additive package totals. Independent review required explicit
+retained-coordination and bare-remote-ref assertions. After those repairs, the writer reran all
+four strengthened cases successfully, then the two MCP cases after correcting its Git output
+helper; scoped Ruff and whitespace checks passed. Both crash cases now preserve coordination
+bytes and the exact unfinished operation across reload/containment. All four cases compare
+captured bare-remote refs, frontier, retry ledger and workspace/index snapshots. A final independent
+read-only review confirmed both assurance gaps closed and found no significant issue in this slice.
+
+An additional delegated run reported five unchanged C loader/preflight cases passing but gave an
+inconsistent interpreter label; it is not credited as closing C's historical exact-pin gap. D's
+52-case/overlapping seven-case proof remains prior worker evidence, not a fresh E run.
+Automated Code Review at `9769042` could not load its configured model; CodeQL skipped the
+test/documentation-only checkpoint. Required source/Cockpit/ecosystem/dependency CI at `cc6b7be`
+was `action_required`, not passing proof. No live transport/prompt or Windows launcher proof ran.
+
+**Next assignment:** finish the explicit missing E rows above, not another executor/backend design.
+Retain the new transport tests and the approved containment boundary. E is not source-ready for
+acceptance; package acceptance, merge, D04 and activation remain pending.
 
 ### D repaired baseline
 
