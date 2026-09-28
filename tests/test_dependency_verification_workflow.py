@@ -714,7 +714,7 @@ def test_cache_probes_are_opt_in_and_isolated_from_required_proofs() -> None:
     for job_name, mode in (("cache-probe-uv", "uv"), ("cache-probe-precommit", "precommit")):
         probe = _job(workflow, job_name)
         assert probe["if"] == f"github.event_name == 'workflow_dispatch' && inputs.cache_probe == '{mode}'"
-        assert probe["runs-on"] == "ubuntu-24.04"
+        assert probe["runs-on"] == "ubuntu-26.04"
         assert not probe["strategy"]["fail-fast"]
         assert "needs" not in probe
         for step in probe["steps"]:
