@@ -236,9 +236,7 @@ def test_listed_coordination_disappearing_at_stat_is_unknown_and_read_only(
     assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
     assert result["pending_effects"] == "unknown"
     assert result["counts"]["coordination"] == 0
-    assert not any(
-        record["kind"] == "coordination" and record["status"] == "missing" for record in result["records"]
-    )
+    assert not any(record["kind"] == "coordination" and record["status"] == "missing" for record in result["records"])
     assert result["writes_performed"] is False
     assert after == before
 

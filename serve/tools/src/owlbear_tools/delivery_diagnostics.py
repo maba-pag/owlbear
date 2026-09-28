@@ -503,20 +503,28 @@ def _inspect_file(
     kind: str,
     *,
     required: bool = False,
-    expected_change_id: str | None = None,
 ) -> None:
     content, _ = _safe_read(parent_fd, name, inspection, kind, required=required)
     if content is not None:
-        _json_shape(
-            content,
-            kind=kind,
-            expected_schema=SUPPORTED_VERSIONS[kind],
-            inspection=inspection,
-            expected_change_id=expected_change_id,
-        )
+        _json_shape(content, kind=kind, expected_schema=SUPPORTED_VERSIONS[kind], inspection=inspection)
         inspection.counts[kind] += 1
     elif kind == "frontier":
         inspection.incomplete = True
+
+
+def _inspect_coordination_file(parent_fd: int, name: str, inspection: _Inspection, expected_change_id: str) -> bool:
+    content, _ = _safe_read(parent_fd, name, inspection, "coordination", required=True)
+    if content is None:
+        return False
+    _json_shape(
+        content,
+        kind="coordination",
+        expected_schema=SUPPORTED_VERSIONS["coordination"],
+        inspection=inspection,
+        expected_change_id=expected_change_id,
+    )
+    inspection.counts["coordination"] += 1
+    return inspection.records[-1]["status"] == "supported"
 
 
 def _scan_change_records(
@@ -594,25 +602,14 @@ def _scan_coordination(runtime_fd: int, inspection: _Inspection, *, selected: st
                 change_id = name[:-5]
                 if selected is not None and change_id != selected:
                     continue
-                record_index = len(inspection.records)
-                _inspect_file(
-                    changes_fd,
-                    name,
-                    inspection,
-                    "coordination",
-                    required=True,
-                    expected_change_id=change_id,
-                )
-                if len(inspection.records) > record_index and inspection.records[-1]["status"] == "supported":
+                if _inspect_coordination_file(changes_fd, name, inspection, change_id):
                     coordination_changes.add(change_id)
                 else:
                     unresolved_changes.add(change_id)
                     inspection.transaction_scan_unknown = True
             listing_errors = {"DIRECTORY_UNREADABLE", "ENTRY_LIMIT_EXCEEDED"} & set(inspection.diagnostics)
             if not inspection.entry_budget_exhausted and not listing_errors:
-                _record_missing_coordination(
-                    inspection, expected_changes - coordination_changes - unresolved_changes
-                )
+                _record_missing_coordination(inspection, expected_changes - coordination_changes - unresolved_changes)
         finally:
             _close_directory(coordination_fd, "changes", changes_fd, changes_opened, inspection)
     finally:

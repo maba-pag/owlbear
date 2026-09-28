@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast, overload
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, Unpack, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
@@ -1271,7 +1271,7 @@ class _CompletedOutcomeRepairLineage:
     previous_result_ids: tuple[str, ...]
 
 
-class _CompletedOutcomeRepairCreateFields(TypedDict):
+class _CompletedOutcomeRepairCreateFields(TypedDict, total=False):
     change_id: str
     request: PrepareCompletedOutcomeRepair
     repair_task_id: str
@@ -1309,21 +1309,13 @@ class CompletedOutcomeRepairReceipt(_DeliveryModel):
     custody: Literal["failed-finalizer-released"] = "failed-finalizer-released"
     finished_at: str = Field(min_length=1, max_length=64)
 
-    @overload
     @classmethod
     def create(
         cls,
-        change_id: str,
-        request: PrepareCompletedOutcomeRepair,
-        repair_task_id: str,
-        previous_task_ids: tuple[str, ...],
-        previous_result_ids: tuple[str, ...],
-        finished_at: str,
-    ) -> CompletedOutcomeRepairReceipt: ...
-
-    @classmethod
-    def create(cls, *args: object, **kwargs: object) -> CompletedOutcomeRepairReceipt:
-        """Create a digest-bound receipt for the retained repair lineage."""
+        *args: object,
+        **kwargs: Unpack[_CompletedOutcomeRepairCreateFields],
+    ) -> CompletedOutcomeRepairReceipt:
+        """Create a receipt while preserving legacy calls; reflection sees the variadic implementation."""
         fields = cast(
             "_CompletedOutcomeRepairCreateFields",
             _COMPLETED_OUTCOME_REPAIR_CREATE_SIGNATURE.bind(*args, **kwargs).arguments,
