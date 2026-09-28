@@ -2203,7 +2203,9 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path, coordin
     )
     assert expected_coordination_diagnostic in diagnostics["diagnostic_codes"]
     if coordination_state == "missing":
+        assert diagnostics["inspection_complete"] is False
         assert "PENDING_EFFECTS_UNKNOWN" in diagnostics["diagnostic_codes"]
+        assert diagnostics["pending_effects"] == "unknown"
     assert diagnostics["writes_performed"] is False
     if coordination_state == "malformed":
         assert malformed_marker.decode() not in diagnostics_cli.stdout + diagnostics_cli.stderr

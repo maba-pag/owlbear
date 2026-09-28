@@ -132,6 +132,7 @@ def test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only(
         assert result["inspection_complete"] is False
         assert {"COORDINATION_MISSING", "PENDING_EFFECTS_UNKNOWN"} <= set(result["diagnostic_codes"])
         assert result["pending_effects"] == "unknown"
+        assert result["truncated"] is False
         assert result["writes_performed"] is False
         assert result["counts"]["frontier"] == 1
         assert result["counts"]["coordination"] == 0
@@ -141,7 +142,10 @@ def test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only(
     assert completed.returncode == 1
     cli_result = json.loads(completed.stdout)
     assert cli_result["status"] == "degraded"
+    assert cli_result["inspection_complete"] is False
     assert {"COORDINATION_MISSING", "PENDING_EFFECTS_UNKNOWN"} <= set(cli_result["diagnostic_codes"])
+    assert cli_result["pending_effects"] == "unknown"
+    assert cli_result["truncated"] is False
     assert cli_result["writes_performed"] is False
     assert "example" not in completed.stdout + completed.stderr
     assert snapshot() == before
@@ -154,8 +158,10 @@ def test_empty_runtime_without_coordination_is_not_missing_a_change(tmp_path: Pa
     result = inspect_delivery(root)
 
     assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
     assert "COORDINATION_MISSING" not in result["diagnostic_codes"]
     assert result["pending_effects"] is False
+    assert result["truncated"] is False
     assert result["writes_performed"] is False
 
 
@@ -179,6 +185,7 @@ def test_symlinked_coordination_is_unknown_not_missing(tmp_path: Path, symlink: 
     assert "SYMLINK_REJECTED" in result["diagnostic_codes"]
     assert "COORDINATION_MISSING" not in result["diagnostic_codes"]
     assert result["pending_effects"] == "unknown"
+    assert result["truncated"] is True
     assert result["writes_performed"] is False
 
 

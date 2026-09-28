@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast, overload
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
@@ -1270,6 +1271,23 @@ class _CompletedOutcomeRepairLineage:
     previous_result_ids: tuple[str, ...]
 
 
+class _CompletedOutcomeRepairCreateFields(TypedDict):
+    change_id: str
+    request: PrepareCompletedOutcomeRepair
+    repair_task_id: str
+    previous_task_ids: tuple[str, ...]
+    previous_result_ids: tuple[str, ...]
+    finished_at: str
+
+
+_COMPLETED_OUTCOME_REPAIR_CREATE_SIGNATURE = inspect.Signature(
+    tuple(
+        inspect.Parameter(name, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        for name in _CompletedOutcomeRepairCreateFields.__annotations__
+    )
+)
+
+
 class CompletedOutcomeRepairReceipt(_DeliveryModel):
     """Immutable evidence joining a proof repair, its lineage, and custody release."""
 
@@ -1291,31 +1309,40 @@ class CompletedOutcomeRepairReceipt(_DeliveryModel):
     custody: Literal["failed-finalizer-released"] = "failed-finalizer-released"
     finished_at: str = Field(min_length=1, max_length=64)
 
+    @overload
     @classmethod
     def create(
         cls,
         change_id: str,
         request: PrepareCompletedOutcomeRepair,
         repair_task_id: str,
-        lineage: _CompletedOutcomeRepairLineage,
+        previous_task_ids: tuple[str, ...],
+        previous_result_ids: tuple[str, ...],
         finished_at: str,
-    ) -> CompletedOutcomeRepairReceipt:
+    ) -> CompletedOutcomeRepairReceipt: ...
+
+    @classmethod
+    def create(cls, *args: object, **kwargs: object) -> CompletedOutcomeRepairReceipt:
         """Create a digest-bound receipt for the retained repair lineage."""
+        fields = cast(
+            "_CompletedOutcomeRepairCreateFields",
+            _COMPLETED_OUTCOME_REPAIR_CREATE_SIGNATURE.bind(*args, **kwargs).arguments,
+        )
         values = {
-            "change_id": change_id,
-            "outcome_id": request.outcome_id,
-            "owning_task_id": request.owning_task_id,
-            "repair_task_id": repair_task_id,
-            "episode_id": request.episode_id,
-            "attempt_id": request.attempt_id,
-            "defect_code": request.defect_code,
-            "finding_boundary": request.finding_boundary,
-            "original_action_id": request.original_action_id,
-            "preservation_id": request.preservation_id,
-            "expected_frontier_digest": request.expected_frontier_digest,
-            "previous_task_ids": lineage.previous_task_ids,
-            "previous_result_ids": lineage.previous_result_ids,
-            "finished_at": finished_at,
+            "change_id": fields["change_id"],
+            "outcome_id": fields["request"].outcome_id,
+            "owning_task_id": fields["request"].owning_task_id,
+            "repair_task_id": fields["repair_task_id"],
+            "episode_id": fields["request"].episode_id,
+            "attempt_id": fields["request"].attempt_id,
+            "defect_code": fields["request"].defect_code,
+            "finding_boundary": fields["request"].finding_boundary,
+            "original_action_id": fields["request"].original_action_id,
+            "preservation_id": fields["request"].preservation_id,
+            "expected_frontier_digest": fields["request"].expected_frontier_digest,
+            "previous_task_ids": fields["previous_task_ids"],
+            "previous_result_ids": fields["previous_result_ids"],
+            "finished_at": fields["finished_at"],
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
         payload = candidate.model_dump(mode="json", exclude={"receipt_id"})
@@ -2769,7 +2796,8 @@ class DeliveryRuntime:
             self._contract.change_id,
             request,
             repair_task_id,
-            lineage,
+            lineage.previous_task_ids,
+            lineage.previous_result_ids,
             finished_at,
         )
         repair_binding = self.retry_ledger().repair_binding_participant(

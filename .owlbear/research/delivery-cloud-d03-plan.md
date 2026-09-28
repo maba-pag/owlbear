@@ -33,6 +33,18 @@ The source writer reports that the repaired 27-path scope now passes standard Ru
 format checks, with focused preservation/recovery/transaction/retry selections passing 44, seven
 and five cases. These selections overlap and are not additive; the parent has not rerun them.
 Exact command/output reconciliation and independent review of the repaired source remain pending.
+The scoped static/diagnostic checkpoint is `2e86dcf8f0116751081eb268359f15a7dc332d44`.
+The writer reports eight missing-coordination/direct-CLI/same-root HTTP cases passing. Review
+confirmed stable absence versus empty-runtime and symlink behavior, but identified a remaining
+listed-row identity/read gap: a filename was counted before its content identity was verified, and
+disappearance before the optional read could evade diagnosis. Those findings require repair and
+exact-candidate review; the stable-absence tests alone do not close them.
+
+The static review also requested preservation of the exported completed-repair receipt factory's
+positional/keyword/mixed call forms and stronger Git diff detection in the pre-read rejection test.
+The writer reports three factory/replay cases passing after restoring runtime call binding; this
+does not establish unchanged reflection/type-checker behavior. Final compatibility and test-guard
+review remains pending. No assertion or parameter is waived.
 
 An independent cumulative read-only review of `df708cc` found another bounded offline defect:
 runtime Change records with missing coordination could report `healthy-structure`. The application
@@ -185,11 +197,12 @@ not current-head passing proof.
 Historical C exact-pin limits and D's POSIX/host limits remain unchanged. Package acceptance, merge,
 D04 and live activation are not claimed.
 
-**Next outcome:** acceptance review of the cumulative bounded D03-E candidate and completion of the
-named automated/external gates in a capable environment. No known source repair remains in the
-reviewed scope; this is not package approval, merge or live activation. Keep ordinary host transport
-separate from cloud source proof, reuse valid prior evidence, and do not substitute an executor/backend
-redesign or treat containment as recovery success.
+**Next outcome:** finish the closeout's exact-candidate review and any supported repairs before
+restoring source readiness, then obtain package acceptance review and the named external gates.
+The earlier statement that no source repair remained is superseded by this closeout's static and
+diagnostic findings. Keep ordinary host transport separate from cloud source proof, reuse valid
+prior evidence, and do not substitute an executor/backend redesign or treat containment as recovery
+success. No package approval, merge or live activation is implied.
 
 ### D repaired baseline
 

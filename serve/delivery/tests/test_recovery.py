@@ -32,6 +32,7 @@ from serve.delivery.tests.test_portfolio_application import (
 )
 
 from owlbear_delivery import (
+    CompletedOutcomeRepairReceipt,
     DeliveryResultSubmission,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
@@ -57,6 +58,50 @@ from owlbear_delivery.recovery import (
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionConflictError, TransactionParticipant
 from owlbear_delivery.work_items import WorkItemActionKind
+
+
+def test_completed_outcome_repair_receipt_create_preserves_legacy_call_forms() -> None:
+    request = PrepareCompletedOutcomeRepair(
+        outcome_id="OUT-001",
+        owning_task_id="TASK-001",
+        episode_id="episode-1",
+        attempt_id="attempt-1",
+        defect_code="worker-failure",
+        finding_boundary="implementation",
+        original_action_id="action-1",
+        preservation_id="a" * 64,
+        expected_frontier_digest="b" * 64,
+    )
+    previous_task_ids = ("TASK-000",)
+    previous_result_ids = ("RESULT-000",)
+    finished_at = "2026-09-28T09:00:00Z"
+    positional = CompletedOutcomeRepairReceipt.create(
+        "change-a",
+        request,
+        "repair-task",
+        previous_task_ids,
+        previous_result_ids,
+        finished_at,
+    )
+    keyword = CompletedOutcomeRepairReceipt.create(
+        change_id="change-a",
+        request=request,
+        repair_task_id="repair-task",
+        previous_task_ids=previous_task_ids,
+        previous_result_ids=previous_result_ids,
+        finished_at=finished_at,
+    )
+    mixed = CompletedOutcomeRepairReceipt.create(
+        "change-a",
+        request,
+        "repair-task",
+        previous_task_ids=previous_task_ids,
+        previous_result_ids=previous_result_ids,
+        finished_at=finished_at,
+    )
+
+    assert positional == keyword == mixed
+
 
 _LEGACY_RECOVERY_ID = "11c924b869f40f9d4c0118de57ab8648d3578df9c3ffea4ddd9bcabb1867c12f"
 _LEGACY_INTENT_JSON = (
