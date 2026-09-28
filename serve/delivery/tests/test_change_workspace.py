@@ -1312,7 +1312,7 @@ def test_recovery_workspace_metadata_does_not_read_dirty_content(tmp_path: Path)
         )
 
     assert paths == ("shared.txt",)
-    assert not any(call.args[0][3:4] == ("diff",) for call in run_git.call_args_list)
+    assert not any("diff" in call.args[0] for call in run_git.call_args_list)
 
 
 @pytest.mark.parametrize(

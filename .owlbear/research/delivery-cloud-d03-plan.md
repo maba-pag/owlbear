@@ -32,9 +32,11 @@ No lint configuration, suppression or acceptance relaxation is authorized by the
 The source writer reports that the repaired 27-path scope now passes standard Ruff lint and
 format checks, with focused preservation/recovery/transaction/retry selections passing 44, seven
 and five cases. These selections overlap and are not additive; the parent has not rerun them.
-Exact command/output reconciliation and independent review of the repaired source remain pending.
+The writer could not recover selectors or stdout for the 44/seven/five runs from its summarized
+history. Those totals remain unverified writer reports and do not close affected-path acceptance.
 The scoped static/diagnostic checkpoint is `2e86dcf8f0116751081eb268359f15a7dc332d44`.
-The writer reports eight missing-coordination/direct-CLI/same-root HTTP cases passing. Review
+The parent inspected captured output for eight missing-coordination/direct-CLI/same-root HTTP
+cases: **8 passed in 3.69s**, with one Starlette/AnyIO deprecation warning. Review
 confirmed stable absence versus empty-runtime and symlink behavior, but identified a remaining
 listed-row identity/read gap: a filename was counted before its content identity was verified, and
 disappearance before the optional read could evade diagnosis. Those findings require repair and
@@ -42,9 +44,29 @@ exact-candidate review; the stable-absence tests alone do not close them.
 
 The static review also requested preservation of the exported completed-repair receipt factory's
 positional/keyword/mixed call forms and stronger Git diff detection in the pre-read rejection test.
-The writer reports three factory/replay cases passing after restoring runtime call binding; this
-does not establish unchanged reflection/type-checker behavior. Final compatibility and test-guard
-review remains pending. No assertion or parameter is waived.
+The parent also inspected captured factory/replay output (**3 passed in 1.93s**) and the strengthened
+pre-read diff-guard node (**1 passed in 0.64s**). The guard now detects `diff` even after Git options.
+These are writer executions, not parent reruns. The factory accepts original positional, keyword
+and mixed calls, but reflection now exposes variadic arguments and its single overload declaration
+remains a typing concern; unchanged reflection/type-checker behavior is not claimed.
+
+Captured commands used `uv run --locked --no-sync python -m pytest -q --tb=short -n 0
+-p no:cacheprovider -m "not api and not model and not e2e"` with these explicit nodes:
+
+- `serve/tools/tests/test_delivery_diagnostics.py::{test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only,test_empty_runtime_without_coordination_is_not_missing_a_change,test_symlinked_coordination_is_unknown_not_missing}`
+  and `tests/test_cockpit_work_items.py::test_http_default_loader_reports_unavailable_custody`.
+- `serve/delivery/tests/test_recovery.py::{test_completed_outcome_repair_receipt_create_preserves_legacy_call_forms,test_completed_outcome_repair_replays_with_retry_authority_and_preserves_result,test_completed_repair_result_resumes_original_finalizer_after_restart}`.
+- `serve/delivery/tests/test_change_workspace.py::test_recovery_workspace_metadata_does_not_read_dirty_content`.
+
+Braces above abbreviate separate node arguments, not an additional test selector. Captured stdout
+was inspected without rerunning delegated checks. Temporary logs are not future-checkout prerequisites.
+At the user's low-time instruction, no new work is authorized: publish the tested repairs and retain
+the listed identity/read, compatibility and evidence gaps. This remains a partial closeout, not a
+source-ready or cumulative acceptance claim.
+
+Validation of source checkpoint `867d50f` reported **zero Python CodeQL alerts**. Automated Code
+Review could not load its configured model; its success wrapper is not a review pass. This does
+not close the independent review findings or external/ordinary-host gates.
 
 An independent cumulative read-only review of `df708cc` found another bounded offline defect:
 runtime Change records with missing coordination could report `healthy-structure`. The application

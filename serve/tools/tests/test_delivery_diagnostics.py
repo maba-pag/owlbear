@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -163,6 +164,83 @@ def test_empty_runtime_without_coordination_is_not_missing_a_change(tmp_path: Pa
     assert result["pending_effects"] is False
     assert result["truncated"] is False
     assert result["writes_performed"] is False
+
+
+def test_coordination_identity_mismatch_is_unknown_not_missing_and_read_only(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    change.mkdir()
+    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
+    coordination.write_bytes(b'{"schema_version":1,"change_id":"other"}\n')
+    before = tuple(
+        sorted(
+            (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
+            for path in root.rglob("*")
+        )
+    )
+
+    result = inspect_delivery(root)
+
+    after = tuple(
+        sorted(
+            (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
+            for path in root.rglob("*")
+        )
+    )
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert {"COORDINATION_MALFORMED", "PENDING_EFFECTS_UNKNOWN"} <= set(result["diagnostic_codes"])
+    assert "COORDINATION_MISSING" not in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert result["writes_performed"] is False
+    assert after == before
+
+
+def test_listed_coordination_disappearing_at_stat_is_unknown_and_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    change.mkdir()
+    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
+    coordination.write_bytes(b'{"schema_version":1,"change_id":"example"}\n')
+    before = tuple(
+        sorted(
+            (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
+            for path in root.rglob("*")
+        )
+    )
+    real_stat = os.stat
+
+    def disappear_listed_row(path, *args, **kwargs):
+        if path == "example.json" and kwargs.get("dir_fd") is not None:
+            raise FileNotFoundError(errno.ENOENT, "disappeared", os.fspath(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(diagnostics.os, "stat", disappear_listed_row)
+
+    result = inspect_delivery(root)
+
+    after = tuple(
+        sorted(
+            (path.relative_to(root).as_posix(), path.read_bytes() if path.is_file() else None)
+            for path in root.rglob("*")
+        )
+    )
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "COORDINATION_MISSING" in result["diagnostic_codes"]
+    assert "PENDING_EFFECTS_UNKNOWN" in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert result["counts"]["coordination"] == 0
+    assert not any(
+        record["kind"] == "coordination" and record["status"] == "missing" for record in result["records"]
+    )
+    assert result["writes_performed"] is False
+    assert after == before
 
 
 @pytest.mark.parametrize("symlink", ["coordination", "changes"])
