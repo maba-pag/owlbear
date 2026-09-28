@@ -2,7 +2,8 @@
 
 ## Status and authority
 
-**D03-E: registered containment and diagnostic-prompt checkpoint; cumulative acceptance is incomplete.**
+**D03-E: HTTP/offline and rendered-prompt continuation is source-ready for cumulative review;
+E/package acceptance is incomplete.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
 Bounded C's and D's recorded evidence and named external limits below are preserved.
@@ -18,72 +19,81 @@ retained-journal regression expectation and handoff evidence: it confirms the ex
 interrupted-owner and diagnostic prompts and preserves prompt applicability after non-executable
 refusal copies. It adds no new recovery implementation or authority. Independent read-only review of
 `bf4bc48..3568c41` found no high-confidence actionable findings and confirmed prompt recomputation
-and exact corrected prompt text; the reviewer ran no tests. That review does not cover the current
-uncommitted tests, which are validated below. This slice adds HTTP malformed/foreign journal and
-unknown-readback containment, finalizer restart/no-mutation proof, and repeated degraded-entry
-observations. No recovery authority or provider boundary changed; `2e377a6` remains controlling.
+and exact corrected prompt text; the reviewer ran no tests. The continuation from `3568c41`
+published its HTTP/frontend checkpoint as `e0e384b`. This slice adds HTTP malformed/foreign journal and
+unknown-readback containment, finalizer restart/no-mutation proof, and a real offline diagnostics CLI
+inspection of the same degraded root as the HTTP entry. No recovery authority or provider boundary
+changed; `2e377a6` remains controlling.
+The post-checkpoint independent HTTP review confirmed the finalizer/readback restart baseline and
+identified one remaining invalid-result directory-content blind spot; the follow-up closes it
+with empty-directory assertions at both registered MCP and HTTP boundaries.
+Final independent read-only review of the complete continuation found no significant issues and
+closed the restart-snapshot, directory-inventory and V10-allocation findings. No reviewer reran tests.
 
 | Bounded capability | Current evidence | Remaining obligation |
 | --- | --- | --- |
-| Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review | Not rerun in this remaining-E slice; include in cumulative package proof |
-| Malformed operation journal and unavailable provider readback | Registered MCP canonical-loader cases cover invalid/foreign intent, invalid result journal, and unknown readback; HTTP route cases cover malformed and foreign intent/result. Unknown readback now also crosses a fresh core-loader restart; replay and reads do not repeat the external effect. Focused MCP and HTTP/core tests passed | Wider stale/forged-field matrix not covered in this slice |
-| Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The finalizer report journal is asserted nonempty; exact coordination/frontier/retry/workspace/refs/writer/report/mutations are compared before and after reload before the first reloaded `get_change`, then around API refusal | Wider finalizer/transport matrix remains |
-| Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Bounded snapshots do not constitute a general no-loss guarantee; broader activation/transport matrix remains |
-| Degraded/offline entry | Real HTTP loader with malformed coordination repeats acquisition and portfolio reads, retains the exact damaged authority bytes/refs, and returns bounded unavailable readiness; verified by the focused HTTP suite. Registered MCP tests cover malformed-runtime entry | Wider degraded-runtime/offline entry matrix remains |
+| Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review | Not rerun after this remaining-E diff; retain as historical proof and include in cumulative C–E package proof |
+| Malformed operation journal and unavailable provider readback | Registered MCP canonical-loader cases cover invalid/foreign intent, invalid result journal, and unknown readback; HTTP route cases cover malformed and foreign intent/result. Invalid-result directory contents remain empty after each registered boundary. Unknown readback crosses a fresh core-loader restart; replay and reads do not repeat the external effect | Stale-basis and caller-forged owner/result-field variants beyond foreign-session mismatch were not rerun here; absent-host capability and independent-Change progress remain distinct gates |
+| Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The report journal is asserted nonempty; exact coordination/frontier/retry/workspace/refs/writer/report/mutations are compared before/after reload before the first reloaded `get_change`, then around API refusal | HTTP restart proof covers `WORKSPACE_DIRTY` custody-preflight with `checks_state=not-run`; other finalizer failure categories and actual host dispatch/transport acceptance are not established here |
+| Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Snapshots are limited to named durable fields and do not prove universal no-loss. Required V10 still-writing/descendant and absent-host no-mutation containment across restart is not supplied here; only actual host exclusion to enable broader recovery is outside bounded D03 |
+| Degraded/offline entry | Malformed coordination is entered through the real HTTP loader/routes, then the stdlib diagnostics CLI inspects that same root and selected Change in a fresh `-B` process; complete project-tree membership/bytes, refs, and provider mutation count remain unchanged and corrupt bytes are not echoed | Combined proof covers malformed coordination only; other unavailable-root/invalid-Change/runtime failure classes are not composed through both adapters. D07 repair/migration and D08 host acceptance remain |
 | Readiness prompts and rendering | Retained-journal regression distinguishes pending/interrupted/diagnostic; executable-ready, retry, refusal-copy, unavailable, diagnostic, and busy/wait/terminal cases passed in focused Python selections. The scoped `WorkPortfolio.test.tsx` passed 116 tests, including inert markup-like text and absent/null prompts; scoped Biome and TypeScript/Vite production build passed | Browser/E2E proof not claimed; broader frontend suite not run |
 | Recovery contract and cumulative package | Existing A–D records remain historical evidence | Strict recovery mappings/positive recovery evidence, role/boundary checks, full C–E closeout and package acceptance are not established by this slice |
 
-**Historical verification for `468c448`:** retained `.git/d03e-venv` Python **3.14.7** and uv **0.12.15**;
-`owlbear_delivery` imports resolve to this checkout. The focused selection ran against the exact
-implementation immediately before its publication; it does not validate the additions recorded
-below. It covered
-`test_target_server.py`, `test_cockpit_work_items.py`, and `test_portfolio_application.py` passed
-**29 tests in 18.27s**, with one existing Starlette/AnyIO `BlockingPortal` deprecation warning.
-Command: `.git/d03e-venv/bin/python -m pytest serve/delivery-mcp/tests/test_target_server.py
-tests/test_cockpit_work_items.py serve/delivery/tests/test_portfolio_application.py -q -n 1 -k
-'registered_loader_contains_malformed_engine_journals or registered_loader_contains_unavailable_provider_readback
-or registered_default_loader_contains_failed_claim_activation or http_default_loader_contains_failed_claim_activation
-or http_finalizer_handoff_contains_failure_before_checks or captured_readiness_agrees_across_public_reads or
-acceptance_retry_budget_never_infers_explicit_observation or engine_action_prompt_is_applicable_to_final_readiness_state or
-continuation_activation_failure_fallback_clears_runnable_prompt'
--m 'not api and not model and not e2e' --tb=short --basetemp=.git/d03e-final-deliverable-pytest`.
-Scoped `ruff check`, source-only `ruff format --check`, and `git diff --check` passed.
-Full `ruff format --check` on the touched test modules reports pre-existing unformatted lines in
-approved `bf4bc48`; the newly added lines identified by that check were formatted without
-reformatting the approved slice.
-For `3568c41`, the retained-journal regression was corrected to assert distinct pending,
-interrupted-owner, and diagnostic prompts (not absence): its exact six-case selection passed in
-**10.78s**, and scoped Ruff plus `git diff --check` passed.
+**Historical evidence:** the [post-stop record at `3568c41`](https://github.com/maba-pag/owlbear/blob/3568c4111fd40c6fd7a9151a16dfe3ece11e6b0c/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff)
+reports the earlier 29-case selection and six-case corrected retained-journal selection. Those are
+prior worker evidence, not new passes or proof of this continuation.
 
-**Current uncommitted remaining-E validation:** with uv **0.12.15** and Python **3.14.7** from the
-locked workspace, the explicit HTTP/readiness selection across `tests/test_cockpit_work_items.py`
-and `serve/delivery/tests/test_portfolio_application.py` passed **33 tests in 21.65s**. The
-registered MCP malformed-journal/readback selection passed **4 tests in 9.29s**. The HTTP run emitted
+**Continuation validation:** the writer reports an initial explicit HTTP/readiness selection across
+`tests/test_cockpit_work_items.py` and `serve/delivery/tests/test_portfolio_application.py` passing
+**33 tests in 21.65s**, and the registered MCP malformed-journal/readback selection passing
+**4 tests in 9.29s**. These precede the later restart/offline/inventory refinements. The HTTP run emitted
 one existing Starlette/AnyIO `BlockingPortal` deprecation warning; the MCP run had no warning.
-`ruff check
-tests/test_cockpit_work_items.py` and `git diff --check` passed. `ruff format --check` reports only
+Scoped Ruff and whitespace checks passed. The writer's format check reports
 two unchanged, pre-existing formatting differences at lines 1245 and 1482 of that test module; the
 newly edited lines are formatted.
+The writer also reported an initial finalizer `busy`/`unavailable` assertion failure whose cause was
+not established; isolated and final reruns passed. It is not classified as a proven pre-existing defect.
 
 After adding fresh-restart provider-readback containment and pre-read finalizer restart comparison,
-the exact two-case HTTP selection passed **2 tests in 4.89s** (one existing
-Starlette/AnyIO `BlockingPortal` deprecation warning). `ruff check` and `git diff --check` passed.
-The command/stdout transcript is `.git/d03-e-python-validation.log`.
+the exact two-case HTTP selection passed **2 tests in 3.85s** (one existing Starlette/AnyIO
+`BlockingPortal` deprecation warning). The real degraded HTTP+CLI selection then passed **1 test in
+2.19s** (same existing warning); the CLI used `sys.executable -B` with the source-tree diagnostics
+script and actual argparse flags. The full-repository tree snapshot, diagnostic redaction and
+`writes_performed=false` assertions passed. `ruff check` and `git diff --check` passed. The captured
+Python commands/stdout/import provenance were inspected by the coordinating session, which did not
+rerun the writer's tests. They show uv **0.12.15**, Python **3.14.7**, checkout-resolved Cockpit,
+Delivery and test-helper imports, and editable `file://` distribution origins. Commands used
+`uv run --project serve/cockpit --locked --python 3.14.7` with explicit test-tool overlays
+(`pytest==9.1.1`, `pytest-xdist==3.8.0`, `pytest-timeout==2.4.0`, `pytest-asyncio==1.4.0`,
+`httpx2==2.13.0`). This is selected-project locked execution with overlays, not a fully locked
+whole-workspace test environment.
+
+After the post-checkpoint invalid-result directory review finding, the exact HTTP and registered MCP
+`invalid-result` parameters passed **2 tests in 5.17s** (one existing Starlette/AnyIO
+`BlockingPortal` deprecation warning). Scoped Ruff on both changed test modules and `git diff --check`
+passed. No frontend rerun was needed for this Python-test-only repair.
+An initial collection failure lacked the local MCP package; adding the checkout's
+`--with ./serve/delivery-mcp` resolved it. These selected counts overlap and are not additive.
 
 **Frontend validation:** Node **24.21.0** / npm **10.9.8**; locked `npm ci` installed 314 packages
 and reported zero vulnerabilities. `npm --prefix serve/cockpit/web test --
 src/__tests__/WorkPortfolio.test.tsx` passed **116 tests in 102.99s**. Scoped Biome check passed and
 `npm --prefix serve/cockpit/web run build` passed TypeScript and Vite (463 modules). No manifest or
-lockfile changed. The exact command/output transcript is `.git/d03-e-frontend-validation.log`.
+lockfile changed. The coordinating session inspected the captured test/build output without rerunning
+it. Local transcripts are session artifacts, not prerequisites for a future checkout.
 
-Final independent review/CodeQL, required CI, and cumulative C–E proof remain for the parent.
-The prior secret scan and validation limitations apply only to the earlier seven-file checkpoint,
-not these current edits; parent must scan the current diff before any commit. Parent read-only review
-is still required. Package acceptance, merge, D04 and live activation are not claimed.
+Automated Code Review could not load its configured model; its success wrapper is not a pass.
+CodeQL skipped this test/documentation-only continuation, not the prior production changes.
+Required dependency/source/Cockpit/ecosystem CI inspected at `3568c41` is `action_required`.
+Historical C exact-pin limits and D's POSIX/host limits remain unchanged. Package acceptance, merge,
+D04 and live activation are not claimed.
 
-**Next outcome:** parent read-only review of the exact candidate and current-diff secret scan before
-publication. Keep unresolved rows above visible; do not substitute another executor/backend design
-or imply package acceptance.
+**Next outcome:** cumulative D03-E bounded-package review/proof, using the capability matrix above
+and the acceptance allocation below. Account for strict recovery mappings and supported positive
+replay, stale/forged-input negatives, V10 no-mutation containment, role/boundary checks and remaining
+degraded-entry classes. Reuse applicable approved evidence rather than rerun unrelated suites.
+Do not substitute an executor/backend redesign or treat containment as recovery success.
 
 ### D repaired baseline
 

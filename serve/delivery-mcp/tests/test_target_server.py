@@ -351,6 +351,8 @@ async def test_registered_loader_contains_malformed_engine_journals_without_effe
     )
     _assert_loader_observation_only(before, after)
     assert provider.draft_state_calls == 0
+    if journal_state == "invalid-result":
+        assert not tuple(result_path.iterdir())
     assert result_path.is_dir() is (journal_state == "invalid-result")
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1066,6 +1067,8 @@ def test_http_default_loader_contains_malformed_engine_journals_without_effects(
     )
     _assert_loader_observation_only(before, after)
     assert provider.draft_state_calls == 0
+    if journal_state == "invalid-result":
+        assert not tuple(result_path.iterdir())
     assert result_path.is_dir() is (journal_state == "invalid-result")
 
 
@@ -1987,12 +1990,13 @@ def test_http_default_loader_rejects_stale_basis_without_acquisition(tmp_path: P
     assert provider.draft_state_calls == 0
 
 
-def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None:
+def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None:  # noqa: PLR0915
     repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
         tmp_path
     )
     coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
-    coordination.write_bytes(b"{")
+    malformed_marker = b"PRIVATE-MALFORMED-COORDINATION-CONTENT"
+    coordination.write_bytes(malformed_marker)
     _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
     _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
     reloaded = load_core_delivery_application(
@@ -2043,7 +2047,51 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
         "not repair authority or prove host/worker closure; the responsible owner must resolve the condition "
         "separately before Delivery rereads it."
     )
-    assert coordination.read_bytes() == coordination_before == b"{"
+    assert coordination.read_bytes() == coordination_before == malformed_marker
+    assert _remote_refs(remote) == remote_refs_before
+    assert provider.draft_state_calls == 0
+
+    def tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
+        entries = []
+        for path in (root, *sorted(root.rglob("*"))):
+            relative = path.relative_to(root.parent).as_posix()
+            if path.is_symlink():
+                entries.append((relative, "symlink", path.readlink().as_posix()))
+            elif path.is_dir():
+                entries.append((relative, "directory", None))
+            elif path.is_file():
+                entries.append((relative, "file", path.read_bytes()))
+            else:
+                entries.append((relative, "other", None))
+        return tuple(entries)
+
+    repository_before_cli = tree_snapshot(repository)
+    diagnostics_cli = subprocess.run(  # noqa: S603
+        (
+            sys.executable,
+            "-B",
+            str(Path(__file__).resolve().parents[1] / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"),
+            "inspect",
+            "--project-root",
+            str(repository),
+            "--change-id",
+            "change-a",
+            "--format",
+            "json",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert diagnostics_cli.returncode == 1
+    diagnostics = json.loads(diagnostics_cli.stdout)
+    assert diagnostics["status"] == "degraded"
+    assert diagnostics["change_scope"] == "selected"
+    assert "COORDINATION_MALFORMED" in diagnostics["diagnostic_codes"]
+    assert diagnostics["writes_performed"] is False
+    assert malformed_marker.decode() not in diagnostics_cli.stdout + diagnostics_cli.stderr
+    assert tree_snapshot(repository) == repository_before_cli
     assert _remote_refs(remote) == remote_refs_before
     assert provider.draft_state_calls == 0
 
