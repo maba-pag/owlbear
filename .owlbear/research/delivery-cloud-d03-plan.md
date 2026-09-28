@@ -2,10 +2,11 @@
 
 ## Status and authority
 
-**D03-E: cumulative closeout repair is in progress; source readiness is not yet re-established.
-E/package acceptance is not claimed. Final automated validation and external gates remain open.**
-The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
-authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
+**D03 is source-ready under the approved bounded contract; current dev is integrated and focused
+integration verification passed. Ready-for-review/CI and human acceptance remain, not more D03-E implementation.**
+The [integration request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5869138354)
+authorizes merging current dev, focused verification and then marking the PR ready for review.
+Ready-for-review is not package acceptance, approval, merge into dev/main, D04 or live activation.
 Bounded C's and D's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
@@ -13,66 +14,86 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The current [closeout repair](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5866918428)
-starts at `df708ccef75b355ea62dd8e29f847e7ecaabee5c`. Its comparison base and verified merge-base
-are **`d7d5d2d358255e154d486448f4711b72d9b2b5b4`**, not an earlier continuation on this PR.
-The entire 1,853-line starting `test_recovery.py` is new against that base. Ruff **0.16.5** in
-the assembled PR checkout reproduced its four `FBT001`/`E501` findings; `I001` did not reproduce.
-The two `dirty` parameters are now keyword-only with all seven original parameter cases retained.
-The parent ran those exact two pytest nodes on locked selected packages with Python **3.14.7**:
-**7 passed in 2.85s**, followed by a clean lint check of that file. This is fresh repair proof,
-not a rerun of the cumulative suite.
+The [cumulative acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5868092173)
+at **`b49a2a8f0017bcf2aa25274b2fec8962d72f02a5`** found **source-ready, pending named gates**,
+with an empty source/bounded-proof blocker list. It supersedes the stop-era pending static,
+coordination identity/disappearance and receipt call-form findings. The receipt factory's changed
+reflection/static typing was acknowledged without a demonstrated required-consumer defect; do not
+reopen speculative compatibility work. The approved `2e377a6` semantics remain unchanged.
 
-The explicit scope is the **27 Python paths** returned by `git diff --name-only d7d5d2d HEAD --
-'*.py'`. Initial standard lint found **440 diagnostics in nine files**; format-check found
-**11 files** needing formatting. Each available base blob was checked using the same Ruff version,
-configuration and `--stdin-filename` path; all were lint-clean and formatted. New files have no
-base debt. Thus all findings in this scope belong to the PR, even when introduced before E.
-No lint configuration, suppression or acceptance relaxation is authorized by the repair.
-The source writer reports that the repaired 27-path scope now passes standard Ruff lint and
-format checks, with focused preservation/recovery/transaction/retry selections passing 44, seven
-and five cases. These selections overlap and are not additive; the parent has not rerun them.
-The writer could not recover selectors or stdout for the 44/seven/five runs from its summarized
-history. Those totals remain unverified writer reports and do not close affected-path acceptance.
-The scoped static/diagnostic checkpoint is `2e86dcf8f0116751081eb268359f15a7dc332d44`.
-The parent inspected captured output for eight missing-coordination/direct-CLI/same-root HTTP
-cases: **8 passed in 3.69s**, with one Starlette/AnyIO deprecation warning. Review
-confirmed stable absence versus empty-runtime and symlink behavior, but identified a remaining
-listed-row identity/read gap: a filename was counted before its content identity was verified, and
-disappearance before the optional read could evade diagnosis. Those findings require repair and
-exact-candidate review; the stable-absence tests alone do not close them.
+[Coordinating evidence](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5867978559):
+all **27 PR-changed Python files** passed Ruff **0.16.5** lint/format, and **14 named final-repair
+cases passed in 11.80s** on Python **3.14.7**, with one existing Starlette/AnyIO warning. These are
+the coordinator's exact-candidate executions, not this integration session's runs. They used a
+disposable candidate checkout and existing locked environment with candidate imports verified.
+Untraceable older **44/seven/five** totals are excluded from credited proof.
 
-The static review also requested preservation of the exported completed-repair receipt factory's
-positional/keyword/mixed call forms and stronger Git diff detection in the pre-read rejection test.
-The parent also inspected captured factory/replay output (**3 passed in 1.93s**) and the strengthened
-pre-read diff-guard node (**1 passed in 0.64s**). The guard now detects `diff` even after Git options.
-These are writer executions, not parent reruns. The factory accepts original positional, keyword
-and mixed calls, but reflection now exposes variadic arguments and its single overload declaration
-remains a typing concern; unchanged reflection/type-checker behavior is not claimed.
+**Integration commit: `ee1cf7106e4e582ad78ee39ae63ffa07fd02b8e4`.** Its parents are the reviewed
+`b49a2a8f0017bcf2aa25274b2fec8962d72f02a5` and freshly fetched live
+`dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. The original fork was
+`d7d5d2d358255e154d486448f4711b72d9b2b5b4`; it is not the current integration target.
+The normal two-parent merge required no conflict resolution and produced tree
+`b1a9163c44f8752bcc4f4e6ce0823c9d2b1db0e8`, matching the prior non-mutating prediction.
+All `serve/` source/tests, root dependency manifests and lockfile are unchanged from the reviewed
+candidate. Preserve its D03 replay/containment/frontend evidence rather than rerunning it.
 
-Captured commands used `uv run --locked --no-sync python -m pytest -q --tb=short -n 0
--p no:cacheprovider -m "not api and not model and not e2e"` with these explicit nodes:
+The integration delta is limited to cache/dependency workflow proof and Ubuntu/actionlint config,
+model references, setup reasoning settings, ecosystem expectations and related guidance.
+This session directly ran **18 selected tests: 18 passed in 7.56s**, using Python **3.14.7**,
+uv **0.12.15**, pytest **9.1.1** and selected locked packages in an external disposable environment.
+Delivery, Delivery MCP and Tools imports were asserted to resolve inside this checkout.
+The environment also includes the browser/knowledge/memory MCP packages required by the existing
+registered-role test; no live server or provider was invoked.
 
-- `serve/tools/tests/test_delivery_diagnostics.py::{test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only,test_empty_runtime_without_coordination_is_not_missing_a_change,test_symlinked_coordination_is_unknown_not_missing}`
-  and `tests/test_cockpit_work_items.py::test_http_default_loader_reports_unavailable_custody`.
-- `serve/delivery/tests/test_recovery.py::{test_completed_outcome_repair_receipt_create_preserves_legacy_call_forms,test_completed_outcome_repair_replays_with_retry_authority_and_preserves_result,test_completed_repair_result_resumes_original_finalizer_after_restart}`.
-- `serve/delivery/tests/test_change_workspace.py::test_recovery_workspace_metadata_does_not_read_dirty_content`.
+The exact selection below used `uv run --locked --no-sync python -m pytest -q --tb=short -n 0
+-p no:cacheprovider -m 'not api and not model and not e2e'` with disposable basetemp.
+Each item is a separate node appended to the named file, not a whole-module run:
 
-Braces above abbreviate separate node arguments, not an additional test selector. Captured stdout
-was inspected without rerunning delegated checks. Temporary logs are not future-checkout prerequisites.
-At the user's low-time instruction, no new work is authorized: publish the tested repairs and retain
-the listed identity/read, compatibility and evidence gaps. This remains a partial closeout, not a
-source-ready or cumulative acceptance claim.
+- `tests/test_agent_ecosystem_validation.py`:
+  `test_recovery_workflows_require_host_exclusion_not_caller_confirmation`,
+  `test_prompt_validator_accepts_current_prompt_roots`,
+  `test_repair_delivery_prompt_is_an_ordinary_read_only_entry`,
+  `test_orchestration_transition_envelope_matches_registered_field`,
+  `test_declared_mcp_tools_exist_in_live_registries`,
+  `test_retired_delivery_operations_are_absent_from_active_customization_prose`.
+- `tests/test_setup_init_settings.py`:
+  `test_copilot_profile_creation_and_reasoning_settings`,
+  `test_copilot_profile_preserves_unrelated_entries`,
+  `test_copilot_profile_decline_preserves_file`,
+  `test_copilot_profile_malformed_json_is_left_unchanged`,
+  `test_copilot_profile_skips_noninteractive_and_non_macos`.
+- `tests/test_dependency_verification_workflow.py`:
+  `test_dependency_workflow_runs_without_dependency_label_gate`,
+  `test_pull_request_proof_workflows_skip_draft_jobs_and_run_when_ready`,
+  `test_dependency_verification_is_read_only_and_has_no_renovate_runner`,
+  `test_dependency_proofs_install_committed_state_and_run_behavior_checks`,
+  `test_gate_requires_only_current_read_only_proofs`,
+  `test_cache_probes_are_opt_in_and_isolated_from_required_proofs`,
+  `test_dependency_workflow_actions_are_pinned`.
 
-Validation of source checkpoint `867d50f` reported **zero Python CodeQL alerts**. Automated Code
-Review could not load its configured model; its success wrapper is not a review pass. This does
-not close the independent review findings or external/ordinary-host gates.
+Ruff **0.16.5** `check` and `format --check` passed for `setup/init.py` and those three test files.
+Pinned **actionlint 1.7.12** passed with
+`actionlint -config-file .github/actionlint.yml .github/workflows/dependency-verification.yml`;
+ShellCheck was available, Pyflakes was not, so no embedded-Python Pyflakes pass is claimed.
+No behavioral fixes or conflict resolution were needed; no new cumulative A–E rereview was required.
+No competing writer was active, no source redesign or authority backend was added, and no live
+services, production state, provider effects or protections were changed.
 
-An independent cumulative read-only review of `df708cc` found another bounded offline defect:
-runtime Change records with missing coordination could report `healthy-structure`. The application
-reports unavailable custody for that state. The repair must diagnose missing coordination without
-writing or confusing unknown inspection with verified absence. Final exact-candidate review and
-affected proof remain required before restoring source readiness.
+| Gate | Current disposition |
+| --- | --- |
+| Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
+| Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
+| Ready-for-review | Focused gate passed and transition is authorized. No ready-state mutation tool is available; browser transport returned `Transport closed`. Maintainer must click **Ready for review** on PR #326; no transition is claimed |
+| Required CI | Must inspect the final published head; old `action_required` runs are neither failures in tested source nor passes |
+| Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
+
+The next action is the maintainer's **Ready for review** transition, followed by normal current-head
+CI approval and existing human acceptance, not a generic Resume D03-E. Do not wait for
+draft-skipped required CI before marking ready, approve obsolete runs, or bypass protections.
+Earlier stop-era details remain in the
+[immutable pre-integration record](https://github.com/maba-pag/owlbear/blob/b49a2a8f0017bcf2aa25274b2fec8962d72f02a5/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff).
+
+### Historical E evidence
 
 The following cumulative continuation evidence is historical. It started at
 `ef011e797e8c273ff52bd37e4ab3990cc1db646b`, following the
@@ -163,7 +184,7 @@ above, these are writer reports, not independently captured stdout.
 | V10 absent-host containment | New core, registered MCP and HTTP cases retain a real still-writing descendant through two application reloads. Exact refusal, no replacement/release, full protected snapshots and subsequent signalled writes are asserted; setup and test cleanup close the synthetic worker | No actual laptop/VS Code exclusion claim; enabling broader recovery still requires independent host authority |
 | Degraded/offline entry | Retained malformed-coordination HTTP/CLI same-root proof and new unknown-Change coverage; direct CLI missing/unsafe runtime-ancestry cases prove incomplete diagnosis, truthful pending-effect accounting and no project-tree writes | D's installed POSIX/no-write evidence remains historical. Other failure classes are not all composed through both adapters; D07 migration and D08 ordinary host acceptance remain |
 | Readiness prompts and rendering | New `coordination-unavailable` diagnostic prompt is checked through real restart Change/WorkItem reads and the applicability table. Retained pending/interrupted, continuation and state-specific prompt proof; unchanged frontend has prior 116-test, Biome and build proof, including inert text and absent/null prompts | Browser/E2E proof not claimed; broader frontend suite not run |
-| Recovery contract and cumulative package | Historical registered replay/strict-input/V10 and parent role/import/authority/parity proof supplement retained A–D evidence. Closeout review covers the actual PR base and identified missing-coordination offline diagnosis | PR-owned static repair, diagnostic repair and exact-candidate review pending. No whole-PR approval inferred; external CI and ordinary host transport acceptance remain open |
+| Recovery contract and cumulative package | Historical registered replay/strict-input/V10 and parent role/import/authority/parity proof supplement retained A–D evidence. Exact-`b49a2a8` closeout proof and cumulative review supersede the pending static/diagnostic findings | Source-ready, not package approval; current integration, CI and human/host gates are listed in the current handoff |
 
 **Historical evidence:** the [post-stop record at `3568c41`](https://github.com/maba-pag/owlbear/blob/3568c4111fd40c6fd7a9151a16dfe3ece11e6b0c/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff)
 reports the earlier 29-case selection and six-case corrected retained-journal selection. Those are
