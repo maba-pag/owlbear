@@ -86,7 +86,7 @@ services, production state, provider effects or protections were changed.
 | Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
 | Required CI | All four workflows passed at PR head `653a102`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36440136593), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36440136312), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36440136399), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36440136595). The local repair candidate is based on that head and still needs exact-head CI after publication. |
 | Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual backend/tooling cases pass on Python 3.12.14 and 3.14.7, including Python 3.12 xdist. The full 116-case WorkPortfolio test file passes locally on Node 24.21 after its test fix; scoped Biome passes. |
-| Follow-up review | The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029) identified five bounded repairs on `653a102`. The first local Opus challenge found stale-result replay under successor custody and outdated budget wording; the second requested explicit post-start stale-reservation proof and a more precise completion-ledger distinction. Those findings are repaired with focused tests. A third fresh local Opus 5.5 challenge found no material source defects (`implementation-sound` for the local bounded proof). Candidate CI and PR re-review remain pending publication. The earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix or preserved custody assertions. |
+| Follow-up review | The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029) identified five bounded repairs on `653a102`. Local Opus challenges found and drove fixes for stale-result replay under successor custody, post-start retry accounting proof, and completion-ledger accuracy. The fourth challenge found no source defect and identified missing selected-Change proof at the entry limit; the regression is now covered. The fifth challenge confirmed the diagnostic boundary and found a stale historical test description, corrected below. Candidate CI and PR re-review remain pending publication. The earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix or preserved custody assertions. |
 | Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
 
 The `f802aed` HTTP failure was a retry-window timing dependency: the retained writer returns
@@ -177,12 +177,13 @@ assertion failed twice because it expected `operation-in-progress`; the observed
 `active-custody` is now asserted without weakening the existing `busy` requirement. One existing
 Starlette/AnyIO deprecation warning remains. This final selection supersedes its affected cases in
 the 50-case run, not the unchanged strict-input/diagnostic/prompt cases.
-The remaining exact HTTP unknown-Change/CLI node then passed **1 test in 2.71s**, after correcting
-its initial expectation: this fixture has incomplete offline inventory (`CONFIG_MISSING`,
-`UNSAFE_ENTRY_NAME`, `PENDING_EFFECTS_UNKNOWN`), so it cannot assert verified `CHANGE_NOT_FOUND`.
-It now requires unknown effects, incomplete/degraded diagnosis and unchanged project bytes. Verified
-absence remains covered by the separate complete-root direct-CLI regression, not this HTTP fixture.
-Independent read-only follow-up confirmed that distinction and found no issue in the correction.
+The remaining exact HTTP unknown-Change/CLI node initially passed **1 test in 2.71s** with a
+degraded inventory (`CONFIG_MISSING`, `UNSAFE_ENTRY_NAME`, `PENDING_EFFECTS_UNKNOWN`), so it could
+not assert verified `CHANGE_NOT_FOUND`. The `.storage.lock` scanner fix removed that false unknown;
+the current fixture now asserts `CONFIG_MISSING`, no `CHANGE_NOT_FOUND`, `pending_effects: false`,
+incomplete inspection and unchanged project bytes. Verified absence remains covered by the separate
+complete-root direct-CLI regression. A selected-change entry-limit regression also proves that an
+incomplete runtime listing suppresses `CHANGE_NOT_FOUND` and reports unknown pending effects.
 The prior continuation reported production Ruff and whitespace passes on its selected boundaries.
 It also reported four lint findings in `test_recovery.py` and formatting failures in four of its
 seven selected Python files. Comparing those files with `ef011e7` established only that the findings

@@ -2279,7 +2279,8 @@ def test_http_and_offline_diagnostics_bound_an_unknown_change_without_mutation(t
     assert diagnostics["status"] == "degraded"
     assert diagnostics["change_scope"] == "selected"
     assert "CHANGE_NOT_FOUND" not in diagnostics["diagnostic_codes"]
-    assert "PENDING_EFFECTS_UNKNOWN" in diagnostics["diagnostic_codes"]
+    assert "CONFIG_MISSING" in diagnostics["diagnostic_codes"]
+    assert diagnostics["pending_effects"] is False
     assert diagnostics["inspection_complete"] is False
     assert diagnostics["writes_performed"] is False
     assert repository_before == tree_snapshot(repository)

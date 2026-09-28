@@ -598,6 +598,7 @@ def test_missing_frontier_is_incomplete_without_unknown_pending_effects(tmp_path
     [
         ("missing-record", "CHANGE_NOT_FOUND", "verified-absent"),
         ("unreadable", "SYMLINK_REJECTED", "unknown"),
+        ("entry-limit", "ENTRY_LIMIT_EXCEEDED", "unknown"),
     ],
 )
 def test_selected_change_presence_requires_runtime_record(
@@ -610,11 +611,15 @@ def test_selected_change_presence_requires_runtime_record(
     changes = root / ".owlbear/delivery/runtime/changes"
     if runtime_changes == "missing-record":
         shutil.rmtree(changes / "example")
-    else:
+    elif runtime_changes == "unreadable":
         shutil.rmtree(changes)
         outside = tmp_path / "outside"
         outside.mkdir()
         changes.symlink_to(outside, target_is_directory=True)
+    else:
+        shutil.rmtree(changes / "example")
+        for index in range(MAX_ENTRIES + 1):
+            (changes / f"other-{index}").mkdir()
     before_membership = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
     before_bytes = {
         path.relative_to(root): path.read_bytes()
@@ -639,7 +644,7 @@ def test_selected_change_presence_requires_runtime_record(
     assert result["inspection_complete"] is False
     assert expected_code in result["diagnostic_codes"]
     assert result["pending_effects"] == (False if expected_pending_effects == "verified-absent" else "unknown")
-    if runtime_changes == "unreadable":
+    if expected_pending_effects == "unknown":
         assert "CHANGE_NOT_FOUND" not in result["diagnostic_codes"]
     assert result["writes_performed"] is False
     assert before_membership == sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))

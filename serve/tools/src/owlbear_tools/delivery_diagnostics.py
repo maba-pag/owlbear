@@ -19,6 +19,21 @@ MAX_ENTRIES = 256
 MAX_RECORD_BYTES = 1 << 20
 MAX_TOTAL_BYTES = 8 << 20
 MAX_LOG_BYTES = 64 << 10
+_INCOMPLETE_DIAGNOSTIC_CODES = frozenset(
+    {
+        "ENTRY_LIMIT_EXCEEDED",
+        "TOTAL_LIMIT_EXCEEDED",
+        "OVERSIZED_RECORD",
+        "LOG_TRUNCATED",
+        "REPLACED_DURING_INSPECTION",
+        "REPLACED_DURING_READ",
+        "CHANGED_DURING_READ",
+        "TRUNCATED_DURING_READ",
+        "SYMLINK_REJECTED",
+        "SPECIAL_FILE_REJECTED",
+        "UNSAFE_ENTRY_NAME",
+    }
+)
 
 SUPPORTED_VERSIONS = {
     "config": 2,
@@ -98,6 +113,18 @@ class _Inspection:
         if code not in self.diagnostics:
             self.diagnostics.append(code)
 
+    def has_complete_inventory(self) -> bool:
+        return not (
+            self.incomplete
+            or self.transaction_scan_unknown
+            or any(
+                code in _INCOMPLETE_DIAGNOSTIC_CODES
+                or code.endswith(("_UNREADABLE", "_MISSING"))
+                or code in {"ROOT_UNAVAILABLE", "DELIVERY_ROOT_UNAVAILABLE"}
+                for code in self.diagnostics
+            )
+        )
+
     def record(
         self,
         kind: str,
@@ -120,36 +147,14 @@ class _Inspection:
         self.records.append(item)
 
     def result(self, *, status: str | None = None, complete: bool = True) -> dict[str, object]:
-        incomplete_codes = {
-            "ENTRY_LIMIT_EXCEEDED",
-            "TOTAL_LIMIT_EXCEEDED",
-            "OVERSIZED_RECORD",
-            "LOG_TRUNCATED",
-            "REPLACED_DURING_INSPECTION",
-            "REPLACED_DURING_READ",
-            "CHANGED_DURING_READ",
-            "TRUNCATED_DURING_READ",
-            "SYMLINK_REJECTED",
-            "SPECIAL_FILE_REJECTED",
-            "UNSAFE_ENTRY_NAME",
-        }
         if "ENTRY_LIMIT_EXCEEDED" in self.diagnostics:
             self.transaction_scan_unknown = True
-        complete = complete and not (
-            self.incomplete
-            or self.transaction_scan_unknown
-            or any(
-                code in incomplete_codes
-                or code.endswith(("_UNREADABLE", "_MISSING"))
-                or code in {"ROOT_UNAVAILABLE", "DELIVERY_ROOT_UNAVAILABLE", "CHANGE_NOT_FOUND"}
-                for code in self.diagnostics
-            )
-        )
+        complete = complete and self.has_complete_inventory() and "CHANGE_NOT_FOUND" not in self.diagnostics
         if self.counts["pending_transactions"] and not self.transaction_scan_unknown:
             self.diagnostic("PENDING_TRANSACTIONS")
         if self.transaction_scan_unknown:
             self.diagnostic("PENDING_EFFECTS_UNKNOWN")
-        truncated = any(code in incomplete_codes for code in self.diagnostics)
+        truncated = any(code in _INCOMPLETE_DIAGNOSTIC_CODES for code in self.diagnostics)
         if status is None:
             status = (
                 "unsupported"
@@ -1052,11 +1057,7 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
             forced_complete = False
         for descriptor in reversed(root_descriptors):
             os.close(descriptor)
-    if (
-        change_id is not None
-        and not inspection.selected_runtime_change_seen
-        and not inspection.transaction_scan_unknown
-    ):
+    if change_id is not None and not inspection.selected_runtime_change_seen and inspection.has_complete_inventory():
         inspection.diagnostic("CHANGE_NOT_FOUND")
     return inspection.result(status=forced_status, complete=forced_complete)
 
