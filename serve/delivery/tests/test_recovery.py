@@ -600,7 +600,12 @@ def completed_recovery_restart_case(tmp_path: Path, kind: str):
     )
     assert recovery_effect_snapshot(restarted, "change-a") == protected
     restarted._recovery_evidence_provider = host
-    return restarted, operation, request, unchanged, host
+
+    def unchanged_after_restart() -> None:
+        unchanged()
+        assert recovery_effect_snapshot(restarted, "change-a") == protected
+
+    return restarted, operation, request, unchanged_after_restart, host
 
 
 def _tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
@@ -1612,6 +1617,8 @@ def test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement(t
     assert replacement.launch.claim.claim_id != launch.claim.claim_id
     existing_owner = application.acquire_change_action(_continuation_request(application))
     assert existing_owner.kind == "busy", existing_owner.model_dump_json()
+    assert existing_owner.reason_code == "active-custody"
+    assert existing_owner.readiness.reason_code == "active-custody"
     product.write_text("replacement-only\n")
     refs = _git(launch.worktree_path, "show-ref")
     with pytest.raises(RuntimeError, match="cannot be dispatched again"):

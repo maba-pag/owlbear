@@ -2,8 +2,8 @@
 
 ## Status and authority
 
-**D03-E: cumulative bounded-package proof and review are in progress;
-E/package acceptance is incomplete.**
+**D03-E: cumulative bounded-package source candidate is ready for acceptance review;
+E/package acceptance is not claimed. Final automated validation and external gates remain open.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
 Bounded C's and D's recorded evidence and named external limits below are preserved.
@@ -29,14 +29,22 @@ defect: coordination or snapshot records could mark a selected Change as seen ev
 frontier was missing, allowing a false healthy structural result. The diagnostic now counts runtime
 records only, preserving unknown inventory versus verified absence. Direct-CLI no-write regressions
 cover missing and unsafe runtime ancestry. Independent read-only review closed this finding and the
-initial/repeated V10 reload-snapshot and setup-cleanup findings. Final aggregate proof is pending.
+initial/repeated V10 reload-snapshot and setup-cleanup findings.
 
 The cumulative reviewer also identified a missing safe diagnostic prompt for readable
-`coordination-unavailable` readiness and non-discriminating MCP forged-input coverage. The prompt
-repair is included; final review and focused validation of these changes remain pending. Completed
+`coordination-unavailable` readiness and non-discriminating MCP forged-input coverage. Both are
+repaired and independently reviewed: real restart reads assert the diagnostic prompt on Change and
+WorkItem readiness; forged requests use otherwise-successful replay and assert exact strict-input
+rejection without host verification. Completed
 recovery replay snapshots now include raw index, refs, retry ledger, coordination bytes and journal
-directory membership before and immediately after reload. These are bounded fixture invariants,
+directory membership before and immediately after reload and after successful registered replay.
+The final focused review closed the post-replay snapshot gap. These are bounded fixture invariants,
 not claims of general host exclusion or automatic dirty-workspace recovery.
+
+Source checkpoint: `8fcfcb6`. The final follow-up only strengthens the shared replay test closure
+and the existing process test's exact `busy`/`active-custody` assertion. No recovery owner, provider
+composition, strict schema, dependency or frontend source changed in this continuation. One writer
+implemented source/tests; the coordinating session owns this record and publication.
 
 Fresh parent-executed checks on the unchanged starting source passed: the three HTTP/MCP
 finalizer-before-checks/restart nodes (**3 passed, 8.39s**), explicit role/import/diagnostic bootstrap,
@@ -56,15 +64,45 @@ execution. Scoped Ruff **0.16.5** lint and format checks passed on the seven pro
 portfolio application, work-item model, MCP models/server, HTTP models/routes and offline diagnostics.
 These checks do not retroactively change C's historical toolchain evidence.
 
+**Writer-reported proof on the new candidate:** the explicit selected recovery/MCP/HTTP/diagnostic/
+readiness suite passed **50 tests in 14.91s** before the final shared-closure refinement. It includes
+completed receipt replay, caller-authored extra fields, stale identity, absent-host live-descendant
+containment, process-exclusion positive controls, selected-runtime CLI accounting and restart prompts.
+Earlier 25/12/15/5/6/3/49-case selections overlap and are not additive or final-source proof.
+After the final shared-closure and exact-reason assertions, the six explicitly selected MCP/HTTP
+completed-replay and core/MCP/HTTP process-containment functions passed **8 cases in 10.59s**:
+MCP claim/proposal replay (two), HTTP claim replay (one), the existing process-exclusion control
+(two orphan-child variants), and three absent-host V10 cases. The first attempt at the added reason
+assertion failed twice because it expected `operation-in-progress`; the observed, contract-consistent
+`active-custody` is now asserted without weakening the existing `busy` requirement. One existing
+Starlette/AnyIO deprecation warning remains. This final selection supersedes its affected cases in
+the 50-case run, not the unchanged strict-input/diagnostic/prompt cases.
+The remaining exact HTTP unknown-Change/CLI node then passed **1 test in 2.71s**, after correcting
+its initial expectation: this fixture has incomplete offline inventory (`CONFIG_MISSING`,
+`UNSAFE_ENTRY_NAME`, `PENDING_EFFECTS_UNKNOWN`), so it cannot assert verified `CHANGE_NOT_FOUND`.
+It now requires unknown effects, incomplete/degraded diagnosis and unchanged project bytes. Verified
+absence remains covered by the separate complete-root direct-CLI regression, not this HTTP fixture.
+Independent read-only follow-up confirmed that distinction and found no issue in the correction.
+Production Ruff and whitespace checks passed. Standard Ruff on the changed test files reports four
+pre-existing findings in `test_recovery.py` at lines 213, 250, 280 and 331 (`FBT001`/`E501`), outside
+changed lines; they were not waived or fixed by this work. The writer compared the original
+`ef011e7` file through Ruff's stdin route and confirmed those same findings at original lines
+212, 249, 279 and 330. Scoped format-check reports four of seven changed Python files would be
+reformatted; the writer compared current and `ef011e7` format diffs and found no introduced hunks.
+This is baseline debt, not a clean full-file formatting pass.
+The parent did not rerun delegated checks; unlike the parent checks
+above, these are writer reports, not independently captured stdout.
+
 | Bounded capability | Current evidence | Remaining obligation |
 | --- | --- | --- |
 | Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review. Cumulative source comparison retains the unchanged engine/publication/retry owner proof; later readiness overlays have their own affected selections | Prior evidence, not a new 12-case pass; required external regressions remain |
-| Malformed operation journal and unavailable provider readback | Registered MCP canonical-loader cases cover invalid/foreign intent, invalid result journal, and unknown readback; HTTP route cases cover malformed and foreign intent/result. Invalid-result directory contents remain empty after each registered boundary. Unknown readback crosses a fresh core-loader restart; replay and reads do not repeat the external effect | Stale-basis and caller-forged owner/result-field variants beyond foreign-session mismatch were not rerun here; absent-host capability and independent-Change progress remain distinct gates |
+| Malformed operation journal and unavailable provider readback | Retained registered MCP/HTTP canonical-loader cases cover malformed/foreign intent/result and unknown readback across restart, without repeated effects or recreated result contents. Fresh strict recovery selections cover stale claim/proposal identities and forged preservation paths, commands, budgets, receipts and stop assertions | Prior engine-action journal/readback evidence was not rerun; required external regressions remain |
 | Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The report journal is nonempty; protected state is compared immediately around reload and API refusal. The three exact nodes passed freshly on the starting source | The initial `busy`/`unavailable` failure did not reproduce; its cause is not established. This checks `WORKSPACE_DIRTY` preflight with `checks_state=not-run`, not every failure category or live host dispatch |
-| Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Snapshots are limited to named durable fields and do not prove universal no-loss. Required V10 still-writing/descendant and absent-host no-mutation containment across restart is not supplied here; only actual host exclusion to enable broader recovery is outside bounded D03 |
-| Degraded/offline entry | Malformed coordination is entered through the real HTTP loader/routes, then the stdlib diagnostics CLI inspects that same root and selected Change in a fresh `-B` process; complete project-tree membership/bytes, refs, and provider mutation count remain unchanged and corrupt bytes are not echoed | Combined proof covers malformed coordination only; other unavailable-root/invalid-Change/runtime failure classes are not composed through both adapters. D07 repair/migration and D08 host acceptance remain |
-| Readiness prompts and rendering | Retained-journal regression distinguishes pending/interrupted/diagnostic; executable-ready, retry, refusal-copy, unavailable, diagnostic, and busy/wait/terminal cases passed in focused Python selections. The scoped `WorkPortfolio.test.tsx` passed 116 tests, including inert markup-like text and absent/null prompts; scoped Biome and TypeScript/Vite production build passed | Browser/E2E proof not claimed; broader frontend suite not run |
-| Recovery contract and cumulative package | Existing A–D records remain historical evidence. Fresh strict recovery adapter/annotation and role/import/authority/parity selections passed. Independent cumulative source review identified the selected-runtime diagnostic defect and a missing safe prompt for readable `coordination-unavailable` readiness | Complete the focused review repairs and their final proof; required external CI and ordinary host transport acceptance remain separate |
+| Failed claim activation with/without writer | Retained MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Named durable-field snapshots are not universal no-loss proof; required external regressions remain |
+| V10 absent-host containment | New core, registered MCP and HTTP cases retain a real still-writing descendant through two application reloads. Exact refusal, no replacement/release, full protected snapshots and subsequent signalled writes are asserted; setup and test cleanup close the synthetic worker | No actual laptop/VS Code exclusion claim; enabling broader recovery still requires independent host authority |
+| Degraded/offline entry | Retained malformed-coordination HTTP/CLI same-root proof and new unknown-Change coverage; direct CLI missing/unsafe runtime-ancestry cases prove incomplete diagnosis, truthful pending-effect accounting and no project-tree writes | D's installed POSIX/no-write evidence remains historical. Other failure classes are not all composed through both adapters; D07 migration and D08 ordinary host acceptance remain |
+| Readiness prompts and rendering | New `coordination-unavailable` diagnostic prompt is checked through real restart Change/WorkItem reads and the applicability table. Retained pending/interrupted, continuation and state-specific prompt proof; unchanged frontend has prior 116-test, Biome and build proof, including inert text and absent/null prompts | Browser/E2E proof not claimed; broader frontend suite not run |
+| Recovery contract and cumulative package | Fresh registered replay/strict-input/V10 and parent role/import/authority/parity proof supplement retained A–D evidence. Cumulative read-only review covered supported replay/evidence revalidation, strict boundaries, custody/readiness/retry and offline diagnostics; final focused reviews closed the concrete findings | No whole-PR approval inferred. Automated review unavailable, final CodeQL timed out, external CI and ordinary host transport acceptance remain open |
 
 **Historical evidence:** the [post-stop record at `3568c41`](https://github.com/maba-pag/owlbear/blob/3568c4111fd40c6fd7a9151a16dfe3ece11e6b0c/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff)
 reports the earlier 29-case selection and six-case corrected retained-journal selection. Those are
@@ -110,17 +148,21 @@ src/__tests__/WorkPortfolio.test.tsx` passed **116 tests in 102.99s**. Scoped Bi
 lockfile changed. The coordinating session inspected the captured test/build output without rerunning
 it. Local transcripts are session artifacts, not prerequisites for a future checkout.
 
-Automated Code Review could not load its configured model; its success wrapper is not a pass.
-CodeQL skipped this test/documentation-only continuation, not the prior production changes.
-Required dependency/source/Cockpit/ecosystem CI inspected at `3568c41` is `action_required`.
+Prior automated Code Review could not load its configured model; its success wrapper is not a pass.
+Prior CodeQL skipped the `ef011e7` test/documentation-only continuation, not production changes.
+Final validation after publishing `8fcfcb6` again could not initialize automated Code Review, and
+CodeQL timed out. Neither is a passing final-source result; the tool explicitly disallowed retry.
+An earlier reviewer-reported zero-alert scan predates final publication and does not close this gap.
+Required dependency/source/Cockpit/ecosystem CI inspected at the starting `ef011e7` is `action_required`,
+not current-head passing proof.
 Historical C exact-pin limits and D's POSIX/host limits remain unchanged. Package acceptance, merge,
 D04 and live activation are not claimed.
 
-**Next outcome:** finish the cumulative reviewers' diagnostic and proof repairs, verify their exact
-affected selections, and reconcile the matrix against the final reviewed source. Keep ordinary host
-transport and external CI separate from cloud source proof. Reuse applicable approved evidence rather
-than rerun unrelated suites. Do not substitute an executor/backend redesign or treat containment as
-recovery success.
+**Next outcome:** acceptance review of the cumulative bounded D03-E candidate and completion of the
+named automated/external gates in a capable environment. No known source repair remains in the
+reviewed scope; this is not package approval, merge or live activation. Keep ordinary host transport
+separate from cloud source proof, reuse valid prior evidence, and do not substitute an executor/backend
+redesign or treat containment as recovery success.
 
 ### D repaired baseline
 
