@@ -5522,6 +5522,34 @@ it("offers read-only inspection for an unavailable Change without controls", asy
   expect(within(inspector).queryByRole("button")).not.toBeInTheDocument();
 });
 
+it.each([
+  ["continuation text", "/continue-change change-alpha reread readiness before continuing."],
+  ["diagnostic text containing markup", '/repair-delivery Diagnose <a href="/mutate">this Change</a> read-only.'],
+  ["absent prompt", undefined],
+  ["null prompt", null],
+] as const)("renders readiness prompts inertly or omits them: %s", async (_label, prompt) => {
+  const promptState = prompt === undefined ? {} : { prompt };
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: "engine-action-blocked",
+      ...promptState,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome:OUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const renderedPrompt = within(inspector).queryByTestId("readiness-prompt");
+  if (typeof prompt === "string") {
+    const promptElement = requirePresent(renderedPrompt);
+    expect(promptElement.tagName).toBe("PRE");
+    expect(promptElement).toHaveTextContent(prompt);
+    expect(promptElement.querySelector("a, button, img, script")).toBeNull();
+  } else {
+    expect(renderedPrompt).not.toBeInTheDocument();
+  }
+});
+
 it("labels every continuation readiness reason without blanking a new engine state", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
     "finalization-failed",

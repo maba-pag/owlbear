@@ -12,30 +12,31 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The first bounded deliverable was independently approved and published as `bf4bc48`; the
-remaining-E implementation checkpoint is published as `468c448`. This uncommitted handoff update
-records the final focused proof and the latest review repair. That checkpoint adds registered
-malformed-journal and unavailable-readback containment, bounded activation snapshots and sibling
-acquisition checks through MCP/HTTP, the HTTP finalizer handoff through existing acquire/execute plus
-core report surfaces, and state-appropriate readiness prompts with inert Cockpit rendering. It
-recomputes prompt text after non-executable refusal copies. Activation snapshots compare the
-explicitly captured fields; they are not a general no-loss guarantee. The checkpoint changes no
-recovery authority or optional provider; `2e377a6` remains controlling.
+The first bounded code deliverable (`bf4bc48`) was independently approved and published; the
+remaining-E implementation checkpoint is `468c448`. The `3568c41` post-stop correction fixes the
+retained-journal regression expectation and handoff evidence: it confirms the existing pending,
+interrupted-owner and diagnostic prompts and preserves prompt applicability after non-executable
+refusal copies. It adds no new recovery implementation or authority. Independent read-only review of
+`bf4bc48..3568c41` found no high-confidence actionable findings and confirmed prompt recomputation
+and exact corrected prompt text; the reviewer ran no tests. That review does not cover the current
+uncommitted tests, which are validated below. This slice adds HTTP malformed/foreign journal and
+unknown-readback containment, finalizer restart/no-mutation proof, and repeated degraded-entry
+observations. No recovery authority or provider boundary changed; `2e377a6` remains controlling.
 
 | Bounded capability | Current evidence | Remaining obligation |
 | --- | --- | --- |
 | Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review | Not rerun in this remaining-E slice; include in cumulative package proof |
-| Malformed operation journal and unavailable provider readback | New canonical-loader MCP cases cover invalid/foreign intent, invalid result journal, and unknown readback; no repeated effect and diagnostic readiness asserted | HTTP-specific malformed/readback variants and wider stale/forged-field matrix not covered in this slice |
-| Finalizer failure before checks | Existing registered MCP case plus new HTTP acquire/execute and core failure-report case; verifies `checks_state=not-run` and retained writer | Restart/no-mutation finalizer proof remains |
+| Malformed operation journal and unavailable provider readback | Registered MCP canonical-loader cases cover invalid/foreign intent, invalid result journal, and unknown readback; HTTP route cases cover malformed and foreign intent/result. Unknown readback now also crosses a fresh core-loader restart; replay and reads do not repeat the external effect. Focused MCP and HTTP/core tests passed | Wider stale/forged-field matrix not covered in this slice |
+| Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The finalizer report journal is asserted nonempty; exact coordination/frontier/retry/workspace/refs/writer/report/mutations are compared before and after reload before the first reloaded `get_change`, then around API refusal | Wider finalizer/transport matrix remains |
 | Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Bounded snapshots do not constitute a general no-loss guarantee; broader activation/transport matrix remains |
-| Degraded/offline entry | Earlier registered malformed-coordination MCP/HTTP readiness coverage remains prior evidence | Full degraded-runtime/offline entry matrix was not rerun |
-| Readiness prompts and rendering | Prompt is rederived on retry, acquisition-reconciliation, engine/finalizer reservation, and claim-activation refusal copies; fallback refusal regression plus executable-ready, retry, pending/interrupted, diagnostic, and busy/wait/terminal matrix. Shared detail renders prompt inertly in normal/unavailable views | Frontend tests/build unrun; no UI/browser proof claimed |
+| Degraded/offline entry | Real HTTP loader with malformed coordination repeats acquisition and portfolio reads, retains the exact damaged authority bytes/refs, and returns bounded unavailable readiness; verified by the focused HTTP suite. Registered MCP tests cover malformed-runtime entry | Wider degraded-runtime/offline entry matrix remains |
+| Readiness prompts and rendering | Retained-journal regression distinguishes pending/interrupted/diagnostic; executable-ready, retry, refusal-copy, unavailable, diagnostic, and busy/wait/terminal cases passed in focused Python selections. The scoped `WorkPortfolio.test.tsx` passed 116 tests, including inert markup-like text and absent/null prompts; scoped Biome and TypeScript/Vite production build passed | Browser/E2E proof not claimed; broader frontend suite not run |
 | Recovery contract and cumulative package | Existing A–D records remain historical evidence | Strict recovery mappings/positive recovery evidence, role/boundary checks, full C–E closeout and package acceptance are not established by this slice |
 
-**Verification for `468c448`:** retained `.git/d03e-venv` Python **3.14.7** and uv **0.12.15**;
+**Historical verification for `468c448`:** retained `.git/d03e-venv` Python **3.14.7** and uv **0.12.15**;
 `owlbear_delivery` imports resolve to this checkout. The focused selection ran against the exact
-implementation immediately before its publication (later local changes are formatting/documentation
-only) across
+implementation immediately before its publication; it does not validate the additions recorded
+below. It covered
 `test_target_server.py`, `test_cockpit_work_items.py`, and `test_portfolio_application.py` passed
 **29 tests in 18.27s**, with one existing Starlette/AnyIO `BlockingPortal` deprecation warning.
 Command: `.git/d03e-venv/bin/python -m pytest serve/delivery-mcp/tests/test_target_server.py
@@ -50,23 +51,39 @@ Scoped `ruff check`, source-only `ruff format --check`, and `git diff --check` p
 Full `ruff format --check` on the touched test modules reports pre-existing unformatted lines in
 approved `bf4bc48`; the newly added lines identified by that check were formatted without
 reformatting the approved slice.
-After publication, the retained-journal regression was corrected to assert distinct pending,
+For `3568c41`, the retained-journal regression was corrected to assert distinct pending,
 interrupted-owner, and diagnostic prompts (not absence): its exact six-case selection passed in
 **10.78s**, and scoped Ruff plus `git diff --check` passed.
 
-Cockpit tests/build were not run: available Node is **22.23.2** while
-`serve/cockpit/web/.nvmrc` pins **24.21.0**, `node_modules` is absent, and one bounded environment
-check found no alternate version manager or local pinned binary/cache. No dependency or lockfile
-changes were made. The presentation change therefore remains unverified. Final independent
-review/CodeQL, required CI, and cumulative C–E proof remain for the parent. Secret scanning passed
-for all seven changed files. `parallel_validation` reported no review comments but could not load
-its configured review model; CodeQL timed out and the tool instructed no retry, so neither is
-claimed as a successful final pass for the repaired diff. Parent read-only review is still required.
-Package acceptance, merge, D04 and live activation are not claimed.
+**Current uncommitted remaining-E validation:** with uv **0.12.15** and Python **3.14.7** from the
+locked workspace, the explicit HTTP/readiness selection across `tests/test_cockpit_work_items.py`
+and `serve/delivery/tests/test_portfolio_application.py` passed **33 tests in 21.65s**. The
+registered MCP malformed-journal/readback selection passed **4 tests in 9.29s**. The HTTP run emitted
+one existing Starlette/AnyIO `BlockingPortal` deprecation warning; the MCP run had no warning.
+`ruff check
+tests/test_cockpit_work_items.py` and `git diff --check` passed. `ruff format --check` reports only
+two unchanged, pre-existing formatting differences at lines 1245 and 1482 of that test module; the
+newly edited lines are formatted.
 
-**Next outcome:** parent read-only review of `468c448` and the remaining formatting/handoff diff.
-Keep unresolved rows above visible; do not substitute another executor/backend design or imply
-package acceptance.
+After adding fresh-restart provider-readback containment and pre-read finalizer restart comparison,
+the exact two-case HTTP selection passed **2 tests in 4.89s** (one existing
+Starlette/AnyIO `BlockingPortal` deprecation warning). `ruff check` and `git diff --check` passed.
+The command/stdout transcript is `.git/d03-e-python-validation.log`.
+
+**Frontend validation:** Node **24.21.0** / npm **10.9.8**; locked `npm ci` installed 314 packages
+and reported zero vulnerabilities. `npm --prefix serve/cockpit/web test --
+src/__tests__/WorkPortfolio.test.tsx` passed **116 tests in 102.99s**. Scoped Biome check passed and
+`npm --prefix serve/cockpit/web run build` passed TypeScript and Vite (463 modules). No manifest or
+lockfile changed. The exact command/output transcript is `.git/d03-e-frontend-validation.log`.
+
+Final independent review/CodeQL, required CI, and cumulative C–E proof remain for the parent.
+The prior secret scan and validation limitations apply only to the earlier seven-file checkpoint,
+not these current edits; parent must scan the current diff before any commit. Parent read-only review
+is still required. Package acceptance, merge, D04 and live activation are not claimed.
+
+**Next outcome:** parent read-only review of the exact candidate and current-diff secret scan before
+publication. Keep unresolved rows above visible; do not substitute another executor/backend design
+or imply package acceptance.
 
 ### D repaired baseline
 
