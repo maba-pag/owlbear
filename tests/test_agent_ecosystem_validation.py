@@ -88,6 +88,8 @@ _TARGET_ROLE_TOOLS = {
     "orchestrator": {
         "list_changes",
         "acquire_actions",
+        "acquire_change_action",
+        "execute_change_action",
         "delivery_health",
         "get_change",
         "transition_delivery",

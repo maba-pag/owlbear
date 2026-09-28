@@ -429,7 +429,7 @@ jobs:
   cache-probe-uv:
     name: "Cache probe uv ${{ matrix.policy }} / Python ${{ matrix.python }}"
     if: github.event_name == 'workflow_dispatch' && inputs.cache_probe == 'uv'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -487,7 +487,7 @@ jobs:
   cache-probe-precommit:
     name: "Cache probe pre-commit / ${{ matrix.policy }}"
     if: github.event_name == 'workflow_dispatch' && inputs.cache_probe == 'precommit'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
