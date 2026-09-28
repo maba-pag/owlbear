@@ -84,7 +84,7 @@ services, production state, provider effects or protections were changed.
 | Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
 | Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
 | Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
-| Required CI | At `717aa83`, Source, Dependency, and Agent ecosystem validation passed. Cockpit failed twice on Node 24.21 in `WorkPortfolio.test.tsx`; Node 24.16 passed. |
+| Required CI | At `717aa83`, Source, Dependency, and Agent ecosystem validation passed. Cockpit failed twice on Node 24.21 in `WorkPortfolio.test.tsx`; Node 24.16 passed. At `958345e`, [Source](https://github.com/maba-pag/owlbear/actions/runs/36439371785), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36439371674), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36439371894), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36439372908) are running. |
 | Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual backend/tooling cases pass on Python 3.12.14 and 3.14.7, including Python 3.12 xdist. The full 116-case WorkPortfolio test file passes locally on Node 24.21 after its test fix; scoped Biome passes. |
 | Follow-up review | [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix and preserved custody assertions. The new Docker/clock/timeout corrections are test-only; focused review on the final head remains. |
 | Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
@@ -98,14 +98,15 @@ The full-suite timeout cases are the 256-record capacity proof and the repeated 
 for `observe-acceptance`; each now has a 60-second per-test bound, with the global timeout and test
 assertions unchanged. The four residual failure cases pass together on Python 3.12.14 and 3.14.7;
 the same four pass under Python 3.12.14 xdist. All nine changed Python files pass Ruff lint/format.
-At `717aa83`, one inspector-restoration test raced its initial portfolio fetch: it awaited the detail
-but mutated the portfolio fixture before the first list load completed. It now waits for the table
-before changing that fixture. A second test renders 16 readiness reasons; D03 added eight cases but
+At `717aa83`, one inspector-restoration test raced portfolio polling: it awaited the detail but
+mutated the portfolio fixture before initial list load completed, then checked the restored table
+before the next poll. It now awaits the table before changing the fixture and awaits table
+restoration after the fixture is reset. A second test renders 16 readiness reasons; D03 added eight cases but
 the test retained Vitest's 20-second default. Its per-test timeout is now 60 seconds; the global
-timeout and assertions are unchanged. The complete 116-test file passes locally on Node 24.21 and
-Biome passes. These local checks are not current-head CI. The latest Cockpit test fix requires a
-fresh exact-head run. Earlier code failures at `aba7684` remain repaired in `f802aed`; do not reopen
-them or approve obsolete runs. This is acceptance closeout, not another D03-E implementation cycle.
+timeout and assertions are unchanged. Commit `958345e` contains only these Cockpit test and handoff
+changes. The complete 116-test file passes locally on Node 24.21 and scoped Biome passes; fresh
+exact-head CI is pending. Earlier code failures at `aba7684` remain repaired in `f802aed`; do not
+reopen them or approve obsolete runs. This is acceptance closeout, not another D03-E cycle.
 Earlier stop-era details remain in the
 [immutable pre-integration record](https://github.com/maba-pag/owlbear/blob/b49a2a8f0017bcf2aa25274b2fec8962d72f02a5/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff).
 

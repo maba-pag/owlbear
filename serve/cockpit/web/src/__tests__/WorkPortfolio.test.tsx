@@ -5758,7 +5758,9 @@ it("keeps the inspector on a Change that becomes unavailable and restores it whe
   const restoredInspector = screen.getByTestId("work-item-detail");
   expect(restoredInspector).toHaveTextContent("Make Delivery supervision coherent.");
   expect(within(restoredInspector).queryByTestId("unavailable-change-diagnostics")).not.toBeInTheDocument();
-  expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("Delivery foundation");
+  await waitFor(() => expect(screen.getByTestId("work-portfolio-table")).toHaveTextContent("Delivery foundation"), {
+    timeout: 6000,
+  });
   expect(screen.getByTestId("test-location")).toHaveTextContent("/delivery/change-alpha/outcome:OUT-001");
   expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
 });
