@@ -718,9 +718,7 @@ async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  
     assert completed_record["action"]["operation_id"] == action.operation_id
     if action_kind in {"reconcile-checkpoint", "sync-target"}:
         published_head = (
-            action.exact_head
-            if action_kind == "reconcile-checkpoint"
-            else engine_result["target_sync"]["merged_head"]
+            action.exact_head if action_kind == "reconcile-checkpoint" else engine_result["target_sync"]["merged_head"]
         )
         _assert_checkpoint_branch_operation(
             before_owner_execution,
@@ -969,10 +967,7 @@ async def test_registered_loader_contains_unknown_custody_without_repeating_effe
     assert operation_journal_before_reload["intent"]
     assert operation_journal_before_reload["started"]
     assert operation_journal_before_reload["result"] is None
-    assert any(
-        action.operation_id in episode.attempt_ids
-        for episode in before_reload["retry_ledger"].episodes
-    )
+    assert any(action.operation_id in episode.attempt_ids for episode in before_reload["retry_ledger"].episodes)
     if action_kind in {"reconcile-checkpoint", "sync-target"}:
         if action_kind == "reconcile-checkpoint":
             published_head = action.exact_head

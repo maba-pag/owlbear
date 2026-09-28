@@ -210,10 +210,8 @@ def test_a5_recovery_fixture_preserves_bytes_and_directional_authority() -> None
 
 
 @pytest.mark.parametrize("dirty", [False, True, "ignored", "replay"])
-def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool | str) -> None:
-    application, _runtimes, coordinator, state = _portfolio(
-        tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}
-    )
+def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path: Path, *, dirty: bool | str) -> None:
+    application, _runtimes, coordinator, state = _portfolio(tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION})
     host = _host(application)
     application.acquire_change_action(_continuation_request(application))
     current = application._propose_recovery("change-a")
@@ -247,7 +245,9 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
         receipt = application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy))
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
         with (
-            patch.object(coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion) as forget,
+            patch.object(
+                coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion
+            ) as forget,
             patch.object(application, "_require_legacy_recovery_clean") as legacy_guard,
         ):
             assert application._complete_recovery("change-a", legacy.recovery_id, host.seal(legacy)) == receipt
@@ -277,7 +277,7 @@ def test_legacy_incomplete_intent_completes_against_current_provenance(tmp_path:
 
 
 @pytest.mark.parametrize("dirty", [False, True, "replay"])
-def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path, dirty: bool | str) -> None:
+def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Path, *, dirty: bool | str) -> None:
     """Old clean journals replay; dirty preservation remains separately admission-gated."""
     application, _runtimes, coordinator, state = _portfolio(
         tmp_path, {"change-a": DeliveryStage.IMPLEMENTATION}, include_downstream=True
@@ -315,9 +315,10 @@ def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Pat
     old_intent = RecoveryIntent.model_validate_json(old_bytes)
     assert not old_intent.uses_legacy_encoding
     assert encoded(old_intent) == old_bytes
-    assert old_intent.authority_matches(
-        current.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)})
-    ) is False
+    assert (
+        old_intent.authority_matches(current.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)}))
+        is False
+    )
     current_path = state / journal_path("change-a", current.recovery_id, "intent")
     current_path.unlink()
     old_path = state / journal_path("change-a", old_intent.recovery_id, "intent")
@@ -328,7 +329,9 @@ def test_a5_incomplete_intent_completes_against_current_provenance(tmp_path: Pat
         receipt = application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent))
         (coordinator.show("change-a").worktree_path / "shared.txt").write_text("dirty\n", encoding="utf-8")
         with (
-            patch.object(coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion) as forget,
+            patch.object(
+                coordinator, "forget_verified_exclusion", wraps=coordinator.forget_verified_exclusion
+            ) as forget,
             patch.object(application, "_require_legacy_recovery_clean") as legacy_guard,
         ):
             assert application._complete_recovery("change-a", old_intent.recovery_id, host.seal(old_intent)) == receipt
@@ -381,9 +384,7 @@ def test_a5_recovery_intent_identity_survives_admitted_authority_fields(tmp_path
     assert not persisted.authority_matches(
         current.model_copy(update={"last_write_provenance": ("tampered-old-provenance",)})
     )
-    assert not persisted.authority_matches(
-        persisted.model_copy(update={"maintained_surfaces": ("legacy-surface",)})
-    )
+    assert not persisted.authority_matches(persisted.model_copy(update={"maintained_surfaces": ("legacy-surface",)}))
 
 
 def test_recovery_intent_binds_only_the_active_task_authority(tmp_path: Path) -> None:
@@ -397,11 +398,7 @@ def test_recovery_intent_binds_only_the_active_task_authority(tmp_path: Path) ->
     intent = application._propose_recovery("change-a")
 
     claim = runtimes["change-a"].active_claims()[0][1]
-    task = next(
-        task
-        for task in runtimes["change-a"].show_binding("OUT-001").tasks
-        if task.task_id == claim.task_id
-    )
+    task = next(task for task in runtimes["change-a"].show_binding("OUT-001").tasks if task.task_id == claim.task_id)
     assert intent.admitted_task_id is None
     assert intent.admitted_task_digest is None
     assert intent.admitted_task_scope == ()
@@ -848,13 +845,17 @@ def test_completed_outcome_repair_replays_with_retry_authority_and_preserves_res
         application._workspace_manager.observed_target_head(),
         None,
     )
-    reservation = runtimes["change-a"].retry_ledger(clock=lambda: now[0]).reserve(
-        key,
-        failure_class=RetryFailureClass.MECHANICAL,
-        now=now[0],
-        attempt_id="repair-attempt",
-        automatic=True,
-        operation_alias="repair-attempt",
+    reservation = (
+        runtimes["change-a"]
+        .retry_ledger(clock=lambda: now[0])
+        .reserve(
+            key,
+            failure_class=RetryFailureClass.MECHANICAL,
+            now=now[0],
+            attempt_id="repair-attempt",
+            automatic=True,
+            operation_alias="repair-attempt",
+        )
     )
     assert reservation.allowed
     before = runtimes["change-a"].frontier_bytes()
@@ -922,9 +923,7 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
     assert first.kind == "acquired"
     original = first.finalization.attempt
     original_action_id = original.writer.attempt_id
-    report = application.report_finalization_failure(
-        _failure_request(application, attempt_key=original_action_id)
-    )
+    report = application.report_finalization_failure(_failure_request(application, attempt_key=original_action_id))
     recovery_intent = application._propose_recovery("change-a")
     application._complete_recovery("change-a", recovery_intent.recovery_id, host.seal(recovery_intent))
     preservation = application._workspace_manager.capture_preservation("change-a", recovery_intent.recovery_id)
@@ -936,13 +935,17 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
         application._workspace_manager.observed_target_head(),
         invalidation.finalization_id,
     )
-    repair_reservation = runtimes["change-a"].retry_ledger(clock=lambda: now[0]).reserve(
-        key,
-        failure_class=RetryFailureClass.MECHANICAL,
-        now=now[0],
-        attempt_id="repair-attempt",
-        automatic=True,
-        operation_alias="repair-attempt",
+    repair_reservation = (
+        runtimes["change-a"]
+        .retry_ledger(clock=lambda: now[0])
+        .reserve(
+            key,
+            failure_class=RetryFailureClass.MECHANICAL,
+            now=now[0],
+            attempt_id="repair-attempt",
+            automatic=True,
+            operation_alias="repair-attempt",
+        )
     )
     before = runtimes["change-a"].frontier_bytes()
     request = PrepareCompletedOutcomeRepair(

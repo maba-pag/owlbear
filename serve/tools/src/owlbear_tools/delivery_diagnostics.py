@@ -88,6 +88,7 @@ class _Inspection:
             "logs": 0,
         }
         self.selected_runtime_change_seen = False
+        self.runtime_frontier_changes: set[str] = set()
         self.transaction_scan_unknown = False
         self.incomplete = False
         self.entries_seen = 0
@@ -531,7 +532,10 @@ def _scan_change_records(
                 continue
             child_fd, child_opened = child
             try:
+                frontier_record = len(inspection.records)
                 _inspect_file(child_fd, "frontier.json", inspection, "frontier", required=True)
+                if len(inspection.records) > frontier_record and inspection.records[-1]["status"] == "supported":
+                    inspection.runtime_frontier_changes.add(name)
                 transactions = _open_optional_transactions(child_fd, inspection)
                 if transactions is not None:
                     transactions_fd, transactions_opened = transactions
@@ -552,28 +556,62 @@ def _scan_change_records(
 
 
 def _scan_coordination(runtime_fd: int, inspection: _Inspection, *, selected: str | None) -> None:
+    expected_changes = inspection.runtime_frontier_changes
+    if selected is not None:
+        expected_changes = expected_changes & {selected}
     coordination = _open_directory(runtime_fd, "coordination", inspection, "COORDINATION")
     if coordination is None:
+        _record_missing_coordination_if_absent(runtime_fd, "coordination", inspection, expected_changes)
         return
     coordination_fd, coordination_opened = coordination
     try:
         changes = _open_directory(coordination_fd, "changes", inspection, "COORDINATION_CHANGES")
         if changes is None:
+            _record_missing_coordination_if_absent(coordination_fd, "changes", inspection, expected_changes)
             return
         changes_fd, changes_opened = changes
         try:
-            for name in _directory_names(changes_fd, inspection):
+            names = _directory_names(changes_fd, inspection)
+            coordination_changes: set[str] = set()
+            for name in names:
                 if not name.endswith(".json") or not _CHANGE_ID.fullmatch(name[:-5]):
                     inspection.diagnostic("UNSAFE_ENTRY_NAME")
                     inspection.transaction_scan_unknown = True
                     continue
                 if selected is not None and name[:-5] != selected:
                     continue
+                coordination_changes.add(name[:-5])
                 _inspect_file(changes_fd, name, inspection, "coordination")
+            listing_errors = {"DIRECTORY_UNREADABLE", "ENTRY_LIMIT_EXCEEDED"} & set(inspection.diagnostics)
+            if not inspection.entry_budget_exhausted and not listing_errors:
+                _record_missing_coordination(inspection, expected_changes - coordination_changes)
         finally:
             _close_directory(coordination_fd, "changes", changes_fd, changes_opened, inspection)
     finally:
         _close_directory(runtime_fd, "coordination", coordination_fd, coordination_opened, inspection)
+
+
+def _record_missing_coordination_if_absent(
+    parent_fd: int, name: str, inspection: _Inspection, expected_changes: set[str]
+) -> None:
+    if not expected_changes:
+        return
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError as exc:
+        if exc.errno == errno.ENOENT:
+            _record_missing_coordination(inspection, expected_changes)
+            return
+    inspection.transaction_scan_unknown = True
+
+
+def _record_missing_coordination(inspection: _Inspection, missing_changes: set[str]) -> None:
+    if not missing_changes:
+        return
+    for _change in missing_changes:
+        inspection.record("coordination", present=False, status="missing")
+    inspection.diagnostic("COORDINATION_MISSING")
+    inspection.transaction_scan_unknown = True
 
 
 def _scan_snapshots(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:

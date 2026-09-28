@@ -38,6 +38,7 @@ _MAX_ATTEMPT_KEY_LENGTH = 128
 type _ReportFileSignature = tuple[str, int, int, int, int, int]
 _PROOF_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 _PROOF_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_PROOF_TEMPORARY_PUBLISHED_LINK_COUNT = 2
 _MAX_PROOF_TEMPORARIES = 256
 _MAX_PROOF_TEMPORARY_BYTES = MAX_REPORT_BYTES * _MAX_PROOF_TEMPORARIES
 
@@ -156,9 +157,7 @@ def _encoded(model: BaseModel, *, exclude: set[str] | None = None) -> bytes:
     ).encode()
 
 
-_CURRENT_REPORT_REQUEST_FIELDS = frozenset(
-    {"procedure_id", "proof_fingerprint_before", "proof_fingerprint_after"}
-)
+_CURRENT_REPORT_REQUEST_FIELDS = frozenset({"procedure_id", "proof_fingerprint_before", "proof_fingerprint_after"})
 
 
 def _encoded_report(report: FinalizationReport, *, exclude: set[str] | None = None) -> bytes:
@@ -672,7 +671,7 @@ class ProofAttemptStore:
                             or (
                                 metadata.st_nlink != 1
                                 and not (
-                                    metadata.st_nlink == 2
+                                    metadata.st_nlink == _PROOF_TEMPORARY_PUBLISHED_LINK_COUNT
                                     and (metadata.st_dev, metadata.st_ino) in published_identities
                                 )
                             )
@@ -680,15 +679,18 @@ class ProofAttemptStore:
                             or metadata.st_size < 0
                             or metadata.st_size > MAX_REPORT_BYTES
                         ):
-                            raise ValueError("proof-attempt temporary artifact is invalid")
+                            msg = "proof-attempt temporary artifact is invalid"
+                            raise ValueError(msg)
                         temporary_count += 1
                         temporary_bytes += metadata.st_size
                         if temporary_count > _MAX_PROOF_TEMPORARIES or temporary_bytes > _MAX_PROOF_TEMPORARY_BYTES:
-                            raise ValueError("proof-attempt temporary artifacts exceed capacity")
+                            msg = "proof-attempt temporary artifacts exceed capacity"
+                            raise ValueError(msg)
                     elif entry.name.endswith(".json"):
                         attempt_count += 1
                     else:
-                        raise ValueError("proof-attempt storage inventory is malformed")
+                        msg = "proof-attempt storage inventory is malformed"
+                        raise ValueError(msg)
                     signatures.append(
                         (
                             entry.name,
@@ -702,7 +704,8 @@ class ProofAttemptStore:
         except FileNotFoundError:
             return ()
         if attempt_count > MAX_PROOF_ATTEMPTS:
-            raise ValueError("proof-attempt history exceeds capacity")
+            msg = "proof-attempt history exceeds capacity"
+            raise ValueError(msg)
         return tuple(sorted(signatures))
 
     def _read(self, descriptor: int) -> tuple[ProofAttempt, ...]:
@@ -793,9 +796,8 @@ class ProofAttemptStore:
             temporary_bytes = sum(
                 signature[3] for signature in inventory if _PROOF_TEMPORARY_PATTERN.fullmatch(signature[0]) is not None
             )
-            if (
-                temporary_count >= _MAX_PROOF_TEMPORARIES
-                or temporary_bytes > _MAX_PROOF_TEMPORARY_BYTES - len(encoded_attempt)
+            if temporary_count >= _MAX_PROOF_TEMPORARIES or temporary_bytes > _MAX_PROOF_TEMPORARY_BYTES - len(
+                encoded_attempt
             ):
                 msg = "proof-attempt-capacity"
                 raise FinalizationReportError(msg)

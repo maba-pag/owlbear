@@ -96,6 +96,92 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["truncated"] is False
 
 
+@pytest.mark.parametrize("missing", ["coordination", "changes", "row"])
+def test_valid_runtime_frontier_without_coordination_is_unknown_and_read_only(
+    tmp_path: Path,
+    missing: str,
+) -> None:
+    root = _root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    change.mkdir()
+    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
+    if missing == "coordination":
+        shutil.rmtree(coordination.parent.parent)
+    elif missing == "changes":
+        shutil.rmtree(coordination.parent)
+    else:
+        coordination.write_bytes(b'{"schema_version":1,"change_id":"example"}\n')
+        coordination.unlink()
+
+    def snapshot() -> tuple[tuple[str, bytes | None], ...]:
+        return tuple(
+            sorted(
+                (
+                    path.relative_to(root).as_posix(),
+                    path.read_bytes() if path.is_file() else None,
+                )
+                for path in root.rglob("*")
+            )
+        )
+
+    before = snapshot()
+    results = (inspect_delivery(root), inspect_delivery(root, change_id="example"))
+    for result in results:
+        assert result["status"] == "degraded"
+        assert result["inspection_complete"] is False
+        assert {"COORDINATION_MISSING", "PENDING_EFFECTS_UNKNOWN"} <= set(result["diagnostic_codes"])
+        assert result["pending_effects"] == "unknown"
+        assert result["writes_performed"] is False
+        assert result["counts"]["frontier"] == 1
+        assert result["counts"]["coordination"] == 0
+        assert "CHANGE_NOT_FOUND" not in result["diagnostic_codes"]
+
+    completed = _run_cli(root, "inspect", "--project-root", os.fspath(root), "--format", "json")
+    assert completed.returncode == 1
+    cli_result = json.loads(completed.stdout)
+    assert cli_result["status"] == "degraded"
+    assert {"COORDINATION_MISSING", "PENDING_EFFECTS_UNKNOWN"} <= set(cli_result["diagnostic_codes"])
+    assert cli_result["writes_performed"] is False
+    assert "example" not in completed.stdout + completed.stderr
+    assert snapshot() == before
+
+
+def test_empty_runtime_without_coordination_is_not_missing_a_change(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    shutil.rmtree(root / ".owlbear/delivery/runtime/coordination")
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "healthy-structure"
+    assert "COORDINATION_MISSING" not in result["diagnostic_codes"]
+    assert result["pending_effects"] is False
+    assert result["writes_performed"] is False
+
+
+@pytest.mark.parametrize("symlink", ["coordination", "changes"])
+def test_symlinked_coordination_is_unknown_not_missing(tmp_path: Path, symlink: str) -> None:
+    root = _root(tmp_path)
+    change = root / ".owlbear/delivery/runtime/changes/example"
+    change.mkdir()
+    (change / "frontier.json").write_bytes(b'{"schema_version":18,"bindings":[]}\n')
+    coordination = root / ".owlbear/delivery/runtime/coordination/changes/example.json"
+    target = root / "target"
+    target.mkdir()
+    link = coordination.parent.parent if symlink == "coordination" else coordination.parent
+    shutil.rmtree(link)
+    link.symlink_to(target, target_is_directory=True)
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert "SYMLINK_REJECTED" in result["diagnostic_codes"]
+    assert "COORDINATION_MISSING" not in result["diagnostic_codes"]
+    assert result["pending_effects"] == "unknown"
+    assert result["writes_performed"] is False
+
+
 @pytest.mark.parametrize(
     ("relative", "content", "code"),
     [

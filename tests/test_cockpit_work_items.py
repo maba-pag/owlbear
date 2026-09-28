@@ -1374,9 +1374,7 @@ def test_http_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0
     assert completed_record["action"]["operation_id"] == action.operation_id
     if action_kind in {"reconcile-checkpoint", "sync-target"}:
         published_head = (
-            action.exact_head
-            if action_kind == "reconcile-checkpoint"
-            else engine_result["target_sync"]["merged_head"]
+            action.exact_head if action_kind == "reconcile-checkpoint" else engine_result["target_sync"]["merged_head"]
         )
         _assert_checkpoint_branch_operation(
             before_owner_execution,
@@ -1613,10 +1611,7 @@ def test_http_loader_contains_unknown_custody_without_repeating_effects(  # noqa
     assert operation_journal_before_reload["intent"]
     assert operation_journal_before_reload["started"]
     assert operation_journal_before_reload["result"] is None
-    assert any(
-        action.operation_id in episode.attempt_ids
-        for episode in before_reload["retry_ledger"].episodes
-    )
+    assert any(action.operation_id in episode.attempt_ids for episode in before_reload["retry_ledger"].episodes)
     if action_kind in {"reconcile-checkpoint", "sync-target"}:
         if action_kind == "reconcile-checkpoint":
             published_head = action.exact_head
@@ -2036,9 +2031,7 @@ def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(tmp_pa
         candidate_coordinator = candidate._coordinator  # noqa: SLF001
         candidate_runtime = candidate._runtimes["change-a"]  # noqa: SLF001
         return {
-            "coordination": (
-                candidate_coordinator.runtime_root / "coordination/changes/change-a.json"
-            ).read_bytes(),
+            "coordination": (candidate_coordinator.runtime_root / "coordination/changes/change-a.json").read_bytes(),
             "frontier": candidate_runtime.frontier_bytes(),
             "retry_ledger": candidate_runtime.retry_ledger().read(),
             "workspace": _workspace_mutation_snapshot(candidate_coordinator.show("change-a").worktree_path),
@@ -2103,13 +2096,17 @@ def test_http_default_loader_rejects_stale_basis_without_acquisition(tmp_path: P
     assert provider.draft_state_calls == 0
 
 
-def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None:  # noqa: PLR0915
+@pytest.mark.parametrize("coordination_state", ["malformed", "missing"])
+def test_http_default_loader_reports_unavailable_custody(tmp_path: Path, coordination_state: str) -> None:  # noqa: PLR0915
     repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
         tmp_path
     )
     coordination = application._coordinator.runtime_root / "coordination/changes/change-a.json"  # noqa: SLF001
     malformed_marker = b"PRIVATE-MALFORMED-COORDINATION-CONTENT"
-    coordination.write_bytes(malformed_marker)
+    if coordination_state == "malformed":
+        coordination.write_bytes(malformed_marker)
+    else:
+        coordination.unlink()
     _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
     _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
     reloaded = load_core_delivery_application(
@@ -2117,7 +2114,7 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
         workspace_root=repository,
         publication_provider=provider,
     )
-    coordination_before = coordination.read_bytes()
+    coordination_before = coordination.read_bytes() if coordination.exists() else None
     remote_refs_before = _remote_refs(remote)
     with TestClient(assemble_target_app(reloaded)) as client:
         result = client.post(
@@ -2160,7 +2157,7 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
         "not repair authority or prove host/worker closure; the responsible owner must resolve the condition "
         "separately before Delivery rereads it."
     )
-    assert coordination.read_bytes() == coordination_before == malformed_marker
+    assert (coordination.read_bytes() if coordination.exists() else None) == coordination_before
     assert _remote_refs(remote) == remote_refs_before
     assert provider.draft_state_calls == 0
 
@@ -2201,9 +2198,15 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
     diagnostics = json.loads(diagnostics_cli.stdout)
     assert diagnostics["status"] == "degraded"
     assert diagnostics["change_scope"] == "selected"
-    assert "COORDINATION_MALFORMED" in diagnostics["diagnostic_codes"]
+    expected_coordination_diagnostic = (
+        "COORDINATION_MALFORMED" if coordination_state == "malformed" else "COORDINATION_MISSING"
+    )
+    assert expected_coordination_diagnostic in diagnostics["diagnostic_codes"]
+    if coordination_state == "missing":
+        assert "PENDING_EFFECTS_UNKNOWN" in diagnostics["diagnostic_codes"]
     assert diagnostics["writes_performed"] is False
-    assert malformed_marker.decode() not in diagnostics_cli.stdout + diagnostics_cli.stderr
+    if coordination_state == "malformed":
+        assert malformed_marker.decode() not in diagnostics_cli.stdout + diagnostics_cli.stderr
     assert tree_snapshot(repository) == repository_before_cli
     assert _remote_refs(remote) == remote_refs_before
     assert provider.draft_state_calls == 0

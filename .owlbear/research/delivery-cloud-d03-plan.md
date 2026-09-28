@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-E: cumulative bounded-package source candidate is ready for acceptance review;
+**D03-E: cumulative closeout repair is in progress; source readiness is not yet re-established.
 E/package acceptance is not claimed. Final automated validation and external gates remain open.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
@@ -13,7 +13,35 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The cumulative continuation starts at `ef011e797e8c273ff52bd37e4ab3990cc1db646b`, following the
+The current [closeout repair](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5866918428)
+starts at `df708ccef75b355ea62dd8e29f847e7ecaabee5c`. Its comparison base and verified merge-base
+are **`d7d5d2d358255e154d486448f4711b72d9b2b5b4`**, not an earlier continuation on this PR.
+The entire 1,853-line starting `test_recovery.py` is new against that base. Ruff **0.16.5** in
+the assembled PR checkout reproduced its four `FBT001`/`E501` findings; `I001` did not reproduce.
+The two `dirty` parameters are now keyword-only with all seven original parameter cases retained.
+The parent ran those exact two pytest nodes on locked selected packages with Python **3.14.7**:
+**7 passed in 2.85s**, followed by a clean lint check of that file. This is fresh repair proof,
+not a rerun of the cumulative suite.
+
+The explicit scope is the **27 Python paths** returned by `git diff --name-only d7d5d2d HEAD --
+'*.py'`. Initial standard lint found **440 diagnostics in nine files**; format-check found
+**11 files** needing formatting. Each available base blob was checked using the same Ruff version,
+configuration and `--stdin-filename` path; all were lint-clean and formatted. New files have no
+base debt. Thus all findings in this scope belong to the PR, even when introduced before E.
+No lint configuration, suppression or acceptance relaxation is authorized by the repair.
+The source writer reports that the repaired 27-path scope now passes standard Ruff lint and
+format checks, with focused preservation/recovery/transaction/retry selections passing 44, seven
+and five cases. These selections overlap and are not additive; the parent has not rerun them.
+Exact command/output reconciliation and independent review of the repaired source remain pending.
+
+An independent cumulative read-only review of `df708cc` found another bounded offline defect:
+runtime Change records with missing coordination could report `healthy-structure`. The application
+reports unavailable custody for that state. The repair must diagnose missing coordination without
+writing or confusing unknown inspection with verified absence. Final exact-candidate review and
+affected proof remain required before restoring source readiness.
+
+The following cumulative continuation evidence is historical. It started at
+`ef011e797e8c273ff52bd37e4ab3990cc1db646b`, following the
 [bounded proof request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5861710203).
 The approved `bf4bc48` replay proof and reviewed `e0e384b`/`ef011e7` HTTP, offline and frontend
 continuation remain prior evidence. The `3568c41` prompt-assertion correction is preserved.
@@ -83,13 +111,12 @@ its initial expectation: this fixture has incomplete offline inventory (`CONFIG_
 It now requires unknown effects, incomplete/degraded diagnosis and unchanged project bytes. Verified
 absence remains covered by the separate complete-root direct-CLI regression, not this HTTP fixture.
 Independent read-only follow-up confirmed that distinction and found no issue in the correction.
-Production Ruff and whitespace checks passed. Standard Ruff on the changed test files reports four
-pre-existing findings in `test_recovery.py` at lines 213, 250, 280 and 331 (`FBT001`/`E501`), outside
-changed lines; they were not waived or fixed by this work. The writer compared the original
-`ef011e7` file through Ruff's stdin route and confirmed those same findings at original lines
-212, 249, 279 and 330. Scoped format-check reports four of seven changed Python files would be
-reformatted; the writer compared current and `ef011e7` format diffs and found no introduced hunks.
-This is baseline debt, not a clean full-file formatting pass.
+The prior continuation reported production Ruff and whitespace passes on its selected boundaries.
+It also reported four lint findings in `test_recovery.py` and formatting failures in four of its
+seven selected Python files. Comparing those files with `ef011e7` established only that the findings
+predated that continuation. **The former classification as baseline debt was incorrect:** that
+revision is on this PR, and the actual-base comparison above establishes PR ownership. The prior
+selected checks are not a cumulative static pass.
 The parent did not rerun delegated checks; unlike the parent checks
 above, these are writer reports, not independently captured stdout.
 
@@ -102,7 +129,7 @@ above, these are writer reports, not independently captured stdout.
 | V10 absent-host containment | New core, registered MCP and HTTP cases retain a real still-writing descendant through two application reloads. Exact refusal, no replacement/release, full protected snapshots and subsequent signalled writes are asserted; setup and test cleanup close the synthetic worker | No actual laptop/VS Code exclusion claim; enabling broader recovery still requires independent host authority |
 | Degraded/offline entry | Retained malformed-coordination HTTP/CLI same-root proof and new unknown-Change coverage; direct CLI missing/unsafe runtime-ancestry cases prove incomplete diagnosis, truthful pending-effect accounting and no project-tree writes | D's installed POSIX/no-write evidence remains historical. Other failure classes are not all composed through both adapters; D07 migration and D08 ordinary host acceptance remain |
 | Readiness prompts and rendering | New `coordination-unavailable` diagnostic prompt is checked through real restart Change/WorkItem reads and the applicability table. Retained pending/interrupted, continuation and state-specific prompt proof; unchanged frontend has prior 116-test, Biome and build proof, including inert text and absent/null prompts | Browser/E2E proof not claimed; broader frontend suite not run |
-| Recovery contract and cumulative package | Fresh registered replay/strict-input/V10 and parent role/import/authority/parity proof supplement retained A–D evidence. Cumulative read-only review covered supported replay/evidence revalidation, strict boundaries, custody/readiness/retry and offline diagnostics; final focused reviews closed the concrete findings | No whole-PR approval inferred. Automated review unavailable, final CodeQL timed out, external CI and ordinary host transport acceptance remain open |
+| Recovery contract and cumulative package | Historical registered replay/strict-input/V10 and parent role/import/authority/parity proof supplement retained A–D evidence. Closeout review covers the actual PR base and identified missing-coordination offline diagnosis | PR-owned static repair, diagnostic repair and exact-candidate review pending. No whole-PR approval inferred; external CI and ordinary host transport acceptance remain open |
 
 **Historical evidence:** the [post-stop record at `3568c41`](https://github.com/maba-pag/owlbear/blob/3568c4111fd40c6fd7a9151a16dfe3ece11e6b0c/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff)
 reports the earlier 29-case selection and six-case corrected retained-journal selection. Those are
@@ -113,9 +140,9 @@ prior worker evidence, not new passes or proof of this continuation.
 **33 tests in 21.65s**, and the registered MCP malformed-journal/readback selection passing
 **4 tests in 9.29s**. These precede the later restart/offline/inventory refinements. The HTTP run emitted
 one existing Starlette/AnyIO `BlockingPortal` deprecation warning; the MCP run had no warning.
-Scoped Ruff and whitespace checks passed. The writer's format check reports
-two unchanged, pre-existing formatting differences at lines 1245 and 1482 of that test module; the
-newly edited lines are formatted.
+Scoped Ruff and whitespace checks were reported passing. The writer's format check reported
+two differences at lines 1245 and 1482 of that test module unchanged from its session baseline.
+That does not establish base-branch debt; the actual PR-base comparison above governs ownership.
 The writer also reported an initial finalizer `busy`/`unavailable` assertion failure whose cause was
 not established; isolated and final reruns passed. It is not classified as a proven pre-existing defect.
 

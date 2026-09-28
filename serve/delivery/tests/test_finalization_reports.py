@@ -245,9 +245,7 @@ def _proof_basis() -> ProofAttemptBasis:
     )
 
 
-def _sigkill_during_proof_publication(
-    tmp_path: Path, destination_suffix: str, *, after_link: bool = False
-) -> None:
+def _sigkill_during_proof_publication(tmp_path: Path, destination_suffix: str, *, after_link: bool = False) -> None:
     child = """
 import os
 import signal
@@ -464,7 +462,10 @@ def test_proof_attempt_store_replays_sigkill_after_publication_link_without_reob
     store = ProofAttemptStore(tmp_path, "change-a", (procedure,))
     history = store.read()
     assert len(history) == 1
-    assert store.record("attempt-1", procedure, _proof_basis(), lambda: pytest.fail("replay must not observe")) == history[0]
+    assert (
+        store.record("attempt-1", procedure, _proof_basis(), lambda: pytest.fail("replay must not observe"))
+        == history[0]
+    )
     assert temporary[0].read_bytes() == temporary_bytes
     assert temporary[0].exists()
 

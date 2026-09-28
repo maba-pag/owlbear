@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
 
 _MAX_WORKER_RETRIES = 3
 _MAX_COMPLETED_REPAIR_RECEIPTS = 256
+_SHA256_HEX_LENGTH = 64
 
 
 class DeliveryStage(StrEnum):
@@ -1262,6 +1264,12 @@ class PrepareCompletedOutcomeRepair(_DeliveryModel):
     expected_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+@dataclass(frozen=True, slots=True)
+class _CompletedOutcomeRepairLineage:
+    previous_task_ids: tuple[str, ...]
+    previous_result_ids: tuple[str, ...]
+
+
 class CompletedOutcomeRepairReceipt(_DeliveryModel):
     """Immutable evidence joining a proof repair, its lineage, and custody release."""
 
@@ -1289,10 +1297,10 @@ class CompletedOutcomeRepairReceipt(_DeliveryModel):
         change_id: str,
         request: PrepareCompletedOutcomeRepair,
         repair_task_id: str,
-        previous_task_ids: tuple[str, ...],
-        previous_result_ids: tuple[str, ...],
+        lineage: _CompletedOutcomeRepairLineage,
         finished_at: str,
     ) -> CompletedOutcomeRepairReceipt:
+        """Create a digest-bound receipt for the retained repair lineage."""
         values = {
             "change_id": change_id,
             "outcome_id": request.outcome_id,
@@ -1305,8 +1313,8 @@ class CompletedOutcomeRepairReceipt(_DeliveryModel):
             "original_action_id": request.original_action_id,
             "preservation_id": request.preservation_id,
             "expected_frontier_digest": request.expected_frontier_digest,
-            "previous_task_ids": previous_task_ids,
-            "previous_result_ids": previous_result_ids,
+            "previous_task_ids": lineage.previous_task_ids,
+            "previous_result_ids": lineage.previous_result_ids,
             "finished_at": finished_at,
         }
         candidate = cls.model_construct(receipt_id="0" * 64, **values)
@@ -2750,32 +2758,18 @@ class DeliveryRuntime:
         repair_id = _completed_outcome_repair_id(self._contract.change_id, request, source.digest)
         repair_task_id = f"repair-{repair_id}"
         existing = next((task for task in binding.tasks if task.task_id == repair_task_id), None)
-        persisted: CompletedOutcomeRepairReceipt | None = None
-        if existing is not None:
-            try:
-                persisted = CompletedOutcomeRepairReceipt.model_validate_json(
-                    read_record(self._target_root, journal_path(self._contract.change_id, repair_id, "receipt"))
-                )
-            except (OSError, TypeError, ValueError) as exc:
-                _reference("completed-outcome repair receipt is missing or invalid", exc)
-            prior_task_ids = persisted.previous_task_ids
-            prior_result_ids = persisted.previous_result_ids
-            if (
-                tuple(task.task_id for task in binding.tasks if task.task_id != repair_task_id) != prior_task_ids
-                or tuple(result.result_id for result in binding.results if result.task_id in prior_task_ids)
-                != prior_result_ids
-            ):
-                _conflict("completed-outcome repair receipt no longer matches its retained lineage")
-        else:
-            prior_task_ids = binding.task_ids
-            prior_result_ids = tuple(result.result_id for result in binding.results)
+        persisted, lineage = self._completed_outcome_repair_history(
+            binding,
+            existing,
+            repair_id,
+            repair_task_id,
+        )
         finished_at = persisted.finished_at if persisted is not None else datetime.now(UTC).isoformat()
         receipt = CompletedOutcomeRepairReceipt.create(
             self._contract.change_id,
             request,
             repair_task_id,
-            prior_task_ids,
-            prior_result_ids,
+            lineage,
             finished_at,
         )
         repair_binding = self.retry_ledger().repair_binding_participant(
@@ -2786,51 +2780,14 @@ class DeliveryRuntime:
             now=finished_at,
             allow_settled=existing is not None,
         )
-        repair = DeliveryTaskDefinition(
-            task_id=repair_task_id,
-            outcome_id=source.outcome_id,
-            plan_scope_id=source.plan_scope_id,
-            title=f"Repair reproduced {request.defect_code}",
-            result=(
-                f"Correct the reproduced {request.finding_boundary} defect {request.defect_code}; "
-                f"resume original action {request.original_action_id} only after the repair proof passes."
-            ),
-            commitment_ids=source.commitment_ids,
-            dependency_ids=prior_task_ids,
-            required_outputs=source.required_outputs,
-            maintained_surfaces=source.maintained_surfaces,
-            constraints=(
-                *source.constraints,
-                f"Use preserved workspace evidence {request.preservation_id}.",
-            ),
-            exclusions=source.exclusions,
-            acceptance_observations=source.acceptance_observations,
-            proof_boundaries=(
-                *source.proof_boundaries,
-                f"Repair episode {request.episode_id} attempt {request.attempt_id} must be independently reproven.",
-            ),
-        )
-        if existing is not None:
-            if existing != repair:
-                _conflict("completed-outcome repair publication conflicts with its episode identity")
-            if persisted is None:
-                _reference("completed-outcome repair receipt is missing or invalid")
-            expected_persisted = CompletedOutcomeRepairReceipt.create(
-                self._contract.change_id,
-                request,
-                repair_task_id,
-                prior_task_ids,
-                prior_result_ids,
-                persisted.finished_at,
-            )
-            if persisted != expected_persisted:
-                _conflict("completed-outcome repair receipt conflicts with its episode identity")
+        repair = self._completed_outcome_repair_task(source, request, repair_task_id, lineage.previous_task_ids)
+        if self._completed_outcome_repair_replay(existing, persisted, repair, receipt):
             return binding
         if binding.stage != DeliveryStage.COMPLETED:
             _conflict("completed-outcome repair requires one completed owning outcome")
-        if len(binding.results) != len(binding.tasks) or {
-            result.task_id for result in binding.results
-        } != set(binding.task_ids):
+        if len(binding.results) != len(binding.tasks) or {result.task_id for result in binding.results} != set(
+            binding.task_ids
+        ):
             _conflict("completed-outcome repair requires all prior task results")
         if hashlib.sha256(previous).hexdigest() != request.expected_frontier_digest:
             _conflict("completed-outcome repair frontier changed")
@@ -2872,6 +2829,87 @@ class DeliveryRuntime:
             additional_participants=additional_participants,
         )
         return updated_binding
+
+    def _completed_outcome_repair_history(
+        self,
+        binding: OutcomeAuthorityBinding,
+        existing: DeliveryTaskDefinition | None,
+        repair_id: str,
+        repair_task_id: str,
+    ) -> tuple[CompletedOutcomeRepairReceipt | None, _CompletedOutcomeRepairLineage]:
+        if existing is not None:
+            try:
+                persisted = CompletedOutcomeRepairReceipt.model_validate_json(
+                    read_record(self._target_root, journal_path(self._contract.change_id, repair_id, "receipt"))
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                _reference("completed-outcome repair receipt is missing or invalid", exc)
+            lineage = _CompletedOutcomeRepairLineage(
+                persisted.previous_task_ids,
+                persisted.previous_result_ids,
+            )
+            if (
+                tuple(task.task_id for task in binding.tasks if task.task_id != repair_task_id)
+                != lineage.previous_task_ids
+                or tuple(result.result_id for result in binding.results if result.task_id in lineage.previous_task_ids)
+                != lineage.previous_result_ids
+            ):
+                _conflict("completed-outcome repair receipt no longer matches its retained lineage")
+            return persisted, lineage
+        lineage = _CompletedOutcomeRepairLineage(
+            binding.task_ids,
+            tuple(result.result_id for result in binding.results),
+        )
+        return None, lineage
+
+    @staticmethod
+    def _completed_outcome_repair_task(
+        source: DeliveryTaskDefinition,
+        request: PrepareCompletedOutcomeRepair,
+        repair_task_id: str,
+        previous_task_ids: tuple[str, ...],
+    ) -> DeliveryTaskDefinition:
+        return DeliveryTaskDefinition(
+            task_id=repair_task_id,
+            outcome_id=source.outcome_id,
+            plan_scope_id=source.plan_scope_id,
+            title=f"Repair reproduced {request.defect_code}",
+            result=(
+                f"Correct the reproduced {request.finding_boundary} defect {request.defect_code}; "
+                f"resume original action {request.original_action_id} only after the repair proof passes."
+            ),
+            commitment_ids=source.commitment_ids,
+            dependency_ids=previous_task_ids,
+            required_outputs=source.required_outputs,
+            maintained_surfaces=source.maintained_surfaces,
+            constraints=(
+                *source.constraints,
+                f"Use preserved workspace evidence {request.preservation_id}.",
+            ),
+            exclusions=source.exclusions,
+            acceptance_observations=source.acceptance_observations,
+            proof_boundaries=(
+                *source.proof_boundaries,
+                f"Repair episode {request.episode_id} attempt {request.attempt_id} must be independently reproven.",
+            ),
+        )
+
+    @staticmethod
+    def _completed_outcome_repair_replay(
+        existing: DeliveryTaskDefinition | None,
+        persisted: CompletedOutcomeRepairReceipt | None,
+        repair: DeliveryTaskDefinition,
+        receipt: CompletedOutcomeRepairReceipt,
+    ) -> bool:
+        if existing is None:
+            return False
+        if existing != repair:
+            _conflict("completed-outcome repair publication conflicts with its episode identity")
+        if persisted is None:
+            _reference("completed-outcome repair receipt is missing or invalid")
+        if persisted != receipt:
+            _conflict("completed-outcome repair receipt conflicts with its episode identity")
+        return True
 
     def has_completed_outcome_repair(self, request: PrepareCompletedOutcomeRepair) -> bool:
         """Return whether the exact engine-derived repair task is already present."""
@@ -3528,7 +3566,8 @@ class DeliveryRuntime:
         if not bindings:
             return ()
         if len(bindings) != 1:
-            raise DeliveryRuntimeConflictError("completed-outcome repair has multiple retry bindings")
+            msg = "completed-outcome repair has multiple retry bindings"
+            raise DeliveryRuntimeConflictError(msg)
         repair_binding = bindings[0]
         receipt = self._completed_outcome_repair_receipt(binding.outcome_id, task_id)
         if (
@@ -3538,7 +3577,8 @@ class DeliveryRuntime:
             or receipt.outcome_id != repair_binding.outcome_id
             or receipt.repair_task_id != repair_binding.repair_task_id
         ):
-            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt identity is unavailable")
+            msg = "completed-outcome repair receipt identity is unavailable"
+            raise DeliveryRuntimeReferenceError(msg)
         return ledger.owner_result_participants(
             receipt.attempt_id,
             accepted=True,
@@ -3561,43 +3601,61 @@ class DeliveryRuntime:
         except FileNotFoundError:
             return None
         except OSError as exc:
-            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt inventory is unavailable") from exc
+            msg = "completed-outcome repair receipt inventory is unavailable"
+            raise DeliveryRuntimeReferenceError(msg) from exc
         if len(entries) > _MAX_COMPLETED_REPAIR_RECEIPTS:
-            raise DeliveryRuntimeReferenceError("completed-outcome repair receipt inventory exceeds its bound")
+            msg = "completed-outcome repair receipt inventory exceeds its bound"
+            raise DeliveryRuntimeReferenceError(msg)
         matches: list[CompletedOutcomeRepairReceipt] = []
         for entry in entries:
-            if not entry.is_dir(follow_symlinks=False):
-                continue
-            if len(entry.name) != 64 or any(character not in "0123456789abcdef" for character in entry.name):
-                continue
-            try:
-                content = read_record(
-                    self._target_root,
-                    journal_path(self._contract.change_id, entry.name, "receipt"),
-                )
-            except FileNotFoundError:
-                continue
-            except (OSError, DeliveryWorkerExclusionRequiredError) as exc:
-                raise DeliveryRuntimeReferenceError("completed-outcome repair receipt is unavailable") from exc
-            try:
-                receipt = CompletedOutcomeRepairReceipt.model_validate_json(content)
-            except (TypeError, ValueError):
-                try:
-                    payload = json.loads(content)
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    payload = None
-                if isinstance(payload, dict) and "repair_task_id" in payload:
-                    raise DeliveryRuntimeReferenceError("completed-outcome repair receipt is malformed")
-                continue
-            if (
-                receipt.change_id == self._contract.change_id
-                and receipt.outcome_id == outcome_id
-                and receipt.repair_task_id == repair_task_id
-            ):
+            receipt = self._completed_outcome_repair_receipt_entry(entry, outcome_id, repair_task_id)
+            if receipt is not None:
                 matches.append(receipt)
         if len(matches) > 1:
-            raise DeliveryRuntimeConflictError("completed-outcome repair has multiple matching receipts")
+            msg = "completed-outcome repair has multiple matching receipts"
+            raise DeliveryRuntimeConflictError(msg)
         return matches[0] if matches else None
+
+    def _completed_outcome_repair_receipt_entry(
+        self,
+        entry: Path,
+        outcome_id: str,
+        repair_task_id: str,
+    ) -> CompletedOutcomeRepairReceipt | None:
+        if not entry.is_dir(follow_symlinks=False):
+            return None
+        if len(entry.name) != _SHA256_HEX_LENGTH or any(
+            character not in "0123456789abcdef" for character in entry.name
+        ):
+            return None
+        try:
+            content = read_record(
+                self._target_root,
+                journal_path(self._contract.change_id, entry.name, "receipt"),
+            )
+        except FileNotFoundError:
+            return None
+        except (OSError, DeliveryWorkerExclusionRequiredError) as exc:
+            msg = "completed-outcome repair receipt is unavailable"
+            raise DeliveryRuntimeReferenceError(msg) from exc
+        try:
+            receipt = CompletedOutcomeRepairReceipt.model_validate_json(content)
+        except (TypeError, ValueError) as exc:
+            try:
+                payload = json.loads(content)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                payload = None
+            if isinstance(payload, dict) and "repair_task_id" in payload:
+                msg = "completed-outcome repair receipt is malformed"
+                raise DeliveryRuntimeReferenceError(msg) from exc
+            return None
+        if (
+            receipt.change_id == self._contract.change_id
+            and receipt.outcome_id == outcome_id
+            and receipt.repair_task_id == repair_task_id
+        ):
+            return receipt
+        return None
 
     def require_result_replay(self, outcome_id: str, claim_id: str, result: DeliveryTaskResult) -> None:
         """Require immutable original claim provenance before replaying a promoted result."""
@@ -4432,23 +4490,12 @@ def _completed_outcome_repair_id(
     source_digest: str,
 ) -> str:
     """Derive one stable repair identity from admitted lineage and evidence."""
-    return hashlib.sha256(
-        "\0".join(
-            (
-                change_id,
-                request.outcome_id,
-                request.owning_task_id,
-                source_digest,
-                request.episode_id,
-                request.attempt_id,
-                request.defect_code,
-                request.finding_boundary,
-                request.original_action_id,
-                request.preservation_id,
-                request.expected_frontier_digest,
-            )
-        ).encode()
-    ).hexdigest()
+    material = (
+        f"{change_id}\0{request.outcome_id}\0{request.owning_task_id}\0{source_digest}\0"
+        f"{request.episode_id}\0{request.attempt_id}\0{request.defect_code}\0{request.finding_boundary}\0"
+        f"{request.original_action_id}\0{request.preservation_id}\0{request.expected_frontier_digest}"
+    )
+    return hashlib.sha256(material.encode()).hexdigest()
 
 
 def _target_sync_operation_id(disposition: DeliveryChangeDisposition) -> str | None:
@@ -4493,6 +4540,7 @@ __all__ = [
     "AdministrativeDeliveryMoveResult",
     "AdvanceDelivery",
     "BlockDelivery",
+    "CompletedOutcomeRepairReceipt",
     "DeliveryAcceptanceAttentionReason",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
@@ -4539,7 +4587,6 @@ __all__ = [
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
-    "CompletedOutcomeRepairReceipt",
     "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PrepareCompletedOutcomeRepair",

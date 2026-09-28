@@ -1321,12 +1321,8 @@ def _loader_engine_state_snapshot(  # noqa: PLR0913
         siblings[sibling_id] = {
             "frontier": sibling_runtime.frontier_bytes(),
             "retry_ledger": sibling_runtime.retry_ledger().read(),
-            "retry_journal": json_tree(
-                runtime_root / "changes" / sibling_id / "retry-ledger"
-            ),
-            "coordination": (
-                coordinator.runtime_root / "coordination" / "changes" / f"{sibling_id}.json"
-            ).read_bytes(),
+            "retry_journal": json_tree(runtime_root / "changes" / sibling_id / "retry-ledger"),
+            "coordination": (coordinator.runtime_root / "coordination" / "changes" / f"{sibling_id}.json").read_bytes(),
             "continuation_action": sibling_coordination.continuation_action,
             "workspace": sibling_workspace,
             "raw_index": sibling_workspace[1],
@@ -1337,9 +1333,7 @@ def _loader_engine_state_snapshot(  # noqa: PLR0913
         "frontier": runtime.frontier_bytes(),
         "retry_ledger": runtime.retry_ledger().read(),
         "retry_journal": json_tree(runtime_root / "changes" / change_id / "retry-ledger"),
-        "coordination": (
-            coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json"
-        ).read_bytes(),
+        "coordination": (coordinator.runtime_root / "coordination" / "changes" / f"{change_id}.json").read_bytes(),
         "continuation_action": coordinator.show(change_id).continuation_action,
         "workspace": workspace,
         "raw_index": workspace[1],
@@ -1362,9 +1356,7 @@ def _loader_engine_state_snapshot(  # noqa: PLR0913
         "continuation_operation_journal": operation_journal,
         "checkpoint_publication": runtime.checkpoint_publication_state(),
         "publication_history": runtime.publication_history(),
-        "branch_publication_journal": json_tree(
-            runtime_root / "publications" / "change-branches" / "operations"
-        ),
+        "branch_publication_journal": json_tree(runtime_root / "publications" / "change-branches" / "operations"),
         "publication_journal": json_tree(runtime_root / "publications"),
         "completion_journal": json_tree(runtime_root / "completions"),
         "siblings": siblings,
@@ -1449,9 +1441,7 @@ def _assert_loader_retry_recording(
 
     before_episodes = {episode.episode_id: episode for episode in before_ledger.episodes}
     after_episodes = {episode.episode_id: episode for episode in after_ledger.episodes}
-    episode_id = next(
-        episode.episode_id for episode in before_ledger.episodes if action_id in episode.attempt_ids
-    )
+    episode_id = next(episode.episode_id for episode in before_ledger.episodes if action_id in episode.attempt_ids)
     previous = before_episodes[episode_id]
     recorded = after_episodes[episode_id]
     assert recorded.attempt_ids == previous.attempt_ids
@@ -1468,18 +1458,14 @@ def _assert_loader_retry_recording(
     assert recorded.stop_code is None
     assert recorded.reset_count == previous.reset_count + 1
     assert recorded.legacy_failures == previous.legacy_failures
-    assert {
-        key: value for key, value in before_episodes.items() if key != episode_id
-    } == {
+    assert {key: value for key, value in before_episodes.items() if key != episode_id} == {
         key: value for key, value in after_episodes.items() if key != episode_id
     }
     assert after_ledger.version == before_ledger.version + 1
 
     added = after_journal.keys() - before_journal.keys()
     changed = {
-        path
-        for path in before_journal.keys() & after_journal.keys()
-        if before_journal[path] != after_journal[path]
+        path for path in before_journal.keys() & after_journal.keys() if before_journal[path] != after_journal[path]
     }
     assert len(added) == 1
     outcome_path = next(iter(added))

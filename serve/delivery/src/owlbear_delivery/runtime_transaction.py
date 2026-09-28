@@ -26,6 +26,7 @@ _MAX_CONTAINED_TEMPORARIES = 256
 _MAX_CONTAINED_TEMPORARY_BYTES = _MAX_CONTAINED_MANIFEST_BYTES * _MAX_CONTAINED_TEMPORARIES
 _CONTAINED_TEMPORARY_PATTERN = re.compile(r"^\.tmp-[0-9a-f]{24}$")
 _CONTAINED_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
+_CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT = 2
 
 
 class TransactionConflictError(RuntimeError):
@@ -256,26 +257,31 @@ class RuntimeTransaction:
         if len(names) > _MAX_CONTAINED_MANIFESTS:
             raise TransactionManifestError
         for name in names:
-            if not name.endswith(".yaml"):
-                raise TransactionManifestError
-            content = read_contained(root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
-            try:
-                manifest = yaml.safe_load(content)
-            except yaml.YAMLError as exc:
-                raise TransactionManifestError from exc
-            if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
-                raise TransactionManifestError
-            entries = manifest.get("participants")
-            if not isinstance(entries, list) or not entries or len(entries) > _MAX_CONTAINED_PARTICIPANTS:
-                raise TransactionManifestError
-            participants = tuple(_participant_from_manifest(entry, (root,)) for entry in entries)
-            transaction = cls(root, Path(name).stem, participants)
-            if transaction._contained_manifest() != manifest:
-                raise TransactionManifestError
-            transaction._publish_contained(root_fd, None)
+            transaction = cls._contained_manifest_transaction(root, root_fd, name)
+            cls._publish_contained(transaction, root_fd, None)
             with contained_directory(root_fd, Path("transactions")) as directory_fd:
                 os.unlink(name, dir_fd=directory_fd)
                 os.fsync(directory_fd)
+
+    @classmethod
+    def _contained_manifest_transaction(cls, root: Path, root_fd: int, name: str) -> RuntimeTransaction:
+        if not name.endswith(".yaml"):
+            raise TransactionManifestError
+        content = read_contained(root_fd, Path("transactions") / name, limit=_MAX_CONTAINED_MANIFEST_BYTES)
+        try:
+            manifest = yaml.safe_load(content)
+        except yaml.YAMLError as exc:
+            raise TransactionManifestError from exc
+        if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
+            raise TransactionManifestError
+        entries = manifest.get("participants")
+        if not isinstance(entries, list) or not entries or len(entries) > _MAX_CONTAINED_PARTICIPANTS:
+            raise TransactionManifestError
+        participants = tuple(_participant_from_manifest(entry, (root,)) for entry in entries)
+        transaction = cls(root, Path(name).stem, participants)
+        if transaction._contained_manifest() != manifest:
+            raise TransactionManifestError
+        return transaction
 
     @classmethod
     def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None:
@@ -471,17 +477,15 @@ def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> t
             except OSError as exc:
                 raise TransactionManifestError from exc
             metadata_by_name[entry.name] = metadata
-            if (
-                _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None
-                and stat.S_ISREG(metadata.st_mode)
-            ):
+            if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None and stat.S_ISREG(metadata.st_mode):
                 published_identities.add((metadata.st_dev, metadata.st_ino))
         for entry in entries:
             if _CONTAINED_TEMPORARY_PATTERN.fullmatch(entry.name) is None:
                 continue
             metadata = metadata_by_name[entry.name]
             linked_to_published = (
-                metadata.st_nlink == 2 and (metadata.st_dev, metadata.st_ino) in published_identities
+                metadata.st_nlink == _CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT
+                and (metadata.st_dev, metadata.st_ino) in published_identities
             )
             if (
                 not stat.S_ISREG(metadata.st_mode)

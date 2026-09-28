@@ -401,10 +401,7 @@ class _TestPreservationProvenanceProvider:
                 if intent.admitted_task_digest is not None
                 else None
             ),
-            paths=tuple(
-                path_provenance(path)
-                for path in kwargs["paths"]
-            ),
+            paths=tuple(path_provenance(path) for path in kwargs["paths"]),
         )
 
     def verify(self, **kwargs):
@@ -539,7 +536,7 @@ def test_recovery_workspace_normalizes_active_custody_for_ordinary_untracked_con
         ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
     )
 
-    with patch.object(manager, "_read_worktree_state", wraps=manager._read_worktree_state) as read_state:
+    with patch("os.open", wraps=os.open) as open_file:
         captured = manager.capture_recovery_workspace(
             coordination.change_id,
             (),
@@ -548,7 +545,10 @@ def test_recovery_workspace_normalizes_active_custody_for_ordinary_untracked_con
         )
 
     assert captured[3:] == (("added.bin",), "workspace-dirty")
-    assert read_state.call_count == 1
+    assert (
+        sum(call.args[0] == "added.bin" and call.kwargs.get("dir_fd") is not None for call in open_file.call_args_list)
+        == 1
+    )
 
 
 def test_recovery_workspace_rejects_intermediate_symlink_before_git_fingerprint(tmp_path: Path) -> None:
@@ -915,9 +915,7 @@ def test_preservation_requires_trusted_exact_path_provenance_before_copying(
     provider: _TestPreservationProvenanceProvider,
     message: str,
 ) -> None:
-    _coordinator, manager, coordination, intent = _preservation_workspace(
-        tmp_path, provenance_provider=provider
-    )
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path, provenance_provider=provider)
     (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
 
     with (
@@ -943,9 +941,7 @@ def test_preservation_default_owner_boundary_is_unavailable(tmp_path: Path) -> N
 
 def test_preservation_restores_only_proven_disposable_paths(tmp_path: Path) -> None:
     provider = _TestPreservationProvenanceProvider(disposition="useful")
-    _coordinator, manager, coordination, intent = _preservation_workspace(
-        tmp_path, provenance_provider=provider
-    )
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path, provenance_provider=provider)
     (coordination.worktree_path / "shared.txt").write_bytes(b"useful code\n")
     preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
 
@@ -1027,9 +1023,7 @@ def test_preservation_owner_evidence_binds_recovery_and_workspace(tmp_path: Path
 
 def test_restore_requires_independent_provenance_reverification_before_objects(tmp_path: Path) -> None:
     provider = _TestPreservationProvenanceProvider()
-    _coordinator, manager, coordination, intent = _preservation_workspace(
-        tmp_path, provenance_provider=provider
-    )
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path, provenance_provider=provider)
     (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
     preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
     provider.verification_available = False
@@ -1286,26 +1280,39 @@ def test_legacy_provenance_shape_remains_inspectable_but_lacks_authority() -> No
     assert legacy.paths[0].before_kind is None
 
 
-def test_preservation_status_paths_include_both_rename_names() -> None:
-    status = b"R  renamed.txt\0original.txt\0"
+def test_preservation_status_paths_include_both_rename_names(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("rename-status")
+    _git(coordination.worktree_path, "mv", "shared.txt", "renamed.txt")
 
-    assert ChangeWorkspaceManager._preservation_status_paths(status) == ("original.txt", "renamed.txt")
+    captured = manager.capture_recovery_workspace_metadata(coordination.change_id, ())
+
+    assert captured[3] == ("renamed.txt", "shared.txt")
 
 
 def test_recovery_workspace_metadata_does_not_read_dirty_content(tmp_path: Path) -> None:
     _coordinator, manager, coordination, _intent = _preservation_workspace(tmp_path)
     (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
 
+    real_open = os.open
+
+    def reject_dirty_content(path, *args, **kwargs):
+        if os.fsdecode(path) == "shared.txt" and kwargs.get("dir_fd") is not None:
+            msg = "dirty content was read"
+            raise AssertionError(msg)
+        return real_open(path, *args, **kwargs)
+
     with (
-        patch.object(manager, "_read_worktree_state", side_effect=AssertionError("dirty content was read")),
-        patch.object(manager, "_run_git", wraps=manager._run_git) as run_git,
+        patch("os.open", side_effect=reject_dirty_content),
+        patch("subprocess.run", wraps=subprocess.run) as run_git,
     ):
         _coordination, _head, _status, paths, _reason = manager.capture_recovery_workspace_metadata(
             coordination.change_id, ()
         )
 
     assert paths == ("shared.txt",)
-    assert not any(call.args[:1] == ("diff",) for call in run_git.call_args_list)
+    assert not any(call.args[0][3:4] == ("diff",) for call in run_git.call_args_list)
 
 
 @pytest.mark.parametrize(
@@ -1768,9 +1775,7 @@ def _kill_during_restoration_intent_link(tmp_path: Path, preservation, repositor
     assert result.returncode == -signal.SIGKILL, result.stderr
 
 
-def _kill_after_restoration_replace_before_private_unlink(
-    tmp_path: Path, preservation, repository: Path
-) -> None:
+def _kill_after_restoration_replace_before_private_unlink(tmp_path: Path, preservation, repository: Path) -> None:
     script = (
         "import os, signal, sys\n"
         "from pathlib import Path\n"
@@ -1967,9 +1972,7 @@ def test_nonterminal_recovery_replays_after_operation_intent_publication_death(t
 
 
 @pytest.mark.parametrize("artifact", ["symlink", "hardlink", "permissions", "oversize", "too-many"])
-def test_nonterminal_recovery_rejects_untrusted_incomplete_operation_artifacts(
-    tmp_path: Path, artifact: str
-) -> None:
+def test_nonterminal_recovery_rejects_untrusted_incomplete_operation_artifacts(tmp_path: Path, artifact: str) -> None:
     _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     worktree = coordination.worktree_path
     worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
@@ -2080,7 +2083,7 @@ def test_nonterminal_recovery_replays_and_retains_prejournal_private_stage_orpha
     operation_dir = (
         manager.runtime_root / preservation.storage_ref / "restoration" / _restoration_operation_id(preservation)
     )
-    path_dir = operation_dir / "paths" / digest("shared.txt".encode())
+    path_dir = operation_dir / "paths" / digest(b"shared.txt")
     orphaned = tuple(path_dir.glob("stage-*"))
     assert len(orphaned) == 1
     assert not (path_dir / "staging.json").exists()
@@ -2102,12 +2105,7 @@ def test_nonterminal_recovery_fails_closed_at_prejournal_private_stage_bound(tmp
     preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
     operation_id = _restoration_operation_id(preservation)
     path_dir = (
-        manager.runtime_root
-        / preservation.storage_ref
-        / "restoration"
-        / operation_id
-        / "paths"
-        / digest("shared.txt".encode())
+        manager.runtime_root / preservation.storage_ref / "restoration" / operation_id / "paths" / digest(b"shared.txt")
     )
     _kill_after_private_staging_before_journal(tmp_path, preservation, manager.repository)
     for stage in path_dir.glob("stage-*"):
@@ -2130,7 +2128,7 @@ def test_private_staging_retention_is_bounded_without_deleting_evidence(tmp_path
     worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
     preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
     operation_id = _restoration_operation_id(preservation)
-    relative = Path(operation_id) / "paths" / digest("shared.txt".encode())
+    relative = Path(operation_id) / "paths" / digest(b"shared.txt")
     staging_dir = manager.runtime_root / preservation.storage_ref / "restoration" / relative
     staging_dir.mkdir(parents=True)
     for index in range(256):
@@ -2204,9 +2202,7 @@ def test_nonterminal_recovery_handles_empty_operation_directory_without_authoriz
 
 
 @pytest.mark.parametrize("mutation", ["bytes", "same-bytes", "same-bytes-foreign", "type", "index"])
-def test_nonterminal_recovery_rejects_changed_operation_owned_staging_or_index(
-    tmp_path: Path, mutation: str
-) -> None:
+def test_nonterminal_recovery_rejects_changed_operation_owned_staging_or_index(tmp_path: Path, mutation: str) -> None:
     _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     worktree = coordination.worktree_path
     worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
