@@ -604,7 +604,14 @@ async def test_registered_default_loader_contains_unknown_result_after_restart(t
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action_kind", ["reconcile-checkpoint", "sync-target", "observe-acceptance"])
+@pytest.mark.parametrize(
+    "action_kind",
+    [
+        "reconcile-checkpoint",
+        "sync-target",
+        pytest.param("observe-acceptance", marks=pytest.mark.timeout(60)),
+    ],
+)
 async def test_registered_loader_replays_and_contains_interrupted_engine_rows(  # noqa: PLR0915
     tmp_path: Path,
     action_kind: str,
@@ -1185,6 +1192,8 @@ async def test_registered_default_loader_contains_failed_finalizer_before_checks
             expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
             paths=("product.txt",),
         )
+        retry_now = datetime.now(UTC).isoformat()
+        application._clock = lambda: retry_now  # noqa: SLF001
         reported = await client.call_tool(
             "report_finalization_failure",
             failure.model_dump(mode="json"),

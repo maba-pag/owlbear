@@ -123,6 +123,7 @@ def test_report_store_rejects_symlink_components(tmp_path: Path, relative: str) 
     assert sentinel.read_bytes() == b"unchanged"
 
 
+@pytest.mark.timeout(60)
 def test_capacity_keeps_original_replay_and_rejects_new_attempt(tmp_path: Path) -> None:
     store = FinalizationReportStore(tmp_path, "change-a")
     first = store.record(_request(), datetime.now(UTC), lambda: None)

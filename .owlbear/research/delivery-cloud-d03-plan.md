@@ -84,21 +84,24 @@ services, production state, provider effects or protections were changed.
 | Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
 | Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
 | Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
-| Required CI | At `f802aed`, source, Cockpit and ecosystem passed; dependency Python 3.14.7 passed but Python 3.12.14 failed one HTTP finalizer-refusal assertion; the summary failure follows that lane. |
-| Focused repair proof | Seven initial CI-failure cases passed on Python 3.12.14 and 3.14.7. The 91-case HTTP module passes under Python 3.12.14 xdist with retry time frozen in both finalizer-refusal tests; both refusal cases pass under Python 3.14.7. Ruff lint/format passes on all six changed Python files. |
-| Follow-up review | The read-only cloud reviewer did not run: the agent runtime rejected `max` reasoning effort for GPT-6 Luna. No review is claimed for that attempt. |
+| Required CI | At `dbf5ad3`, Agent ecosystem, Cockpit and Python 3.14.7 dependency proof passed. Source timed out once in registered `observe-acceptance` MCP server assembly at the global 30-second per-test limit. Python 3.12 dependency proof reported: missing Docker-runtime mock in the quality wrapper test; a 30-second timeout in the 256-report capacity test; and the MCP finalizer retry-window assertion. |
+| Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual CI cases pass on Python 3.12.14 and 3.14.7; the same four pass together under Python 3.12.14 xdist. Ruff lint/format passes on all nine changed Python files. |
+| Follow-up review | [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix and preserved custody assertions. The new Docker/clock/timeout corrections are test-only; focused review on the final head remains. |
 | Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
 
-The `f802aed` Python 3.12 failure was a retry-window timing dependency in the HTTP finalizer
-refusal test: while the durable retry backoff is active the expected result is `busy/active-custody`;
-after it expires readiness reports `finalization-failed` and refusal is `unavailable`. The test now
-freezes its retry clock at failure recording and across restart, preserving the intended immediate
-custody assertion. This is test determinism only; no product behavior changed. The affected 91-case
-module passes locally under Python 3.12.14 xdist, and the two refusal cases pass under Python 3.14.7.
-These results are local, not current-head CI. Commit the focused test/handoff follow-up and inspect
-fresh CI. The earlier source/Python 3.12 code failures at `aba7684` are already repaired in
-`f802aed`; do not reopen them or approve obsolete runs. This is acceptance closeout, not another
-D03-E implementation cycle.
+The `f802aed` HTTP failure was a retry-window timing dependency: the retained writer returns
+`busy/active-custody` during backoff; after it expires, finalization-failed readiness returns
+`unavailable/finalization-failed`. `dbf5ad3` freezes retry time in both HTTP refusal fixtures, without
+changing production behavior. The same bounded clock is now used in the registered MCP finalizer
+fixture. The quality orchestration test now stubs Docker-runtime discovery as its sibling does.
+The full-suite timeout cases are the 256-record capacity proof and the repeated MCP registration
+for `observe-acceptance`; each now has a 60-second per-test bound, with the global timeout and test
+assertions unchanged. The four residual failure cases pass together on Python 3.12.14 and 3.14.7;
+the same four pass under Python 3.12.14 xdist. All nine changed Python files pass Ruff lint/format.
+These local focused checks are not current-head CI. The latest test-fixture follow-up must receive
+fresh Source and Dependency results plus focused read-only review. Earlier code failures at
+`aba7684` remain repaired in `f802aed`; do not reopen them or approve obsolete runs. This is
+acceptance closeout, not another D03-E implementation cycle.
 Earlier stop-era details remain in the
 [immutable pre-integration record](https://github.com/maba-pag/owlbear/blob/b49a2a8f0017bcf2aa25274b2fec8962d72f02a5/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff).
 
