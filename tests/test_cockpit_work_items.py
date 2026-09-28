@@ -1938,6 +1938,8 @@ def test_http_finalizer_handoff_contains_failure_before_checks(tmp_path: Path) -
             expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
             paths=("product.txt",),
         )
+        retry_now = datetime.now(UTC).isoformat()
+        application._clock = lambda: retry_now  # noqa: SLF001
         report = application.report_finalization_failure(failure)
 
         current = client.get("/api/changes/change-a/work-items/publication")
@@ -1961,7 +1963,9 @@ def test_http_finalizer_handoff_contains_failure_before_checks(tmp_path: Path) -
     assert application._coordinator.show("change-a").writer is not None  # noqa: SLF001
 
 
-def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(tmp_path: Path) -> None:
+def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(  # noqa: PLR0915 - restart safety proof.
+    tmp_path: Path,
+) -> None:
     repository, runtime_root, remote, provider, application = _loader_registered_engine_action_fixture(
         tmp_path, "sync-target"
     )
@@ -2012,6 +2016,8 @@ def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(tmp_pa
             expected_workspace_fingerprint=finalization_basis.workspace_fingerprint,
             paths=("product.txt",),
         )
+        retry_now = datetime.now(UTC).isoformat()
+        application._clock = lambda: retry_now  # noqa: SLF001
         report = application.report_finalization_failure(failure)
 
     report_root = runtime_root / "finalization-reports/change-a"
@@ -2047,6 +2053,7 @@ def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(tmp_pa
         workspace_root=repository,
         publication_provider=provider,
     )
+    reloaded._clock = lambda: retry_now  # noqa: SLF001
     after_reload = state_snapshot(reloaded)
     assert after_reload == before_reload
     with TestClient(assemble_target_app(reloaded)) as client:
@@ -2067,7 +2074,7 @@ def test_http_finalizer_handoff_refusal_survives_restart_without_mutation(tmp_pa
             },
         )
     assert refused.status_code == 200
-    assert refused.json()["kind"] == "busy"
+    assert refused.json()["kind"] == "busy", refused.json()
     assert refused.json()["reason_code"] == "active-custody"
     assert refused.json()["finalization"] is None
     assert refused.json()["readiness"]["checks_state"] == "not-run"
