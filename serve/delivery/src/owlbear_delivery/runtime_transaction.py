@@ -29,6 +29,14 @@ _CONTAINED_TEMPORARY_MODE = stat.S_IRUSR | stat.S_IWUSR
 _CONTAINED_TEMPORARY_PUBLISHED_LINK_COUNT = 2
 
 
+@dataclass(frozen=True)
+class ContainedWriteLimits:
+    """Resource bounds for one contained atomic write."""
+
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES
+
+
 class TransactionConflictError(RuntimeError):
     """A transaction destination already contains different immutable bytes."""
 
@@ -461,8 +469,14 @@ def read_contained(root_fd: int, path: Path, *, limit: int) -> bytes | None:
         return content
 
 
-def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> tuple[int, int]:
-    if additional_bytes < 0 or additional_bytes > _MAX_CONTAINED_MANIFEST_BYTES:
+def _contained_temporary_usage(
+    directory_fd: int,
+    *,
+    additional_bytes: int,
+    max_content_bytes: int = _MAX_CONTAINED_MANIFEST_BYTES,
+    max_temporary_bytes: int = _MAX_CONTAINED_TEMPORARY_BYTES,
+) -> tuple[int, int]:
+    if additional_bytes < 0 or additional_bytes > max_content_bytes:
         raise TransactionManifestError
     temporary_count = 0
     temporary_bytes = 0
@@ -492,7 +506,7 @@ def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> t
                 or (metadata.st_nlink != 1 and not linked_to_published)
                 or stat.S_IMODE(metadata.st_mode) != _CONTAINED_TEMPORARY_MODE
                 or metadata.st_size < 0
-                or metadata.st_size > _MAX_CONTAINED_MANIFEST_BYTES
+                or metadata.st_size > max_content_bytes
             ):
                 raise TransactionManifestError
             temporary_count += 1
@@ -501,21 +515,34 @@ def _contained_temporary_usage(directory_fd: int, *, additional_bytes: int) -> t
         raise TransactionManifestError from exc
     if (
         temporary_count + (1 if additional_bytes else 0) > _MAX_CONTAINED_TEMPORARIES
-        or temporary_bytes + additional_bytes > _MAX_CONTAINED_TEMPORARY_BYTES
+        or temporary_bytes + additional_bytes > max_temporary_bytes
     ):
         raise TransactionManifestError
     return temporary_count, temporary_bytes
 
 
-def write_contained(root_fd: int, path: Path, content: bytes, *, expected: bytes | None = None) -> None:
+def write_contained(
+    root_fd: int,
+    path: Path,
+    content: bytes,
+    *,
+    expected: bytes | None = None,
+    limits: ContainedWriteLimits | None = None,
+) -> None:
     """Atomically publish exact bytes without following directory or file links."""
+    write_limits = limits if limits is not None else ContainedWriteLimits()
     with _contained_parent(root_fd, path, create=True) as parent_fd:
         current = read_contained(parent_fd, Path(path.name), limit=max(len(content), len(expected or b"")))
         if current == content:
             return
         if current != expected:
             raise TransactionConflictError
-        _contained_temporary_usage(parent_fd, additional_bytes=len(content))
+        _contained_temporary_usage(
+            parent_fd,
+            additional_bytes=len(content),
+            max_content_bytes=write_limits.max_content_bytes,
+            max_temporary_bytes=write_limits.max_temporary_bytes,
+        )
         temporary = f".tmp-{secrets.token_hex(12)}"
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
         try:

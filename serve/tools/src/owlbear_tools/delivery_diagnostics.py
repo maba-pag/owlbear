@@ -467,6 +467,9 @@ def _json_shape(
         ):
             inspection.diagnostic("CONFIG_MALFORMED")
             inspection.records[-1]["status"] = "malformed"
+        else:
+            inspection.records[-1]["schema_version"] = expected_schema
+            inspection.records[-1]["status"] = "supported"
     elif kind == "frontier" and not isinstance(value.get("bindings"), list):
         inspection.diagnostic("FRONTIER_MALFORMED")
         inspection.records[-1]["status"] = "malformed"
@@ -838,6 +841,29 @@ def _scan_package_root_transactions(packages_fd: int, inspection: _Inspection) -
         _close_directory(packages_fd, "transactions", transactions_fd, transactions_opened, inspection)
 
 
+def _inspect_package_storage_lock(packages_fd: int, inspection: _Inspection) -> None:
+    try:
+        info = os.stat(".storage.lock", dir_fd=packages_fd, follow_symlinks=False)
+    except OSError:
+        inspection.diagnostic("PACKAGES_UNREADABLE")
+        inspection.transaction_scan_unknown = True
+        return
+    if stat.S_ISREG(info.st_mode):
+        return
+    if stat.S_ISLNK(info.st_mode):
+        inspection.diagnostic("SYMLINK_REJECTED")
+    else:
+        inspection.diagnostic("SPECIAL_FILE_REJECTED")
+    inspection.transaction_scan_unknown = True
+
+
+def _package_change_names(packages_fd: int, inspection: _Inspection) -> list[str]:
+    names = _directory_names(packages_fd, inspection)
+    if ".storage.lock" in names:
+        _inspect_package_storage_lock(packages_fd, inspection)
+    return [name for name in names if name not in {"transactions", ".storage.lock"}]
+
+
 def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str | None) -> None:  # noqa: PLR0912
     packages = _open_optional_pending_directory(delivery_fd, "packages", inspection, "PACKAGES")
     if packages is None:
@@ -845,7 +871,7 @@ def _scan_packages(delivery_fd: int, inspection: _Inspection, *, selected: str |
     packages_fd, packages_opened = packages
     try:
         _scan_package_root_transactions(packages_fd, inspection)
-        for name in (entry for entry in _directory_names(packages_fd, inspection) if entry != "transactions"):
+        for name in _package_change_names(packages_fd, inspection):
             if not _CHANGE_ID.fullmatch(name):
                 inspection.diagnostic("UNSAFE_ENTRY_NAME")
                 inspection.transaction_scan_unknown = True

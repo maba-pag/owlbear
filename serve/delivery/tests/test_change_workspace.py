@@ -849,12 +849,13 @@ def _preservation_workspace(
     return coordinator, manager, coordination, intent
 
 
-def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_path: Path) -> None:
+def test_preservation_captures_linked_index_and_large_raw_worktree_state(tmp_path: Path) -> None:
     _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
     index = manager._resolve_managed_index(coordination.worktree_path)  # noqa: SLF001
     assert index.path != manager.repository / ".git" / "index"
     index_bytes = manager._read_managed_index(index)  # noqa: SLF001
-    (coordination.worktree_path / "shared.txt").write_bytes(b"dirty preservation\n")
+    large_content = b"dirty preservation\n" + b"x" * (3 * 1024 * 1024)
+    (coordination.worktree_path / "shared.txt").write_bytes(large_content)
     (coordination.worktree_path / "shared.txt").chmod(0o755)
     (coordination.worktree_path / "preserved-link").symlink_to("shared.txt")
 
@@ -871,6 +872,8 @@ def test_preservation_captures_linked_index_and_restores_raw_worktree_state(tmp_
     )
     assert (private_root / "manifest.json").exists()
     assert (private_root.stat().st_mode & 0o077) == 0
+    large_object = private_root / "objects" / f"{hashlib.sha256(large_content).hexdigest()}.raw"
+    assert large_object.read_bytes() == large_content
 
     restored = manager.restore_preservation(coordination.change_id, preservation.preservation_id)
     assert restored == preservation
@@ -2083,6 +2086,9 @@ def test_nonterminal_recovery_replays_and_retains_prejournal_private_stage_orpha
     path_dir = operation_dir / "paths" / digest(b"shared.txt")
     orphaned = tuple(path_dir.glob("stage-*"))
     assert len(orphaned) == 1
+    orphaned_temporary = path_dir / f".tmp-{'a' * 24}"
+    orphaned_temporary.write_bytes(b"partial staging record\n")
+    orphaned_temporary.chmod(0o600)
     assert not (path_dir / "staging.json").exists()
     assert worktree.joinpath("shared.txt").read_bytes() == b"dirty preservation\n"
 
@@ -2091,8 +2097,41 @@ def test_nonterminal_recovery_replays_and_retains_prejournal_private_stage_orpha
     assert restarted.restore_preservation(coordination.change_id, preservation.preservation_id) == preservation
     assert worktree.joinpath("shared.txt").read_bytes() == b"base\n"
     assert orphaned[0].exists()
+    assert orphaned_temporary.read_bytes() == b"partial staging record\n"
     assert (path_dir / "staging.json").exists()
     assert len(tuple(path_dir.glob("stage-*"))) == 1
+
+
+def test_nonterminal_recovery_rejects_symlinked_path_record_temporary(tmp_path: Path) -> None:
+    _coordinator, manager, coordination, intent = _preservation_workspace(tmp_path)
+    worktree = coordination.worktree_path
+    worktree.joinpath("shared.txt").write_bytes(b"dirty preservation\n")
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    index_bytes = manager._read_managed_index(index)  # noqa: SLF001
+    preservation = manager.capture_preservation(coordination.change_id, intent.recovery_id)
+    _kill_after_private_staging_before_journal(tmp_path, preservation, manager.repository)
+    path_dir = (
+        manager.runtime_root
+        / preservation.storage_ref
+        / "restoration"
+        / _restoration_operation_id(preservation)
+        / "paths"
+        / digest(b"shared.txt")
+    )
+    outside = tmp_path / "foreign-temporary"
+    outside.write_bytes(b"foreign bytes\n")
+    temporary = path_dir / f".tmp-{'b' * 24}"
+    temporary.symlink_to(outside)
+
+    restarted_coordinator, restarted = _manager(tmp_path, manager.repository)
+    restarted_coordinator.record_verified_exclusion(preservation.recovery_id)
+    with pytest.raises(PreservationFenceError, match="temporary is not an owner-private regular file"):
+        restarted.restore_preservation(coordination.change_id, preservation.preservation_id)
+
+    assert temporary.is_symlink()
+    assert outside.read_bytes() == b"foreign bytes\n"
+    assert worktree.joinpath("shared.txt").read_bytes() == b"dirty preservation\n"
+    assert restarted._read_managed_index(index) == index_bytes  # noqa: SLF001
 
 
 def test_nonterminal_recovery_fails_closed_at_prejournal_private_stage_bound(tmp_path: Path) -> None:

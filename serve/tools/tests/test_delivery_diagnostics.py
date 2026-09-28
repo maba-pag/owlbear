@@ -95,6 +95,9 @@ def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     assert result["counts"]["frontier"] == 1
     assert result["maintenance_prompt"]
     assert result["truncated"] is False
+    config = next(record for record in result["records"] if record["kind"] == "config")
+    assert config["status"] == "supported"
+    assert config["schema_version"] == 2
 
 
 @pytest.mark.parametrize("missing", ["coordination", "changes", "row"])
@@ -511,6 +514,45 @@ def test_package_root_transactions_are_inspected_with_root_locator(tmp_path: Pat
         record["locator"] for record in result["records"]
     }
     assert "hidden" not in json.dumps(result)
+
+
+def test_regular_package_storage_lock_does_not_degrade_inspection(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    packages = root / ".owlbear/delivery/packages"
+    packages.mkdir()
+    (packages / ".storage.lock").write_bytes(b"")
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "healthy-structure"
+    assert result["inspection_complete"] is True
+    assert result["pending_effects"] is False
+
+
+@pytest.mark.parametrize("entry_type", ["symlink", "fifo"])
+def test_non_regular_package_storage_lock_keeps_pending_effects_contained(
+    tmp_path: Path,
+    entry_type: str,
+) -> None:
+    root = _root(tmp_path)
+    packages = root / ".owlbear/delivery/packages"
+    packages.mkdir()
+    lock = packages / ".storage.lock"
+    if entry_type == "symlink":
+        target = tmp_path / "outside"
+        target.write_bytes(b"not inspected")
+        lock.symlink_to(target)
+        diagnostic = "SYMLINK_REJECTED"
+    else:
+        os.mkfifo(lock)
+        diagnostic = "SPECIAL_FILE_REJECTED"
+
+    result = inspect_delivery(root)
+
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert result["pending_effects"] == "unknown"
+    assert diagnostic in result["diagnostic_codes"]
 
 
 def test_optional_host_local_and_selected_package_scope_are_bounded(tmp_path: Path) -> None:

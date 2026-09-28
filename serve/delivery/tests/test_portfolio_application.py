@@ -2859,6 +2859,10 @@ def test_engine_target_fetch_drift_is_stale_then_syncs_exact_target(tmp_path: Pa
     target = _advance_remote_target(tmp_path, remote, product="Competing target edit\n" if conflict else None)
     stale = _execute_engine(application, action)
     assert stale.kind == "stale", stale
+    started_path = coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json")
+    assert started_path.is_file()
+    pending_attempt_ids = {attempt.attempt_id for attempt in RetryLedger(state_root, "change-a").pending_attempts()}
+    assert action.operation_id in pending_attempt_ids
     assert coordinator.show("change-a").last_reviewed_commit == action.exact_head
     fresh = _engine_action(application)
     assert fresh.operation_id != action.operation_id
@@ -9219,6 +9223,47 @@ def _mutate_loader_workspace(worktree: Path, variant: str) -> Path:
     return path
 
 
+def _assert_loader_stale_retry(
+    application: PortfolioApplication,
+    action: ChangeContinuationAction,
+    now: list[datetime],
+    budget_after_stale: object,
+    stale_result: DeliveryEngineActionResult,
+) -> None:
+    ledger = application._runtimes["change-b"].retry_ledger()
+    budget_after_wait = ledger.read()
+    assert budget_after_wait == budget_after_stale
+    stale_episode = next(
+        episode for episode in budget_after_wait.episodes if action.operation_id in episode.attempt_ids
+    )
+    assert stale_episode.next_eligible_at is not None
+    now[0] = datetime.fromisoformat(stale_episode.next_eligible_at) + timedelta(seconds=1)
+    retried_action = _engine_action(application, "change-b")
+    assert retried_action.operation_id != action.operation_id
+    retry_budget = ledger.read()
+    retry_episode = next(
+        episode for episode in retry_budget.episodes if retried_action.operation_id in episode.attempt_ids
+    )
+    assert retry_episode.total_attempts == 2
+    assert retry_episode.reset_count == 0
+    assert action.operation_id in retry_episode.attempt_ids
+    budget_before_replay = ledger.read()
+    assert _execute_engine(application, action) == stale_result
+    assert ledger.read() == budget_before_replay
+
+
+def test_unscoped_start_marker_read_preserves_continuation_mutation_guard(tmp_path: Path) -> None:
+    _repository, _runtime_root, _remote, _provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    action = _engine_action(application, "change-b")
+    coordinator = application._coordinator
+
+    assert not coordinator.continuation_start_recorded(action)
+    with pytest.raises(CoordinationConflictError, match="continuation action custody"):
+        coordinator.continuation_action_started(action)
+
+
 @pytest.mark.parametrize("workspace_variant", ["dirty", "staged", "private"])
 def test_loader_composed_engine_preflight_contains_workspace_variants(
     tmp_path: Path,
@@ -9227,11 +9272,21 @@ def test_loader_composed_engine_preflight_contains_workspace_variants(
     _repository, _runtime_root, remote, provider, application, _head_a, _head_b = _loader_composed_engine_fixture(
         tmp_path
     )
-    action = _engine_action(application, "change-b")
+    now = [datetime.now(UTC)]
+
+    def fixed_clock() -> str:
+        return now[0].isoformat()
+
+    application._clock = fixed_clock
     worktree = application._coordinator.show("change-b").worktree_path
+    original_path_bytes = (worktree / "product.txt").read_bytes() if workspace_variant == "dirty" else None
+    action = _engine_action(application, "change-b")
     changed_path = _mutate_loader_workspace(worktree, workspace_variant)
     workspace_before = _workspace_mutation_snapshot(worktree)
     budget_before = application._runtimes["change-b"].retry_ledger().read()
+    reserved_episode = next(episode for episode in budget_before.episodes if action.operation_id in episode.attempt_ids)
+    assert reserved_episode.total_attempts == 1
+    assert reserved_episode.last_status == "reserved"
     remote_state_before = _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state")
     sibling_frontier = application._runtimes["change-a"].frontier_bytes()
     sibling_publication = application._runtimes["change-a"].checkpoint_publication_state()
@@ -9243,7 +9298,16 @@ def test_loader_composed_engine_preflight_contains_workspace_variants(
     assert provider.draft_state_calls == 0
     assert application._runtimes["change-b"].ready_receipt() is None
     assert _workspace_mutation_snapshot(worktree) == workspace_before
-    assert application._runtimes["change-b"].retry_ledger().read() == budget_before
+    ledger = application._runtimes["change-b"].retry_ledger()
+    budget_after_stale = ledger.read()
+    stale_episode = next(
+        episode for episode in budget_after_stale.episodes if action.operation_id in episode.attempt_ids
+    )
+    assert stale_episode.total_attempts == 1
+    assert stale_episode.reset_count == 0
+    assert stale_episode.last_status == "failed"
+    assert digest(f"{action.operation_id}:failed".encode()) in stale_episode.outcome_ids
+    assert action.operation_id not in {attempt.attempt_id for attempt in ledger.pending_attempts()}
     assert _git(remote, "rev-parse", "refs/heads/owlbear/delivery-state") == remote_state_before
     assert application._runtimes["change-a"].frontier_bytes() == sibling_frontier
     assert application._runtimes["change-a"].checkpoint_publication_state() == sibling_publication
@@ -9252,9 +9316,20 @@ def test_loader_composed_engine_preflight_contains_workspace_variants(
     )
     assert not started_path.exists()
     assert _execute_engine(application, action) == result
+    if workspace_variant == "dirty":
+        _git(worktree, "checkout", "--", changed_path.name)
+    elif workspace_variant == "staged":
+        _git(worktree, "reset", "HEAD", "--", changed_path.name)
+        changed_path.unlink()
+    else:
+        changed_path.unlink()
+    if workspace_variant == "dirty":
+        assert changed_path.read_bytes() == original_path_bytes
+    else:
+        assert not changed_path.exists()
+    assert _git(worktree, "status", "--porcelain") == ""
+    _assert_loader_stale_retry(application, action, now, budget_after_stale, result)
     assert provider.draft_state_calls == 0
-    assert application._runtimes["change-b"].retry_ledger().read() == budget_before
-    assert changed_path.exists()
 
 
 @pytest.mark.parametrize("failure_mode", ["unknown-result", "unknown-readback"])

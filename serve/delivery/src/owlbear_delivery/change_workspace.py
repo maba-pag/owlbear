@@ -36,6 +36,7 @@ from owlbear_delivery.recovery import (
     read_record,
 )
 from owlbear_delivery.runtime_transaction import (
+    ContainedWriteLimits,
     ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionConflictError,
@@ -1913,6 +1914,10 @@ class PortfolioCoordinator:
     def continuation_action_started(self, action: ChangeContinuationAction) -> bool:
         """Read exact effect-entry evidence without creating it."""
         self.require_continuation_access(action.change_id)
+        return self.continuation_start_recorded(action)
+
+    def continuation_start_recorded(self, action: ChangeContinuationAction) -> bool:
+        """Read one action's identity-checked effect-entry marker without a mutation guard."""
         path = self.continuation_record_path(action.change_id, action.operation_id).with_name("started.json")
         try:
             content = path.read_bytes()
@@ -4395,7 +4400,7 @@ class ChangeWorkspaceManager:
                 kinds[scope] = "file"
         return kinds
 
-    def capture_preservation(  # noqa: C901, PLR0912, PLR0915 - custody capture keeps each exact fence in one transaction.
+    def capture_preservation(  # noqa: C901, PLR0912, PLR0915 - capture keeps each fence in one transaction.
         self,
         change_id: str,
         recovery_id: str,
@@ -6507,7 +6512,15 @@ class ChangeWorkspaceManager:
                 os.fchmod(preservation_fd, 0o700)
                 for object_name, content in objects.items():
                     object_path = Path("objects") / f"{object_name}.raw"
-                    write_contained(preservation_fd, object_path, content)
+                    write_contained(
+                        preservation_fd,
+                        object_path,
+                        content,
+                        limits=ContainedWriteLimits(
+                            max_content_bytes=_MAX_PRESERVED_FILE_BYTES,
+                            max_temporary_bytes=_MAX_PRESERVED_TOTAL_BYTES,
+                        ),
+                    )
                 manifest = {
                     "schema_version": 1,
                     "receipt": receipt.model_dump(mode="json"),
@@ -6749,7 +6762,9 @@ class ChangeWorkspaceManager:
 
     @staticmethod
     def _private_staging_artifact_size(entry: os.DirEntry[str], parent_fd: int) -> int:
-        if _RESTORATION_STAGE_PATTERN.fullmatch(entry.name) is None:
+        is_stage = _RESTORATION_STAGE_PATTERN.fullmatch(entry.name) is not None
+        is_temporary = _RESTORATION_RECORD_TEMPORARY_PATTERN.fullmatch(entry.name) is not None
+        if not is_stage and not is_temporary:
             msg = "private restoration staging inventory is malformed"
             raise PreservationFenceError(msg)
         try:
@@ -6757,7 +6772,16 @@ class ChangeWorkspaceManager:
         except OSError as exc:
             msg = "private restoration staging inventory is unavailable"
             raise PreservationFenceError(msg) from exc
-        if not (stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode)) or metadata.st_nlink < 1:
+        if is_temporary and (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != _RESTORATION_RECORD_TEMPORARY_MODE
+        ):
+            msg = "private restoration staging temporary is not an owner-private regular file"
+            raise PreservationFenceError(msg)
+        if is_stage and (
+            not (stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode)) or metadata.st_nlink < 1
+        ):
             msg = "private restoration staging artifact is not a file"
             raise PreservationFenceError(msg)
         size = metadata.st_size

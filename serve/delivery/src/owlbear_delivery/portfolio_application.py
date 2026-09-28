@@ -7320,6 +7320,13 @@ class PortfolioApplication:
                 failure_detail=(result.failure.detail if result.failure is not None else None),
                 now=self._clock(),
             )
+        elif result.kind == "stale" and not self._coordinator.continuation_start_recorded(action):
+            ledger.record_failure(
+                reservation,
+                failure_code=result.reason_code,
+                failure_detail="Engine preflight rejected stale readiness before owner dispatch.",
+                now=self._clock(),
+            )
 
     def _read_engine_intent(self, request: ExecuteDeliveryChangeAction) -> ChangeContinuationAction:
         path = self._coordinator.continuation_record_path(request.change_id, request.operation_id)
