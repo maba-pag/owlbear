@@ -165,8 +165,8 @@ Luna work. This cloud staffing policy replaces model preferences elsewhere, not 
 
 | Select | When it earns the additional cost | Complete PR mention |
 | --- | --- | --- |
-| GPT-5.6 Luna Max | Default, including source-grounded planning and independent review against explicit criteria. | `@copilot+gpt-5.6-luna:max` |
-| Claude Opus 5 | An additional perspective is needed on ambiguous acceptance, cross-component safety interactions or consequential final review. Name the unresolved claim it must assess. | `@copilot+claude-opus-5` |
+| GPT-5.6 Luna Max | Default, including source-grounded planning and independent review against explicit criteria. | `@copilot+gpt-6-luna:max` |
+| Claude Opus 5 | An additional perspective is needed on ambiguous acceptance, cross-component safety interactions or consequential final review. Name the unresolved claim it must assess. | `@copilot+claude-opus-5.5` |
 | GPT-6 Astra | Novel architecture or cross-cutting contracts require broad synthesis and a material trade-off cannot be resolved from the approved plan/current owners. Scope it to that decision, then return bounded work to Luna. | `@copilot+gpt-6-astra` |
 
 These mention forms have been supplied by the user or observed in this repository's PR workflow.
@@ -197,7 +197,7 @@ or proof to fit the clock. Split an oversized PR only at a reviewed coherent bou
 End with the phase, observed code revision, actual checks, unresolved findings/gaps and **one complete
 next request in a `text` code block**. Start the request with the exact model-qualified mention from
 Model Selection, then the action, actual phase ID, this guide's path and necessary PR/review context.
-Default prefix: `@copilot+gpt-5.6-luna:max`. Never output a bare `Repair D03-C ...`, plain `@copilot`,
+Default prefix: `@copilot+gpt-6-luna:max`. Never output a bare `Repair D03-C ...`, plain `@copilot`,
 a model placeholder, or a separate model recommendation in place of a usable command. No hashes,
 paths or model names should need manual assembly. If escalating, explain why outside the block,
 but still put the selected model's complete mention inside it.
@@ -480,39 +480,39 @@ in its UI; the qualified mention is the supported PR-follow-up route, not a univ
 **Plan**:
 
 ```text
-@copilot+gpt-5.6-luna:max Work on D04-P using .owlbear/research/delivery-cloud-flight-handoff.md.
+@copilot+gpt-6-luna:max Work on D04-P using .owlbear/research/delivery-cloud-flight-handoff.md.
 Follow its Agent Start Here reading route and execute only that phase.
 ```
 
 **Authorize an implementation phase** (change only the phase ID):
 
 ```text
-@copilot+gpt-5.6-luna:max Work on D03-B using .owlbear/research/delivery-cloud-flight-handoff.md.
+@copilot+gpt-6-luna:max Work on D03-B using .owlbear/research/delivery-cloud-flight-handoff.md.
 I approve the package plan presented in this PR for that phase. Follow the reading route and stop after it.
 ```
 
 **Review against defined criteria**:
 
 ```text
-@copilot+gpt-5.6-luna:max Review D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
+@copilot+gpt-6-luna:max Review D03-B using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
 **Different-family review when warranted**:
 
 ```text
-@copilot+claude-opus-5 Review D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
+@copilot+claude-opus-5.5 Review D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
 **Repair findings**:
 
 ```text
-@copilot+gpt-5.6-luna:max Repair D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's review.
+@copilot+gpt-6-luna:max Repair D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR's review.
 ```
 
 **Resume an interruption**:
 
 ```text
-@copilot+gpt-5.6-luna:max Resume D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
+@copilot+gpt-6-luna:max Resume D03-C using .owlbear/research/delivery-cloud-flight-handoff.md and this PR.
 ```
 
 ### Platform Preparation

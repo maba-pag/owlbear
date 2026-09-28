@@ -85,9 +85,9 @@ _INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
 _INSTALL_MANIFEST_SCHEMA_VERSION = 1
 _DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
 _COPILOT_REASONING_SETTINGS = {
-    "gpt-5.6-luna": "max",
-    "gpt-5.6-sol": "high",
-    "claude-opus-5": "medium",
+    "gpt-6-luna": "max",
+    "gpt-6-sol": "high",
+    "claude-opus-5.5": "medium",
 }
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC

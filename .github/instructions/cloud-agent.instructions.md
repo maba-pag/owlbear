@@ -38,7 +38,7 @@ Distinguish your checks from prior reported evidence. Keep PR summaries current,
 
 When another agent action is needed, include exactly one complete copy-ready request in a `text`
 code block, starting with the selected model's GitHub-qualified mention. Default to
-`@copilot+gpt-5.6-luna:max` for well-defined planning, implementation, review and repair. Recommend
+`@copilot+gpt-6-luna:max` for well-defined planning, implementation, review and repair. Recommend
 Opus/Astra only for a concrete unresolved decision that merits their cost; put that model's known
 selector in the command, never a guessed suffix or placeholder.
 
@@ -46,7 +46,7 @@ Choose the next action from evidence: unfinished task -> Resume; valid unresolve
 implemented candidate -> Review. Write a self-contained request for the actual task on the current PR:
 
 ```text
-@copilot+gpt-5.6-luna:max Review the fixes on this PR against its requested behavior and latest findings; do not edit code.
+@copilot+gpt-6-luna:max Review the fixes on this PR against its requested behavior and latest findings; do not edit code.
 ```
 
 Include an accessible review/report link if the next worker cannot find it on this PR. Never leave

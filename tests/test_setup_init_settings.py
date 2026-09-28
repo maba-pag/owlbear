@@ -434,9 +434,9 @@ def test_copilot_profile_creation_and_reasoning_settings(
     assert {
         model_id: copilot_settings[model_id]["reasoningEffort"] for model_id in init_module._COPILOT_REASONING_SETTINGS
     } == {
-        "gpt-5.6-luna": "max",
-        "gpt-5.6-sol": "high",
-        "claude-opus-5": "medium",
+        "gpt-6-luna": "max",
+        "gpt-6-sol": "high",
+        "claude-opus-5.5": "medium",
     }
 
 
@@ -459,7 +459,7 @@ def test_copilot_profile_preserves_unrelated_entries(
             "vendor": "copilot",
             "settings": {
                 "unrelated-model": {"reasoningEffort": "low", "custom": "preserve"},
-                "gpt-5.6-luna": {"custom": "preserve"},
+                "gpt-6-luna": {"custom": "preserve"},
             },
         },
     ]
@@ -473,12 +473,12 @@ def test_copilot_profile_preserves_unrelated_entries(
     profile_data = json.loads(profile_path.read_text(encoding="utf-8"))
     assert profile_data[0] == original_data[0]
     assert profile_data[1]["settings"]["unrelated-model"] == original_data[1]["settings"]["unrelated-model"]
-    assert profile_data[1]["settings"]["gpt-5.6-luna"] == {
+    assert profile_data[1]["settings"]["gpt-6-luna"] == {
         "custom": "preserve",
         "reasoningEffort": "max",
     }
-    assert profile_data[1]["settings"]["gpt-5.6-sol"] == {"reasoningEffort": "high"}
-    assert profile_data[1]["settings"]["claude-opus-5"] == {"reasoningEffort": "medium"}
+    assert profile_data[1]["settings"]["gpt-6-sol"] == {"reasoningEffort": "high"}
+    assert profile_data[1]["settings"]["claude-opus-5.5"] == {"reasoningEffort": "medium"}
 
 
 def test_copilot_profile_decline_preserves_file(
