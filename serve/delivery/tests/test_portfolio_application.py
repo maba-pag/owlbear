@@ -1782,8 +1782,8 @@ def test_engine_acquisition_without_required_head_returns_typed_stop(tmp_path: P
     capture = application._capture_action_basis
 
     def missing_head(*args):
-        basis, reason = capture(*args)
-        return basis.model_copy(update={head_field: None}), reason
+        basis, reason, guidance = capture(*args)
+        return basis.model_copy(update={head_field: None}), reason, guidance
 
     with patch.object(application, "_capture_action_basis", side_effect=missing_head):
         result = application.acquire_change_action(_continuation_request(application))

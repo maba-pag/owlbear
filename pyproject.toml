@@ -20,7 +20,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/delivery/src", "serve/tools/src"]
+pythonpath = [".", "serve/delivery/src", "serve/tools/src"]
 addopts = """\
 --import-mode=importlib -m 'not e2e and not model' -n auto --dist loadfile \
 -p no:logfire -p no:pytest_logfire\

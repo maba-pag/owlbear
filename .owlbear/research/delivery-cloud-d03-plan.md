@@ -83,13 +83,17 @@ services, production state, provider effects or protections were changed.
 | --- | --- |
 | Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
 | Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
-| Ready-for-review | Focused gate passed and transition is authorized. No ready-state mutation tool is available; browser transport returned `Transport closed`. Maintainer must click **Ready for review** on PR #326; no transition is claimed |
-| Required CI | Must inspect the final published head; old `action_required` runs are neither failures in tested source nor passes |
+| Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
+| Required CI | At pre-repair head `aba7684`, source verification failed (4 tests plus 1 collection error; 2,916 passed); dependency verification failed in the Python 3.12.14 lane (Python 3.14.7 passed); Cockpit passed; ecosystem validation was cancelled. The dependency summary failure follows the Python 3.12 lane. |
+| Focused repair proof | Seven explicit affected cases pass on both Python 3.12.14 and 3.14.7; Ruff lint and format pass on all five changed Python files. |
 | Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
 
-The next action is the maintainer's **Ready for review** transition, followed by normal current-head
-CI approval and existing human acceptance, not a generic Resume D03-E. Do not wait for
-draft-skipped required CI before marking ready, approve obsolete runs, or bypass protections.
+The compatibility, stale-test-contract, import-path and child-gate fixes are locally verified on
+both supported Python versions. The next action is to inspect the required workflows on the
+published repair head: confirm source and dependency proofs pass and obtain a replacement ecosystem
+run for the cancelled result. The old `aba7684` failures are not evidence about the repair head.
+Do not approve obsolete runs or bypass protections. This is acceptance closeout, not another
+D03-E implementation cycle.
 Earlier stop-era details remain in the
 [immutable pre-integration record](https://github.com/maba-pag/owlbear/blob/b49a2a8f0017bcf2aa25274b2fec8962d72f02a5/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff).
 

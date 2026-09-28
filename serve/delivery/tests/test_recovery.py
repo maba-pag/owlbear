@@ -1004,7 +1004,16 @@ def test_completed_repair_result_resumes_original_finalizer_after_restart(  # no
         preservation_id=preservation.preservation_id,
         expected_frontier_digest=hashlib.sha256(before).hexdigest(),
     )
-    application.repair_completed_outcome("change-a", request)
+    repair_binding = application.repair_completed_outcome("change-a", request)
+    receipt_root = state / "changes" / "change-a" / "recovery-receipts"
+    receipt_entry = next(entry for entry in receipt_root.iterdir() if entry.is_dir())
+    symlink_name = "f" * 64 if receipt_entry.name != "f" * 64 else "e" * 64
+    symlink_entry = receipt_root / symlink_name
+    symlink_entry.symlink_to(receipt_entry, target_is_directory=True)
+    try:
+        assert application.repair_completed_outcome("change-a", request) == repair_binding
+    finally:
+        symlink_entry.unlink()
     before_restart = RetryLedger(state, "change-a").episode(key)
     assert before_restart is not None
     assert before_restart.total_attempts == 2

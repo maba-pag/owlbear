@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -3642,7 +3643,11 @@ class DeliveryRuntime:
         outcome_id: str,
         repair_task_id: str,
     ) -> CompletedOutcomeRepairReceipt | None:
-        if not entry.is_dir(follow_symlinks=False):
+        try:
+            entry_mode = entry.lstat().st_mode
+        except OSError:
+            entry_mode = None
+        if entry_mode is None or not stat.S_ISDIR(entry_mode):
             return None
         if len(entry.name) != _SHA256_HEX_LENGTH or any(
             character not in "0123456789abcdef" for character in entry.name

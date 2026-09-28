@@ -1829,11 +1829,8 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         "real_fdopen = os.fdopen\n"
         "def fdopen(fd, *args, **kwargs):\n"
         "    handle = real_fdopen(fd, *args, **kwargs)\n"
-        "    try:\n"
-        "        name = os.readlink('/proc/self/fd/' + str(fd))\n"
-        "    except OSError:\n"
-        "        name = ''\n"
-        "    if not Path(name).name.startswith('stage-'):\n"
+        "    mode = args[0] if args else kwargs.get('mode', 'r')\n"
+        "    if mode != 'wb':\n"
         "        return handle\n"
         "    class PartialWrite:\n"
         "        def __init__(self, wrapped):\n"
@@ -1876,12 +1873,12 @@ def _kill_during_private_staging_write(tmp_path: Path, preservation, repository:
         stderr=subprocess.PIPE,
         text=True,
     )
-    for _ in range(100):
-        if ready.exists():
-            break
-        time.sleep(0.01)
+    deadline = time.monotonic() + 10
+    while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.02)
     if not ready.exists():
-        os.kill(process.pid, signal.SIGKILL)
+        if process.poll() is None:
+            os.kill(process.pid, signal.SIGKILL)
         _stdout, stderr = process.communicate()
         pytest.fail(f"private staging child did not reach partial-write gate: {stderr}")
     os.kill(process.pid, signal.SIGKILL)
