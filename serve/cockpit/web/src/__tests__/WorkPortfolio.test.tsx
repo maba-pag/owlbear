@@ -5589,7 +5589,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
     unmount();
   }
-});
+}, 60_000);
 
 it("renders durable retry readiness metadata", async () => {
   currentDetail = detail({
@@ -5725,6 +5725,7 @@ it("counts listed unavailable Changes in portfolio accounting and filters", asyn
 it("keeps the inspector on a Change that becomes unavailable and restores it when available again", async () => {
   renderPage("/delivery/change-alpha/outcome:OUT-001");
   expect(await screen.findByTestId("work-item-detail")).toHaveTextContent("Delivery foundation");
+  await screen.findByTestId("work-portfolio-table");
 
   currentPortfolio = {
     ...portfolio([]),

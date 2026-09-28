@@ -84,8 +84,8 @@ services, production state, provider effects or protections were changed.
 | Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
 | Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
 | Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
-| Required CI | At `dbf5ad3`, Agent ecosystem, Cockpit and Python 3.14.7 dependency proof passed. Source timed out once in registered `observe-acceptance` MCP server assembly at the global 30-second per-test limit. Python 3.12 dependency proof reported: missing Docker-runtime mock in the quality wrapper test; a 30-second timeout in the 256-report capacity test; and the MCP finalizer retry-window assertion. |
-| Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual CI cases pass on Python 3.12.14 and 3.14.7; the same four pass together under Python 3.12.14 xdist. Ruff lint/format passes on all nine changed Python files. |
+| Required CI | At `717aa83`, Source, Dependency, and Agent ecosystem validation passed. Cockpit failed twice on Node 24.21 in `WorkPortfolio.test.tsx`; Node 24.16 passed. |
+| Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual backend/tooling cases pass on Python 3.12.14 and 3.14.7, including Python 3.12 xdist. The full 116-case WorkPortfolio test file passes locally on Node 24.21 after its test fix; scoped Biome passes. |
 | Follow-up review | [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix and preserved custody assertions. The new Docker/clock/timeout corrections are test-only; focused review on the final head remains. |
 | Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
 
@@ -98,10 +98,14 @@ The full-suite timeout cases are the 256-record capacity proof and the repeated 
 for `observe-acceptance`; each now has a 60-second per-test bound, with the global timeout and test
 assertions unchanged. The four residual failure cases pass together on Python 3.12.14 and 3.14.7;
 the same four pass under Python 3.12.14 xdist. All nine changed Python files pass Ruff lint/format.
-These local focused checks are not current-head CI. The latest test-fixture follow-up must receive
-fresh Source and Dependency results plus focused read-only review. Earlier code failures at
-`aba7684` remain repaired in `f802aed`; do not reopen them or approve obsolete runs. This is
-acceptance closeout, not another D03-E implementation cycle.
+At `717aa83`, one inspector-restoration test raced its initial portfolio fetch: it awaited the detail
+but mutated the portfolio fixture before the first list load completed. It now waits for the table
+before changing that fixture. A second test renders 16 readiness reasons; D03 added eight cases but
+the test retained Vitest's 20-second default. Its per-test timeout is now 60 seconds; the global
+timeout and assertions are unchanged. The complete 116-test file passes locally on Node 24.21 and
+Biome passes. These local checks are not current-head CI. The latest Cockpit test fix requires a
+fresh exact-head run. Earlier code failures at `aba7684` remain repaired in `f802aed`; do not reopen
+them or approve obsolete runs. This is acceptance closeout, not another D03-E implementation cycle.
 Earlier stop-era details remain in the
 [immutable pre-integration record](https://github.com/maba-pag/owlbear/blob/b49a2a8f0017bcf2aa25274b2fec8962d72f02a5/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff).
 
