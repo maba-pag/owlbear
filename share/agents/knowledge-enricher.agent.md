@@ -4,7 +4,7 @@ description: "Knowledge enrichment worker - entity and relation extraction from 
 argument-hint: "Enrich: {optional scope or worker note}"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-6 Luna (copilot)
 tools:
   [vscode/toolSearch, owlbear-knowledge/claim_enrichment_batch, owlbear-knowledge/knowledge_search, owlbear-knowledge/knowledge_stats, owlbear-knowledge/retry_enrichment, owlbear-knowledge/store_enrichment, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 ---

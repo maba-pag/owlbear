@@ -4,7 +4,7 @@ description: "Plan challenger - independently review one Delivery task-chain cla
 argument-hint: "Challenge Plan: change={change_id}, outcome={outcome_id}, claim={claim_id}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Opus 5 (copilot)
+model: Claude Opus 5.5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, owlbear-memory/recall_memory]
 agents: []
 hooks:

@@ -4,7 +4,7 @@ description: "Target admission challenger - read-only source-grounded challenge 
 argument-hint: "Challenge Design: change_id={change_id}, identities=[change, commitments, outcomes, scopes]"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 5 (copilot)
+model: Claude Opus 5.5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-memory/recall_memory]
 agents: []
 hooks:

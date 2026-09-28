@@ -4,7 +4,7 @@ description: "Delivery repairer - diagnose one exact Change attention and resolv
 argument-hint: "Repair Delivery Change: {change_id}"
 user-invocable: false
 disable-model-invocation: true
-model: GPT-5.6 Luna (copilot)
+model: GPT-6 Luna (copilot)
 tools: [vscode/toolSearch, vscode/askQuestions, read/readFile, owlbear-delivery/get_change, owlbear-delivery/repair, owlbear-delivery/answer, owlbear-memory/recall_memory]
 ---
 

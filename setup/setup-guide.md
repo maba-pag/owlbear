@@ -182,9 +182,9 @@ data:
 
   | Model | Reasoning effort |
   | --- | --- |
-  | `gpt-5.6-luna` | `max` |
-  | `gpt-5.6-sol` | `high` |
-  | `claude-opus-5` | `medium` |
+  | `gpt-6-luna` | `max` |
+  | `gpt-6-sol` | `high` |
+  | `claude-opus-5.5` | `medium` |
 
 The file is written atomically, unrelated profile entries are preserved, and a missing file or
 Copilot entry is created minimally. Malformed profile JSON is left unchanged with a warning. To

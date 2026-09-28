@@ -4,7 +4,7 @@ description: "Conceptual design reviewer - read-only product, workflow, and inte
 argument-hint: "Review Concept: proposal={artifact}, question={decision_or_claim}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Opus 5 (copilot)
+model: Claude Opus 5.5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-memory/recall_memory]
 agents: []
 hooks:
