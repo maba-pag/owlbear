@@ -33,7 +33,13 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_mutation_snapshot,
     acceptance_budget_case,
 )
-from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
+from serve.delivery.tests.test_recovery import (
+    absent_host_process_case,
+    completed_recovery_restart_case,
+    recovery_case,
+    recovery_effect_snapshot,
+    recovery_journal_snapshot,
+)
 
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
@@ -125,14 +131,158 @@ async def test_registered_recovery_exclusion_required(tmp_path: Path, kind: str)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["claim", "proposal"])
 async def test_registered_verified_completed_recovery_replay(tmp_path: Path, kind: str) -> None:
-    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    application, operation, request, unchanged, host = completed_recovery_restart_case(tmp_path, kind)
+    journals = recovery_journal_snapshot(application, "change-a")
+    verifications = host.verifications
     async with Client(assemble_target_server(application)) as client:
-        result = await client.call_tool(operation, request)
-    assert not result.is_error
-    payload = json.loads(result.content[0].text)
-    recovered = payload["recovery"] if kind == "proposal" else payload
+        first_read = await client.call_tool("get_change", {"change_id": "change-a"})
+        repeated_read = await client.call_tool("get_change", {"change_id": "change-a"})
+        assert not first_read.is_error
+        assert first_read.structured_content == repeated_read.structured_content
+        assert recovery_journal_snapshot(application, "change-a") == journals
+        assert host.verifications == verifications
+        first_replay = await client.call_tool(operation, request)
+        second_replay = await client.call_tool(operation, request)
+    assert not first_replay.is_error
+    assert not second_replay.is_error
+    first_payload = json.loads(first_replay.content[0].text)
+    second_payload = json.loads(second_replay.content[0].text)
+    assert first_payload == second_payload
+    recovered = first_payload["recovery"] if kind == "proposal" else first_payload
     assert recovered["status"] == "recovered"
+    assert host.verifications == verifications + 2
+    assert recovery_journal_snapshot(application, "change-a") == journals
     unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("preservation_paths", ["../../outside"]),
+        ("commands", ["terminate-worker"]),
+        ("budget", {"attempts": 999}),
+        ("effect_receipt", {"verified": True}),
+        ("stop_assertion", {"all_descendants_stopped": True}),
+    ],
+)
+async def test_registered_recovery_rejects_caller_authored_evidence_fields(
+    tmp_path: Path,
+    kind: str,
+    field: str,
+    value: object,
+) -> None:
+    application, operation, request, unchanged, host = completed_recovery_restart_case(tmp_path, kind)
+    before = recovery_effect_snapshot(application)
+    verifications = host.verifications
+    forged = {**request, field: value}
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(operation, forged)
+    assert result.is_error
+    validation_error = result.content[0].text
+    assert "validation error for Strict" in validation_error
+    assert field in validation_error
+    assert "Extra inputs are not permitted" in validation_error
+    assert "type=extra_forbidden" in validation_error
+    assert host.verifications == verifications
+    assert recovery_effect_snapshot(application) == before
+    unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["claim", "proposal"])
+async def test_registered_recovery_rejects_stale_claim_or_proposal_identity(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    application, operation, request, unchanged = recovery_case(tmp_path, kind)
+    stale = dict(request)
+    if kind == "proposal":
+        stale["proposal_id"] = "0" * 64
+    else:
+        stale["attempt_id"] = "stale-attempt"
+    async with Client(assemble_target_server(application)) as client:
+        result = await client.call_tool(operation, stale)
+    assert result.is_error
+    unchanged()
+
+
+@pytest.mark.asyncio
+async def test_registered_absent_host_still_writing_descendant_stays_contained_across_restarts(
+    tmp_path: Path,
+) -> None:
+    application, host, _worker, launch, restart, snapshot, signal = absent_host_process_case(tmp_path)
+
+    async def assert_contained(candidate) -> tuple[object, ...]:
+        before = snapshot(candidate)
+        async with Client(assemble_target_server(candidate)) as client:
+            first = await client.call_tool("get_change", {"change_id": "change-a"})
+            repeated = await client.call_tool("get_change", {"change_id": "change-a"})
+            assert not first.is_error
+            assert first.structured_content == repeated.structured_content
+            assert first.structured_content is not None
+            readiness = first.structured_content["readiness"]
+            assert readiness["executable"] is False
+            diagnosis = await client.call_tool("repair", {"change_id": "change-a"})
+            assert not diagnosis.is_error
+            assert diagnosis.structured_content is not None
+            proposal = diagnosis.structured_content["proposal"]
+            assert proposal is not None
+            assert "contained pending verified owner evidence" in proposal["summary"]
+            assert "Custody and files remain unchanged" in proposal["consequence"]
+            refusal = await client.call_tool(
+                "repair",
+                {"change_id": "change-a", "proposal_id": proposal["proposal_id"]},
+            )
+            assert refusal.is_error
+            assert DeliveryWorkerExclusionRequiredError.code in refusal.content[0].text
+            assert "Custody and files are unchanged" in refusal.content[0].text
+            claim_refusal = await client.call_tool(
+                "recover_claim",
+                {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "attempt_id": launch.claim.attempt_id,
+                    "claim_id": launch.claim.claim_id,
+                    "confirmed_lost": True,
+                },
+            )
+            assert claim_refusal.is_error
+            assert DeliveryWorkerExclusionRequiredError.code in claim_refusal.content[0].text
+            acquired = await client.call_tool(
+                "acquire_change_action",
+                {
+                    "change_id": "change-a",
+                    "expected_basis": readiness["basis"],
+                    "capabilities": ["builder"],
+                    "host_id": "synthetic-host",
+                    "session_id": "absent-host-recovery",
+                },
+            )
+            assert not acquired.is_error
+            assert acquired.structured_content is not None
+            assert acquired.structured_content["kind"] == "unsupported"
+            assert acquired.structured_content["reason_code"] == "repair-required"
+            assert acquired.structured_content["readiness"]["reason_code"] == "active-custody"
+            assert acquired.structured_content["engine_action"] is None
+        assert host.verifications == 0
+        assert launch.claim.claim_id not in host.closed
+        assert snapshot(candidate) == before
+        return before
+
+    try:
+        first_snapshot = await assert_contained(application)
+        signal("write-next", b"late old write after restart\n")
+        after_signaled_write = snapshot(application)
+        assert after_signaled_write[:3] == first_snapshot[:3]
+        assert after_signaled_write[3] != first_snapshot[3]
+        assert after_signaled_write[4:] == first_snapshot[4:]
+        restarted = restart()
+        assert snapshot(restarted) == after_signaled_write
+        await assert_contained(restarted)
+    finally:
+        host.close(launch.claim.claim_id)
 
 
 @pytest.mark.asyncio

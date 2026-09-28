@@ -6333,7 +6333,12 @@ class PortfolioApplication:
                 "and settles all descendant writers and jobs; preserve custody and journals, and do not retry or "
                 "infer termination."
             )
-        if reason not in {"engine-action-failed", "engine-action-incomplete", "engine-action-blocked"}:
+        if reason not in {
+            "coordination-unavailable",
+            "engine-action-failed",
+            "engine-action-incomplete",
+            "engine-action-blocked",
+        }:
             return None
         return (
             f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "

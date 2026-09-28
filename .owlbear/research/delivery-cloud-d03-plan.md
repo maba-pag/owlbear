@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**D03-E: HTTP/offline and rendered-prompt continuation is source-ready for cumulative review;
+**D03-E: cumulative bounded-package proof and review are in progress;
 E/package acceptance is incomplete.**
 The [E request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5853033131) explicitly
 authorizes E from `cc6b7be`. Package acceptance, merge, D04 and live activation remain unauthorized.
@@ -13,38 +13,64 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-The first bounded code deliverable (`bf4bc48`) was independently approved and published; the
-remaining-E implementation checkpoint is `468c448`. The `3568c41` post-stop correction fixes the
-retained-journal regression expectation and handoff evidence: it confirms the existing pending,
-interrupted-owner and diagnostic prompts and preserves prompt applicability after non-executable
-refusal copies. It adds no new recovery implementation or authority. Independent read-only review of
-`bf4bc48..3568c41` found no high-confidence actionable findings and confirmed prompt recomputation
-and exact corrected prompt text; the reviewer ran no tests. The continuation from `3568c41`
-published its HTTP/frontend checkpoint as `e0e384b`. This slice adds HTTP malformed/foreign journal and
-unknown-readback containment, finalizer restart/no-mutation proof, and a real offline diagnostics CLI
-inspection of the same degraded root as the HTTP entry. No recovery authority or provider boundary
-changed; `2e377a6` remains controlling.
-The post-checkpoint independent HTTP review confirmed the finalizer/readback restart baseline and
-identified one remaining invalid-result directory-content blind spot; the follow-up closes it
-with empty-directory assertions at both registered MCP and HTTP boundaries.
-Final independent read-only review of the complete continuation found no significant issues and
-closed the restart-snapshot, directory-inventory and V10-allocation findings. No reviewer reran tests.
+The cumulative continuation starts at `ef011e797e8c273ff52bd37e4ab3990cc1db646b`, following the
+[bounded proof request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5861710203).
+The approved `bf4bc48` replay proof and reviewed `e0e384b`/`ef011e7` HTTP, offline and frontend
+continuation remain prior evidence. The `3568c41` prompt-assertion correction is preserved.
+The owning engine execution, publication, transaction and retry implementations have not changed
+since that replay proof; subsequent production edits concern readiness prompts. The existing
+frontend proof is retained without another installation or build. `2e377a6` remains controlling:
+an unavailable host does not become a completion prerequisite or permission to release custody.
+
+Evidence reconciliation identified dedicated fresh-application public recovery-receipt replay,
+forged recovery-field rejection, and absent-host still-writing descendant containment across
+restart as focused proof additions. A cumulative source review also identified a degraded-entry
+defect: coordination or snapshot records could mark a selected Change as seen even when its runtime
+frontier was missing, allowing a false healthy structural result. The diagnostic now counts runtime
+records only, preserving unknown inventory versus verified absence. Direct-CLI no-write regressions
+cover missing and unsafe runtime ancestry. Independent read-only review closed this finding and the
+initial/repeated V10 reload-snapshot and setup-cleanup findings. Final aggregate proof is pending.
+
+The cumulative reviewer also identified a missing safe diagnostic prompt for readable
+`coordination-unavailable` readiness and non-discriminating MCP forged-input coverage. The prompt
+repair is included; final review and focused validation of these changes remain pending. Completed
+recovery replay snapshots now include raw index, refs, retry ledger, coordination bytes and journal
+directory membership before and immediately after reload. These are bounded fixture invariants,
+not claims of general host exclusion or automatic dirty-workspace recovery.
+
+Fresh parent-executed checks on the unchanged starting source passed: the three HTTP/MCP
+finalizer-before-checks/restart nodes (**3 passed, 8.39s**), explicit role/import/diagnostic bootstrap,
+authority and TypeScript-parity nodes (**10 passed, 3.13s**), and strict recovery/repair adapter
+mapping/validation plus operation annotations (**19 passed, 2.06s**). The initial finalizer
+`busy`/`unavailable` assertion did not reproduce in the three-case selection; its original cause
+remains unknown. No classification as a pre-existing defect is inferred.
+
+These commands used uv **0.12.19**, Python **3.14.7**, pytest **9.1.1**, and checkout-resolved
+Delivery, MCP and Cockpit imports. `uv sync --locked --python 3.14.7 --package owlbear-cockpit
+--package owlbear-delivery-mcp --package owlbear-tools --group dev` created an isolated selected-package
+environment outside the checkout. Execution used `uv run --locked --no-sync --python 3.14.7
+python -m pytest`, explicit nodes, one worker and no cache provider; no dependency overlays or
+lockfile changes. A console-script collection attempt could not resolve the repository's `serve`
+test-helper namespace; `python -m pytest` from the repository root resolved it before behavioral
+execution. Scoped Ruff **0.16.5** lint and format checks passed on the seven production boundaries:
+portfolio application, work-item model, MCP models/server, HTTP models/routes and offline diagnostics.
+These checks do not retroactively change C's historical toolchain evidence.
 
 | Bounded capability | Current evidence | Remaining obligation |
 | --- | --- | --- |
-| Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review | Not rerun after this remaining-E diff; retain as historical proof and include in cumulative C–E package proof |
+| Exact result replay and four interrupted engine rows | Approved `bf4bc48`; prior exact selected 12-case run and independent review. Cumulative source comparison retains the unchanged engine/publication/retry owner proof; later readiness overlays have their own affected selections | Prior evidence, not a new 12-case pass; required external regressions remain |
 | Malformed operation journal and unavailable provider readback | Registered MCP canonical-loader cases cover invalid/foreign intent, invalid result journal, and unknown readback; HTTP route cases cover malformed and foreign intent/result. Invalid-result directory contents remain empty after each registered boundary. Unknown readback crosses a fresh core-loader restart; replay and reads do not repeat the external effect | Stale-basis and caller-forged owner/result-field variants beyond foreign-session mismatch were not rerun here; absent-host capability and independent-Change progress remain distinct gates |
-| Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The report journal is asserted nonempty; exact coordination/frontier/retry/workspace/refs/writer/report/mutations are compared before/after reload before the first reloaded `get_change`, then around API refusal | HTTP restart proof covers `WORKSPACE_DIRTY` custody-preflight with `checks_state=not-run`; other finalizer failure categories and actual host dispatch/transport acceptance are not established here |
+| Finalizer failure before checks | Registered MCP case plus HTTP acquire/execute, core report, and restart/refusal proof. The report journal is nonempty; protected state is compared immediately around reload and API refusal. The three exact nodes passed freshly on the starting source | The initial `busy`/`unavailable` failure did not reproduce; its cause is not established. This checks `WORKSPACE_DIRTY` preflight with `checks_state=not-run`, not every failure category or live host dispatch |
 | Failed claim activation with/without writer | New MCP/HTTP variants compare claim/attempt, frontier, retry ledger, coordination, workspace/index/status and repository refs across restart and repeated read/refusal; sibling acquisition is separately verified | Snapshots are limited to named durable fields and do not prove universal no-loss. Required V10 still-writing/descendant and absent-host no-mutation containment across restart is not supplied here; only actual host exclusion to enable broader recovery is outside bounded D03 |
 | Degraded/offline entry | Malformed coordination is entered through the real HTTP loader/routes, then the stdlib diagnostics CLI inspects that same root and selected Change in a fresh `-B` process; complete project-tree membership/bytes, refs, and provider mutation count remain unchanged and corrupt bytes are not echoed | Combined proof covers malformed coordination only; other unavailable-root/invalid-Change/runtime failure classes are not composed through both adapters. D07 repair/migration and D08 host acceptance remain |
 | Readiness prompts and rendering | Retained-journal regression distinguishes pending/interrupted/diagnostic; executable-ready, retry, refusal-copy, unavailable, diagnostic, and busy/wait/terminal cases passed in focused Python selections. The scoped `WorkPortfolio.test.tsx` passed 116 tests, including inert markup-like text and absent/null prompts; scoped Biome and TypeScript/Vite production build passed | Browser/E2E proof not claimed; broader frontend suite not run |
-| Recovery contract and cumulative package | Existing A–D records remain historical evidence | Strict recovery mappings/positive recovery evidence, role/boundary checks, full C–E closeout and package acceptance are not established by this slice |
+| Recovery contract and cumulative package | Existing A–D records remain historical evidence. Fresh strict recovery adapter/annotation and role/import/authority/parity selections passed. Independent cumulative source review identified the selected-runtime diagnostic defect and a missing safe prompt for readable `coordination-unavailable` readiness | Complete the focused review repairs and their final proof; required external CI and ordinary host transport acceptance remain separate |
 
 **Historical evidence:** the [post-stop record at `3568c41`](https://github.com/maba-pag/owlbear/blob/3568c4111fd40c6fd7a9151a16dfe3ece11e6b0c/.owlbear/research/delivery-cloud-d03-plan.md#current-handoff)
 reports the earlier 29-case selection and six-case corrected retained-journal selection. Those are
 prior worker evidence, not new passes or proof of this continuation.
 
-**Continuation validation:** the writer reports an initial explicit HTTP/readiness selection across
+**Prior `ef011e7` continuation validation:** the writer reports an initial explicit HTTP/readiness selection across
 `tests/test_cockpit_work_items.py` and `serve/delivery/tests/test_portfolio_application.py` passing
 **33 tests in 21.65s**, and the registered MCP malformed-journal/readback selection passing
 **4 tests in 9.29s**. These precede the later restart/offline/inventory refinements. The HTTP run emitted
@@ -76,7 +102,8 @@ passed. No frontend rerun was needed for this Python-test-only repair.
 An initial collection failure lacked the local MCP package; adding the checkout's
 `--with ./serve/delivery-mcp` resolved it. These selected counts overlap and are not additive.
 
-**Frontend validation:** Node **24.21.0** / npm **10.9.8**; locked `npm ci` installed 314 packages
+**Prior frontend validation, retained for unchanged inputs:** Node **24.21.0** / npm **10.9.8**;
+locked `npm ci` installed 314 packages
 and reported zero vulnerabilities. `npm --prefix serve/cockpit/web test --
 src/__tests__/WorkPortfolio.test.tsx` passed **116 tests in 102.99s**. Scoped Biome check passed and
 `npm --prefix serve/cockpit/web run build` passed TypeScript and Vite (463 modules). No manifest or
@@ -89,11 +116,11 @@ Required dependency/source/Cockpit/ecosystem CI inspected at `3568c41` is `actio
 Historical C exact-pin limits and D's POSIX/host limits remain unchanged. Package acceptance, merge,
 D04 and live activation are not claimed.
 
-**Next outcome:** cumulative D03-E bounded-package review/proof, using the capability matrix above
-and the acceptance allocation below. Account for strict recovery mappings and supported positive
-replay, stale/forged-input negatives, V10 no-mutation containment, role/boundary checks and remaining
-degraded-entry classes. Reuse applicable approved evidence rather than rerun unrelated suites.
-Do not substitute an executor/backend redesign or treat containment as recovery success.
+**Next outcome:** finish the cumulative reviewers' diagnostic and proof repairs, verify their exact
+affected selections, and reconcile the matrix against the final reviewed source. Keep ordinary host
+transport and external CI separate from cloud source proof. Reuse applicable approved evidence rather
+than rerun unrelated suites. Do not substitute an executor/backend redesign or treat containment as
+recovery success.
 
 ### D repaired baseline
 

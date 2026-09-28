@@ -87,7 +87,7 @@ class _Inspection:
             "pending_transactions": 0,
             "logs": 0,
         }
-        self.selected_change_seen = False
+        self.selected_runtime_change_seen = False
         self.transaction_scan_unknown = False
         self.incomplete = False
         self.entries_seen = 0
@@ -524,7 +524,7 @@ def _scan_change_records(
                 continue
             if selected is not None and name != selected:
                 continue
-            inspection.selected_change_seen = True
+            inspection.selected_runtime_change_seen = True
             child = _open_directory(fd, name, inspection, "CHANGE")
             if child is None:
                 inspection.transaction_scan_unknown = True
@@ -569,7 +569,6 @@ def _scan_coordination(runtime_fd: int, inspection: _Inspection, *, selected: st
                     continue
                 if selected is not None and name[:-5] != selected:
                     continue
-                inspection.selected_change_seen = True
                 _inspect_file(changes_fd, name, inspection, "coordination")
         finally:
             _close_directory(coordination_fd, "changes", changes_fd, changes_opened, inspection)
@@ -590,7 +589,6 @@ def _scan_snapshots(delivery_fd: int, inspection: _Inspection, *, selected: str 
                 continue
             if selected is not None and name != selected:
                 continue
-            inspection.selected_change_seen = True
             child = _open_directory(state_fd, name, inspection, "SNAPSHOT")
             if child is None:
                 inspection.transaction_scan_unknown = True
@@ -965,7 +963,11 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
             forced_complete = False
         for descriptor in reversed(root_descriptors):
             os.close(descriptor)
-    if change_id is not None and not inspection.selected_change_seen:
+    if (
+        change_id is not None
+        and not inspection.selected_runtime_change_seen
+        and not inspection.transaction_scan_unknown
+    ):
         inspection.diagnostic("CHANGE_NOT_FOUND")
     return inspection.result(status=forced_status, complete=forced_complete)
 

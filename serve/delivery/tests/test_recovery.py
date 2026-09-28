@@ -50,6 +50,7 @@ from owlbear_delivery.recovery import (
     RetryEpisodeKey,
     RetryFailureClass,
     RetryLedger,
+    UnavailableRecoveryEvidenceProvider,
     digest,
     encoded,
     journal_path,
@@ -587,6 +588,65 @@ def test_recovery_intent_validates_nested_admitted_paths_by_component_boundary()
         RecoveryIntent.model_validate(payload)
 
 
+def completed_recovery_restart_case(tmp_path: Path, kind: str):
+    """Reload completed owner journals before public replay with the same host authority."""
+    application, operation, request, unchanged = completed_recovery_case(tmp_path, kind)
+    host = application._recovery_evidence_provider
+    protected = recovery_effect_snapshot(application, "change-a")
+    restarted, _coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        application._coordinator.runtime_root,
+        application._runtimes,
+    )
+    assert recovery_effect_snapshot(restarted, "change-a") == protected
+    restarted._recovery_evidence_provider = host
+    return restarted, operation, request, unchanged, host
+
+
+def _tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
+    if not root.exists() and not root.is_symlink():
+        return ((root.name, "absent", None),)
+    entries = []
+    for path in (root, *sorted(root.rglob("*"))):
+        if path.is_symlink():
+            entries.append((path.relative_to(root.parent).as_posix(), "symlink", path.readlink().as_posix()))
+        elif path.is_dir():
+            entries.append((path.relative_to(root.parent).as_posix(), "directory", None))
+        elif path.is_file():
+            entries.append((path.relative_to(root.parent).as_posix(), "file", path.read_bytes()))
+        else:
+            entries.append((path.relative_to(root.parent).as_posix(), "other", None))
+    return tuple(entries)
+
+
+def recovery_journal_snapshot(application, change_id: str) -> tuple[tuple[str, str, bytes | str | None], ...]:
+    change_root = application._coordinator.runtime_root / "changes" / change_id
+    return tuple(
+        entry for journal in ("invocations", "recovery-receipts") for entry in _tree_snapshot(change_root / journal)
+    )
+
+
+def recovery_effect_snapshot(application, change_id: str = "change-a") -> tuple[object, ...]:
+    runtime = application._runtimes[change_id]
+    coordination = application._coordinator.show(change_id)
+    worktree = coordination.worktree_path
+    index = Path(_git(worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    retry_ledger = runtime.retry_ledger()
+    coordination_record = application._coordinator.runtime_root / "coordination/changes" / f"{change_id}.json"
+    return (
+        runtime.frontier_bytes(),
+        coordination,
+        coordination_record.read_bytes(),
+        _file_bytes(worktree),
+        index.read_bytes(),
+        _git(worktree, "show-ref"),
+        _git(worktree, "rev-parse", "HEAD"),
+        retry_ledger.read(),
+        _tree_snapshot(retry_ledger.summary_path.parent),
+        recovery_journal_snapshot(application, change_id),
+    )
+
+
 class ProcessEvidenceHost(EvidenceHost):
     """Own the controlled invocation's entire process/job graph below the evidence port."""
 
@@ -611,6 +671,9 @@ class ProcessEvidenceHost(EvidenceHost):
             " if command == 'close': break\n"
             " if command == 'write':\n"
             "  product.write_text('late old write\\n')\n"
+            "  subprocess.run(['git','update-ref','refs/owlbear/test-worker','HEAD'],cwd=product.parent,check=True)\n"
+            " elif command == 'write-next':\n"
+            "  product.write_text('late old write after restart\\n')\n"
             "  subprocess.run(['git','update-ref','refs/owlbear/test-worker','HEAD'],cwd=product.parent,check=True)\n"
             " elif command == 'restore':\n"
             "  product.write_text('baseline\\n')\n"
@@ -654,6 +717,54 @@ class ProcessEvidenceHost(EvidenceHost):
         return RecoveryEvidence(
             reference=reference, recovery_id=intent.recovery_id, invocation=intent.invocation, status=status
         )
+
+
+def absent_host_process_case(tmp_path: Path):
+    """Keep an issued descendant alive while a fresh application lacks its evidence host."""
+    application, runtimes, _coordinator, state = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    host = ProcessEvidenceHost(orphan_child=True)
+    application._recovery_evidence_provider = host
+    launch = application.acquire_frontier_work().launch_packages[0]
+    try:
+        worker = host.dispatch(launch.claim.claim_id)
+        protected = recovery_effect_snapshot(application, "change-a")
+        reopened, _coordinator, _manager = _reopen_portfolio(
+            tmp_path,
+            state,
+            runtimes,
+            clock=lambda: "2030-01-01T00:00:00Z",
+        )
+        assert recovery_effect_snapshot(reopened, "change-a") == protected
+        assert isinstance(reopened._recovery_evidence_provider, UnavailableRecoveryEvidenceProvider)
+        exact_head = _git(launch.worktree_path, "rev-parse", "HEAD")
+
+        def signal(command: str, expected_content: bytes) -> None:
+            worker.stdin.write(f"{command}\n")
+            worker.stdin.flush()
+            assert worker.stdout.readline().strip() == command
+            assert (launch.worktree_path / "product.txt").read_bytes() == expected_content
+            if command.startswith("write"):
+                assert _git(launch.worktree_path, "rev-parse", "refs/owlbear/test-worker") == exact_head
+
+        signal("write", b"late old write\n")
+
+        def restart():
+            return _reopen_portfolio(
+                tmp_path,
+                state,
+                runtimes,
+                clock=lambda: "2030-01-01T00:00:00Z",
+            )[0]
+
+    except BaseException:
+        if launch.claim.claim_id in host.processes and launch.claim.claim_id not in host.closed:
+            host.close(launch.claim.claim_id)
+        raise
+    else:
+        return reopened, host, worker, launch, restart, recovery_effect_snapshot, signal
 
 
 def _host(application):
@@ -1381,7 +1492,18 @@ def test_restart_cannot_use_exclusion_receipt_without_current_host_verification(
     reopened, _, _ = _reopen_portfolio(tmp_path, state, runtimes)
     frontier, custody = runtimes["change-a"].frontier_bytes(), coordinator.show("change-a")
     assert (intent.recovery_id in custody.recovery_exclusions) == (crash != "evidence")
-    assert not reopened.get_change("change-a").readiness.executable
+    readiness = reopened.get_change("change-a").readiness
+    assert not readiness.executable
+    if crash != "evidence":
+        assert readiness.reason_code == "coordination-unavailable"
+        assert readiness.prompt == (
+            "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. "
+            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
+            "condition separately before Delivery rereads it."
+        )
+        item = reopened.show_work_item_view("change-a", "outcome:OUT-001")
+        assert item.readiness.reason_code == "coordination-unavailable"
+        assert item.readiness.prompt == readiness.prompt
     assert reopened.acquire_change_action(_continuation_request(reopened)).kind != "acquired"
     with pytest.raises(DeliveryWorkerExclusionRequiredError):
         reopened._coordinator.prepare_runtime_custody_guard("change-a")
@@ -1488,7 +1610,8 @@ def test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement(t
         replacement = reopened.acquire_change_action(_continuation_request(reopened))
     assert replacement.kind == "acquired"
     assert replacement.launch.claim.claim_id != launch.claim.claim_id
-    assert application.acquire_change_action(_continuation_request(application)).kind == "busy"
+    existing_owner = application.acquire_change_action(_continuation_request(application))
+    assert existing_owner.kind == "busy", existing_owner.model_dump_json()
     product.write_text("replacement-only\n")
     refs = _git(launch.worktree_path, "show-ref")
     with pytest.raises(RuntimeError, match="cannot be dispatched again"):
@@ -1499,6 +1622,48 @@ def test_process_exclusion_then_verified_all_jobs_close_admits_one_replacement(t
     assert _git(launch.worktree_path, "show-ref") == refs
     assert "refs/owlbear/test-worker" not in refs
     assert coordinator.show("change-a").writer == replacement.launch.writer
+
+
+def test_absent_host_still_writing_descendant_stays_contained_across_restarts(tmp_path: Path) -> None:
+    reopened, host, _worker, launch, restart, snapshot, signal = absent_host_process_case(tmp_path)
+
+    def assert_contained(application) -> tuple[object, ...]:
+        before = snapshot(application)
+        view = application.get_change("change-a")
+        assert not view.readiness.executable
+        diagnosis = application.repair("change-a")
+        assert diagnosis.proposal is not None
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.repair("change-a", diagnosis.proposal.proposal_id)
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.recover_claim(
+                "change-a",
+                "OUT-001",
+                launch.claim.attempt_id,
+                launch.claim.claim_id,
+                confirmed_lost=True,
+            )
+        acquisition = application.acquire_change_action(_continuation_request(application))
+        assert acquisition.kind == "unsupported"
+        assert acquisition.reason_code == "repair-required"
+        assert acquisition.readiness.reason_code == "active-custody"
+        assert application._coordinator.show("change-a").writer.claim_id == launch.claim.claim_id
+        assert launch.claim.claim_id not in host.closed
+        assert snapshot(application) == before
+        return before
+
+    try:
+        first_snapshot = assert_contained(reopened)
+        signal("write-next", b"late old write after restart\n")
+        after_signaled_write = snapshot(reopened)
+        assert after_signaled_write[:3] == first_snapshot[:3]
+        assert after_signaled_write[3] != first_snapshot[3]
+        assert after_signaled_write[4:] == first_snapshot[4:]
+        restarted = restart()
+        assert snapshot(restarted) == after_signaled_write
+        assert_contained(restarted)
+    finally:
+        host.close(launch.claim.claim_id)
 
 
 @pytest.mark.parametrize("fault_record", ["intent", "evidence", "receipt"])

@@ -32,7 +32,12 @@ from serve.delivery.tests.test_portfolio_application import (
     _workspace_mutation_snapshot,
     acceptance_budget_case,
 )
-from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
+from serve.delivery.tests.test_recovery import (
+    absent_host_process_case,
+    completed_recovery_restart_case,
+    recovery_case,
+    recovery_journal_snapshot,
+)
 
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.routes.target_work import assemble_target_app
@@ -813,13 +818,121 @@ def test_http_explicit_acceptance_is_one_bounded_read(tmp_path: Path, *, exhaust
 
 
 def test_http_verified_completed_recovery_replay(tmp_path: Path) -> None:
-    application, _operation, request, unchanged = completed_recovery_case(tmp_path, "claim")
+    application, _operation, request, unchanged, host = completed_recovery_restart_case(tmp_path, "claim")
     body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    journals = recovery_journal_snapshot(application, "change-a")
+    verifications = host.verifications
+    with TestClient(assemble_target_app(application)) as client:
+        first_read = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        repeated_read = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        assert first_read.status_code == repeated_read.status_code == 200
+        assert first_read.json() == repeated_read.json()
+        assert recovery_journal_snapshot(application, "change-a") == journals
+        assert host.verifications == verifications
+        first_replay = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+        second_replay = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert first_replay.status_code == second_replay.status_code == 200
+    assert first_replay.json() == second_replay.json()
+    assert first_replay.json()["status"] == "recovered"
+    assert host.verifications == verifications + 2
+    assert recovery_journal_snapshot(application, "change-a") == journals
+    unchanged()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("preservation_paths", ["../../outside"]),
+        ("commands", ["terminate-worker"]),
+        ("budget", {"attempts": 999}),
+        ("effect_receipt", {"verified": True}),
+        ("stop_assertion", {"all_descendants_stopped": True}),
+    ],
+)
+def test_http_recovery_rejects_caller_authored_evidence_fields_before_mutation(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    application, _operation, request, unchanged = recovery_case(tmp_path, "builder")
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    body[field] = value
     with TestClient(assemble_target_app(application)) as client:
         response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
-    assert response.status_code == 200
-    assert response.json()["status"] == "recovered"
+    assert response.status_code == 422
+    assert response.json()["code"] == "ERR_DELIVERY_HTTP_VALIDATION"
+    assert response.json()["detail"] == "Delivery request input is malformed"
     unchanged()
+
+
+def test_http_recovery_rejects_stale_claim_identity_before_mutation(tmp_path: Path) -> None:
+    application, _operation, request, unchanged = recovery_case(tmp_path, "builder")
+    body = {key: value for key, value in request.items() if key not in {"change_id", "outcome_id"}}
+    body["attempt_id"] = "stale-attempt"
+    with TestClient(assemble_target_app(application)) as client:
+        response = client.post("/api/changes/change-a/outcomes/OUT-001/claims/recover", json=body)
+    assert response.status_code == 409
+    unchanged()
+
+
+def test_http_absent_host_still_writing_descendant_stays_contained_across_restarts(tmp_path: Path) -> None:
+    application, host, _worker, launch, restart, snapshot, signal = absent_host_process_case(tmp_path)
+
+    def assert_contained(candidate) -> tuple[object, ...]:
+        before = snapshot(candidate)
+        with TestClient(assemble_target_app(candidate)) as client:
+            first = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+            repeated = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+            assert first.status_code == repeated.status_code == 200
+            assert first.json() == repeated.json()
+            readiness = first.json()["item"]["readiness"]
+            assert readiness["executable"] is False
+            portfolio = client.get("/api/work-items")
+            assert portfolio.status_code == 200
+            claim_refusal = client.post(
+                "/api/changes/change-a/outcomes/OUT-001/claims/recover",
+                json={
+                    "attempt_id": launch.claim.attempt_id,
+                    "claim_id": launch.claim.claim_id,
+                    "confirmed_lost": True,
+                },
+            )
+            assert claim_refusal.status_code == 409
+            assert claim_refusal.json()["code"] == DeliveryWorkerExclusionRequiredError.code
+            assert claim_refusal.json()["retry_safe"] is False
+            assert "Custody and files are unchanged" in claim_refusal.json()["detail"]
+            assert "Timeout and caller confirmation are not evidence" in claim_refusal.json()["detail"]
+            acquired = client.post(
+                "/api/changes/change-a/continuation/acquire",
+                json={
+                    "expected_basis": readiness["basis"],
+                    "capabilities": ["builder"],
+                    "host_id": "synthetic-host",
+                    "session_id": "absent-host-recovery",
+                },
+            )
+            assert acquired.status_code == 200
+            assert acquired.json()["kind"] == "unsupported"
+            assert acquired.json()["reason_code"] == "repair-required"
+            assert acquired.json()["readiness"]["reason_code"] == "active-custody"
+            assert acquired.json()["engine_action"] is None
+        assert host.verifications == 0
+        assert launch.claim.claim_id not in host.closed
+        assert snapshot(candidate) == before
+        return before
+
+    try:
+        first_snapshot = assert_contained(application)
+        signal("write-next", b"late old write after restart\n")
+        after_signaled_write = snapshot(application)
+        assert after_signaled_write[:3] == first_snapshot[:3]
+        assert after_signaled_write[3] != first_snapshot[3]
+        assert after_signaled_write[4:] == first_snapshot[4:]
+        restarted = restart()
+        assert snapshot(restarted) == after_signaled_write
+        assert_contained(restarted)
+    finally:
+        host.close(launch.claim.claim_id)
 
 
 def test_http_default_loader_replays_engine_action_after_restart(tmp_path: Path) -> None:
@@ -2094,6 +2207,71 @@ def test_http_default_loader_reports_unavailable_custody(tmp_path: Path) -> None
     assert tree_snapshot(repository) == repository_before_cli
     assert _remote_refs(remote) == remote_refs_before
     assert provider.draft_state_calls == 0
+
+
+def test_http_and_offline_diagnostics_bound_an_unknown_change_without_mutation(tmp_path: Path) -> None:
+    repository, _runtime_root, remote, provider, _application, _head_a, _head_b = _loader_composed_engine_fixture(
+        tmp_path
+    )
+    _git(repository, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    _git(repository, "config", f"url.{remote}.insteadOf", "https://github.com/example/project.git")
+    reloaded = load_core_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+
+    def tree_snapshot(root: Path) -> tuple[tuple[str, str, bytes | str | None], ...]:
+        entries = []
+        for path in (root, *sorted(root.rglob("*"))):
+            relative = path.relative_to(root.parent).as_posix()
+            if path.is_symlink():
+                entries.append((relative, "symlink", path.readlink().as_posix()))
+            elif path.is_dir():
+                entries.append((relative, "directory", None))
+            elif path.is_file():
+                entries.append((relative, "file", path.read_bytes()))
+            else:
+                entries.append((relative, "other", None))
+        return tuple(entries)
+
+    repository_before = tree_snapshot(repository)
+    remote_refs_before = _remote_refs(remote)
+    provider_calls_before = provider.draft_state_calls
+    with TestClient(assemble_target_app(reloaded)) as client:
+        first = client.get("/api/changes/change-missing/work-items/publication")
+        repeated = client.get("/api/changes/change-missing/work-items/publication")
+    assert first.status_code == repeated.status_code == 409
+    assert first.json() == repeated.json()
+    assert first.json()["code"] == "ERR_DELIVERY_PORTFOLIO"
+    diagnostics_cli = subprocess.run(  # noqa: S603
+        (
+            sys.executable,
+            "-B",
+            str(Path(__file__).resolve().parents[1] / "serve/tools/src/owlbear_tools/delivery_diagnostics.py"),
+            "inspect",
+            "--project-root",
+            str(repository),
+            "--change-id",
+            "change-missing",
+            "--format",
+            "json",
+        ),
+        cwd=repository,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert diagnostics_cli.returncode == 1
+    diagnostics = json.loads(diagnostics_cli.stdout)
+    assert diagnostics["status"] == "degraded"
+    assert diagnostics["change_scope"] == "selected"
+    assert "CHANGE_NOT_FOUND" in diagnostics["diagnostic_codes"]
+    assert diagnostics["inspection_complete"] is False
+    assert diagnostics["writes_performed"] is False
+    assert repository_before == tree_snapshot(repository)
+    assert _remote_refs(remote) == remote_refs_before
+    assert provider.draft_state_calls == provider_calls_before
 
 
 def _remote_refs(repository: Path) -> str:

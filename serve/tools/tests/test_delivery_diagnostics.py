@@ -382,6 +382,63 @@ def test_missing_frontier_is_incomplete_without_unknown_pending_effects(tmp_path
     assert result["pending_effects"] is False
 
 
+@pytest.mark.parametrize(
+    ("runtime_changes", "expected_code", "expected_pending_effects"),
+    [
+        ("missing-record", "CHANGE_NOT_FOUND", "verified-absent"),
+        ("unreadable", "SYMLINK_REJECTED", "unknown"),
+    ],
+)
+def test_selected_change_presence_requires_runtime_record(
+    tmp_path: Path,
+    runtime_changes: str,
+    expected_code: str,
+    expected_pending_effects: str,
+) -> None:
+    root = _complete_root(tmp_path)
+    changes = root / ".owlbear/delivery/runtime/changes"
+    if runtime_changes == "missing-record":
+        shutil.rmtree(changes / "example")
+    else:
+        shutil.rmtree(changes)
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        changes.symlink_to(outside, target_is_directory=True)
+    before_membership = sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+    before_bytes = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+
+    completed = _run_cli(
+        root,
+        "inspect",
+        "--project-root",
+        str(root),
+        "--change-id",
+        "example",
+        "--format",
+        "json",
+    )
+    result = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert result["status"] == "degraded"
+    assert result["inspection_complete"] is False
+    assert expected_code in result["diagnostic_codes"]
+    assert result["pending_effects"] == (False if expected_pending_effects == "verified-absent" else "unknown")
+    if runtime_changes == "unreadable":
+        assert "CHANGE_NOT_FOUND" not in result["diagnostic_codes"]
+    assert result["writes_performed"] is False
+    assert before_membership == sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+    assert before_bytes == {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+
+
 def test_failed_present_pending_families_make_pending_effects_unknown(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

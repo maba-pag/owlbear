@@ -5123,6 +5123,7 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
         ("engine-action-failed", False, "/repair-delivery"),
         ("engine-action-incomplete", False, "/repair-delivery"),
         ("engine-action-blocked", False, "/repair-delivery"),
+        ("coordination-unavailable", False, "/repair-delivery"),
         ("active-custody", False, None),
         ("dependency-wait", False, None),
         ("publication-wait", False, None),
