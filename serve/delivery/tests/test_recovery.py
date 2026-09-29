@@ -32,13 +32,18 @@ from serve.delivery.tests.test_portfolio_application import (
 )
 
 from owlbear_delivery import (
+    BlockDelivery,
     CompletedOutcomeRepairReceipt,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestOption,
     DeliveryResultSubmission,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
     PortfolioApplicationError,
     PrepareCompletedOutcomeRepair,
     PreservationRejectedError,
+    ReturnDelivery,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
 from owlbear_delivery.recovery import (
@@ -1293,10 +1298,13 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
     assert readiness.attempts == (3 if exhausted else 1)
 
     blocked = application.acquire_change_action(_continuation_request(application))
-    assert blocked.kind == ("human" if exhausted else "waiting")
+    assert blocked.kind == ("unsupported" if exhausted else "waiting")
     assert blocked.reason_code == ("retry-exhausted" if exhausted else "retry-backoff")
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == (3 if exhausted else 1)
+    if exhausted:
+        assert blocked.readiness.next_actor.value == "none"
+        assert blocked.readiness.prompt is None
     assert RetryLedger(state_root, "change-a").episode(key).total_attempts == (3 if exhausted else 1)
     assert runtime.finalization() is None
 
@@ -1726,6 +1734,59 @@ def test_absent_host_still_writing_descendant_stays_contained_across_restarts(tm
         restarted = restart()
         assert snapshot(restarted) == after_signaled_write
         assert_contained(restarted)
+    finally:
+        host.close(launch.claim.claim_id)
+
+
+@pytest.mark.parametrize("transition_kind", ["block", "return"])
+def test_active_builder_handoff_requires_worker_exclusion(tmp_path: Path, transition_kind: str) -> None:
+    application, host, _worker, launch, _restart, snapshot, signal = absent_host_process_case(tmp_path)
+    signal("restore", b"baseline\n")
+    before = snapshot(application)
+    if transition_kind == "block":
+        request = BlockDelivery(
+            action="block",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            block_id="blocked-check",
+            reason="A prerequisite needs a decision.",
+            unblock_condition="The user answers the request.",
+            expected_evidence=("answer",),
+            locators=("TASK-001",),
+            request=DeliveryRequest(
+                request_id="request-1",
+                kind=DeliveryRequestKind.DECISION,
+                outcome_id=launch.outcome_id,
+                summary="Choose the supported prerequisite.",
+                options=(DeliveryRequestOption(option_id="continue", label="Continue"),),
+            ),
+            resume_commit=launch.last_reviewed_commit,
+        )
+    else:
+        request = ReturnDelivery(
+            action="return",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            target=DeliveryStage.PLANNING,
+            reason="The implementation premise needs revision.",
+            locators=("TASK-001",),
+            preserved_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+        )
+
+    try:
+        with pytest.raises(DeliveryWorkerExclusionRequiredError):
+            application.transition_delivery("change-a", request)
+
+        assert snapshot(application) == before
+        assert application._coordinator.show("change-a").writer.claim_id == launch.claim.claim_id
+        signal("write", b"late old write\n")
+        after_write = snapshot(application)
+        assert after_write[:3] == before[:3]
+        assert after_write[3] != before[3]
+        assert after_write[4] == before[4]
+        assert after_write[5] != before[5]
+        assert after_write[6:] == before[6:]
     finally:
         host.close(launch.claim.claim_id)
 

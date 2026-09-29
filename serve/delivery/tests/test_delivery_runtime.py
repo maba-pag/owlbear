@@ -1908,19 +1908,12 @@ def _active_second_task(tmp_path: Path):
 
 
 @pytest.mark.parametrize("instruction", ["planning", "design", "block"])
-def test_implementation_nonadvance_persists_only_consumed_successor_state(
+def test_implementation_nonadvance_requires_verified_worker_exclusion(
     tmp_path: Path,
     instruction: str,
 ) -> None:
-    runtime, coordinator, coordination, initial, attempt_commit, first_result, tasks = _active_second_task(tmp_path)
+    runtime, coordinator, coordination, _, attempt_commit, _, _ = _active_second_task(tmp_path)
     requests = {
-        "retry": RetryDelivery(
-            action="retry",
-            outcome_id="OUT-001",
-            claim_id="claim-002",
-            abandoned_commit=attempt_commit,
-            attempt_id="attempt-002",
-        ),
         "planning": ReturnDelivery(
             action="return",
             outcome_id="OUT-001",
@@ -1960,51 +1953,15 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
         ),
     }
 
-    with (
-        patch.object(runtime, "_replace", side_effect=RuntimeError("injected after workspace reconciliation")),
-        pytest.raises(RuntimeError, match="injected"),
-    ):
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("delivery-runtime")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         runtime.transition(requests[instruction])
 
-    result = runtime.transition(requests[instruction])
-    current = coordinator.show("delivery-runtime")
-
-    assert result.active_claim_id is None
-    assert current.writer is None
-    assert current.last_reviewed_commit == initial
-    if instruction == "retry":
-        assert result.tasks == tasks
-        assert result.results == (first_result,)
-        assert result.return_context is None
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
-        assert (
-            _git(coordination.worktree_path, "rev-parse", "refs/owlbear/attempts/delivery-runtime/attempt-002")
-            == attempt_commit
-        )
-    elif instruction == "planning":
-        assert result.stage == DeliveryStage.PLANNING
-        assert result.tasks == (tasks[0],)
-        assert result.results == (first_result,)
-        assert result.return_context is not None
-        assert result.return_context.preserved_commit == attempt_commit
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
-    elif instruction == "design":
-        assert result.stage == DeliveryStage.DESIGN
-        assert result.tasks == result.results == ()
-        assert result.return_context is not None
-        assert result.return_context.completed_boundary == initial
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
-    else:
-        assert result.stage == DeliveryStage.IMPLEMENTATION
-        assert result.tasks == tasks
-        assert result.results == (first_result,)
-        assert result.block is not None
-        assert result.block.resume_commit == attempt_commit
-        assert _git(coordination.worktree_path, "rev-parse", "HEAD") == initial
-        assert (
-            _git(coordination.worktree_path, "rev-parse", "refs/owlbear/attempts/delivery-runtime/attempt-002")
-            == attempt_commit
-        )
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_coordination
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 
 def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(tmp_path: Path) -> None:
@@ -2241,11 +2198,11 @@ def test_implementation_block_requires_bounded_user_request(tmp_path: Path) -> N
     assert coordinator.show("delivery-runtime").writer is not None
 
 
-def test_implementation_block_rejects_resume_commit_not_at_branch_head(tmp_path: Path) -> None:
-    runtime, coordinator, _coordination, initial, _attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+def test_implementation_block_cannot_bypass_exclusion_with_stale_resume_commit(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, initial, attempt_commit, _, _ = _active_second_task(tmp_path)
     before = runtime.frontier_bytes()
 
-    with pytest.raises(RuntimeError, match="outside the recoverable restart states"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         runtime.transition(
             BlockDelivery(
                 action="block",
@@ -2269,6 +2226,7 @@ def test_implementation_block_rejects_resume_commit_not_at_branch_head(tmp_path:
     assert runtime.frontier_bytes() == before
     assert coordinator.show("delivery-runtime").writer is not None
     assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 
 def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_path: Path) -> None:

@@ -5610,6 +5610,30 @@ it("renders durable retry readiness metadata", async () => {
   expect(inspector).toHaveTextContent("2026-08-04T00:00:02Z");
 });
 
+it.each([
+  ["retry-exhausted", "Automatic retries are exhausted; Delivery offers no action to reset this budget."],
+  [
+    "retry-containment",
+    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
+  ],
+] as const)("shows no expected actor or prompt for %s", async (reason, explanation) => {
+  currentDetail = detail({
+    readiness: readiness({
+      status: "blocked",
+      reason_code: reason,
+      next_actor: "none",
+      prompt: null,
+      stop_reason: reason,
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  expect(inspector.querySelector('[data-readiness-actor="none"]')).toHaveTextContent("Next: Nobody");
+  expect(inspector.querySelector(`[data-readiness-reason="${reason}"]`)).toHaveTextContent(explanation);
+  expect(screen.queryByTestId("readiness-prompt")).not.toBeInTheDocument();
+});
+
 it("reports engine continuation custody as provenance without offering caller-confirmed recovery", async () => {
   currentDetail = detail({
     card: card({ stage: "implementation" }),

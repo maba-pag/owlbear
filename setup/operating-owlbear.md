@@ -213,10 +213,11 @@ Worker transitions keep correction finite and typed:
 | Condition | Owner and control | Resume behavior |
 | --- | --- | --- |
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
-| Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
+| Planning-stage user decision or action | Planning worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
-| Worker returns `retry` | Worker supplies the exact claim and source boundary | Runtime refuses the transition with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree stay unchanged, and no new attempt starts. Orchestrator reports the missing exclusion evidence |
-| Planning or Design premise failed | Worker returns `return` with evidence and target | Runtime persists successor context; Design reopen is currently manual through `/design` |
+| Worker returns `retry` | Worker supplies the exact claim; Implementation retry also supplies its attempt and abandoned-commit identity | Runtime refuses the transition with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree stay unchanged, and no new attempt starts. Orchestrator reports the missing exclusion evidence |
+| Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
+| Implementation Builder requests `block` or `return` | An otherwise-valid transition is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` | No request or return context is persisted; the active claim, worktree and capacity stay held. This refusal is specific to Implementation; Planning-stage `block` and `return` still persist typed state. Do not treat the refusal as worker-loss evidence or permission to reset or redispatch |
 | Claim recovery is requested | User requests recovery of the exact claim in Cockpit | The current runtime refuses with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the claim, worktree, and capacity stay held. Timeout and caller confirmation are not evidence, and this version has no successful claim-release path |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
@@ -225,8 +226,11 @@ The current runtime has no successful claim-release path; it refuses recovery re
 custody. Request answers, requestless unblock, claim-recovery requests, backward movement, and
 retained Integration attention remain user-owned Cockpit controls rather than agent MCP operations.
 Refused claims and interrupted operations consume shared execution capacity. If they occupy every
-slot, new Planner/Builder work, finalization, and engine continuation wait; this version has no
-operator action that releases those holds.
+slot, new Planner/Builder work, finalization, and engine continuation wait. This version has no
+supported host-exclusion path that can release a claim while its worker may still run. A Change
+cannot be abandoned while an active mutation claim remains, and a timeout or recovery request does
+not release that claim. The slot remains occupied until supported host-owned exclusion proves the
+worker cannot resume and exact custody recovery completes.
 
 ### Publication, Acceptance, And Completed History
 
@@ -258,8 +262,8 @@ of receipt-backed history.
 
 - External Change-head adoption proves provenance only. Explicit promotion is required before an
   adopted head becomes review authority, and finalization binds the exact reviewed head.
-- Design return persists structured successor context, but reopening and revising the Specification
-  currently starts with a manual `/design` invocation.
+- A Planning-stage return to Design persists structured successor context, but reopening and revising
+  the Specification currently starts with a manual `/design` invocation.
 - Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
   configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
@@ -269,7 +273,7 @@ of receipt-backed history.
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
-Correction: return | block -> typed successor context; retry -> refusal with claim retained pending supported host exclusion
+Correction: Planning block | return -> typed successor context; Implementation Builder block | return -> refusal; retry (any stage) -> refusal, with claim retained pending supported host exclusion
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```

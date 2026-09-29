@@ -189,10 +189,14 @@ and require the returned binding to name the launch outcome. The Builder already
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
 commit fields. For a `DeliveryTransition`, call `transition_delivery` with outer
 `change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
-A worker-owned `block`, `retry`, or `return` is forwarded normally and must not be recovered. A
-malformed submission result or identity mismatch follows the existing dispatch-failure recovery
-route. A `retry` cannot release custody without verified exclusion; report the non-retryable rejection
-and do not rewrite it into another transition.
+An implementation-stage Builder `block` or `return` is forwarded unchanged, but it is not a
+guaranteed custody release: runtime rejects the handoff with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
+while a dispatched worker can still write, leaving its claim, worktree, and capacity held. Report the
+exact Change, outcome, attempt, and claim identities with that rejection. It is not malformed worker
+output or proof that the worker was lost; do not call `recover_claim`, redispatch, or synthesize a
+replacement transition. A malformed submission result or identity mismatch follows the existing
+dispatch-failure recovery route. A `retry` cannot release custody without verified exclusion; report
+the non-retryable rejection and do not rewrite it into another transition.
 
 Immediately before forwarding, if no directly callable `transition_delivery` binding exists, run one focused
 `tool_search` for that exact operation. If it remains unavailable or the search returns a tool

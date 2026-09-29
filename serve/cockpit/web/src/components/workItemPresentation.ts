@@ -53,9 +53,10 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "checkpoint-pending": "A durable checkpoint is still pending.",
   "report-store-unavailable": "Finalization diagnostics could not be read.",
   "retry-backoff": "Automatic recovery is waiting for its next eligible time.",
-  "retry-exhausted": "Automatic recovery is exhausted; preserve state for an explicit decision.",
+  "retry-exhausted": "Automatic retries are exhausted; Delivery offers no action to reset this budget.",
   "acceptance-wait": "Acceptance is unchanged; observe later without repeating the effect.",
-  "retry-containment": "Automatic recovery is contained pending an owning decision.",
+  "retry-containment":
+    "A prior attempt has no authoritative outcome. Preserve custody; no caller action can retry or release it.",
   "retry-ledger-unavailable": "Retry authority could not be read safely.",
 };
 

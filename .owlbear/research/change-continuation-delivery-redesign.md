@@ -15,7 +15,8 @@
 ### D03 Current Checkpoint: 2026-09-29
 
 Continue D03 on the existing PR branch. The [package plan's current handoff](delivery-cloud-d03-plan.md#current-handoff)
-owns its exact candidate, review, CI and human/host acceptance status. The [approved recovery boundary](#11-requirements-from-the-user)
+owns its exact candidate, review, CI and human/host acceptance status; its required human/host
+capacity-risk acknowledgment remains pending. The [approved recovery boundary](#11-requirements-from-the-user)
 supersedes the former full-automation requirement. Older D02 stop instructions below are historical;
 their accepted evidence remains intact. D03 is not accepted until its current candidate clears the
 named gates; no D04 dispatch, merge or live activation is implied here.

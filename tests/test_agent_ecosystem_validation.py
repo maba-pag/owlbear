@@ -861,6 +861,8 @@ def test_worker_retry_guidance_matches_runtime_exclusion_refusal() -> None:
         assert "does not reset" in workflow
     assert "resets the managed worktree to the reviewed boundary" not in packet
     assert "`retry` abandons the current attempt" not in packet
+    assert "runtime also refuses implementation-stage Builder `block` and `return`" in packet
+    assert "persists no user request or return context" in packet
     assert "report the non-retryable rejection" in orchestration
     assert "Runtime clears the claim" not in operator_guide
     assert "eligible for recovery after the configured" not in delivery_readme

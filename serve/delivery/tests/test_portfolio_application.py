@@ -1884,13 +1884,20 @@ def test_engine_finished_action_requires_original_journal_before_advancing(tmp_p
 @pytest.mark.parametrize("interrupted", [False, True])
 def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: Path, *, interrupted: bool) -> None:
     application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
-    action = _engine_action(application)
+    request = _continuation_request(application)
+    acquired = application.acquire_change_action(request)
+    if acquired.kind == "reconciled":
+        request = _continuation_request(application)
+        acquired = application.acquire_change_action(request)
+    assert acquired.kind == "acquired"
+    assert acquired.engine_action is not None
+    action = acquired.engine_action
     if interrupted:
         with application._coordinator.continuation_execution(action):
             application._coordinator.start_continuation_action(action)
     else:
         provider.observe_checks.side_effect = PublicationProviderError(
-            PublicationProviderFailureCode.UNAVAILABLE, action.operation_id, "provider unavailable", retry_safe=True
+            PublicationProviderFailureCode.UNAVAILABLE, "observe_checks", "provider unavailable", retry_safe=False
         )
     result = _execute_engine(application, action)
     assert result.kind == "blocked"
@@ -1904,7 +1911,7 @@ def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: 
     assert "start a replacement" in result.failure.retry_condition
     reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
     assert _execute_engine(reopened, action) == result
-    stopped = reopened.acquire_change_action(_continuation_request(reopened))
+    stopped = reopened.acquire_change_action(request)
     assert stopped.kind == "unavailable"
     assert stopped.engine_result == result
     assert stopped.failure == result.failure
@@ -1912,6 +1919,113 @@ def test_engine_failure_retains_exact_action_without_retry_or_release(tmp_path: 
     with pytest.raises(CoordinationConflictError, match="continuation action custody"):
         runtime.queue_explicit_checkpoint("f" * 40)
     assert provider.set_pull_request_draft_state.call_count == 0
+
+
+@pytest.mark.parametrize(
+    ("provider_method", "operation"),
+    [("read_pull_request", "read_pull_request"), ("observe_checks", "observe_checks")],
+)
+def test_mark_ready_read_failure_retries_after_backoff_with_new_operation(
+    tmp_path: Path, provider_method: str, operation: str
+) -> None:
+    now = {"value": "2026-08-04T00:00:00Z"}
+
+    def clock() -> str:
+        return now["value"]
+
+    application, runtime, provider, state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False, clock=clock
+    )
+    action = _engine_action(application)
+    getattr(provider, provider_method).side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        operation,
+        "provider unavailable",
+        retry_safe=True,
+    )
+
+    failed = _execute_engine(application, action)
+
+    assert failed.kind == "blocked"
+    assert failed.failure.pre_effect_retryable
+    assert application._coordinator.show("change-a").continuation_action.finished_at is not None
+    assert application._execution_occupancy() == 0
+    if provider_method == "read_pull_request":
+        provider.read_pull_request.side_effect = lambda _repository, _number: state["pull_request"]
+    else:
+        provider.observe_checks.side_effect = None
+    publisher = application._draft_pull_request_publisher
+    application, _coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        _state_root,
+        {"change-a": runtime},
+        clock=clock,
+    )
+    application._draft_pull_request_publisher = publisher
+    runtime = application._runtimes["change-a"]
+    before_backoff = application.acquire_change_action(_continuation_request(application))
+    assert before_backoff.kind == "waiting"
+    assert before_backoff.reason_code == "retry-backoff"
+
+    now["value"] = "2026-08-04T00:00:02Z"
+    retry = application.acquire_change_action(_continuation_request(application))
+
+    assert retry.kind == "acquired"
+    assert retry.engine_action is not None
+    assert retry.engine_action.operation_id != action.operation_id
+    key = RetryEpisodeKey.engine(
+        "change-a",
+        "mark-ready",
+        action.exact_head,
+        action.target_head,
+        action.finalization_id,
+    )
+    episode = runtime.retry_ledger(clock=clock).episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 2
+    completed = _execute_engine(application, retry.engine_action)
+    assert completed.kind == "completed"
+    assert provider.set_pull_request_draft_state.call_count == 1
+    episode = runtime.retry_ledger(clock=clock).episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 0
+    assert retry.engine_action.operation_id in episode.accepted_attempt_ids
+    next_action = application.acquire_change_action(_continuation_request(application))
+    if next_action.kind == "reconciled":
+        next_action = application.acquire_change_action(_continuation_request(application))
+    assert next_action.kind == "acquired"
+    assert next_action.engine_action is not None
+    assert next_action.engine_action.kind == "observe-acceptance"
+
+
+def test_mark_ready_retry_exhaustion_has_no_actor_or_prompt(tmp_path: Path) -> None:
+    now = {"value": "2026-08-04T00:00:00Z"}
+    application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        mark_ready=False,
+        clock=lambda: now["value"],
+    )
+    provider.observe_checks.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "observe_checks",
+        "provider unavailable",
+        retry_safe=True,
+    )
+
+    for retry_time in (None, "2026-08-04T00:00:05Z", "2026-08-04T00:00:20Z"):
+        if retry_time is not None:
+            now["value"] = retry_time
+        action = _engine_action(application)
+        failed = _execute_engine(application, action)
+        assert failed.kind == "blocked"
+        assert failed.failure.pre_effect_retryable
+
+    exhausted = application.acquire_change_action(_continuation_request(application))
+    assert exhausted.kind == "unsupported"
+    assert exhausted.reason_code == "retry-exhausted"
+    assert exhausted.readiness.next_actor.value == "none"
+    assert exhausted.readiness.prompt is None
+    assert exhausted.readiness.attempts == 3
 
 
 @pytest.mark.parametrize(
@@ -2038,9 +2152,9 @@ def test_readiness_projects_recorded_engine_failure_as_contained(tmp_path: Path)
     action = _engine_action(application)
     provider.observe_checks.side_effect = PublicationProviderError(
         PublicationProviderFailureCode.UNAVAILABLE,
-        action.operation_id,
+        "observe_checks",
         "provider unavailable",
-        retry_safe=True,
+        retry_safe=False,
     )
     result = _execute_engine(application, action)
     assert result.reason_code == "engine-action-failed"
@@ -2111,9 +2225,9 @@ def test_readiness_validates_started_journal_with_recorded_result(tmp_path: Path
     action = _engine_action(application)
     provider.observe_checks.side_effect = PublicationProviderError(
         PublicationProviderFailureCode.UNAVAILABLE,
-        action.operation_id,
+        "observe_checks",
         "provider unavailable",
-        retry_safe=True,
+        retry_safe=False,
     )
     result = _execute_engine(application, action)
     assert result.reason_code == "engine-action-failed"
@@ -2347,6 +2461,9 @@ def test_worker_legacy_budget_is_imported_before_dispatch(
     assert first.reason_code == ("retry-backoff" if count < 3 else "retry-exhausted")
     assert first.readiness.attempts == count
     assert first.failure is None
+    if count == 3:
+        assert first.readiness.next_actor.value == "none"
+        assert first.readiness.prompt is None
     episode = RetryLedger(state_root, "change-a").read().episodes[0]
     assert episode.total_attempts == count
     assert episode.legacy_failures == count
@@ -2451,6 +2568,7 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
         assert not application.get_change("change-a").readiness.executable
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
+    assert reopened.get_change("change-a").readiness.next_actor.value == "none"
     assert reopened.get_change("change-a").readiness.prompt is None
     assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
     sibling = reopened.acquire_change_action(_continuation_request(reopened, "change-b"))
@@ -2458,8 +2576,15 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
     assert sibling.launch.change_id == "change-b"
 
 
-def test_interrupted_engine_reservation_remains_consumed_without_dispatch_evidence(tmp_path: Path) -> None:
-    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(tmp_path, mark_ready=False)
+def test_interrupted_engine_reservation_waits_for_no_launch_backoff(tmp_path: Path) -> None:
+    now = {"value": "2026-08-04T00:00:00Z"}
+
+    def clock() -> str:
+        return now["value"]
+
+    application, runtime, provider, _state, _head, state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False, clock=clock
+    )
     assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
     with (
         patch.object(
@@ -2470,18 +2595,31 @@ def test_interrupted_engine_reservation_remains_consumed_without_dispatch_eviden
         application.acquire_change_action(_continuation_request(application))
     before = RetryLedger(state_root, "change-a").read()
     assert before.episodes[0].total_attempts == 1
-    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime})
+    assert before.episodes[0].last_status == "failed"
+    assert before.episodes[0].next_eligible_at == "2026-08-04T00:00:01Z"
+    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, {"change-a": runtime}, clock=clock)
     reopened._draft_pull_request_publisher = application._draft_pull_request_publisher
-    stopped = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
-    assert stopped.engine_action is None
-    assert stopped.readiness.reason_code == "retry-containment"
-    assert RetryLedger(state_root, "change-a").read() == before
+    before_backoff = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
+    assert before_backoff.kind == "waiting"
+    assert before_backoff.reason_code == "retry-backoff"
+    now["value"] = "2026-08-04T00:00:01Z"
+    retried = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
+    assert retried.kind == "acquired"
+    assert retried.engine_action is not None
+    after = RetryLedger(state_root, "change-a").read()
+    assert after.episodes[0].total_attempts == 2
+    assert retried.engine_action.operation_id in after.episodes[0].attempt_ids
     assert provider.set_pull_request_draft_state.call_count == 0
 
 
 @pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.COMPLETED])
-def test_worker_and_finalizer_reservations_without_owner_remain_consumed(tmp_path: Path, stage) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+def test_worker_and_finalizer_no_launch_retries_wait_for_backoff(tmp_path: Path, stage) -> None:
+    current_time = ["2026-08-04T00:00:00Z"]
+
+    def clock() -> str:
+        return current_time[0]
+
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage}, clock=clock)
     owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
     operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
     with (
@@ -2492,14 +2630,115 @@ def test_worker_and_finalizer_reservations_without_owner_remain_consumed(tmp_pat
     ledger = RetryLedger(state_root, "change-a")
     before = ledger.read()
     assert before.episodes[0].total_attempts == 1
-    reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
-    stopped = reopened.acquire_change_action(_continuation_request(reopened, session_id="new-session"))
-    assert stopped.readiness.reason_code == "retry-containment"
-    assert stopped.launch is None
-    assert stopped.finalization is None
-    assert ledger.read() == before
-    assert coordinator.show("change-a").writer is None
-    assert runtimes["change-a"].active_claims() == ()
+    assert before.episodes[0].last_status == "failed"
+    assert before.episodes[0].next_eligible_at == "2026-08-04T00:00:01Z"
+    too_soon = ledger.reserve(
+        before.episodes[0].key,
+        failure_class=before.episodes[0].failure_class,
+        now=current_time[0],
+        attempt_id="too-soon",
+    )
+    assert not too_soon.allowed
+    assert too_soon.reason_code == "retry-backoff"
+    current_time[0] = before.episodes[0].next_eligible_at
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    retried = reopened.acquire_change_action(_continuation_request(reopened, session_id="new-session"))
+    after = ledger.read()
+    assert after.episodes[0].total_attempts == 2
+    assert len(after.episodes[0].attempt_ids) == 2
+    if stage is DeliveryStage.PLANNING:
+        assert retried.launch is not None
+        assert retried.launch.claim.attempt_id in after.episodes[0].attempt_ids
+        assert reopened_coordinator.show("change-a").writer is None
+        active_claims = runtimes["change-a"].active_claims()
+        assert len(active_claims) == 1
+        assert active_claims[0][1] == retried.launch.claim
+    else:
+        assert retried.finalization is not None
+        assert retried.finalization.attempt.writer.attempt_id in after.episodes[0].attempt_ids
+        assert reopened_coordinator.show("change-a").writer == retried.finalization.attempt.writer
+        assert runtimes["change-a"].active_claims() == ()
+
+
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.COMPLETED])
+def test_committed_worker_or_finalizer_publication_error_keeps_reservation_pending(tmp_path: Path, stage) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
+    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
+    publish = getattr(owner, operation)
+    message = "owner publication response lost"
+
+    def publish_then_raise(*args, **kwargs):
+        publish(*args, **kwargs)
+        raise OSError(message)
+
+    with (
+        patch.object(owner, operation, side_effect=publish_then_raise),
+        pytest.raises(OSError, match="owner publication response lost"),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+
+    ledger = RetryLedger(state_root, "change-a")
+    pending_ids = {attempt.attempt_id for attempt in ledger.pending_attempts()}
+    assert len(pending_ids) == 1
+    if stage is DeliveryStage.PLANNING:
+        active_claims = runtimes["change-a"].active_claims()
+        assert len(active_claims) == 1
+        assert active_claims[0][1].attempt_id in pending_ids
+        assert coordinator.show("change-a").writer is None
+    else:
+        writer = coordinator.show("change-a").writer
+        assert writer is not None
+        assert writer.attempt_id in pending_ids
+        assert runtimes["change-a"].active_claims() == ()
+
+
+def test_recovered_finalizer_acquisition_keeps_reservation_pending(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    original_commit = RuntimeTransaction.commit
+    message = "injected finalizer acquisition interruption"
+
+    def interrupted(transaction):
+        def fail(stage: str) -> None:
+            if stage == "before-publication" and transaction._transaction_id.startswith("portfolio-acquire-change-a-"):
+                raise RuntimeError(message)
+
+        original_commit(transaction, failure=fail)
+
+    with (
+        patch.object(RuntimeTransaction, "commit", interrupted),
+        pytest.raises(RuntimeError, match=message),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+
+    pending = RetryLedger(state_root, "change-a").pending_attempts()
+    writer = coordinator.show("change-a").writer
+    assert writer is not None
+    assert tuple(item.attempt_id for item in pending) == (writer.attempt_id,)
+
+
+def test_committed_engine_action_publication_error_keeps_reservation_pending(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path, mark_ready=False
+    )
+    assert application.acquire_change_action(_continuation_request(application)).kind == "reconciled"
+    publish = application._coordinator.acquire_continuation_action
+    message = "engine owner publication response lost"
+
+    def publish_then_raise(action: ChangeContinuationAction) -> None:
+        publish(action)
+        raise OSError(message)
+
+    with (
+        patch.object(application._coordinator, "acquire_continuation_action", side_effect=publish_then_raise),
+        pytest.raises(OSError, match="engine owner publication response lost"),
+    ):
+        application.acquire_change_action(_continuation_request(application))
+
+    action = application._coordinator.show("change-a").continuation_action
+    assert action is not None
+    assert action.finished_at is None
+    assert {attempt.attempt_id for attempt in runtime.retry_ledger().pending_attempts()} == {action.operation_id}
 
 
 def test_existing_finalization_receipt_reconciles_accounting_without_marker(tmp_path: Path) -> None:
@@ -2587,7 +2826,7 @@ def test_block_accounting_failure_still_publishes_and_replays_without_refund(tmp
     assert ledger.read().episodes[0] == accounted
 
 
-def test_return_accounting_reconciles_after_application_failure_and_replay(tmp_path: Path) -> None:
+def test_builder_return_without_exclusion_keeps_custody_and_retry_reservation(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     planner = application.acquire_change_action(_continuation_request(application)).launch
     candidate = application.publish_delivery_plan(
@@ -2619,29 +2858,26 @@ def test_return_accounting_reconciles_after_application_failure_and_replay(tmp_p
         attempt_id=builder.claim.attempt_id,
     )
 
-    with patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")):
-        returned = application.transition_delivery("change-a", request)
-
-    assert returned.active_claim is None
-    assert coordinator.show("change-a").writer is None
     ledger = RetryLedger(state_root, "change-a")
-    reserved = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
+    before_frontier = runtimes["change-a"].frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    before_ledger = ledger.read()
+    reserved = next(item for item in before_ledger.episodes if item.key.procedure_class == "builder")
     assert reserved.total_attempts == 1
     assert reserved.last_status == "reserved"
     assert reserved.outcome_ids == ()
 
-    reopened, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
-    accounted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
-    assert accounted.total_attempts == 1
-    assert accounted.last_status == "failed"
-    assert len(accounted.outcome_ids) == 1
-    assert accounted.next_eligible_at == "2026-08-04T00:00:01Z"
-    before_replay = ledger.read()
-    assert reopened.transition_delivery("change-a", request) == returned
-    assert ledger.read() == before_replay
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", request)
+
+    assert runtimes["change-a"].frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert ledger.read() == before_ledger
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{builder.claim.attempt_id}.json"
+    assert not owner_result.exists()
 
 
-def test_returned_builder_replan_preserves_backoff_and_remaining_budget(tmp_path: Path) -> None:
+def test_builder_return_stays_contained_after_reload_and_elapsed_backoff(tmp_path: Path) -> None:
     now = datetime(2026, 8, 4, tzinfo=UTC)
 
     def clock() -> str:
@@ -2652,96 +2888,6 @@ def test_returned_builder_replan_preserves_backoff_and_remaining_budget(tmp_path
         {"change-a": DeliveryStage.PLANNING},
         clock=clock,
     )
-
-    def acquire():
-        result = application.acquire_change_action(_continuation_request(application))
-        while result.kind == "reconciled":
-            result = application.acquire_change_action(_continuation_request(application))
-        return result
-
-    def replan() -> None:
-        planner_result = acquire()
-        assert planner_result.launch is not None
-        candidate = application.publish_delivery_plan(
-            "change-a",
-            PublishDeliveryPlan(
-                outcome_id=planner_result.launch.outcome_id,
-                claim_id=planner_result.launch.claim.claim_id,
-                tasks=(_task(),),
-            ),
-        )
-        application.transition_delivery(
-            "change-a",
-            AdvanceDelivery(
-                action="advance",
-                outcome_id=planner_result.launch.outcome_id,
-                claim_id=planner_result.launch.claim.claim_id,
-                output=candidate.output,
-            ),
-        )
-
-    def return_builder():
-        builder_result = acquire()
-        assert builder_result.launch is not None
-        builder = builder_result.launch
-        assert builder.claim.task_id == "TASK-001"
-        preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
-        application.transition_delivery(
-            "change-a",
-            ReturnDelivery(
-                action="return",
-                outcome_id=builder.outcome_id,
-                claim_id=builder.claim.claim_id,
-                target=DeliveryStage.PLANNING,
-                reason="The Builder needs a revised plan.",
-                locators=("TASK-001",),
-                preserved_commit=preserved_commit,
-                attempt_id=builder.claim.attempt_id,
-            ),
-        )
-        return builder
-
-    replan()
-    first_builder = return_builder()
-    ledger = RetryLedger(state_root, "change-a")
-    first_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
-    assert first_episode.total_attempts == 1
-    assert first_episode.next_eligible_at == "2026-08-04T00:00:01Z"
-
-    application, _coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
-    replan()
-    blocked = acquire()
-    assert blocked.launch is None
-    assert blocked.reason_code == "retry-backoff"
-
-    now += timedelta(seconds=1)
-    second_builder = return_builder()
-    assert second_builder.claim.attempt_id != first_builder.claim.attempt_id
-    second_episode = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
-    assert second_episode.total_attempts == 2
-    assert second_episode.next_eligible_at == "2026-08-04T00:00:03Z"
-
-    replan()
-    blocked = acquire()
-    assert blocked.launch is None
-    assert blocked.reason_code == "retry-backoff"
-
-    now += timedelta(seconds=2)
-    third_builder = return_builder()
-    assert third_builder.claim.attempt_id not in {first_builder.claim.attempt_id, second_builder.claim.attempt_id}
-    exhausted = next(item for item in ledger.read().episodes if item.key.procedure_class == "builder")
-    assert exhausted.total_attempts == 3
-    assert exhausted.stop_code.value == "retry-exhausted"
-
-    replan()
-    stopped = acquire()
-    assert stopped.launch is None
-    assert stopped.reason_code == "retry-exhausted"
-
-
-@pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
-def test_return_owner_result_reconciles_after_transaction_restart(tmp_path: Path, crash_stage: str) -> None:
-    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     planner = application.acquire_change_action(_continuation_request(application)).launch
     candidate = application.publish_delivery_plan(
         "change-a",
@@ -2759,9 +2905,8 @@ def test_return_owner_result_reconciles_after_transaction_restart(tmp_path: Path
     builder_result = application.acquire_change_action(_continuation_request(application))
     if builder_result.kind == "reconciled":
         builder_result = application.acquire_change_action(_continuation_request(application))
-    assert builder_result.launch is not None
     builder = builder_result.launch
-    preserved_commit = _git(builder.worktree_path, "rev-parse", "HEAD")
+    assert builder is not None
     request = ReturnDelivery(
         action="return",
         outcome_id=builder.outcome_id,
@@ -2769,35 +2914,23 @@ def test_return_owner_result_reconciles_after_transaction_restart(tmp_path: Path
         target=DeliveryStage.PLANNING,
         reason="The Builder needs a revised plan.",
         locators=("TASK-001",),
-        preserved_commit=preserved_commit,
+        preserved_commit=_git(builder.worktree_path, "rev-parse", "HEAD"),
         attempt_id=builder.claim.attempt_id,
     )
-    original = RuntimeTransaction.commit
-
-    def interrupted(transaction):
-        if not transaction._transaction_id.startswith("delivery-runtime-"):
-            original(transaction)
-            return
-
-        def fail(stage):
-            if stage == crash_stage:
-                raise OSError
-
-        original(transaction, failure=fail)
-
-    with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(OSError, match=r"^$"):
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.transition_delivery("change-a", request)
 
-    reopened, coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
-    episode = next(
-        item for item in RetryLedger(state_root, "change-a").read().episodes if item.key.procedure_class == "builder"
-    )
-    assert episode.total_attempts == 1
-    assert episode.last_status == "failed"
-    assert len(episode.outcome_ids) == 1
-    assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim is None
-    assert coordinator.show("change-a").writer is None
-    assert reopened.transition_delivery("change-a", request).active_claim is None
+    ledger = RetryLedger(state_root, "change-a")
+    before_ledger = ledger.read()
+    now += timedelta(days=1)
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    result = reopened.acquire_change_action(_continuation_request(reopened, session_id="fresh-session"))
+
+    assert result.launch is None
+    assert result.reason_code == "active-custody"
+    assert reopened._runtimes["change-a"].show_binding("OUT-001").active_claim.claim_id == builder.claim.claim_id
+    assert reopened_coordinator.show("change-a").writer.claim_id == builder.claim.claim_id
+    assert ledger.read() == before_ledger
 
 
 @pytest.mark.parametrize("restart_during_execution", [False, True])
@@ -5618,10 +5751,12 @@ def _awaiting_acceptance_fixture(
     checks: tuple[PublicationCheck, ...] | Callable[[str], tuple[PublicationCheck, ...]] = (),
     mark_ready: bool = True,
     record_publication_identity: bool = True,
+    clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
 ):
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
+        clock=clock,
     )
     runtime = runtimes["change-a"]
     exact_head = coordinator.show("change-a").last_reviewed_commit
@@ -10466,7 +10601,7 @@ def test_submit_result_promotes_and_replays_exact_builder_result(
 
 
 def test_submit_result_replays_when_another_task_holds_the_claim(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
+    application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
@@ -10515,45 +10650,20 @@ def test_submit_result_replays_when_another_task_holds_the_claim(tmp_path: Path)
         ),
     )
 
-    application.submit_result(submission)
+    first_submission = application.submit_result(submission)
     second_launch = application.acquire_frontier_work().launch_packages[0]
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    before_retry_ledger = RetryLedger(state_root, "change-a").read()
     replayed = application.submit_result(submission)
 
     assert second_launch.claim.task_id == "TASK-002"
-    assert replayed.result_id == "RESULT-FIRST"
+    assert replayed.result_id == first_submission.result_id == "RESULT-FIRST"
     assert replayed.binding.active_claim is not None
     assert replayed.binding.active_claim.task_id == "TASK-002"
-    application.transition_delivery(
-        "change-a",
-        BlockDelivery(
-            action="block",
-            outcome_id="OUT-001",
-            claim_id=second_launch.claim.claim_id,
-            block_id="second-task-failed",
-            reason="Second task check failed",
-            unblock_condition="Check prerequisite available",
-            expected_evidence=("check",),
-            locators=("TASK-002",),
-            resume_commit=completed_commit,
-            request=DeliveryRequest(
-                request_id="second-task-prerequisite",
-                kind=DeliveryRequestKind.ACTION,
-                outcome_id="OUT-001",
-                summary="Restore the check prerequisite.",
-            ),
-        ),
-    )
-    application.resolve_request(
-        "change-a",
-        "second-task-prerequisite",
-        DeliveryRequestResolution(response_text="Available", provenance="user-confirmed"),
-    )
-    application.submit_result(submission)
-    assert application.show_work_item_view("change-a", "outcome:OUT-001").readiness.reason_code == "retry-backoff"
-    episodes = RetryLedger(_state_root, "change-a").read().episodes
-    second_episode = next(item for item in episodes if item.key.task_lineage == "TASK-002")
-    assert second_episode.total_attempts == 1
-    assert second_episode.reset_count == 0
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert RetryLedger(state_root, "change-a").read() == before_retry_ledger
 
 
 def test_transition_publishes_change_branch_before_delivery_state(
@@ -11076,13 +11186,12 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
     assert plan_context.requests[0].resolution == resolved.resolution
 
 
-def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_path: Path) -> None:
+def test_live_implementation_block_does_not_publish_or_release_without_exclusion(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
     launch = application.acquire_frontier_work().launch_packages[0]
-    reviewed_head = coordinator.show("change-a").last_reviewed_commit
     candidate_path = launch.worktree_path / "candidate.txt"
     candidate_path.write_text("preserved Builder candidate\n", encoding="utf-8")
     _git(launch.worktree_path, "add", candidate_path.name)
@@ -11095,59 +11204,31 @@ def test_resolved_implementation_block_reacquires_from_reviewed_boundary(tmp_pat
         summary="Repair the external runtime prerequisite.",
     )
 
-    blocked = application.transition_delivery(
-        "change-a",
-        BlockDelivery(
-            action="block",
-            outcome_id="OUT-001",
-            claim_id=launch.claim.claim_id,
-            block_id="block-implementation",
-            reason="The external runtime prerequisite is unavailable.",
-            unblock_condition="The prerequisite is repaired.",
-            expected_evidence=("Successful implementation proof",),
-            locators=("TASK-001",),
-            request=request,
-            resume_commit=candidate_head,
-        ),
-    )
-
-    assert blocked.block is not None
-    assert blocked.block.resume_commit == candidate_head
-    assert blocked.active_claim is None
-    coordination = coordinator.show("change-a")
-    assert coordination.last_reviewed_commit == reviewed_head
-    assert coordination.writer is None
-    assert _git(launch.worktree_path, "rev-parse", "HEAD") == reviewed_head
-    assert (
-        _git(
-            launch.worktree_path,
-            "rev-parse",
-            f"refs/owlbear/attempts/change-a/{launch.claim.attempt_id}",
+    runtime = runtimes["change-a"]
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery(
+            "change-a",
+            BlockDelivery(
+                action="block",
+                outcome_id="OUT-001",
+                claim_id=launch.claim.claim_id,
+                block_id="block-implementation",
+                reason="The external runtime prerequisite is unavailable.",
+                unblock_condition="The prerequisite is repaired.",
+                expected_evidence=("Successful implementation proof",),
+                locators=("TASK-001",),
+                request=request,
+                resume_commit=candidate_head,
+            ),
         )
-        == candidate_head
-    )
 
-    resolved = application.resolve_request(
-        "change-a",
-        request.request_id,
-        DeliveryRequestResolution(response_text="The prerequisite is repaired.", provenance="user-confirmed"),
-    )
-    application._clock = lambda: "2026-08-04T00:00:01Z"
-    resumed = application.acquire_frontier_work().launch_packages
-
-    assert len(resumed) == 1
-    resumed_launch = resumed[0]
-    assert resumed_launch.claim.claim_id != launch.claim.claim_id
-    assert resumed_launch.source_head == reviewed_head
-    assert resumed_launch.last_reviewed_commit == reviewed_head
-    build_context = application.show_build_context(
-        "change-a",
-        resumed_launch.outcome_id,
-        resumed_launch.claim.attempt_id,
-        resumed_launch.claim.claim_id,
-    )
-    assert build_context.requests[0].resolution == resolved.resolution
-    assert runtimes["change-a"].show_binding("OUT-001").active_claim_id == resumed_launch.claim.claim_id
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert runtime.show_binding("OUT-001").active_claim_id == launch.claim.claim_id
+    assert _git(launch.worktree_path, "rev-parse", "HEAD") == candidate_head
+    assert application.show_operator_context("change-a", "OUT-001").block is None
 
 
 def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -> None:

@@ -244,6 +244,11 @@ required `unblock_condition` and `expected_evidence` fields. Every Build block i
 `request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
 `dispatch_failure`, not `block`.
 
+The runtime also refuses implementation-stage Builder `block` and `return` while the mutation claim
+is active. That refusal persists no user request or return context and leaves the claim, worktree, and
+capacity held. Orchestrator forwards the selected transition unchanged and reports the refusal under
+`w-orchestration` Step 3; do not substitute another transition or describe it as a completed handoff.
+
 On a passing Build result, call `submit_result` with the unchanged `change_id`, `outcome_id`,
 `claim_id`, and exact `DeliveryTaskResult`. Require the returned `kind: submitted` result to preserve
 those identities and the exact `result_id`; return that result directly. The operation publishes and

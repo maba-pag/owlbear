@@ -3950,6 +3950,7 @@ class DeliveryRuntime:
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.preserved_commit is None or request.attempt_id is None:
                 _conflict("Implementation return requires attempt and preserved-commit identity")
+            self._require_builder_transition_exclusion(binding)
             manager = self._require_workspace()
             coordination = manager.show(self._contract.change_id)
             if coordination.writer is not None:
@@ -4016,6 +4017,7 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
+            self._require_builder_transition_exclusion(binding)
             claim = binding.active_claim
             if claim is None:
                 _conflict("Implementation block requires an active claim")
@@ -4048,6 +4050,11 @@ class DeliveryRuntime:
                 "requests": requests,
             }
         )
+
+    @staticmethod
+    def _require_builder_transition_exclusion(binding: OutcomeAuthorityBinding) -> None:
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            raise DeliveryWorkerExclusionRequiredError
 
     def _read(self) -> tuple[DeliveryFrontier, bytes]:
         RuntimeTransaction.recover_all(self._target_root)
