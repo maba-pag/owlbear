@@ -12,14 +12,50 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Historical integration record:** The integration commit, source-ready `b49a2a8` review, and
-following proof paragraphs describe the earlier integration checkpoint. Instructions there to retain
-unchanged source evidence did not cover the later recovery and diagnostic repairs. The current full
-local candidate is the 14-file working-tree diff above published PR #326 head
-`fb834f6b6344e3bb1715c21a6b383af8bd2d4809` (`origin/copilot/d03-p`), whose merge base is
-`dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. These local repairs are uncommitted and unpublished;
-PR metadata, CI and prior reviews still describe the published head, not this dirty candidate. Its proof
-and remaining gates are recorded in the current-disposition table below.
+**Code checkpoint: `5443f8d4200bea0f149adf503d38b8a6c5bc3bad`.** R1-R7 are committed and
+focused-tested in the repair checkout, based on `951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`,
+with merge base `dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. This R8 documentation update
+describes that code checkpoint, not an as-yet unknown documentation commit. The candidate is
+**pending fresh Opus 5.5 read-only challenge and publication/CI**, not source-ready or accepted.
+The caller owns commit/publication and the subsequent exact-head metadata update.
+
+| Gate | Current disposition |
+| --- | --- |
+| Source and contract | R1-R7 implement the bounded repairs described in the completion ledger and contract below. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
+| Independent challenge | Fresh unnamed Opus 5.5 read-only challenge is pending. Historical reviews do not establish a pass for `5443f8d` or the forthcoming source-and-docs candidate |
+| Required CI | All four required workflows succeeded on old remote `951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`. That is baseline evidence only, not repaired-source proof. Source, Dependency, Cockpit and Agent ecosystem must all succeed on the same exact published candidate head |
+| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body still describes `fb834f6`; the caller must reconcile the exact PR head, body and documentation after review/publication/CI |
+| Human acknowledgment | **Pending.** Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures can hold shared execution capacity. Occupancy of every slot stalls Planner/Builder work, finalization and engine continuation. The user must explicitly acknowledge this operational limitation; implementation/commit/push/CI authorization is not that acknowledgment |
+| Host and activation boundary | No supported worker-exclusion backend is added. Caller confirmation and timeout do not prove closure or release custody. Ordinary host/transport limits remain separate from local source proof; no merge or live activation is implied |
+
+**Parent-observed focused proof, reported to this documentation writer:** 40 selected repair
+core/runtime cases passed in **7.24s**; nine diagnostic cases, including the actual offline
+installed-wheel launcher no-write test, passed in **0.78s**; 15 filtered
+`WorkPortfolio.test.tsx` readiness/continuation/recovery/contained cases passed in **7.90s**.
+The parent's R5 core, registered MCP and HTTP prompt selection passed **24 cases**. Its R1
+three-case, R2 four-case and R7 nine-case selections overlap this proof and are not additional
+totals. All 13 changed Python files passed the parent's Ruff check and format check; editor
+diagnostics also passed. The installed launcher ran locally; a browser did not.
+
+**Delegated worker reports, not new parent or R8 executions:** R3 reports 12 pause-application,
+35 retry-ledger, 17 runtime and 14 neighboring application cases; R4 reports 110 scoped
+core/recovery and 12 adapter cases, TypeScript `noEmit` and two-file Biome passes; R6 reports
+44 registered schema/validation/mutation/accepted-path cases. Selections overlap: do not sum them
+or treat their reports as independently rerun proof. No fresh full-suite, live host or browser
+pass is claimed.
+
+**Completion still requires:** focused regressions preserving original safe containment and exact
+result replay, with adequate proof for the current material contract; a fresh unnamed Opus 5.5
+read-only challenge reconciled with no accepted defect or blocker remaining; all four required CI
+workflows succeeding on the same exact published head and exact PR/docs metadata; and explicit
+bounded-capacity/ordinary Builder-refusal acknowledgment. None grants merge or live activation.
+The next step is the caller's fresh challenge, not a source-readiness or acceptance declaration.
+
+### Historical integration evidence
+
+The integration checkpoint and proof below are historical, not current candidate assertions.
+Instructions here to retain unchanged source evidence did not cover the later R1-R7 repairs.
+Use the current handoff above for present review, CI and human/host gate status.
 
 The [cumulative acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5868092173)
 at **`b49a2a8f0017bcf2aa25274b2fec8962d72f02a5`** found **source-ready, pending named gates**,
@@ -86,16 +122,20 @@ No behavioral fixes or conflict resolution were needed; no new cumulative A–E 
 No competing writer was active, no source redesign or authority backend was added, and no live
 services, production state, provider effects or protections were changed.
 
-| Gate | Current disposition |
-| --- | --- |
-| Bounded A–E source and closeout proof | Historical source-ready review at `b49a2a8`; it predates the current repairs and is not package acceptance |
-| Target integration | Historical two-parent integration at `ee1cf71`; its 18 focused tests, four-file Ruff lint/format and pinned actionlint apply to that checkpoint |
-| Current candidate | The published tracking head is `fb834f6`; this session's candidate is 14 tracked working-tree edits on top of it and has not been committed or published. The earlier 2,155-test changed-path, whole-tree Ruff and documentation results apply to their named published candidate, not this diff. The complete affected six-module Python selection now passes **697 tests in 201.23s** after the final replay repair; the earlier interrupted run is superseded. The same-basis recorded-failure replay and engine/worker/finalizer no-launch cooldown cases pass. A fresh read-only challenge found no remaining source or documentation blocker; package acceptance gates remain below. Confirm PR metadata for the exact published SHA; existing PR CI does not prove this local candidate. |
-| Ready-for-review | PR #326 is non-draft; the ready-for-review transition is complete and does not review or accept the current candidate. Use PR metadata for its exact current head. |
-| Required CI | All four workflows passed at baseline PR head `653a102`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36440136593), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36440136312), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36440136399), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36440136595). The subsequent source/guidance candidate also passed all four at `4a1b7b2348d3457bd539147053866f45eb6cde4b`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36503295275), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36503295262), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36503295234), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36503295256). Those runs predate the current local source and handoff repairs and do not verify this dirty candidate; run every required workflow on the exact published head after these repairs are committed and published. |
-| Focused repair proof | Current local proof: the six affected Python modules pass **697 tests in 201.23s**; the Cockpit exhausted/contained-state case passes **2 tests**; scoped Ruff check/format, the skill validator, editor diagnostics and `git diff --check` pass. Markdownlint is unavailable because `markdownlint-cli2` is not installed. The earlier 2,155-test changed-path route, whole-tree Ruff/format, validators and Markdownlint apply only to their named published candidate. Before acceptance, required workflows must pass on the exact published PR head after these repairs are committed and published. |
-| Follow-up review | The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029) and earlier local challenges are historical evidence. Later challenges found B1/B2/B3, L1-L4, a same-basis replay regression for a valid unfinished blocked result, and operator-guidance mismatches; the local diff repairs journal ordering, structural provider-read retry classification, stale custody tests, Builder guidance, exhausted actor projection, finalizer recovery, no-launch cooldown, result replay, request-field guidance and these status rows. The final read-only challenge found no remaining source or documentation blocker. The existing fail-closed liveness limit where a proven no-launch reservation remains pending while a sibling claim is active is disclosed below. Neither local review nor published-head CI accepts this dirty candidate; the human/host acknowledgment and exact-head CI remain required before package acceptance. The earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) applies only to its named candidate. |
-| Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; this gate adds no broader optional-host recovery requirement. Before merge, the user must acknowledge that unresolved worker claims retain shared execution capacity and can stall Planner/Builder work, finalization, and engine continuation when all slots are occupied. In particular, an otherwise-valid Implementation Builder `block` or `return` is refused without persisting its request or successor context; its active claim and worktree remain. This candidate has no supported host-owned worker-exclusion/recovery path for a possibly live worker, and a Change with an active mutation claim cannot be abandoned; neither caller confirmation nor timeout releases that claim. Separately, if a sibling claim prevents release of a proven-no-launch reservation, the reservation remains pending; a later attempt contains that outcome's retry budget with no request or unblock path. The stranded reservation does not consume execution capacity, but the outcome cannot progress. Once sibling claims end, the supported exit is abandoning the whole Change. See the [operating guide](../../setup/operating-owlbear.md) for operator-facing consequences. |
+Historical CI passed at `653a102`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36440136593),
+[Dependency](https://github.com/maba-pag/owlbear/actions/runs/36440136312),
+[Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36440136399) and
+[Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36440136595).
+All four also passed at `4a1b7b2348d3457bd539147053866f45eb6cde4b`:
+[Source](https://github.com/maba-pag/owlbear/actions/runs/36503295275),
+[Dependency](https://github.com/maba-pag/owlbear/actions/runs/36503295262),
+[Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36503295234) and
+[Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36503295256).
+The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029)
+and earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530)
+apply only to their named candidates. Earlier local six-module **697-case** and two-case Cockpit
+repair proof, the 2,155-test changed-path report and their static checks also predate R1-R7;
+none is current repaired-source proof or a fresh challenge pass.
 
 The `f802aed` HTTP failure was a retry-window timing dependency: the retained writer returns
 `busy/active-custody` during backoff; after it expires, finalization-failed readiness returns
@@ -439,12 +479,16 @@ for their exact limits. The named capitalization failure is now resolved, not di
 | Outcome | Required behavior and evidence |
 | --- | --- |
 | Supported recovery | Exact engine-owned durable result or matching publication receipt is replayed/reconciled once under existing custody. A lost response followed by restart returns the same result and resumes only the selected Change; it does not re-invoke an already completed effect |
+| Preflight and batch accounting | Capture the engine frontier preflight before reserving its retry attempt, so the reservation cannot invalidate its own basis. Charge batch execution capacity only for actual retained execution; preparation that retains no execution must not consume a batch slot or hide eligible siblings |
 | Unknown execution | Started without authoritative result, absent exclusion or conflicting receipt remains contained. No cleanup, copying, custody release, blind retry or replacement worker; bytes/index/head and failure budget remain unchanged. A typed stale result after effect entry is durably recorded and releases that action's custody while its retry reservation remains pending. A stale preflight before the start marker records a failed attempt with backoff, without refund/reset, so a retry can proceed after drift is corrected |
-| Implementation Builder block/return | An otherwise-valid Builder `block` or `return` is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; no request or return context is persisted, and the active claim and worktree remain. This refusal is Implementation-only; Planning-stage `block` and `return` still persist typed state. Do not infer worker loss, reset authority, or redispatch from the refusal; supported host-owned exclusion remains required |
+| Planning request-bearing block | Persist a typed durable paused owner result and settle only that paused retry reservation. Preserve previous genuine failures, the request-answer gate and exact result replay; an unanswered request does not launch another attempt. Planning-stage `return` retains its typed successor behavior |
+| Implementation Builder block/return | An otherwise-valid transition is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`. Persist the typed exact-claim diagnostic transition in existing `recovery_attention`, not an active request, block or return authority. Retain claim/stage/worktree/index/refs and retry budget. WorkItem, operator and readiness reads expose blocked state, no executable action and a read-only diagnostic prompt. No worker loss, reset authority or redispatch is inferred |
 | Worker-requested retry | `retry` is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree remain unchanged, with no reset or replacement attempt. Verified worker exclusion is still required before custody can be released |
 | Unattributed mutation | Stable foreign, ignored/private or staged edits cannot become automatic preservation or Builder authority through snapshots, scope, caller assertions or a successful exit code. Keep the original material in place |
-| Actionable diagnosis | Public reads distinguish an unstarted retained action, started-without-result, exact recorded failure and unverifiable journals against the original action. Containment replaces mark-ready/merge guidance and names missing evidence, responsible owner and resume condition; repeated reads do not execute, reconcile or mutate authority. No nonexistent repair promise, command assembly, fake approval, inferred termination or unsupported clickable action |
-| Continued progress | Unrelated eligible Changes run while shared execution capacity remains available. Refused retries, lost claims and interrupted operations stay occupied; if retained work exhausts all slots, acquisition, finalization and engine continuation wait. Repeated requests do not mint new equivalent attempts or reset budgets |
+| Actionable diagnosis | Public reads distinguish an unstarted retained action, started-without-result, exact recorded failure and unverifiable journals against the original action. Failed activation and retained active custody expose `/repair-delivery` for read-only diagnosis only, never permission to retry or release. Containment replaces mark-ready/merge guidance; repeated reads do not execute, reconcile or mutate authority. No nonexistent repair promise, fake approval, inferred termination or unsupported executable action |
+| Continued progress | Unrelated eligible Changes run while shared execution capacity remains available. Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures keep slots occupied. If every slot is held, Planner/Builder acquisition, finalization and engine continuation wait. Repeated requests, caller confirmation and timeout do not release custody or reset budgets |
+| No-launch reservation limit | If sibling custody prevents settlement of a proven-no-launch reservation, it remains pending; a later attempt contains that outcome's retry budget without an actionable request or unblock path. The stranded reservation does not consume execution capacity, but the outcome cannot progress. Once sibling claims end, the supported exit is abandoning the whole Change, not resetting the reservation or inferring recovery |
+| Public validation and offline entry | Registered MCP invalid parameters return strict, sanitized `ERR_TARGET_PARAM_VALIDATION` without private input echo. Missing or denied current-directory resolution returns bounded `ROOT_UNAVAILABLE`, unknown pending effects and exit 2, with no writes |
 | Package integration | D retains offline diagnosis; E retains strict registered/HTTP forwarding and cumulative proof for this revised boundary. Unsupported host recovery is explicitly contained, not a hidden package prerequisite |
 
 ### Source anchors and historical baseline
@@ -695,6 +739,15 @@ must be reconciled into this authority, not become a second allowance.
 - Reserve each automatic attempt before dispatch/effect entry; duplicate submission/replay charges
   once. Interrupted reservations remain consumed until exact evidence proves no attempt started.
   Pure observation of readiness neither consumes nor resets the budget.
+- Capture the engine frontier preflight before retry reservation; reserve against that captured
+  basis without making the reservation itself appear as frontier drift. Batch capacity is charged
+  only for actual retained execution, not merely a failed acquisition candidate.
+- A Planning request-bearing `block` records a typed durable paused owner result. Settle only its
+  paused reservation, preserving earlier genuine failures and the unanswered-request gate.
+  Exact replay returns the retained result without another charge, reset or premature launch.
+- A refused Implementation `block`/`return` records only a typed exact-claim diagnostic transition
+  in `recovery_attention`. It is not active request/block/return authority and cannot settle the
+  reservation, release custody or change the stage, worktree, index, refs or retry budget.
 
 Proposed programme defaults, made precise for specification review:
 
@@ -876,6 +929,8 @@ the inspected root. Enforce descriptor/realpath containment, no-follow regular-f
 replacement during inspection; dangling/symlink/FIFO/oversized entries produce bounded diagnostics.
 The CLI's read-only promise covers its own writes, not ambient access-time changes. Exit 0 only for
 healthy structure, 1 for diagnosed degradation/unsupported state, 2 for unusable invocation/root.
+Missing or denied current-directory resolution must produce bounded `ROOT_UNAVAILABLE`, unknown
+pending effects and exit 2 without writes, not a traceback or a claim of verified absence.
 The prompt reports that repair writes/upgrade require D07's supported route; it must not promise an
 unimplemented auto-fix or require users to repair files manually.
 
@@ -889,8 +944,10 @@ independent review with findings resolved on this PR. D03-D is technically indep
 this sequence avoids another writer/scheduling path. Each phase may update only its progress/gaps
 here, not silently change approved semantics.
 
-All named new modules/tests below are **planned**, not present or passed. No additional testing
-framework or dependency is required. Extend existing test files where their fixtures suffice; new
+The phase descriptions below retain their original planned paths and check recipes; they are not
+current implementation or proof status. Use the [current handoff](#current-handoff) for the repaired
+code checkpoint and outstanding gates. No additional testing framework or dependency is required.
+Extend existing test files where their fixtures suffice; new
 focused recovery/diagnostic files use the existing pytest setup. T3 owns A/C and acceptance, T2 can
 implement settled B/D/E mappings; obtain independent different-family review of implementation.
 
@@ -1109,6 +1166,8 @@ Include Builder/conflict skill companions only where the C repair return context
 No replacement workflow or broader role grants.
 
 Ship strict recovery request/result mappings, registrations/annotations and shared error taxonomy.
+Registered MCP parameter rejection must return sanitized `ERR_TARGET_PARAM_VALIDATION`, including
+errors raised by registered schema validation before the handler, without private input echo.
 Keep `repair` the high-level diagnose/apply operation: application discovers exact proposals;
 callers forward Change/proposal and, where supported, opaque owner evidence references. Reject
 caller-authored preservation paths, commands, budgets, effect receipts and stop assertions.
@@ -1118,7 +1177,11 @@ and positive recovery tests; it must retain A's negative legacy-call tests and r
 assertion-based workflow advice. Success compatibility covers verified receipt replay and read-only
 requests, never unverified legacy release.
 Expose one complete `/continue-change` or `/repair-delivery` prompt in readiness; a new UI control
-is unnecessary for U1. Required frontend mirrors ship with each introducing phase; remaining E
+is unnecessary for U1. Failed activation and retained active custody expose `/repair-delivery`
+for read-only diagnosis only, never retry/release permission. Refused Implementation `block`/`return`
+must expose the typed exact-claim `recovery_attention` diagnostic through WorkItem, operator and
+readiness views as blocked, with no executable action; it is not active request/block/return
+authority. Required frontend mirrors ship with each introducing phase; remaining E
 presentation changes are limited to `serve/cockpit/web/src/{api/workItems.ts,pages/WorkPortfolioPage.tsx,
 components/WorkItemDetail.tsx,__tests__/WorkPortfolio.test.tsx}`, not a UI redesign.
 

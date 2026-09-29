@@ -213,11 +213,12 @@ Worker transitions keep correction finite and typed:
 | Condition | Owner and control | Resume behavior |
 | --- | --- | --- |
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
-| Planning-stage user decision or action | Planning worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
+| Planning-stage user decision or action | Planning worker returns `block` with an embedded request; the owner records a durable paused result | Only that paused reservation is settled, without counting it as a failure or erasing earlier failures. Answer the request in Cockpit before work resumes; fresh context carries the structured resolution, and exact result replay does not charge another attempt |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
 | Worker returns `retry` | Worker supplies the exact claim; Implementation retry also supplies its attempt and abandoned-commit identity | Runtime refuses the transition with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree stay unchanged, and no new attempt starts. Orchestrator reports the missing exclusion evidence |
 | Planning-stage premise failed | Planning worker returns `return` with evidence, target and source boundary | Runtime persists typed successor context; Design reopen is currently manual through `/design` |
-| Implementation Builder requests `block` or `return` | An otherwise-valid transition is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` | No request or return context is persisted; the active claim, worktree and capacity stay held. This refusal is specific to Implementation; Planning-stage `block` and `return` still persist typed state. Do not treat the refusal as worker-loss evidence or permission to reset or redispatch |
+| Implementation Builder requests `block` or `return` | An otherwise-valid transition is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` | The typed transition is retained only as an exact-claim diagnostic in `recovery_attention`, not an active request, block or return authority. Claim, stage, worktree, index, refs and retry budget remain unchanged, with capacity held. Work-item, operator and readiness views show blocked state, no executable action and a read-only diagnostic prompt. This Implementation-only refusal is not worker-loss evidence or permission to answer, reset or redispatch |
+| Failed activation or retained active custody | Readiness exposes `/repair-delivery` for read-only diagnosis | The prompt can explain the retained state; it grants no permission to retry, release custody or start replacement work |
 | Claim recovery is requested | User requests recovery of the exact claim in Cockpit | The current runtime refuses with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the claim, worktree, and capacity stay held. Timeout and caller confirmation are not evidence, and this version has no successful claim-release path |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
@@ -225,12 +226,25 @@ Recovery requests are not proof. Do not infer worker closure from a timeout or c
 The current runtime has no successful claim-release path; it refuses recovery requests and retains
 custody. Request answers, requestless unblock, claim-recovery requests, backward movement, and
 retained Integration attention remain user-owned Cockpit controls rather than agent MCP operations.
-Refused claims and interrupted operations consume shared execution capacity. If they occupy every
-slot, new Planner/Builder work, finalization, and engine continuation wait. This version has no
-supported host-exclusion path that can release a claim while its worker may still run. A Change
-cannot be abandoned while an active mutation claim remains, and a timeout or recovery request does
-not release that claim. The slot remains occupied until supported host-owned exclusion proves the
-worker cannot resume and exact custody recovery completes.
+Those controls cannot turn a refused Builder diagnostic into an actionable request or transition.
+
+Shared execution capacity remains occupied by refused or lost worker claims, including ordinary
+Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with
+interrupted or recorded failures. If they occupy every slot, new Planner/Builder work, finalization
+and engine continuation stall across the portfolio. This version has no supported host-exclusion
+path that can release a claim while its worker may still run. A Change cannot be abandoned while
+an active mutation claim remains. Caller confirmation, timeout and a recovery request do not prove
+closure or release that claim; a read-only diagnostic does not supply the missing authority.
+
+Separately, a proven-no-launch reservation can remain pending while another claim in the same
+Change is active. It does not consume an execution slot, but a later attempt contains that
+outcome's retry budget without an actionable request or unblock path. Once the other claims end,
+the supported exit is abandoning the whole Change; do not reset the reservation manually.
+
+Use `/repair-delivery` for bounded read-only diagnosis when normal Delivery inspection is
+unavailable. It is not a repair or custody-release command. If the current working directory is
+missing or access is denied, the offline diagnostic returns `ROOT_UNAVAILABLE`, unknown pending
+effects and exit status 2 without writes. Unknown pending effects must not be read as no effects.
 
 ### Publication, Acceptance, And Completed History
 
@@ -273,7 +287,7 @@ of receipt-backed history.
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
-Correction: Planning block | return -> typed successor context; Implementation Builder block | return -> refusal; retry (any stage) -> refusal, with claim retained pending supported host exclusion
+Correction: Planning request block -> paused result and answer gate; Planning return -> typed successor context; Implementation Builder block | return -> refusal with diagnostic-only context; retry (any stage) -> refusal with claim retained
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
