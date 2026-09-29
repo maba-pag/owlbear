@@ -150,12 +150,14 @@ tracked baseline:
 {"execution_capacity": 2, "claim_timeout_seconds": 1800}
 ```
 
-An active Planner or Builder claim is eligible for recovery after the configured
-`claim_timeout_seconds` (3600 seconds by default), measured from its persisted `started_at` value.
-The loader merges `host.local.json` over `host.json` when the overlay exists. Recovery runs lazily at
-the next `acquire_frontier_work()` call. Clean matching Builder custody is restarted and released
-through the normal recovery path; dirty or mismatched worktrees remain retained with recovery
-attention and continue to consume capacity.
+An active Planner or Builder claim is checked lazily during the next `acquire_frontier_work()` call;
+`claim_timeout_seconds` (3600 seconds by default) identifies elapsed claims but is not proof that a
+worker stopped. The current runtime refuses claim recovery with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and leaves the claim and worktree unchanged. The default
+host evidence provider is unavailable, so expired claims remain retained and continue to consume
+capacity. Because execution capacity is shared, enough retained claims can stall acquisition,
+finalization, and engine continuation across the portfolio. The loader merges `host.local.json` over
+`host.json` when the overlay exists; a timeout or caller confirmation does not clear custody.
 
 `setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. It
 does not create `host.local.json`; create that ignored file only when this host needs overrides. The

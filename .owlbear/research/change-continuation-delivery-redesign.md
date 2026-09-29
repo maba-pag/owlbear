@@ -1,23 +1,24 @@
 # Change-Scoped Continuation and Recoverable Delivery
 
 > **Owning request:** User-authorized direct implementation of the Delivery redesign on `dev`.
-> **Updated:** 2026-09-25
+> **Updated:** 2026-09-29
 > **Source baseline:** `8198cdff9d373bb903ee136fc89884a5ecbc7426` on `dev`, plus the explicitly identified untracked research/packages below.
 > **Question:** Can one Change-scoped continuation session carry approved intent through implementation, recovery, verification, publication, and accepted completion without requiring the user to run tests, edit worktrees, or operate Delivery internals?
 > **Status:** Active direct-development plan. Section 0 owns execution and status; sections 1-11 and 13-14 retain product requirements, design evidence and acceptance. Proposed product APIs are not claims that those APIs have shipped.
 
-**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03-C is active on [PR #326](https://github.com/maba-pag/owlbear/pull/326), with the explicit bounded-recovery revision in section 1.1; it is not accepted. The current package plan owns the next C assignment. D/E and live activation have not been started or accepted by this revision. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
+**Execution status:** D01 is complete at independently reviewed candidate `dcee688c654b1627cd9f8bbca5c241d02733447f`. D02 is complete and accepted at source commit `1ab5ae7e4f56201e3b01dc2a5a88fc8525352806`: exact-head assembled checks, independent code review and the actual named-agent host rehearsal passed. D03 remains active on [PR #326](https://github.com/maba-pag/owlbear/pull/326) under the explicit bounded-recovery revision in section 1.1; it is not accepted. The D03 package plan owns its implementation phases and current proof/review/CI disposition. D04-D08 and live activation have not started or been accepted by this revision. The [P00/P01 record](delivery-action-readiness-p00.md) remains historical evidence.
 
 **Reading route:** Start with section 0 for the next direct work package. Sections 1-11 explain the product and technical contracts; section 12 retains the original WP/P identifiers for traceability only; section 13 supplies proof scenarios. Do not invoke Delivery to execute this programme.
 
 ## 0. Direct Implementation Decision
 
-### D03 Current Checkpoint: 2026-09-25
+### D03 Current Checkpoint: 2026-09-29
 
-Continue the [bounded C implementation assignment](delivery-cloud-d03-plan.md#current-handoff)
-on the existing PR branch. The [approved recovery boundary](#11-requirements-from-the-user)
+Continue D03 on the existing PR branch. The [package plan's current handoff](delivery-cloud-d03-plan.md#current-handoff)
+owns its exact candidate, review, CI and human/host acceptance status. The [approved recovery boundary](#11-requirements-from-the-user)
 supersedes the former full-automation requirement. Older D02 stop instructions below are historical;
-their accepted evidence remains intact. No D03 acceptance, merge, D/E dispatch or activation is implied.
+their accepted evidence remains intact. D03 is not accepted until its current candidate clears the
+named gates; no D04 dispatch, merge or live activation is implied here.
 
 ### D02 Accepted Checkpoint: 2026-09-14
 
@@ -727,6 +728,12 @@ authority cannot be independently established. Other programme requirements are 
   separate concrete capability design and explicit approval; it is not silently assigned to D08.
 - The accepted reduction is automation coverage, never data safety. End-to-end acceptance must
   demonstrate at least one real supported recovery path plus the negative containment path.
+
+**Operational consequence recorded 2026-09-29; not a change to the approved boundary:** the current
+runtime refuses retry and claim-release transitions without supported host exclusion. Retained claims
+and interrupted operations continue to consume shared execution capacity; if they occupy all slots,
+acquisition, finalization and engine continuation wait across the portfolio. User acknowledgment of
+this limitation remains a D03 merge gate in the [package plan](delivery-cloud-d03-plan.md#current-handoff).
 
 - U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
 - U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.

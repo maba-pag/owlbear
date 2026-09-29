@@ -39,8 +39,11 @@ The server exposes these operation groups:
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
-creation operation. These operations expose and recover current typed Integration attention; current
-work uses sequential Change outcomes and user-owned pull-request acceptance.
+creation operation. It exposes typed Integration attention and accepts exact recovery requests, but
+the current runtime refuses `recover_integration_repair_claim` with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` and retains custody. No successful Integration claim-release
+path is available in this version. Current work uses sequential Change outcomes and user-owned
+pull-request acceptance.
 
 Delivery startup isolates malformed or identity-mismatched per-Change state as bounded attention so
 valid Changes can continue to operate. Quarantined Changes are omitted from acquisition and dispatch

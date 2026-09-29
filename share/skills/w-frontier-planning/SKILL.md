@@ -20,7 +20,9 @@ source head, integration target, and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities.
+the unchanged outcome and claim identities. The current runtime refuses every worker retry with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and plan remain unchanged, with no new
+attempt. It does not reset the attempt or worktree. Orchestrator reports this non-retryable refusal.
 
 ## Step 1 - Ground The Task Chain
 
@@ -59,7 +61,8 @@ conversation or request summary.
 
 Before routing a blocker: choose among authority-equivalent planning alternatives; use a request for
 an expressly stakeholder-selectable choice or external action; use `return` for missing,
-contradictory, or observably ambiguous Design authority; use `retry` for local or transient failure.
+contradictory, or observably ambiguous Design authority; a local or transient failure may return the
+schema-valid `retry` mapping, but the runtime refusal above keeps the active claim occupied.
 
 When one bounded request blocks planning, create no side record. Return a
 `BlockDelivery` containing reason, unblock condition, expected evidence, locators, and one embedded
@@ -98,7 +101,9 @@ output: <published DeliveryPlanCandidate.output unchanged>
 
 On `finding`, publish nothing. Planner chooses one transition:
 
-- `retry` only for a local task-chain or explicitly transient planning failure. A required reviewer-dispatch failure that is not transient is not a retry;
+- `retry` only for a local task-chain or explicitly transient planning failure. The runtime refusal
+  above means it does not start another planning attempt. A required reviewer-dispatch failure that
+  is not transient is not a retry;
 - `return` with target `design`, reason, source locators, and `source_boundary` equal to the supplied
   launch package ID for missing or contradictory Design authority;
 - `block` with an embedded bounded request for one user-owned decision or action. When the required

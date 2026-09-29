@@ -56,10 +56,11 @@ reason: <recorded prerequisite failure>
 ### Triage An Unclean Worktree
 
 The normal Builder launch is clean. If a Builder dispatch fails or ends without a valid transition,
-Orchestrator calls exact `recover_claim`; Delivery preserves and cleans a dirty worktree
+Orchestrator may request exact `recover_claim`; the current runtime refuses with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`, leaves the claim and worktree unchanged, and reports the
+missing host-owned exclusion evidence. Delivery does not preserve, clean, or release the worktree
 automatically. Do not ask the user to classify stale files or perform Git recovery. A recovery
-attention is a machine-owned preservation or custody failure, not an invitation to invent a manual
-cleanup route.
+refusal is retained custody, not an invitation to invent a manual cleanup route.
 
 Inspect the assigned worktree before editing with `git status --short`, `git diff`,
 `git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
@@ -70,9 +71,8 @@ launch identity.
   it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
   fact that another session ended.
 - **Preserve for handoff:** When changes are useful but incomplete for this invocation, preserve them
-  with a task-scoped WIP commit using explicit owned paths, then return `retry` with that exact clean
-  commit as `abandoned_commit`. The WIP commit is recoverable predecessor evidence; it is not a
-  successful task result and does not release the claim by itself.
+  with a task-scoped WIP commit using explicit owned paths. The WIP commit is recoverable predecessor
+  evidence; it is not a successful task result and does not release the claim by itself.
 - **Reset:** When changes are clearly disposable artifacts from this exact task and every tracked or
   untracked path is within the task boundary, the Builder may discard them. Prefer a reversible
   `git stash push -u -m <claim-id> -- <explicit paths>` before removal. For disposable untracked
@@ -82,7 +82,8 @@ launch identity.
 - **Escalate:** If any path is foreign or ambiguous, staged state exists outside the task boundary,
   branch/HEAD/custody is not exact, recovery attention is present, or the current HEAD contains an
   unreviewed commit whose provenance is unclear, do not reset or adopt it. Return the claim-bound
-  `dispatch_failure` above for exact recovery.
+  `dispatch_failure` above; Orchestrator reports missing host exclusion evidence and retains the
+  claim. This route does not imply that recovery will succeed.
 
 Before returning `retry`, `return`, or `block`, the Builder must leave the managed worktree clean and
 make any required commit identity equal the current exact HEAD. A dirty worktree cannot produce one of
@@ -111,8 +112,9 @@ at the supplied task boundary.
 If context contains a request or a request may be needed, load `h-decision-requests` before consuming
 or constructing it. Choose among authority-equivalent implementation alternatives; use a request
 for an expressly stakeholder-selectable choice or external action; use `return` for missing,
-contradictory, or observably ambiguous earlier authority; use `retry` for local failure and
-`dispatch_failure` for context, custody, or tool failure.
+contradictory, or observably ambiguous earlier authority; use `retry` for a local failure only as a
+schema-valid request subject to Step 4's runtime refusal, and `dispatch_failure` for context, custody,
+or tool failure.
 
 ## Step 2 - Implement And Commit
 
@@ -200,10 +202,11 @@ abandoned_commit: <exact clean current head>
 
 Use `retry` for an implementation failure that cannot be repaired in this invocation.
 
-`retry` abandons the current attempt and resets the managed worktree to the reviewed boundary through
-Delivery. It is valid only after the Builder has supplied a clean exact `abandoned_commit`; it does not
-preserve uncommitted work. Preserve useful incomplete work with the WIP handoff in Step 0 before
-returning `retry`.
+The current runtime refuses every worker `retry` transition with
+`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`. It leaves the active claim and managed worktree unchanged;
+it does not reset the attempt or start a replacement. Orchestrator reports this non-retryable
+refusal. Do not describe `retry` as a completed handoff or worktree reset, and do not try another
+transition to bypass verified worker exclusion.
 
 ```yaml
 action: return

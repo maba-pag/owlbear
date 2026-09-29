@@ -143,7 +143,7 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 | --- | --- |
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, task progress, and explicit per-Change admission/runtime status from `PortfolioApplication` |
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
-| User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
+| User controls | Answer requests, clear blocks, request exact claim/worktree recovery, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
@@ -151,6 +151,9 @@ The `/api/work-items` response consumes Delivery's explicit status axes. A packa
 unadmitted Design only when persisted admission is absent. An admitted Change with no tasks is a
 valid Planning state and reports `Task plan not published`; an admitted but non-actionable Change
 retains its admission state and reports the generic `runtime_unavailable` diagnostic.
+Claim-recovery controls submit a request, not proof of worker closure. The current runtime refuses
+release with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the default provider is unavailable, so the
+claim and worktree remain retained. See the [operator recovery boundary](../../setup/operating-owlbear.md#correction-and-recovery).
 
 The current frontend polls `/api/work-items` every three seconds. Each poll observes a reconciled
 Delivery read, so an already-running Cockpit can see newly admitted Changes without a process
@@ -161,7 +164,7 @@ The assembled FastAPI inventory preserves 21 POST routes for user-owned controls
 
 | Control family | Preserved operations | Routes |
 | --- | --- | ---: |
-| Requests and outcomes | Answer a request; clear a requestless block; recover a claim; preview a backward move; apply a backward move | 5 |
+| Requests and outcomes | Answer a request; clear a requestless block; request exact claim recovery; preview a backward move; apply a backward move | 5 |
 | Publication and acceptance | Reconcile acceptance; reconcile a publication; mark ready; observe acceptance; observe publication checks; resolve attention; supersede a publication; defer; resume | 9 |
 | Target and worktree | Sync with target; abort or resolve a target conflict; abandon a Change; clean up abandoned or completed worktrees; recover a worktree | 7 |
 

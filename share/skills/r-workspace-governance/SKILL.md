@@ -35,12 +35,15 @@ without behavior change).
   output with those inputs in the same scoped commit. Keep the output in the task's explicit
   `maintained_surfaces` and `required_outputs`; do not create a later lock-only or index-only task
   when an earlier task cannot be proved without the generated file.
-- During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
-  within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
-  complete diff, validate it against the task, and explicitly adopt it before committing. Do not
-  infer an ownership conflict from a dirty path, file timestamp, or invocation boundary alone. If a
-  concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
-  containment reason instead of describing the whole task-owned diff as mixed.
+- After claim-scoped recovery returns a verified successful receipt and releases custody, treat
+  uncommitted changes within the task-maintained surfaces as candidate work from the interrupted
+  claim. Inspect the complete diff, validate it against the task, and explicitly adopt it before
+  committing. Do not infer an ownership conflict from a dirty path, file timestamp, or invocation
+  boundary alone. If a concrete hunk conflicts with the task or cannot be safely attributed, name that
+  path and hunk in the containment reason instead of describing the whole task-owned diff as mixed.
+- Until a verified recovery receipt releases the exact claim, do not adopt its uncommitted changes
+  into a later invocation. Retain them and report the missing host-owned exclusion evidence; a timeout
+  or caller assertion does not grant custody.
 - Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
   another broad directory. The task's maintained surfaces bound eligible implementation paths.
 - Builder calls `submit_result` only after the scoped commit exists, its path set equals

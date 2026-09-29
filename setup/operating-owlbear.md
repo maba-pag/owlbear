@@ -215,14 +215,18 @@ Worker transitions keep correction finite and typed:
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
 | Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
-| Retryable worker condition | Worker returns `retry` with exact claim and source boundary | Runtime clears the claim and recomputes same-stage eligibility |
+| Worker returns `retry` | Worker supplies the exact claim and source boundary | Runtime refuses the transition with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree stay unchanged, and no new attempt starts. Orchestrator reports the missing exclusion evidence |
 | Planning or Design premise failed | Worker returns `return` with evidence and target | Runtime persists successor context; Design reopen is currently manual through `/design` |
-| Claim owner is confirmed dead | User recovers the exact claim in Cockpit | Runtime preserves or clears custody according to exact workspace evidence |
+| Claim recovery is requested | User requests recovery of the exact claim in Cockpit | The current runtime refuses with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the claim, worktree, and capacity stay held. Timeout and caller confirmation are not evidence, and this version has no successful claim-release path |
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
-Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and retained Integration attention
-remain user-owned Cockpit controls rather than agent MCP operations.
+Recovery requests are not proof. Do not infer worker closure from a timeout or caller confirmation.
+The current runtime has no successful claim-release path; it refuses recovery requests and retains
+custody. Request answers, requestless unblock, claim-recovery requests, backward movement, and
+retained Integration attention remain user-owned Cockpit controls rather than agent MCP operations.
+Refused claims and interrupted operations consume shared execution capacity. If they occupy every
+slot, new Planner/Builder work, finalization, and engine continuation wait; this version has no
+operator action that releases those holds.
 
 ### Publication, Acceptance, And Completed History
 
@@ -244,9 +248,11 @@ Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect t
 New Integration repair claims, candidates, reviews, and admissions are not created by the current
 workflow. Treat a
 merge conflict without a current repair claim as an authority gap; if persisted repair-claim context
-supplies exact attempt and claim identities, use the exact recovery operation and preserve its
-evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
-provide bounded list, search, and exact lookup of receipt-backed history.
+supplies exact attempt and claim identities, request recovery only through the exact owner operation
+and preserve its evidence. The operation still requires supported host-owned exclusion; the default
+provider refuses without it and leaves attention/custody intact. Do not edit the target or worktree
+directly. Cockpit and the MCP completed-change tools provide bounded list, search, and exact lookup
+of receipt-backed history.
 
 ### Current Manual Boundaries
 
@@ -263,7 +269,7 @@ provide bounded list, search, and exact lookup of receipt-backed history.
 /ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
-Correction: retry | return | block -> typed successor context
+Correction: return | block -> typed successor context; retry -> refusal with claim retained pending supported host exclusion
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```

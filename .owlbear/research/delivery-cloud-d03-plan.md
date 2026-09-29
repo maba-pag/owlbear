@@ -2,17 +2,21 @@
 
 ## Status and authority
 
-**D03 is source-ready under the approved bounded contract; current dev is integrated and focused
-integration verification passed. Ready-for-review/CI and human acceptance remain, not more D03-E implementation.**
-The [integration request](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5869138354)
-authorizes merging current dev, focused verification and then marking the PR ready for review.
-Ready-for-review is not package acceptance, approval, merge into dev/main, D04 or live activation.
+**D03 remains active under the approved bounded contract and is not accepted. The exact current PR
+head, review, CI and human/host gate status are tracked below; a non-draft PR is not package
+acceptance or evidence for a different candidate.**
 Bounded C's and D's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
+
+**Historical integration record:** The integration commit, source-ready `b49a2a8` review, and
+following proof paragraphs describe the earlier integration checkpoint. Instructions there to retain
+unchanged source evidence did not cover the later recovery and diagnostic repairs. The current full
+candidate is the working-tree diff from published PR baseline `653a102`; its proof and remaining gates
+are recorded in the current-disposition table below.
 
 The [cumulative acceptance review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5868092173)
 at **`b49a2a8f0017bcf2aa25274b2fec8962d72f02a5`** found **source-ready, pending named gates**,
@@ -81,13 +85,14 @@ services, production state, provider effects or protections were changed.
 
 | Gate | Current disposition |
 | --- | --- |
-| Bounded A–E source and closeout proof | Source-ready review and named exact-`b49a2a8` evidence retained for unchanged behavior |
-| Target integration | Conflict-free two-parent merge published at `ee1cf71`; 18 focused tests, four-file Ruff lint/format and pinned actionlint passed |
-| Ready-for-review | Complete: PR #326 is ready for review at integrated head `aba7684`. |
-| Required CI | All four workflows passed at PR head `653a102`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36440136593), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36440136312), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36440136399), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36440136595). The local repair candidate is based on that head and still needs exact-head CI after publication. |
-| Focused repair proof | The 91-case HTTP module passed under Python 3.12.14 xdist with deterministic retry clocks. Four residual backend/tooling cases pass on Python 3.12.14 and 3.14.7, including Python 3.12 xdist. The full 116-case WorkPortfolio test file passes locally on Node 24.21 after its test fix; scoped Biome passes. |
-| Follow-up review | The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029) identified five bounded repairs on `653a102`. Local Opus challenges found and drove fixes for stale-result replay under successor custody, post-start retry accounting proof, and completion-ledger accuracy. The fourth challenge found no source defect and identified missing selected-Change proof at the entry limit; the regression is now covered. The fifth challenge confirmed the diagnostic boundary and found a stale historical test description, corrected below. Candidate CI and PR re-review remain pending publication. The earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix or preserved custody assertions. |
-| Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement |
+| Bounded A–E source and closeout proof | Historical source-ready review at `b49a2a8`; it predates the current repairs and is not package acceptance |
+| Target integration | Historical two-parent integration at `ee1cf71`; its 18 focused tests, four-file Ruff lint/format and pinned actionlint apply to that checkpoint |
+| Current local candidate | PR baseline `653a102` plus local repair commits `3c15ab1`/`bc7ac22` and current documentation/guidance edits. The changed-path route passes 2,155 tests; whole-tree Ruff and documentation validators pass. The final full-package local Opus challenge found the bounded implementation sound; its handoff correction is recorded here. Candidate is unpublished; exact-head CI remains pending. |
+| Ready-for-review | The published PR is non-draft at `653a102`; that status does not review or accept the current local candidate. |
+| Required CI | All four workflows passed at baseline PR head `653a102`: [Source](https://github.com/maba-pag/owlbear/actions/runs/36440136593), [Dependency](https://github.com/maba-pag/owlbear/actions/runs/36440136312), [Cockpit](https://github.com/maba-pag/owlbear/actions/runs/36440136399), and [Agent ecosystem](https://github.com/maba-pag/owlbear/actions/runs/36440136595). These are historical baseline results; verify every required workflow on the exact current PR head before acceptance. |
+| Focused repair proof | Historical HTTP and WorkPortfolio results above apply to their named candidates. The current local candidate passes the 2,155-test changed-path route, whole-tree Ruff/format, validators, and Markdownlint on applicable edited Markdown; no exact-head CI has run. |
+| Follow-up review | The [whole-package review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5873016029) identified five bounded repairs on `653a102`; subsequent local Opus challenges drove source, diagnostics, capacity-disclosure and guidance corrections. The final full-package local Opus challenge found the bounded implementation sound and one stale-handoff issue; that documentation correction is recorded above. Exact-head CI follows publication; neither local review nor baseline CI alone constitutes package acceptance. The earlier [Opus 5.5 review](https://github.com/maba-pag/owlbear/pull/326#issuecomment-5871033530) found no concern with the retry-clock fix or preserved custody assertions. |
+| Human/host acceptance | Existing ordinary dispatch/transport and platform limits remain; no broader optional-host recovery requirement is imposed. Before merge, the user must acknowledge that retained claims can exhaust shared capacity and stall the portfolio until supported host exclusion exists |
 
 The `f802aed` HTTP failure was a retry-window timing dependency: the retained writer returns
 `busy/active-custody` during backoff; after it expires, finalization-failed readiness returns
@@ -377,7 +382,11 @@ decision, producer framework or host backend is needed for the approved bounded 
 | Unrelated eligible Change | Continue through selected application acquisition without releasing the contained Change |
 | Worker closure or dirty-content authority unavailable | Keep existing fail-closed boundaries; diagnosis is not release, preservation or permission |
 
-### Candidate proof and limits
+### Historical candidate proof and limits
+
+The following evidence belongs to candidate `7b93a913660da21cf7e72ef7808d664fd4498a17`; it is
+historical and is not proof for the current PR head or local candidate. The current handoff above
+owns present review, CI and acceptance status.
 
 **Fresh writer-observed verification, 2026-09-26:** uv **0.11.0**, locked dependencies and
 supported Python **3.14.3**; Delivery and GitHub-adapter imports verified in this checkout.
@@ -428,12 +437,16 @@ for their exact limits. The named capitalization failure is now resolved, not di
 | --- | --- |
 | Supported recovery | Exact engine-owned durable result or matching publication receipt is replayed/reconciled once under existing custody. A lost response followed by restart returns the same result and resumes only the selected Change; it does not re-invoke an already completed effect |
 | Unknown execution | Started without authoritative result, absent exclusion or conflicting receipt remains contained. No cleanup, copying, custody release, blind retry or replacement worker; bytes/index/head and failure budget remain unchanged. A typed stale result after effect entry is durably recorded and releases that action's custody while its retry reservation remains pending. A stale preflight before the start marker records a failed attempt with backoff, without refund/reset, so a retry can proceed after drift is corrected |
+| Worker-requested retry | `retry` is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree remain unchanged, with no reset or replacement attempt. Verified worker exclusion is still required before custody can be released |
 | Unattributed mutation | Stable foreign, ignored/private or staged edits cannot become automatic preservation or Builder authority through snapshots, scope, caller assertions or a successful exit code. Keep the original material in place |
 | Actionable diagnosis | Public reads distinguish an unstarted retained action, started-without-result, exact recorded failure and unverifiable journals against the original action. Containment replaces mark-ready/merge guidance and names missing evidence, responsible owner and resume condition; repeated reads do not execute, reconcile or mutate authority. No nonexistent repair promise, command assembly, fake approval, inferred termination or unsupported clickable action |
-| Continued progress | Unrelated eligible Changes still run; same-Change unknown custody remains occupied. Repeated requests do not mint new equivalent attempts or reset budgets |
+| Continued progress | Unrelated eligible Changes run while shared execution capacity remains available. Refused retries, lost claims and interrupted operations stay occupied; if retained work exhausts all slots, acquisition, finalization and engine continuation wait. Repeated requests do not mint new equivalent attempts or reset budgets |
 | Package integration | D retains offline diagnosis; E retains strict registered/HTTP forwarding and cumulative proof for this revised boundary. Unsupported host recovery is explicitly contained, not a hidden package prerequisite |
 
-### Next assignment and verified baseline
+### Source anchors and historical baseline
+
+This section preserves source navigation and earlier proof context; it is not the current assignment
+or status record. Use the current handoff above for those decisions.
 
 Source anchors: `PortfolioApplication.execute_change_action`, `_read_engine_result`,
 `_replay_pending_state_publication`, `_reconcile_pending_state_publication`, `repair_change`,
@@ -1145,6 +1158,7 @@ Closeout, split into bounded selections:
 
 ## Progress and verification gaps
 
-The [completion ledger](#completion-ledger) owns current status and the next outcome.
-The [evidence index](#evidence-index) links the immutable historical record. No historical
-test total or increment-level review is a cumulative D03-C acceptance claim.
+The [current handoff](#current-handoff) owns D03 status and the next action. The
+[completion ledger](#completion-ledger) defines accepted behavior; the [evidence index](#evidence-index)
+links immutable historical proof. No historical test total or increment-level review is a cumulative
+D03 acceptance claim.

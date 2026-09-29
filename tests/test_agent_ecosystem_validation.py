@@ -838,6 +838,51 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
+def test_worker_retry_guidance_matches_runtime_exclusion_refusal() -> None:
+    packet = " ".join((_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8").split())
+    planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
+    orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
+    attention = " ".join(
+        (_SKILLS_ROOT / "w-delivery-attention-resolution/SKILL.md").read_text(encoding="utf-8").split()
+    )
+    orchestrate_prompt = (_PROMPTS_ROOT / "orchestrate.prompt.md").read_text(encoding="utf-8")
+    operator_guide = (_REPO_ROOT / "setup/operating-owlbear.md").read_text(encoding="utf-8")
+    delivery_readme = (_REPO_ROOT / "serve/delivery/README.md").read_text(encoding="utf-8")
+    delivery_mcp_readme = " ".join((_REPO_ROOT / "serve/delivery-mcp/README.md").read_text(encoding="utf-8").split())
+    cockpit_readme = (_REPO_ROOT / "serve/cockpit/README.md").read_text(encoding="utf-8")
+    wiring = " ".join((_REPO_ROOT / "share/WIRING.md").read_text(encoding="utf-8").split())
+    workspace_governance = " ".join(
+        (_SKILLS_ROOT / "r-workspace-governance/SKILL.md").read_text(encoding="utf-8").split()
+    )
+
+    for workflow in (packet, planning):
+        assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in workflow
+        assert "active claim" in workflow
+        assert "does not reset" in workflow
+    assert "resets the managed worktree to the reviewed boundary" not in packet
+    assert "`retry` abandons the current attempt" not in packet
+    assert "report the non-retryable rejection" in orchestration
+    assert "Runtime clears the claim" not in operator_guide
+    assert "eligible for recovery after the configured" not in delivery_readme
+    assert "confirmed-dead claim recovery" not in operator_guide
+    assert "Clean matching Builder custody is restarted and released" not in delivery_readme
+    assert "If they occupy every" in operator_guide
+    assert "enough retained claims can stall acquisition" in delivery_readme
+    assert "expose and recover current typed Integration attention" not in delivery_mcp_readme
+    assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in delivery_mcp_readme
+    assert "recover confirmed-dead claims or worktrees" not in cockpit_readme
+    assert "preserves and cleans a dirty worktree automatically" not in packet
+    assert "releases stale custody" not in attention
+    assert "quarantine evidence" not in attention
+    assert "recover exact failed launches" not in orchestrate_prompt
+    assert "recovers exact failed claims" not in wiring
+    assert "dispatch failure instead triggers the matching exact claim recovery" not in wiring
+    assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in wiring
+    assert "leaving custody retained" in wiring
+    assert "During exact-claim recovery after a crash or unstructured worker return" not in workspace_governance
+    assert "Until a verified recovery receipt releases the exact claim" in workspace_governance
+
+
 def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     """Manual review cannot infer named scope from an entry's own provenance."""
     prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
