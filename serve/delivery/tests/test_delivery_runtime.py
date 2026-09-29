@@ -1958,10 +1958,26 @@ def test_implementation_nonadvance_requires_verified_worker_exclusion(
     with pytest.raises(DeliveryWorkerExclusionRequiredError):
         runtime.transition(requests[instruction])
 
-    assert runtime.frontier_bytes() == before_frontier
+    before = DeliveryFrontier.model_validate_json(before_frontier)
+    after = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    assert after.bindings[0].recovery_attention.diagnostic_transition == requests[instruction]
+    assert (
+        after.model_copy(
+            update={
+                "bindings": tuple(binding.model_copy(update={"recovery_attention": None}) for binding in after.bindings)
+            }
+        )
+        == before
+    )
     assert coordinator.show("delivery-runtime") == before_coordination
     assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
+    legacy_attention = after.model_dump(mode="json")
+    legacy_attention["bindings"][0]["recovery_attention"].pop("diagnostic_transition")
+    parsed, _canonical_bytes = parse_delivery_frontier(json.dumps(legacy_attention).encode())
+    assert parsed.schema_version == 18
+    assert parsed.bindings[0].recovery_attention.diagnostic_transition is None
+    assert parsed.bindings[0].active_claim == after.bindings[0].active_claim
 
 
 def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(tmp_path: Path) -> None:

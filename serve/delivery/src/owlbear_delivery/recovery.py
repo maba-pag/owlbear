@@ -546,7 +546,7 @@ class RetryAttemptOutcome(_RecoveryModel):
     schema_version: Literal[1] = 1
     attempt_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$", max_length=256)
     episode_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    status: Literal["failed", "succeeded", "waiting", "contained"]
+    status: Literal["failed", "succeeded", "waiting", "contained", "paused"]
     observed_at: str = Field(min_length=1, max_length=64)
     failure_code: str | None = Field(default=None, max_length=128)
     failure_detail: str | None = Field(default=None, max_length=240)
@@ -611,6 +611,7 @@ class RetryOwnerResult(_RecoveryModel):
     observed_at: str
     failure_code: str = "worker-blocked"
     accepted_progress: bool = True
+    paused: bool = False
     repair_outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
     repair_task_id: str | None = Field(default=None, min_length=1, max_length=256)
     completed_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
@@ -618,6 +619,10 @@ class RetryOwnerResult(_RecoveryModel):
     @model_validator(mode="after")
     def _validate_repair_acceptance(self) -> Self:
         repair_fields = (self.repair_outcome_id, self.repair_task_id, self.completed_commit)
+        if self.paused:
+            if self.accepted or self.accepted_progress or any(value is not None for value in repair_fields):
+                raise ValueError("paused retry owner result cannot carry accepted progress")
+            return self
         if not self.accepted and (not self.accepted_progress or any(value is not None for value in repair_fields)):
             raise ValueError("rejected retry owner result cannot carry repair acceptance")
         if self.accepted and self.repair_task_id is None:
@@ -645,7 +650,7 @@ class RetryEpisodeSummary(_RecoveryModel):
     repair_attempts: int = Field(default=0, ge=0)
     observation_attempts: int = Field(default=0, ge=0)
     explicit_observations: int = Field(default=0, ge=0)
-    last_status: Literal["reserved", "failed", "succeeded", "waiting", "contained"] | None = None
+    last_status: Literal["reserved", "failed", "succeeded", "waiting", "contained", "paused"] | None = None
     last_failure_at: str | None = Field(default=None, max_length=64)
     next_eligible_at: str | None = Field(default=None, max_length=64)
     stop_code: RetryStopCode | None = None
@@ -870,6 +875,7 @@ class RetryLedger:
         now: datetime | str,
         failure_code: str = "worker-blocked",
         accepted_progress: bool = True,
+        paused: bool = False,
         repair_outcome_id: str | None = None,
         repair_task_id: str | None = None,
         completed_commit: str | None = None,
@@ -885,6 +891,7 @@ class RetryLedger:
             observed_at=_retry_timestamp(_retry_time(now)),
             failure_code=failure_code,
             accepted_progress=accepted_progress,
+            paused=paused,
             repair_outcome_id=repair_outcome_id,
             repair_task_id=repair_task_id,
             completed_commit=completed_commit,
@@ -1117,7 +1124,9 @@ class RetryLedger:
                     or attempt.key != episode.key
                 ):
                     raise RetryLedgerCorruptError
-                if result.repair_task_id is not None:
+                if result.paused:
+                    self.record_pause(attempt_id, now=result.observed_at)
+                elif result.repair_task_id is not None:
                     self.record_repair_owner_result(result)
                 elif result.accepted:
                     self.record_success(
@@ -1408,6 +1417,53 @@ class RetryLedger:
             stop_code=updated.stop_code,
         )
 
+    def record_pause(self, attempt_id: str, *, now: datetime | str | None = None) -> RetryEpisodeSummary:
+        """Settle only a human-gated reservation, retaining all prior failure authority."""
+        summary, previous = self._read_with_bytes()
+        episode = _episode_for_attempt(summary, attempt_id)
+        if episode is None:
+            raise RetryLedgerConflictError("pause requires a reserved attempt")
+        outcome_id = digest(f"{attempt_id}:paused".encode())
+        if outcome_id in episode.outcome_ids:
+            return episode
+        if attempt_id not in _pending_attempts(episode):
+            raise RetryLedgerConflictError("paused attempt already has a terminal outcome")
+        attempt = self._read_attempt(attempt_id)
+        if (
+            attempt.episode_id != episode.episode_id
+            or attempt.key != episode.key
+            or attempt.failure_class is not RetryFailureClass.MECHANICAL
+            or attempt.kind not in {"original", "repair"}
+        ):
+            raise RetryLedgerConflictError("pause requires an exact mechanical reservation")
+        observed = _retry_timestamp(_retry_time(now if now is not None else self._clock()))
+        outcome = RetryAttemptOutcome(
+            attempt_id=attempt_id, episode_id=episode.episode_id, status="paused", observed_at=observed
+        )
+        updated = episode.model_copy(
+            update={
+                "outcome_ids": (*episode.outcome_ids, outcome_id),
+                "total_attempts": episode.total_attempts - 1,
+                "repair_attempts": episode.repair_attempts - (1 if attempt.kind == "repair" else 0),
+                "last_status": "paused",
+                "stop_code": None if episode.stop_code is RetryStopCode.CONTAINMENT else episode.stop_code,
+            }
+        )
+        self._commit_summary(
+            previous,
+            summary.model_copy(
+                update={
+                    "version": summary.version + 1,
+                    "updated_at": observed,
+                    "episodes": _replace_episode(summary.episodes, updated),
+                }
+            ),
+            RetryAttemptOutcome,
+            outcome,
+            outcome_id=outcome_id,
+        )
+        return updated
+
     def record_failure(
         self,
         reservation: RetryReservation | str,
@@ -1426,6 +1482,8 @@ class RetryLedger:
         if episode is None:
             raise RetryLedgerConflictError("attempt is not part of the current retry summary")
         outcome_id = digest(f"{attempt_id}:failed".encode())
+        if digest(f"{attempt_id}:paused".encode()) in episode.outcome_ids:
+            raise RetryLedgerConflictError("paused attempt cannot be recorded as failed")
         if outcome_id in episode.outcome_ids or digest(f"{attempt_id}:succeeded".encode()) in episode.outcome_ids:
             return episode
         delay_index = (
@@ -1503,6 +1561,8 @@ class RetryLedger:
         if episode is None:
             raise RetryLedgerConflictError("attempt is not part of the current retry summary")
         outcome_id = digest(f"{attempt_id}:succeeded".encode())
+        if digest(f"{attempt_id}:paused".encode()) in episode.outcome_ids:
+            raise RetryLedgerConflictError("paused attempt cannot be recorded as succeeded")
         if (
             outcome_id in episode.outcome_ids
             or digest(f"{attempt_id}:failed".encode()) in episode.outcome_ids
@@ -1596,6 +1656,7 @@ class RetryLedger:
         outcome_id = digest(f"{attempt_id}:contained".encode())
         if (
             outcome_id in episode.outcome_ids
+            or digest(f"{attempt_id}:paused".encode()) in episode.outcome_ids
             or digest(f"{attempt_id}:failed".encode()) in episode.outcome_ids
             or digest(f"{attempt_id}:succeeded".encode()) in episode.outcome_ids
         ):
@@ -1910,4 +1971,5 @@ def _pending_attempts(episode: RetryEpisodeSummary) -> tuple[str, ...]:
         if digest(f"{attempt_id}:failed".encode()) not in episode.outcome_ids
         and digest(f"{attempt_id}:succeeded".encode()) not in episode.outcome_ids
         and digest(f"{attempt_id}:contained".encode()) not in episode.outcome_ids
+        and digest(f"{attempt_id}:paused".encode()) not in episode.outcome_ids
     )

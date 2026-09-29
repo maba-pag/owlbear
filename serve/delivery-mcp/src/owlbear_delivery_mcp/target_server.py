@@ -13,6 +13,7 @@ from typing import Annotated, Never, cast, get_args, get_origin, get_type_hints
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, BeforeValidator, ConfigDict, TypeAdapter, ValidationError, create_model
 
@@ -1226,19 +1227,48 @@ def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None:
 
 
 def _install_strict_argument_model(server: MCPServer, name: str) -> None:
-    """Replace MCP's permissive argument model with an extra-forbid variant."""
+    """Install strict arguments and bounded diagnostics at MCP's validation boundary."""
     tool_manager = getattr(server, "_tool_manager", None)
     tool = tool_manager.get_tool(name) if tool_manager is not None else None
     if tool is None:
         message = f"Delivery MCP operation {name} was not registered"
         raise RuntimeError(message)
+    metadata = tool.fn_metadata
     argument_model = create_model(
         f"Strict{name.title().replace('_', '')}Arguments",
-        __base__=tool.fn_metadata.arg_model,
+        __base__=metadata.arg_model,
         __config__=ConfigDict(extra="forbid"),
     )
-    tool.fn_metadata.arg_model = argument_model
+    tool.fn_metadata = _TargetToolMetadata(
+        arg_model=argument_model,
+        output_schema=metadata.output_schema,
+        output_model=metadata.output_model,
+        wrap_output=metadata.wrap_output,
+    )
     tool.parameters = argument_model.model_json_schema(by_alias=True)
+
+
+class _TargetArgumentValidationError(ValidationError):
+    """Carry a value-free diagnostic through MCP's expected validation-error path."""
+
+    def __str__(self) -> str:
+        return TargetDiagnostic(
+            code="ERR_TARGET_PARAM_VALIDATION",
+            detail="Invalid tool arguments. Check the tool input schema.",
+            current_authority_identity="portfolio",
+            retry_safe=False,
+        ).model_dump_json()
+
+
+class _TargetToolMetadata(FuncMetadata):
+    """Sanitize input validation without altering MCP's result conversion."""
+
+    def validate_arguments(self, arguments_to_validate: dict[str, object]) -> dict[str, object]:
+        try:
+            return super().validate_arguments(arguments_to_validate)
+        except ValidationError:
+            title = "Tool arguments"
+            raise _TargetArgumentValidationError.from_exception_data(title, []) from None
 
 
 def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:

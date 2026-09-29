@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
+    BlockDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryBlock,
     DeliveryChangeDisposition,
@@ -21,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
+    ReturnDelivery,
     parse_delivery_frontier,
 )
 from owlbear_delivery.draft_pull_request import PublicationPullRequestObservationReceipt
@@ -271,6 +273,7 @@ class DeliveryReadinessBasis(_ProjectionModel):
 DeliveryReadinessReason = Literal[
     "ready",
     "active-custody",
+    "builder-transition-contained",
     "finalization-failed",
     "claim-activation-failed",
     "coordination-unavailable",
@@ -398,6 +401,7 @@ class WorkItemRecoveryView(_ProjectionModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class WorkItemDependencyView(_ProjectionModel):
@@ -756,7 +760,11 @@ class WorkItemProjector:
         if binding.block is not None and not binding.block.resolved:
             return WorkItemNeed.YOU, "Block requires evidence"
         if binding.recovery_attention is not None:
-            return WorkItemNeed.YOU, "Claim recovery required"
+            return (
+                (WorkItemNeed.NONE, "Builder transition contained; host exclusion required")
+                if binding.recovery_attention.diagnostic_transition is not None
+                else (WorkItemNeed.YOU, "Claim recovery required")
+            )
         incomplete = tuple(
             identity for identity in outcome.dependency_ids if self._bindings[identity].stage != DeliveryStage.COMPLETED
         )
@@ -770,6 +778,11 @@ class WorkItemProjector:
         needs: WorkItemNeed,
         headline: str | None,
     ) -> tuple[WorkItemNextActor, str]:
+        attention = binding.recovery_attention
+        if attention is not None and attention.diagnostic_transition is not None:
+            claim = binding.active_claim
+            owner = claim.owner_id if claim is not None else attention.claim_id
+            return WorkItemNextActor.AGENT, f"Builder owner {owner}: {attention.reason} {attention.retry_condition}"
         if needs == WorkItemNeed.YOU:
             return WorkItemNextActor.YOU, headline or "Your attention is required"
         if needs == WorkItemNeed.DEPENDENCY:
@@ -783,6 +796,8 @@ class WorkItemProjector:
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
         claim = binding.active_claim
+        if binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None:
+            return WorkItemActivity(state=WorkItemActivityState.IDLE)
         if claim is not None:
             return WorkItemActivity(
                 state=WorkItemActivityState.WORKING,
@@ -796,6 +811,8 @@ class WorkItemProjector:
 
     @staticmethod
     def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
+        if binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None:
+            return WorkItemAction()
         if binding.stage == DeliveryStage.DESIGN:
             return WorkItemAction(
                 kind=WorkItemActionKind.RESUME_DESIGN,
@@ -1307,6 +1324,7 @@ class WorkItemProjector:
                 if card.readiness is not None
                 and card.readiness.reason_code
                 in {
+                    "builder-transition-contained",
                     "engine-action-pending",
                     "engine-action-interrupted",
                     "engine-action-failed",
@@ -1350,6 +1368,7 @@ class WorkItemProjector:
             reason=attention.reason,
             custody_retained=attention.custody_retained,
             retry_condition=attention.retry_condition,
+            diagnostic_transition=attention.diagnostic_transition,
         )
 
     @staticmethod

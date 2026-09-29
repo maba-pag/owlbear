@@ -67,6 +67,7 @@ export type DeliveryReadinessChecksState = "not-run" | "failed" | "passed" | "un
 export type DeliveryReadinessReasonCode =
   | "ready"
   | "active-custody"
+  | "builder-transition-contained"
   | "finalization-failed"
   | "claim-activation-failed"
   | "coordination-unavailable"
@@ -581,6 +582,31 @@ export interface PublicationSupersessionResponse {
   successor_publication_id: string;
 }
 
+export type BuilderTransitionDiagnostic =
+  | {
+      action: "block";
+      outcome_id: string;
+      claim_id: string;
+      block_id: string;
+      reason: string;
+      unblock_condition: string;
+      expected_evidence: string[];
+      locators: string[];
+      request: DeliveryRequest | null;
+      resume_commit: string | null;
+    }
+  | {
+      action: "return";
+      outcome_id: string;
+      claim_id: string;
+      target: WorkItemStage;
+      reason: string;
+      locators: string[];
+      preserved_commit: string | null;
+      attempt_id: string | null;
+      source_boundary: string | null;
+    };
+
 export interface WorkItemDetailView {
   snapshot_version: string;
   change_title: string;
@@ -622,6 +648,7 @@ export interface WorkItemDetailView {
     reason: string;
     custody_retained: boolean;
     retry_condition: string;
+    diagnostic_transition?: BuilderTransitionDiagnostic | null;
   } | null;
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;

@@ -23,6 +23,7 @@ from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    BlockDelivery,
     DeliveryBlock,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
@@ -45,6 +46,7 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
+    ReturnDelivery,
 )
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
@@ -569,6 +571,7 @@ class DeliveryOperatorClaimResponse(_TargetProtocolModel):
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
+    owner_id: str | None = None
 
 
 class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
@@ -579,6 +582,7 @@ class DeliveryOperatorRecoveryAttentionResponse(_TargetProtocolModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class DeliveryOperatorIntegrationAttentionResponse(_TargetProtocolModel):
@@ -622,6 +626,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     started_at=active_claim.started_at,
                     worker_role=active_claim.worker_role,
                     task_id=active_claim.task_id,
+                    owner_id=active_claim.owner_id,
                 )
                 if active_claim is not None
                 else None
@@ -634,6 +639,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                     reason=recovery_attention.reason,
                     custody_retained=recovery_attention.custody_retained,
                     retry_condition=recovery_attention.retry_condition,
+                    diagnostic_transition=recovery_attention.diagnostic_transition,
                 )
                 if recovery_attention is not None
                 else None

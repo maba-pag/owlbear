@@ -31,6 +31,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _startup_config,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
+    builder_transition_case,
 )
 from serve.delivery.tests.test_recovery import (
     absent_host_process_case,
@@ -790,6 +791,38 @@ def test_real_core_claim_recovery_exclusion_required(tmp_path: Path, kind: str) 
     assert diagnostic["retry_safe"] is False
     assert "Custody and files are unchanged" in diagnostic["detail"]
     unchanged()
+
+
+@pytest.mark.parametrize("action", ["block", "return"])
+def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tmp_path: Path, action: str) -> None:
+    application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, action)
+    before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
+    before_coordination = coordinator.show("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+    retained = runtimes["change-a"].frontier_bytes()
+    with TestClient(assemble_target_app(application)) as client:
+        detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        change_response = client.get("/api/work-items")
+    assert detail_response.status_code == change_response.status_code == 200
+    detail = detail_response.json()["item"]
+    change = change_response.json()["groups"][0]["items"][0]
+    assert detail["recovery_attention"]["diagnostic_transition"] == transition.model_dump(mode="json")
+    assert detail["requests"] == []
+    assert detail["block"] is None
+    assert detail["return_context"] is None
+    assert detail["card"]["needs"] == "none"
+    assert detail["card"]["action"]["kind"] == "none"
+    assert launch.claim.owner_id in detail["card"]["next_step"]
+    for readiness in (change["readiness"], detail["readiness"]):
+        assert readiness["status"] == "blocked"
+        assert readiness["reason_code"] == "builder-transition-contained"
+        assert readiness["executable"] is False
+        assert readiness["action"] is None
+        assert "read-only" in readiness["prompt"]
+    assert runtimes["change-a"].frontier_bytes() == retained
+    assert coordinator.show("change-a") == before_coordination
+    assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace
 
 
 @pytest.mark.parametrize("exhausted", [False, True])
@@ -1801,7 +1834,8 @@ def test_http_default_loader_contains_failed_claim_activation(  # noqa: PLR0915 
     assert payload["kind"] == "unavailable"
     assert payload["reason_code"] == "claim-activation-failed"
     assert payload["launch"] is None
-    assert payload["readiness"]["prompt"] is None
+    assert payload["readiness"]["prompt"].startswith("/repair-delivery")
+    assert "read-only" in payload["readiness"]["prompt"]
     assert payload["failure"]["claim_id"]
     assert payload["failure"]["attempt_id"]
     assert (coordinator.show("change-a").writer is not None) is writer_recorded
@@ -1835,7 +1869,8 @@ def test_http_default_loader_contains_failed_claim_activation(  # noqa: PLR0915 
             if item["change_id"] == "change-a" and item["scope"] == "outcome"
         )
         assert first_readiness["executable"] is False
-        assert first_readiness["prompt"] is None
+        assert first_readiness["prompt"].startswith("/repair-delivery")
+        assert "dispatch a replacement" in first_readiness["prompt"]
         blocked = client.post(
             "/api/changes/change-a/continuation/acquire",
             json={

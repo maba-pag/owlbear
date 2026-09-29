@@ -180,11 +180,17 @@ async def test_registered_recovery_rejects_caller_authored_evidence_fields(
     async with Client(assemble_target_server(application)) as client:
         result = await client.call_tool(operation, forged)
     assert result.is_error
-    validation_error = result.content[0].text
-    assert "validation error for Strict" in validation_error
-    assert field in validation_error
-    assert "Extra inputs are not permitted" in validation_error
-    assert "type=extra_forbidden" in validation_error
+    diagnostic = {
+        "code": "ERR_TARGET_PARAM_VALIDATION",
+        "detail": "Invalid tool arguments. Check the tool input schema.",
+        "current_authority_identity": "portfolio",
+        "retry_safe": False,
+    }
+    assert len(result.content) == 1
+    assert result.content[0].text == (
+        f"Error executing tool {operation}: " + json.dumps(diagnostic, separators=(",", ":"))
+    )
+    assert result.structured_content is None
     assert host.verifications == verifications
     assert recovery_effect_snapshot(application) == before
     unchanged()
@@ -1261,7 +1267,8 @@ async def test_registered_default_loader_contains_failed_claim_activation(  # no
     assert result.structured_content["kind"] == "unavailable"
     assert result.structured_content["reason_code"] == "claim-activation-failed"
     assert result.structured_content["launch"] is None
-    assert result.structured_content["readiness"]["prompt"] is None
+    assert result.structured_content["readiness"]["prompt"].startswith("/repair-delivery")
+    assert "read-only" in result.structured_content["readiness"]["prompt"]
     assert result.structured_content["failure"]["claim_id"]
     assert result.structured_content["failure"]["attempt_id"]
     assert (coordinator.show("change-a").writer is not None) is writer_recorded
@@ -1288,7 +1295,8 @@ async def test_registered_default_loader_contains_failed_claim_activation(  # no
         assert first_read.structured_content == second_read.structured_content
         assert first_read.structured_content is not None
         assert first_read.structured_content["readiness"]["executable"] is False
-        assert first_read.structured_content["readiness"]["prompt"] is None
+        assert first_read.structured_content["readiness"]["prompt"].startswith("/repair-delivery")
+        assert "dispatch a replacement" in first_read.structured_content["readiness"]["prompt"]
         blocked = await client.call_tool(
             "acquire_change_action",
             {
@@ -1895,15 +1903,72 @@ async def test_registered_finalization_failure_schema_exposes_proof_diagnostics(
 
 
 @pytest.mark.asyncio
-async def test_flattened_tool_rejects_unknown_arguments_before_delegation() -> None:
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("list_work_items", {"unexpected": True}),
+        (
+            "repair",
+            {
+                "change_id": "change-a",
+                "proposal_id": "a" * 64,
+                "preservation_paths": ["synthetic-private-token"],
+            },
+        ),
+        ("repair", {"change_id": ["/synthetic/private/path", "synthetic-private-token"]}),
+        ("repair", {"change_id": "/synthetic/private/path"}),
+        ("repair", {"change_id": "change-a", "confirmed_lost": "synthetic-private-token"}),
+        ("acquire_actions", {"selection": "synthetic-private-token"}),
+        (
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "synthetic-private-token",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                },
+            },
+        ),
+        (
+            "acquire_actions",
+            {
+                "selection": {
+                    "change_id": "change-a",
+                    "outcome_id": "OUT-001",
+                    "expected_stage": "planning",
+                    "expected_frontier_digest": "a" * 64,
+                    "expected_source_head": "b" * 40,
+                    "/synthetic/private/path": "synthetic-private-token",
+                },
+            },
+        ),
+    ],
+)
+async def test_registered_validation_rejects_private_arguments_before_delegation(
+    tool_name: str,
+    arguments: dict[str, object],
+) -> None:
     application = _RecordingApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
 
     async with Client(server) as client:
-        result = await client.call_tool("list_work_items", {"unexpected": True})
+        result = await client.call_tool(tool_name, arguments)
 
     assert result.is_error
     assert application.calls == []
+    diagnostic = {
+        "code": "ERR_TARGET_PARAM_VALIDATION",
+        "detail": "Invalid tool arguments. Check the tool input schema.",
+        "current_authority_identity": "portfolio",
+        "retry_safe": False,
+    }
+    assert len(result.content) == 1
+    assert result.content[0].text == (
+        f"Error executing tool {tool_name}: " + json.dumps(diagnostic, separators=(",", ":"))
+    )
+    assert result.structured_content is None
 
 
 @pytest.mark.asyncio

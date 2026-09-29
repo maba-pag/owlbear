@@ -920,6 +920,7 @@ class DeliveryRecoveryAttention(_DeliveryModel):
     writer_claim_id: str | None = None
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class DeliveryIntegrationAttentionDisposition(StrEnum):
@@ -1050,6 +1051,19 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             or self.recovery_attention.claim_id != self.active_claim.claim_id
         ):
             message = "recovery attention must bind the current active claim"
+            raise ValueError(message)
+        diagnostic = self.recovery_attention.diagnostic_transition
+        if diagnostic is not None and (
+            self.stage != DeliveryStage.IMPLEMENTATION
+            or diagnostic.outcome_id != self.outcome_id
+            or diagnostic.claim_id != self.active_claim.claim_id
+            or (isinstance(diagnostic, ReturnDelivery) and diagnostic.attempt_id != self.active_claim.attempt_id)
+            or (
+                isinstance(diagnostic, BlockDelivery)
+                and (diagnostic.request is None or diagnostic.request.outcome_id != self.outcome_id)
+            )
+        ):
+            message = "diagnostic transition must bind the current active Builder claim and outcome"
             raise ValueError(message)
 
     @property
@@ -3543,11 +3557,18 @@ class DeliveryRuntime:
                 ),
             )
         if isinstance(request, (AdvanceDelivery, BlockDelivery, ReturnDelivery)) and binding.active_claim is not None:
+            paused = (
+                isinstance(request, BlockDelivery)
+                and binding.stage == DeliveryStage.PLANNING
+                and request.request is not None
+            )
             result_participants = (
                 *result_participants,
                 *self.retry_ledger().owner_result_participants(
                     binding.active_claim.attempt_id,
                     accepted=isinstance(request, AdvanceDelivery),
+                    accepted_progress=not paused,
+                    paused=paused,
                     now=retry_observed_at or datetime.now(UTC),
                     failure_code="worker-returned" if isinstance(request, ReturnDelivery) else "worker-blocked",
                 ),
@@ -3950,7 +3971,7 @@ class DeliveryRuntime:
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.preserved_commit is None or request.attempt_id is None:
                 _conflict("Implementation return requires attempt and preserved-commit identity")
-            self._require_builder_transition_exclusion(binding)
+            self._require_builder_transition_exclusion(binding, request)
             manager = self._require_workspace()
             coordination = manager.show(self._contract.change_id)
             if coordination.writer is not None:
@@ -4017,7 +4038,7 @@ class DeliveryRuntime:
                 _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
-            self._require_builder_transition_exclusion(binding)
+            self._require_builder_transition_exclusion(binding, request)
             claim = binding.active_claim
             if claim is None:
                 _conflict("Implementation block requires an active claim")
@@ -4051,10 +4072,45 @@ class DeliveryRuntime:
             }
         )
 
-    @staticmethod
-    def _require_builder_transition_exclusion(binding: OutcomeAuthorityBinding) -> None:
-        if binding.stage == DeliveryStage.IMPLEMENTATION:
+    def _require_builder_transition_exclusion(
+        self, binding: OutcomeAuthorityBinding, request: BlockDelivery | ReturnDelivery
+    ) -> None:
+        claim = binding.active_claim
+        if claim is None or claim.claim_id != request.claim_id:
+            _conflict("diagnostic transition does not match the active Builder claim")
+        if isinstance(request, ReturnDelivery) and request.attempt_id != claim.attempt_id:
+            _conflict("diagnostic return does not match the active Builder attempt")
+        snapshot = self._require_workspace().recovery_snapshot(self._contract.change_id, claim.attempt_id)
+        if (
+            snapshot.writer is None
+            or snapshot.writer.claim_id != claim.claim_id
+            or snapshot.writer.attempt_id != claim.attempt_id
+        ):
+            _conflict("diagnostic transition does not match Builder writer custody")
+        submitted_commit = request.resume_commit if isinstance(request, BlockDelivery) else request.preserved_commit
+        if submitted_commit != snapshot.branch_head:
             raise DeliveryWorkerExclusionRequiredError
+        self.publish_recovery_attention(
+            binding.outcome_id,
+            DeliveryRecoveryAttention(
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                reason=request.reason,
+                worktree_path=str(snapshot.worktree_path),
+                branch_head=snapshot.branch_head,
+                worktree_head=snapshot.worktree_head,
+                last_reviewed_commit=snapshot.last_reviewed_commit,
+                writer_claim_id=snapshot.writer.claim_id,
+                custody_retained=True,
+                retry_condition=(
+                    "Diagnostic only: the current Builder retains custody. Host worker-exclusion evidence is missing; "
+                    "no transition or restart is authorized. Resume requires verified exclusion through a supported "
+                    "host recovery path, whose availability is not established by this diagnostic."
+                ),
+                diagnostic_transition=request,
+            ),
+        )
+        raise DeliveryWorkerExclusionRequiredError
 
     def _read(self) -> tuple[DeliveryFrontier, bytes]:
         RuntimeTransaction.recover_all(self._target_root)

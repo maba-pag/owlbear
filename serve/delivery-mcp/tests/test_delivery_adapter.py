@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
+from serve.delivery.tests.test_portfolio_application import _reopen_portfolio, builder_transition_case
 from serve.delivery.tests.test_recovery import completed_recovery_case, recovery_case
 
 from owlbear_delivery import (
@@ -306,6 +307,36 @@ async def test_real_core_recovery_exclusion_required(tmp_path: Path, kind: str) 
     assert diagnostic["current_authority_identity"] == "change-a"
     assert "Custody and files are unchanged" in diagnostic["detail"]
     unchanged()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["block", "return"])
+async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tmp_path: Path, action: str) -> None:
+    application, runtimes, coordinator, state_root, launch, transition = builder_transition_case(tmp_path, action)
+    before_coordination = coordinator.show(CHANGE)
+    payload = {"change_id": CHANGE, "transition": transition.model_dump(mode="json")}
+    with pytest.raises(ToolError) as error:
+        await TargetMCPAdapter(application).transition_delivery(payload)
+    diagnostic = json.loads(str(error.value))
+    assert diagnostic["code"] == DeliveryWorkerExclusionRequiredError.code
+    assert diagnostic["retry_safe"] is False
+    retained = runtimes[CHANGE].frontier_bytes()
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    adapter = TargetMCPAdapter(reopened)
+    with pytest.raises(ToolError):
+        await adapter.transition_delivery(payload)
+    context = await adapter.show_operator_context({"change_id": CHANGE, "outcome_id": "OUT-001"})
+    assert context.recovery_attention.diagnostic_transition == transition
+    assert context.active_claim.owner_id == launch.claim.owner_id
+    assert context.block is None
+    assert context.requests == ()
+    change = await adapter.get_change({"change_id": CHANGE})
+    assert change["readiness"]["status"] == "blocked"
+    assert change["readiness"]["reason_code"] == "builder-transition-contained"
+    assert change["readiness"]["action"] is None
+    assert "read-only" in change["readiness"]["prompt"]
+    assert runtimes[CHANGE].frontier_bytes() == retained
+    assert reopened_coordinator.show(CHANGE) == before_coordination
 
 
 @pytest.mark.asyncio

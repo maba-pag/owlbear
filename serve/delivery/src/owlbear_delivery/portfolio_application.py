@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from threading import Lock
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Annotated, Literal, Never
 
 from markdown_it import MarkdownIt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -75,6 +75,7 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     AdvanceDelivery,
+    BlockDelivery,
     DeliveryAcceptanceAttentionReason,
     DeliveryAcceptanceWaitingError,
     DeliveryActionSelectionConflictError,
@@ -120,6 +121,7 @@ from owlbear_delivery.delivery_runtime import (
     PrepareCompletedOutcomeRepair,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    ReturnDelivery,
     derive_change_stage,
     integration_attention_disposition,
     is_acceptance_waiting_observation,
@@ -677,6 +679,7 @@ def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim 
         started_at=claim.started_at,
         worker_role=claim.worker_role,
         task_id=claim.task_id,
+        owner_id=claim.owner_id,
     )
 
 
@@ -691,6 +694,7 @@ def _operator_recovery_attention(
         reason=attention.reason,
         custody_retained=attention.custody_retained,
         retry_condition=attention.retry_condition,
+        diagnostic_transition=attention.diagnostic_transition,
     )
 
 
@@ -1327,6 +1331,7 @@ class DeliveryOperatorClaim(_ApplicationModel):
     started_at: str = Field(min_length=1)
     worker_role: DeliveryWorkerRole
     task_id: str | None = None
+    owner_id: str | None = None
 
 
 class DeliveryOperatorRecoveryAttention(_ApplicationModel):
@@ -1337,6 +1342,7 @@ class DeliveryOperatorRecoveryAttention(_ApplicationModel):
     reason: str = Field(min_length=1)
     custody_retained: bool
     retry_condition: str = Field(min_length=1)
+    diagnostic_transition: Annotated[BlockDelivery | ReturnDelivery, Field(discriminator="action")] | None = None
 
 
 class DeliveryOperatorIntegrationAttention(_ApplicationModel):
@@ -4788,14 +4794,7 @@ class PortfolioApplication:
                 self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
             elif request.action in {"block", "return"}:
                 with suppress(OSError, RuntimeError, ValueError):
-                    ledger = runtime.retry_ledger(clock=self._clock)
-                    attempt_id = ledger.attempt_for_operation(request.claim_id)
-                    if attempt_id is not None:
-                        ledger.record_failure(
-                            attempt_id,
-                            failure_code="worker-returned" if request.action == "return" else "worker-blocked",
-                            now=self._clock(),
-                        )
+                    runtime.retry_ledger(clock=self._clock).reconcile_owner_results()
             self._publish_delivery_state(
                 change_id,
                 runtime,
@@ -6455,6 +6454,15 @@ class PortfolioApplication:
                 f"/continue-change {change_id} Resume the exact engine-selected operation after rereading "
                 "readiness; do not replace it or infer closure."
             )
+        if reason == "builder-transition-contained":
+            return (
+                f"/repair-delivery Diagnose Change {change_id} read-only: reread get_change and show_operator_context "
+                "for the exact current Builder claim, owner, and diagnostic transition. The submitted block or return "
+                "was refused because host worker-exclusion evidence is missing. Preserve custody, stage, worktree, "
+                "and retry budget; do not answer, unblock, restart, release, or dispatch a replacement. Resume "
+                "requires verified host exclusion and settlement through a supported recovery path; this diagnostic "
+                "does not establish that such a capability is available."
+            )
         if reason == "engine-action-interrupted":
             return (
                 f"/continue-change {change_id} only after the Delivery engine owner verifies host/worker closure "
@@ -6462,6 +6470,9 @@ class PortfolioApplication:
                 "infer termination."
             )
         if reason not in {
+            "active-custody",
+            "claim-activation-failed",
+            "claim-custody-unreconciled",
             "coordination-unavailable",
             "engine-action-failed",
             "engine-action-incomplete",
@@ -6470,8 +6481,9 @@ class PortfolioApplication:
             return None
         return (
             f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "
-            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
-            "condition separately before Delivery rereads it."
+            "This does not repair authority or prove host/worker closure. Do not stop a worker, retry, release "
+            "custody, or dispatch a replacement. The responsible owner must establish any missing authority "
+            "through a supported path before Delivery can resume; this diagnostic does not supply that authority."
         )
 
     @classmethod
@@ -6494,15 +6506,22 @@ class PortfolioApplication:
         action = prerequisites.get(workspace_reason, action) if finalization else action
         operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
         status, reason = "ready", "ready"
-        if workspace_reason in {
+        contained = any(
+            binding.recovery_attention is not None
+            and binding.recovery_attention.diagnostic_transition is not None
+            and (card.scope is WorkItemScope.CHANGE_PUBLICATION or binding.outcome_id == card.work_item_id)
+            for binding in frontier.bindings
+        )
+        if contained or workspace_reason in {
             "engine-action-pending",
             "engine-action-interrupted",
             "engine-action-failed",
             "engine-action-incomplete",
             "engine-action-blocked",
         }:
-            status = "running" if workspace_reason == "engine-action-pending" else "blocked"
-            reason = workspace_reason
+            status = "running" if not contained and workspace_reason == "engine-action-pending" else "blocked"
+            reason = "builder-transition-contained" if contained else workspace_reason
+            operation = None if contained else operation
         elif workspace_reason == "coordination-unavailable":
             status, reason = "unavailable", workspace_reason
         elif workspace_reason == "claim-custody-unreconciled":
@@ -7108,10 +7127,11 @@ class PortfolioApplication:
                     failures.append(source)
                     continue
                 launch = self._activate_candidate(candidate, source)
-                available -= 1
                 if isinstance(launch, DeliveryAcquisitionFailure):
                     failures.append(launch)
+                    available = max(self._execution_capacity - self._execution_occupancy(), 0)
                     continue
+                available -= 1
                 launches.append(launch)
             self._capture_portfolio_snapshots()
             return DeliveryAcquisitionResult(
@@ -8318,6 +8338,12 @@ class PortfolioApplication:
     def _selected_change_card(
         self, snapshot: DeliveryPortfolioSnapshot, cards: tuple[WorkItemCardView, ...]
     ) -> WorkItemCardView:
+        contained = next(
+            (card for card in cards if card.readiness and card.readiness.reason_code == "builder-transition-contained"),
+            None,
+        )
+        if contained is not None:
+            return contained
         proposal = self._repair_proposal(snapshot)
         if proposal is not None:
             return next(card for card in cards if card.work_item_id == proposal.outcome_id)
@@ -9631,6 +9657,7 @@ class PortfolioApplication:
             claim = claim.model_copy(
                 update={"owner_id": host_identity[0], "process_id": host_identity[1], "continuation": True}
             )
+        frontier_before = candidate.runtime.frontier_bytes()
         reservation = self._reserve_worker_attempt(candidate, source, claim.attempt_id, claim.claim_id)
         if reservation is not None and not reservation.allowed:
             return DeliveryAcquisitionFailure(
@@ -9645,7 +9672,6 @@ class PortfolioApplication:
                     "do not create a new allowance by renaming the task or operation."
                 ),
             )
-        frontier_before = candidate.runtime.frontier_bytes()
         try:
             self._register_recovery_invocation(
                 candidate.runtime,

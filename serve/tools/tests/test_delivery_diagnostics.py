@@ -72,6 +72,48 @@ def _run_cli(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.parametrize("failure", [FileNotFoundError, PermissionError])
+@pytest.mark.parametrize("invocation", [("text", False), ("text", True), ("json", False), ("json", True)])
+def test_unavailable_cwd_returns_redacted_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: type[OSError],
+    invocation: tuple[str, bool],
+) -> None:
+    output_format, relative_root = invocation
+    root = _root(tmp_path)
+    arguments = ["inspect", "--format", output_format]
+    if relative_root:
+        arguments.extend(["--project-root", "relative-project"])
+
+    def unavailable() -> Path:
+        message = "private-cwd-detail"
+        raise failure(message)
+
+    with monkeypatch.context() as context:
+        context.setattr(Path, "cwd", unavailable)
+        exit_code = main(arguments)
+        explicit = inspect_delivery(root)
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.err == ""
+    assert "private-cwd-detail" not in captured.out
+    assert "ROOT_UNAVAILABLE" in captured.out
+    assert "PENDING_EFFECTS_UNKNOWN" in captured.out
+    if output_format == "json":
+        result = json.loads(captured.out)
+        assert result["status"] == "unavailable"
+        assert result["inspection_complete"] is False
+        assert result["writes_performed"] is False
+        assert result["bytes_inspected"] == 0
+        assert result["records"] == []
+    else:
+        assert "status: unavailable" in captured.out
+        assert "writes_performed: false" in captured.out
+    assert explicit["status"] == "healthy-structure"
+
+
 def test_valid_structure_is_bounded_and_healthy(tmp_path: Path) -> None:
     root = _root(tmp_path)
     change = root / ".owlbear/delivery/runtime/changes/example"

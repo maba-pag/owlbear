@@ -85,7 +85,7 @@ class _SafeArgumentParser(argparse.ArgumentParser):
 
 
 class _Inspection:
-    def __init__(self, project_root: Path, change_id: str | None) -> None:
+    def __init__(self, project_root: Path | None, change_id: str | None) -> None:
         self.project_root = project_root
         self.change_id = change_id
         self.total_bytes = 0
@@ -1027,11 +1027,17 @@ def inspect_delivery(project_root: Path | str | None = None, change_id: str | No
     """Inspect fixed Delivery paths without importing or initializing Delivery."""
     if change_id is not None and not _CHANGE_ID.fullmatch(change_id):
         raise ValueError(_INVALID_CHANGE_ID)
-    root = (
-        _discover_project_root(_absolute_without_following(Path.cwd()))
-        if project_root is None
-        else _absolute_without_following(Path(project_root))
-    )
+    try:
+        root = (
+            _discover_project_root(_absolute_without_following(Path.cwd()))
+            if project_root is None
+            else _absolute_without_following(Path(project_root))
+        )
+    except OSError:
+        inspection = _Inspection(None, change_id)
+        inspection.transaction_scan_unknown = True
+        inspection.diagnostic("ROOT_UNAVAILABLE")
+        return inspection.result(status="unavailable", complete=False)
     inspection = _Inspection(root, change_id)
     opened = _open_root(root)
     if opened is None:

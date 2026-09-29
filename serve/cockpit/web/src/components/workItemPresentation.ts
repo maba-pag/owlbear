@@ -28,6 +28,8 @@ export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> = 
 export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string> = {
   ready: "Delivery reports this operation is eligible now.",
   "active-custody": "An active operation retains Change custody.",
+  "builder-transition-contained":
+    "The Builder transition was refused; custody is retained and host worker-exclusion evidence is missing.",
   "finalization-failed": "A recorded finalization diagnostic retains that attempt.",
   "claim-activation-failed": "Delivery could not activate custody for the selected action.",
   "coordination-unavailable": "This Change has no readable coordination record.",
