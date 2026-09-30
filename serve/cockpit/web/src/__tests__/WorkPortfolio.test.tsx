@@ -298,6 +298,7 @@ function detail(overrides: Partial<WorkItemAvailableDetailResponse["item"]> = {}
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
+      retry_diagnostic: null,
       ...overrides,
       publication: publication || null,
     },
@@ -1510,6 +1511,59 @@ it("opens routed semantic detail with acceptance and bounded task evidence", asy
   expect(screen.getByText("Acceptance (1)").closest("details")).not.toHaveAttribute("open");
   expect(screen.getByText("Delivery task evidence (1)").closest("details")).not.toHaveAttribute("open");
   expect(requests.some(({ url }) => url === "/api/changes/change-alpha/work-items/outcome%3AOUT-001")).toBe(true);
+});
+
+it("shows a refused retry as a blocked non-executable current exception", async () => {
+  currentDetail = detail({
+    active_claim: {
+      attempt_id: "attempt-retry",
+      claim_id: "claim-retry",
+      owner_id: "planner-001",
+      process_id: "process-retry",
+      continuation: false,
+      started_at: "2026-09-30T12:00:00Z",
+      worker_role: "planner",
+      task_id: null,
+    },
+    retry_diagnostic: {
+      code: "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+      attempt_id: "attempt-retry",
+      transition: {
+        action: "retry",
+        outcome_id: "OUT-001",
+        claim_id: "claim-retry",
+        abandoned_commit: null,
+        attempt_id: null,
+        failure_code: "planner-failed",
+      },
+    },
+    readiness: readiness({
+      status: "blocked",
+      next_actor: "none",
+      reason_code: "retry-transition-contained",
+      prompt:
+        "/repair-delivery Inspect only Change change-alpha using the bounded offline inspector. " +
+        "Make no MCP calls; do not retry.",
+    }),
+  });
+  renderPage("/delivery/change-alpha/outcome%3AOUT-001");
+
+  const inspector = await screen.findByTestId("work-item-detail");
+  const readinessView = within(inspector).getByTestId("delivery-readiness");
+  expect(within(readinessView).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+  expect(within(readinessView).getByText("Next: Nobody")).toBeInTheDocument();
+  expect(within(readinessView).getByTestId("readiness-not-executable")).toBeInTheDocument();
+  expect(
+    within(readinessView).getByText(
+      "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
+    ),
+  ).toBeInTheDocument();
+  expect(within(readinessView).getByTestId("readiness-prompt")).toHaveTextContent("Make no MCP calls");
+  expect(inspector).toHaveTextContent("Retry refused");
+  expect(inspector).toHaveTextContent(
+    "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED: planner-failed for attempt attempt-retry " +
+      "and claim claim-retry remains active because host worker-exclusion evidence is missing.",
+  );
 });
 
 it("answers a decision request and refetches its resolved state", async () => {

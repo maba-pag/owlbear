@@ -70,6 +70,7 @@ from owlbear_delivery import (
     PublicationCheckKind,
     PublicationProviderError,
     PublicationProviderFailureCode,
+    RetryDelivery,
 )
 from owlbear_delivery.acceptance import CompletionPullRequestIdentity, CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
@@ -3665,3 +3666,64 @@ def test_completed_history_routes_publish_versioned_discriminated_schema() -> No
             "abandoned-change": "#/components/schemas/AbandonedChangeRecord",
         },
     }
+
+
+def test_http_retry_diagnostic_is_blocked_and_projected(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root, launch, _transition = builder_transition_case(tmp_path, "block")
+    transition = RetryDelivery(
+        action="retry",
+        outcome_id=launch.outcome_id,
+        claim_id=launch.claim.claim_id,
+        abandoned_commit=_git(launch.worktree_path, "rev-parse", "HEAD"),
+        attempt_id=launch.claim.attempt_id,
+        failure_code="builder-failed",
+    )
+    before_frontier = runtimes["change-a"].frontier_bytes()
+    before_payload = json.loads(before_frontier)
+    before_coordination = coordinator.show("change-a")
+    before_workspace = _workspace_mutation_snapshot(launch.worktree_path)
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+
+    with TestClient(assemble_target_app(application)) as client:
+        detail_response = client.get("/api/changes/change-a/work-items/outcome:OUT-001")
+        change_response = client.get("/api/work-items")
+    assert detail_response.status_code == change_response.status_code == 200
+    detail = detail_response.json()["item"]
+    change = change_response.json()["groups"][0]["items"][0]
+    assert detail["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": launch.claim.attempt_id,
+        "transition": transition.model_dump(mode="json"),
+    }
+    assert detail["recovery_attention"] is None
+    assert detail["active_claim"]["attempt_id"] == launch.claim.attempt_id
+    assert detail["card"]["needs"] == "none"
+    assert detail["card"]["next_actor"] == "none"
+    assert detail["card"]["activity"]["state"] == "idle"
+    assert detail["card"]["action"]["kind"] == "none"
+    assert launch.claim.owner_id in detail["card"]["next_step"]
+    prompt = detail["readiness"]["prompt"]
+    for readiness in (change["readiness"], detail["readiness"]):
+        assert readiness["status"] == "blocked"
+        assert readiness["reason_code"] == "retry-transition-contained"
+        assert readiness["executable"] is False
+        assert readiness["next_actor"] == "none"
+        assert readiness["operation"] is None
+        assert readiness["action"] is None
+        assert readiness["prompt"] == prompt
+    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
+    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
+    assert "Make no MCP calls" in prompt
+    assert "do not retry" in prompt
+    assert "retry budget" in prompt
+    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+        assert unsupported_tool not in prompt
+
+    after_payload = json.loads(runtimes["change-a"].frontier_bytes())
+    assert after_payload["bindings"][0]["retry_diagnostic"] == detail["retry_diagnostic"]
+    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert after_payload == before_payload
+    assert coordinator.show("change-a") == before_coordination
+    assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace

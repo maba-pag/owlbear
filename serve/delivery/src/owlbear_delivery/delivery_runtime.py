@@ -907,6 +907,25 @@ class DeliveryReturnContext(_DeliveryModel):
     source_boundary: str | None = None
 
 
+class RetryDelivery(_DeliveryModel):
+    """End a claim and leave its outcome in the same stage."""
+
+    action: Literal["retry"]
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    attempt_id: str | None = None
+    failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
+
+
+class DeliveryRetryDiagnostic(_DeliveryModel):
+    """Exact refused retry request bound to the active worker attempt."""
+
+    code: Literal["ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED"] = "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED"
+    attempt_id: str = Field(min_length=1)
+    transition: RetryDelivery
+
+
 class DeliveryRecoveryAttention(_DeliveryModel):
     """Operator-consumed evidence for one Build claim that cannot be removed safely."""
 
@@ -998,6 +1017,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     result_candidate: DeliveryResultCandidate | None = None
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
     retry_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -1010,6 +1030,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             raise ValueError(message)
         self._validate_active_claim()
         self._validate_recovery_attention()
+        self._validate_retry_diagnostic()
         request_ids = tuple(request.request_id for request in self.requests)
         if len(request_ids) != len(set(request_ids)):
             message = "Delivery request identities must be unique per outcome"
@@ -1064,6 +1085,28 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             )
         ):
             message = "diagnostic transition must bind the current active Builder claim and outcome"
+            raise ValueError(message)
+
+    def _validate_retry_diagnostic(self) -> None:
+        diagnostic = self.retry_diagnostic
+        if diagnostic is None:
+            return
+        claim = self.active_claim
+        request = diagnostic.transition
+        if (
+            claim is None
+            or diagnostic.attempt_id != claim.attempt_id
+            or request.outcome_id != self.outcome_id
+            or request.claim_id != claim.claim_id
+        ):
+            message = "retry diagnostic must bind the current active claim and outcome"
+            raise ValueError(message)
+        if self.stage == DeliveryStage.PLANNING:
+            if request.attempt_id is not None or request.abandoned_commit is not None:
+                message = "Planning retry diagnostic cannot contain Implementation identity"
+                raise ValueError(message)
+        elif request.attempt_id != claim.attempt_id or request.abandoned_commit is None:
+            message = "Implementation retry diagnostic must bind its attempt and abandoned commit"
             raise ValueError(message)
 
     @property
@@ -1428,17 +1471,6 @@ class AdvanceDelivery(_DeliveryModel):
     output: DeliveryOutputReference
 
 
-class RetryDelivery(_DeliveryModel):
-    """End a claim and leave its outcome in the same stage."""
-
-    action: Literal["retry"]
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    claim_id: str = Field(min_length=1)
-    abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    attempt_id: str | None = None
-    failure_code: str = Field(default="worker-retry", pattern=r"^[a-z0-9][a-z0-9._-]{0,63}$")
-
-
 class ReturnDelivery(_DeliveryModel):
     """Return one claim to an allowed earlier stage with successor context."""
 
@@ -1725,6 +1757,7 @@ class DeliveryRuntime:
                     "candidate": None,
                     "result_candidate": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                 }
             )
             for binding in frontier.bindings
@@ -3362,7 +3395,9 @@ class DeliveryRuntime:
             if binding.output is not None or binding.result_candidate is not None or binding.candidate is not None:
                 raise DeliveryWorkerExclusionRequiredError
             replacement = _replace_binding(
-                frontier, binding, binding.model_copy(update={"active_claim": None, "recovery_attention": None})
+                frontier,
+                binding,
+                binding.model_copy(update={"active_claim": None, "recovery_attention": None, "retry_diagnostic": None}),
             )
         elif any(binding.active_claim is not None for binding in frontier.bindings):
             raise DeliveryWorkerExclusionRequiredError
@@ -3475,6 +3510,7 @@ class DeliveryRuntime:
                 "output": None,
                 "result_candidate": None,
                 "recovery_attention": None,
+                "retry_diagnostic": None,
             }
         )
         self._replace(previous, _replace_binding(frontier, binding, claimed))
@@ -3997,6 +4033,7 @@ class DeliveryRuntime:
                     "candidate": None,
                     "return_context": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
                     "requests": (),
                     "retry_fingerprint": None,
@@ -4027,6 +4064,7 @@ class DeliveryRuntime:
                     "result_candidate": None,
                     "return_context": None,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
                     "requests": (),
                     "retry_fingerprint": None,
@@ -4043,9 +4081,31 @@ class DeliveryRuntime:
         claim = binding.active_claim
         if claim is None:
             _conflict("retry requires an active claim")
+        self._validate_retry_identity(binding, request, claim)
+        diagnostic = DeliveryRetryDiagnostic(attempt_id=claim.attempt_id, transition=request)
+        frontier, previous = self._read()
+        current = _find_binding(frontier, binding.outcome_id)
+        if current != binding:
+            _conflict("active claim changed before retry diagnostic persistence")
+        if current.retry_diagnostic is not None:
+            if current.retry_diagnostic == diagnostic:
+                raise DeliveryWorkerExclusionRequiredError
+            _conflict("active claim already has a different refused retry diagnostic")
+        updated = current.model_copy(update={"retry_diagnostic": diagnostic})
+        self._replace(previous, _replace_binding(frontier, current, updated))
+        raise DeliveryWorkerExclusionRequiredError
+
+    def _validate_retry_identity(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: RetryDelivery,
+        claim: DeliveryActiveClaim,
+    ) -> None:
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.abandoned_commit is None or request.attempt_id is None:
                 _conflict("Implementation retry requires attempt and abandoned-commit identity")
+            if request.attempt_id != claim.attempt_id:
+                _conflict("Implementation retry attempt does not match the active claim")
             manager = self._require_workspace()
             coordination = manager.show(self._contract.change_id)
             if coordination.writer is not None:
@@ -4058,7 +4118,6 @@ class DeliveryRuntime:
                     _conflict("Implementation retry attempt does not own writer custody")
         elif request.abandoned_commit is not None or request.attempt_id is not None:
             _conflict("only Implementation retry accepts attempt commit identity")
-        raise DeliveryWorkerExclusionRequiredError
 
     def _require_workspace(self) -> ChangeWorkspaceManager:
         if self._workspace_manager is None:
@@ -4143,6 +4202,7 @@ class DeliveryRuntime:
                     "result_candidate": None,
                     "return_context": context,
                     "recovery_attention": None,
+                    "retry_diagnostic": None,
                     "block": None,
                 }
             )
@@ -4155,7 +4215,7 @@ class DeliveryRuntime:
             source_boundary=request.source_boundary,
         )
         returned = _reset_binding(binding, request.target)
-        return returned.model_copy(update={"return_context": context})
+        return returned.model_copy(update={"return_context": context, "retry_diagnostic": None})
 
     def _block(
         self,
@@ -4198,6 +4258,7 @@ class DeliveryRuntime:
                 "result_candidate": None,
                 "return_context": None,
                 "recovery_attention": None,
+                "retry_diagnostic": None,
                 "block": block,
                 "requests": requests,
             }

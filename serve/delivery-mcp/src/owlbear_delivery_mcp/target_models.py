@@ -37,6 +37,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryRequest,
     DeliveryRequestResolution,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
     DeliveryStage,
     DeliveryTaskDefinition,
@@ -605,6 +606,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
     active_claim: DeliveryOperatorClaimResponse | None = None
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttentionResponse | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttentionResponse | None = None
 
     @classmethod
@@ -632,6 +634,7 @@ class DeliveryOperatorContextResponse(_TargetProtocolModel):
                 else None
             ),
             return_context=context.return_context,
+            retry_diagnostic=context.retry_diagnostic,
             recovery_attention=(
                 DeliveryOperatorRecoveryAttentionResponse(
                     attempt_id=recovery_attention.attempt_id,

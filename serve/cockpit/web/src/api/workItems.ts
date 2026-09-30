@@ -68,6 +68,7 @@ export type DeliveryReadinessReasonCode =
   | "ready"
   | "active-custody"
   | "builder-transition-contained"
+  | "retry-transition-contained"
   | "finalization-failed"
   | "claim-activation-failed"
   | "coordination-unavailable"
@@ -607,6 +608,19 @@ export type BuilderTransitionDiagnostic =
       source_boundary: string | null;
     };
 
+export interface WorkItemRetryDiagnostic {
+  code: "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED";
+  attempt_id: string;
+  transition: {
+    action: "retry";
+    outcome_id: string;
+    claim_id: string;
+    abandoned_commit: string | null;
+    attempt_id: string | null;
+    failure_code: string;
+  };
+}
+
 export interface WorkItemDetailView {
   snapshot_version: string;
   change_title: string;
@@ -650,6 +664,7 @@ export interface WorkItemDetailView {
     retry_condition: string;
     diagnostic_transition?: BuilderTransitionDiagnostic | null;
   } | null;
+  retry_diagnostic: WorkItemRetryDiagnostic | null;
   publication: WorkItemPublicationView | null;
   readiness?: DeliveryReadiness | null;
 }

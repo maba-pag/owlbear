@@ -18,6 +18,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryOperatorMove,
     DeliveryRecoveryAttention,
     DeliveryRequest,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
     DeliveryStage,
     DeliveryWorkerRole,
@@ -274,6 +275,7 @@ DeliveryReadinessReason = Literal[
     "ready",
     "active-custody",
     "builder-transition-contained",
+    "retry-transition-contained",
     "finalization-failed",
     "claim-activation-failed",
     "coordination-unavailable",
@@ -523,6 +525,7 @@ class WorkItemDetailView(_ProjectionModel):
     return_context: DeliveryReturnContext | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     publication: WorkItemPublicationView | None = None
     readiness: DeliveryReadiness | None = None
 
@@ -694,6 +697,7 @@ class WorkItemProjector:
             return_context=binding.return_context,
             operator_moves=self._snapshot.frontier.operator_moves,
             recovery_attention=self._recovery_view(binding.recovery_attention),
+            retry_diagnostic=binding.retry_diagnostic,
             readiness=card.readiness,
         )
 
@@ -753,12 +757,15 @@ class WorkItemProjector:
     ) -> tuple[WorkItemNeed, str | None]:
         if binding.stage == DeliveryStage.DESIGN:
             return WorkItemNeed.YOU, "Re-admission required"
+        if binding.retry_diagnostic is not None:
+            return WorkItemNeed.NONE, "Retry refused; host worker-exclusion evidence required"
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
-        if pending_request is not None:
-            headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
+        if pending_request is not None or (binding.block is not None and not binding.block.resolved):
+            if pending_request is not None:
+                headline = "Decision required" if pending_request.kind.value == "decision" else "Action required"
+            else:
+                headline = "Block requires evidence"
             return WorkItemNeed.YOU, headline
-        if binding.block is not None and not binding.block.resolved:
-            return WorkItemNeed.YOU, "Block requires evidence"
         if binding.recovery_attention is not None:
             return (
                 (WorkItemNeed.NONE, "Builder transition contained; host exclusion required")
@@ -778,11 +785,21 @@ class WorkItemProjector:
         needs: WorkItemNeed,
         headline: str | None,
     ) -> tuple[WorkItemNextActor, str]:
+        retry = binding.retry_diagnostic
         attention = binding.recovery_attention
-        if attention is not None and attention.diagnostic_transition is not None:
+        if retry is not None:
+            claim = binding.active_claim
+            owner = claim.owner_id if claim is not None else retry.transition.claim_id
+            next_step = f"Retry {retry.transition.failure_code} refused; claim owner {owner} remains active"
+        elif attention is not None and attention.diagnostic_transition is not None:
             claim = binding.active_claim
             owner = claim.owner_id if claim is not None else attention.claim_id
-            return WorkItemNextActor.AGENT, f"Builder owner {owner}: {attention.reason} {attention.retry_condition}"
+            next_step = f"Builder owner {owner}: {attention.reason} {attention.retry_condition}"
+        else:
+            next_step = None
+        if next_step is not None:
+            actor = WorkItemNextActor.NONE if retry is not None else WorkItemNextActor.AGENT
+            return actor, next_step
         if needs == WorkItemNeed.YOU:
             return WorkItemNextActor.YOU, headline or "Your attention is required"
         if needs == WorkItemNeed.DEPENDENCY:
@@ -796,6 +813,8 @@ class WorkItemProjector:
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
         claim = binding.active_claim
+        if binding.retry_diagnostic is not None:
+            return WorkItemActivity(state=WorkItemActivityState.IDLE)
         if binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None:
             return WorkItemActivity(state=WorkItemActivityState.IDLE)
         if claim is not None:
@@ -811,7 +830,9 @@ class WorkItemProjector:
 
     @staticmethod
     def _outcome_action(binding: OutcomeAuthorityBinding, change_id: str) -> WorkItemAction:
-        if binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None:
+        if binding.retry_diagnostic is not None or (
+            binding.recovery_attention is not None and binding.recovery_attention.diagnostic_transition is not None
+        ):
             return WorkItemAction()
         if binding.stage == DeliveryStage.DESIGN:
             return WorkItemAction(

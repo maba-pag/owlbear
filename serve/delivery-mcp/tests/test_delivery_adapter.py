@@ -72,6 +72,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
+    RetryDelivery,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublicationError
 from owlbear_delivery.design_package import DesignPackageConflictError, DesignPackageManifest, DesignPackageResult
@@ -310,9 +311,18 @@ async def test_real_core_recovery_exclusion_required(tmp_path: Path, kind: str) 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("action", ["block", "return"])
+@pytest.mark.parametrize("action", ["block", "return", "retry"])
 async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tmp_path: Path, action: str) -> None:
     application, runtimes, coordinator, state_root, launch, transition = builder_transition_case(tmp_path, action)
+    if action == "retry":
+        transition = RetryDelivery(
+            action="retry",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            abandoned_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+            failure_code="builder-failed",
+        )
     before_coordination = coordinator.show(CHANGE)
     payload = {"change_id": CHANGE, "transition": transition.model_dump(mode="json")}
     with pytest.raises(ToolError) as error:
@@ -326,15 +336,30 @@ async def test_builder_transition_diagnostics_survive_mcp_refusal_and_restart(tm
     with pytest.raises(ToolError):
         await adapter.transition_delivery(payload)
     context = await adapter.show_operator_context({"change_id": CHANGE, "outcome_id": "OUT-001"})
-    assert context.recovery_attention.diagnostic_transition == transition
+    if action == "retry":
+        assert context.retry_diagnostic.model_dump(mode="json") == {
+            "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+            "attempt_id": launch.claim.attempt_id,
+            "transition": transition.model_dump(mode="json"),
+        }
+        assert context.recovery_attention is None
+    else:
+        assert context.recovery_attention.diagnostic_transition == transition
     assert context.active_claim.owner_id == launch.claim.owner_id
     assert context.block is None
     assert context.requests == ()
     change = await adapter.get_change({"change_id": CHANGE})
     assert change["readiness"]["status"] == "blocked"
-    assert change["readiness"]["reason_code"] == "builder-transition-contained"
+    expected_reason = "retry-transition-contained" if action == "retry" else "builder-transition-contained"
+    assert change["readiness"]["reason_code"] == expected_reason
     assert change["readiness"]["action"] is None
+    if action == "retry":
+        assert change["readiness"]["next_actor"] == "none"
     assert "read-only" in change["readiness"]["prompt"]
+    if action == "retry":
+        assert "delivery-diagnose inspect --change-id change-a" in change["readiness"]["prompt"]
+        assert "Make no MCP calls" in change["readiness"]["prompt"]
+        assert "do not retry" in change["readiness"]["prompt"]
     assert runtimes[CHANGE].frontier_bytes() == retained
     assert reopened_coordinator.show(CHANGE) == before_coordination
 

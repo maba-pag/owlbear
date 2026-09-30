@@ -2005,37 +2005,113 @@ def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(t
 def test_repeated_retry_exclusion_required_preserves_claim_and_budget(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path, stages=(DeliveryStage.PLANNING, DeliveryStage.PLANNING, DeliveryStage.PLANNING))
     _activate(runtime, "OUT-001", "retry-claim")
-    before = runtime.frontier_bytes()
+    before = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="retry-claim",
+        failure_code="planner-failed",
+    )
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(request)
+    after = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    active_claim = before.bindings[0].active_claim
+    assert active_claim is not None
+    after_payload = after.model_dump(mode="json")
+    before_payload = before.model_dump(mode="json")
+    assert after_payload["bindings"][0]["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": active_claim.attempt_id,
+        "transition": request.model_dump(mode="json"),
+    }
+    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert after_payload == before_payload
+    reloaded = DeliveryRuntime(tmp_path, runtime.contract)
+    assert reloaded.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": active_claim.attempt_id,
+        "transition": request.model_dump(mode="json"),
+    }
+    persisted = runtime.frontier_bytes()
     for _attempt in range(3):
         with pytest.raises(DeliveryWorkerExclusionRequiredError):
-            runtime.transition(
-                RetryDelivery(
-                    action="retry",
-                    outcome_id="OUT-001",
-                    claim_id="retry-claim",
-                    failure_code="planner-failed",
-                )
-            )
-    assert runtime.frontier_bytes() == before
+            runtime.transition(request)
+        assert runtime.frontier_bytes() == persisted
     assert "OUT-001" not in runtime.claimable_outcome_ids()
 
 
 def test_clean_implementation_retry_exclusion_required(tmp_path: Path) -> None:
     runtime, coordinator, coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
-    before = runtime.frontier_bytes()
+    before = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     custody = coordinator.show("delivery-runtime")
+    before_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    before_index_tree = _git(coordination.worktree_path, "write-tree")
+    before_refs = _git(coordination.worktree_path, "for-each-ref", "--format=%(refname) %(objectname)")
+    before_status = _git(coordination.worktree_path, "status", "--porcelain")
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=attempt_commit,
+        attempt_id="attempt-002",
+    )
     with pytest.raises(DeliveryWorkerExclusionRequiredError):
-        runtime.transition(
+        runtime.transition(request)
+    after = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    active_claim = before.bindings[0].active_claim
+    assert active_claim is not None
+    assert after.bindings[0].model_dump(mode="json")["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": active_claim.attempt_id,
+        "transition": request.model_dump(mode="json"),
+    }
+    after_payload = after.model_dump(mode="json")
+    before_payload = before.model_dump(mode="json")
+    after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+    assert after_payload == before_payload
+    assert coordinator.show("delivery-runtime") == custody
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == before_head == attempt_commit
+    assert _git(coordination.worktree_path, "write-tree") == before_index_tree
+    assert _git(coordination.worktree_path, "for-each-ref", "--format=%(refname) %(objectname)") == before_refs
+    assert _git(coordination.worktree_path, "status", "--porcelain") == before_status
+    reloaded = DeliveryRuntime(tmp_path / "state", runtime.contract)
+    assert reloaded.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] == {
+        "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+        "attempt_id": active_claim.attempt_id,
+        "transition": request.model_dump(mode="json"),
+    }
+
+
+def test_foreign_retry_claim_or_attempt_does_not_persist_diagnostic(tmp_path: Path) -> None:
+    planning = _runtime(tmp_path, stages=(DeliveryStage.PLANNING, DeliveryStage.PLANNING, DeliveryStage.PLANNING))
+    _activate(planning, "OUT-001", "retry-claim")
+    planning_before = planning.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError):
+        planning.transition(
+            RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id="foreign-claim",
+                failure_code="planner-failed",
+            )
+        )
+    assert planning.frontier_bytes() == planning_before
+    assert planning.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] is None
+
+    builder, _coordinator, coordination, _initial, attempt_commit, _result, _tasks = _active_second_task(tmp_path)
+    builder_before = builder.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError):
+        builder.transition(
             RetryDelivery(
                 action="retry",
                 outcome_id="OUT-001",
                 claim_id="claim-002",
                 abandoned_commit=attempt_commit,
-                attempt_id="attempt-002",
+                attempt_id="foreign-attempt",
             )
         )
-    assert runtime.frontier_bytes() == before
-    assert coordinator.show("delivery-runtime") == custody
+    assert builder.frontier_bytes() == builder_before
+    assert builder.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] is None
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 

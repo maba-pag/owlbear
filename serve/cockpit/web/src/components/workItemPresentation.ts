@@ -30,6 +30,8 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "active-custody": "An active operation retains Change custody.",
   "builder-transition-contained":
     "The Builder transition was refused; custody is retained and host worker-exclusion evidence is missing.",
+  "retry-transition-contained":
+    "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
   "finalization-failed": "A recorded finalization diagnostic retains that attempt.",
   "claim-activation-failed": "Delivery could not activate custody for the selected action.",
   "coordination-unavailable": "This Change has no readable coordination record.",

@@ -494,8 +494,8 @@ function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: Wo
 }
 
 function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, "detail">) {
-  const { return_context: returned, recovery_attention: recovery } = detail.item;
-  if (!returned && !recovery) return null;
+  const { return_context: returned, recovery_attention: recovery, retry_diagnostic: retry } = detail.item;
+  if (!returned && !recovery && !retry) return null;
   return (
     <section aria-labelledby="work-attention-heading">
       <PHeading id="work-attention-heading" tag="h3" size="md">
@@ -513,6 +513,16 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, "detail">
         ) : null}
         {recovery ? (
           <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} />
+        ) : null}
+        {retry ? (
+          <AttentionItem
+            label="Retry refused"
+            reason={
+              `${retry.code}: ${retry.transition.failure_code} for attempt ${retry.attempt_id} ` +
+              `and claim ${retry.transition.claim_id} remains active because host worker-exclusion evidence is missing.`
+            }
+            retry="Do not retry or release until supported host exclusion is verified."
+          />
         ) : null}
       </div>
     </section>

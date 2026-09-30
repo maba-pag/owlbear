@@ -107,6 +107,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequestKind,
     DeliveryRequestResolution,
     DeliveryResultCandidate,
+    DeliveryRetryDiagnostic,
     DeliveryReturnContext,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
@@ -1365,6 +1366,7 @@ class DeliveryOperatorContext(_ApplicationModel):
     active_claim: DeliveryOperatorClaim | None = None
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttention | None = None
+    retry_diagnostic: DeliveryRetryDiagnostic | None = None
     integration_attention: DeliveryOperatorIntegrationAttention | None = None
 
 
@@ -5870,6 +5872,7 @@ class PortfolioApplication:
             active_claim=_operator_claim(binding.active_claim),
             return_context=binding.return_context,
             recovery_attention=_operator_recovery_attention(binding.recovery_attention),
+            retry_diagnostic=binding.retry_diagnostic,
         )
 
     def resolve_request(
@@ -6464,18 +6467,32 @@ class PortfolioApplication:
                 f"/continue-change {change_id} Resume the exact engine-selected operation after rereading "
                 "readiness; do not replace it or infer closure."
             )
-        if reason == "builder-transition-contained":
+        if reason in {"retry-transition-contained", "builder-transition-contained"}:
+            if reason == "retry-transition-contained":
+                diagnostic = (
+                    "The refused RetryDelivery remains in the existing work-item retry diagnostic; "
+                    "the claim owner remains active. Make no MCP calls and query no additional "
+                    "Delivery authority. Keep it read-only: preserve the claim, stage, any existing "
+                    "managed workspace, inspected files, and retry budget; do not retry, unblock, "
+                    "restart, release, edit, repair, or dispatch a replacement. Resume requires "
+                    "verified host worker-exclusion and settlement through a supported owner path; "
+                    "this inspection establishes neither."
+                )
+            else:
+                diagnostic = (
+                    "The refused transition remains in the existing work-item recovery view; "
+                    "the current claim owner remains on its card. Do not query for additional "
+                    "Delivery authority. The submitted block or return was refused because host "
+                    "worker-exclusion evidence is missing. Keep it read-only: preserve custody, "
+                    "stage, worktree, inspected files, and retry budget; do not answer, unblock, "
+                    "restart, release, edit, repair, or dispatch a replacement. Resume requires "
+                    "verified host exclusion and settlement through a supported recovery path; "
+                    "this diagnostic does not establish that such a capability is available."
+                )
             return (
                 f"/repair-delivery Inspect only Change {change_id} using the bounded offline "
                 f"`delivery-diagnose inspect --change-id {change_id}` operation. "
-                "The refused transition remains in the existing "
-                "work-item recovery view; the current claim owner remains on its card. Do not query "
-                "for additional Delivery authority. The submitted block or return was refused because "
-                "host worker-exclusion evidence is missing. Keep it read-only: preserve custody, "
-                "stage, worktree, inspected files, and retry budget; do not answer, unblock, restart, "
-                "release, edit, repair, or dispatch a replacement. Resume requires verified host "
-                "exclusion and settlement through a supported recovery path; this diagnostic does not "
-                "establish that such a capability is available."
+                f"{diagnostic}"
             )
         if reason == "engine-action-interrupted":
             return (
@@ -6520,12 +6537,18 @@ class PortfolioApplication:
         action = prerequisites.get(workspace_reason, action) if finalization else action
         operation = action.kind if action.kind is not WorkItemActionKind.NONE else None
         status, reason = "ready", "ready"
-        contained = any(
+        retry_contained = any(
+            binding.retry_diagnostic is not None
+            and (card.scope is WorkItemScope.CHANGE_PUBLICATION or binding.outcome_id == card.work_item_id)
+            for binding in frontier.bindings
+        )
+        builder_contained = any(
             binding.recovery_attention is not None
             and binding.recovery_attention.diagnostic_transition is not None
             and (card.scope is WorkItemScope.CHANGE_PUBLICATION or binding.outcome_id == card.work_item_id)
             for binding in frontier.bindings
         )
+        contained = retry_contained or builder_contained
         if contained or workspace_reason in {
             "engine-action-pending",
             "engine-action-interrupted",
@@ -6534,7 +6557,13 @@ class PortfolioApplication:
             "engine-action-blocked",
         }:
             status = "running" if not contained and workspace_reason == "engine-action-pending" else "blocked"
-            reason = "builder-transition-contained" if contained else workspace_reason
+            reason = (
+                "retry-transition-contained"
+                if retry_contained
+                else "builder-transition-contained"
+                if builder_contained
+                else workspace_reason
+            )
             operation = None if contained else operation
         elif workspace_reason == "coordination-unavailable":
             status, reason = "unavailable", workspace_reason

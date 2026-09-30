@@ -3293,7 +3293,7 @@ def _assert_contained_builder_views(
 
 @pytest.mark.parametrize("kind", ["block", "return", "retry"])
 def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: Path, kind: str) -> None:
-    application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, kind)
+    application, runtimes, coordinator, state_root, launch, transition = builder_transition_case(tmp_path, kind)
     if kind == "retry":
         transition = RetryDelivery(
             action="retry",
@@ -3311,15 +3311,26 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
     before_index = index.read_bytes()
     before_index_mtime = index.stat().st_mtime_ns
     before_coordination = coordinator.show("change-a")
+    retry_ledger = RetryLedger(state_root, "change-a")
+    before_retry_ledger = retry_ledger.read()
     with pytest.raises(DeliveryWorkerExclusionRequiredError):
         application.transition_delivery("change-a", transition)
     assert index.read_bytes() == before_index
     assert index.stat().st_mtime_ns == before_index_mtime
     assert product.read_bytes() == before_product
     assert coordinator.show("change-a") == before_coordination
+    assert retry_ledger.read() == before_retry_ledger
     assert runtimes["change-a"].show_binding("OUT-001").active_claim == launch.claim
     if kind == "retry":
-        assert runtimes["change-a"].frontier_bytes() == before_frontier
+        before_payload = json.loads(before_frontier)
+        after_payload = json.loads(runtimes["change-a"].frontier_bytes())
+        assert after_payload["bindings"][0]["retry_diagnostic"] == {
+            "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+            "attempt_id": launch.claim.attempt_id,
+            "transition": transition.model_dump(mode="json"),
+        }
+        after_payload["bindings"][0]["retry_diagnostic"] = before_payload["bindings"][0]["retry_diagnostic"]
+        assert after_payload == before_payload
 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:
