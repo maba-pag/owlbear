@@ -43,10 +43,10 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 | --- | --- | --- | --- | --- |
-| designer | GPT-6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
+| designer | GPT-6.1 Sol (copilot) | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
 | conceptual-design-reviewer | Claude Opus 5.5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
 | designer-challenger | Claude Opus 5.5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-6 Astra | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
+| planner | GPT-6.1 Sol (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5.5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-6 Luna | `w-orchestration` | planner, builder, repairer, memory-curator, Explore | Reports and acquires portfolio actions through the grouped Change listing and acquire-actions facade, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, routes engine-authored Change repair proposals to Repairer, requests exact claim or Integration recovery when identities are available and reports `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` with custody retained when host evidence is unavailable, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
 | repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
