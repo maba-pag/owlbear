@@ -150,6 +150,61 @@ class _ManagedIndexIdentity:
     link_count: int
 
 
+@dataclass(frozen=True)
+class BuilderHandoffMetadata:
+    """Metadata-only identity of one dirty-capable registered Change workspace."""
+
+    change_id: str
+    branch: str
+    worktree_path: Path
+    last_reviewed_commit: str
+    branch_head: str
+    registration: _RegisteredGitWorktree
+    managed_index: _ManagedIndexIdentity
+    index_digest: str
+    status_digest: str
+    ignored_status_digest: str
+    path_metadata: tuple[tuple[str, str, tuple[int, int, int, int, int, int, int, int] | None], ...]
+
+    @property
+    def fingerprint(self) -> str:
+        """Return the complete metadata identity without persisting file contents."""
+        payload = {
+            "change_id": self.change_id,
+            "branch": self.branch,
+            "worktree_path": str(self.worktree_path),
+            "last_reviewed_commit": self.last_reviewed_commit,
+            "branch_head": self.branch_head,
+            "registration": {
+                "path": str(self.registration.path),
+                "head": self.registration.head,
+                "branch": self.registration.branch,
+                "locked": self.registration.locked,
+                "prunable": self.registration.prunable,
+                "bare": self.registration.bare,
+            },
+            "managed_index": {
+                "path": str(self.managed_index.path),
+                "administration": str(self.managed_index.administration),
+                "common_directory": str(self.managed_index.common_directory),
+                "device": self.managed_index.device,
+                "inode": self.managed_index.inode,
+                "mode": self.managed_index.mode,
+                "link_count": self.managed_index.link_count,
+                "digest": self.index_digest,
+            },
+            "status_digest": self.status_digest,
+            "ignored_status_digest": self.ignored_status_digest,
+            "path_metadata": [
+                [path, kind, list(identity) if identity is not None else None]
+                for path, kind, identity in self.path_metadata
+            ],
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+        ).hexdigest()
+
+
 class PreservationPathProvenance(BaseModel):
     """Trusted producer classification for one exact dirty path."""
 
@@ -345,7 +400,35 @@ class ChangeWriter(WriterIdentity):
     """One active writer bound to a target transformation."""
 
     job_id: int = Field(gt=0)
-    kind: Literal["plan", "build", "repair", "finalize"]
+    kind: Literal["plan", "build", "repair", "finalize", "handoff"]
+
+
+class ChangeBuilderHandoff(_WorkspaceModel):
+    """Settled Builder identity retained as non-executing workspace custody."""
+
+    change_id: ChangeId
+    settlement_id: str = Field(min_length=1, max_length=256)
+    original_task_id: str = Field(min_length=1, max_length=256)
+    original_writer: ChangeWriter
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    metadata_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_original_writer(self) -> Self:
+        if self.original_writer.kind != "build":
+            message = "Builder handoff requires the exact original Builder writer"
+            raise ValueError(message)
+        return self
+
+
+@dataclass(frozen=True)
+class PreparedBuilderHandoff:
+    """Captured Builder handoff and its uncommitted coordination participant."""
+
+    handoff: ChangeBuilderHandoff
+    metadata: BuilderHandoffMetadata
+    participant: ReplacementTransactionParticipant
 
 
 class ChangeFinalizationAttempt(_WorkspaceModel):
@@ -1276,6 +1359,7 @@ class ChangeCoordination(_WorkspaceModel):
     design_package_snapshot_intent: ChangeDesignPackageSnapshotIntent | None = None
     design_package_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
     writer: ChangeWriter | None = None
+    builder_handoff: ChangeBuilderHandoff | None = None
     finalization_attempt: ChangeFinalizationAttempt | None = None
     continuation_action: ChangeContinuationAction | None = None
     recovery_owner_id: str | None = Field(default=None, min_length=1, max_length=128)
@@ -1357,6 +1441,35 @@ class ChangeCoordination(_WorkspaceModel):
                 raise ValueError(message)
         elif self.writer is not None and self.writer.kind == "finalize":
             message = "finalizer custody requires an unfinished attempt"
+            raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_builder_handoff(self) -> Self:
+        handoff = self.builder_handoff
+        if handoff is None:
+            if self.writer is not None and self.writer.kind == "handoff":
+                message = "Builder handoff writer requires its settlement association"
+                raise ValueError(message)
+            return self
+        if handoff.change_id != self.change_id:
+            message = "Builder handoff does not match its Change"
+            raise ValueError(message)
+        expected_writer = handoff.original_writer.model_copy(update={"kind": "handoff"})
+        if self.writer != expected_writer or self.last_reviewed_commit != handoff.last_reviewed_commit:
+            message = "Builder handoff does not match its retained workspace custody"
+            raise ValueError(message)
+        if any(
+            (
+                self.publication_lease,
+                self.worktree_cleanup_intent,
+                self.worktree_cleanup,
+                self.dirty_worktree_quarantine,
+                self.target_sync_conflict,
+                self.external_head_adoption_intent,
+            )
+        ):
+            message = "Builder handoff cannot overlap another Change operation"
             raise ValueError(message)
         return self
 
@@ -1673,7 +1786,7 @@ class PortfolioCoordinator:
     def recovery_coordination_bytes(self, change_id: str, owner_id: str) -> bytes:
         """Capture the exact fenced coordination bytes that intent publication will CAS."""
         coordination, _previous = self._read_coordination(change_id)
-        if coordination.recovery_owner_id not in {None, owner_id}:
+        if coordination.builder_handoff is not None or coordination.recovery_owner_id not in {None, owner_id}:
             raise DeliveryWorkerExclusionRequiredError
         return _model_content(coordination.model_copy(update={"recovery_owner_id": owner_id}))
 
@@ -1708,6 +1821,8 @@ class PortfolioCoordinator:
         """Prepare only the journal-verified exact release for the runtime transaction."""
         request = intent.invocation.request
         coordination, previous = self._read_coordination(request.change_id)
+        if coordination.builder_handoff is not None:
+            raise DeliveryWorkerExclusionRequiredError
         if (
             digest(previous) != intent.coordination_digest
             or coordination.recovery_owner_id != request.owner_id
@@ -2026,6 +2141,8 @@ class PortfolioCoordinator:
         *,
         finalization_attempt: ChangeFinalizationAttempt | None = None,
     ) -> ChangeCoordination:
+        if writer.kind == "handoff":
+            _coordination_conflict("Builder handoff custody is not an executable writer")
         if (writer.kind == "finalize") != (finalization_attempt is not None) or (
             finalization_attempt is not None
             and (finalization_attempt.writer != writer or finalization_attempt.finished_at is not None)
@@ -2083,6 +2200,8 @@ class PortfolioCoordinator:
             self._require_continuation_coordination(coordination)
             if coordination.writer is None:
                 return coordination
+            if coordination.writer.kind == "handoff" or coordination.builder_handoff is not None:
+                _coordination_conflict("settled Builder claim cannot release handoff custody")
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
                 _coordination_conflict("writer claim does not own the change workspace")
             if coordination.writer.kind == "finalize":
@@ -2119,14 +2238,7 @@ class PortfolioCoordinator:
         path = self._coordination_path(coordination.change_id)
         previous = path.read_bytes()
         existing = ChangeCoordination.model_validate_json(previous)
-        if (
-            existing.writer != coordination.writer
-            or existing.recovery_owner_id != coordination.recovery_owner_id
-            or existing.recovery_exclusions != coordination.recovery_exclusions
-            or existing.publication_lease != coordination.publication_lease
-            or existing.continuation_action != coordination.continuation_action
-        ):
-            _coordination_conflict("workspace update cannot change ownership")
+        self._validate_coordination_ownership_update(existing, coordination)
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
         baseline_changed = existing.publication_base_head != coordination.publication_base_head
@@ -2167,6 +2279,23 @@ class PortfolioCoordinator:
         return coordination
 
     @staticmethod
+    def _validate_coordination_ownership_update(
+        existing: ChangeCoordination,
+        replacement: ChangeCoordination,
+    ) -> None:
+        if existing.builder_handoff is not None and existing != replacement:
+            _coordination_conflict("workspace update cannot mutate retained Builder handoff custody")
+        if (
+            existing.writer != replacement.writer
+            or existing.builder_handoff != replacement.builder_handoff
+            or existing.recovery_owner_id != replacement.recovery_owner_id
+            or existing.recovery_exclusions != replacement.recovery_exclusions
+            or existing.publication_lease != replacement.publication_lease
+            or existing.continuation_action != replacement.continuation_action
+        ):
+            _coordination_conflict("workspace update cannot change ownership")
+
+    @staticmethod
     def _validate_out_of_band_head_recovery_update(
         existing: ChangeCoordination,
         replacement: ChangeCoordination,
@@ -2189,6 +2318,8 @@ class PortfolioCoordinator:
         existing = ChangeCoordination.model_validate_json(previous)
         if existing != coordination:
             _coordination_conflict("change workspace changed during finalization preparation")
+        if existing.builder_handoff is not None:
+            _coordination_conflict("finalization cannot advance a retained Builder handoff boundary")
         if existing.last_reviewed_commit == reviewed_head:
             return None
         updated = existing.model_copy(update={"last_reviewed_commit": reviewed_head})
@@ -2335,6 +2466,74 @@ class PortfolioCoordinator:
     ) -> None:
         RuntimeTransaction(self._state_root, f"portfolio-{transaction_id}", participants).commit()
 
+    def _prepare_builder_handoff(
+        self,
+        coordination: ChangeCoordination,
+        handoff: ChangeBuilderHandoff,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare the exact build-writer replacement for a shared settlement transaction."""
+        self._require_publication_lock(lock, coordination.change_id)
+        self.require_no_pending_recovery(coordination.change_id)
+        path = self._coordination_path(coordination.change_id)
+        previous = path.read_bytes()
+        existing = ChangeCoordination.model_validate_json(previous)
+        if existing != coordination or existing.builder_handoff is not None:
+            _coordination_conflict("Change workspace changed during Builder handoff preparation")
+        if (
+            existing.writer is None
+            or existing.writer != handoff.original_writer
+            or existing.writer.kind != "build"
+            or handoff.change_id != coordination.change_id
+            or handoff.last_reviewed_commit != existing.last_reviewed_commit
+        ):
+            _coordination_conflict("Builder handoff does not match the exact active build writer")
+        updated = existing.model_copy(
+            update={
+                "writer": existing.writer.model_copy(update={"kind": "handoff"}),
+                "builder_handoff": handoff,
+            }
+        )
+        return _replacement(self._state_root, path, previous, updated)
+
+    def _prepare_builder_handoff_acquisition(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        handoff: ChangeBuilderHandoff,
+        metadata: BuilderHandoffMetadata,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare exact handoff consumption for a shared claim-activation transaction."""
+        self._require_publication_lock(lock, change_id)
+        self.require_no_pending_recovery(change_id)
+        coordination, previous = self._read_coordination(change_id)
+        retained = coordination.builder_handoff
+        expected_handoff_writer = (
+            None if retained is None else retained.original_writer.model_copy(update={"kind": "handoff"})
+        )
+        if (
+            retained != handoff
+            or coordination.writer != expected_handoff_writer
+            or writer.kind != "build"
+            or writer.attempt_id == handoff.original_writer.attempt_id
+            or writer.claim_id == handoff.original_writer.claim_id
+            or metadata.change_id != change_id
+            or metadata.branch != coordination.branch
+            or metadata.worktree_path != coordination.worktree_path
+            or metadata.last_reviewed_commit != handoff.last_reviewed_commit
+            or metadata.branch_head != handoff.branch_head
+            or metadata.fingerprint != handoff.metadata_fingerprint
+            or coordination.last_reviewed_commit != handoff.last_reviewed_commit
+            or coordination.publication_lease is not None
+            or coordination.worktree_cleanup_intent is not None
+            or coordination.worktree_cleanup is not None
+            or coordination.dirty_worktree_quarantine is not None
+        ):
+            _coordination_conflict("Builder handoff does not match the exact settlement, task, and workspace")
+        claimed = coordination.model_copy(update={"writer": writer, "builder_handoff": None})
+        return _replacement(self._state_root, self._coordination_path(change_id), previous, claimed)
+
 
 class ChangeWorkspaceManager:
     """Own one warm writable Git worktree and non-rewriting integration per change."""
@@ -2396,6 +2595,179 @@ class ChangeWorkspaceManager:
     ) -> TransactionParticipant | ReplacementTransactionParticipant:
         """Join a failed finalizer's exact release to a repair transaction."""
         return self._coordinator.prepare_finalization_repair_release(change_id, attempt_id, finished_at)
+
+    def prepare_builder_handoff(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        settlement_id: str,
+        original_task_id: str,
+        lock: PublicationLock,
+    ) -> PreparedBuilderHandoff:
+        """Prepare metadata-only handoff custody without committing its participant."""
+        self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
+        self._coordinator.require_no_pending_recovery(change_id)
+        coordination = self._coordinator.show(change_id)
+        if writer.kind != "build" or coordination.writer != writer or coordination.builder_handoff is not None:
+            _coordination_conflict("Builder handoff requires the exact active build writer")
+        if (
+            coordination.publication_lease is not None
+            or (coordination.finalization_attempt is not None and coordination.finalization_attempt.finished_at is None)
+            or (coordination.continuation_action is not None and coordination.continuation_action.finished_at is None)
+            or coordination.worktree_cleanup_intent is not None
+            or coordination.worktree_cleanup is not None
+            or coordination.dirty_worktree_quarantine is not None
+            or coordination.target_sync_conflict is not None
+            or coordination.external_head_adoption_intent is not None
+        ):
+            _coordination_conflict("Builder handoff cannot overlap another Change operation")
+        metadata = self._capture_builder_handoff_metadata(coordination)
+        handoff = ChangeBuilderHandoff(
+            change_id=change_id,
+            settlement_id=settlement_id,
+            original_task_id=original_task_id,
+            original_writer=writer,
+            last_reviewed_commit=coordination.last_reviewed_commit,
+            branch_head=metadata.branch_head,
+            metadata_fingerprint=metadata.fingerprint,
+        )
+        participant = self._coordinator._prepare_builder_handoff(coordination, handoff, lock)  # noqa: SLF001
+        return PreparedBuilderHandoff(handoff=handoff, metadata=metadata, participant=participant)
+
+    def acquire(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        *,
+        handoff: ChangeBuilderHandoff | None = None,
+        handoff_task_id: str | None = None,
+        finalization_attempt: ChangeFinalizationAttempt | None = None,
+    ) -> ChangeCoordination:
+        """Acquire ordinary writer custody or consume one revalidated exact Builder handoff."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.builder_handoff is None:
+            if handoff is not None:
+                _coordination_conflict("Builder handoff is no longer retained by the Change")
+            return self._coordinator.acquire(change_id, writer, finalization_attempt=finalization_attempt)
+        if handoff is None or handoff != coordination.builder_handoff or handoff_task_id != handoff.original_task_id:
+            _coordination_conflict("Builder handoff settlement or original task identity differs")
+        with self._coordinator.publication_lock(change_id) as lock:
+            if finalization_attempt is not None:
+                _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
+            participant = self.prepare_builder_handoff_acquisition(
+                change_id, writer, handoff, lock, task_id=handoff_task_id
+            )
+            RuntimeTransaction(
+                self.runtime_root, f"acquire-builder-handoff-{change_id}-{writer.claim_id}", (participant,)
+            ).commit()
+            return self._coordinator.show(change_id)
+
+    def prepare_builder_handoff_acquisition(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        handoff: ChangeBuilderHandoff,
+        lock: PublicationLock,
+        *,
+        task_id: str,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare a same-task handoff replacement without activating a claim independently."""
+        self._coordinator._require_publication_lock(lock, change_id)  # noqa: SLF001
+        self._coordinator.require_no_pending_recovery(change_id)
+        coordination = self._coordinator.show(change_id)
+        if coordination.builder_handoff != handoff or task_id != handoff.original_task_id:
+            _coordination_conflict("Builder handoff changed or belongs to another task")
+        if writer.kind != "build":
+            _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
+        metadata = self._capture_builder_handoff_metadata(coordination)
+        if metadata.fingerprint != handoff.metadata_fingerprint:
+            message = "Builder handoff workspace metadata changed before acquisition"
+            raise PreservationFenceError(message)
+        return self._coordinator._prepare_builder_handoff_acquisition(  # noqa: SLF001
+            change_id, writer, handoff, metadata, lock
+        )
+
+    def _capture_builder_handoff_metadata(self, coordination: ChangeCoordination) -> BuilderHandoffMetadata:
+        self._require_preservation_environment()
+        self._coordinator.require_no_pending_recovery(coordination.change_id)
+        handoff = coordination.builder_handoff
+        expected_writer = (
+            handoff.original_writer.model_copy(update={"kind": "handoff"})
+            if handoff is not None
+            else coordination.writer
+        )
+        if (
+            coordination.writer != expected_writer
+            or expected_writer is None
+            or expected_writer.kind not in {"build", "handoff"}
+            or coordination.publication_lease is not None
+            or coordination.worktree_cleanup_intent is not None
+            or coordination.worktree_cleanup is not None
+            or coordination.dirty_worktree_quarantine is not None
+            or coordination.target_sync_conflict is not None
+            or coordination.external_head_adoption_intent is not None
+        ):
+            _coordination_conflict("Builder handoff workspace is not under exact exclusive custody")
+        captured, head, status, paths, reason = self.capture_recovery_workspace_metadata(coordination.change_id, ())
+        if captured != coordination:
+            _coordination_conflict("Change custody changed during Builder handoff metadata capture")
+        if reason not in {None, "workspace-dirty"}:
+            message = "Builder handoff workspace failed metadata preflight"
+            raise PreservationFenceError(message)
+        if not self._is_ancestor(coordination.last_reviewed_commit, head, cwd=self._repository):
+            message = "Builder handoff head is not descended from the reviewed boundary"
+            raise PreservationFenceError(message)
+        return self._capture_builder_handoff_metadata_details(coordination, head, status, paths)
+
+    def _capture_builder_handoff_metadata_details(
+        self,
+        coordination: ChangeCoordination,
+        head: str,
+        status: bytes,
+        paths: tuple[str, ...],
+    ) -> BuilderHandoffMetadata:
+        worktree = self._canonical_worktree_path(coordination.change_id, coordination.worktree_path)
+        self._require_worktree(coordination.change_id, worktree, coordination.branch, head)
+        registration = self._registered_worktrees_all().get(worktree.resolve())
+        if registration is None or registration.head != head or registration.branch != coordination.branch:
+            message = "Builder handoff worktree registration changed"
+            raise PreservationFenceError(message)
+        current_status = self._preservation_git(
+            "status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=worktree
+        ).stdout
+        if current_status != status:
+            message = "Builder handoff worktree status changed during metadata capture"
+            raise PreservationFenceError(message)
+        managed_index = self._resolve_managed_index(worktree)
+        index_bytes = self._read_managed_index(managed_index)
+        if self._resolve_managed_index(worktree) != managed_index:
+            message = "Builder handoff managed index changed during metadata capture"
+            raise PreservationFenceError(message)
+        index_digest = hashlib.sha256(index_bytes).hexdigest()
+        status_digest = hashlib.sha256(status).hexdigest()
+        ignored_status = self._preservation_git(
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--untracked-files=normal",
+            cwd=worktree,
+        ).stdout
+        ignored_status_digest = hashlib.sha256(ignored_status).hexdigest()
+        path_metadata = tuple((path, *self._read_worktree_handoff_metadata(worktree, path)) for path in paths)
+        return BuilderHandoffMetadata(
+            change_id=coordination.change_id,
+            branch=coordination.branch,
+            worktree_path=worktree,
+            last_reviewed_commit=coordination.last_reviewed_commit,
+            branch_head=head,
+            registration=registration,
+            managed_index=managed_index,
+            index_digest=index_digest,
+            status_digest=status_digest,
+            ignored_status_digest=ignored_status_digest,
+            path_metadata=path_metadata,
+        )
 
     def ensure(
         self,
@@ -2549,6 +2921,8 @@ class ChangeWorkspaceManager:
         self._require_preservation_environment()
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
+            if coordination.writer is not None or coordination.publication_lease is not None:
+                _coordination_conflict("out-of-band head recovery cannot overlap active Change custody")
             existing = coordination.out_of_band_head_recovery
             if existing is not None:
                 if (
@@ -6383,6 +6757,37 @@ class ChangeWorkspaceManager:
             os.close(parent_fd)
 
     @staticmethod
+    def _read_worktree_handoff_metadata(
+        worktree: Path,
+        path: str,
+    ) -> tuple[str, tuple[int, int, int, int, int, int, int, int] | None]:
+        """Read safe path stat identity without opening or copying dirty content."""
+        _validate_relative_preservation_path(path)
+        relative = PurePosixPath(path)
+        opened = ChangeWorkspaceManager._open_worktree_read_parent(worktree, relative.parts[:-1], path)
+        if opened is None:
+            return "absent", None
+        parent_fd, ancestors = opened
+        try:
+            try:
+                metadata = os.stat(relative.name, dir_fd=parent_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+                return "absent", None
+            ChangeWorkspaceManager._verify_worktree_ancestors(ancestors, path)
+            if stat.S_ISDIR(metadata.st_mode):
+                kind = "directory"
+            elif stat.S_ISREG(metadata.st_mode):
+                kind = "regular"
+            elif stat.S_ISLNK(metadata.st_mode):
+                kind = "symlink"
+            else:
+                kind = "special"
+            return kind, _preservation_file_identity(metadata)
+        finally:
+            os.close(parent_fd)
+
+    @staticmethod
     def _read_worktree_leaf(
         parent_fd: int,
         name: str,
@@ -7316,6 +7721,8 @@ class ChangeWorkspaceManager:
         """Preserve a dirty Builder worktree as an isolated commit before cleanup."""
         coordination = self._coordinator.show(change_id)
         writer = coordination.writer
+        if coordination.builder_handoff is not None or (writer is not None and writer.kind == "handoff"):
+            _coordination_conflict("ended Builder handoff cannot quarantine preserved content")
         if writer is None or writer.attempt_id != attempt_id or writer.claim_id != claim_id:
             _coordination_conflict("dirty worktree quarantine requires matching writer custody")
         worktree = coordination.worktree_path
@@ -7639,6 +8046,8 @@ class ChangeWorkspaceManager:
         coordination = self._coordinator.show(change_id)
         if coordination.writer is None or coordination.writer.claim_id != claim_id:
             _coordination_conflict("writer claim does not own the change workspace")
+        if coordination.writer.kind == "handoff":
+            _coordination_conflict("ended Builder handoff cannot validate a writer result")
         if coordination.writer.kind == "finalize":
             raise DeliveryWorkerExclusionRequiredError
         branch_head = self._resolve(coordination.branch)
@@ -7675,6 +8084,8 @@ class ChangeWorkspaceManager:
         """Preserve a rejected head and restore the change to its reviewed boundary."""
         with self._coordinator.publication_lock(change_id):
             coordination = self._coordinator.show(change_id)
+            if coordination.writer is not None and coordination.writer.kind == "handoff":
+                _coordination_conflict("ended Builder handoff cannot restart its preserved worktree")
             if coordination.writer is not None and coordination.writer.kind == "finalize":
                 raise DeliveryWorkerExclusionRequiredError
             branch_head = self._resolve(coordination.branch)

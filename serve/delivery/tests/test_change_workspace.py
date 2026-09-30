@@ -30,6 +30,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    PreparedBuilderHandoff,
     PreservationFenceError,
     PreservationPathProvenance,
     PreservationProvenanceEvidence,
@@ -54,7 +55,12 @@ from owlbear_delivery.recovery import (
     digest,
     journal_path,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant, write_contained
+from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionParticipant,
+    write_contained,
+)
 
 
 def _coordination(root: Path, change_id: str) -> ChangeCoordination:
@@ -82,6 +88,12 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
     coordinator = PortfolioCoordinator(tmp_path / "state")
     coordinator.register(_coordination(tmp_path, "change-a"))
     coordinator.register(_coordination(tmp_path, "change-b"))
+    with pytest.raises(CoordinationConflictError, match="not an executable writer"):
+        coordinator.acquire(
+            "change-b",
+            ChangeWriter(**_identity("change-b").model_dump(), job_id=2, kind="handoff"),
+        )
+    assert coordinator.show("change-b").writer is None
     first = coordinator.acquire(
         "change-a",
         ChangeWriter(**_identity("change-a").model_dump(), job_id=1, kind="build"),
@@ -344,6 +356,277 @@ def _manager(
         preservation_provenance_provider=provenance_provider or _TestPreservationProvenanceProvider(),
     )
     return coordinator, manager
+
+
+def _prepared_builder_handoff(
+    tmp_path: Path,
+) -> tuple[
+    Path,
+    PortfolioCoordinator,
+    ChangeWorkspaceManager,
+    ChangeCoordination,
+    ChangeWriter,
+    PreparedBuilderHandoff,
+    dict[str, object],
+]:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("handoff-change")
+    original_writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, original_writer)
+    worktree = coordination.worktree_path
+
+    (worktree / "committed.txt").write_bytes(b"committed before handoff\n")
+    _git(worktree, "add", "committed.txt")
+    _git(worktree, "commit", "-m", "commit before Builder handoff")
+    shared = worktree / "shared.txt"
+    shared.write_bytes(b"staged version\n")
+    _git(worktree, "add", "shared.txt")
+    shared.write_bytes(b"unstaged version\n")
+    metadata = shared.stat()
+    os.utime(shared, ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 2_000_000_000))
+    before = _builder_handoff_workspace_state(repository, manager, coordination)
+
+    with coordinator.publication_lock(coordination.change_id) as lock:
+        prepared = manager.prepare_builder_handoff(
+            coordination.change_id,
+            original_writer,
+            f"settlement-{coordination.change_id}",
+            f"task-{coordination.change_id}",
+            lock,
+        )
+    return repository, coordinator, manager, coordination, original_writer, prepared, before
+
+
+def _builder_handoff_workspace_state(
+    repository: Path,
+    manager: ChangeWorkspaceManager,
+    coordination: ChangeCoordination,
+) -> dict[str, object]:
+    worktree = coordination.worktree_path
+    shared = worktree / "shared.txt"
+    index = manager._resolve_managed_index(worktree)  # noqa: SLF001
+    metadata = shared.lstat()
+    return {
+        "branch_head": _git(repository, "rev-parse", coordination.branch),
+        "refs": _git(repository, "for-each-ref", "--format=%(refname) %(objectname)"),
+        "staged_content": manager._preservation_git("show", ":shared.txt", cwd=worktree).stdout,  # noqa: SLF001
+        "worktree_content": shared.read_bytes(),
+        "worktree_stat": (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_nlink,
+            metadata.st_size,
+            stat.S_IMODE(metadata.st_mode),
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        ),
+        "index": manager._read_managed_index(index),  # noqa: SLF001
+        "status": manager._preservation_git(  # noqa: SLF001
+            "status", "--porcelain=v1", "-z", "--untracked-files=all", cwd=worktree
+        ).stdout,
+        "ignored_status": manager._preservation_git(  # noqa: SLF001
+            "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=normal", cwd=worktree
+        ).stdout,
+    }
+
+
+def _next_builder_writer(change_id: str) -> ChangeWriter:
+    return ChangeWriter(
+        attempt_id=f"next-attempt-{change_id}",
+        claim_id=f"next-claim-{change_id}",
+        actor_id="builder",
+        process_id=f"next-process-{change_id}",
+        claimed_at="2026-08-02T00:05:00Z",
+        job_id=2,
+        kind="build",
+    )
+
+
+def test_builder_handoff_prepares_and_consumes_without_changing_dirty_git_state(tmp_path: Path) -> None:
+    repository, coordinator, manager, coordination, original_writer, prepared, before = _prepared_builder_handoff(
+        tmp_path
+    )
+
+    assert coordinator.show(coordination.change_id).writer == original_writer
+    assert coordinator.show(coordination.change_id).builder_handoff is None
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+    assert before["staged_content"] == b"staged version\n"
+    assert before["worktree_content"] == b"unstaged version\n"
+    assert before["status"]
+    assert prepared.metadata.branch_head == before["branch_head"]
+    assert isinstance(before["index"], bytes)
+    assert prepared.metadata.index_digest == hashlib.sha256(before["index"]).hexdigest()
+
+    RuntimeTransaction(
+        manager.runtime_root,
+        f"builder-handoff-{coordination.change_id}",
+        (prepared.participant,),
+    ).commit()
+    retained = coordinator.show(coordination.change_id)
+
+    assert retained.writer == original_writer.model_copy(update={"kind": "handoff"})
+    assert retained.builder_handoff == prepared.handoff
+    assert retained.builder_handoff.settlement_id == f"settlement-{coordination.change_id}"
+    assert retained.builder_handoff.original_task_id == f"task-{coordination.change_id}"
+    assert retained.last_reviewed_commit == coordination.last_reviewed_commit
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+    acquired = manager.acquire(
+        coordination.change_id,
+        _next_builder_writer(coordination.change_id),
+        handoff=prepared.handoff,
+        handoff_task_id=prepared.handoff.original_task_id,
+    )
+
+    assert acquired.writer == _next_builder_writer(coordination.change_id)
+    assert acquired.builder_handoff is None
+    assert acquired.last_reviewed_commit == coordination.last_reviewed_commit
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+
+def test_builder_handoff_consumption_can_join_a_shared_transaction(tmp_path: Path) -> None:
+    repository, coordinator, manager, coordination, _writer, prepared, before = _prepared_builder_handoff(tmp_path)
+    RuntimeTransaction(manager.runtime_root, "prepare-shared-handoff", (prepared.participant,)).commit()
+    retained = coordinator.show(coordination.change_id)
+    companion = manager.runtime_root / "handoff-companion.json"
+    companion.write_bytes(b'{"claim":null}\n')
+    next_writer = _next_builder_writer(coordination.change_id)
+    with coordinator.publication_lock(coordination.change_id) as lock:
+        consumed = manager.prepare_builder_handoff_acquisition(
+            coordination.change_id,
+            next_writer,
+            prepared.handoff,
+            lock,
+            task_id=prepared.handoff.original_task_id,
+        )
+        assert coordinator.show(coordination.change_id) == retained
+        assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+        RuntimeTransaction(
+            manager.runtime_root,
+            "consume-shared-handoff",
+            (
+                consumed,
+                ReplacementTransactionParticipant(
+                    manager.runtime_root,
+                    Path("handoff-companion.json"),
+                    companion.read_bytes(),
+                    b'{"claim":"new"}\n',
+                ),
+            ),
+        ).commit()
+    assert coordinator.show(coordination.change_id).writer == next_writer
+    assert coordinator.show(coordination.change_id).builder_handoff is None
+    assert companion.read_bytes() == b'{"claim":"new"}\n'
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+
+@pytest.mark.parametrize("mismatch", ["settlement", "task", "new-task", "fingerprint", "workspace-tamper"])
+def test_builder_handoff_acquire_rejects_foreign_binding_or_changed_metadata(tmp_path: Path, mismatch: str) -> None:
+    repository, coordinator, manager, coordination, _original_writer, prepared, before = _prepared_builder_handoff(
+        tmp_path
+    )
+    RuntimeTransaction(
+        manager.runtime_root,
+        f"builder-handoff-{coordination.change_id}",
+        (prepared.participant,),
+    ).commit()
+    handoff = prepared.handoff
+    task_id = handoff.original_task_id
+    expected_error: type[RuntimeError] = CoordinationConflictError
+    if mismatch == "settlement":
+        handoff = handoff.model_copy(update={"settlement_id": "foreign-settlement"})
+    elif mismatch == "task":
+        handoff = handoff.model_copy(update={"original_task_id": "foreign-task"})
+    elif mismatch == "new-task":
+        task_id = "another-task"
+    elif mismatch == "fingerprint":
+        handoff = handoff.model_copy(update={"metadata_fingerprint": "0" * 64})
+    else:
+        (coordination.worktree_path / "shared.txt").write_bytes(b"changed after settlement\n")
+        expected_error = PreservationFenceError
+        before = _builder_handoff_workspace_state(repository, manager, coordination)
+
+    retained_before = coordinator.show(coordination.change_id)
+    with pytest.raises(expected_error):
+        manager.acquire(
+            coordination.change_id,
+            _next_builder_writer(coordination.change_id),
+            handoff=handoff,
+            handoff_task_id=task_id,
+        )
+
+    assert coordinator.show(coordination.change_id) == retained_before
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
+
+
+def test_builder_handoff_cannot_be_released_or_completed_by_the_ended_claim(tmp_path: Path) -> None:
+    repository, coordinator, manager, coordination, original_writer, prepared, _before = _prepared_builder_handoff(
+        tmp_path
+    )
+    RuntimeTransaction(
+        manager.runtime_root,
+        f"builder-handoff-{coordination.change_id}",
+        (prepared.participant,),
+    ).commit()
+    retained = coordinator.show(coordination.change_id)
+    workspace_before = _builder_handoff_workspace_state(repository, manager, coordination)
+    operations = (
+        lambda: coordinator.release(coordination.change_id, original_writer.claim_id),
+        lambda: coordinator.acquire(coordination.change_id, _next_builder_writer(coordination.change_id)),
+        lambda: manager.validate_writer_head(
+            coordination.change_id, original_writer.claim_id, prepared.handoff.branch_head
+        ),
+        lambda: manager.complete_reviewed(
+            coordination.change_id, original_writer.claim_id, prepared.handoff.branch_head
+        ),
+        lambda: manager.release_writer_at_head(
+            coordination.change_id, original_writer.claim_id, prepared.handoff.branch_head
+        ),
+        lambda: manager.restart(coordination.change_id, original_writer.attempt_id, prepared.handoff.branch_head),
+        lambda: manager.quarantine_dirty_worktree(
+            coordination.change_id, original_writer.attempt_id, original_writer.claim_id, "quarantine-handoff"
+        ),
+        lambda: manager.recover_out_of_band_head(
+            RecoverOutOfBandHead(
+                change_id=coordination.change_id,
+                expected_reviewed_head=prepared.handoff.last_reviewed_commit,
+                expected_remote_head=coordination.target_head,
+                expected_branch_head=prepared.handoff.branch_head,
+                operation_id="out-of-band-handoff",
+            )
+        ),
+    )
+
+    for operation in operations:
+        with pytest.raises((CoordinationConflictError, DeliveryWorkerExclusionRequiredError)):
+            operation()
+        assert coordinator.show(coordination.change_id) == retained
+        assert _builder_handoff_workspace_state(repository, manager, coordination) == workspace_before
+
+
+def test_builder_handoff_participant_failure_leaves_original_custody_and_git_state(tmp_path: Path) -> None:
+    repository, coordinator, manager, coordination, original_writer, prepared, before = _prepared_builder_handoff(
+        tmp_path
+    )
+    coordination_before = coordinator.coordination_bytes(coordination.change_id)
+
+    def interrupt(stage: str) -> None:
+        if stage == "before-publication":
+            message = "injected Builder handoff transaction failure"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="injected Builder handoff transaction failure"):
+        RuntimeTransaction(
+            manager.runtime_root,
+            f"builder-handoff-failure-{coordination.change_id}",
+            (prepared.participant,),
+        ).commit(failure=interrupt)
+
+    assert coordinator.coordination_bytes(coordination.change_id) == coordination_before
+    assert coordinator.show(coordination.change_id).writer == original_writer
+    assert coordinator.show(coordination.change_id).builder_handoff is None
+    assert _builder_handoff_workspace_state(repository, manager, coordination) == before
 
 
 class _TestPreservationProvenanceProvider:
