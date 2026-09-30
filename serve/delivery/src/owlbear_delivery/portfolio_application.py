@@ -4789,7 +4789,17 @@ class PortfolioApplication:
         runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             self._import_legacy_worker_budgets(runtime)
+            previous = runtime.frontier_bytes()
             binding = runtime.transition(request, retry_observed_at=self._clock())
+            if (
+                isinstance(request, BlockDelivery)
+                and request.request is not None
+                and runtime.frontier_bytes() == previous
+            ):
+                pending = runtime.pending_state_publication()
+                request_digest = hashlib.sha256(_canonical_model_bytes(request)).hexdigest()
+                if pending is None or pending.transition_request_digest != request_digest:
+                    return binding
             if request.action == "advance":
                 self._record_worker_retry_success(runtime, request.outcome_id, request.claim_id)
             elif request.action in {"block", "return"}:

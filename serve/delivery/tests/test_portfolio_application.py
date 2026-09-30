@@ -2704,6 +2704,29 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
     assert application.get_change("change-a").readiness.next_actor.value == "none"
 
 
+def _acknowledge_and_replay_planning_pause(
+    tmp_path: Path,
+    state_root: Path,
+    runtimes: dict[str, DeliveryRuntime],
+    application: PortfolioApplication,
+    request: BlockDelivery,
+) -> PortfolioApplication:
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+    binding = application.transition_delivery("change-a", request)
+    publisher.publish.assert_called_once()
+    assert application._runtime("change-a").pending_state_publication() is None
+    assert binding.block is not None
+    assert binding.block.request_id == "decision-0"
+    assert binding.requests[-1].resolution is None
+    application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    runtime = application._runtime("change-a")
+    before_replay = runtime.frontier_bytes()
+    assert application.transition_delivery("change-a", request) == binding
+    assert runtime.frontier_bytes() == before_replay
+    return application
+
+
 @pytest.mark.parametrize(
     ("owner", "crash_stage"),
     [
@@ -2756,10 +2779,7 @@ def test_planning_pause_owner_result_replays_once(tmp_path: Path, owner: str, cr
     assert episode.accepted_attempt_ids == ()
     assert episode.last_failure_at == prior.last_failure_at
     assert episode.next_eligible_at == prior.next_eligible_at
-    binding = application.transition_delivery("change-a", request)
-    assert binding.block.request_id == "decision-0"
-    assert binding.requests[-1].resolution is None
-    application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
+    application = _acknowledge_and_replay_planning_pause(tmp_path, state_root, runtimes, application, request)
     assert ledger.read() == settled
     assert application.acquire_change_action(_continuation_request(application)).launch is None
     answer = DeliveryAnswer(
@@ -2776,6 +2796,80 @@ def test_planning_pause_owner_result_replays_once(tmp_path: Path, owner: str, cr
     application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert ledger.read().episodes[0].total_attempts == 2
     assert tuple(attempt.attempt_id for attempt in ledger.pending_attempts()) == (resumed.attempt_id,)
+
+
+def _assert_historical_planning_pause(application, request, paused, publisher):
+    runtime = application._runtime("change-a")
+    ledger = runtime.retry_ledger()
+    frontier = runtime.frontier_bytes()
+    accounting = ledger.read()
+    publisher.reset_mock()
+    assert application.transition_delivery("change-a", request) == paused
+    assert runtime.frontier_bytes() == frontier
+    assert ledger.read() == accounting
+    publisher.publish.assert_not_called()
+
+
+def test_planning_pause_replays_exactly_after_acknowledged_publication_and_resume(tmp_path: Path) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=clock
+    )
+    _fail_planning_attempt(application, 0)
+    ledger = RetryLedger(state_root, "change-a")
+    prior = ledger.read().episodes[0]
+    now += timedelta(seconds=1)
+    claim = _acquire_planning_claim(application)
+    request = _planning_decision_block(claim.claim_id, 0)
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+
+    paused = application.transition_delivery("change-a", request)
+    publisher.publish.assert_called_once()
+    assert runtimes["change-a"].pending_state_publication() is None
+    assert paused.block is not None
+    assert paused.block.request_id == "decision-0"
+    assert paused.requests[-1].resolution is None
+    settled = ledger.read()
+    assert settled.episodes[0].total_attempts == prior.total_attempts
+    assert settled.episodes[0].accepted_attempt_ids == prior.accepted_attempt_ids
+
+    application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
+    publisher.reset_mock()
+    application._delivery_state_publisher = publisher
+    runtime = application._runtime("change-a")
+    before_replay = runtime.frontier_bytes()
+    assert application.transition_delivery("change-a", request) == paused
+    assert runtime.frontier_bytes() == before_replay
+    publisher.publish.assert_not_called()
+    with pytest.raises(DeliveryRuntimeConflictError):
+        application.transition_delivery("change-a", request.model_copy(update={"reason": "Changed reason"}))
+    with pytest.raises(DeliveryRuntimeConflictError):
+        application.transition_delivery("change-a", request.model_copy(update={"claim_id": "foreign-claim"}))
+    assert runtime.frontier_bytes() == before_replay
+    assert application.acquire_change_action(_continuation_request(application)).launch is None
+
+    answer = DeliveryAnswer(
+        change_id="change-a",
+        kind=DeliveryAnswerKind.REQUEST,
+        expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        request_id="decision-0",
+        resolution=DeliveryRequestResolution(selected_option_id="proceed", provenance="user-confirmed"),
+    )
+    application.answer(answer)
+    application.answer(answer)
+    _assert_historical_planning_pause(application, request, paused, publisher)
+
+    resumed = _acquire_planning_claim(application)
+    _assert_historical_planning_pause(application, request, paused, publisher)
+    after_reacquire = runtime.frontier_bytes()
+    current = DeliveryFrontier.model_validate_json(after_reacquire, strict=False).bindings[0]
+    assert current.active_claim == resumed
+    assert current.requests[-1].resolution == answer.resolution
 
 
 @pytest.mark.parametrize("writer_recorded", [False, True])

@@ -1475,6 +1475,48 @@ type DeliveryTransition = Annotated[
 DELIVERY_TRANSITION_ADAPTER = TypeAdapter(DeliveryTransition)
 
 
+class _DeliveryPlanningPauseReplay(_DeliveryModel):
+    """Immutable result for replaying one exact request-bearing Planning pause."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request: BlockDelivery
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_replay(self) -> _DeliveryPlanningPauseReplay:
+        delivery_request = self.request.request
+        block = self.result.block
+        if delivery_request is None:
+            message = "Planning pause replay requires its original bounded request"
+            raise ValueError(message)
+        if (
+            self.request_digest != hashlib.sha256(_model_content(self.request)).hexdigest()
+            or self.request.outcome_id != self.outcome_id
+            or self.request.claim_id != self.claim_id
+            or delivery_request.outcome_id != self.outcome_id
+            or self.result.outcome_id != self.outcome_id
+            or self.result.stage != DeliveryStage.PLANNING
+            or self.result.active_claim is not None
+            or block is None
+            or block.block_id != self.request.block_id
+            or block.reason != self.request.reason
+            or block.unblock_condition != self.request.unblock_condition
+            or block.expected_evidence != self.request.expected_evidence
+            or block.locators != self.request.locators
+            or block.request_id != delivery_request.request_id
+            or block.resume_commit != self.request.resume_commit
+            or not self.result.requests
+            or self.result.requests[-1] != delivery_request
+        ):
+            message = "Planning pause replay receipt does not bind its original transition"
+            raise ValueError(message)
+        return self
+
+
 class AdministrativeDeliveryMove(_DeliveryModel):
     """Authorized operator movement to one earlier canonical stage."""
 
@@ -3516,32 +3558,36 @@ class DeliveryRuntime:
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return candidate
 
+    @staticmethod
+    def _pending_transition_matches(
+        pending_publication: DeliveryPendingStatePublication | None,
+        previous: bytes,
+        request_digest: str,
+    ) -> bool:
+        return (
+            pending_publication is not None
+            and pending_publication.frontier_digest == hashlib.sha256(previous).hexdigest()
+            and pending_publication.transition_request_digest == request_digest
+        )
+
     def transition(
         self, request: DeliveryTransition, *, retry_observed_at: datetime | str | None = None
     ) -> OutcomeAuthorityBinding:
         """Apply one worker-owned mechanical transition instruction."""
         frontier, previous = self._read()
+        request_digest = hashlib.sha256(_model_content(request)).hexdigest()
+        replay_result = self._planning_pause_replay_result(request, request_digest)
+        if replay_result is not None:
+            return replay_result
         _require_change_mutable(frontier, "transition")
         binding = _find_binding(frontier, request.outcome_id)
-        request_digest = hashlib.sha256(_model_content(request)).hexdigest()
         pending_publication = self.pending_state_publication()
-        if (
-            pending_publication is not None
-            and pending_publication.frontier_digest == hashlib.sha256(previous).hexdigest()
-            and pending_publication.transition_request_digest == request_digest
-        ):
+        if self._pending_transition_matches(pending_publication, previous, request_digest):
             return binding
         _require_claim(binding, request.claim_id)
         if self._workspace_manager is not None:
             self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
-        if isinstance(request, AdvanceDelivery):
-            updated = self._advance(binding, request)
-        elif isinstance(request, RetryDelivery):
-            updated = self._retry(binding, request)
-        elif isinstance(request, ReturnDelivery):
-            updated = self._return(binding, request)
-        else:
-            updated = self._block(binding, request)
+        updated = self._transitioned_binding(binding, request)
         replacement = _replace_binding(frontier, binding, updated)
         result_participants = ()
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
@@ -3573,6 +3619,10 @@ class DeliveryRuntime:
                     failure_code="worker-returned" if isinstance(request, ReturnDelivery) else "worker-blocked",
                 ),
             )
+        result_participants = (
+            *result_participants,
+            *self._planning_pause_replay_participants(request, binding, updated, request_digest),
+        )
         if isinstance(request, AdvanceDelivery):
             result_participants = (
                 *result_participants,
@@ -3585,6 +3635,19 @@ class DeliveryRuntime:
             previous, replacement, transition_request_digest=request_digest, additional_participants=result_participants
         )
         return _find_binding(replacement, request.outcome_id)
+
+    def _transitioned_binding(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: DeliveryTransition,
+    ) -> OutcomeAuthorityBinding:
+        if isinstance(request, AdvanceDelivery):
+            return self._advance(binding, request)
+        if isinstance(request, RetryDelivery):
+            return self._retry(binding, request)
+        if isinstance(request, ReturnDelivery):
+            return self._return(binding, request)
+        return self._block(binding, request)
 
     def _repair_owner_result_participants(
         self,
@@ -3725,6 +3788,74 @@ class DeliveryRuntime:
             / "result-receipts"
             / outcome_id
             / f"{digest}.json"
+        )
+
+    def _planning_pause_replay_result(
+        self,
+        request: DeliveryTransition,
+        request_digest: str,
+    ) -> OutcomeAuthorityBinding | None:
+        if not isinstance(request, BlockDelivery) or request.request is None:
+            return None
+        relative_path = self._planning_pause_replay_path(request.outcome_id, request_digest)
+        path = self._target_root / relative_path
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Planning pause replay receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryPlanningPauseReplay.model_validate_json(content, strict=False)
+        except (TypeError, ValueError) as exc:
+            _reference("Planning pause replay receipt is invalid", exc)
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.outcome_id != request.outcome_id
+            or receipt.claim_id != request.claim_id
+            or receipt.request_digest != request_digest
+            or receipt.request != request
+        ):
+            _reference("Planning pause replay receipt does not match its original request")
+        return receipt.result
+
+    def _planning_pause_replay_participant(
+        self,
+        request: BlockDelivery,
+        result: OutcomeAuthorityBinding,
+        request_digest: str,
+    ) -> TransactionParticipant:
+        receipt = _DeliveryPlanningPauseReplay(
+            change_id=self._contract.change_id,
+            outcome_id=request.outcome_id,
+            claim_id=request.claim_id,
+            request_digest=request_digest,
+            request=request,
+            result=result,
+        )
+        return TransactionParticipant(
+            self._target_root,
+            self._planning_pause_replay_path(request.outcome_id, request_digest),
+            _model_content(receipt),
+        )
+
+    def _planning_pause_replay_participants(
+        self,
+        request: DeliveryTransition,
+        binding: OutcomeAuthorityBinding,
+        result: OutcomeAuthorityBinding,
+        request_digest: str,
+    ) -> tuple[TransactionParticipant, ...]:
+        if not isinstance(request, BlockDelivery) or binding.stage != DeliveryStage.PLANNING or request.request is None:
+            return ()
+        return (self._planning_pause_replay_participant(request, result, request_digest),)
+
+    def _planning_pause_replay_path(self, outcome_id: str, request_digest: str) -> Path:
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "planning-pause-receipts"
+            / outcome_id
+            / f"{request_digest}.json"
         )
 
     def resolve_request(
