@@ -12,19 +12,21 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Code checkpoint: `8c05c2696c255129703db10b55184eade08403d9`.** The R1-R7 repairs and the
+**Code checkpoint: `4462955e8446f0cbbfc26efd0bae817bafd205b5`.** The R1-R7 repairs and the
 subsequent challenge repairs are committed and focused-tested, based on
 `951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`, with merge base
 `dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. This record identifies the code checkpoint;
-the PR head also includes its documentation update. A renewed fresh Opus 5.5 challenge and
-exact-head CI remain required. The candidate is not accepted or authorized for activation.
+the PR head also includes its documentation update. Post-checkpoint independent review and all
+four CI results are recorded against the exact publication head on
+[PR #326](https://github.com/maba-pag/owlbear/pull/326). An older run cannot satisfy that gate.
+This code checkpoint alone is not acceptance or authorization for activation.
 
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | R1-R7 implement the bounded repairs described in the completion ledger and contract below. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
-| Independent challenge | The fresh unnamed Opus 5.5 challenge of `d0ec2f1a` found an optional Git index refresh, loss of collected batch launches on a later error, and stale regression expectations. `8c05c269` repairs these findings; renewed independent review is pending |
-| Required CI | `d0ec2f1a` passed Cockpit but failed Source, Python 3.12 Dependency and Agent ecosystem checks on ten unique stale expectations. All ten are repaired and pass locally. Source, Dependency, Cockpit and Agent ecosystem must now all succeed on the same exact published repaired head; older success is not its proof |
-| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body was corrected to the `d0ec2f1a` candidate and must track the next published head and its actual review/CI results |
+| Independent challenge | The fresh unnamed Opus 5.5 challenge of `d0ec2f1a` found index refresh, lost collected batch launches and stale regression expectations, repaired in `8c05c269`. The renewed challenge of `4190dad6` found the same optional index refresh in refused Builder retry validation. `4462955e` repairs that remaining path. The PR records the fresh review of the published successor; no older verdict is transferred without checking its delta |
+| Required CI | `d0ec2f1a` failed on ten unique stale expectations, repaired in `8c05c269`. At `4190dad6`, Dependency, Cockpit and Agent ecosystem passed; Source failed only the controlled-process retry raw-index assertion. The deterministic retry/index repair is in `4462955e`. The PR must show Source, Dependency, Cockpit and Agent ecosystem success on the same exact published repaired head; older success is not its proof |
+| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
 | Human acknowledgment | **Not granted.** The user requested evidence of whether another work package removes the limitation before making a decision. Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures can hold every execution slot and stall Planner/Builder work, finalization and engine continuation. Implementation/commit/push/CI authorization is not acknowledgment of that limitation |
 | Host and activation boundary | No supported worker-exclusion backend is added. Caller confirmation and timeout do not prove closure or release custody. Ordinary host/transport limits remain separate from local source proof; no merge or live activation is implied |
 
@@ -43,6 +45,12 @@ capacity/error cases successfully. The test-repair worker identified all ten uni
 selection, including both production regressions: all passed. Every original content/index/ref,
 coordination and retry assertion remains; only the precisely asserted diagnostic frontier field
 is allowed to change. All five files in `8c05c269` passed the parent's scoped Ruff lint/format.
+The next independent challenge verified the batch, pause, diagnostic and privacy fixes but
+reproduced an index refresh through `validate_writer_head` before refused Builder retry. After
+`4462955e`, the parent ran all three stat-dirty raw-index refusal cases, all three controlled-process
+handoff cases and the Git-administration authority check: **seven passed in 2.59s**. Both changed
+Python files passed scoped Ruff lint/format. No production release, live worker exclusion or
+whole-repository local test pass is claimed.
 
 **Programme dependency gap:** the current [D04-D08 schedule](delivery-cloud-flight-handoff.md#d04-revision-and-evidence)
 does not commit to a supported worker-exclusion or resumption capability. D04 owns revision/evidence,
@@ -65,7 +73,8 @@ result replay, with adequate proof for the current material contract; a fresh un
 read-only challenge reconciled with no accepted defect or blocker remaining; all four required CI
 workflows succeeding on the same exact published head and exact PR/docs metadata; and explicit
 bounded-capacity/ordinary Builder-refusal acknowledgment. None grants merge or live activation.
-The next step is the caller's fresh challenge, not a source-readiness or acceptance declaration.
+Use the PR's exact-head review and check results for the technical gate, and the unresolved
+programme dependency below for the product-level merge gate. Neither permits an inferred acceptance.
 
 ### Historical integration evidence
 
