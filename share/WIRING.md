@@ -43,20 +43,21 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 | --- | --- | --- | --- | --- |
-| designer | GPT-6.1 Sol (copilot) | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
-| conceptual-design-reviewer | Claude Opus 5.5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
-| designer-challenger | Claude Opus 5.5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-6.1 Sol (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
-| planner-challenger | Claude Opus 5.5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-6 Luna | `w-orchestration` | planner, builder, repairer, memory-curator, Explore | Reports and acquires portfolio actions through the grouped Change listing and acquire-actions facade, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, routes engine-authored Change repair proposals to Repairer, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
+| designer | Claude Opus 5.5 (copilot) | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
+| conceptual-design-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
+| designer-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
+| planner | Claude Opus 5.5 (copilot) | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch; terminal read-only; publishes advisory-reviewed task chains and returns worker-owned transitions |
+| planner-challenger | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
+| orchestrator | GPT-6 Luna (copilot) | `w-orchestration` | planner, builder, finalizer, repairer, memory-curator, Explore | Reports and acquires portfolio actions through the grouped Change listing and acquire-actions facade, inspects bounded Delivery health when acquisition supplies a hint, dispatches task claims, routes engine-authored Change repair proposals to Repairer, recovers exact failed claims including retained Integration repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
 | repairer | GPT-6 Luna | `h-decision-requests` | None | One exact Change view and one bounded answer/repair interaction; high-level Delivery tools only, no repository or worker authority |
 | builder | GPT-6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; successful Build uses the claim-bound submit-result facade while retry/return/block transitions remain forwardable; `SessionStart`: repository context; `PostToolUse`: lint changed files |
-| build-reviewer | Claude Opus 5.5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
+| build-reviewer | GPT-6.1 Sol (copilot) | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch; terminal read-only |
 | finalizer | GPT-6 Luna | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-6 Luna | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
+| test-curator | GPT-6.1 Sol (copilot) | `w-test-curation`, `r-workspace-governance` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
 | memory-curator | GPT-6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
+| Explore (built-in) | default | None declared by OwlBear | None | VS Code built-in delegate; no OwlBear-specific model override or hook |
 
 Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
@@ -67,6 +68,9 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
+| `continue-change` | `prompt` -> orchestrator | One selected Change; acquires and dispatches at most one Change action at a time |
+| `challenge-plan_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles evidence and owns the recommendation |
+| `challenge-implementation_sol` | Current agent directed by `.github/prompts` | Dispatches a fresh unnamed read-only subagent with `GPT-6.1 Sol (copilot)`; caller reconciles findings and owns the verdict |
 | `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `inspect-change` | built-in `ask` mode | Read-only Change diagnosis through `get_change` and `delivery_health` only; no mutation or host repair |
 | `address-pr-feedback` | Current agent directed by prompt | Loads `w-address-pr-feedback`; `start` evaluates and repairs external review threads, while `resume` publishes the fresh finalized head before replying and resolving threads |
@@ -134,6 +138,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | An acquired Build launch cannot produce its exact-commit result or transition; a dispatch failure instead triggers the matching exact claim recovery |
+| finalizer | orchestrator | An issued finalization launch is dispatched intact; if the capability is unavailable, the orchestrator reports the native `/finalize-change <change_id>` entry instead |
 | repairer | orchestrator | A Change-specific engine-authored repair proposal cannot receive its bounded user interaction |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |

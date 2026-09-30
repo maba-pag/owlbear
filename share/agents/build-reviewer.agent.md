@@ -4,7 +4,7 @@ description: "Build reviewer - independently review one exact-commit task result
 argument-hint: "Review exact commit: mode={review_mode}, change={change_id}, commit={candidate_commit}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Opus 5.5 (copilot)
+model: GPT-6.1 Sol (copilot)
 tools: [vscode/toolSearch, execute/runInTerminal, read/problems, read/readFile, read/viewImage, search, owlbear-memory/recall_memory]
 agents: []
 hooks:
