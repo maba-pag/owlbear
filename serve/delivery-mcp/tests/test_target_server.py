@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import subprocess
 import threading
 import time
@@ -1969,6 +1970,47 @@ async def test_registered_validation_rejects_private_arguments_before_delegation
         f"Error executing tool {tool_name}: " + json.dumps(diagnostic, separators=(",", ":"))
     )
     assert result.structured_content is None
+
+
+@pytest.mark.asyncio
+async def test_registered_model_validation_hides_cross_field_input_and_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    sdk_logger = logging.getLogger("mcp.server.mcpserver.server")
+    caplog.set_level(logging.ERROR, logger=sdk_logger.name)
+    sdk_logger.addHandler(caplog.handler)
+    try:
+        async with Client(server) as client:
+            result = await client.call_tool(
+                "set_change_intent",
+                {
+                    "change_id": "change-a",
+                    "kind": "resume",
+                    "expected_frontier_digest": "a" * 64,
+                    "reason": "secret42",
+                },
+            )
+    finally:
+        sdk_logger.removeHandler(caplog.handler)
+
+    diagnostic = {
+        "code": "ERR_TARGET_PARAM_VALIDATION",
+        "detail": "Invalid tool arguments. Check the tool input schema.",
+        "current_authority_identity": "portfolio",
+        "retry_safe": False,
+    }
+    assert result.is_error
+    assert application.calls == []
+    assert len(result.content) == 1
+    assert result.content[0].text == (
+        "Error executing tool set_change_intent: " + json.dumps(diagnostic, separators=(",", ":"))
+    )
+    assert result.structured_content is None
+    assert "secret42" not in result.content[0].text
+    assert "secret42" not in caplog.text
+    assert "Traceback (most recent call last)" not in caplog.text
 
 
 @pytest.mark.asyncio

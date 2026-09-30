@@ -1271,6 +1271,14 @@ class _TargetToolMetadata(FuncMetadata):
             raise _TargetArgumentValidationError.from_exception_data(title, []) from None
 
 
+def _validate_flat_model[ModelT: BaseModel](model: type[ModelT], payload: dict[str, object]) -> ModelT:
+    try:
+        return model.model_validate(payload)
+    except ValidationError:
+        diagnostic = _TargetArgumentValidationError.from_exception_data("Tool arguments", [])
+        raise ToolError(str(diagnostic)) from None
+
+
 def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]:
     """Expose one adapter model as strict top-level MCP keyword arguments."""
     method = getattr(adapter, name)
@@ -1315,7 +1323,7 @@ def _flatten_tool(adapter: TargetMCPAdapter, name: str) -> Callable[..., object]
         )
 
     async def flat_tool(**payload: object) -> object:
-        params = request_annotation.model_validate(payload)
+        params = _validate_flat_model(request_annotation, payload)
         return await method(params)
 
     flat_tool.__name__ = name
