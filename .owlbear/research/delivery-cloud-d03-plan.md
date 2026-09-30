@@ -12,20 +12,20 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Code checkpoint: `5443f8d4200bea0f149adf503d38b8a6c5bc3bad`.** R1-R7 are committed and
-focused-tested in the repair checkout, based on `951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`,
-with merge base `dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. This R8 documentation update
-describes that code checkpoint, not an as-yet unknown documentation commit. The candidate is
-**pending fresh Opus 5.5 read-only challenge and publication/CI**, not source-ready or accepted.
-The caller owns commit/publication and the subsequent exact-head metadata update.
+**Code checkpoint: `8c05c2696c255129703db10b55184eade08403d9`.** The R1-R7 repairs and the
+subsequent challenge repairs are committed and focused-tested, based on
+`951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`, with merge base
+`dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. This record identifies the code checkpoint;
+the PR head also includes its documentation update. A renewed fresh Opus 5.5 challenge and
+exact-head CI remain required. The candidate is not accepted or authorized for activation.
 
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | R1-R7 implement the bounded repairs described in the completion ledger and contract below. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
-| Independent challenge | Fresh unnamed Opus 5.5 read-only challenge is pending. Historical reviews do not establish a pass for `5443f8d` or the forthcoming source-and-docs candidate |
-| Required CI | All four required workflows succeeded on old remote `951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`. That is baseline evidence only, not repaired-source proof. Source, Dependency, Cockpit and Agent ecosystem must all succeed on the same exact published candidate head |
-| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body still describes `fb834f6`; the caller must reconcile the exact PR head, body and documentation after review/publication/CI |
-| Human acknowledgment | **Pending.** Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures can hold shared execution capacity. Occupancy of every slot stalls Planner/Builder work, finalization and engine continuation. The user must explicitly acknowledge this operational limitation; implementation/commit/push/CI authorization is not that acknowledgment |
+| Independent challenge | The fresh unnamed Opus 5.5 challenge of `d0ec2f1a` found an optional Git index refresh, loss of collected batch launches on a later error, and stale regression expectations. `8c05c269` repairs these findings; renewed independent review is pending |
+| Required CI | `d0ec2f1a` passed Cockpit but failed Source, Python 3.12 Dependency and Agent ecosystem checks on ten unique stale expectations. All ten are repaired and pass locally. Source, Dependency, Cockpit and Agent ecosystem must now all succeed on the same exact published repaired head; older success is not its proof |
+| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body was corrected to the `d0ec2f1a` candidate and must track the next published head and its actual review/CI results |
+| Human acknowledgment | **Not granted.** The user requested evidence of whether another work package removes the limitation before making a decision. Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures can hold every execution slot and stall Planner/Builder work, finalization and engine continuation. Implementation/commit/push/CI authorization is not acknowledgment of that limitation |
 | Host and activation boundary | No supported worker-exclusion backend is added. Caller confirmation and timeout do not prove closure or release custody. Ordinary host/transport limits remain separate from local source proof; no merge or live activation is implied |
 
 **Parent-observed focused proof, reported to this documentation writer:** 40 selected repair
@@ -36,6 +36,22 @@ The parent's R5 core, registered MCP and HTTP prompt selection passed **24 cases
 three-case, R2 four-case and R7 nine-case selections overlap this proof and are not additional
 totals. All 13 changed Python files passed the parent's Ruff check and format check; editor
 diagnostics also passed. The installed launcher ran locally; a browser did not.
+
+**Challenge-repair proof:** the parent ran two stat-dirty raw-index refusal cases and six batch
+capacity/error cases successfully. The test-repair worker identified all ten unique CI failures
+(the ecosystem failure duplicates one Source/Dependency failure) and ran an 18-case combined
+selection, including both production regressions: all passed. Every original content/index/ref,
+coordination and retry assertion remains; only the precisely asserted diagnostic frontier field
+is allowed to change. All five files in `8c05c269` passed the parent's scoped Ruff lint/format.
+
+**Programme dependency gap:** the current [D04-D08 schedule](delivery-cloud-flight-handoff.md#d04-revision-and-evidence)
+does not commit to a supported worker-exclusion or resumption capability. D04 owns revision/evidence,
+D05 merge approval, D06 prepared assistance, D07 offline maintenance with active-writer fences,
+and D08 integration/host acceptance. The [approved boundary](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
+explicitly says broader recovery is not automatically assigned to D08. Therefore no later-package
+fix or permanent acceptance can be presumed. Closing this product-level merge gate requires an
+informed decision or an explicitly approved capability design and ownership; do not weaken custody
+or silently expand D03 to create one.
 
 **Delegated worker reports, not new parent or R8 executions:** R3 reports 12 pause-application,
 35 retry-ledger, 17 runtime and 14 neighboring application cases; R4 reports 110 scoped
