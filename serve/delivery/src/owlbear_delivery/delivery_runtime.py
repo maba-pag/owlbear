@@ -1507,6 +1507,53 @@ type DeliveryTransition = Annotated[
 DELIVERY_TRANSITION_ADAPTER = TypeAdapter(DeliveryTransition)
 
 
+class DeliveryPlanningRetrySettlement(_DeliveryModel):
+    """Trusted Orchestrator report for one completed Planner retry invocation."""
+
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    disposition: Literal["normal-return", "completed-timeout"]
+    request: RetryDelivery | None = None
+
+    @model_validator(mode="after")
+    def _validate_completed_invocation(self) -> DeliveryPlanningRetrySettlement:
+        if self.disposition == "normal-return":
+            if self.request is None:
+                message = "normal Planner retry settlement requires its unchanged RetryDelivery"
+                raise ValueError(message)
+            if self.request.outcome_id != self.outcome_id or self.request.claim_id != self.claim_id:
+                message = "Planner retry request does not match its settlement identity"
+                raise ValueError(message)
+            if self.request.failure_code == "worker-timeout":
+                message = "worker-timeout is reserved for completed Planner timeouts"
+                raise ValueError(message)
+        elif self.request is not None:
+            message = "completed Planner timeout cannot carry an inner request"
+            raise ValueError(message)
+        return self
+
+
+class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
+    """Immutable result for replaying one exact completed Planner retry invocation."""
+
+    schema_version: Literal[1] = 1
+    envelope: DeliveryPlanningRetrySettlement
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryPlanningRetrySettlementReceipt:
+        if (
+            self.result.outcome_id != self.envelope.outcome_id
+            or self.result.stage != DeliveryStage.PLANNING
+            or self.result.active_claim is not None
+        ):
+            message = "Planning retry settlement receipt result does not match its completed claim"
+            raise ValueError(message)
+        return self
+
+
 class _DeliveryPlanningPauseReplay(_DeliveryModel):
     """Immutable result for replaying one exact request-bearing Planning pause."""
 
@@ -1657,6 +1704,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "publish_plan",
         "publish_result",
         "transition",
+        "settle_planning_retry",
         "_retry",
         "resolve_request",
         "unblock",
@@ -3673,6 +3721,65 @@ class DeliveryRuntime:
         )
         return _find_binding(replacement, request.outcome_id)
 
+    def settle_planning_retry(
+        self, envelope: DeliveryPlanningRetrySettlement, *, retry_observed_at: datetime | str | None = None
+    ) -> OutcomeAuthorityBinding:
+        """Settle one exact, normally returned or completed-timeout Planner retry invocation."""
+        if not isinstance(envelope, DeliveryPlanningRetrySettlement):
+            _conflict("Planning retry settlement requires a typed completed-invocation envelope")
+        try:
+            envelope = DeliveryPlanningRetrySettlement.model_validate_json(_model_content(envelope), strict=True)
+        except (TypeError, ValueError):
+            _conflict("Planning retry settlement envelope is invalid")
+        if envelope.change_id != self._contract.change_id:
+            _conflict("Planning retry settlement belongs to another Change")
+
+        frontier, previous = self._read()
+        replay_result = self._planning_retry_settlement_replay_result(envelope)
+        if replay_result is not None:
+            return replay_result
+        _require_change_mutable(frontier, "settle_planning_retry")
+        binding = _find_binding(frontier, envelope.outcome_id)
+        claim = binding.active_claim
+        if binding.stage != DeliveryStage.PLANNING or claim is None:
+            _conflict("Planning retry settlement requires an active Planner claim")
+        if claim.claim_id != envelope.claim_id or claim.attempt_id != envelope.attempt_id:
+            _conflict("Planning retry settlement does not match the active claim and attempt")
+        if claim.worker_role != DeliveryWorkerRole.PLANNER or claim.task_id is not None:
+            _conflict("Planning retry settlement cannot accept a Builder task")
+
+        if envelope.disposition == "normal-return":
+            request = envelope.request
+            if request is None:
+                _conflict("normal Planner retry settlement requires its unchanged RetryDelivery")
+            self._validate_retry_identity(binding, request, claim)
+            failure_code = request.failure_code
+        else:
+            failure_code = "worker-timeout"
+
+        result = binding.model_copy(
+            update={
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+            }
+        )
+        receipt = _DeliveryPlanningRetrySettlementReceipt(envelope=envelope, result=result)
+        participants = (
+            *self.retry_ledger().owner_result_participants(
+                claim.attempt_id,
+                accepted=False,
+                accepted_progress=True,
+                failure_code=failure_code,
+                now=retry_observed_at or datetime.now(UTC),
+            ),
+            self._planning_retry_settlement_participant(receipt),
+        )
+        self._replace(previous, _replace_binding(frontier, binding, result), additional_participants=participants)
+        return result
+
     def _transitioned_binding(
         self,
         binding: OutcomeAuthorityBinding,
@@ -3855,6 +3962,44 @@ class DeliveryRuntime:
         ):
             _reference("Planning pause replay receipt does not match its original request")
         return receipt.result
+
+    def _planning_retry_settlement_replay_result(
+        self,
+        envelope: DeliveryPlanningRetrySettlement,
+    ) -> OutcomeAuthorityBinding | None:
+        path = self._target_root / self._planning_retry_settlement_path(envelope)
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Planning retry settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryPlanningRetrySettlementReceipt.model_validate_json(content, strict=True)
+        except (TypeError, ValueError) as exc:
+            _reference("Planning retry settlement receipt is invalid", exc)
+        if receipt.envelope != envelope:
+            _conflict("Planning retry settlement conflicts with the immutable attempt receipt")
+        return receipt.result
+
+    def _planning_retry_settlement_participant(
+        self,
+        receipt: _DeliveryPlanningRetrySettlementReceipt,
+    ) -> TransactionParticipant:
+        return TransactionParticipant(
+            self._target_root,
+            self._planning_retry_settlement_path(receipt.envelope),
+            _model_content(receipt),
+        )
+
+    def _planning_retry_settlement_path(self, envelope: DeliveryPlanningRetrySettlement) -> Path:
+        attempt_digest = hashlib.sha256(envelope.attempt_id.encode("utf-8")).hexdigest()
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "planning-retry-receipts"
+            / envelope.outcome_id
+            / f"{attempt_digest}.json"
+        )
 
     def _planning_pause_replay_participant(
         self,

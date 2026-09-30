@@ -78,9 +78,18 @@ from owlbear_delivery import (
     integration_attention_disposition,
     repair_missing_request_provenance,
 )
-from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import (
+    DeliveryPlanningRetrySettlement,
+    invalidate_checkpoint_publication,
+    parse_delivery_frontier,
+)
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
-from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
+from owlbear_delivery.recovery import (
+    DeliveryWorkerExclusionRequiredError,
+    RetryEpisodeKey,
+    RetryFailureClass,
+    RetryOwnerResult,
+)
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
@@ -2113,6 +2122,218 @@ def test_foreign_retry_claim_or_attempt_does_not_persist_diagnostic(tmp_path: Pa
     assert builder.frontier_bytes() == builder_before
     assert builder.show_binding("OUT-001").model_dump(mode="json")["retry_diagnostic"] is None
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
+
+
+def _reserve_planning_settlement(runtime, attempt_id):
+    ledger = runtime.retry_ledger()
+    key = RetryEpisodeKey(
+        change_id="delivery-runtime",
+        action_kind="planning-retry",
+        exact_head="planning-authority",
+        outcome_id="OUT-001",
+    )
+    reservation = ledger.reserve(
+        key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now=datetime(2026, 8, 4, tzinfo=UTC),
+        attempt_id=attempt_id,
+        original=True,
+    )
+    assert reservation.allowed
+    return ledger, key
+
+
+def test_planning_retry_settlement_clears_claim_and_replays_exact_receipt(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    claimed = _activate(runtime, "OUT-001", "planner-claim", attempt_id="planner-attempt")
+    ledger, key = _reserve_planning_settlement(runtime, "planner-attempt")
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="planner-claim",
+        failure_code="planner-failed",
+    )
+    envelope = DeliveryPlanningRetrySettlement(
+        change_id="delivery-runtime",
+        outcome_id="OUT-001",
+        claim_id="planner-claim",
+        attempt_id="planner-attempt",
+        disposition="normal-return",
+        request=request,
+    )
+
+    observed_at = datetime(2026, 8, 4, tzinfo=UTC)
+    result = runtime.settle_planning_retry(envelope, retry_observed_at=observed_at)
+    owner_result_path = tmp_path / "changes/delivery-runtime/retry-ledger/owner-results/planner-attempt.json"
+    owner_result = RetryOwnerResult.model_validate_json(owner_result_path.read_bytes())
+    assert owner_result.accepted is False
+    assert owner_result.failure_code == "planner-failed"
+    assert datetime.fromisoformat(owner_result.observed_at) == observed_at
+    ledger.reconcile_owner_results()
+    assert ledger.episode(key).last_status == "failed"
+
+    assert claimed.active_claim is not None
+    assert result.stage == DeliveryStage.PLANNING
+    assert result.active_claim is None
+    assert result.output is None
+    assert result.candidate is None
+    assert result.retry_count == claimed.retry_count
+    assert result.retry_fingerprint == claimed.retry_fingerprint
+    settled_frontier = runtime.frontier_bytes()
+    assert runtime.settle_planning_retry(envelope) == result
+    assert runtime.frontier_bytes() == settled_frontier
+
+    conflicting = envelope.model_copy(update={"request": request.model_copy(update={"failure_code": "other-failure"})})
+    with pytest.raises(DeliveryRuntimeConflictError, match="immutable attempt receipt"):
+        runtime.settle_planning_retry(conflicting)
+    assert runtime.frontier_bytes() == settled_frontier
+    _activate(runtime, "OUT-001", "new-planner-claim", attempt_id="new-planner-attempt")
+    reacquired = runtime.frontier_bytes()
+    accounted = ledger.read()
+    assert runtime.settle_planning_retry(envelope) == result
+    assert runtime.frontier_bytes() == reacquired
+    assert ledger.read() == accounted
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.publish_plan(
+            PublishDeliveryPlan(outcome_id="OUT-001", claim_id="planner-claim", tasks=(_task("TASK-001"),))
+        )
+    assert runtime.frontier_bytes() == reacquired
+
+
+@pytest.mark.parametrize(
+    "identity_update",
+    [
+        {"change_id": "another-change"},
+        {"outcome_id": "OUT-002"},
+        {"claim_id": "foreign-claim"},
+        {"attempt_id": "stale-attempt"},
+    ],
+)
+def test_planning_retry_settlement_rejects_foreign_or_stale_identity(
+    tmp_path: Path,
+    identity_update: dict[str, str],
+) -> None:
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "planner-claim", attempt_id="planner-attempt")
+    envelope = DeliveryPlanningRetrySettlement(
+        change_id="delivery-runtime",
+        outcome_id="OUT-001",
+        claim_id="planner-claim",
+        attempt_id="planner-attempt",
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
+            outcome_id="OUT-001",
+            claim_id="planner-claim",
+            failure_code="planner-failed",
+        ),
+    )
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.settle_planning_retry(envelope.model_copy(update=identity_update))
+
+    assert runtime.frontier_bytes() == before
+    assert runtime.show_binding("OUT-001").active_claim is not None
+
+
+def test_planning_retry_settlement_rejects_builder_claim(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.IMPLEMENTATION, DeliveryStage.PLANNING, DeliveryStage.PLANNING),
+    )
+    claimed = _activate(runtime, "OUT-001", "builder-claim", task_id="TASK-001", attempt_id="builder-attempt")
+    envelope = DeliveryPlanningRetrySettlement(
+        change_id="delivery-runtime",
+        outcome_id="OUT-001",
+        claim_id="builder-claim",
+        attempt_id="builder-attempt",
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
+            outcome_id="OUT-001",
+            claim_id="builder-claim",
+            failure_code="builder-failed",
+        ),
+    )
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="active Planner claim"):
+        runtime.settle_planning_retry(envelope)
+
+    assert claimed.active_claim is not None
+    assert runtime.frontier_bytes() == before
+    assert runtime.show_binding("OUT-001").active_claim == claimed.active_claim
+
+
+def test_planning_retry_settlement_requires_completed_typed_disposition() -> None:
+    values = {
+        "change_id": "delivery-runtime",
+        "outcome_id": "OUT-001",
+        "claim_id": "planner-claim",
+        "attempt_id": "planner-attempt",
+    }
+    request = RetryDelivery(action="retry", outcome_id="OUT-001", claim_id="planner-claim")
+
+    with pytest.raises(ValidationError):
+        DeliveryPlanningRetrySettlement(**values, disposition="running")
+    with pytest.raises(ValidationError):
+        DeliveryPlanningRetrySettlement(**values, disposition="normal-return")
+    with pytest.raises(ValidationError, match="worker-timeout is reserved"):
+        DeliveryPlanningRetrySettlement(
+            **values,
+            disposition="normal-return",
+            request=RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id="planner-claim",
+                failure_code="worker-timeout",
+            ),
+        )
+    with pytest.raises(ValidationError):
+        DeliveryPlanningRetrySettlement(
+            **values,
+            disposition="completed-timeout",
+            request=request,
+        )
+
+
+def test_completed_planning_timeout_records_only_typed_worker_timeout(tmp_path: Path) -> None:
+    attempt_id = "planning-timeout-attempt"
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "planner-claim", attempt_id=attempt_id)
+    ledger, key = _reserve_planning_settlement(runtime, attempt_id)
+    owner_result_path = tmp_path / "changes/delivery-runtime/retry-ledger/owner-results" / f"{attempt_id}.json"
+    raw_retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="planner-claim",
+        failure_code="worker-timeout",
+    )
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        runtime.transition(raw_retry)
+    assert not owner_result_path.exists()
+    assert ledger.episode(key).last_status == "reserved"
+
+    result = runtime.settle_planning_retry(
+        DeliveryPlanningRetrySettlement(
+            change_id="delivery-runtime",
+            outcome_id="OUT-001",
+            claim_id="planner-claim",
+            attempt_id=attempt_id,
+            disposition="completed-timeout",
+        )
+    )
+
+    owner_result = RetryOwnerResult.model_validate_json(owner_result_path.read_bytes())
+    assert result.active_claim is None
+    assert owner_result.accepted is False
+    assert owner_result.failure_code == "worker-timeout"
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    assert episode.last_status == "failed"
 
 
 @pytest.mark.parametrize(
