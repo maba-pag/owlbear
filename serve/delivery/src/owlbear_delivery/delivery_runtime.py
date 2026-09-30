@@ -35,6 +35,8 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryIntent,
     RecoveryReceipt,
+    RetryEpisodeSummary,
+    RetryFailureClass,
     RetryLedger,
     digest,
     encoded,
@@ -51,7 +53,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery.change_workspace import ChangeWorkspaceManager
+    from owlbear_delivery.change_workspace import (
+        ChangeWorkspaceManager,
+        PreparedBuilderHandoff,
+        PublicationLock,
+    )
     from owlbear_delivery.target_contract import DeliveryContract
 
 
@@ -926,6 +932,19 @@ class DeliveryRetryDiagnostic(_DeliveryModel):
     transition: RetryDelivery
 
 
+class DeliveryBuilderHandoffContext(_DeliveryModel):
+    """Exact Builder settlement authority retained for one future same-task route."""
+
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    original_task_id: str = Field(min_length=1, max_length=256)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    metadata_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    route: Literal["same-task", "planning-routing-unimplemented"]
+
+
 class DeliveryRecoveryAttention(_DeliveryModel):
     """Operator-consumed evidence for one Build claim that cannot be removed safely."""
 
@@ -1016,6 +1035,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     candidate: DeliveryPlanCandidate | None = None
     result_candidate: DeliveryResultCandidate | None = None
     return_context: DeliveryReturnContext | None = None
+    builder_handoff_context: DeliveryBuilderHandoffContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
     retry_diagnostic: DeliveryRetryDiagnostic | None = None
     block: DeliveryBlock | None = None
@@ -1042,6 +1062,27 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             raise ValueError(message)
         if not {result.task_id for result in self.results} <= set(task_ids):
             message = "Delivery results must bind promoted task authority"
+            raise ValueError(message)
+        handoff = self.builder_handoff_context
+        if handoff is not None and (handoff.outcome_id != self.outcome_id or handoff.original_task_id not in task_ids):
+            message = "Builder handoff context must bind retained task authority for its outcome"
+            raise ValueError(message)
+        if handoff is not None and handoff.route == "same-task" and self.stage != DeliveryStage.IMPLEMENTATION:
+            message = "same-task Builder handoff context requires Implementation stage"
+            raise ValueError(message)
+        if (
+            handoff is not None
+            and handoff.route == "planning-routing-unimplemented"
+            and self.stage != DeliveryStage.PLANNING
+        ):
+            message = "Planning Builder handoff context requires Planning stage"
+            raise ValueError(message)
+        if (
+            handoff is not None
+            and self.active_claim is not None
+            and self.active_claim.task_id != handoff.original_task_id
+        ):
+            message = "active claim cannot consume a different Builder handoff task"
             raise ValueError(message)
         return self
 
@@ -1535,6 +1576,54 @@ class DeliveryPlanningRetrySettlement(_DeliveryModel):
         return self
 
 
+class DeliveryBuilderInvocationSettlement(_DeliveryModel):
+    """Trusted Orchestrator report for one completed Builder invocation."""
+
+    change_id: str = Field(min_length=1, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    task_id: str = Field(min_length=1, max_length=256)
+    expected_last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    disposition: Literal["normal-return", "completed-timeout"]
+    request: RetryDelivery | BlockDelivery | ReturnDelivery | None = None
+
+    @model_validator(mode="after")
+    def _validate_completed_invocation(self) -> DeliveryBuilderInvocationSettlement:
+        if self.disposition == "normal-return":
+            self._validate_normal_return()
+        elif self.request is not None:
+            message = "completed Builder timeout cannot carry an inner request"
+            raise ValueError(message)
+        return self
+
+    def _validate_normal_return(self) -> None:
+        request = self.request
+        if request is None:
+            message = "normal Builder settlement requires its unchanged RetryDelivery, BlockDelivery, or ReturnDelivery"
+            raise ValueError(message)
+        if request.outcome_id != self.outcome_id or request.claim_id != self.claim_id:
+            message = "Builder settlement request does not match its outcome and claim"
+            raise ValueError(message)
+        if isinstance(request, RetryDelivery):
+            if request.failure_code == "worker-timeout":
+                message = "worker-timeout is reserved for completed Builder timeouts"
+                raise ValueError(message)
+            if request.attempt_id != self.attempt_id:
+                message = "Builder retry request does not match its attempt"
+                raise ValueError(message)
+        elif isinstance(request, BlockDelivery):
+            if request.request is None or request.request.resolution is not None:
+                message = "Builder block settlement requires an unanswered bounded user request"
+                raise ValueError(message)
+            if request.request.outcome_id != self.outcome_id:
+                message = "Builder block request does not match its outcome"
+                raise ValueError(message)
+        elif request.attempt_id != self.attempt_id:
+            message = "Builder return request does not match its attempt"
+            raise ValueError(message)
+
+
 class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
     """Immutable result for replaying one exact completed Planner retry invocation."""
 
@@ -1550,6 +1639,42 @@ class _DeliveryPlanningRetrySettlementReceipt(_DeliveryModel):
             or self.result.active_claim is not None
         ):
             message = "Planning retry settlement receipt result does not match its completed claim"
+            raise ValueError(message)
+        return self
+
+
+class _DeliveryBuilderInvocationSettlementReceipt(_DeliveryModel):
+    """Immutable result for replaying one exact completed Builder invocation."""
+
+    schema_version: Literal[1] = 1
+    settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    envelope: DeliveryBuilderInvocationSettlement
+    handoff_context: DeliveryBuilderHandoffContext
+    result: OutcomeAuthorityBinding
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _DeliveryBuilderInvocationSettlementReceipt:
+        context = self.handoff_context
+        if (
+            self.settlement_id != hashlib.sha256(_model_content(self.envelope)).hexdigest()
+            or context.settlement_id != self.settlement_id
+            or context.outcome_id != self.envelope.outcome_id
+            or context.original_task_id != self.envelope.task_id
+            or context.attempt_id != self.envelope.attempt_id
+            or context.last_reviewed_commit != self.envelope.expected_last_reviewed_commit
+            or self.result.outcome_id != self.envelope.outcome_id
+            or self.result.active_claim is not None
+            or self.result.builder_handoff_context != context
+        ):
+            message = "Builder invocation settlement receipt does not match its exact handoff"
+            raise ValueError(message)
+        expected_stage = (
+            DeliveryStage.PLANNING
+            if context.route == "planning-routing-unimplemented"
+            else DeliveryStage.IMPLEMENTATION
+        )
+        if self.result.stage != expected_stage:
+            message = "Builder invocation settlement receipt has an incompatible route stage"
             raise ValueError(message)
         return self
 
@@ -1705,6 +1830,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "publish_result",
         "transition",
         "settle_planning_retry",
+        "settle_builder_invocation",
         "_retry",
         "resolve_request",
         "unblock",
@@ -3504,6 +3630,10 @@ class DeliveryRuntime:
             if binding.stage not in {DeliveryStage.DESIGN, DeliveryStage.COMPLETED}
             and binding.active_claim_id is None
             and (binding.block is None or binding.block.resolved)
+            and not (
+                binding.builder_handoff_context is not None
+                and binding.builder_handoff_context.route == "planning-routing-unimplemented"
+            )
             and dependencies[binding.outcome_id] <= completed
         )
 
@@ -3515,11 +3645,15 @@ class DeliveryRuntime:
         if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim_id is not None:
             return ()
         completed = {result.task_id for result in binding.results}
-        return tuple(
+        claimable = tuple(
             task.task_id
             for task in binding.tasks
             if task.task_id not in completed and set(task.dependency_ids) <= completed
         )
+        handoff = binding.builder_handoff_context
+        if handoff is None:
+            return claimable
+        return tuple(task_id for task_id in claimable if task_id == handoff.original_task_id)
 
     def change_stage(self) -> DeliveryChangeStage:
         """Derive change lifecycle from canonical outcome state."""
@@ -3673,6 +3807,10 @@ class DeliveryRuntime:
         if self._workspace_manager is not None:
             self._workspace_manager.prepare_runtime_custody_guard(self._contract.change_id)
         updated = self._transitioned_binding(binding, request)
+        if isinstance(request, AdvanceDelivery) and binding.builder_handoff_context is not None:
+            if binding.active_task_id != binding.builder_handoff_context.original_task_id:
+                _conflict("Builder handoff can only be consumed by advancing its original task")
+            updated = updated.model_copy(update={"builder_handoff_context": None})
         replacement = _replace_binding(frontier, binding, updated)
         result_participants = ()
         if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
@@ -3784,6 +3922,77 @@ class DeliveryRuntime:
             additional_participants=participants,
         )
         return result
+
+    def settle_builder_invocation(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+        *,
+        retry_observed_at: datetime | str | None = None,
+    ) -> OutcomeAuthorityBinding:
+        """Settle one exact Builder invocation without rewriting its registered worktree."""
+        if not isinstance(envelope, DeliveryBuilderInvocationSettlement):
+            _conflict("Builder invocation settlement requires a typed completed-invocation envelope")
+        try:
+            envelope = DeliveryBuilderInvocationSettlement.model_validate_json(_model_content(envelope), strict=True)
+        except (TypeError, ValueError):
+            _conflict("Builder invocation settlement envelope is invalid")
+        if envelope.change_id != self._contract.change_id:
+            _conflict("Builder invocation settlement belongs to another Change")
+        if isinstance(envelope.request, ReturnDelivery) and envelope.request.target == DeliveryStage.DESIGN:
+            _conflict("Builder return to Design is refused until a supported Design workspace owner route exists")
+        manager = self._require_workspace()
+        with manager._coordinator.publication_lock(envelope.change_id) as lock:  # noqa: SLF001
+            frontier, previous = self._read()
+            replay_result = self._builder_invocation_settlement_replay_result(envelope)
+            if replay_result is not None:
+                return replay_result
+            _require_change_mutable(frontier, "settle_builder_invocation")
+            binding = _find_binding(frontier, envelope.outcome_id)
+            claim, prepared = self._prepare_builder_invocation_handoff(binding, envelope, manager, lock)
+            ledger, episode = self._builder_invocation_retry_episode(envelope)
+            settlement_id = hashlib.sha256(_model_content(envelope)).hexdigest()
+            context = DeliveryBuilderHandoffContext(
+                settlement_id=settlement_id,
+                original_task_id=envelope.task_id,
+                outcome_id=envelope.outcome_id,
+                attempt_id=envelope.attempt_id,
+                last_reviewed_commit=envelope.expected_last_reviewed_commit,
+                branch_head=prepared.metadata.branch_head,
+                metadata_fingerprint=prepared.metadata.fingerprint,
+                route="planning-routing-unimplemented" if isinstance(envelope.request, ReturnDelivery) else "same-task",
+            )
+            result, paused, failure_code = self._builder_invocation_settled_binding(
+                binding, envelope, context, episode, ledger
+            )
+            receipt = _DeliveryBuilderInvocationSettlementReceipt(
+                settlement_id=settlement_id,
+                envelope=envelope,
+                handoff_context=context,
+                result=result,
+            )
+            participants = (
+                *ledger.owner_result_participants(
+                    claim.attempt_id,
+                    accepted=False,
+                    accepted_progress=not paused,
+                    paused=paused,
+                    failure_code=failure_code,
+                    now=retry_observed_at or datetime.now(UTC),
+                ),
+                self._builder_invocation_settlement_participant(receipt),
+                prepared.participant,
+            )
+            replacement = _replace_binding(frontier, binding, result)
+            portable = not any(item.active_claim is not None for item in replacement.bindings)
+            portable = portable and replacement.integration_repair_claim is None
+            self._replace_content(
+                previous,
+                _model_content(replacement),
+                record_pending_publication=portable,
+                transition_request_digest=settlement_id,
+                additional_participants=participants,
+            )
+            return result
 
     def _transitioned_binding(
         self,
@@ -4006,6 +4215,288 @@ class DeliveryRuntime:
             / f"{attempt_digest}.json"
         )
 
+    def _prepare_builder_invocation_handoff(
+        self,
+        binding: OutcomeAuthorityBinding,
+        envelope: DeliveryBuilderInvocationSettlement,
+        manager: ChangeWorkspaceManager,
+        lock: PublicationLock,
+    ) -> tuple[DeliveryActiveClaim, PreparedBuilderHandoff]:
+        claim = binding.active_claim
+        if (
+            binding.stage != DeliveryStage.IMPLEMENTATION
+            or claim is None
+            or claim.worker_role != DeliveryWorkerRole.BUILDER
+            or claim.claim_id != envelope.claim_id
+            or claim.attempt_id != envelope.attempt_id
+            or claim.task_id != envelope.task_id
+            or not any(task.task_id == envelope.task_id for task in binding.tasks)
+        ):
+            _conflict("Builder invocation settlement does not match the active task claim")
+        coordination = manager.show(envelope.change_id)
+        writer = coordination.writer
+        if (
+            writer is None
+            or writer.kind != "build"
+            or writer.claim_id != claim.claim_id
+            or writer.attempt_id != claim.attempt_id
+            or coordination.last_reviewed_commit != envelope.expected_last_reviewed_commit
+        ):
+            _conflict("Builder invocation settlement does not match exact Change workspace custody")
+        settlement_id = hashlib.sha256(_model_content(envelope)).hexdigest()
+        prepared = manager.prepare_builder_handoff(
+            envelope.change_id,
+            writer,
+            settlement_id,
+            envelope.task_id,
+            lock,
+        )
+        metadata = prepared.metadata
+        if (
+            metadata.change_id != envelope.change_id
+            or metadata.branch != coordination.branch
+            or metadata.worktree_path != coordination.worktree_path
+            or metadata.last_reviewed_commit != envelope.expected_last_reviewed_commit
+            or metadata.registration.path != metadata.worktree_path
+            or metadata.registration.branch != metadata.branch
+            or metadata.registration.head != metadata.branch_head
+        ):
+            _conflict("Builder handoff metadata does not match its registered branch and reviewed boundary")
+        request = envelope.request
+        if isinstance(request, RetryDelivery) and request.abandoned_commit != metadata.branch_head:
+            _conflict("Builder retry commit does not match the registered branch head")
+        if isinstance(request, BlockDelivery) and request.resume_commit != metadata.branch_head:
+            _conflict("Builder block commit does not match the registered branch head")
+        if isinstance(request, ReturnDelivery) and request.preserved_commit != metadata.branch_head:
+            _conflict("Builder return commit does not match the registered branch head")
+        self._validate_builder_result_candidate(binding, claim, envelope.task_id)
+        return claim, prepared
+
+    @staticmethod
+    def _validate_builder_result_candidate(
+        binding: OutcomeAuthorityBinding,
+        claim: DeliveryActiveClaim,
+        task_id: str,
+    ) -> None:
+        candidate = binding.result_candidate
+        if candidate is None:
+            return
+        if candidate.claim_id != claim.claim_id or candidate.result.task_id != task_id:
+            _conflict("published Builder result candidate does not match its active task claim")
+        accepted = next((result for result in binding.results if result.task_id == candidate.result.task_id), None)
+        if accepted is not None and accepted != candidate.result:
+            _conflict("published Builder result candidate conflicts with its accepted result")
+
+    def _builder_invocation_retry_episode(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+    ) -> tuple[RetryLedger, RetryEpisodeSummary]:
+        ledger = self.retry_ledger()
+        episode = ledger.episode_for_attempt(envelope.attempt_id)
+        if episode is None:
+            _conflict("Builder invocation settlement requires its exact reserved retry episode")
+        key = episode.key
+        reviewed_head_matches = key.exact_head == envelope.expected_last_reviewed_commit or any(
+            alias.alias_kind == "commit" and alias.value == envelope.expected_last_reviewed_commit
+            for alias in episode.aliases
+        )
+        if (
+            episode.failure_class != RetryFailureClass.MECHANICAL
+            or key.change_id != envelope.change_id
+            or key.action_kind != "builder-claim"
+            or not reviewed_head_matches
+            or key.contract_digest != self._authority_digest
+            or key.outcome_id != envelope.outcome_id
+            or key.task_lineage != envelope.task_id
+            or key.procedure_class != DeliveryWorkerRole.BUILDER.value
+            or envelope.attempt_id not in episode.attempt_ids
+        ):
+            _conflict("Builder invocation settlement retry episode does not match its exact task authority")
+        owner_result_path = (
+            self._target_root
+            / "changes"
+            / envelope.change_id
+            / "retry-ledger"
+            / "owner-results"
+            / f"{envelope.attempt_id}.json"
+        )
+        if owner_result_path.exists():
+            _conflict("Builder invocation settlement already has an owner result without its exact receipt")
+        return ledger, episode
+
+    def _builder_invocation_settled_binding(
+        self,
+        binding: OutcomeAuthorityBinding,
+        envelope: DeliveryBuilderInvocationSettlement,
+        context: DeliveryBuilderHandoffContext,
+        episode: RetryEpisodeSummary,
+        ledger: RetryLedger,
+    ) -> tuple[OutcomeAuthorityBinding, bool, str]:
+        request = envelope.request
+        paused = isinstance(request, BlockDelivery)
+        failure_code = (
+            "worker-timeout"
+            if envelope.disposition == "completed-timeout"
+            else "worker-blocked"
+            if paused
+            else "worker-returned"
+            if isinstance(request, ReturnDelivery)
+            else request.failure_code
+        )
+        exhausted = not paused and episode.total_attempts >= ledger.mechanical_repairs + 1
+        if envelope.disposition == "completed-timeout" or isinstance(request, RetryDelivery):
+            result = self._builder_retry_settled_binding(binding, context, envelope, exhausted=exhausted)
+        elif isinstance(request, BlockDelivery):
+            result = self._builder_pause_settled_binding(binding, context, request)
+        elif isinstance(request, ReturnDelivery):
+            result = self._builder_return_settled_binding(binding, context, request, exhausted=exhausted)
+        else:
+            _conflict("Builder invocation settlement has no supported completed disposition")
+        return result, paused, failure_code
+
+    @staticmethod
+    def _builder_retry_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        envelope: DeliveryBuilderInvocationSettlement,
+        *,
+        exhausted: bool,
+    ) -> OutcomeAuthorityBinding:
+        updates = {
+            "active_claim": None,
+            "output": None,
+            "candidate": None,
+            "result_candidate": None,
+            "return_context": None,
+            "builder_handoff_context": context,
+            "recovery_attention": None,
+            "retry_diagnostic": None,
+            "block": None,
+        }
+        if exhausted:
+            updates["block"] = DeliveryBlock(
+                block_id=f"builder-attempt-limit-{context.settlement_id}",
+                reason="The Builder retry episode reached its three-attempt limit.",
+                unblock_condition="Use a supported operator disposition without resetting this retry episode.",
+                expected_evidence=("An exact operator disposition for the retained Builder task.",),
+                locators=(envelope.task_id,),
+            )
+        return binding.model_copy(update=updates)
+
+    @staticmethod
+    def _builder_pause_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        request: BlockDelivery,
+    ) -> OutcomeAuthorityBinding:
+        delivery_request = request.request
+        if delivery_request is None or any(
+            existing.request_id == delivery_request.request_id for existing in binding.requests
+        ):
+            _conflict("Builder pause request is absent or already active")
+        block = DeliveryBlock(
+            block_id=request.block_id,
+            reason=request.reason,
+            unblock_condition=request.unblock_condition,
+            expected_evidence=request.expected_evidence,
+            locators=request.locators,
+            request_id=delivery_request.request_id,
+            resume_commit=request.resume_commit,
+        )
+        return binding.model_copy(
+            update={
+                "active_claim": None,
+                "builder_handoff_context": context,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+                "return_context": None,
+                "block": block,
+                "requests": (*binding.requests, delivery_request),
+            }
+        )
+
+    @staticmethod
+    def _builder_return_settled_binding(
+        binding: OutcomeAuthorityBinding,
+        context: DeliveryBuilderHandoffContext,
+        request: ReturnDelivery,
+        *,
+        exhausted: bool,
+    ) -> OutcomeAuthorityBinding:
+        if request.target != DeliveryStage.PLANNING:
+            _conflict("Builder return target has no supported workspace owner route")
+        block = DeliveryBlock(
+            block_id=f"builder-planning-route-{context.settlement_id}",
+            reason=(
+                "The Builder retry episode reached its three-attempt limit."
+                if exhausted
+                else "Builder work returned to Planning, but Planning task routing is not implemented."
+            ),
+            unblock_condition="A supported Planning owner route is available for this retained Builder task.",
+            expected_evidence=("An exact Planning owner route for the retained Builder task.",),
+            locators=request.locators,
+        )
+        return binding.model_copy(
+            update={
+                "stage": DeliveryStage.PLANNING,
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "builder_handoff_context": context,
+                "recovery_attention": None,
+                "retry_diagnostic": None,
+                "return_context": DeliveryReturnContext(
+                    target=DeliveryStage.PLANNING,
+                    reason=request.reason,
+                    locators=request.locators,
+                    preserved_commit=request.preserved_commit,
+                    completed_boundary=context.last_reviewed_commit,
+                ),
+                "block": block,
+            }
+        )
+
+    def _builder_invocation_settlement_replay_result(
+        self,
+        envelope: DeliveryBuilderInvocationSettlement,
+    ) -> OutcomeAuthorityBinding | None:
+        path = self._target_root / self._builder_invocation_settlement_path(envelope)
+        try:
+            content = path.read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            _reference("Builder invocation settlement receipt is unavailable", exc)
+        try:
+            receipt = _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(content, strict=True)
+        except (TypeError, ValueError) as exc:
+            _reference("Builder invocation settlement receipt is invalid", exc)
+        if receipt.envelope != envelope:
+            _conflict("Builder invocation settlement conflicts with the immutable attempt receipt")
+        return receipt.result
+
+    def _builder_invocation_settlement_participant(
+        self,
+        receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    ) -> TransactionParticipant:
+        return TransactionParticipant(
+            self._target_root,
+            self._builder_invocation_settlement_path(receipt.envelope),
+            _model_content(receipt),
+        )
+
+    def _builder_invocation_settlement_path(self, envelope: DeliveryBuilderInvocationSettlement) -> Path:
+        attempt_digest = hashlib.sha256(envelope.attempt_id.encode("utf-8")).hexdigest()
+        return (
+            self._frontier_path.parent.relative_to(self._target_root)
+            / "builder-invocation-receipts"
+            / f"{attempt_digest}.json"
+        )
+
     def _planning_pause_replay_participant(
         self,
         request: BlockDelivery,
@@ -4120,6 +4611,7 @@ class DeliveryRuntime:
         if hashlib.sha256(previous).hexdigest() != request.expected_version:
             _conflict("administrative movement preview is stale")
         ordered = _administrative_move_closure(self._contract, frontier, request.outcome_id, request.target)
+        self._require_no_handoff_in_administrative_closure(frontier, ordered)
         invalidated = set(ordered)
         updated_bindings = tuple(
             _reset_binding(item, request.target if item.outcome_id == request.outcome_id else DeliveryStage.PLANNING)
@@ -4157,12 +4649,22 @@ class DeliveryRuntime:
     ) -> AdministrativeDeliveryMovePreview:
         """Return the exact invalidation closure without mutating authority."""
         frontier, content = self._read()
+        ordered = _administrative_move_closure(self._contract, frontier, outcome_id, target)
+        self._require_no_handoff_in_administrative_closure(frontier, ordered)
         return AdministrativeDeliveryMovePreview(
             outcome_id=outcome_id,
             target=target,
             snapshot_version=hashlib.sha256(content).hexdigest(),
-            invalidated_outcome_ids=_administrative_move_closure(self._contract, frontier, outcome_id, target),
+            invalidated_outcome_ids=ordered,
         )
+
+    @staticmethod
+    def _require_no_handoff_in_administrative_closure(frontier: DeliveryFrontier, outcome_ids: tuple[str, ...]) -> None:
+        if any(
+            binding.builder_handoff_context is not None and binding.outcome_id in outcome_ids
+            for binding in frontier.bindings
+        ):
+            _conflict("administrative movement cannot orphan a preserved Builder handoff")
 
     def _advance(
         self,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -79,6 +79,7 @@ from owlbear_delivery import (
     repair_missing_request_provenance,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryBuilderInvocationSettlement,
     DeliveryPlanningRetrySettlement,
     invalidate_checkpoint_publication,
     parse_delivery_frontier,
@@ -1533,6 +1534,33 @@ def _git(repository: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
+def _git_worktree_snapshot(worktree: Path) -> tuple[tuple[tuple[str, bytes], ...], tuple[tuple[str, bytes], ...], str]:
+    git_dir = Path(_git(worktree, "rev-parse", "--absolute-git-dir")).resolve()
+    common_dir = Path(_git(worktree, "rev-parse", "--git-common-dir"))
+    if not common_dir.is_absolute():
+        common_dir = (worktree / common_dir).resolve()
+    git_files = tuple(
+        (str(path), path.read_bytes())
+        for path in sorted(
+            {path for root in {git_dir, common_dir} for path in root.rglob("*") if path.is_file()}, key=str
+        )
+    )
+    worktree_files = tuple(
+        (path.relative_to(worktree).as_posix(), path.read_bytes())
+        for path in sorted(worktree.rglob("*"))
+        if path.is_file()
+    )
+    status = _git(worktree, "--no-optional-locks", "status", "--porcelain=v2", "--untracked-files=all")
+    return git_files, worktree_files, status
+
+
+def _dirty_builder_worktree(worktree: Path) -> None:
+    (worktree / "product.txt").write_text("unstaged builder work\n", encoding="utf-8")
+    (worktree / "staged.txt").write_text("staged builder work\n", encoding="utf-8")
+    _git(worktree, "add", "staged.txt")
+    (worktree / "untracked.txt").write_text("untracked builder work\n", encoding="utf-8")
+
+
 def _workspace(tmp_path: Path):
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -2334,6 +2362,764 @@ def test_completed_planning_timeout_records_only_typed_worker_timeout(tmp_path: 
     assert episode is not None
     assert episode.total_attempts == 1
     assert episode.last_status == "failed"
+
+
+def _builder_settlement_envelope(
+    runtime: DeliveryRuntime,
+    coordination,
+    request: RetryDelivery | BlockDelivery | ReturnDelivery | None,
+    disposition: str = "normal-return",
+) -> DeliveryBuilderInvocationSettlement:
+    claim = runtime.show_binding("OUT-001").active_claim
+    assert claim is not None
+    assert claim.task_id is not None
+    return DeliveryBuilderInvocationSettlement(
+        change_id="delivery-runtime",
+        outcome_id="OUT-001",
+        claim_id=claim.claim_id,
+        attempt_id=claim.attempt_id,
+        task_id=claim.task_id,
+        expected_last_reviewed_commit=coordination.last_reviewed_commit,
+        disposition=disposition,
+        request=request,
+    )
+
+
+def _reserve_builder_settlement(
+    runtime: DeliveryRuntime,
+    attempt_id: str,
+    expected_last_reviewed_commit: str,
+    *,
+    total_attempts: int = 1,
+):
+    ledger = runtime.retry_ledger()
+    key = RetryEpisodeKey.worker(
+        "delivery-runtime",
+        "builder-claim",
+        expected_last_reviewed_commit,
+        contract_digest=runtime.authority_digest,
+        outcome_id="OUT-001",
+        task_lineage="TASK-002",
+        procedure_class="builder",
+        original_candidate="OUT-001",
+    )
+    started_at = datetime(2026, 8, 4, tzinfo=UTC)
+    for index in range(1, total_attempts):
+        reservation = ledger.reserve(
+            key,
+            failure_class=RetryFailureClass.MECHANICAL,
+            now=started_at + timedelta(seconds=10 * index),
+            attempt_id=f"prior-builder-attempt-{index}",
+            original=index == 1,
+        )
+        assert reservation.allowed
+        ledger.record_failure(
+            reservation,
+            failure_code="prior-builder-failure",
+            now=started_at + timedelta(seconds=10 * index + 1),
+        )
+    reservation = ledger.reserve(
+        key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now=started_at + timedelta(seconds=10 * (total_attempts + 1)),
+        attempt_id=attempt_id,
+        original=total_attempts == 1,
+    )
+    assert reservation.allowed
+    return ledger, key
+
+
+def test_builder_retry_settlement_preserves_git_bytes_and_same_task_handoff(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, first_result, tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+    )
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+        failure_code="builder-failed",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    tasks = (*tasks, _task("TASK-003"))
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    expanded_binding = frontier.bindings[0].model_copy(update={"tasks": tasks})
+    frontier_path = coordinator.runtime_root / "changes/delivery-runtime/frontier.json"
+    frontier_path.write_bytes(
+        _canonical(frontier.model_copy(update={"bindings": (expanded_binding, *frontier.bindings[1:])}))
+    )
+    observed_at = datetime(2026, 8, 4, 12, tzinfo=UTC)
+
+    result = runtime.settle_builder_invocation(envelope, retry_observed_at=observed_at)
+
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert result.stage == DeliveryStage.IMPLEMENTATION
+    assert result.active_claim is None
+    assert result.tasks == tasks
+    assert result.results == (first_result,)
+    assert result.block is None
+    handoff_context = result.builder_handoff_context
+    assert handoff_context is not None
+    assert (
+        handoff_context.outcome_id,
+        handoff_context.original_task_id,
+        handoff_context.attempt_id,
+        handoff_context.last_reviewed_commit,
+        handoff_context.route,
+    ) == ("OUT-001", "TASK-002", "attempt-002", coordination.last_reviewed_commit, "same-task")
+    assert runtime.claimable_task_ids("OUT-001") == ("TASK-002",)
+    before_unrelated_activation = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="implementation task is not claimable"):
+        _activate(runtime, "OUT-001", "claim-unrelated-task", task_id="TASK-003", attempt_id="attempt-unrelated-task")
+    assert runtime.frontier_bytes() == before_unrelated_activation
+    workspace = coordinator.show("delivery-runtime")
+    assert workspace.writer is not None
+    assert workspace.writer.kind == "handoff"
+    assert workspace.builder_handoff is not None
+    assert workspace.builder_handoff.settlement_id == handoff_context.settlement_id
+    assert workspace.builder_handoff.original_task_id == "TASK-002"
+    assert workspace.builder_handoff.last_reviewed_commit == handoff_context.last_reviewed_commit
+    assert workspace.builder_handoff.branch_head == handoff_context.branch_head
+    assert workspace.builder_handoff.metadata_fingerprint == handoff_context.metadata_fingerprint
+    owner_result_path = (
+        coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json"
+    )
+    owner_result_bytes = owner_result_path.read_bytes()
+    owner_result = RetryOwnerResult.model_validate_json(owner_result_bytes)
+    assert owner_result.accepted is False
+    assert owner_result.paused is False
+    assert owner_result.failure_code == "builder-failed"
+    assert datetime.fromisoformat(owner_result.observed_at) == observed_at
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    assert episode.reset_count == 0
+
+
+@pytest.mark.parametrize("target", [DeliveryStage.PLANNING, DeliveryStage.DESIGN])
+def test_builder_handoff_refuses_administrative_orphaning(tmp_path: Path, target: DeliveryStage) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+    )
+    runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    frontier = runtime.frontier_bytes()
+    custody = coordinator.coordination_bytes("delivery-runtime")
+    git_state = _git_worktree_snapshot(coordination.worktree_path)
+    with pytest.raises(DeliveryRuntimeConflictError, match="cannot orphan"):
+        runtime.preview_administrative_move("OUT-001", target)
+    with pytest.raises(DeliveryRuntimeConflictError, match="cannot orphan"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="orphan-handoff",
+                outcome_id="OUT-001",
+                target=target,
+                reason="synthetic operator move",
+                expected_version=hashlib.sha256(frontier).hexdigest(),
+            )
+        )
+    assert runtime.frontier_bytes() == frontier
+    assert coordinator.coordination_bytes("delivery-runtime") == custody
+    assert _git_worktree_snapshot(coordination.worktree_path) == git_state
+
+
+def test_builder_settlement_reuses_registered_commit_alias_without_budget_renewal(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    ledger, current_key = _reserve_builder_settlement(runtime, "alias-original-attempt", initial)
+    original = ledger.episode(current_key)
+    assert original is not None
+    ledger.record_failure("alias-original-attempt", failure_code="original-failure", now="2026-08-04T00:00:31Z")
+    next_key = current_key.model_copy(update={"exact_head": coordination.last_reviewed_commit})
+    reserved = ledger.reserve(
+        next_key,
+        failure_class=RetryFailureClass.MECHANICAL,
+        now="2026-08-04T00:00:40Z",
+        attempt_id="attempt-002",
+    )
+    assert reserved.allowed
+    assert reserved.episode_id == original.episode_id
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+    )
+    result = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    assert result.active_claim is None
+    ledger.reconcile_owner_results()
+    episode = ledger.episode_for_attempt("attempt-002")
+    assert episode is not None
+    assert episode.episode_id == original.episode_id
+    assert episode.total_attempts == 2
+    assert episode.reset_count == 0
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+
+
+def test_builder_settlement_skips_portable_publication_while_other_claim_is_active(tmp_path: Path) -> None:
+    runtime, _coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _activate(runtime, "OUT-003", "other-planner", attempt_id="other-planning-attempt")
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+    )
+    result = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    assert result.active_claim is None
+    assert runtime.show_binding("OUT-003").active_claim_id == "other-planner"
+    assert runtime.pending_state_publication() is None
+
+
+def test_builder_settlement_replay_conflict_and_late_publish_refusal(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, tasks = _active_second_task(tmp_path)
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+        failure_code="builder-failed",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    result = runtime.settle_builder_invocation(envelope)
+    owner_result_path = (
+        coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json"
+    )
+    owner_result_bytes = owner_result_path.read_bytes()
+    settled_frontier = runtime.frontier_bytes()
+    settled_workspace = coordinator.show("delivery-runtime")
+
+    assert runtime.settle_builder_invocation(envelope) == result
+    assert runtime.frontier_bytes() == settled_frontier
+    assert coordinator.show("delivery-runtime") == settled_workspace
+    assert owner_result_path.read_bytes() == owner_result_bytes
+
+    conflicting = envelope.model_copy(
+        update={"request": request.model_copy(update={"failure_code": "different-failure"})}
+    )
+    with pytest.raises(DeliveryRuntimeConflictError, match="immutable attempt receipt"):
+        runtime.settle_builder_invocation(conflicting)
+    assert runtime.frontier_bytes() == settled_frontier
+    assert coordinator.show("delivery-runtime") == settled_workspace
+    assert owner_result_path.read_bytes() == owner_result_bytes
+
+    late_result = _task_result(
+        "RESULT-002-LATE",
+        "delivery-runtime",
+        runtime.authority_digest,
+        tasks[1],
+        branch_head,
+    )
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.publish_result(PublishDeliveryResult(outcome_id="OUT-001", claim_id="claim-002", result=late_result))
+    assert runtime.frontier_bytes() == settled_frontier
+
+
+def test_builder_settlement_rejects_candidate_conflicting_with_accepted_result(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, tasks = _active_second_task(tmp_path)
+    candidate_result = _task_result(
+        "RESULT-002-CANDIDATE",
+        "delivery-runtime",
+        runtime.authority_digest,
+        tasks[1],
+        branch_head,
+    )
+    runtime.publish_result(PublishDeliveryResult(outcome_id="OUT-001", claim_id="claim-002", result=candidate_result))
+    accepted_result = _task_result(
+        "RESULT-002-ACCEPTED",
+        "delivery-runtime",
+        runtime.authority_digest,
+        tasks[1],
+        coordination.last_reviewed_commit,
+    )
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    binding = frontier.bindings[0].model_copy(update={"results": (*frontier.bindings[0].results, accepted_result)})
+    frontier_path = coordinator.runtime_root / "changes/delivery-runtime/frontier.json"
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"bindings": (binding, *frontier.bindings[1:])})))
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="conflicts with its accepted result"):
+        runtime.settle_builder_invocation(envelope)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+def test_builder_completed_timeout_records_only_typed_worker_timeout(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, None, "completed-timeout")
+
+    result = runtime.settle_builder_invocation(
+        envelope,
+        retry_observed_at=datetime(2026, 8, 4, 12, tzinfo=UTC),
+    )
+
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert result.stage == DeliveryStage.IMPLEMENTATION
+    owner_result = RetryOwnerResult.model_validate_json(
+        (coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json").read_bytes()
+    )
+    assert owner_result.failure_code == "worker-timeout"
+    assert owner_result.accepted is False
+    assert owner_result.paused is False
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    assert episode.reset_count == 0
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == branch_head
+
+
+def test_builder_request_block_pauses_without_charging_or_discarding_work(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, tasks = _active_second_task(tmp_path)
+    candidate_result = _task_result(
+        "pause-candidate", "delivery-runtime", runtime.authority_digest, tasks[1], branch_head
+    )
+    runtime.publish_result(PublishDeliveryResult(outcome_id="OUT-001", claim_id="claim-002", result=candidate_result))
+    _dirty_builder_worktree(coordination.worktree_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+    )
+    delivery_request = DeliveryRequest(
+        request_id="builder-request-002",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Provide the external evidence needed to continue.",
+    )
+    request = BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        block_id="builder-block-002",
+        reason="External evidence is unavailable.",
+        unblock_condition="The requested evidence is supplied.",
+        expected_evidence=("External evidence",),
+        locators=("TASK-002",),
+        request=delivery_request,
+        resume_commit=branch_head,
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+
+    result = runtime.settle_builder_invocation(envelope)
+
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert result.active_claim is None
+    assert result.output is None
+    assert result.candidate is None
+    assert result.result_candidate is None
+    assert result.requests[-1] == delivery_request
+    assert result.block is not None
+    assert result.block.request_id == delivery_request.request_id
+    assert not result.block.resolved
+    assert result.builder_handoff_context is not None
+    assert result.builder_handoff_context.original_task_id == "TASK-002"
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    owner_result = RetryOwnerResult.model_validate_json(
+        (coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json").read_bytes()
+    )
+    assert owner_result.accepted is False
+    assert owner_result.accepted_progress is False
+    assert owner_result.paused is True
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 0
+    assert episode.last_status == "paused"
+    assert episode.reset_count == 0
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+
+
+def test_builder_handoff_blocks_administrative_move_without_mutation(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    delivery_request = DeliveryRequest(
+        request_id="builder-request-002",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-001",
+        summary="Provide the external evidence needed to continue.",
+    )
+    request = BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        block_id="builder-block-002",
+        reason="External evidence is unavailable.",
+        unblock_condition="The requested evidence is supplied.",
+        expected_evidence=("External evidence",),
+        locators=("TASK-002",),
+        request=delivery_request,
+        resume_commit=branch_head,
+    )
+    runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="Builder handoff"):
+        runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_coordination
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="Builder handoff"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="move-handoff",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="The outcome authority needs revision.",
+                expected_version=hashlib.sha256(before_frontier).hexdigest(),
+            )
+        )
+
+    assert runtime.show_binding("OUT-001").builder_handoff_context is not None
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_coordination
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+def test_builder_return_to_planning_preserves_history_and_retains_partial_handoff(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, first_result, tasks = _active_second_task(tmp_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+    )
+    request = ReturnDelivery(
+        action="return",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        target=DeliveryStage.PLANNING,
+        reason="The remaining implementation task needs clearer boundaries.",
+        locators=("TASK-002",),
+        preserved_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+
+    result = runtime.settle_builder_invocation(envelope)
+
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert result.stage == DeliveryStage.PLANNING
+    assert result.tasks == tasks
+    assert result.results == (first_result,)
+    assert result.return_context is not None
+    assert result.return_context.completed_boundary == coordination.last_reviewed_commit
+    assert result.builder_handoff_context is not None
+    assert result.builder_handoff_context.route == "planning-routing-unimplemented"
+    assert result.block is not None
+    assert result.block.request_id is None
+    assert "Planning task routing is not implemented" in result.block.reason
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    assert episode.reset_count == 0
+
+
+@pytest.mark.parametrize("settlement_kind", ["retry", "planning-return"])
+def test_third_builder_failure_persists_requestless_exhaustion_block(
+    tmp_path: Path,
+    settlement_kind: str,
+) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+        total_attempts=3,
+    )
+    request = (
+        RetryDelivery(
+            action="retry",
+            outcome_id="OUT-001",
+            claim_id="claim-002",
+            abandoned_commit=branch_head,
+            attempt_id="attempt-002",
+            failure_code="builder-failed",
+        )
+        if settlement_kind == "retry"
+        else ReturnDelivery(
+            action="return",
+            outcome_id="OUT-001",
+            claim_id="claim-002",
+            target=DeliveryStage.PLANNING,
+            reason="The remaining task authority needs revision.",
+            locators=("TASK-002",),
+            preserved_commit=branch_head,
+            attempt_id="attempt-002",
+        )
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+
+    result = runtime.settle_builder_invocation(envelope)
+
+    assert result.stage == (DeliveryStage.IMPLEMENTATION if settlement_kind == "retry" else DeliveryStage.PLANNING)
+    assert result.block is not None
+    assert result.block.block_id.startswith(
+        "builder-attempt-limit-" if settlement_kind == "retry" else "builder-planning-route-"
+    )
+    assert "three-attempt limit" in result.block.reason
+    assert result.block.request_id is None
+    assert not result.block.resolved
+    assert result.builder_handoff_context is not None
+    assert result.builder_handoff_context.original_task_id == "TASK-002"
+    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 3
+    assert episode.last_status == "failed"
+    assert episode.reset_count == 0
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+
+
+@pytest.mark.parametrize(
+    "identity_update",
+    [
+        {"change_id": "another-change"},
+        {"outcome_id": "OUT-002"},
+        {"claim_id": "foreign-claim"},
+        {"attempt_id": "foreign-attempt"},
+        {"task_id": "TASK-001"},
+        {"expected_last_reviewed_commit": "f" * 40},
+    ],
+)
+def test_builder_settlement_refuses_foreign_identity_without_mutation(
+    tmp_path: Path,
+    identity_update: dict[str, str],
+) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+        failure_code="builder-failed",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    envelope = envelope.model_copy(update=identity_update)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises((DeliveryRuntimeConflictError, RuntimeError, ValueError)):
+        runtime.settle_builder_invocation(envelope)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+def test_builder_settlement_refuses_unrelated_registered_head_without_mutation(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    tree = _git(coordination.worktree_path, "rev-parse", "HEAD^{tree}")
+    unrelated_head = _git(coordination.worktree_path, "commit-tree", tree, "-m", "unrelated root")
+    branch_ref = _git(coordination.worktree_path, "symbolic-ref", "HEAD")
+    _git(coordination.worktree_path, "update-ref", branch_ref, unrelated_head)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises((DeliveryRuntimeConflictError, RuntimeError, ValueError)):
+        runtime.settle_builder_invocation(envelope)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+def test_builder_settlement_refuses_attempt_without_retry_reservation(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="exact reserved retry episode"):
+        runtime.settle_builder_invocation(envelope)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+@pytest.mark.parametrize("invalid_shape", ["unknown-request", "elapsed-timeout", "timeout-inner-request"])
+def test_builder_settlement_rejects_unknown_request_and_elapsed_timeout_without_mutation(
+    tmp_path: Path,
+    invalid_shape: str,
+) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    invalid_values = envelope.model_dump(mode="json")
+    if invalid_shape == "unknown-request":
+        invalid_values["request"] = AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id="claim-002",
+            output=_output("claim-002", DeliveryStage.IMPLEMENTATION),
+        ).model_dump(mode="json")
+    elif invalid_shape == "elapsed-timeout":
+        invalid_values["elapsed_timeout"] = True
+    else:
+        invalid_values["disposition"] = "completed-timeout"
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises(ValidationError):
+        DeliveryBuilderInvocationSettlement.model_validate(invalid_values)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+def test_builder_return_to_design_is_a_bounded_read_only_refusal(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    request = ReturnDelivery(
+        action="return",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        target=DeliveryStage.DESIGN,
+        reason="The admitted meaning needs revision.",
+        locators=("OUT-001",),
+        preserved_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="supported Design workspace owner route"):
+        runtime.settle_builder_invocation(envelope)
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+
+
+@pytest.mark.parametrize("crash_stage", ["after-first-publication", "before-handoff-publication"])
+def test_interrupted_builder_settlement_recovers_all_atomic_participants(tmp_path: Path, crash_stage: str) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        abandoned_commit=branch_head,
+        attempt_id="attempt-002",
+        failure_code="builder-failed",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    original_commit = RuntimeTransaction.commit
+    import owlbear_delivery.runtime_transaction as transaction_module  # noqa: PLC0415
+
+    original_replace = transaction_module._publish_replacement  # noqa: SLF001
+
+    def fail_before_handoff(destination, participant):
+        if (
+            crash_stage == "before-handoff-publication"
+            and destination.parent.name == "changes"
+            and destination.parent.parent.name == "coordination"
+        ):
+            message = "simulated Builder settlement crash"
+            raise RuntimeError(message)
+        return original_replace(destination, participant)
+
+    def fail_after_frontier(transaction: RuntimeTransaction) -> None:
+        def failure(point: str) -> None:
+            if crash_stage == "after-first-publication" and point == "after-first-publication":
+                message = "simulated Builder settlement crash"
+                raise RuntimeError(message)
+
+        original_commit(transaction, failure=failure)
+
+    with (
+        patch.object(RuntimeTransaction, "commit", fail_after_frontier),
+        patch.object(transaction_module, "_publish_replacement", fail_before_handoff),
+        pytest.raises(RuntimeError, match="simulated Builder settlement crash"),
+    ):
+        runtime.settle_builder_invocation(envelope)
+
+    custody_path = coordinator.runtime_root / "coordination/changes/delivery-runtime.json"
+    assert json.loads(custody_path.read_bytes())["writer"]["kind"] == "build"
+    result = runtime.settle_builder_invocation(envelope)
+
+    assert json.loads(custody_path.read_bytes())["writer"]["kind"] == "handoff"
+    assert not tuple((coordinator.runtime_root / "transactions").glob("*.yaml"))
+    assert result.active_claim is None
+    assert result.builder_handoff_context is not None
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+    assert (coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json").is_file()
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert not tuple((coordinator.runtime_root / "transactions").glob("*.yaml"))
 
 
 @pytest.mark.parametrize(
