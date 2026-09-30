@@ -12,23 +12,48 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Code checkpoint: `4462955e8446f0cbbfc26efd0bae817bafd205b5`.** The R1-R7 repairs and the
-subsequent challenge repairs are committed and focused-tested, based on
-`951b735e63f9c2f9f3755df4feb0d3fc1cb8a0f1`, with merge base
-`dev@29f095863aaf71541f5ac55a470573d04f6cdf6f`. This record identifies the code checkpoint;
-the PR head also includes its documentation update. Post-checkpoint independent review and all
-four CI results are recorded against the exact publication head on
+**Code checkpoint: `b70568ca52d6f709ebeb7e4bc09062a35402266c`.** The fresh implementation challenge
+of `0ba4924a` found four additional source gaps. Repairs were applied sequentially and committed:
+complete-model MCP validation privacy (`48e492ed`), durable acknowledged Planning pause replay
+(`1e5f0ce1`), an executable offline diagnostic handoff (`5176629d`), and persisted exact refused-retry
+diagnostics (`b70568ca`). Integration checkpoint `cf7642056e47c3d08c560ff2aa1c2235b6955093` preserves
+the concurrently published PR merge and current `dev@62dfc3fba71dc2756e12790f8015aa73eca1adbc`.
+No concurrent work was overwritten. This record identifies code checkpoints;
+the PR head also includes its documentation update. Fresh independent review and all
+four CI results must apply to the exact publication head on
 [PR #326](https://github.com/maba-pag/owlbear/pull/326). An older run cannot satisfy that gate.
 This code checkpoint alone is not acceptance or authorization for activation.
 
 | Gate | Current disposition |
 | --- | --- |
-| Source and contract | R1-R7 implement the bounded repairs described in the completion ledger and contract below. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
-| Independent challenge | The fresh unnamed Opus 5.5 challenge of `d0ec2f1a` found index refresh, lost collected batch launches and stale regression expectations, repaired in `8c05c269`. The renewed challenge of `4190dad6` found the same optional index refresh in refused Builder retry validation. `4462955e` repairs that remaining path. The PR records the fresh review of the published successor; no older verdict is transferred without checking its delta |
-| Required CI | `d0ec2f1a` failed on ten unique stale expectations, repaired in `8c05c269`. At `4190dad6`, Dependency, Cockpit and Agent ecosystem passed; Source failed only the controlled-process retry raw-index assertion. The deterministic retry/index repair is in `4462955e`. The PR must show Source, Dependency, Cockpit and Agent ecosystem success on the same exact published repaired head; older success is not its proof |
+| Source and contract | Four fresh source findings are repaired. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
+| Independent challenge | Fresh unnamed Opus 5.5 challenge and caller reconciliation are required for the integrated repaired head. Earlier reviews apply only to their named candidates |
+| Required CI | Source, Dependency, Cockpit and Agent ecosystem must succeed on the same exact published repaired head. Checks on `0ba4924a` or the intervening target-only merge do not prove these new source repairs |
 | PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
-| Human acknowledgment | **Not granted.** The user requested evidence of whether another work package removes the limitation before making a decision. Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures can hold every execution slot and stall Planner/Builder work, finalization and engine continuation. Implementation/commit/push/CI authorization is not acknowledgment of that limitation |
+| Human acknowledgment | **Not granted.** The user authorized implementing, committing, pushing and checking the findings, not accepting permanent capacity saturation. In default host composition, refused/lost worker claims, ordinary worker retries, Implementation Builder `block`/`return`, failed finalizers and retained uncertain engine actions have no supported in-product release or abandonment exit. Capacity defaults to three; a Change may retain multiple claims. Saturation can indefinitely stall unrelated Planner/Builder work, finalization and engine continuation across restart. Timeout, a clean head and caller confirmation do not supply exclusion |
 | Host and activation boundary | No supported worker-exclusion backend is added. Caller confirmation and timeout do not prove closure or release custody. Ordinary host/transport limits remain separate from local source proof; no merge or live activation is implied |
+
+**Fresh repair proof, executed by the caller:** complete-model registered validation passed its
+new regression and eight existing field-validation cases; Planning acknowledgment/restart and
+transaction-interruption replay passed eight cases; offline handoff and prompt applicability passed
+21 cases. Refusal identity, protected state, HTTP and boundary selections passed 20 cases, followed
+by six registered-adapter restart/raw-index cases. Eight selected Cockpit retry/containment cases
+passed; after wrapping text, the exact refused-retry rendering case passed again. Scoped Ruff,
+Biome, TypeScript compilation, EditorConfig and editor diagnostics passed. The target integration
+passed five selected ecosystem cases. Selections overlap and are not additive. Luna workers reported
+additional focused checks, the 119-case Work Portfolio file and a build; those are not new caller
+executions. No whole-repository suite, live host exclusion, service startup or activation is claimed.
+
+**Recovery capability finding:** `UnavailableRecoveryEvidenceProvider` remains the production
+default. Exact claim fences reject stale Delivery calls but do not stop filesystem, Git, terminal
+descendant or outstanding tool-job writers. The existing recovery receipt transaction therefore
+cannot safely release ambiguous custody without a configured trusted exclusion owner. Merely
+accepting a typed end, revoking an MCP claim, increasing capacity or excluding an abandoned Change
+from accounting is not that owner. Closing this finding requires a concrete supported capability
+design and approval, or an explicit revised product decision accepting the limitation; no such
+decision is inferred from the repair authorization.
+
+**Previous repair proof, historical:**
 
 **Parent-observed focused proof, reported to this documentation writer:** 40 selected repair
 core/runtime cases passed in **7.24s**; nine diagnostic cases, including the actual offline
@@ -773,6 +798,12 @@ must be reconciled into this authority, not become a second allowance.
 - A refused Implementation `block`/`return` records only a typed exact-claim diagnostic transition
   in `recovery_attention`. It is not active request/block/return authority and cannot settle the
   reservation, release custody or change the stage, worktree, index, refs or retry budget.
+- A refused worker `retry` records an exact claim/attempt-bound `retry_diagnostic`, including its
+  typed transition and fixed exclusion code. It is blocked diagnostic context, not release or retry
+  authority. Exact repeats do not rewrite it; protected state and retry accounting remain unchanged.
+- Planning request-bearing pauses retain immutable exact request/result receipts independently of
+  publication acknowledgment. Historical replay returns the original paused result without changing
+  the current frontier or publishing unrelated later state; its own pending publication can settle.
 
 Proposed programme defaults, made precise for specification review:
 
