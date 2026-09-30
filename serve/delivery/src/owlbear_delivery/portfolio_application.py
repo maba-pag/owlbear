@@ -6466,12 +6466,16 @@ class PortfolioApplication:
             )
         if reason == "builder-transition-contained":
             return (
-                f"/repair-delivery Diagnose Change {change_id} read-only: reread get_change and show_operator_context "
-                "for the exact current Builder claim, owner, and diagnostic transition. The submitted block or return "
-                "was refused because host worker-exclusion evidence is missing. Preserve custody, stage, worktree, "
-                "and retry budget; do not answer, unblock, restart, release, or dispatch a replacement. Resume "
-                "requires verified host exclusion and settlement through a supported recovery path; this diagnostic "
-                "does not establish that such a capability is available."
+                f"/repair-delivery Inspect only Change {change_id} using the bounded offline "
+                f"`delivery-diagnose inspect --change-id {change_id}` operation. "
+                "The refused transition remains in the existing "
+                "work-item recovery view; the current claim owner remains on its card. Do not query "
+                "for additional Delivery authority. The submitted block or return was refused because "
+                "host worker-exclusion evidence is missing. Keep it read-only: preserve custody, "
+                "stage, worktree, inspected files, and retry budget; do not answer, unblock, restart, "
+                "release, edit, repair, or dispatch a replacement. Resume requires verified host "
+                "exclusion and settlement through a supported recovery path; this diagnostic does not "
+                "establish that such a capability is available."
             )
         if reason == "engine-action-interrupted":
             return (

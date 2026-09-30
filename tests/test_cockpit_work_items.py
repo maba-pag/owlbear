@@ -820,6 +820,14 @@ def test_http_builder_transition_diagnostic_is_blocked_without_active_request(tm
         assert readiness["executable"] is False
         assert readiness["action"] is None
         assert "read-only" in readiness["prompt"]
+    prompt = detail["readiness"]["prompt"]
+    assert change["readiness"]["prompt"] == prompt
+    assert prompt.startswith("/repair-delivery Inspect only Change change-a")
+    assert "`delivery-diagnose inspect --change-id change-a`" in prompt
+    assert "preserve custody, stage, worktree, inspected files, and retry budget" in prompt
+    assert "do not answer, unblock, restart, release, edit, repair, or dispatch a replacement" in prompt
+    for unsupported_tool in ("get_change", "show_operator_context", "acquire_change_action", "transition_delivery"):
+        assert unsupported_tool not in prompt
     assert runtimes["change-a"].frontier_bytes() == retained
     assert coordinator.show("change-a") == before_coordination
     assert _workspace_mutation_snapshot(launch.worktree_path) == before_workspace
