@@ -51,6 +51,7 @@ from owlbear_delivery import (
     DeliveryStateSnapshot,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    DeliveryWorkerExclusionRequiredError,
     DeliveryWorkerRole,
     DesignPackageStore,
     OutcomeAuthorityBinding,
@@ -1403,6 +1404,129 @@ def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None
         for diagnostic in health.diagnostics
     )
     assert degraded.list_work_items() == ()
+
+
+def test_remote_state_bootstrap_preserves_refused_builder_retry(tmp_path: Path) -> None:  # noqa: PLR0915 - assembled restart proof.
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "bootstrap-refused-retry"
+    contract, intent, design = _contract(change_id)
+    state_root = tmp_path / "state"
+    package_store = DesignPackageStore(repository / ".owlbear/delivery/packages", repository)
+    package = package_store.create(change_id, intent, design)
+    package_store.publish_contract(
+        change_id,
+        package.package_id,
+        _canonical_payload(contract.model_dump(mode="json")),
+        lambda *_content: None,
+    )
+    package = package_store.read_verified(change_id)
+    coordinator = PortfolioCoordinator(state_root)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    coordination = manager.ensure(change_id)
+    task = DeliveryTaskDefinition(
+        task_id="TASK-001",
+        outcome_id="OUT-001",
+        plan_scope_id="SCOPE-001",
+        title="Persist result",
+        result="Persist the result.",
+        commitment_ids=("COM-001",),
+        dependency_ids=(),
+        required_outputs=("Result",),
+        maintained_surfaces=("serve/delivery",),
+        constraints=("Use the reviewed branch.",),
+        exclusions=("Do not rewrite target history.",),
+        acceptance_observations=("The result is persisted.",),
+        proof_boundaries=("PortfolioApplication.acquire_frontier_work",),
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.IMPLEMENTATION,
+                tasks=(task,),
+            ),
+        ),
+    )
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier_path.write_bytes(_canonical_payload(frontier.model_dump(mode="json")))
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "bootstrap-package",
+    )
+    _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="bootstrap-state",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    assert launch.claim.worker_role is DeliveryWorkerRole.BUILDER
+    transition = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id=launch.claim.claim_id,
+        abandoned_commit=launch.last_reviewed_commit,
+        attempt_id=launch.claim.attempt_id,
+    )
+
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery(change_id, transition)
+
+    refused = application.show_operator_context(change_id, "OUT-001")
+    assert refused.active_claim is not None
+    assert refused.retry_diagnostic is not None
+    reloaded = load_delivery_application(config, workspace_root=fresh)
+    health = reloaded.delivery_health()
+    assert health.status.value == "healthy"
+    assert not any(item.change_id == change_id for item in health.diagnostics)
+    persisted_frontier = DeliveryFrontier.model_validate_json(
+        (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=False
+    )
+    binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
+    assert binding.active_claim == launch.claim
+    assert binding.retry_diagnostic == refused.retry_diagnostic
+    operator = reloaded.show_operator_context(change_id, "OUT-001")
+    assert operator.active_claim == refused.active_claim
+    assert operator.retry_diagnostic == refused.retry_diagnostic
+    readiness = reloaded.show_work_item_view(change_id, "outcome:OUT-001").readiness
+    assert readiness.status == "blocked"
+    assert readiness.reason_code == "retry-transition-contained"
+    assert readiness.next_actor.value == "none"
+    assert readiness.executable is False
+    assert readiness.operation is None
+    assert readiness.action is None
+    assert readiness.prompt is not None
+    assert "/repair-delivery" in readiness.prompt
+    assert "delivery-diagnose inspect --change-id" in readiness.prompt
+    assert "Make no MCP calls" in readiness.prompt
 
 
 def test_delivery_state_snapshot_repair_reconciles_confirmed_block_successor(tmp_path: Path) -> None:
