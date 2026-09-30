@@ -12,7 +12,7 @@ record the same explicit scope revision. Shared governance is unchanged.
 
 ### Current handoff
 
-**Code checkpoint: `b70568ca52d6f709ebeb7e4bc09062a35402266c`.** The fresh implementation challenge
+**Repair checkpoint: `1b6d50e535bc8877093a0f7c187b96db40aca94a`.** The fresh implementation challenge
 of `0ba4924a` found four additional source gaps. Repairs were applied sequentially and committed:
 complete-model MCP validation privacy (`48e492ed`), durable acknowledged Planning pause replay
 (`1e5f0ce1`), an executable offline diagnostic handoff (`5176629d`), and persisted exact refused-retry
@@ -24,9 +24,18 @@ four CI results must apply to the exact publication head on
 [PR #326](https://github.com/maba-pag/owlbear/pull/326). An older run cannot satisfy that gate.
 This code checkpoint alone is not acceptance or authorization for activation.
 
+The fresh unnamed Opus 5.5 challenge of `4429affe` independently confirmed the four bounded
+repairs and found a default-loader restart gap: claim-local `retry_diagnostic` was not removed
+by snapshot successor comparison. `406702a9` aligns that comparison and retains unrelated-drift
+and advanced-branch refusal. CI on `4429affe` passed Cockpit but found three failures. `ea0fbd49`
+registers and guards the diagnostic writer under central mutability policy; `fe15fe33` preserves
+all controlled-worker assertions while allowing only the exact diagnostic; `1b6d50e5` corrects
+two stale recovery promises introduced by target model-guidance integration. The failed checks
+are not rerun as unchanged candidates, and a renewed exact-head challenge remains required.
+
 | Gate | Current disposition |
 | --- | --- |
-| Source and contract | Four fresh source findings are repaired. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
+| Source and contract | Four original source findings and the loader/CI findings are repaired. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
 | Independent challenge | Fresh unnamed Opus 5.5 challenge and caller reconciliation are required for the integrated repaired head. Earlier reviews apply only to their named candidates |
 | Required CI | Source, Dependency, Cockpit and Agent ecosystem must succeed on the same exact published repaired head. Checks on `0ba4924a` or the intervening target-only merge do not prove these new source repairs |
 | PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
@@ -43,6 +52,9 @@ Biome, TypeScript compilation, EditorConfig and editor diagnostics passed. The t
 passed five selected ecosystem cases. Selections overlap and are not additive. Luna workers reported
 additional focused checks, the 119-case Work Portfolio file and a build; those are not new caller
 executions. No whole-repository suite, live host exclusion, service startup or activation is claimed.
+After the renewed challenge and CI failures, the caller executed five loader positive/refusal
+cases, three mutation-policy/identity cases, three real controlled-worker handoff cases and the
+exact ecosystem contract case; all passed. Scoped Ruff and the wiring Markdown check also passed.
 
 **Recovery capability finding:** `UnavailableRecoveryEvidenceProvider` remains the production
 default. Exact claim fences reject stale Delivery calls but do not stop filesystem, Git, terminal
