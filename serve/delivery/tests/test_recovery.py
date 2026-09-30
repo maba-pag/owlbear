@@ -1749,7 +1749,17 @@ def _assert_refused_handoff_frontier(
     request: BlockDelivery | ReturnDelivery | RetryDelivery,
 ) -> None:
     if isinstance(request, RetryDelivery):
-        assert after == before
+        before_frontier = json.loads(before)
+        after_frontier = json.loads(after)
+        before_binding = next(item for item in before_frontier["bindings"] if item["outcome_id"] == launch.outcome_id)
+        after_binding = next(item for item in after_frontier["bindings"] if item["outcome_id"] == launch.outcome_id)
+        assert after_binding["retry_diagnostic"] == {
+            "code": "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED",
+            "attempt_id": launch.claim.attempt_id,
+            "transition": request.model_dump(mode="json"),
+        }
+        after_binding["retry_diagnostic"] = before_binding["retry_diagnostic"]
+        assert after_frontier == before_frontier
         return
     before_frontier = json.loads(before)
     after_frontier = json.loads(after)
