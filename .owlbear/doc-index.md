@@ -98,7 +98,7 @@
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
 
-## .github/prompts/challenge-implementation_opus.prompt.md
+## .github/prompts/challenge-implementation_sol.prompt.md
 - ## `Implementation Frame`
 - ## `Review Contract`
 - ### `Conformance And Implementation Soundness`
@@ -108,7 +108,7 @@
 - ## `Required Challenger Memo`
 - ## `Caller Reconciliation`
 
-## .github/prompts/challenge-plan_opus.prompt.md
+## .github/prompts/challenge-plan_sol.prompt.md
 - ## `Decision Frame And Necessity Gate`
 - ## `Evidence Sufficiency Gate`
 - ## `Dispatch Requirements`
