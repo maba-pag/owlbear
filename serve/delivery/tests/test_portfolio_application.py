@@ -146,6 +146,7 @@ from owlbear_delivery import (
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
+    RetryDelivery,
     ReturnDelivery,
     WorkspaceRecoverySnapshot,
     classify_publication_check,
@@ -3196,9 +3197,18 @@ def _assert_contained_builder_views(
     assert application.show_work_item("change-a", transition.outcome_id).projection.next_action == detail.card.next_step
 
 
-@pytest.mark.parametrize("kind", ["block", "return"])
+@pytest.mark.parametrize("kind", ["block", "return", "retry"])
 def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: Path, kind: str) -> None:
     application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, kind)
+    if kind == "retry":
+        transition = RetryDelivery(
+            action="retry",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            abandoned_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+        )
+    before_frontier = runtimes["change-a"].frontier_bytes()
     product = launch.worktree_path / "product.txt"
     before_product = product.read_bytes()
     metadata = product.stat()
@@ -3214,6 +3224,8 @@ def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: 
     assert product.read_bytes() == before_product
     assert coordinator.show("change-a") == before_coordination
     assert runtimes["change-a"].show_binding("OUT-001").active_claim == launch.claim
+    if kind == "retry":
+        assert runtimes["change-a"].frontier_bytes() == before_frontier
 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:

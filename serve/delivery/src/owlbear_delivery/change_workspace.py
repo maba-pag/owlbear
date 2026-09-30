@@ -7646,7 +7646,7 @@ class ChangeWorkspaceManager:
             _workspace_failure("candidate commit is not the current change branch head")
         self._require_ancestor(coordination.last_reviewed_commit, commit)
         self._require_worktree(change_id, coordination.worktree_path, coordination.branch, commit)
-        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+        if self._git("--no-optional-locks", "-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("candidate commit requires a clean change worktree")
         return coordination
 
