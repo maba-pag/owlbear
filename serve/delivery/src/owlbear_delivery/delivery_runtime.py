@@ -1657,6 +1657,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "publish_plan",
         "publish_result",
         "transition",
+        "_retry",
         "resolve_request",
         "unblock",
         "administrative_move",
@@ -4084,6 +4085,7 @@ class DeliveryRuntime:
         self._validate_retry_identity(binding, request, claim)
         diagnostic = DeliveryRetryDiagnostic(attempt_id=claim.attempt_id, transition=request)
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "_retry")
         current = _find_binding(frontier, binding.outcome_id)
         if current != binding:
             _conflict("active claim changed before retry diagnostic persistence")
