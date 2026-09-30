@@ -60,6 +60,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestResolution,
@@ -1126,6 +1127,23 @@ def _requests() -> dict[str, dict[str, object]]:
                 },
             },
         },
+        "settle_worker_invocation": {
+            "settlement": {
+                "change_id": CHANGE,
+                "outcome_id": "OUT-001",
+                "claim_id": "claim",
+                "attempt_id": "attempt",
+                "disposition": "normal-return",
+                "request": {
+                    "action": "retry",
+                    "outcome_id": "OUT-001",
+                    "claim_id": "claim",
+                    "failure_code": "worker-retry",
+                },
+            },
+            "host_id": "host",
+            "session_id": "session",
+        },
         "recover_claim": {**claim, "confirmed_lost": True},
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
@@ -1241,9 +1259,26 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes( 
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
         "prepare_review_repair": (CHANGE,),
+        "settle_worker_invocation": (
+            DeliveryPlanningRetrySettlement(
+                change_id=CHANGE,
+                outcome_id="OUT-001",
+                claim_id="claim",
+                attempt_id="attempt",
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id="OUT-001",
+                    claim_id="claim",
+                    failure_code="worker-retry",
+                ),
+            ),
+        ),
     }
     if operation_name in call_args:
         assert application.calls[0][1] == call_args[operation_name]
+    if operation_name == "settle_worker_invocation":
+        assert application.calls[0][2] == {"host_id": "host", "session_id": "session"}
     if operation_name == "submit_result":
         submission = application.calls[0][1][0]
         assert isinstance(submission, DeliveryResultSubmission)

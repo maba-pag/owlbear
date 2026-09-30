@@ -162,7 +162,11 @@ from owlbear_delivery.delivery_contract_discovery import (
     contract_fingerprint,
     discover_persisted_changes,
 )
-from owlbear_delivery.delivery_runtime import DeliveryRuntimeReferenceError, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import (
+    DeliveryPlanningRetrySettlement,
+    DeliveryRuntimeReferenceError,
+    parse_delivery_frontier,
+)
 from owlbear_delivery.delivery_state import DeliveryStateSnapshotDiagnostic, DeliveryStateSnapshotInventory
 from owlbear_delivery.finalization_reports import (
     FinalizationFailureCode,
@@ -2702,6 +2706,133 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
     application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert application.get_change("change-a").readiness.reason_code == "retry-exhausted"
     assert application.get_change("change-a").readiness.next_actor.value == "none"
+
+
+@pytest.mark.parametrize(
+    ("disposition", "failure_code"),
+    [("normal-return", "worker-retry"), ("completed-timeout", "worker-timeout")],
+)
+def test_settled_planner_retries_exhaust_after_three_exact_attempts(
+    tmp_path: Path,
+    disposition: str,
+    failure_code: str,
+) -> None:
+    now = datetime(2026, 8, 4, tzinfo=UTC)
+
+    def clock() -> str:
+        return now.isoformat()
+
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.PLANNING}, clock=clock
+    )
+    for index, elapsed in enumerate((0, 1, 3)):
+        now = datetime(2026, 8, 4, tzinfo=UTC) + timedelta(seconds=elapsed)
+        acquired = application.acquire_actions()
+        assert len(acquired.launch_packages) == 1
+        claim = acquired.launch_packages[0].claim
+        request = (
+            RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id=claim.claim_id,
+                failure_code=failure_code,
+            )
+            if disposition == "normal-return"
+            else None
+        )
+        settlement = DeliveryPlanningRetrySettlement(
+            change_id="change-a",
+            outcome_id="OUT-001",
+            claim_id=claim.claim_id,
+            attempt_id=claim.attempt_id,
+            disposition=disposition,
+            request=request,
+        )
+
+        settled = application.settle_worker_invocation(
+            settlement,
+            host_id="ignored-host",
+            session_id="ignored-session",
+        )
+
+        assert settled.active_claim is None
+        episode = RetryLedger(state_root, "change-a").read().episodes[0]
+        assert episode.total_attempts == index + 1
+        assert episode.reset_count == 0
+        assert episode.attempt_ids[-1] == claim.attempt_id
+        owner_result_path = state_root / "changes/change-a/retry-ledger/owner-results" / f"{claim.attempt_id}.json"
+        assert json.loads(owner_result_path.read_text(encoding="utf-8"))["failure_code"] == failure_code
+        if index < 2:
+            assert application.get_change("change-a").readiness.reason_code == "retry-backoff"
+    readiness = application.get_change("change-a").readiness
+    assert readiness.reason_code == "retry-exhausted"
+    assert readiness.next_actor.value == "none"
+    assert readiness.prompt is None
+    assert application.acquire_actions().launch_packages == ()
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
+
+
+def test_planner_settlement_replay_does_not_publish_unrelated_pending_state(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    claim = _acquire_planning_claim(application)
+    settlement = DeliveryPlanningRetrySettlement(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=claim.claim_id,
+        attempt_id=claim.attempt_id,
+        disposition="normal-return",
+        request=RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=claim.claim_id),
+    )
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+    settled = application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
+    publisher.publish.assert_called_once()
+    publisher.reset_mock()
+    runtime = runtimes["change-a"]
+    runtime.queue_explicit_checkpoint(application._workspace_manager.show("change-a").last_reviewed_commit)
+    frontier = runtime.frontier_bytes()
+    accounting = runtime.retry_ledger().read()
+    pending = runtime.pending_state_publication()
+    assert pending is not None
+    assert application.settle_worker_invocation(settlement) == settled
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.retry_ledger().read() == accounting
+    assert runtime.pending_state_publication() == pending
+    publisher.publish.assert_not_called()
+
+
+def test_planner_settlement_replays_its_own_failed_publication(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    claim = _acquire_planning_claim(application)
+    settlement = DeliveryPlanningRetrySettlement(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=claim.claim_id,
+        attempt_id=claim.attempt_id,
+        disposition="normal-return",
+        request=RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=claim.claim_id),
+    )
+    publisher = Mock()
+    publisher.publish.side_effect = [OSError("synthetic publication unavailable"), None]
+    application._delivery_state_publisher = publisher
+    with pytest.raises(OSError, match="synthetic publication unavailable"):
+        application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
+    runtime = runtimes["change-a"]
+    frontier = runtime.frontier_bytes()
+    accounting = runtime.retry_ledger().read()
+    pending = runtime.pending_state_publication()
+    assert pending is not None
+    assert pending.transition_request_digest == hashlib.sha256(_canonical(settlement)).hexdigest()
+    publisher.read_snapshot_inventory.return_value = Mock(
+        remote_head="a" * 40,
+        snapshots=(Mock(change_id="change-a", frontier=DeliveryFrontier.model_validate_json(frontier, strict=False)),),
+    )
+    result = application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
+    assert result.active_claim is None
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.retry_ledger().read() == accounting
+    assert runtime.pending_state_publication() is None
+    assert publisher.publish.call_count == 2
 
 
 def _acknowledge_and_replay_planning_pause(

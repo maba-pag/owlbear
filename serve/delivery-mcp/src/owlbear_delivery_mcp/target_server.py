@@ -154,6 +154,8 @@ from owlbear_delivery_mcp.target_models import (
     SetChangeIntentParams,
     SetChangeIntentRequest,
     SetChangeIntentResponse,
+    SettleWorkerInvocationParams,
+    SettleWorkerInvocationRequest,
     ShowCompletedParams,
     ShowCompletedRequest,
     StrandedFrontierRepairResponse,
@@ -238,6 +240,7 @@ DELIVERY_OPERATION_NAMES = (
     "recover_change_worktree",
     "recover_publication_baseline",
     "transition_delivery",
+    "settle_worker_invocation",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -1050,6 +1053,18 @@ class TargetMCPAdapter:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
+
+    async def settle_worker_invocation(self, request: SettleWorkerInvocationRequest) -> dict[str, object]:
+        """Settle one exact completed Planner retry invocation."""
+        params = self._validate(SettleWorkerInvocationParams, request)
+        return self._call(
+            params,
+            lambda: self._application.settle_worker_invocation(
+                params.settlement,
+                host_id=params.host_id,
+                session_id=params.session_id,
+            ),
+        )
 
     async def recover_claim(self, request: RecoverClaimRequest) -> dict[str, object]:
         """Request exact recovery; caller confirmation cannot establish worker exclusion."""

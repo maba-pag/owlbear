@@ -3777,7 +3777,12 @@ class DeliveryRuntime:
             ),
             self._planning_retry_settlement_participant(receipt),
         )
-        self._replace(previous, _replace_binding(frontier, binding, result), additional_participants=participants)
+        self._replace(
+            previous,
+            _replace_binding(frontier, binding, result),
+            transition_request_digest=hashlib.sha256(_model_content(envelope)).hexdigest(),
+            additional_participants=participants,
+        )
         return result
 
     def _transitioned_binding(
@@ -5000,6 +5005,7 @@ __all__ = [
     "DeliveryOutputReference",
     "DeliveryPendingCheckpoint",
     "DeliveryPendingStatePublication",
+    "DeliveryPlanningRetrySettlement",
     "DeliveryRequest",
     "DeliveryRequestKind",
     "DeliveryRequestOption",

@@ -102,6 +102,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryPendingCheckpoint,
     DeliveryPendingStatePublication,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -2086,6 +2087,14 @@ class PortfolioApplication:
                 ledger.record_failure(
                     report.request.attempt_key, failure_code=report.request.code.value, now=report.observed_at
                 )
+
+    def _reconcile_retry_results_fail_closed(self, runtime: DeliveryRuntime) -> None:
+        try:
+            self._reconcile_retry_results(runtime)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(
+                runtime.contract.change_id, "worker retry owner results are unavailable"
+            ) from exc
 
     def _reconcile_worker_retry_receipt(
         self, runtime: DeliveryRuntime, ledger: RetryLedger, attempt: RetryAttempt
@@ -4813,6 +4822,57 @@ class PortfolioApplication:
                 _checkpoint_operation_id("transition", change_id, request.outcome_id, request.claim_id),
             )
             return binding
+
+    def settle_worker_invocation(
+        self,
+        settlement: DeliveryPlanningRetrySettlement,
+        *,
+        host_id: str | None = None,
+        session_id: str | None = None,
+    ) -> OutcomeAuthorityBinding:
+        """Settle one completed Planner retry invocation through its exact owner receipt."""
+        if not isinstance(settlement, DeliveryPlanningRetrySettlement):
+            self._fail("Planner retry settlement requires its typed invocation envelope")
+        change_id = settlement.change_id
+        runtime = self._runtime(change_id, for_mutation=True)
+        with (
+            self._coordinator.acquisition_lock(),
+            self._selected_action_checkpoint_lock(change_id),
+        ):
+            claim = runtime.show_binding(settlement.outcome_id).active_claim
+            if (
+                claim is not None
+                and claim.claim_id == settlement.claim_id
+                and claim.attempt_id == settlement.attempt_id
+                and claim.worker_role is DeliveryWorkerRole.PLANNER
+                and claim.continuation
+                and (host_id != claim.owner_id or session_id != claim.process_id)
+            ):
+                self._fail("Planner continuation settlement does not match its active host and session binding")
+            frontier_before = runtime.frontier_bytes()
+            result = runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
+            frontier_after = runtime.frontier_bytes()
+            if frontier_after != frontier_before:
+                self._reconcile_retry_results_fail_closed(runtime)
+                self._publish_delivery_state(
+                    change_id,
+                    runtime,
+                    _checkpoint_operation_id(
+                        "planning-retry-settlement", change_id, settlement.outcome_id, settlement.claim_id
+                    ),
+                )
+            elif not runtime.active_claims():
+                pending = runtime.pending_state_publication()
+                settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
+                if (
+                    pending is not None
+                    and pending.frontier_digest == hashlib.sha256(frontier_after).hexdigest()
+                    and pending.transition_request_digest == settlement_digest
+                ):
+                    failure = self._replay_pending_state_publication(change_id, runtime)
+                    if failure is not None:
+                        raise DeliveryRuntimeReconciliationError(change_id, failure.detail)
+            return result
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
@@ -9714,6 +9774,7 @@ class PortfolioApplication:
         expected_frontier_digest: str | None = None,
         host_identity: tuple[str, str] | None = None,
     ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
+        self._reconcile_retry_results_fail_closed(candidate.runtime)
         claim = self._new_claim(candidate.role, candidate.task_id)
         if host_identity is not None:
             claim = claim.model_copy(
@@ -9804,7 +9865,7 @@ class PortfolioApplication:
         claim_id: str,
     ) -> RetryReservation | None:
         """Reserve worker/check repair before publishing a claim or writer."""
-        key = self._worker_retry_key(candidate, source.source_head)
+        key = self._worker_retry_key(candidate, source.coordination.last_reviewed_commit)
         ledger = candidate.runtime.retry_ledger(clock=self._clock)
         ledger.import_legacy_failures(key, candidate.binding.retry_count, now=self._clock())
         return ledger.reserve(

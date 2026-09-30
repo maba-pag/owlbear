@@ -29,6 +29,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _loader_engine_state_snapshot,
     _loader_registered_engine_action_fixture,
     _make_provider_readback_unavailable,
+    _portfolio,
     _seed_loader_composed_completed_change,
     _startup_config,
     _workspace_mutation_snapshot,
@@ -56,6 +57,7 @@ from owlbear_delivery import (
     DeliveryEngineActionResult,
     DeliveryFrontier,
     DeliveryOutcome,
+    DeliveryPlanningRetrySettlement,
     DeliveryPlanScope,
     DeliveryReadiness,
     DeliveryReadinessBasis,
@@ -65,6 +67,7 @@ from owlbear_delivery import (
     ExecuteDeliveryChangeAction,
     OutcomeAuthorityBinding,
     PortfolioApplication,
+    RetryDelivery,
 )
 from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_application_loader import (
@@ -1472,6 +1475,7 @@ DELIVERY_TOOLS = {
     "recover_change_worktree",
     "recover_publication_baseline",
     "transition_delivery",
+    "settle_worker_invocation",
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
@@ -1883,6 +1887,124 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    launch = application.acquire_actions().launch_packages[0]
+    settlement = DeliveryPlanningRetrySettlement(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=launch.claim.claim_id,
+        attempt_id=launch.claim.attempt_id,
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            failure_code="worker-retry",
+        ),
+    )
+    server = assemble_target_server(application)
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        result = await client.call_tool(
+            "settle_worker_invocation",
+            {"settlement": settlement.model_dump(mode="json")},
+        )
+
+    tool = tools["settle_worker_invocation"]
+    assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id"}
+    assert tool.input_schema["additionalProperties"] is False
+    assert not result.is_error
+    assert result.structured_content == runtimes["change-a"].show_binding("OUT-001").model_dump(mode="json")
+    assert runtimes["change-a"].active_claims() == ()
+
+
+@pytest.mark.asyncio
+async def test_registered_planner_settlement_preserves_wrong_continuation_identity(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    acquired = application.acquire_change_action(
+        DeliveryContinuationRequest(
+            change_id="change-a",
+            expected_basis=application.get_change("change-a").readiness.basis,
+            capabilities=("planner",),
+            host_id="host-a",
+            session_id="session-a",
+        )
+    )
+    assert acquired.launch is not None
+    claim = acquired.launch.claim
+    settlement = DeliveryPlanningRetrySettlement(
+        change_id="change-a",
+        outcome_id="OUT-001",
+        claim_id=claim.claim_id,
+        attempt_id=claim.attempt_id,
+        disposition="normal-return",
+        request=RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=claim.claim_id),
+    )
+    runtime = runtimes["change-a"]
+    frontier = runtime.frontier_bytes()
+    accounting = runtime.retry_ledger().read()
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{claim.attempt_id}.json"
+    async with Client(assemble_target_server(application)) as client:
+        refused = await client.call_tool(
+            "settle_worker_invocation",
+            {"settlement": settlement.model_dump(mode="json"), "host_id": "host-a", "session_id": "session-b"},
+        )
+        assert refused.is_error
+        assert runtime.frontier_bytes() == frontier
+        assert runtime.retry_ledger().read() == accounting
+        assert runtime.show_binding("OUT-001").active_claim == claim
+        assert not owner_result.exists()
+        settled = await client.call_tool(
+            "settle_worker_invocation",
+            {"settlement": settlement.model_dump(mode="json"), "host_id": "host-a", "session_id": "session-a"},
+        )
+    assert not settled.is_error
+    assert runtime.active_claims() == ()
+    assert owner_result.exists()
+
+
+@pytest.mark.asyncio
+async def test_registered_planner_settlement_rejects_unknown_fields_before_delegation() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    settlement = {
+        "change_id": "change-a",
+        "outcome_id": "OUT-001",
+        "claim_id": "claim",
+        "attempt_id": "attempt",
+        "disposition": "normal-return",
+        "request": {
+            "action": "retry",
+            "outcome_id": "OUT-001",
+            "claim_id": "claim",
+            "failure_code": "worker-retry",
+        },
+        "private_value": "must-not-appear",
+    }
+
+    async with Client(server) as client:
+        result = await client.call_tool("settle_worker_invocation", {"settlement": settlement})
+
+    assert result.is_error
+    assert application.calls == []
+    assert result.content[0].text == (
+        "Error executing tool settle_worker_invocation: "
+        + json.dumps(
+            {
+                "code": "ERR_TARGET_PARAM_VALIDATION",
+                "detail": "Invalid tool arguments. Check the tool input schema.",
+                "current_authority_identity": "portfolio",
+                "retry_safe": False,
+            },
+            separators=(",", ":"),
+        )
+    )
+    assert "must-not-appear" not in result.content[0].text
 
 
 @pytest.mark.asyncio

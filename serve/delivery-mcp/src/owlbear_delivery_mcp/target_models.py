@@ -35,6 +35,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryOperatorMove,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
+    DeliveryPlanningRetrySettlement,
     DeliveryRequest,
     DeliveryRequestResolution,
     DeliveryRetryDiagnostic,
@@ -1046,6 +1047,14 @@ class TransitionDeliveryParams(ChangeParams):
     transition: DeliveryTransition
 
 
+class SettleWorkerInvocationParams(_TargetProtocolModel):
+    """Validate one completed Planner retry and its optional continuation identity."""
+
+    settlement: DeliveryPlanningRetrySettlement
+    host_id: str | None = Field(default=None, min_length=1)
+    session_id: str | None = Field(default=None, min_length=1)
+
+
 class CompletedPageParams(_TargetProtocolModel):
     """Validate one bounded completed-history page request."""
 
@@ -1227,6 +1236,10 @@ type TransitionDeliveryRequest = Annotated[
     TransitionDeliveryParams,
     BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
 ]
+type SettleWorkerInvocationRequest = Annotated[
+    SettleWorkerInvocationParams,
+    BeforeValidator(partial(_parse_json_model, SettleWorkerInvocationParams)),
+]
 type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
 type WorkItemViewRequest = Annotated[
     WorkItemViewParams,
@@ -1326,6 +1339,8 @@ __all__ = [
     "SetChangeIntentParams",
     "SetChangeIntentRequest",
     "SetChangeIntentResponse",
+    "SettleWorkerInvocationParams",
+    "SettleWorkerInvocationRequest",
     "ShowCompletedParams",
     "ShowCompletedRequest",
     "StrandedFrontierRepairResponse",
