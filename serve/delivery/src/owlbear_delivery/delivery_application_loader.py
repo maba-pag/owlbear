@@ -733,6 +733,7 @@ def _is_unpublished_claim_successor(
         "candidate": None,
         "result_candidate": None,
         "recovery_attention": None,
+        "retry_diagnostic": None,
     }
     snapshot_without_claims = snapshot_frontier.model_copy(
         update={

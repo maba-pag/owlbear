@@ -38,6 +38,7 @@ from owlbear_delivery import (
     DeliveryOutcome,
     DeliveryPlanCandidate,
     DeliveryPlanScope,
+    DeliveryRetryDiagnostic,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRuntime,
@@ -55,6 +56,7 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
     PublishChangeBranch,
+    RetryDelivery,
     SyncChangeWithTarget,
 )
 from owlbear_delivery.acceptance import (
@@ -1123,7 +1125,8 @@ def test_state_publisher_rejects_unreachable_result_commit(tmp_path: Path) -> No
         )
 
 
-def test_loader_accepts_claim_only_local_frontier_successor() -> None:
+@pytest.mark.parametrize("refused_retry", [False, True])
+def test_loader_accepts_claim_only_local_frontier_successor(*, refused_retry: bool) -> None:
     snapshot_frontier = DeliveryFrontier(
         bindings=(
             OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),
@@ -1150,6 +1153,21 @@ def test_loader_accepts_claim_only_local_frontier_successor() -> None:
             )
         }
     )
+    if refused_retry:
+        local_binding = local_frontier.bindings[0]
+        diagnostic = DeliveryRetryDiagnostic(
+            attempt_id="attempt",
+            transition=RetryDelivery(
+                action="retry",
+                outcome_id="OUT-001",
+                claim_id="claim",
+                failure_code="planner-failed",
+            ),
+        )
+        diagnosed = OutcomeAuthorityBinding.model_validate(
+            {**local_binding.model_dump(), "retry_diagnostic": diagnostic}
+        )
+        local_frontier = local_frontier.model_copy(update={"bindings": (diagnosed, local_frontier.bindings[1])})
 
     assert _is_unpublished_claim_successor(snapshot_frontier, local_frontier)
 
