@@ -2128,8 +2128,9 @@ def test_readiness_distinguishes_retained_engine_journal_states_without_writes( 
     else:
         assert view.readiness.prompt == (
             "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. "
-            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
-            "condition separately before Delivery rereads it."
+            "This does not repair authority or prove host/worker closure. Do not stop a worker, retry, release "
+            "custody, or dispatch a replacement. The responsible owner must establish any missing authority "
+            "through a supported path before Delivery can resume; this diagnostic does not supply that authority."
         )
         assert "journals cannot be verified" in view.detail.card.next_step
         assert "do not reconstruct or retry" in view.detail.card.next_step
@@ -2800,6 +2801,54 @@ def test_batch_failed_activation_retains_execution_capacity(tmp_path: Path, *, w
     assert application._execution_occupancy() == 1
 
 
+@pytest.mark.parametrize("failure", ["recount", "activation"])
+def test_batch_failure_returns_already_acquired_launches(tmp_path: Path, failure: str) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.IMPLEMENTATION,
+            "change-b": DeliveryStage.IMPLEMENTATION,
+            "change-c": DeliveryStage.IMPLEMENTATION,
+        },
+    )
+    acquire = coordinator.acquire
+    registered = coordinator.list_registered
+    unavailable = False
+
+    def fail_second_writer(change_id, writer, **kwargs):
+        nonlocal unavailable
+        if change_id == "change-b":
+            unavailable = True
+            message = "writer storage unavailable"
+            raise OSError(message)
+        return acquire(change_id, writer, **kwargs)
+
+    def list_registered():
+        if unavailable:
+            message = "coordination storage unavailable"
+            raise OSError(message)
+        return registered()
+
+    if failure == "recount":
+        with (
+            patch.object(coordinator, "acquire", fail_second_writer),
+            patch.object(coordinator, "list_registered", list_registered),
+        ):
+            result = application.acquire_frontier_work()
+    else:
+        with patch.object(runtimes["change-b"], "activate_claim", side_effect=OSError("activation unavailable")):
+            result = application.acquire_frontier_work()
+    assert len(result.launch_packages) == 1
+    launch = result.launch_packages[0]
+    assert launch.change_id == "change-a"
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim == launch.claim
+    assert coordinator.show("change-a").writer.claim_id == launch.claim.claim_id
+    assert bool(runtimes["change-b"].active_claims()) is (failure == "recount")
+    assert runtimes["change-c"].active_claims() == ()
+    assert result.failures[-1].change_id == "portfolio"
+    assert "Preserve all existing claims" in result.failures[-1].retry_condition
+
+
 def test_interrupted_engine_reservation_waits_for_no_launch_backoff(tmp_path: Path) -> None:
     now = {"value": "2026-08-04T00:00:00Z"}
 
@@ -3145,6 +3194,26 @@ def _assert_contained_builder_views(
     assert transition.reason in detail.card.next_step
     assert "Host worker-exclusion evidence is missing" in detail.card.next_step
     assert application.show_work_item("change-a", transition.outcome_id).projection.next_action == detail.card.next_step
+
+
+@pytest.mark.parametrize("kind", ["block", "return"])
+def test_refused_builder_transition_does_not_refresh_stat_dirty_index(tmp_path: Path, kind: str) -> None:
+    application, runtimes, coordinator, _state_root, launch, transition = builder_transition_case(tmp_path, kind)
+    product = launch.worktree_path / "product.txt"
+    before_product = product.read_bytes()
+    metadata = product.stat()
+    os.utime(product, ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 10_000_000_000))
+    index = Path(_git(launch.worktree_path, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    before_index = index.read_bytes()
+    before_index_mtime = index.stat().st_mtime_ns
+    before_coordination = coordinator.show("change-a")
+    with pytest.raises(DeliveryWorkerExclusionRequiredError):
+        application.transition_delivery("change-a", transition)
+    assert index.read_bytes() == before_index
+    assert index.stat().st_mtime_ns == before_index_mtime
+    assert product.read_bytes() == before_product
+    assert coordinator.show("change-a") == before_coordination
+    assert runtimes["change-a"].show_binding("OUT-001").active_claim == launch.claim
 
 
 def test_change_selection_prioritizes_contained_builder_over_other_outcomes(tmp_path: Path) -> None:
@@ -11507,8 +11576,9 @@ def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: 
         "started_at": launch.claim.started_at,
         "worker_role": "planner",
         "task_id": None,
+        "owner_id": launch.claim.owner_id,
     }
-    assert not {"owner_id", "process_id", "output", "reviewer_id"} & serialized_claim.keys()
+    assert not {"process_id", "output", "reviewer_id"} & serialized_claim.keys()
     before = runtimes["change-a"].frontier_bytes()
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
         _recover_claim(application, "change-a", "OUT-001", "stale-attempt", launch.claim.claim_id)

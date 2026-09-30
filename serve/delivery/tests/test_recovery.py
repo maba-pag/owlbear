@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -43,9 +44,11 @@ from owlbear_delivery import (
     PortfolioApplicationError,
     PrepareCompletedOutcomeRepair,
     PreservationRejectedError,
+    RetryDelivery,
     ReturnDelivery,
 )
 from owlbear_delivery.delivery_state import DeliveryStatePublisher
+from owlbear_delivery.portfolio_application import DeliveryLaunchPackage
 from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RecoveryEvidence,
@@ -1568,8 +1571,9 @@ def test_restart_cannot_use_exclusion_receipt_without_current_host_verification(
         assert readiness.reason_code == "coordination-unavailable"
         assert readiness.prompt == (
             "/repair-delivery Diagnose Change change-a read-only; preserve existing custody and journals. "
-            "This does not repair authority or prove host/worker closure; the responsible owner must resolve the "
-            "condition separately before Delivery rereads it."
+            "This does not repair authority or prove host/worker closure. Do not stop a worker, retry, release "
+            "custody, or dispatch a replacement. The responsible owner must establish any missing authority "
+            "through a supported path before Delivery can resume; this diagnostic does not supply that authority."
         )
         item = reopened.show_work_item_view("change-a", "outcome:OUT-001")
         assert item.readiness.reason_code == "coordination-unavailable"
@@ -1738,7 +1742,42 @@ def test_absent_host_still_writing_descendant_stays_contained_across_restarts(tm
         host.close(launch.claim.claim_id)
 
 
-@pytest.mark.parametrize("transition_kind", ["block", "return"])
+def _assert_refused_handoff_frontier(
+    before: bytes,
+    after: bytes,
+    launch: DeliveryLaunchPackage,
+    request: BlockDelivery | ReturnDelivery | RetryDelivery,
+) -> None:
+    if isinstance(request, RetryDelivery):
+        assert after == before
+        return
+    before_frontier = json.loads(before)
+    after_frontier = json.loads(after)
+    before_binding = next(item for item in before_frontier["bindings"] if item["outcome_id"] == launch.outcome_id)
+    after_binding = next(item for item in after_frontier["bindings"] if item["outcome_id"] == launch.outcome_id)
+    assert before_binding["recovery_attention"] is None
+    assert after_binding["recovery_attention"] == {
+        "attempt_id": launch.claim.attempt_id,
+        "claim_id": launch.claim.claim_id,
+        "reason": request.reason,
+        "worktree_path": str(launch.worktree_path),
+        "branch_head": launch.last_reviewed_commit,
+        "worktree_head": launch.last_reviewed_commit,
+        "last_reviewed_commit": launch.last_reviewed_commit,
+        "writer_claim_id": launch.claim.claim_id,
+        "custody_retained": True,
+        "retry_condition": (
+            "Diagnostic only: the current Builder retains custody. Host worker-exclusion evidence is missing; "
+            "no transition or restart is authorized. Resume requires verified exclusion through a supported "
+            "host recovery path, whose availability is not established by this diagnostic."
+        ),
+        "diagnostic_transition": request.model_dump(mode="json"),
+    }
+    after_binding["recovery_attention"] = None
+    assert after_frontier == before_frontier
+
+
+@pytest.mark.parametrize("transition_kind", ["block", "return", "retry"])
 def test_active_builder_handoff_requires_worker_exclusion(tmp_path: Path, transition_kind: str) -> None:
     application, host, _worker, launch, _restart, snapshot, signal = absent_host_process_case(tmp_path)
     signal("restore", b"baseline\n")
@@ -1762,7 +1801,7 @@ def test_active_builder_handoff_requires_worker_exclusion(tmp_path: Path, transi
             ),
             resume_commit=launch.last_reviewed_commit,
         )
-    else:
+    elif transition_kind == "return":
         request = ReturnDelivery(
             action="return",
             outcome_id=launch.outcome_id,
@@ -1773,16 +1812,26 @@ def test_active_builder_handoff_requires_worker_exclusion(tmp_path: Path, transi
             preserved_commit=launch.last_reviewed_commit,
             attempt_id=launch.claim.attempt_id,
         )
+    else:
+        request = RetryDelivery(
+            action="retry",
+            outcome_id=launch.outcome_id,
+            claim_id=launch.claim.claim_id,
+            abandoned_commit=launch.last_reviewed_commit,
+            attempt_id=launch.claim.attempt_id,
+        )
 
     try:
         with pytest.raises(DeliveryWorkerExclusionRequiredError):
             application.transition_delivery("change-a", request)
 
-        assert snapshot(application) == before
+        after_refusal = snapshot(application)
+        _assert_refused_handoff_frontier(before[0], after_refusal[0], launch, request)
+        assert after_refusal[1:] == before[1:]
         assert application._coordinator.show("change-a").writer.claim_id == launch.claim.claim_id
         signal("write", b"late old write\n")
         after_write = snapshot(application)
-        assert after_write[:3] == before[:3]
+        assert after_write[:3] == after_refusal[:3]
         assert after_write[3] != before[3]
         assert after_write[4] == before[4]
         assert after_write[5] != before[5]

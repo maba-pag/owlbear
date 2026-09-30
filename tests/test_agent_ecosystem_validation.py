@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 import types
@@ -671,8 +672,17 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     assert "transition as `request` byte-for-structure unchanged" not in step
     assert rejected.is_error
     rejected_text = "\n".join(getattr(item, "text", "") for item in rejected.content)
-    assert "transition" in rejected_text
-    assert "request" in rejected_text
+    prefix, marker, content = rejected_text.partition("{")
+    assert prefix == "Error executing tool transition_delivery: "
+    assert marker, rejected_text
+    assert json.loads(marker + content) == {
+        "code": "ERR_TARGET_PARAM_VALIDATION",
+        "detail": "Invalid tool arguments. Check the tool input schema.",
+        "current_authority_identity": "portfolio",
+        "retry_safe": False,
+    }
+    for value in ("planner-change", "advance", "OUT-001", "planner-claim", "planner-output", "planning", "a" * 64):
+        assert value not in rejected_text
 
 
 def test_orchestration_housekeeping_failure_does_not_stop_acquisition() -> None:

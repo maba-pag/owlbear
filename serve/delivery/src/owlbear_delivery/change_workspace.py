@@ -7276,7 +7276,7 @@ class ChangeWorkspaceManager:
                 "branch",
                 "--show-current",
             )
-            clean = not self._git("-C", str(coordination.worktree_path), "status", "--porcelain")
+            clean = not self._git("--no-optional-locks", "-C", str(coordination.worktree_path), "status", "--porcelain")
         quarantine = coordination.dirty_worktree_quarantine
         return WorkspaceRecoverySnapshot(
             change_id=change_id,

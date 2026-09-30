@@ -7112,31 +7112,50 @@ class PortfolioApplication:
             failures.extend(pending_publication_failures)
             occupied = self._execution_occupancy()
             available = max(self._execution_capacity - occupied, 0)
+            integration_attention = self._integration_attention_statuses(pre_claim_snapshots)
             launches: list[DeliveryLaunchPackage] = []
-            for candidate in self._candidates():
-                if available == 0:
-                    break
-                source = self._prepare_source(
-                    candidate.change_id,
-                    candidate.runtime,
-                    candidate.binding.outcome_id,
-                    candidate.role,
-                    allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
+            try:
+                for candidate in self._candidates():
+                    if available == 0:
+                        break
+                    source = self._prepare_source(
+                        candidate.change_id,
+                        candidate.runtime,
+                        candidate.binding.outcome_id,
+                        candidate.role,
+                        allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
+                    )
+                    if isinstance(source, DeliveryAcquisitionFailure):
+                        failures.append(source)
+                        continue
+                    launch = self._activate_candidate(candidate, source)
+                    if isinstance(launch, DeliveryAcquisitionFailure):
+                        failures.append(launch)
+                        available = max(self._execution_capacity - self._execution_occupancy(), 0)
+                        continue
+                    available -= 1
+                    launches.append(launch)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                failures.append(
+                    DeliveryAcquisitionFailure(
+                        change_id=getattr(exc, "change_id", None) or "portfolio",
+                        outcome_id="OUT-000",
+                        code=getattr(exc, "code", PortfolioApplicationError.code),
+                        detail="Batch acquisition stopped because current custody could not be established.",
+                        retry_condition="Preserve all existing claims and writers; diagnose custody before retry.",
+                    )
                 )
-                if isinstance(source, DeliveryAcquisitionFailure):
-                    failures.append(source)
-                    continue
-                launch = self._activate_candidate(candidate, source)
-                if isinstance(launch, DeliveryAcquisitionFailure):
-                    failures.append(launch)
-                    available = max(self._execution_capacity - self._execution_occupancy(), 0)
-                    continue
-                available -= 1
-                launches.append(launch)
+                return DeliveryAcquisitionResult(
+                    launch_packages=tuple(launches),
+                    integration_attention=integration_attention,
+                    recoveries=recoveries,
+                    failures=tuple(failures),
+                    health_hint="Call delivery_health for current Delivery diagnostics.",
+                )
             self._capture_portfolio_snapshots()
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
-                integration_attention=self._integration_attention_statuses(pre_claim_snapshots),
+                integration_attention=integration_attention,
                 recoveries=recoveries,
                 failures=tuple(failures),
                 health_hint=(
