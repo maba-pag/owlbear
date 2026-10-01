@@ -47,13 +47,27 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native source checkpoint: `b4c64edac084c09ab7b23460b9ec2161c53d38ac`.** This implements the
+**Native repair checkpoint: `ac01a0cab746a295764f9026ed1f7e790679d534`.** This implements the
 user-directed native settlement revision above after independently challenged implementation slices.
 Planner retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer
 failures settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
 dirty/staged/committed work, releases execution capacity without destructive cleanup, and binds fresh
 acquisition to the same task or its exact replanned lineage. Three total failed attempts, bounded
 backoff, durable receipts and default-loader restart retain the failure episode across sessions.
+
+The cumulative challenge of published `539fe951` found that settled Finalizer attention freed
+capacity but offered no continuation for the same Change. The repair now admits a fresh Finalizer
+after backoff only for exact receipt/report authority and a clean, unchanged workspace, frontier,
+contract and target. Attention-to-attempt replacement is fenced under the publication lock; old
+reports, failed attempts and retry counts remain history. Dirty or target-stale attention stays
+non-executable with read-only inspection, not a promise of worker closure or implicit target sync.
+Passive attention permits exact defer/resume/abandon without granting workspace cleanup authority.
+
+CI on `539fe951` also exposed dropped exact-head publication methods. `b3ac9e50` restores
+`mark_change_ready` and its required-check consumers without changing their publication contract.
+The repaired review-repair exhaustion regression retains its semantic key, three-attempt and
+no-dispatch assertions while matching the already-exhausted readiness short circuit. Cockpit's
+reason type, label and rendering contract now include settled-attention target drift.
 
 Answered pauses, supported local lifecycle intents, Planning promotion and Design attention are
 validated against private exact receipt chains. Handoff state remains host-local, not a portable
@@ -65,13 +79,21 @@ results must apply to the exact publication head on
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native ended-invocation settlement supersedes blanket ordinary-worker refusal. Unknown execution, stale identity and unattributed material remain fail-closed; normal result trust is workflow authority, not OS exclusion |
-| Independent challenge | Sliced reviews and repairs are complete; a fresh cumulative unnamed Opus 5.5 challenge and caller reconciliation remain required for the published head |
-| Required CI | Source, Dependency, Cockpit and Agent ecosystem must succeed on the same exact published head. The green runs on `03037782` are historical |
+| Independent challenge | The cumulative review of `539fe951` and the Finalizer repair reviews are reconciled; a fresh cumulative unnamed Opus 5.5 challenge remains required for this repaired publication head |
+| Required CI | `539fe951` passed Cockpit and Agent ecosystem but failed Source and Dependency. Those supported failures are repaired; all four workflows must succeed on the same new exact published head. Older green runs are historical |
 | PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
 | User direction | Native Orchestrator settlement is explicitly directed; no approval of the rejected host-expansion design is required. Unknown execution remains contained and may saturate shared capacity; no unavailable-host progress is promised |
 | Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
-**Native checkpoint proof:** focused core, default-loader restart, registered MCP, handoff, retry
+**Repair proof executed by the caller:** a serial 39-case selection covering settled Finalizer
+continuation, stale-target refusal, review-repair exhaustion, registered settlement and exact-head
+publication passed. Scoped Ruff lint/format and editor diagnostics passed. Backend/frontend reason
+parity and the continuation rendering matrix passed, followed by scoped Biome and TypeScript.
+All scoped commit gates passed. Independent repair reviewers separately ran focused tests; their
+counts are not caller executions or additive totals. No full-project agent suite, MegaLinter,
+live service/provider mutation, host-exclusion guarantee, merge or activation is claimed.
+
+**Historical native checkpoint proof:** focused core, default-loader restart, registered MCP, handoff, retry
 exhaustion, Planning/Design return and Finalizer checks were executed during the sliced repairs;
 their reports are not additive or a whole-suite claim. The caller reran all six Planning-promotion
 restart cases, then four selected ecosystem cases, all successfully. All 17 changed Python files
