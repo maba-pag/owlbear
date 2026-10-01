@@ -3,46 +3,84 @@
 ## Status and authority
 
 **D03 remains active under the approved bounded contract and is not accepted. The exact current PR
-head, review, CI and human/host gate status are tracked below; a non-draft PR is not package
+head, review, CI and host limits are tracked below; a non-draft PR is not package
 acceptance or evidence for a different candidate.**
 Bounded C's and D's recorded evidence and named external limits below are preserved.
 This is the package record required by the [cloud execution guide](delivery-cloud-flight-handoff.md).
 The programme's [user requirements](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 record the same explicit scope revision. Shared governance is unchanged.
 
+### Native Orchestrator Settlement Revision
+
+**User-directed design revision, 2026-09-30:** retain VS Code Copilot's native Orchestrator and
+specialists. Do not introduce Copilot CLI, MCP sampling, an alternate agent runtime or an Invocation
+Host to fix ordinary returned worker failures. The earlier host-expansion investigation is not the
+implementation direction.
+
+Orchestrator owns settlement of an exact invocation it dispatched and received a normal result
+from. This is trusted workflow authority, like the existing successful-result path, not a claim of
+OS-enforced exclusion. Delivery still validates the exact Change, task, claim and attempt, current
+custody and workspace identity before atomically publishing settlement. A returned retry is not
+assertion-only lost-worker recovery.
+
+- `retry` ends the old attempt, records a failed attempt in the stable persisted retry episode, and
+  preserves its worktree bytes, staging, commits and refs. After backoff, acquire a new claim for the
+  same task with prior-attempt context. Builder may adopt compatible task work or discard only
+  attributable, explicitly scoped disposable work; foreign, private or ambiguous content stays intact.
+- Request-bearing `block` records the bounded request and blocked task state while settling only the
+  ended execution reservation. Unanswered requests prevent reacquisition; resolution enables a fresh
+  acquisition, not an automatic dispatch. Ordinary code failure does not fabricate a human request.
+- `return` preserves prior results and useful candidate work while routing the exact task/outcome to
+  its owning Planning or Design boundary. It does not erase work merely to obtain a clean checkout.
+- Use three total attempts for the same failure episode. Retries and completed timeout outcomes
+  consume that budget; new sessions, operation IDs or changed error prose do not renew it. Exhaustion
+  blocks automatic redispatch with an agent-owned failure history and responsible handler.
+- A completed timed-out invocation can produce a counted retry. A timer expiring while execution may
+  still be running, a disconnect, missing/malformed result or identity mismatch is unknown execution,
+  not permission to dispatch a concurrent replacement. Preserve custody until its owning workflow
+  can establish a valid settlement. Do not promise progress while the VS Code host is unavailable.
+
+The native restoration must receive independent review before and after each material implementation
+slice, with focused positive settlement/reacquisition and negative stale-identity, late-submission,
+unknown-execution, budget-renewal and no-loss checks. Earlier blanket-refusal clauses below describe
+the superseded implementation; this revision controls ordinary returned worker transitions.
+
 ### Current handoff
 
-**Repair checkpoint: `1b6d50e535bc8877093a0f7c187b96db40aca94a`.** The fresh implementation challenge
-of `0ba4924a` found four additional source gaps. Repairs were applied sequentially and committed:
-complete-model MCP validation privacy (`48e492ed`), durable acknowledged Planning pause replay
-(`1e5f0ce1`), an executable offline diagnostic handoff (`5176629d`), and persisted exact refused-retry
-diagnostics (`b70568ca`). Integration checkpoint `cf7642056e47c3d08c560ff2aa1c2235b6955093` preserves
-the concurrently published PR merge and current `dev@62dfc3fba71dc2756e12790f8015aa73eca1adbc`.
-No concurrent work was overwritten. This record identifies code checkpoints;
-the PR head also includes its documentation update. Fresh independent review and all
-four CI results must apply to the exact publication head on
-[PR #326](https://github.com/maba-pag/owlbear/pull/326). An older run cannot satisfy that gate.
-This code checkpoint alone is not acceptance or authorization for activation.
+**Native source checkpoint: `b4c64edac084c09ab7b23460b9ec2161c53d38ac`.** This implements the
+user-directed native settlement revision above after independently challenged implementation slices.
+Planner retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer
+failures settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
+dirty/staged/committed work, releases execution capacity without destructive cleanup, and binds fresh
+acquisition to the same task or its exact replanned lineage. Three total failed attempts, bounded
+backoff, durable receipts and default-loader restart retain the failure episode across sessions.
 
-The fresh unnamed Opus 5.5 challenge of `4429affe` independently confirmed the four bounded
-repairs and found a default-loader restart gap: claim-local `retry_diagnostic` was not removed
-by snapshot successor comparison. `406702a9` aligns that comparison and retains unrelated-drift
-and advanced-branch refusal. CI on `4429affe` passed Cockpit but found three failures. `ea0fbd49`
-registers and guards the diagnostic writer under central mutability policy; `fe15fe33` preserves
-all controlled-worker assertions while allowing only the exact diagnostic; `1b6d50e5` corrects
-two stale recovery promises introduced by target model-guidance integration. The failed checks
-are not rerun as unchanged candidates, and a renewed exact-head challenge remains required.
+Answered pauses, supported local lifecycle intents, Planning promotion and Design attention are
+validated against private exact receipt chains. Handoff state remains host-local, not a portable
+snapshot. Unknown/live execution is still retained. No CLI, sampling, Invocation Host, live activation
+or new Integration repair authority is added. Fresh cumulative independent review and all four CI
+results must apply to the exact publication head on
+[PR #326](https://github.com/maba-pag/owlbear/pull/326); older green runs do not prove this checkpoint.
 
 | Gate | Current disposition |
 | --- | --- |
-| Source and contract | Four original source findings and the loader/CI findings are repaired. Preserve the approved **Bounded recovery now; explicit containment otherwise** decision; no new backend or broader recovery authority is introduced |
-| Independent challenge | Fresh unnamed Opus 5.5 challenge and caller reconciliation are required for the integrated repaired head. Earlier reviews apply only to their named candidates |
-| Required CI | Source, Dependency, Cockpit and Agent ecosystem must succeed on the same exact published repaired head. Checks on `0ba4924a` or the intervening target-only merge do not prove these new source repairs |
+| Source and contract | Native ended-invocation settlement supersedes blanket ordinary-worker refusal. Unknown execution, stale identity and unattributed material remain fail-closed; normal result trust is workflow authority, not OS exclusion |
+| Independent challenge | Sliced reviews and repairs are complete; a fresh cumulative unnamed Opus 5.5 challenge and caller reconciliation remain required for the published head |
+| Required CI | Source, Dependency, Cockpit and Agent ecosystem must succeed on the same exact published head. The green runs on `03037782` are historical |
 | PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
-| Human acknowledgment | **Not granted.** The user authorized implementing, committing, pushing and checking the findings, not accepting permanent capacity saturation. In default host composition, refused/lost worker claims, ordinary worker retries, Implementation Builder `block`/`return`, failed finalizers and retained uncertain engine actions have no supported in-product release or abandonment exit. Capacity defaults to three; a Change may retain multiple claims. Saturation can indefinitely stall unrelated Planner/Builder work, finalization and engine continuation across restart. Timeout, a clean head and caller confirmation do not supply exclusion |
-| Host and activation boundary | No supported worker-exclusion backend is added. Caller confirmation and timeout do not prove closure or release custody. Ordinary host/transport limits remain separate from local source proof; no merge or live activation is implied |
+| User direction | Native Orchestrator settlement is explicitly directed; no approval of the rejected host-expansion design is required. Unknown execution remains contained and may saturate shared capacity; no unavailable-host progress is promised |
+| Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
-**Fresh repair proof, executed by the caller:** complete-model registered validation passed its
+**Native checkpoint proof:** focused core, default-loader restart, registered MCP, handoff, retry
+exhaustion, Planning/Design return and Finalizer checks were executed during the sliced repairs;
+their reports are not additive or a whole-suite claim. The caller reran all six Planning-promotion
+restart cases, then four selected ecosystem cases, all successfully. All 17 changed Python files
+passed full-config scoped Ruff lint/format. Real skill, agent (14 files) and prompt (22 files)
+validators passed. After the commit hook formatted the routing table, the caller reran the three
+selected settlement/inspector contracts successfully; all scoped commit gates passed. Fresh external
+CI and cumulative review remain unrun for this publication checkpoint.
+
+**Historical repair proof, executed by the caller:** complete-model registered validation passed its
 new regression and eight existing field-validation cases; Planning acknowledgment/restart and
 transaction-interruption replay passed eight cases; offline handoff and prompt applicability passed
 21 cases. Refusal identity, protected state, HTTP and boundary selections passed 20 cases, followed
@@ -56,14 +94,14 @@ After the renewed challenge and CI failures, the caller executed five loader pos
 cases, three mutation-policy/identity cases, three real controlled-worker handoff cases and the
 exact ecosystem contract case; all passed. Scoped Ruff and the wiring Markdown check also passed.
 
-**Recovery capability finding:** `UnavailableRecoveryEvidenceProvider` remains the production
+**Remaining unknown-execution capability limit:** `UnavailableRecoveryEvidenceProvider` remains the production
 default. Exact claim fences reject stale Delivery calls but do not stop filesystem, Git, terminal
 descendant or outstanding tool-job writers. The existing recovery receipt transaction therefore
 cannot safely release ambiguous custody without a configured trusted exclusion owner. Merely
 accepting a typed end, revoking an MCP claim, increasing capacity or excluding an abandoned Change
-from accounting is not that owner. Closing this finding requires a concrete supported capability
-design and approval, or an explicit revised product decision accepting the limitation; no such
-decision is inferred from the repair authorization.
+from accounting is not that owner. The native revision provides a separate exact ended-invocation
+workflow, not a physical exclusion capability for ambiguous or still-running work. The rejected
+host-expansion proposal is not a prerequisite for ordinary returned-worker settlement.
 
 **Previous repair proof, historical:**
 
@@ -89,14 +127,14 @@ handoff cases and the Git-administration authority check: **seven passed in 2.59
 Python files passed scoped Ruff lint/format. No production release, live worker exclusion or
 whole-repository local test pass is claimed.
 
-**Programme dependency gap:** the current [D04-D08 schedule](delivery-cloud-flight-handoff.md#d04-revision-and-evidence)
+**Broader recovery limit:** the current [D04-D08 schedule](delivery-cloud-flight-handoff.md#d04-revision-and-evidence)
 does not commit to a supported worker-exclusion or resumption capability. D04 owns revision/evidence,
 D05 merge approval, D06 prepared assistance, D07 offline maintenance with active-writer fences,
 and D08 integration/host acceptance. The [approved boundary](change-continuation-delivery-redesign.md#11-requirements-from-the-user)
 explicitly says broader recovery is not automatically assigned to D08. Therefore no later-package
-fix or permanent acceptance can be presumed. Closing this product-level merge gate requires an
-informed decision or an explicitly approved capability design and ownership; do not weaken custody
-or silently expand D03 to create one.
+fix or broader capability can be presumed. This does not reinstate the superseded blanket
+normal-return refusal or require the rejected host design. Do not weaken unknown-worker custody or
+silently expand D03 to create physical exclusion.
 
 **Delegated worker reports, not new parent or R8 executions:** R3 reports 12 pause-application,
 35 retry-ledger, 17 runtime and 14 neighboring application cases; R4 reports 110 scoped
@@ -108,10 +146,9 @@ pass is claimed.
 **Completion still requires:** focused regressions preserving original safe containment and exact
 result replay, with adequate proof for the current material contract; a fresh unnamed Opus 5.5
 read-only challenge reconciled with no accepted defect or blocker remaining; all four required CI
-workflows succeeding on the same exact published head and exact PR/docs metadata; and explicit
-bounded-capacity/ordinary Builder-refusal acknowledgment. None grants merge or live activation.
-Use the PR's exact-head review and check results for the technical gate, and the unresolved
-programme dependency below for the product-level merge gate. Neither permits an inferred acceptance.
+workflows succeeding on the same exact published head and exact PR/docs metadata. Review against the
+user-directed native revision, including truthful remaining unknown-execution limits. None grants
+merge, live activation or automatic Design revision/admission.
 
 ### Historical integration evidence
 
@@ -544,11 +581,11 @@ for their exact limits. The named capitalization failure is now resolved, not di
 | Preflight and batch accounting | Capture the engine frontier preflight before reserving its retry attempt, so the reservation cannot invalidate its own basis. Charge batch execution capacity only for actual retained execution; preparation that retains no execution must not consume a batch slot or hide eligible siblings |
 | Unknown execution | Started without authoritative result, absent exclusion or conflicting receipt remains contained. No cleanup, copying, custody release, blind retry or replacement worker; bytes/index/head and failure budget remain unchanged. A typed stale result after effect entry is durably recorded and releases that action's custody while its retry reservation remains pending. A stale preflight before the start marker records a failed attempt with backoff, without refund/reset, so a retry can proceed after drift is corrected |
 | Planning request-bearing block | Persist a typed durable paused owner result and settle only that paused retry reservation. Preserve previous genuine failures, the request-answer gate and exact result replay; an unanswered request does not launch another attempt. Planning-stage `return` retains its typed successor behavior |
-| Implementation Builder block/return | An otherwise-valid transition is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`. Persist the typed exact-claim diagnostic transition in existing `recovery_attention`, not an active request, block or return authority. Retain claim/stage/worktree/index/refs and retry budget. WorkItem, operator and readiness reads expose blocked state, no executable action and a read-only diagnostic prompt. No worker loss, reset authority or redispatch is inferred |
-| Worker-requested retry | `retry` is refused with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and worktree remain unchanged, with no reset or replacement attempt. Verified worker exclusion is still required before custody can be released |
+| Implementation Builder block/return | Exact native ended-invocation settlement preserves work and completed results. Request-bearing block settles the pause and gates reacquisition on the answer. Planning return permits exact lineage-preserving replan; Design return supplies complete human-owned Designer attention without automatic revision/admission. Raw unsupervised transitions remain refused |
+| Worker-requested retry | Native exact retry settles the ended attempt once, preserves work, charges the stable episode and permits same-task reacquisition after backoff. Three total failures block automatic redispatch with agent-owned diagnosis, not a fabricated request or reset. Unknown execution remains held |
 | Unattributed mutation | Stable foreign, ignored/private or staged edits cannot become automatic preservation or Builder authority through snapshots, scope, caller assertions or a successful exit code. Keep the original material in place |
 | Actionable diagnosis | Public reads distinguish an unstarted retained action, started-without-result, exact recorded failure and unverifiable journals against the original action. Failed activation and retained active custody expose `/repair-delivery` for read-only diagnosis only, never permission to retry or release. Containment replaces mark-ready/merge guidance; repeated reads do not execute, reconcile or mutate authority. No nonexistent repair promise, fake approval, inferred termination or unsupported executable action |
-| Continued progress | Unrelated eligible Changes run while shared execution capacity remains available. Refused/lost worker claims, including ordinary Implementation Builder `block`/`return`, failed finalizers, and retained engine actions with interrupted or recorded failures keep slots occupied. If every slot is held, Planner/Builder acquisition, finalization and engine continuation wait. Repeated requests, caller confirmation and timeout do not release custody or reset budgets |
+| Continued progress | Corroborated passive Builder handoff and report-backed Finalizer attention no longer occupy live execution slots; unrelated eligible Changes can proceed. Unknown/live worker claims and uncertain engine actions still consume capacity. If all slots remain held, work waits. Mere elapsed time or repeated requests do not release custody or renew budgets |
 | No-launch reservation limit | If sibling custody prevents settlement of a proven-no-launch reservation, it remains pending; a later attempt contains that outcome's retry budget without an actionable request or unblock path. The stranded reservation does not consume execution capacity, but the outcome cannot progress. Once sibling claims end, the supported exit is abandoning the whole Change, not resetting the reservation or inferring recovery |
 | Public validation and offline entry | Registered MCP invalid parameters return strict, sanitized `ERR_TARGET_PARAM_VALIDATION` without private input echo. Missing or denied current-directory resolution returns bounded `ROOT_UNAVAILABLE`, unknown pending effects and exit 2, with no writes |
 | Package integration | D retains offline diagnosis; E retains strict registered/HTTP forwarding and cumulative proof for this revised boundary. Unsupported host recovery is explicitly contained, not a hidden package prerequisite |

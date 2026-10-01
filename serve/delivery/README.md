@@ -159,6 +159,13 @@ capacity. Because execution capacity is shared, enough retained claims can stall
 finalization, and engine continuation across the portfolio. The loader merges `host.local.json` over
 `host.json` when the overlay exists; a timeout or caller confirmation does not clear custody.
 
+Native Orchestrator settlement is separate from unknown-worker recovery. An exact normally returned
+invocation, or an actually ended timeout with owned mutation jobs settled, can release its execution
+reservation through `settle_worker_invocation`. Builder handoff preserves the same task's work and
+remains mutation-fenced; corroborated passive handoff and Finalizer attention do not count as live
+execution. A timer expiring, disconnect or missing result does not qualify. See the
+[operating guide](../../setup/operating-owlbear.md#correction-and-recovery) for retry and pause behavior.
+
 `setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. It
 does not create `host.local.json`; create that ignored file only when this host needs overrides. The
 loader still accepts an absent baseline or local file for older or manually managed workspaces.

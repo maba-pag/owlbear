@@ -33,7 +33,7 @@ The server exposes these operation groups:
 | --- | --- |
 | Design | `create_design_session`, `put_design`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `admit_change` |
 | Portfolio | `list_work_items`, `list_changes`, `get_change`, `answer`, `set_change_intent`, `delivery_health`, `propose_quarantined_delivery_state_snapshot_repair`, `repair_stranded_frontier`, `repair_quarantined_delivery_state_snapshot`, `repair`, `repair_delivery_state_snapshot`, `recover_out_of_band_head`, `repair_target_sync_publication`, `list_retained_change_worktrees`, `show_work_item`, `show_work_item_view`, `show_operator_context`, `preview_administrative_move`, `administrative_move`, `acquire_actions`, `acquire_change_action`, `execute_change_action`, `show_plan_context`, `show_build_context`, `show_finalization_context`, `report_finalization_failure` |
-| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
+| Delivery | `publish_delivery_plan`, `submit_result`, `finalize_change`, `mark_change_ready`, `prepare_review_repair`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `cleanup_abandoned_change_worktree`, `cleanup_abandoned_change_worktree_after_target_sync_discard`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `settle_worker_invocation`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Integration attention | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
@@ -68,6 +68,14 @@ a detailed view key such as `publication` when a workflow needs richer publicati
 `get_change` and `show_finalization_context` preserve the core readiness decision, including tagged
 unavailable results. `report_finalization_failure` accepts only bounded structural diagnostic fields
 and retains a report without creating finalization proof or changing worker custody.
+
+`settle_worker_invocation` accepts strict typed Planner, Builder or Finalizer settlement for an exact
+invocation that the native Orchestrator observed ending. Planner/Builder identity is supplied by the
+issued launch context and host/session envelope; Finalizer identity is in its typed settlement.
+Returned retries preserve work and charge the same bounded episode. Builder request pauses and
+Planning/Design returns preserve their evidence and gate fresh work appropriately. Report-backed
+Finalizer failure becomes passive attention, not successful proof. Unknown execution cannot be
+released through this route; neither a timer alone nor transport failure attests completion.
 
 ## Configuration
 

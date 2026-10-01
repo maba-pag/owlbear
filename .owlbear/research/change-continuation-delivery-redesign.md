@@ -730,11 +730,18 @@ authority cannot be independently established. Other programme requirements are 
 - The accepted reduction is automation coverage, never data safety. End-to-end acceptance must
   demonstrate at least one real supported recovery path plus the negative containment path.
 
-**Operational consequence recorded 2026-09-29; not a change to the approved boundary:** the current
-runtime refuses retry and claim-release transitions without supported host exclusion. Retained claims
-and interrupted operations continue to consume shared execution capacity; if they occupy all slots,
-acquisition, finalization and engine continuation wait across the portfolio. User acknowledgment of
-this limitation remains a D03 merge gate in the [package plan](delivery-cloud-d03-plan.md#current-handoff).
+**Native settlement revision directed 2026-09-30:** use the existing VS Code Copilot Orchestrator,
+not Copilot CLI, sampling, an alternate agent runtime or an Invocation Host. Orchestrator may settle
+its exact normally returned invocation, or an actually ended timeout after owned mutating jobs end,
+as trusted workflow authority. This supersedes blanket ordinary-worker refusal, not unknown-worker
+containment, and does not claim OS-enforced exclusion. Preserve dirty/staged/committed task work,
+reacquire the same task after bounded backoff, count three total failed attempts without renewal,
+settle genuine request pauses with an answer gate, and preserve completed work on Planning/Design
+return. Missing/malformed transport results, disconnected hosts and possibly running work remain
+contained and may hold all shared capacity. No automatic Design revision/admission or unavailable-host
+progress is promised. The [D03 package plan](delivery-cloud-d03-plan.md#native-orchestrator-settlement-revision)
+records the exact native contract and current proof gates; no rejected host-expansion approval is
+required for ordinary ended-invocation settlement.
 
 - U1: Normal and recovery actions must be available through a Cockpit control or a complete chat prompt.
 - U2: The user never runs tests, edits source or worktree files, repairs JSON, calculates digests, or operates Git custody.
