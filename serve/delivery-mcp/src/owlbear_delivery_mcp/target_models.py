@@ -25,6 +25,7 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMoveResult,
     BlockDelivery,
     DeliveryBlock,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
     DeliveryChangeDispositionResolution,
@@ -53,6 +54,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageManifest, DesignPackageResult
 from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.finalization_reports import (
+    FinalizerSettlement,
     ReportFinalizationFailure,
 )
 from owlbear_delivery.identities import ChangeId
@@ -1048,11 +1050,20 @@ class TransitionDeliveryParams(ChangeParams):
 
 
 class SettleWorkerInvocationParams(_TargetProtocolModel):
-    """Validate one completed Planner retry and its optional continuation identity."""
+    """Validate one typed Planner, Builder, or Finalizer invocation settlement."""
 
-    settlement: DeliveryPlanningRetrySettlement
+    settlement: FinalizerSettlement | DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement
     host_id: str | None = Field(default=None, min_length=1)
     session_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_finalizer_identity_location(self) -> SettleWorkerInvocationParams:
+        if isinstance(self.settlement, FinalizerSettlement) and any(
+            value is not None for value in (self.host_id, self.session_id)
+        ):
+            message = "Finalizer host and session identities belong in the settlement"
+            raise ValueError(message)
+        return self
 
 
 class CompletedPageParams(_TargetProtocolModel):

@@ -400,7 +400,7 @@ class ChangeWriter(WriterIdentity):
     """One active writer bound to a target transformation."""
 
     job_id: int = Field(gt=0)
-    kind: Literal["plan", "build", "repair", "finalize", "handoff"]
+    kind: Literal["plan", "build", "repair", "finalize", "handoff", "finalization-attention"]
 
 
 class ChangeBuilderHandoff(_WorkspaceModel):
@@ -431,6 +431,18 @@ class PreparedBuilderHandoff:
     participant: ReplacementTransactionParticipant
 
 
+@dataclass(frozen=True)
+class BuilderHandoffSource:
+    """Exact source fence for a retained Builder handoff or its active successor."""
+
+    settlement_id: str
+    original_task_id: str
+    branch_head: str
+    last_reviewed_commit: str
+    metadata_fingerprint: str
+    retained_handoff: ChangeBuilderHandoff | None = None
+
+
 class ChangeFinalizationAttempt(_WorkspaceModel):
     """Durable finalizer custody and exact inputs, completed by its owning receipt."""
 
@@ -447,6 +459,27 @@ class ChangeFinalizationAttempt(_WorkspaceModel):
             message = "finalization attempts require finalizer custody"
             raise ValueError(message)
         return self
+
+
+class ChangeFinalizationAttention(_WorkspaceModel):
+    """Passive, receipt-backed custody after a normally returned failed Finalizer."""
+
+    change_id: ChangeId
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    attempt_id: str = Field(min_length=1)
+    report_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    outcome: Literal["proof-failed", "review-failed"]
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_reviewed_base: str = Field(pattern=r"^[0-9a-f]{40}$")
+    finished_at: str = Field(min_length=1)
+    workspace_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    workspace_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    workspace_paths: tuple[str, ...] = Field(default=(), max_length=32)
+
+    @field_validator("workspace_paths", mode="before")
+    @classmethod
+    def _normalize_workspace_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
 
 
 class ChangeContinuationAction(_WorkspaceModel):
@@ -1361,6 +1394,7 @@ class ChangeCoordination(_WorkspaceModel):
     writer: ChangeWriter | None = None
     builder_handoff: ChangeBuilderHandoff | None = None
     finalization_attempt: ChangeFinalizationAttempt | None = None
+    finalization_attention: ChangeFinalizationAttention | None = None
     continuation_action: ChangeContinuationAction | None = None
     recovery_owner_id: str | None = Field(default=None, min_length=1, max_length=128)
     recovery_exclusions: tuple[Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")], ...] = Field(
@@ -1470,6 +1504,44 @@ class ChangeCoordination(_WorkspaceModel):
             )
         ):
             message = "Builder handoff cannot overlap another Change operation"
+            raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_finalization_attention(self) -> Self:
+        attention = self.finalization_attention
+        writer = self.writer
+        if attention is None:
+            if writer is not None and writer.kind == "finalization-attention":
+                message = "Finalizer attention writer requires its immutable settlement receipt"
+                raise ValueError(message)
+            return self
+        attempt = self.finalization_attempt
+        if (
+            attention.change_id != self.change_id
+            or writer is None
+            or attempt is None
+            or attempt.finished_at != attention.finished_at
+            or writer != attempt.writer.model_copy(update={"kind": "finalization-attention"})
+            or attention.attempt_id != attempt.writer.attempt_id
+            or attention.expected_head != attempt.exact_head
+            or attention.expected_reviewed_base != self.last_reviewed_commit
+            or attention.workspace_head != attention.expected_head
+            or any(
+                (
+                    self.builder_handoff,
+                    self.publication_lease,
+                    self.continuation_action is not None and self.continuation_action.finished_at is None,
+                    self.recovery_owner_id,
+                    self.worktree_cleanup_intent,
+                    self.worktree_cleanup,
+                    self.dirty_worktree_quarantine,
+                    self.target_sync_conflict,
+                    self.external_head_adoption_intent,
+                )
+            )
+        ):
+            message = "Finalizer attention does not match its ended attempt and retained workspace custody"
             raise ValueError(message)
         return self
 
@@ -1786,7 +1858,11 @@ class PortfolioCoordinator:
     def recovery_coordination_bytes(self, change_id: str, owner_id: str) -> bytes:
         """Capture the exact fenced coordination bytes that intent publication will CAS."""
         coordination, _previous = self._read_coordination(change_id)
-        if coordination.builder_handoff is not None or coordination.recovery_owner_id not in {None, owner_id}:
+        if (
+            coordination.builder_handoff is not None
+            or coordination.finalization_attention is not None
+            or coordination.recovery_owner_id not in {None, owner_id}
+        ):
             raise DeliveryWorkerExclusionRequiredError
         return _model_content(coordination.model_copy(update={"recovery_owner_id": owner_id}))
 
@@ -1821,7 +1897,7 @@ class PortfolioCoordinator:
         """Prepare only the journal-verified exact release for the runtime transaction."""
         request = intent.invocation.request
         coordination, previous = self._read_coordination(request.change_id)
-        if coordination.builder_handoff is not None:
+        if coordination.builder_handoff is not None or coordination.finalization_attention is not None:
             raise DeliveryWorkerExclusionRequiredError
         if (
             digest(previous) != intent.coordination_digest
@@ -2141,8 +2217,8 @@ class PortfolioCoordinator:
         *,
         finalization_attempt: ChangeFinalizationAttempt | None = None,
     ) -> ChangeCoordination:
-        if writer.kind == "handoff":
-            _coordination_conflict("Builder handoff custody is not an executable writer")
+        if writer.kind in {"handoff", "finalization-attention"}:
+            _coordination_conflict("passive workspace custody is not an executable writer")
         if (writer.kind == "finalize") != (finalization_attempt is not None) or (
             finalization_attempt is not None
             and (finalization_attempt.writer != writer or finalization_attempt.finished_at is not None)
@@ -2200,8 +2276,12 @@ class PortfolioCoordinator:
             self._require_continuation_coordination(coordination)
             if coordination.writer is None:
                 return coordination
-            if coordination.writer.kind == "handoff" or coordination.builder_handoff is not None:
-                _coordination_conflict("settled Builder claim cannot release handoff custody")
+            if (
+                coordination.writer.kind in {"handoff", "finalization-attention"}
+                or coordination.builder_handoff is not None
+                or coordination.finalization_attention is not None
+            ):
+                _coordination_conflict("passive workspace custody cannot be released as a worker claim")
             if coordination.writer is None or coordination.writer.claim_id != claim_id:
                 _coordination_conflict("writer claim does not own the change workspace")
             if coordination.writer.kind == "finalize":
@@ -2288,6 +2368,7 @@ class PortfolioCoordinator:
         if (
             existing.writer != replacement.writer
             or existing.builder_handoff != replacement.builder_handoff
+            or existing.finalization_attention != replacement.finalization_attention
             or existing.recovery_owner_id != replacement.recovery_owner_id
             or existing.recovery_exclusions != replacement.recovery_exclusions
             or existing.publication_lease != replacement.publication_lease
@@ -2349,14 +2430,54 @@ class PortfolioCoordinator:
         )
         return _replacement(self._state_root, path, previous, updated)
 
+    def prepare_finalization_attention(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        attention: ChangeFinalizationAttention,
+        lock: PublicationLock,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare one exact normal-return failure as passive, receipt-backed custody."""
+        self._require_publication_lock(lock, change_id)
+        self.require_no_pending_recovery(change_id)
+        path = self._coordination_path(change_id)
+        previous = path.read_bytes()
+        existing = ChangeCoordination.model_validate_json(previous)
+        attempt = existing.finalization_attempt
+        if (
+            existing.writer != writer
+            or writer.kind != "finalize"
+            or attempt is None
+            or attempt.writer != writer
+            or attempt.finished_at is not None
+            or attention.change_id != change_id
+            or attention.attempt_id != writer.attempt_id
+        ):
+            _coordination_conflict("Finalizer settlement does not match the exact active workspace attempt")
+        updated = existing.model_copy(
+            update={
+                "writer": writer.model_copy(update={"kind": "finalization-attention"}),
+                "finalization_attempt": attempt.model_copy(update={"finished_at": attention.finished_at}),
+                "finalization_attention": attention,
+            }
+        )
+        try:
+            ChangeCoordination.model_validate(updated.model_dump(mode="python"))
+        except ValidationError as exc:
+            _coordination_conflict("Finalizer settlement does not form valid passive workspace custody")
+            raise AssertionError from exc
+        return _replacement(self._state_root, path, previous, updated)
+
     def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
         """Fence a runtime mutation against concurrent finalizer acquisition."""
         self.require_continuation_access(change_id)
         path = self._coordination_path(change_id)
         coordination, previous = self._read_coordination(change_id)
         self._require_continuation_coordination(coordination)
-        if coordination.writer is not None and coordination.writer.kind == "finalize":
-            _coordination_conflict("mutation cannot overlap active finalizer custody")
+        if (coordination.writer is not None and coordination.writer.kind == "finalize") or (
+            coordination.finalization_attention is not None
+        ):
+            _coordination_conflict("mutation cannot overlap active or retained Finalizer custody")
         return ReplacementTransactionParticipant(
             self._state_root, path.relative_to(self._state_root), previous, previous
         )
@@ -4379,9 +4500,17 @@ class ChangeWorkspaceManager:
             _workspace_failure("change source worktree is not clean")
         return branch_head
 
-    def source_head(self, change_id: str, *, require_clean: bool = True) -> str:
+    def source_head(
+        self,
+        change_id: str,
+        *,
+        require_clean: bool = True,
+        builder_handoff_source: BuilderHandoffSource | None = None,
+    ) -> str:
         """Return one source head at the reviewed or durably adopted boundary."""
         coordination = self._coordinator.show(change_id)
+        if builder_handoff_source is not None:
+            return self._builder_handoff_source_head(coordination, builder_handoff_source)
         if coordination.external_head_adoption_intent is not None:
             _coordination_conflict("external Change head adoption requires operation replay")
         branch_head = self._resolve(coordination.branch)
@@ -4399,6 +4528,54 @@ class ChangeWorkspaceManager:
         if require_clean and self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("change source worktree is not clean")
         return branch_head
+
+    def _builder_handoff_source_head(
+        self,
+        coordination: ChangeCoordination,
+        source: BuilderHandoffSource,
+    ) -> str:
+        retained = source.retained_handoff
+        if retained is None:
+            if (
+                coordination.builder_handoff is not None
+                or coordination.writer is None
+                or (coordination.writer.kind != "build")
+            ):
+                _coordination_conflict("active Builder handoff source has no exact successor writer")
+            if coordination.last_reviewed_commit != source.last_reviewed_commit:
+                _coordination_conflict("active Builder handoff reviewed boundary changed")
+            branch_head = self._resolve(coordination.branch)
+            if not (
+                self._is_ancestor(source.branch_head, branch_head, cwd=self._repository)
+                and self._is_ancestor(source.last_reviewed_commit, branch_head, cwd=self._repository)
+            ):
+                message = "active Builder handoff branch no longer descends from its captured boundary"
+                raise PreservationFenceError(message)
+            worktree = self._canonical_worktree_path(coordination.change_id, coordination.worktree_path)
+            self._require_worktree(coordination.change_id, worktree, coordination.branch, branch_head)
+            registration = self._registered_worktrees_all().get(worktree.resolve())
+            if registration is None or registration.head != branch_head or registration.branch != coordination.branch:
+                message = "active Builder handoff worktree registration changed"
+                raise PreservationFenceError(message)
+            return branch_head
+        if (
+            coordination.builder_handoff != retained
+            or retained.settlement_id != source.settlement_id
+            or retained.original_task_id != source.original_task_id
+            or retained.last_reviewed_commit != source.last_reviewed_commit
+            or retained.branch_head != source.branch_head
+            or retained.metadata_fingerprint != source.metadata_fingerprint
+        ):
+            _coordination_conflict("Builder handoff source differs from its retained exact task")
+        metadata = self._capture_builder_handoff_metadata(coordination)
+        if (
+            metadata.branch_head != source.branch_head
+            or metadata.last_reviewed_commit != source.last_reviewed_commit
+            or metadata.fingerprint != source.metadata_fingerprint
+        ):
+            message = "Builder handoff workspace metadata changed before source preparation"
+            raise PreservationFenceError(message)
+        return metadata.branch_head
 
     def promote_external_head(
         self,
@@ -7721,8 +7898,12 @@ class ChangeWorkspaceManager:
         """Preserve a dirty Builder worktree as an isolated commit before cleanup."""
         coordination = self._coordinator.show(change_id)
         writer = coordination.writer
-        if coordination.builder_handoff is not None or (writer is not None and writer.kind == "handoff"):
-            _coordination_conflict("ended Builder handoff cannot quarantine preserved content")
+        if (
+            coordination.builder_handoff is not None
+            or coordination.finalization_attention is not None
+            or (writer is not None and writer.kind in {"handoff", "finalization-attention"})
+        ):
+            _coordination_conflict("passive workspace custody cannot quarantine preserved content")
         if writer is None or writer.attempt_id != attempt_id or writer.claim_id != claim_id:
             _coordination_conflict("dirty worktree quarantine requires matching writer custody")
         worktree = coordination.worktree_path

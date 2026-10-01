@@ -66,6 +66,7 @@ export type DeliveryReadinessStatus = "ready" | "running" | "waiting" | "blocked
 export type DeliveryReadinessChecksState = "not-run" | "failed" | "passed" | "unknown";
 export type DeliveryReadinessReasonCode =
   | "ready"
+  | "design-attention"
   | "active-custody"
   | "builder-transition-contained"
   | "retry-transition-contained"

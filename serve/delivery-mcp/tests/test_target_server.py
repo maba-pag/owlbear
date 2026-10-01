@@ -21,7 +21,9 @@ from serve.delivery.tests.test_portfolio_application import (
     _assert_checkpoint_branch_operation,
     _assert_loader_observation_only,
     _assert_loader_retry_recording,
+    _builder_retry_handoff_setup,
     _canonical,
+    _continuation_request,
     _engine_action,
     _failure_request,
     _loader_activation_state_snapshot,
@@ -32,6 +34,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _portfolio,
     _seed_loader_composed_completed_change,
     _startup_config,
+    _workspace_content_snapshot,
     _workspace_mutation_snapshot,
     acceptance_budget_case,
 )
@@ -49,6 +52,7 @@ from owlbear_delivery import (
     ChangeContinuationAction,
     ChangeCoordination,
     DeliveryAdmissionReceipt,
+    DeliveryBuilderInvocationSettlement,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContinuationRequest,
@@ -75,10 +79,14 @@ from owlbear_delivery.delivery_application_loader import (
 )
 from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
+    BlockDelivery,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryRequestOption,
     DeliveryResultCandidate,
     PublishDeliveryResult,
 )
-from owlbear_delivery.finalization_reports import FinalizationFailureCode
+from owlbear_delivery.finalization_reports import FinalizationFailureCode, FinalizationReportStore
 from owlbear_delivery.portfolio_operating import DeliveryHealthStatus, DeliveryHealthView
 from owlbear_delivery.recovery import DeliveryWorkerExclusionRequiredError
 from owlbear_delivery.work_items import WorkItemNextActor
@@ -1918,9 +1926,426 @@ async def test_registered_planner_retry_settlement_has_exact_client_contract(tmp
     tool = tools["settle_worker_invocation"]
     assert set(tool.input_schema["properties"]) == {"settlement", "host_id", "session_id"}
     assert tool.input_schema["additionalProperties"] is False
+    settlement_schema = tool.input_schema["properties"]["settlement"]
+    settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_schema["anyOf"]}
+    assert settlement_refs == {
+        "DeliveryPlanningRetrySettlement",
+        "DeliveryBuilderInvocationSettlement",
+        "FinalizerSettlement",
+    }
+    definitions = tool.input_schema["$defs"]
+    builder_schema = definitions["DeliveryBuilderInvocationSettlement"]
+    assert {
+        "change_id",
+        "outcome_id",
+        "claim_id",
+        "attempt_id",
+        "task_id",
+        "expected_last_reviewed_commit",
+        "disposition",
+    } <= set(builder_schema["required"])
+    assert {"release", "elapsed_time", "confirmed_lost"}.isdisjoint(builder_schema["properties"])
+    finalizer_schema = definitions["FinalizerSettlement"]
+    assert {
+        "change_id",
+        "attempt_id",
+        "claim_id",
+        "expected_head",
+        "expected_reviewed_base",
+        "report_id",
+        "disposition",
+        "outcome",
+        "host_id",
+        "session_id",
+    } <= set(finalizer_schema["required"])
+    assert {"release", "elapsed_time", "confirmed_lost"}.isdisjoint(finalizer_schema["properties"])
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is False
+    assert tool.annotations.idempotent_hint is True
+    assert tool.annotations.destructive_hint is False
     assert not result.is_error
     assert result.structured_content == runtimes["change-a"].show_binding("OUT-001").model_dump(mode="json")
     assert runtimes["change-a"].active_claims() == ()
+
+
+async def _acquire_registered_change_action(client: Any, change_id: str, capabilities: list[str]) -> Any:
+    observed = await client.call_tool("get_change", {"change_id": change_id})
+    assert not observed.is_error
+    assert observed.structured_content is not None
+    return await client.call_tool(
+        "acquire_change_action",
+        {
+            "change_id": change_id,
+            "expected_basis": observed.structured_content["readiness"]["basis"],
+            "capabilities": capabilities,
+            "host_id": "host-a",
+            "session_id": "session-a",
+        },
+    )
+
+
+async def _issue_registered_finalizer_failure(
+    client: Any,
+    application: PortfolioApplication,
+    category: str,
+    code: FinalizationFailureCode,
+    checks_state: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    acquired = await _acquire_registered_change_action(client, "change-a", ["finalizer"])
+    assert not acquired.is_error
+    assert acquired.structured_content is not None
+    finalization = acquired.structured_content["finalization"]
+    assert finalization is not None
+    writer = finalization["attempt"]["writer"]
+    report_fields: dict[str, object] = {"category": category, "code": code, "checks_state": checks_state}
+    if category == "custody-preflight":
+        report_fields["expected_workspace_fingerprint"] = finalization["context"]["readiness"]["basis"][
+            "workspace_fingerprint"
+        ]
+    reported = await client.call_tool(
+        "report_finalization_failure",
+        _failure_request(application, attempt_key=writer["attempt_id"], **report_fields).model_dump(mode="json"),
+    )
+    assert not reported.is_error
+    assert reported.structured_content is not None
+    report = reported.structured_content
+    assert report["request"]["code"] == code.value
+    assert report["request"]["checks_state"] == checks_state
+    return finalization, report
+
+
+def _finalizer_settlement_request(
+    finalization: dict[str, Any], report: dict[str, Any], outcome: str
+) -> dict[str, object]:
+    attempt = finalization["attempt"]
+    writer = attempt["writer"]
+    return {
+        "change_id": finalization["context"]["change_id"],
+        "attempt_id": writer["attempt_id"],
+        "claim_id": writer["claim_id"],
+        "expected_head": attempt["exact_head"],
+        "expected_reviewed_base": finalization["context"]["reviewed_change_head"],
+        "report_id": report["report_id"],
+        "disposition": "normal-return",
+        "outcome": outcome,
+        "host_id": writer["actor_id"],
+        "session_id": writer["process_id"],
+    }
+
+
+async def _assert_invalid_finalizer_settlements_are_read_only(
+    client: Any,
+    application: PortfolioApplication,
+    state_root: Path,
+    settlement: dict[str, object],
+) -> None:
+    report_store = FinalizationReportStore(state_root, "change-a")
+    before_state = _loader_activation_state_snapshot(application)
+    before_reports = report_store.read()
+    report_id = settlement["report_id"]
+    forged_report = "0" * 64 if report_id != "0" * 64 else "f" * 64
+    invalid_calls = (
+        ({"settlement": {**settlement, "report_id": forged_report}}, (forged_report,)),
+        ({"settlement": {**settlement, "host_id": "foreign-host"}}, ("foreign-host",)),
+        (
+            {"settlement": {**settlement, "private_value": "synthetic-private-token"}},
+            ("synthetic-private-token",),
+        ),
+        ({"settlement": settlement, "host_id": "outer-host-shadow"}, ("outer-host-shadow",)),
+    )
+    for arguments, rejected_values in invalid_calls:
+        refused = await client.call_tool("settle_worker_invocation", arguments)
+        assert refused.is_error
+        assert all(value not in refused.content[0].text for value in rejected_values)
+        assert _loader_activation_state_snapshot(application) == before_state
+        assert report_store.read() == before_reports
+        receipt_path = (
+            state_root
+            / "finalizer-settlements/change-a"
+            / (f"{hashlib.sha256(str(settlement['attempt_id']).encode('utf-8')).hexdigest()}.json")
+        )
+        assert not receipt_path.exists()
+
+
+def _assert_finalizer_workspace_and_report_unchanged(
+    application: PortfolioApplication,
+    report_store: FinalizationReportStore,
+    before_state: dict[str, Any],
+    before_reports: Any,
+) -> None:
+    after_state = _loader_activation_state_snapshot(application)
+    assert after_state["repository_refs"] == before_state["repository_refs"]
+    before_workspaces = {change_id: state["workspace"] for change_id, state in before_state["changes"].items()}
+    after_workspaces = {change_id: state["workspace"] for change_id, state in after_state["changes"].items()}
+    assert after_workspaces == before_workspaces
+    assert report_store.read() == before_reports
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("category", "code", "checks_state", "expected_outcome"),
+    [
+        ("maintained-check", FinalizationFailureCode.MAINTAINED_CHECK_FAILED, "failed", "proof-failed"),
+        ("custody-preflight", FinalizationFailureCode.WORKSPACE_PREFLIGHT_FAILED, "not-run", "proof-failed"),
+        ("independent-review", FinalizationFailureCode.INDEPENDENT_REVIEW_FAILED, "failed", "review-failed"),
+    ],
+)
+async def test_registered_finalizer_failure_settlement_releases_capacity_with_exact_report(
+    tmp_path: Path,
+    category: str,
+    code: FinalizationFailureCode,
+    checks_state: str,
+    expected_outcome: str,
+) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+    report_store = FinalizationReportStore(state_root, "change-a")
+    async with Client(assemble_target_server(application)) as client:
+        finalization, report = await _issue_registered_finalizer_failure(
+            client, application, category, code, checks_state
+        )
+        settlement = _finalizer_settlement_request(finalization, report, expected_outcome)
+        waiting = await _acquire_registered_change_action(client, "change-b", ["planner"])
+        assert not waiting.is_error
+        assert waiting.structured_content["kind"] == "waiting"
+        assert waiting.structured_content["reason_code"] == "execution-capacity"
+
+        before_state = _loader_activation_state_snapshot(application)
+        before_reports = report_store.read()
+        settled = await client.call_tool("settle_worker_invocation", {"settlement": settlement})
+        assert not settled.is_error, settled.content[0].text
+        receipt = settled.structured_content
+        assert receipt is not None
+        assert receipt["settlement"] == settlement
+        assert receipt["report"]["report_id"] == report["report_id"]
+        assert receipt["report"]["request"]["checks_state"] == checks_state
+
+        coordination = coordinator.show("change-a")
+        attention = coordination.finalization_attention
+        assert attention is not None
+        assert attention.receipt_id == receipt["receipt_id"]
+        assert attention.report_id == report["report_id"]
+        assert coordination.writer.kind == "finalization-attention"
+        assert coordination.finalization_attempt.writer.attempt_id == settlement["attempt_id"]
+        assert coordination.finalization_attempt.finished_at == receipt["finished_at"]
+        assert runtimes["change-a"].finalization() is None
+
+        _assert_finalizer_workspace_and_report_unchanged(application, report_store, before_state, before_reports)
+        assert len(before_reports.reports) == 1
+        owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{settlement['attempt_id']}.json"
+        owner_result_bytes = owner_result.read_bytes()
+        assert json.loads(owner_result_bytes)["observed_at"] == report["observed_at"]
+
+        replayed = await client.call_tool("settle_worker_invocation", {"settlement": settlement})
+        assert not replayed.is_error
+        assert replayed.structured_content == receipt
+        assert owner_result.read_bytes() == owner_result_bytes
+        next_change = await _acquire_registered_change_action(client, "change-b", ["planner"])
+
+    assert not next_change.is_error
+    assert next_change.structured_content["kind"] == "acquired"
+    assert next_change.structured_content["launch"]["change_id"] == "change-b"
+
+
+@pytest.mark.asyncio
+async def test_registered_finalizer_settlement_rejects_invalid_identity_and_schema_before_effects(
+    tmp_path: Path,
+) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+    async with Client(assemble_target_server(application)) as client:
+        finalization, report = await _issue_registered_finalizer_failure(
+            client,
+            application,
+            "maintained-check",
+            FinalizationFailureCode.MAINTAINED_CHECK_FAILED,
+            "failed",
+        )
+        settlement = _finalizer_settlement_request(finalization, report, "proof-failed")
+        await _assert_invalid_finalizer_settlements_are_read_only(client, application, state_root, settlement)
+        waiting = await _acquire_registered_change_action(client, "change-b", ["planner"])
+
+    assert not waiting.is_error
+    assert waiting.structured_content["kind"] == "waiting"
+    assert waiting.structured_content["reason_code"] == "execution-capacity"
+
+
+@pytest.mark.asyncio
+async def test_registered_builder_retry_settlement_reacquires_same_task_and_preserves_dirty_workspace(
+    tmp_path: Path,
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, _branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    assert isinstance(settlement, DeliveryBuilderInvocationSettlement)
+
+    async with Client(assemble_target_server(application)) as client:
+        settled = await client.call_tool(
+            "settle_worker_invocation",
+            {
+                "settlement": settlement.model_dump(mode="json"),
+                "host_id": first.claim.owner_id,
+                "session_id": first.claim.process_id,
+            },
+        )
+        assert not settled.is_error
+        assert settled.structured_content is not None
+        handoff = settled.structured_content["builder_handoff_context"]
+        assert handoff["original_task_id"] == first.task_id
+        assert handoff["route"] == "same-task"
+        assert handoff["last_reviewed_commit"] == first.last_reviewed_commit
+        serialized = json.dumps(settled.structured_content, sort_keys=True)
+        assert len(json.dumps(handoff, sort_keys=True)) < 1024
+        assert all(
+            content not in serialized
+            for content in (
+                "committed Builder work",
+                "staged Builder work",
+                "unstaged Builder work",
+                "untracked Builder work",
+            )
+        )
+        assert runtime.active_claims() == ()
+        assert coordinator.show("change-a").builder_handoff is not None
+        assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+        now[0] = "2026-08-04T01:00:00Z"
+        resumed = None
+        for _ in range(3):
+            request = _continuation_request(application, "change-a")
+            resumed = await client.call_tool("acquire_change_action", request.model_dump(mode="json"))
+            if resumed.structured_content is None or resumed.structured_content["kind"] != "reconciled":
+                break
+
+    assert resumed is not None
+    assert not resumed.is_error
+    assert resumed.structured_content is not None
+    assert resumed.structured_content["kind"] == "acquired"
+    launch = resumed.structured_content["launch"]
+    assert launch["task_id"] == first.task_id
+    assert launch["claim"]["task_id"] == first.task_id
+    assert launch["claim"]["attempt_id"] != first.claim.attempt_id
+    assert launch["claim"]["claim_id"] != first.claim.claim_id
+    assert launch["builder_handoff_context"] == handoff
+    assert coordinator.show("change-a").builder_handoff is None
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+
+@pytest.mark.asyncio
+async def test_registered_builder_block_request_releases_capacity_without_resuming_claim(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    request = DeliveryRequest(
+        request_id="builder-pause-decision",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id=first.outcome_id,
+        summary="Choose whether this Builder task may resume.",
+        options=(DeliveryRequestOption(option_id="resume", label="Resume"),),
+    )
+    block = BlockDelivery(
+        action="block",
+        outcome_id=first.outcome_id,
+        claim_id=first.claim.claim_id,
+        block_id="builder-pause",
+        reason="The Builder needs a user decision.",
+        unblock_condition="The user decision is recorded.",
+        expected_evidence=("A confirmed decision.",),
+        locators=(first.task_id,),
+        resume_commit=branch_head,
+        request=request,
+    )
+    settlement = settlement.model_copy(update={"request": block})
+
+    async with Client(assemble_target_server(application)) as client:
+        paused = await client.call_tool(
+            "settle_worker_invocation",
+            {
+                "settlement": settlement.model_dump(mode="json"),
+                "host_id": first.claim.owner_id,
+                "session_id": first.claim.process_id,
+            },
+        )
+        assert not paused.is_error
+        assert paused.structured_content is not None
+        assert paused.structured_content["active_claim"] is None
+        assert paused.structured_content["requests"][0]["request_id"] == request.request_id
+        assert paused.structured_content["requests"][0]["resolution"] is None
+        assert paused.structured_content["block"]["resolution_note"] is None
+        assert runtime.active_claims() == ()
+        assert coordinator.show("change-a").builder_handoff is not None
+        assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+        sibling_request = _continuation_request(application, "change-b")
+        sibling = await client.call_tool("acquire_change_action", sibling_request.model_dump(mode="json"))
+
+    assert not sibling.is_error
+    assert sibling.structured_content is not None
+    assert sibling.structured_content["kind"] == "acquired"
+    assert sibling.structured_content["launch"]["change_id"] == "change-b"
+    assert sibling.structured_content["launch"]["claim"]["worker_role"] == "planner"
+    assert runtime.active_claims() == ()
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+
+@pytest.mark.asyncio
+async def test_registered_builder_settlement_rejects_invalid_envelopes_without_mutation(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, state_root, first, _branch_head, _workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    before = (
+        runtime.frontier_bytes(),
+        runtime.retry_ledger().read(),
+        coordinator.show("change-a"),
+        coordination_path.read_bytes(),
+        _workspace_content_snapshot(first.worktree_path),
+    )
+    base = settlement.model_dump(mode="json")
+    foreign_task = {**base, "task_id": "TASK-FOREIGN"}
+    foreign_attempt = {**base, "attempt_id": "foreign-attempt"}
+    foreign_reviewed_base = {**base, "expected_last_reviewed_commit": "a" * 40}
+    invalid_calls = [
+        (base, "foreign-host", first.claim.process_id),
+        (base, first.claim.owner_id, "foreign-session"),
+        (foreign_task, first.claim.owner_id, first.claim.process_id),
+        (foreign_attempt, first.claim.owner_id, first.claim.process_id),
+        (foreign_reviewed_base, first.claim.owner_id, first.claim.process_id),
+        *(
+            ({**base, field: value}, first.claim.owner_id, first.claim.process_id)
+            for field, value in (
+                ("private_value", "must-not-appear"),
+                ("release", True),
+                ("elapsed_time", 1.0),
+                ("confirmed_lost", True),
+            )
+        ),
+    ]
+
+    async with Client(assemble_target_server(application)) as client:
+        for envelope, host_id, session_id in invalid_calls:
+            result = await client.call_tool(
+                "settle_worker_invocation",
+                {"settlement": envelope, "host_id": host_id, "session_id": session_id},
+            )
+            assert result.is_error
+            assert "must-not-appear" not in result.content[0].text
+            assert (
+                runtime.frontier_bytes(),
+                runtime.retry_ledger().read(),
+                coordinator.show("change-a"),
+                coordination_path.read_bytes(),
+                _workspace_content_snapshot(first.worktree_path),
+            ) == before
 
 
 @pytest.mark.asyncio

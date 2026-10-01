@@ -5606,6 +5606,7 @@ it.each([
 
 it("labels every continuation readiness reason without blanking a new engine state", async () => {
   const continuationReasons: DeliveryReadinessReasonCode[] = [
+    "design-attention",
     "finalization-failed",
     "claim-activation-failed",
     "coordination-unavailable",
@@ -5628,9 +5629,10 @@ it("labels every continuation readiness reason without blanking a new engine sta
   );
 
   for (const reason of continuationReasons) {
+    const designAttention = reason === "design-attention";
     const state = readiness({
-      status: "waiting",
-      next_actor: "agent",
+      status: designAttention ? "blocked" : "waiting",
+      next_actor: designAttention ? "you" : "agent",
       reason_code: reason,
     });
     currentDetail = detail({ readiness: state });
@@ -5641,6 +5643,9 @@ it("labels every continuation readiness reason without blanking a new engine sta
     expect(rendered).toHaveTextContent(READINESS_REASON_LABELS[reason]);
     expect(rendered?.textContent?.trim()).not.toBe("");
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
+    if (designAttention) {
+      expect(inspector.querySelector('[data-readiness-actor="you"]')).toHaveTextContent("Next: You");
+    }
     unmount();
   }
 }, 60_000);

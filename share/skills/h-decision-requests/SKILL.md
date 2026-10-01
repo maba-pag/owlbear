@@ -42,9 +42,10 @@ The enclosing block supplies:
 - condition that makes the task ready to resume;
 - source locators and optional resumable commit.
 
-Return the block to Orchestrator. It forwards the unchanged transition to `transition_delivery`,
-which persists the request and gates the outcome. Do not call a separate request tool or hand-write
-request records.
+Return the block to Orchestrator. It uses the role-specific routing table in
+`w-orchestration` Step 3, preserving the inner transition unchanged. Delivery persists the request
+and gates the outcome; normal Builder blocks settle through `settle_worker_invocation`. Do not call
+a separate request tool or hand-write request records.
 
 ## Resolution And Resume
 

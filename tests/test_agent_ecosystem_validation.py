@@ -8,6 +8,7 @@ import re
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -111,6 +112,7 @@ _TARGET_ROLE_TOOLS = {
         "delivery_health",
         "get_change",
         "transition_delivery",
+        "settle_worker_invocation",
         "recover_claim",
         "recover_integration_repair_claim",
     },
@@ -601,15 +603,54 @@ def test_target_conflict_skill_separates_precommit_and_postcommit_checks() -> No
     assert "/finalize-change <change-id>" in content
 
 
+def _assert_finalizer_settlement_schema(finalizer_settlement: dict[str, Any]) -> None:
+    assert {
+        "change_id",
+        "attempt_id",
+        "claim_id",
+        "expected_head",
+        "expected_reviewed_base",
+        "report_id",
+        "disposition",
+        "outcome",
+        "host_id",
+        "session_id",
+    } <= set(finalizer_settlement["required"])
+    assert finalizer_settlement["additionalProperties"] is False
+    assert {"release", "elapsed_time", "confirmed_lost"}.isdisjoint(finalizer_settlement["properties"])
+
+
+def _assert_worker_settlement_schemas(
+    planning_settlement: dict[str, Any],
+    builder_settlement: dict[str, Any],
+) -> None:
+    assert {
+        "change_id",
+        "outcome_id",
+        "claim_id",
+        "attempt_id",
+        "disposition",
+    } <= set(planning_settlement["required"])
+    assert {
+        "change_id",
+        "outcome_id",
+        "claim_id",
+        "attempt_id",
+        "task_id",
+        "expected_last_reviewed_commit",
+        "disposition",
+    } <= set(builder_settlement["required"])
+
+
 @pytest.mark.asyncio
 async def test_orchestration_transition_envelope_matches_registered_field() -> None:
-    """Orchestrator guidance must use the live transition_delivery envelope field."""
+    """Orchestrator guidance must match the live transition and settlement envelopes."""
     from mcp import Client  # noqa: PLC0415
 
     from owlbear_delivery_mcp.target_server import assemble_target_server  # noqa: PLC0415
 
     content = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
-    step_start = content.index("## Step 3 - Forward One Worker Transition")
+    step_start = content.index("## Step 3 - Route One Completed Worker Result")
     step_end = content.index("## Step 4 - Preserve Typed Integration Attention")
     step = content[step_start:step_end]
 
@@ -643,11 +684,28 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     async with Client(server) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
         transition_schema = tools["transition_delivery"].input_schema
+        settlement_schema = tools["settle_worker_invocation"].input_schema
         transition_fields = tuple(field for field in transition_schema["properties"] if field != "change_id")
         assert len(transition_fields) == 1
         transition_field = transition_fields[0]
         assert transition_field != "request"
         assert transition_field in transition_schema["required"]
+        assert set(settlement_schema["properties"]) == {"settlement", "host_id", "session_id"}
+        assert settlement_schema["additionalProperties"] is False
+        settlement_variants = settlement_schema["properties"]["settlement"]["anyOf"]
+        settlement_refs = {item["$ref"].rsplit("/", 1)[-1] for item in settlement_variants}
+        assert settlement_refs == {
+            "DeliveryPlanningRetrySettlement",
+            "DeliveryBuilderInvocationSettlement",
+            "FinalizerSettlement",
+        }
+        assert set(settlement_schema["required"]) == {"settlement"}
+        definitions = settlement_schema["$defs"]
+        planning_settlement = definitions["DeliveryPlanningRetrySettlement"]
+        builder_settlement = definitions["DeliveryBuilderInvocationSettlement"]
+        finalizer_settlement = definitions["FinalizerSettlement"]
+        _assert_worker_settlement_schemas(planning_settlement, builder_settlement)
+        _assert_finalizer_settlement_schema(finalizer_settlement)
 
         for change_id, transition in (
             ("planner-change", planner_transition),
@@ -670,6 +728,9 @@ async def test_orchestration_transition_envelope_matches_registered_field() -> N
     ]
     assert f"transition as `{transition_field}` byte-for-structure unchanged" in step
     assert "transition as `request` byte-for-structure unchanged" not in step
+    assert "MCP envelope has only these top-level fields" in step
+    assert "`settlement` is required" in step
+    assert "`host_id` and `session_id`" in step
     assert rejected.is_error
     rejected_text = "\n".join(getattr(item, "text", "") for item in rejected.content)
     prefix, marker, content = rejected_text.partition("{")
@@ -848,7 +909,7 @@ def test_memory_curator_required_skill_falls_back_to_shared_root() -> None:
     assert "owlbear-memory/commit_memory_batch" in agent
 
 
-def test_worker_retry_guidance_matches_runtime_exclusion_refusal() -> None:
+def test_worker_settlement_guidance_matches_native_contract() -> None:
     packet = " ".join((_SKILLS_ROOT / "w-packet-building/SKILL.md").read_text(encoding="utf-8").split())
     planning = " ".join((_SKILLS_ROOT / "w-frontier-planning/SKILL.md").read_text(encoding="utf-8").split())
     orchestration = " ".join((_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8").split())
@@ -865,15 +926,35 @@ def test_worker_retry_guidance_matches_runtime_exclusion_refusal() -> None:
         (_SKILLS_ROOT / "r-workspace-governance/SKILL.md").read_text(encoding="utf-8").split()
     )
 
-    for workflow in (packet, planning):
-        assert "ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED" in workflow
-        assert "active claim" in workflow
-        assert "does not reset" in workflow
+    assert "dispatch_failure" in packet
+    assert "RetryDelivery" in planning
     assert "resets the managed worktree to the reviewed boundary" not in packet
+    assert "settle_worker_invocation" in packet
+    assert "settle_worker_invocation" in planning
+    assert "A normal Builder settlement preserves the managed worktree" in packet
+    assert "do not clean or reset the worktree before normal settlement" in packet
+    assert "does not approve or admit a revision" in packet
+    assert "normal Planner return" in planning
     assert "`retry` abandons the current attempt" not in packet
-    assert "runtime also refuses implementation-stage Builder `block` and `return`" in packet
-    assert "persists no user request or return context" in packet
-    assert "report the non-retryable rejection" in orchestration
+    assert "settle_worker_invocation" in orchestration
+    assert "DeliveryPlanningRetrySettlement" in orchestration
+    assert "DeliveryBuilderInvocationSettlement" in orchestration
+    assert all(
+        fragment in orchestration
+        for fragment in (
+            "FinalizerSettlement",
+            "`report_id` returned by `report_finalization_failure`",
+            "attempt.writer.actor_id",
+            "attempt.writer.process_id",
+            "context.reviewed_change_head",
+            "preserve the report's code and `checks_state` (`not-run`, `failed`, or `unknown`)",
+            "without presenting the report as proof or as evidence that the Finalizer process is closed",
+        )
+    )
+    assert "A normal Builder `return` to `design` is settled through the same typed envelope" in orchestration
+    assert "complete engine-authored `readiness.prompt` unchanged" in orchestration
+    assert "expected_last_reviewed_commit=launch.last_reviewed_commit" in orchestration
+    assert "make the Design route claimable by Planner or Builder" in orchestration
     assert "Runtime clears the claim" not in operator_guide
     assert "eligible for recovery after the configured" not in delivery_readme
     assert "confirmed-dead claim recovery" not in operator_guide

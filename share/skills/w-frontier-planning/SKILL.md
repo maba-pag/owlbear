@@ -8,7 +8,7 @@ user-invocable: false
 
 Own one Planner launch selected by Delivery acquisition. Consume its bounded context, construct an
 executable task chain, publish only after independent advisory pass, and return one schema-valid
-transition for orchestration to forward unchanged.
+transition unchanged for Orchestrator to route through the native Delivery operation.
 
 ## Step 0 - Validate Launch And Context
 
@@ -20,9 +20,10 @@ source head, integration target, and reviewed boundary to remain unchanged.
 
 Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
 any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
-the unchanged outcome and claim identities. The current runtime refuses every worker retry with
-`ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`; the active claim and plan remain unchanged, with no new
-attempt. It does not reset the attempt or worktree. Orchestrator reports this non-retryable refusal.
+the unchanged outcome and claim identities. A normal Planner return with this retry is settled by
+Orchestrator through `settle_worker_invocation` using the exact launch identity; Planner returns the
+`RetryDelivery` unchanged and never calls the settlement operation itself. Settlement records the
+completed attempt without publishing a plan; fresh acquisition owns any later attempt.
 
 ## Step 1 - Ground The Task Chain
 
@@ -101,18 +102,20 @@ output: <published DeliveryPlanCandidate.output unchanged>
 
 On `finding`, publish nothing. Planner chooses one transition:
 
-- `retry` only for a local task-chain or explicitly transient planning failure. The runtime refusal
-  above means it does not start another planning attempt. A required reviewer-dispatch failure that
-  is not transient is not a retry;
+- `retry` only for a local task-chain or explicitly transient planning failure. Orchestrator settles
+  a normal-return retry through `settle_worker_invocation`; fresh acquisition owns any later attempt.
+  A required reviewer-dispatch failure that is not transient is not a retry;
 - `return` with target `design`, reason, source locators, and `source_boundary` equal to the supplied
   launch package ID for missing or contradictory Design authority;
 - `block` with an embedded bounded request for one user-owned decision or action. When the required
   reviewer cannot be dispatched, use an `action` request naming the reviewer capability, unblock
   condition, expected evidence, and source locators.
 
-Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
-validates the returned outcome and claim identity and forwards the mapping byte-for-structure
-unchanged. Do not call a job, request, or transition lifecycle operation.
+Return the selected `DeliveryTransition` directly; Planner does not call `transition_delivery` or
+`settle_worker_invocation`. Orchestrator settles a normal-return `retry` through
+`settle_worker_invocation` and forwards other supported transitions through `transition_delivery`,
+preserving the worker mapping unchanged. Do not call a job, request, or transition lifecycle
+operation.
 
 ## Known Pitfalls
 

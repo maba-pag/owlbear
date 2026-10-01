@@ -273,6 +273,7 @@ class DeliveryReadinessBasis(_ProjectionModel):
 
 DeliveryReadinessReason = Literal[
     "ready",
+    "design-attention",
     "active-custody",
     "builder-transition-contained",
     "retry-transition-contained",
@@ -608,7 +609,14 @@ class WorkItemProjector:
                 card.model_copy(
                     update={
                         "readiness": decision,
-                        "action": decision.action or WorkItemAction(),
+                        "action": (
+                            decision.action
+                            if decision.action is not None
+                            else card.action
+                            if decision.reason_code == "design-attention"
+                            and card.action.kind is WorkItemActionKind.RESUME_DESIGN
+                            else WorkItemAction()
+                        ),
                         "next_actor": decision.next_actor,
                         "needs": WorkItemNeed.NONE if decision.reason_code in retained_reasons else card.needs,
                         "needs_headline": (
@@ -616,12 +624,41 @@ class WorkItemProjector:
                             if decision.reason_code in retained_reasons
                             else card.needs_headline
                         ),
-                        "next_step": guidance_item or readiness_fallbacks.get(decision.reason_code, card.next_step),
+                        "next_step": self._readiness_next_step(
+                            card,
+                            decision,
+                            guidance_item,
+                            readiness_fallbacks.get(decision.reason_code, card.next_step),
+                        ),
                     }
                 )
                 for card, decision, guidance_item in zip(self._cards, readiness, guidance, strict=True)
             )
         self._items = {card.work_item_id: self._compatibility_projection(card) for card in self._cards}
+
+    @staticmethod
+    def _readiness_next_step(
+        card: WorkItemCardView,
+        readiness: DeliveryReadiness,
+        guidance: str | None,
+        fallback: str,
+    ) -> str:
+        if guidance is not None:
+            return guidance
+        if readiness.reason_code == "retry-exhausted":
+            owner = (
+                "Builder"
+                if card.scope is WorkItemScope.OUTCOME and card.stage is WorkItemStage.IMPLEMENTATION
+                else "Planner"
+                if card.scope is WorkItemScope.OUTCOME
+                else "Delivery"
+            )
+            return (
+                f"{owner} retry budget is exhausted after {readiness.attempts} attempts. Orchestrator can inspect "
+                f"this Change read-only with /inspect-change {card.change_id}; any new attempt requires approved "
+                "current authority."
+            )
+        return fallback
 
     def list_items(self) -> tuple[WorkItemProjection, ...]:
         """Return MCP-compatible projections in snapshot order."""
@@ -756,7 +793,7 @@ class WorkItemProjector:
         binding: OutcomeAuthorityBinding,
     ) -> tuple[WorkItemNeed, str | None]:
         if binding.stage == DeliveryStage.DESIGN:
-            return WorkItemNeed.YOU, "Re-admission required"
+            return WorkItemNeed.YOU, "Designer attention required before re-admission"
         if binding.retry_diagnostic is not None:
             return WorkItemNeed.NONE, "Retry refused; host worker-exclusion evidence required"
         pending_request = next((item for item in binding.requests if item.resolution is None), None)

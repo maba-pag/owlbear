@@ -15,7 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -346,6 +346,106 @@ class FinalizationReport(_ReportModel):
         content = (json.dumps(values, sort_keys=True, separators=(",", ":")) + "\n").encode()
         values["report_id"] = hashlib.sha256(content).hexdigest()
         return cls.model_validate_json(json.dumps(values))
+
+
+class FinalizerSettlement(_ReportModel):
+    """Trusted Orchestrator attestation that one exact Finalizer returned normally."""
+
+    change_id: str = Field(min_length=1, max_length=128, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    claim_id: str = Field(min_length=1)
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_reviewed_base: str = Field(pattern=r"^[0-9a-f]{40}$")
+    report_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    disposition: Literal["normal-return"]
+    outcome: Literal["proof-failed", "review-failed"]
+    host_id: str = Field(min_length=1, max_length=128)
+    session_id: str = Field(min_length=1, max_length=128)
+
+
+def _encoded_finalizer_settlement_receipt(
+    receipt: FinalizerSettlementReceipt,
+    *,
+    exclude: set[str] | None = None,
+) -> bytes:
+    return (
+        json.dumps(receipt.model_dump(mode="json", exclude=exclude), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+
+
+class FinalizerWorkspaceObservation(_ReportModel):
+    """Bounded read-only metadata captured when one Finalizer invocation ended."""
+
+    head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paths: tuple[str, ...] = Field(default=(), max_length=32)
+
+    @field_validator("paths", mode="before")
+    @classmethod
+    def _normalize_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def _validate_paths(self) -> FinalizerWorkspaceObservation:
+        if len(set(self.paths)) != len(self.paths):
+            message = "Finalizer workspace paths must be unique"
+            raise ValueError(message)
+        return self
+
+
+class FinalizerSettlementReceipt(_ReportModel):
+    """Immutable normal-return failure settlement, bound to its original diagnostic and workspace readback."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    settlement: FinalizerSettlement
+    report: FinalizationReport
+    finished_at: datetime
+    workspace: FinalizerWorkspaceObservation
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> FinalizerSettlementReceipt:
+        request = self.report.request
+        expected_outcome = "review-failed" if request.category == "independent-review" else "proof-failed"
+        if (
+            self.finished_at.tzinfo is None
+            or self.settlement.change_id != request.change_id
+            or self.settlement.attempt_id != request.attempt_key
+            or self.settlement.expected_head != request.expected_change_head
+            or self.settlement.expected_reviewed_base != request.expected_reviewed_head
+            or self.settlement.report_id != self.report.report_id
+            or self.settlement.outcome != expected_outcome
+            or self.workspace.head != self.settlement.expected_head
+            or hashlib.sha256(_encoded_finalizer_settlement_receipt(self, exclude={"receipt_id"})).hexdigest()
+            != self.receipt_id
+        ):
+            message = "Finalizer settlement receipt does not match its exact report and workspace observation"
+            raise ValueError(message)
+        return self
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        settlement: FinalizerSettlement,
+        report: FinalizationReport,
+        finished_at: datetime,
+        workspace: FinalizerWorkspaceObservation,
+    ) -> FinalizerSettlementReceipt:
+        """Create a stable receipt identity from the exact settlement and read-only observation."""
+        values = {
+            "schema_version": 1,
+            "settlement": settlement.model_dump(mode="json"),
+            "report": report.model_dump(mode="json"),
+            "finished_at": finished_at.isoformat().replace("+00:00", "Z"),
+            "workspace": workspace.model_dump(mode="json"),
+        }
+        receipt_id = hashlib.sha256(
+            (json.dumps(values, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        ).hexdigest()
+        return cls.model_validate_json(
+            json.dumps({"receipt_id": receipt_id, **values}, sort_keys=True, separators=(",", ":"))
+        )
 
 
 class FinalizationAttempt(_ReportModel):

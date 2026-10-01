@@ -15,6 +15,7 @@ import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from threading import Barrier, Event, Lock
@@ -36,6 +37,7 @@ from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
     ChangeExternalHeadAdoptionReceipt,
+    ChangeFinalizationAttempt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,
@@ -120,7 +122,10 @@ from owlbear_delivery import (
     DraftPullRequestPublisher,
     DraftPullRequestSupersessionReceipt,
     ExecuteDeliveryChangeAction,
+    FinalizationReport,
     FinalizeDeliveryChange,
+    FinalizerSettlement,
+    FinalizerSettlementReceipt,
     GeneratedPullRequestSummaryReceipt,
     MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
@@ -154,6 +159,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
+    PreservationFenceError,
     PreservationPathProvenance,
     PreservationProvenanceEvidence,
 )
@@ -163,6 +169,7 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryBuilderInvocationSettlement,
     DeliveryPlanningRetrySettlement,
     DeliveryRuntimeReferenceError,
     parse_delivery_frontier,
@@ -463,6 +470,7 @@ def _contract(
     design: bytes,
     *,
     include_downstream: bool = False,
+    include_independent: bool = False,
 ) -> DeliveryContract:
     outcomes = [
         DeliveryOutcome(
@@ -475,7 +483,7 @@ def _contract(
         )
     ]
     plan_scopes = [DeliveryPlanScope(scope_id="SCOPE-001", outcome_id="OUT-001")]
-    if include_downstream:
+    if include_downstream or include_independent:
         outcomes.append(
             DeliveryOutcome(
                 outcome_id="OUT-002",
@@ -483,7 +491,7 @@ def _contract(
                 promise="Retain one downstream report.",
                 acceptance=("The report is retained.",),
                 commitment_ids=("COM-001",),
-                dependency_ids=("OUT-001",),
+                dependency_ids=("OUT-001",) if include_downstream else (),
             )
         )
         plan_scopes.append(DeliveryPlanScope(scope_id="SCOPE-002", outcome_id="OUT-002"))
@@ -671,6 +679,8 @@ def _runtime(
     ]
     if len(contract.outcomes) > 1:
         downstream_task = _downstream_task()
+        if not contract.outcomes[1].dependency_ids:
+            downstream_task = downstream_task.model_copy(update={"dependency_ids": ()})
         downstream_result = _task_result(
             "RESULT-002",
             contract.change_id,
@@ -829,13 +839,14 @@ def _publish_external_change_head(
     return adopted
 
 
-def _portfolio(
+def _portfolio(  # noqa: PLR0913 - shared fixture preserves existing controls and independent-outcome setup.
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
     execution_capacity: int = 3,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
     include_downstream: bool = False,
+    include_independent: bool = False,
 ):
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -862,7 +873,13 @@ def _portfolio(
     for change_id, stage in stages.items():
         intent = f"intent prose sentinel {change_id}\n".encode()
         design = f"design prose sentinel {change_id}\n".encode()
-        contract = _contract(change_id, intent, design, include_downstream=include_downstream)
+        contract = _contract(
+            change_id,
+            intent,
+            design,
+            include_downstream=include_downstream,
+            include_independent=include_independent,
+        )
         package = store.create(change_id, intent, design)
         store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
         coordination = manager.ensure(change_id)
@@ -1257,6 +1274,16 @@ def _workspace_mutation_snapshot(worktree: Path) -> tuple[dict[str, bytes], byte
         refs,
         _git(worktree, "status", "--porcelain=v1", "--untracked-files=all"),
     )
+
+
+def _workspace_content_snapshot(worktree: Path) -> tuple[dict[str, bytes], bytes, tuple[str, ...]]:
+    index_path = Path(_git(worktree, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    refs = tuple(
+        line
+        for line in _git(worktree, "show-ref").splitlines()
+        if not line.endswith("refs/remotes/origin/owlbear/delivery-state")
+    )
+    return _file_bytes(worktree), index_path.read_bytes(), refs
 
 
 def _loader_activation_state_snapshot(application: PortfolioApplication) -> dict[str, object]:
@@ -2004,7 +2031,7 @@ def test_mark_ready_read_failure_retries_after_backoff_with_new_operation(
     assert next_action.engine_action.kind == "observe-acceptance"
 
 
-def test_mark_ready_retry_exhaustion_has_no_actor_or_prompt(tmp_path: Path) -> None:
+def test_mark_ready_retry_exhaustion_is_non_actionable_with_diagnostic(tmp_path: Path) -> None:
     now = {"value": "2026-08-04T00:00:00Z"}
     application, _runtime, provider, _state, _head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,
@@ -2029,8 +2056,11 @@ def test_mark_ready_retry_exhaustion_has_no_actor_or_prompt(tmp_path: Path) -> N
     exhausted = application.acquire_change_action(_continuation_request(application))
     assert exhausted.kind == "unsupported"
     assert exhausted.reason_code == "retry-exhausted"
-    assert exhausted.readiness.next_actor.value == "none"
-    assert exhausted.readiness.prompt is None
+    assert exhausted.readiness.next_actor.value == "agent"
+    assert exhausted.readiness.prompt is not None
+    assert exhausted.readiness.prompt.startswith("/inspect-change change-a")
+    assert exhausted.readiness.executable is False
+    assert exhausted.readiness.operation is None
     assert exhausted.readiness.attempts == 3
 
 
@@ -2469,8 +2499,11 @@ def test_worker_legacy_budget_is_imported_before_dispatch(
     assert first.readiness.attempts == count
     assert first.failure is None
     if count == 3:
-        assert first.readiness.next_actor.value == "none"
-        assert first.readiness.prompt is None
+        assert first.readiness.next_actor.value == "agent"
+        assert first.readiness.prompt is not None
+        assert first.readiness.prompt.startswith("/inspect-change change-a")
+        assert first.readiness.executable is False
+        assert first.readiness.operation is None
     episode = RetryLedger(state_root, "change-a").read().episodes[0]
     assert episode.total_attempts == count
     assert episode.legacy_failures == count
@@ -2579,8 +2612,9 @@ def test_worker_budget_survives_resolved_blocks_and_leaves_sibling_runnable(tmp_
         assert not application.get_change("change-a").readiness.executable
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock, execution_capacity=1)
     assert reopened.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert reopened.get_change("change-a").readiness.next_actor.value == "none"
-    assert reopened.get_change("change-a").readiness.prompt is None
+    assert reopened.get_change("change-a").readiness.next_actor.value == "agent"
+    assert reopened.get_change("change-a").readiness.prompt is not None
+    assert reopened.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
     assert reopened.acquire_change_action(_continuation_request(reopened)).launch is None
     if batch:
         acquired = reopened.acquire_frontier_work()
@@ -2705,7 +2739,9 @@ def test_planning_decisions_suspend_retry_budget_across_restart(tmp_path: Path, 
         now += timedelta(seconds=2)
     application, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes, clock=clock)
     assert application.get_change("change-a").readiness.reason_code == "retry-exhausted"
-    assert application.get_change("change-a").readiness.next_actor.value == "none"
+    assert application.get_change("change-a").readiness.next_actor.value == "agent"
+    assert application.get_change("change-a").readiness.prompt is not None
+    assert application.get_change("change-a").readiness.prompt.startswith("/inspect-change change-a")
 
 
 @pytest.mark.parametrize(
@@ -2766,8 +2802,13 @@ def test_settled_planner_retries_exhaust_after_three_exact_attempts(
             assert application.get_change("change-a").readiness.reason_code == "retry-backoff"
     readiness = application.get_change("change-a").readiness
     assert readiness.reason_code == "retry-exhausted"
-    assert readiness.next_actor.value == "none"
-    assert readiness.prompt is None
+    assert readiness.next_actor.value == "agent"
+    assert readiness.prompt is not None
+    assert readiness.prompt.startswith("/inspect-change change-a")
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.card.next_actor.value == "agent"
+    assert view.card.action.kind.value == "none"
+    assert "Planner" in view.card.next_step
     assert application.acquire_actions().launch_packages == ()
     assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
 
@@ -2802,7 +2843,11 @@ def test_planner_settlement_replay_does_not_publish_unrelated_pending_state(tmp_
 
 
 def test_planner_settlement_replays_its_own_failed_publication(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        clock=lambda: "2026-08-04T05:06:07Z",
+    )
     claim = _acquire_planning_claim(application)
     settlement = DeliveryPlanningRetrySettlement(
         change_id="change-a",
@@ -2812,12 +2857,23 @@ def test_planner_settlement_replays_its_own_failed_publication(tmp_path: Path) -
         disposition="normal-return",
         request=RetryDelivery(action="retry", outcome_id="OUT-001", claim_id=claim.claim_id),
     )
+    runtime = runtimes["change-a"]
+    frontier_before_wrong_owner = runtime.frontier_bytes()
+    ledger_before_wrong_owner = runtime.retry_ledger().read()
     publisher = Mock()
     publisher.publish.side_effect = [OSError("synthetic publication unavailable"), None]
     application._delivery_state_publisher = publisher
+    for host_id, session_id in (
+        ("foreign-host", claim.process_id),
+        (claim.owner_id, "foreign-session"),
+    ):
+        with pytest.raises(PortfolioApplicationError, match="host and session binding"):
+            application.settle_worker_invocation(settlement, host_id=host_id, session_id=session_id)
+        assert runtime.frontier_bytes() == frontier_before_wrong_owner
+        assert runtime.retry_ledger().read() == ledger_before_wrong_owner
+        publisher.publish.assert_not_called()
     with pytest.raises(OSError, match="synthetic publication unavailable"):
         application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
-    runtime = runtimes["change-a"]
     frontier = runtime.frontier_bytes()
     accounting = runtime.retry_ledger().read()
     pending = runtime.pending_state_publication()
@@ -2829,10 +2885,1227 @@ def test_planner_settlement_replays_its_own_failed_publication(tmp_path: Path) -
     )
     result = application.settle_worker_invocation(settlement, host_id=claim.owner_id, session_id=claim.process_id)
     assert result.active_claim is None
+    owner_result_path = (
+        runtime._target_root / "changes/change-a/retry-ledger/owner-results" / f"{claim.attempt_id}.json"
+    )
+    assert json.loads(owner_result_path.read_bytes())["observed_at"] == application._clock()
     assert runtime.frontier_bytes() == frontier
     assert runtime.retry_ledger().read() == accounting
     assert runtime.pending_state_publication() is None
     assert publisher.publish.call_count == 2
+
+
+def _builder_retry_handoff_setup(
+    tmp_path: Path,
+    now: list[str],
+    *,
+    include_independent: bool = False,
+    add_workspace_changes: bool = True,
+    publish_initial_state: bool = False,
+):
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+        clock=lambda: now[0],
+        include_independent=include_independent,
+    )
+    if publish_initial_state:
+        repository = application._workspace_manager.repository
+        _attach_local_target(application, tmp_path)
+        application._delivery_state_publisher = DeliveryStatePublisher(
+            repository,
+            remote="origin",
+            state_branch="owlbear/delivery-state",
+        )
+        assert (
+            application._publish_delivery_state(
+                "change-a",
+                runtimes["change-a"],
+                "builder-handoff-baseline",
+            )
+            is not None
+        )
+    first_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert first_result.launch is not None
+    first = first_result.launch
+    assert first.task_id == "TASK-001"
+    blocked_sibling = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert blocked_sibling.kind == "waiting"
+    assert blocked_sibling.reason_code == "execution-capacity"
+
+    if add_workspace_changes:
+        committed_file = first.worktree_path / "committed.txt"
+        committed_file.write_text("committed Builder work\n", encoding="utf-8")
+        _git(first.worktree_path, "add", committed_file.name)
+        _git(first.worktree_path, "commit", "-m", "preserve Builder commit")
+        branch_head = _git(first.worktree_path, "rev-parse", "HEAD")
+        product = first.worktree_path / "product.txt"
+        product.write_text("staged Builder work\n", encoding="utf-8")
+        _git(first.worktree_path, "add", product.name)
+        product.write_text("unstaged Builder work\n", encoding="utf-8")
+        untracked_file = first.worktree_path / "untracked.txt"
+        untracked_file.write_text("untracked Builder work\n", encoding="utf-8")
+    else:
+        branch_head = _git(first.worktree_path, "rev-parse", "HEAD")
+    before_workspace = _workspace_content_snapshot(first.worktree_path)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id=first.outcome_id,
+        claim_id=first.claim.claim_id,
+        attempt_id=first.claim.attempt_id,
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settlement = DeliveryBuilderInvocationSettlement(
+        change_id=first.change_id,
+        outcome_id=first.outcome_id,
+        claim_id=first.claim.claim_id,
+        attempt_id=first.claim.attempt_id,
+        task_id=first.task_id,
+        expected_last_reviewed_commit=first.last_reviewed_commit,
+        disposition="normal-return",
+        request=retry,
+    )
+    return application, runtimes["change-a"], coordinator, state_root, first, branch_head, before_workspace, settlement
+
+
+def _settle_builder_handoff_attempt(
+    application: PortfolioApplication,
+    claim: DeliveryActiveClaim,
+    settlement: DeliveryBuilderInvocationSettlement,
+) -> OutcomeAuthorityBinding:
+    return application.settle_worker_invocation(
+        settlement,
+        host_id=claim.owner_id,
+        session_id=claim.process_id,
+    )
+
+
+def _seed_two_task_builder(application, runtimes, coordinator, state_root):
+    completed_task = _task()
+    original_task = completed_task.model_copy(
+        update={
+            "task_id": "TASK-002",
+            "title": "Implement the retained task",
+            "result": "One bounded implementation after Planning repair.",
+            "dependency_ids": ("TASK-001",),
+        }
+    )
+    for change_id, runtime in runtimes.items():
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+        completed_result = _task_result(
+            "RESULT-001",
+            change_id,
+            runtime.authority_digest,
+            completed_task,
+            coordinator.show(change_id).last_reviewed_commit,
+        )
+        bindings = []
+        for binding in frontier.bindings:
+            if change_id == "change-a" and binding.outcome_id == "OUT-001":
+                update = {
+                    "stage": DeliveryStage.IMPLEMENTATION,
+                    "tasks": (completed_task, original_task),
+                    "results": (completed_result,),
+                }
+            else:
+                update = {"stage": DeliveryStage.PLANNING, "tasks": (), "results": ()}
+            bindings.append(
+                binding.model_copy(
+                    update={
+                        **update,
+                        "active_claim": None,
+                        "output": None,
+                        "candidate": None,
+                        "result_candidate": None,
+                        "return_context": None,
+                        "builder_handoff_context": None,
+                        "block": None,
+                        "recovery_attention": None,
+                        "retry_diagnostic": None,
+                    }
+                )
+            )
+        seeded = DeliveryFrontier.model_validate_json(
+            _canonical(frontier.model_copy(update={"bindings": tuple(bindings)})),
+            strict=False,
+        )
+        path = state_root / "changes" / change_id / "frontier.json"
+        path.write_bytes(_canonical(seeded))
+        runtime.bindings()
+    first_result = runtimes["change-a"].show_binding("OUT-001").results[0]
+    builder_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert builder_result.launch is not None, builder_result
+    builder = builder_result.launch
+    assert builder.task_id == original_task.task_id
+    return completed_task, original_task, first_result, builder
+
+
+def _return_builder(application, builder, *, target: DeliveryStage = DeliveryStage.PLANNING):
+    committed = builder.worktree_path / "preserved-builder-commit.txt"
+    committed.write_text("committed Builder bytes\n", encoding="utf-8")
+    _git(builder.worktree_path, "add", committed.name)
+    _git(builder.worktree_path, "commit", "-m", "preserve Builder commit")
+    branch_head = _git(builder.worktree_path, "rev-parse", "HEAD")
+    staged = builder.worktree_path / "staged.txt"
+    staged.write_text("staged Builder bytes\n", encoding="utf-8")
+    _git(builder.worktree_path, "add", staged.name)
+    product = builder.worktree_path / "product.txt"
+    product.write_text("unstaged Builder bytes\n", encoding="utf-8")
+    untracked = builder.worktree_path / "untracked.txt"
+    untracked.write_text("untracked Builder bytes\n", encoding="utf-8")
+    before_workspace = _workspace_content_snapshot(builder.worktree_path)
+    reason = (
+        "The admitted Design lacks the premise for the retained task."
+        if target is DeliveryStage.DESIGN
+        else "The retained task needs a clearer implementation boundary."
+    )
+    locators = ("design.md",) if target is DeliveryStage.DESIGN else (builder.task_id,)
+    request = ReturnDelivery(
+        action="return",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        target=target,
+        reason=reason,
+        locators=locators,
+        preserved_commit=branch_head,
+        attempt_id=builder.claim.attempt_id,
+    )
+    settlement = DeliveryBuilderInvocationSettlement(
+        change_id=builder.change_id,
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        attempt_id=builder.claim.attempt_id,
+        task_id=builder.task_id,
+        expected_last_reviewed_commit=builder.last_reviewed_commit,
+        disposition="normal-return",
+        request=request,
+    )
+    settled = application.settle_worker_invocation(
+        settlement,
+        host_id=builder.claim.owner_id,
+        session_id=builder.claim.process_id,
+    )
+    return settled, branch_head, before_workspace, reason
+
+
+def _assert_returned_planner_handoff(
+    application,
+    builder,
+    settled: OutcomeAuthorityBinding,
+    before_workspace,
+) -> None:
+    runtime = application._runtimes["change-a"]
+    coordinator = application._coordinator
+    handoff = coordinator.show("change-a").builder_handoff
+    completed_task, original_task = settled.tasks
+    assert settled.stage == DeliveryStage.PLANNING
+    assert settled.results == (runtime.show_binding("OUT-001").results[0],)
+    assert settled.return_context is not None
+    assert settled.return_context.reason == "The retained task needs a clearer implementation boundary."
+    assert settled.return_context.preserved_commit == handoff.branch_head
+    assert settled.return_context.completed_boundary == builder.last_reviewed_commit
+    assert settled.builder_handoff_context is not None
+    assert settled.builder_handoff_context.route == "same-outcome-planner"
+    assert settled.builder_handoff_context.original_task_commitment_ids == original_task.commitment_ids
+    assert settled.builder_handoff_context.original_task_maintained_surfaces == original_task.maintained_surfaces
+    assert handoff is not None
+    assert handoff.original_task_id == original_task.task_id
+    assert handoff.branch_head == settled.builder_handoff_context.branch_head
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    assert runtime.claimable_outcome_ids() == ("OUT-001",)
+
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    before_ledger = runtime.retry_ledger().read()
+    with pytest.raises(DeliveryActionSelectionConflictError, match="selected action"):
+        application.acquire_actions(
+            DeliveryActionSelection(
+                change_id="change-a",
+                outcome_id="OUT-002",
+                expected_stage=DeliveryStage.PLANNING,
+                expected_frontier_digest=hashlib.sha256(before_frontier).hexdigest(),
+                expected_source_head=handoff.branch_head,
+            )
+        )
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert runtime.retry_ledger().read() == before_ledger
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    assert completed_task.task_id == settled.results[0].task_id
+
+
+def _assert_returned_handoff_metadata_fences(application, builder, before_workspace) -> None:
+    runtime = application._runtimes["change-a"]
+    coordinator = application._coordinator
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    before_ledger = runtime.retry_ledger().read()
+    builder_episode = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
+    assert builder_episode is not None
+    assert builder_episode.key.exact_head == builder.last_reviewed_commit
+    assert builder_episode.total_attempts == 1
+    assert builder_episode.reset_count == 0
+    retained_metadata = application._workspace_manager._capture_builder_handoff_metadata(before_coordination)
+    stale_metadata = replace(retained_metadata, status_digest="0" * 64)
+    with patch.object(
+        application._workspace_manager,
+        "_capture_builder_handoff_metadata",
+        return_value=stale_metadata,
+    ):
+        result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert result.kind == "unavailable"
+    assert result.reason_code == "source-unavailable"
+    assert result.launch is None
+    assert runtime.frontier_bytes() == before_frontier
+    assert runtime.retry_ledger().read() == before_ledger
+    assert coordinator.show("change-a") == before_coordination
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    assert runtime.active_claims() == ()
+
+    with (
+        patch.object(
+            application._workspace_manager,
+            "_capture_builder_handoff_metadata",
+            side_effect=(retained_metadata, stale_metadata),
+        ),
+        pytest.raises(PreservationFenceError, match="metadata changed before source preparation"),
+    ):
+        application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert runtime.active_claims() == ()
+    assert coordinator.show("change-a") == before_coordination
+    ledger_after = runtime.retry_ledger()
+    assert ledger_after.episode_for_attempt(builder.claim.attempt_id) == builder_episode
+    assert ledger_after.pending_attempts() == ()
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+
+
+def _acquire_returned_planner(application, builder, before_workspace):
+    runtime = application._runtimes["change-a"]
+    coordinator = application._coordinator
+    binding = runtime.show_binding("OUT-001")
+    handoff = coordinator.show("change-a").builder_handoff
+    result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert result.launch is not None, (result.reason_code, result.failure)
+    planner = result.launch
+    assert planner.claim.worker_role is DeliveryWorkerRole.PLANNER
+    assert planner.task_id is None
+    assert planner.writer is None
+    assert planner.source_head == handoff.branch_head
+    assert planner.worktree_path == builder.worktree_path
+    context = application.show_plan_context(
+        "change-a", planner.outcome_id, planner.claim.attempt_id, planner.claim.claim_id
+    )
+    assert context.return_context is not None
+    assert context.return_context.reason == binding.return_context.reason
+    assert context.return_context.preserved_commit == handoff.branch_head
+    assert context.launch.builder_handoff_context == binding.builder_handoff_context
+    assert context.launch.writer is None
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    assert coordinator.show("change-a").builder_handoff == handoff
+    assert coordinator.show("change-a").writer == handoff.original_writer.model_copy(update={"kind": "handoff"})
+    sibling = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert sibling.kind == "waiting"
+    assert sibling.reason_code == "execution-capacity"
+    assert application._runtimes["change-b"].active_claims() == ()
+    assert coordinator.show("change-b").writer is None
+    return planner
+
+
+def _assert_return_plan_rejected(application, planner, tasks, message: str, claim_id: str | None = None) -> None:
+    runtime = application._runtimes["change-a"]
+    coordination = application._coordinator.show("change-a")
+    before_frontier = runtime.frontier_bytes()
+    before_ledger = runtime.retry_ledger().read()
+    before_workspace = _workspace_content_snapshot(coordination.worktree_path)
+    with pytest.raises(DeliveryRuntimeConflictError, match=message):
+        application.publish_delivery_plan(
+            "change-a",
+            PublishDeliveryPlan(
+                outcome_id="OUT-001",
+                claim_id=claim_id or planner.claim.claim_id,
+                tasks=tasks,
+            ),
+        )
+    assert runtime.frontier_bytes() == before_frontier
+    assert application._coordinator.show("change-a") == coordination
+    assert runtime.retry_ledger().read() == before_ledger
+    assert _workspace_content_snapshot(coordination.worktree_path) == before_workspace
+
+
+def _assert_return_plan_rejections(application, planner) -> tuple[DeliveryTaskDefinition, ...]:
+    binding = application._runtimes["change-a"].show_binding("OUT-001")
+    completed_task, original_task = binding.tasks
+    planned_original = original_task.model_copy(
+        update={"title": "Clarify the retained task", "result": "One clarified bounded implementation."}
+    )
+    followup = _task().model_copy(
+        update={
+            "task_id": "TASK-003",
+            "title": "Implement the follow-up",
+            "dependency_ids": ("TASK-002",),
+        }
+    )
+    planned_tasks = (completed_task, planned_original, followup)
+    invalid_plans = (
+        (planned_tasks, "claim", "wrong-planner-claim"),
+        ((original_task.model_copy(update={"dependency_ids": ()}),), "completed task definitions", None),
+        (
+            (completed_task.model_copy(update={"title": "Rewrite completed task"}), original_task),
+            "completed task definitions",
+            None,
+        ),
+        ((completed_task,), "original task", None),
+        (
+            (completed_task, original_task.model_copy(update={"maintained_surfaces": ("share/WIRING.md",)})),
+            "original task",
+            None,
+        ),
+        (
+            (completed_task, original_task.model_copy(update={"commitment_ids": ("COM-002",)})),
+            "original task",
+            None,
+        ),
+    )
+    for tasks, message, claim_id in invalid_plans:
+        _assert_return_plan_rejected(application, planner, tasks, message, claim_id)
+    return planned_tasks
+
+
+def _advance_returned_plan(application, planner, builder, planned_tasks):
+    runtime = application._runtimes["change-a"]
+    binding = runtime.show_binding("OUT-001")
+    completed_task = binding.tasks[0]
+    first_result = binding.results[0]
+    handoff = binding.builder_handoff_context
+    before_workspace = _workspace_content_snapshot(builder.worktree_path)
+    candidate = application.publish_delivery_plan(
+        "change-a",
+        PublishDeliveryPlan(outcome_id="OUT-001", claim_id=planner.claim.claim_id, tasks=planned_tasks),
+    )
+    advanced = application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            action="advance",
+            outcome_id="OUT-001",
+            claim_id=planner.claim.claim_id,
+            output=candidate.output,
+        ),
+    )
+    assert advanced.stage == DeliveryStage.IMPLEMENTATION
+    assert advanced.tasks[0].model_dump_json().encode("utf-8") == completed_task.model_dump_json().encode("utf-8")
+    assert tuple(result.model_dump_json().encode("utf-8") for result in advanced.results) == (
+        first_result.model_dump_json().encode("utf-8"),
+    )
+    assert advanced.builder_handoff_context is not None
+    assert advanced.builder_handoff_context.route == "same-task"
+    assert advanced.builder_handoff_context.settlement_id == handoff.settlement_id
+    assert advanced.builder_handoff_context.metadata_fingerprint == handoff.metadata_fingerprint
+    assert runtime.claimable_task_ids("OUT-001") == ("TASK-002",)
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    return advanced
+
+
+def _assert_returned_builder_reacquisition(application, builder, advanced, now, before_workspace) -> None:
+    runtime = application._runtimes["change-a"]
+    episode_before = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
+    assert episode_before is not None
+    assert episode_before.total_attempts == 1
+    assert episode_before.reset_count == 0
+    now[0] = "2026-08-04T01:00:00Z"
+    result = application.acquire_actions(
+        DeliveryActionSelection(
+            change_id="change-a",
+            outcome_id="OUT-001",
+            expected_stage=DeliveryStage.IMPLEMENTATION,
+            expected_task_id="TASK-002",
+            expected_frontier_digest=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            expected_source_head=advanced.builder_handoff_context.branch_head,
+        )
+    )
+    assert len(result.launch_packages) == 1, (
+        tuple((failure.code, failure.detail, failure.retry_condition) for failure in result.failures),
+        runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id),
+    )
+    resumed = result.launch_packages[0]
+    assert resumed.claim.worker_role is DeliveryWorkerRole.BUILDER
+    assert resumed.task_id == "TASK-002"
+    assert resumed.source_head == advanced.builder_handoff_context.branch_head
+    assert resumed.builder_handoff_context == advanced.builder_handoff_context
+    assert resumed.writer is not None
+    assert application._coordinator.show("change-a").builder_handoff is None
+    assert application._coordinator.show("change-a").writer == resumed.writer
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    episode_after = runtime.retry_ledger().episode_for_attempt(builder.claim.attempt_id)
+    assert episode_after is not None
+    assert episode_after.total_attempts == 2
+    assert episode_after.reset_count == 0
+    assert builder.claim.attempt_id in episode_after.attempt_ids
+    assert resumed.claim.attempt_id in episode_after.attempt_ids
+
+
+def test_builder_return_routes_through_planner_then_same_task_retry(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+        clock=lambda: now[0],
+        include_independent=True,
+    )
+    _completed_task, _original_task, _first_result, builder = _seed_two_task_builder(
+        application, runtimes, coordinator, state_root
+    )
+    settled, _branch_head, before_workspace, _reason = _return_builder(application, builder)
+    _assert_returned_planner_handoff(application, builder, settled, before_workspace)
+    _assert_returned_handoff_metadata_fences(application, builder, before_workspace)
+    planner = _acquire_returned_planner(application, builder, before_workspace)
+    planned_tasks = _assert_return_plan_rejections(application, planner)
+    advanced = _advance_returned_plan(application, planner, builder, planned_tasks)
+    _assert_returned_builder_reacquisition(application, builder, advanced, now, before_workspace)
+
+
+def test_builder_return_to_design_routes_to_human_and_releases_capacity(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+        include_independent=True,
+    )
+    _completed_task, _original_task, _first_result, builder = _seed_two_task_builder(
+        application, runtimes, coordinator, state_root
+    )
+
+    settled, _branch_head, before_workspace, reason = _return_builder(
+        application,
+        builder,
+        target=DeliveryStage.DESIGN,
+    )
+
+    assert settled.stage == DeliveryStage.DESIGN
+    assert settled.active_claim is None
+    assert settled.return_context is not None
+    assert settled.return_context.reason == reason
+    assert settled.return_context.locators == ("design.md",)
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    runtime = runtimes["change-a"]
+    assert runtime.claimable_outcome_ids() == ()
+    assert runtime.claimable_task_ids("OUT-001") == ()
+    assert runtime.active_claims() == ()
+
+    view = application.get_change("change-a")
+    readiness = view.readiness
+    assert readiness.reason_code == "design-attention"
+    assert readiness.next_actor.value == "you"
+    assert readiness.status == "blocked"
+    assert not readiness.executable
+    assert view.detail.return_context == settled.return_context
+    assert view.detail.card.action.kind.value == "resume-design"
+    assert view.detail.card.action.command == "/design change-a"
+    assert readiness.prompt is not None
+    assert readiness.prompt.startswith("/design change-a")
+    assert reason in readiness.prompt
+    assert "design.md" in readiness.prompt
+    assert "Outcome: OUT-001" in readiness.prompt
+    assert "Delivery stage: design" in readiness.prompt
+    assert f"Preserved commit: {settled.return_context.preserved_commit}" in readiness.prompt
+    assert f"Completed boundary: {settled.return_context.completed_boundary}" in readiness.prompt
+    assert "does not approve or admit" in readiness.prompt
+    assert "managed worktree" in readiness.prompt
+
+    continuation = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert continuation.kind == "human"
+    assert continuation.reason_code == "design-attention"
+    assert continuation.readiness.prompt == readiness.prompt
+    assert continuation.launch is None
+    assert continuation.engine_action is None
+    assert runtime.active_claims() == ()
+    assert _workspace_content_snapshot(builder.worktree_path) == before_workspace
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    assert coordinator.show("change-a").writer == handoff.original_writer.model_copy(update={"kind": "handoff"})
+
+    independent = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert independent.kind == "acquired"
+    assert independent.launch is not None
+    assert independent.launch.claim.worker_role is DeliveryWorkerRole.PLANNER
+
+
+def _builder_decision_handoff_setup(tmp_path: Path, now: list[str]):
+    application, runtime, coordinator, state_root, first, branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, include_independent=True)
+    )
+    request = DeliveryRequest(
+        request_id="builder-pause-decision",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id=first.outcome_id,
+        summary="Choose whether this Builder task may resume.",
+        options=(DeliveryRequestOption(option_id="resume", label="Resume"),),
+    )
+    block = BlockDelivery(
+        action="block",
+        outcome_id=first.outcome_id,
+        claim_id=first.claim.claim_id,
+        block_id="builder-pause",
+        reason="The Builder needs a user decision.",
+        unblock_condition="The user decision is recorded.",
+        expected_evidence=("A confirmed decision.",),
+        locators=(first.task_id,),
+        resume_commit=branch_head,
+        request=request,
+    )
+    paused = _settle_builder_handoff_attempt(application, first.claim, settlement.model_copy(update={"request": block}))
+    return application, runtime, coordinator, state_root, first, before_workspace, request, paused
+
+
+def test_builder_retry_handoff_reacquires_same_task_without_changing_workspace(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, state_root, first, _branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    settled = application.settle_worker_invocation(
+        settlement,
+        host_id=first.claim.owner_id,
+        session_id=first.claim.process_id,
+    )
+
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    owner_result_path = state_root / "changes/change-a/retry-ledger/owner-results" / f"{first.claim.attempt_id}.json"
+    assert json.loads(owner_result_path.read_bytes())["observed_at"] == now[0]
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    assert coordinator.show("change-a").writer is not None
+    assert coordinator.show("change-a").writer.kind == "handoff"
+    assert runtime.show_binding("OUT-001").recovery_attention is None
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    sibling_result = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert sibling_result.launch is not None
+    sibling = sibling_result.launch
+    sibling_retry = RetryDelivery(
+        action="retry",
+        outcome_id=sibling.outcome_id,
+        claim_id=sibling.claim.claim_id,
+    )
+    application.settle_worker_invocation(
+        DeliveryPlanningRetrySettlement(
+            change_id=sibling.change_id,
+            outcome_id=sibling.outcome_id,
+            claim_id=sibling.claim.claim_id,
+            attempt_id=sibling.claim.attempt_id,
+            disposition="normal-return",
+            request=sibling_retry,
+        ),
+        host_id=sibling.claim.owner_id,
+        session_id=sibling.claim.process_id,
+    )
+    now[0] = "2026-08-04T01:00:00Z"
+
+    resumed_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert resumed_result.launch is not None, (
+        resumed_result.failure.detail if resumed_result.failure is not None else resumed_result
+    )
+    resumed = resumed_result.launch
+    assert resumed.claim.task_id == first.task_id
+    assert resumed.claim.attempt_id != first.claim.attempt_id
+    assert resumed.builder_handoff_context == settled.builder_handoff_context
+    assert coordinator.show("change-a").builder_handoff is None
+    assert coordinator.show("change-a").writer == resumed.writer
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+    coordination = coordinator.show("change-a")
+    foreign_writers = (
+        resumed.writer.model_copy(update={"claim_id": "foreign-builder-claim"}),
+        resumed.writer.model_copy(update={"claimed_at": "2026-08-04T02:00:00Z"}),
+    )
+    for foreign_writer in foreign_writers:
+        with (
+            patch.object(
+                application._workspace_manager,
+                "show",
+                return_value=coordination.model_copy(update={"writer": foreign_writer}),
+            ),
+            pytest.raises(PortfolioApplicationError, match="active Builder handoff context does not match"),
+        ):
+            application.show_build_context(
+                resumed.change_id,
+                resumed.outcome_id,
+                resumed.claim.attempt_id,
+                resumed.claim.claim_id,
+            )
+    (resumed.worktree_path / "product.txt").write_text("active Builder edit\n", encoding="utf-8")
+    build_context = application.show_build_context(
+        resumed.change_id,
+        resumed.outcome_id,
+        resumed.claim.attempt_id,
+        resumed.claim.claim_id,
+    )
+    assert build_context.launch.builder_handoff_context == settled.builder_handoff_context
+
+    ledger = runtime.retry_ledger().read()
+    assert len(ledger.episodes) == 1
+    episode = ledger.episodes[0]
+    assert episode.total_attempts == 2
+    assert episode.reset_count == 0
+    assert episode.key.exact_head == first.last_reviewed_commit
+    assert first.claim.attempt_id in episode.attempt_ids
+    assert resumed.claim.attempt_id in episode.attempt_ids
+
+
+def test_builder_retry_handoff_keeps_dirty_workspace_out_of_remote_state(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _coordinator, _state_root, first, _branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, publish_initial_state=True)
+    )
+    publisher = application._delivery_state_publisher
+    assert isinstance(publisher, DeliveryStatePublisher)
+    initial_inventory = publisher.read_snapshot_inventory()
+    initial_snapshot = publisher.read_snapshot("change-a")
+    assert initial_inventory.remote_head is not None
+    assert initial_snapshot is not None
+
+    settled = application.settle_worker_invocation(
+        settlement,
+        host_id=first.claim.owner_id,
+        session_id=first.claim.process_id,
+    )
+
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    assert runtime.pending_state_publication() is None
+    assert application._publish_delivery_state("change-a", runtime, "builder-handoff-retry") is None
+    assert runtime.pending_state_publication() is None
+    assert publisher.read_snapshot_inventory().remote_head == initial_inventory.remote_head
+    assert publisher.read_snapshot("change-a") == initial_snapshot
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    now[0] = "2026-08-04T01:00:00Z"
+    resumed_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert resumed_result.launch is not None, resumed_result
+    resumed = resumed_result.launch
+
+    assert resumed.claim.task_id == first.task_id
+    assert resumed.claim.attempt_id != first.claim.attempt_id
+    assert _workspace_content_snapshot(resumed.worktree_path) == before_workspace
+    assert runtime.pending_state_publication() is None
+    assert publisher.read_snapshot_inventory().remote_head == initial_inventory.remote_head
+    assert publisher.read_snapshot("change-a") == initial_snapshot
+
+
+def test_paused_builder_handoff_releases_capacity_and_refuses_late_result(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    (
+        application,
+        runtime,
+        coordinator,
+        state_root,
+        first,
+        before_workspace,
+        request,
+        paused,
+    ) = _builder_decision_handoff_setup(tmp_path, now)
+
+    assert paused.active_claim is None
+    assert paused.requests == (request,)
+    assert paused.block is not None
+    assert not paused.block.resolved
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    assert runtime.active_claims() == ()
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    late_result = _task_result(
+        "RESULT-LATE-PAUSED-BUILDER",
+        "change-a",
+        runtime.authority_digest,
+        runtime.show_binding(first.outcome_id).tasks[0],
+        _git(first.worktree_path, "rev-parse", "HEAD"),
+    )
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.publish_result(
+            PublishDeliveryResult(outcome_id=first.outcome_id, claim_id=first.claim.claim_id, result=late_result)
+        )
+
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        application._runtimes,
+        clock=lambda: now[0],
+        execution_capacity=1,
+    )
+    while_unanswered = reopened.acquire_frontier_work()
+    assert while_unanswered.failures == ()
+    assert tuple(package.change_id for package in while_unanswered.launch_packages) == ("change-b",)
+    assert while_unanswered.launch_packages[0].claim.worker_role is DeliveryWorkerRole.PLANNER
+    assert reopened._runtimes["change-a"].active_claims() == ()
+    assert reopened_coordinator.show("change-a").builder_handoff == handoff
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+
+def test_builder_decision_answer_survives_restart_and_reacquires_same_task(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    (
+        application,
+        _runtime,
+        coordinator,
+        state_root,
+        first,
+        before_workspace,
+        request,
+        paused,
+    ) = _builder_decision_handoff_setup(tmp_path, now)
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        application._runtimes,
+        clock=lambda: now[0],
+        execution_capacity=1,
+    )
+    answer_view = reopened.get_change("change-a")
+    answer = DeliveryAnswer(
+        change_id="change-a",
+        request_id=request.request_id,
+        resolution=DeliveryRequestResolution(selected_option_id="resume"),
+        expected_frontier_digest=answer_view.frontier_digest,
+    )
+    answered = reopened.answer(answer)
+    assert answered.request.resolution == answer.resolution
+    assert reopened_coordinator.show("change-a").builder_handoff == handoff
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    restarted, restarted_coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        application._runtimes,
+        clock=lambda: now[0],
+        execution_capacity=1,
+    )
+    assert restarted._runtimes["change-a"].show_binding(first.outcome_id).requests[0].resolution == answer.resolution
+    resumed_result = restarted.acquire_change_action(_continuation_request(restarted, "change-a"))
+    assert resumed_result.kind == "acquired"
+    assert resumed_result.launch is not None, resumed_result
+    resumed = resumed_result.launch
+    assert resumed.claim.task_id == first.task_id
+    assert resumed.builder_handoff_context == paused.builder_handoff_context
+    assert resumed.claim.attempt_id != first.claim.attempt_id
+    assert resumed.claim.claim_id != first.claim.claim_id
+    assert restarted_coordinator.show("change-a").builder_handoff is None
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    ledger = restarted._runtimes["change-a"].retry_ledger().read()
+    assert len(ledger.episodes) == 1
+    episode = ledger.episodes[0]
+    assert episode.total_attempts == 1
+    assert episode.last_failure_at is None
+    assert episode.legacy_failures == 0
+    assert set(episode.attempt_ids) == {first.claim.attempt_id, resumed.claim.attempt_id}
+
+
+def test_builder_retry_handoff_refuses_foreign_task_and_workspace_drift(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, branch_head, before_workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now)
+    )
+    frontier_before_wrong_owner = runtime.frontier_bytes()
+    ledger_before_wrong_owner = runtime.retry_ledger().read()
+    for host_id, session_id in (
+        ("foreign-host", first.claim.process_id),
+        (first.claim.owner_id, "foreign-session"),
+    ):
+        with pytest.raises(PortfolioApplicationError, match="host and session binding"):
+            application.settle_worker_invocation(settlement, host_id=host_id, session_id=session_id)
+        assert runtime.frontier_bytes() == frontier_before_wrong_owner
+        assert runtime.retry_ledger().read() == ledger_before_wrong_owner
+        assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    settled = application.settle_worker_invocation(
+        settlement,
+        host_id=first.claim.owner_id,
+        session_id=first.claim.process_id,
+    )
+
+    assert settled.active_claim is None
+    assert settled.builder_handoff_context is not None
+    handoff = coordinator.show("change-a").builder_handoff
+    assert handoff is not None
+    assert runtime.show_binding("OUT-001").recovery_attention is None
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+    frontier_before_refusals = runtime.frontier_bytes()
+    foreign_claim = DeliveryActiveClaim(
+        attempt_id="foreign-attempt",
+        claim_id="foreign-claim",
+        owner_id="foreign-host",
+        process_id="foreign-session",
+        started_at=now[0],
+        worker_role=DeliveryWorkerRole.BUILDER,
+        task_id="TASK-FOREIGN",
+    )
+    with pytest.raises(DeliveryRuntimeConflictError, match="implementation task is not claimable"):
+        runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim=foreign_claim))
+    late_result = _task_result(
+        "RESULT-LATE-BUILDER",
+        "change-a",
+        runtime.authority_digest,
+        runtime.show_binding("OUT-001").tasks[0],
+        branch_head,
+    )
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.publish_result(
+            PublishDeliveryResult(outcome_id="OUT-001", claim_id=first.claim.claim_id, result=late_result)
+        )
+    assert runtime.frontier_bytes() == frontier_before_refusals
+    assert coordinator.show("change-a").builder_handoff == handoff
+
+    now[0] = "2026-08-04T01:00:00Z"
+    drift_file = first.worktree_path / "post-handoff-drift.txt"
+    drift_file.write_text("workspace changed after handoff\n", encoding="utf-8")
+    drift_snapshot = _workspace_content_snapshot(first.worktree_path)
+    drift_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert drift_result.kind == "unavailable", drift_result
+    assert drift_result.launch is None
+    assert runtime.active_claims() == ()
+    assert coordinator.show("change-a").builder_handoff == handoff
+    assert _workspace_content_snapshot(first.worktree_path) == drift_snapshot
+    drift_file.unlink()
+    assert _workspace_content_snapshot(first.worktree_path) == before_workspace
+
+
+def test_batch_handoff_selects_exact_task_over_higher_ranked_independent_outcome(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, _branch_head, _workspace, settlement = (
+        _builder_retry_handoff_setup(
+            tmp_path,
+            now,
+            include_independent=True,
+            add_workspace_changes=False,
+        )
+    )
+    settled = _settle_builder_handoff_attempt(application, first.claim, settlement)
+    assert settled.builder_handoff_context is not None
+    now[0] = "2026-08-04T01:00:00Z"
+
+    def rank_candidate(candidate_runtime: DeliveryRuntime, outcome_id: str) -> int:
+        if candidate_runtime.contract.change_id == "change-a":
+            return {"OUT-002": -1, "OUT-001": 0}[outcome_id]
+        return 1
+
+    assert rank_candidate(runtime, "OUT-002") < rank_candidate(runtime, "OUT-001")
+    with patch.object(application, "_dependency_depth", side_effect=rank_candidate):
+        result = application.acquire_frontier_work()
+
+    assert result.failures == ()
+    assert tuple(package.change_id for package in result.launch_packages) == ("change-a",)
+    resumed = result.launch_packages[0]
+    assert resumed.outcome_id == first.outcome_id
+    assert resumed.claim.task_id == first.task_id
+    assert resumed.builder_handoff_context == settled.builder_handoff_context
+    assert runtime.active_claims() == ((first.outcome_id, resumed.claim),)
+    assert runtime.show_binding("OUT-002").active_claim is None
+    assert coordinator.show("change-a").builder_handoff is None
+
+
+@pytest.mark.parametrize("handoff_state", ["paused", "exhausted"])
+def test_nonclaimable_builder_handoff_leaves_capacity_for_independent_change(
+    tmp_path: Path,
+    handoff_state: str,
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, _branch_head, _workspace, settlement = (
+        _builder_retry_handoff_setup(
+            tmp_path,
+            now,
+            include_independent=True,
+            add_workspace_changes=False,
+        )
+    )
+    if handoff_state == "paused":
+        request = BlockDelivery(
+            action="block",
+            outcome_id=first.outcome_id,
+            claim_id=first.claim.claim_id,
+            block_id="builder-pause",
+            reason="The Builder needs a user decision.",
+            unblock_condition="The user decision is recorded.",
+            expected_evidence=("A confirmed decision.",),
+            locators=(first.task_id,),
+            resume_commit=first.source_head,
+            request=DeliveryRequest(
+                request_id="builder-pause-decision",
+                kind=DeliveryRequestKind.DECISION,
+                outcome_id=first.outcome_id,
+                summary="Choose whether this Builder task may resume.",
+                options=(DeliveryRequestOption(option_id="resume", label="Resume"),),
+            ),
+        )
+        settlement = settlement.model_copy(update={"request": request})
+    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    if handoff_state == "exhausted":
+        for hour in (1, 2):
+            now[0] = f"2026-08-04T{hour:02}:00:00Z"
+            resumed_result = application.acquire_change_action(_continuation_request(application))
+            assert resumed_result.launch is not None
+            resumed = resumed_result.launch
+            retry = RetryDelivery(
+                action="retry",
+                outcome_id=resumed.outcome_id,
+                claim_id=resumed.claim.claim_id,
+                attempt_id=resumed.claim.attempt_id,
+                abandoned_commit=resumed.source_head,
+                failure_code="builder-failed",
+            )
+            retry_settlement = DeliveryBuilderInvocationSettlement(
+                change_id=resumed.change_id,
+                outcome_id=resumed.outcome_id,
+                claim_id=resumed.claim.claim_id,
+                attempt_id=resumed.claim.attempt_id,
+                task_id=resumed.task_id,
+                expected_last_reviewed_commit=resumed.last_reviewed_commit,
+                disposition="normal-return",
+                request=retry,
+            )
+            _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+        assert runtime.show_binding(first.outcome_id).block is not None
+
+    assert runtime.claimable_outcome_ids() == ("OUT-002",)
+
+    def rank_sibling_first(candidate_runtime: DeliveryRuntime, outcome_id: str) -> int:
+        return -1 if candidate_runtime.contract.change_id == "change-a" and outcome_id == "OUT-002" else 0
+
+    with patch.object(application, "_dependency_depth", side_effect=rank_sibling_first):
+        result = application.acquire_frontier_work()
+
+    assert result.failures == ()
+    assert tuple(package.change_id for package in result.launch_packages) == ("change-b",)
+    assert coordinator.show("change-a").builder_handoff is not None
+    assert coordinator.show("change-a").writer is not None
+    assert coordinator.show("change-a").writer.kind == "handoff"
+    assert runtime.show_binding("OUT-002").active_claim is None
+    assert application._execution_occupancy() == 1
+
+
+def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_action(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, _coordinator, _state_root, first, _head, _workspace, settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    )
+    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    attempt_ids = [first.claim.attempt_id]
+
+    for hour in (1, 2):
+        now[0] = f"2026-08-04T{hour:02}:00:00Z"
+        acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+        assert acquired.launch is not None, acquired
+        resumed = acquired.launch
+        attempt_ids.append(resumed.claim.attempt_id)
+        retry_settlement = DeliveryBuilderInvocationSettlement(
+            change_id=resumed.change_id,
+            outcome_id=resumed.outcome_id,
+            claim_id=resumed.claim.claim_id,
+            attempt_id=resumed.claim.attempt_id,
+            task_id=resumed.task_id,
+            expected_last_reviewed_commit=resumed.last_reviewed_commit,
+            disposition="normal-return",
+            request=RetryDelivery(
+                action="retry",
+                outcome_id=resumed.outcome_id,
+                claim_id=resumed.claim.claim_id,
+                attempt_id=resumed.claim.attempt_id,
+                abandoned_commit=resumed.source_head,
+                failure_code="builder-failed",
+            ),
+        )
+        _settle_builder_handoff_attempt(application, resumed.claim, retry_settlement)
+
+    binding = runtime.show_binding("OUT-001")
+    assert binding.block is not None
+    assert binding.block.request_id is None
+    assert binding.requests == ()
+    assert "three-attempt limit" in binding.block.reason
+    episode = runtime.retry_ledger().read().episodes[0]
+    assert episode.total_attempts == 3
+    assert episode.attempt_ids == tuple(attempt_ids)
+    assert episode.stop_code.value == "retry-exhausted"
+    assert episode.reset_count == 0
+
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness is not None
+    assert view.card.needs.value == "none"
+    assert view.card.next_actor.value == "agent"
+    assert view.card.action.kind.value == "none"
+    assert view.card.action.command is None
+    assert view.readiness.reason_code == "retry-exhausted"
+    assert view.readiness.attempts == 3
+    assert view.readiness.executable is False
+    assert view.readiness.operation is None
+    assert view.readiness.prompt is not None
+    assert view.readiness.prompt.startswith("/inspect-change change-a")
+    assert "read-only" in view.readiness.prompt
+    assert "do not clear the block, retry, dispatch, or reset the budget" in view.readiness.prompt
+    assert "Builder" in view.card.next_step
+    assert "approved current authority" in view.card.next_step
+
+
+@pytest.mark.parametrize("writer_state", ["unchanged", "replaced"])
+def test_handoff_pre_activation_cas_failure_refunds_only_unchanged_writer_reservation(
+    tmp_path: Path,
+    writer_state: Literal["unchanged", "replaced"],
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, state_root, first, _branch_head, _workspace, settlement = (
+        _builder_retry_handoff_setup(
+            tmp_path,
+            now,
+        )
+    )
+    _settle_builder_handoff_attempt(application, first.claim, settlement)
+    ledger = runtime.retry_ledger()
+    before_episode = ledger.read().episodes[0]
+    before_pending = ledger.pending_attempts()
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    assert before_coordination.builder_handoff is not None
+    assert before_coordination.writer == before_coordination.builder_handoff.original_writer.model_copy(
+        update={"kind": "handoff"}
+    )
+    assert runtime.show_binding(first.outcome_id).builder_handoff_context is not None
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    before_coordination_bytes = coordination_path.read_bytes()
+    before_workspace = _workspace_content_snapshot(before_coordination.worktree_path)
+    before_non_ledger_files = {
+        path: content
+        for path, content in _file_bytes(state_root).items()
+        if not path.startswith("changes/change-a/retry-ledger/")
+    }
+    assert runtime.claimable_outcome_ids() == ("OUT-001",)
+
+    def rank_handoff_first(candidate_runtime: DeliveryRuntime, outcome_id: str) -> int:
+        return -1 if candidate_runtime.contract.change_id == "change-a" and outcome_id == "OUT-001" else 0
+
+    with patch.object(application, "_dependency_depth", side_effect=rank_handoff_first):
+        candidate = next(
+            candidate
+            for candidate in application._candidates("change-a")
+            if candidate.binding.outcome_id == first.outcome_id
+        )
+    source = application._prepare_source(candidate, allow_dirty=True)
+    assert not isinstance(source, DeliveryAcquisitionFailure), source.detail
+    assert source.coordination.builder_handoff == before_coordination.builder_handoff
+
+    now[0] = "2026-08-04T01:00:00Z"
+    if writer_state == "replaced":
+        replacement_writer = ChangeWriter(
+            attempt_id="replacement-attempt",
+            claim_id="replacement-claim",
+            actor_id="replacement-host",
+            process_id="replacement-session",
+            claimed_at=now[0],
+            job_id=1,
+            kind="build",
+        )
+        with (
+            patch.object(
+                coordinator,
+                "show",
+                return_value=before_coordination.model_copy(update={"writer": replacement_writer}),
+            ),
+            patch.object(
+                application,
+                "_activate_candidate_claim",
+                side_effect=OSError("injected interrupted claim activation"),
+            ),
+            pytest.raises(OSError, match="interrupted claim activation"),
+        ):
+            application._activate_candidate(candidate, source)
+    else:
+        with (
+            patch.object(
+                application._workspace_manager,
+                "prepare_builder_handoff_acquisition",
+                side_effect=OSError("injected handoff metadata compare-and-swap failure"),
+            ),
+            pytest.raises(OSError, match="metadata compare-and-swap failure"),
+        ):
+            application._activate_candidate(candidate, source)
+
+    after_episode = ledger.read().episodes[0]
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert coordination_path.read_bytes() == before_coordination_bytes
+    assert _workspace_content_snapshot(before_coordination.worktree_path) == before_workspace
+    assert {
+        path: content
+        for path, content in _file_bytes(state_root).items()
+        if not path.startswith("changes/change-a/retry-ledger/")
+    } == before_non_ledger_files
+    if writer_state == "replaced":
+        assert after_episode.total_attempts == before_episode.total_attempts + 1
+        assert after_episode.repair_attempts == before_episode.repair_attempts + 1
+        assert len(ledger.pending_attempts()) == len(before_pending) + 1
+    else:
+        assert after_episode.total_attempts == before_episode.total_attempts
+        assert after_episode.repair_attempts == before_episode.repair_attempts
+        assert ledger.pending_attempts() == before_pending
+    assert runtime.active_claims() == ()
+    assert coordinator.show("change-a").writer.kind == "handoff"
+
+
+def test_builder_settlement_replay_does_not_publish_unrelated_pending_state(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    runtime = runtimes["change-a"]
+    builder = application.acquire_frontier_work().launch_packages[0]
+    publisher = Mock()
+    application._delivery_state_publisher = publisher
+    settlement = DeliveryBuilderInvocationSettlement(
+        change_id="change-a",
+        outcome_id=builder.outcome_id,
+        claim_id=builder.claim.claim_id,
+        attempt_id=builder.claim.attempt_id,
+        task_id=builder.task_id,
+        expected_last_reviewed_commit=builder.last_reviewed_commit,
+        disposition="normal-return",
+        request=RetryDelivery(
+            action="retry",
+            outcome_id=builder.outcome_id,
+            claim_id=builder.claim.claim_id,
+            attempt_id=builder.claim.attempt_id,
+            abandoned_commit=_git(builder.worktree_path, "rev-parse", "HEAD"),
+        ),
+    )
+
+    result = application.settle_worker_invocation(
+        settlement,
+        host_id=builder.claim.owner_id,
+        session_id=builder.claim.process_id,
+    )
+    assert result.active_claim is None
+    publisher.publish.assert_not_called()
+    publisher.reset_mock()
+    runtime.queue_explicit_checkpoint(builder.last_reviewed_commit)
+    frontier = runtime.frontier_bytes()
+    accounting = runtime.retry_ledger().read()
+    pending = runtime.pending_state_publication()
+    assert pending is None
+    assert runtime.checkpoint_publication_state().pending_checkpoint is not None
+
+    assert (
+        application.settle_worker_invocation(
+            settlement,
+            host_id=builder.claim.owner_id,
+            session_id=builder.claim.process_id,
+        )
+        == result
+    )
+    assert runtime.frontier_bytes() == frontier
+    assert runtime.retry_ledger().read() == accounting
+    assert runtime.pending_state_publication() == pending
+    publisher.publish.assert_not_called()
 
 
 def _acknowledge_and_replay_planning_pause(
@@ -3114,9 +4387,7 @@ def test_interrupted_engine_reservation_waits_for_no_launch_backoff(tmp_path: Pa
 def test_worker_preflight_read_failure_does_not_reserve_an_attempt(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.PLANNING})
     candidate = application._candidates()[0]
-    source = application._prepare_source(
-        candidate.change_id, candidate.runtime, candidate.binding.outcome_id, candidate.role
-    )
+    source = application._prepare_source(candidate)
     assert not isinstance(source, DeliveryAcquisitionFailure)
     with (
         patch.object(candidate.runtime, "frontier_bytes", side_effect=OSError("preflight read failed")),
@@ -5945,7 +7216,7 @@ def test_captured_readiness_agrees_across_public_reads(tmp_path: Path, *, dirty:
         ("publication-wait", False, None),
         ("change-terminal", False, None),
         ("retry-backoff", False, None),
-        ("retry-exhausted", False, None),
+        ("retry-exhausted", False, "/inspect-change"),
         ("acceptance-wait", False, None),
         ("retry-ledger-unavailable", False, None),
     ],
@@ -6021,6 +7292,429 @@ def _failure_request(application: PortfolioApplication, **updates):
             **updates,
         }
     )
+
+
+def _finalizer_settlement(
+    application: PortfolioApplication,
+    attempt: ChangeFinalizationAttempt,
+    report: FinalizationReport,
+    **updates: object,
+) -> FinalizerSettlement:
+    coordination = application._workspace_manager.show(report.request.change_id)
+    return FinalizerSettlement(
+        change_id=report.request.change_id,
+        attempt_id=attempt.writer.attempt_id,
+        claim_id=attempt.writer.claim_id,
+        expected_head=attempt.exact_head,
+        expected_reviewed_base=coordination.last_reviewed_commit,
+        report_id=report.report_id,
+        disposition="normal-return",
+        outcome="review-failed" if report.request.category == "independent-review" else "proof-failed",
+        host_id=attempt.writer.actor_id,
+        session_id=attempt.writer.process_id,
+    ).model_copy(update=updates)
+
+
+@pytest.mark.parametrize(
+    ("category", "code", "expected_outcome"),
+    [
+        ("maintained-check", FinalizationFailureCode.MAINTAINED_CHECK_FAILED, "proof-failed"),
+        ("independent-review", FinalizationFailureCode.INDEPENDENT_REVIEW_FAILED, "review-failed"),
+    ],
+)
+def test_normal_finalizer_failure_settlement_releases_slot_without_granting_proof(
+    tmp_path: Path,
+    category: str,
+    code: FinalizationFailureCode,
+    expected_outcome: str,
+) -> None:
+    now = "2026-08-04T00:00:00Z"
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.PLANNING},
+        clock=lambda: now,
+        execution_capacity=1,
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired"
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id, category=category, code=code)
+    )
+    assert isinstance(report, FinalizationReport)
+    settlement = _finalizer_settlement(application, attempt, report)
+    assert settlement.outcome == expected_outcome
+    before_ledger = RetryLedger(state_root, "change-a").read()
+    worktree = coordinator.show("change-a").worktree_path
+    index_path = Path(_git(worktree, "rev-parse", "--git-path", "index"))
+    if not index_path.is_absolute():
+        index_path = worktree / index_path
+    workspace_bytes = tuple(
+        (path.relative_to(worktree).as_posix(), path.read_bytes())
+        for path in sorted(worktree.rglob("*"))
+        if path.is_file() and path.name != ".git"
+    )
+    protected_bytes = (
+        runtimes["change-a"].frontier_bytes(),
+        index_path.read_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+        workspace_bytes,
+    )
+
+    waiting = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert waiting.kind == "waiting"
+    assert waiting.reason_code == "execution-capacity"
+
+    receipt = application.settle_finalizer_invocation(settlement)
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    assert receipt.finished_at.isoformat().replace("+00:00", "Z") == now
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    assert coordinator.show("change-a").writer is not None
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+    assert coordinator.show("change-a").finalization_attempt.finished_at == receipt.finished_at.isoformat().replace(
+        "+00:00", "Z"
+    )
+    assert attention.receipt_id == receipt.receipt_id
+    assert runtimes["change-a"].finalization() is None
+    assert (
+        runtimes["change-a"].frontier_bytes(),
+        index_path.read_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+        tuple(
+            (path.relative_to(worktree).as_posix(), path.read_bytes())
+            for path in sorted(worktree.rglob("*"))
+            if path.is_file() and path.name != ".git"
+        ),
+    ) == protected_bytes
+    RetryLedger(state_root, "change-a").reconcile_owner_results()
+    assert RetryLedger(state_root, "change-a").read() == before_ledger
+    owner_result = state_root / "changes/change-a/retry-ledger/owner-results" / f"{attempt.writer.attempt_id}.json"
+    assert owner_result.is_file()
+    assert json.loads(owner_result.read_text())["accepted"] is False
+    assert FinalizationReportStore(state_root, "change-a").read().current_report_id == report.report_id
+
+    failed_view = application.get_change("change-a")
+    assert failed_view.readiness.status != "passed"
+    assert failed_view.readiness.checks_state == "failed"
+    assert failed_view.readiness.last_attempt is not None
+    assert failed_view.readiness.last_attempt.report == report
+    assert failed_view.readiness.last_attempt.applicability == "current"
+    assert failed_view.finalization_attempt.finished_at is not None
+    assert application.settle_finalizer_invocation(settlement) == receipt
+
+    next_claim = application.acquire_change_action(_continuation_request(application, "change-b"))
+    if next_claim.kind == "reconciled":
+        next_claim = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert next_claim.kind == "acquired"
+
+
+def test_finalization_attention_replays_only_its_report_and_rejects_new_diagnostics(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    request = _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    report = application.report_finalization_failure(request)
+    assert isinstance(report, FinalizationReport)
+    settlement = _finalizer_settlement(application, attempt, report)
+    receipt = application.settle_finalizer_invocation(settlement)
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    with pytest.raises(DeliveryActionSelectionConflictError):
+        application.settle_finalizer_invocation(settlement.model_copy(update={"claim_id": "conflicting-claim"}))
+
+    report_store = FinalizationReportStore(state_root, "change-a")
+    ledger = RetryLedger(state_root, "change-a")
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    report_state = (
+        report_store.read(),
+        ledger.read(),
+        coordination_path.read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+    )
+    assert application.report_finalization_failure(request) == report
+    assert (
+        report_store.read(),
+        ledger.read(),
+        coordination_path.read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+    ) == report_state
+    conflicting_request = request.model_copy(
+        update={"attempt_key": "post-attention-attempt", "expected_diagnostic_sequence": report.sequence}
+    )
+    with pytest.raises(FinalizationReportError, match="diagnostic-conflict"):
+        application.report_finalization_failure(conflicting_request)
+    assert (
+        report_store.read(),
+        ledger.read(),
+        coordination_path.read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+    ) == report_state
+
+
+def test_finalizer_settlement_rejects_mismatched_authority_without_effects(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    valid = _finalizer_settlement(application, attempt, report)
+    other_report_id = "0" * 64 if report.report_id != "0" * 64 else "f" * 64
+    other_head = "0" * 40 if attempt.exact_head != "0" * 40 else "1" * 40
+    other_reviewed_base = "0" * 40 if valid.expected_reviewed_base != "0" * 40 else "1" * 40
+    invalid = (
+        valid.model_copy(update={"report_id": other_report_id}),
+        valid.model_copy(update={"session_id": "other-session"}),
+        valid.model_copy(update={"host_id": "other-host"}),
+        valid.model_copy(update={"claim_id": "other-claim"}),
+        valid.model_copy(update={"expected_head": other_head}),
+        valid.model_copy(update={"expected_reviewed_base": other_reviewed_base}),
+        valid.model_copy(update={"outcome": "review-failed"}),
+        valid.model_copy(update={"disposition": "cancelled"}),
+        valid.model_copy(update={"change_id": "change-b"}),
+    )
+    worktrees = tuple(
+        (
+            change_id,
+            tuple(
+                (path.relative_to(coordinator.show(change_id).worktree_path).as_posix(), path.read_bytes())
+                for path in sorted(coordinator.show(change_id).worktree_path.rglob("*"))
+                if path.is_file() and path.name != ".git"
+            ),
+        )
+        for change_id in ("change-a", "change-b")
+    )
+    before = (
+        tuple(
+            (change_id, (state_root / f"coordination/changes/{change_id}.json").read_bytes())
+            for change_id in ("change-a", "change-b")
+        ),
+        tuple(
+            (change_id, runtimes[change_id].frontier_bytes(), RetryLedger(state_root, change_id).read())
+            for change_id in ("change-a", "change-b")
+        ),
+        _git(application._workspace_manager.repository, "show-ref"),
+        worktrees,
+        FinalizationReportStore(state_root, "change-a").read(),
+    )
+    for candidate in invalid:
+        with pytest.raises(DeliveryActionSelectionConflictError):
+            application.settle_finalizer_invocation(candidate)
+        after_worktrees = tuple(
+            (
+                change_id,
+                tuple(
+                    (path.relative_to(coordinator.show(change_id).worktree_path).as_posix(), path.read_bytes())
+                    for path in sorted(coordinator.show(change_id).worktree_path.rglob("*"))
+                    if path.is_file() and path.name != ".git"
+                ),
+            )
+            for change_id in ("change-a", "change-b")
+        )
+        after = (
+            tuple(
+                (change_id, (state_root / f"coordination/changes/{change_id}.json").read_bytes())
+                for change_id in ("change-a", "change-b")
+            ),
+            tuple(
+                (change_id, runtimes[change_id].frontier_bytes(), RetryLedger(state_root, change_id).read())
+                for change_id in ("change-a", "change-b")
+            ),
+            _git(application._workspace_manager.repository, "show-ref"),
+            after_worktrees,
+            FinalizationReportStore(state_root, "change-a").read(),
+        )
+        assert after == before
+    assert not application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id).exists()
+    waiting = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert waiting.kind == "waiting"
+    assert waiting.reason_code == "execution-capacity"
+
+
+def test_finalizer_settlement_uses_report_time_when_initial_failure_charge_fails(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    request = _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    with patch.object(RetryLedger, "record_failure", side_effect=OSError("injected accounting failure")):
+        report = application.report_finalization_failure(request)
+    assert isinstance(report, FinalizationReport)
+
+    now[0] = "2026-08-04T00:01:00Z"
+    settlement = _finalizer_settlement(application, attempt, report)
+    assert isinstance(application.settle_finalizer_invocation(settlement), FinalizerSettlementReceipt)
+    observed_at = report.observed_at.isoformat().replace("+00:00", "Z")
+    owner_result_path = state_root / "changes/change-a/retry-ledger/owner-results" / f"{attempt.writer.attempt_id}.json"
+    assert json.loads(owner_result_path.read_text())["observed_at"] == observed_at
+
+    ledger = RetryLedger(state_root, "change-a")
+    ledger.reconcile_owner_results()
+    episode = ledger.episode_for_attempt(attempt.writer.attempt_id)
+    assert episode is not None
+    assert episode.last_failure_at == observed_at
+    assert episode.next_eligible_at == (report.observed_at + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+    assert episode.total_attempts == 1
+    assert episode.reset_count == 0
+    assert len(episode.outcome_ids) == 1
+
+
+def test_corrupt_finalizer_settlement_receipt_keeps_capacity_occupied(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    settlement = _finalizer_settlement(application, attempt, report)
+    receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    receipt_path.parent.mkdir(parents=True)
+    receipt_path.write_bytes(b"{")
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    before = (
+        coordination_path.read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        RetryLedger(state_root, "change-a").read(),
+    )
+
+    with pytest.raises(ValidationError):
+        application.settle_finalizer_invocation(settlement)
+
+    assert (
+        coordination_path.read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        RetryLedger(state_root, "change-a").read(),
+    ) == before
+    assert coordinator.show("change-a").writer == attempt.writer
+    waiting = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert waiting.kind == "waiting"
+    assert waiting.reason_code == "execution-capacity"
+
+
+def test_finalizer_settlement_rejects_retired_report_without_releasing_custody(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    FinalizationReportStore(state_root, "change-a").retire(attempt.exact_head, attempt.contract_digest)
+    settlement = _finalizer_settlement(application, attempt, report)
+    before = (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        RetryLedger(state_root, "change-a").read(),
+        _git(application._workspace_manager.repository, "show-ref"),
+    )
+    with pytest.raises(DeliveryActionSelectionConflictError):
+        application.settle_finalizer_invocation(settlement)
+    assert (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        RetryLedger(state_root, "change-a").read(),
+        _git(application._workspace_manager.repository, "show-ref"),
+    ) == before
+    assert coordinator.show("change-a").writer == attempt.writer
+    assert coordinator.show("change-a").finalization_attempt.finished_at is None
+
+
+def test_finalizer_settlement_replays_after_interrupted_atomic_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: "2026-08-04T00:00:00Z",
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    settlement = _finalizer_settlement(application, attempt, report)
+    original_commit = RuntimeTransaction.commit
+
+    def interrupted(transaction: RuntimeTransaction) -> None:
+        def fail(stage: str) -> None:
+            if stage == "after-first-publication":
+                message = "injected Finalizer settlement interruption"
+                raise RuntimeError(message)
+
+        original_commit(transaction, failure=fail)
+
+    with (
+        patch.object(RuntimeTransaction, "commit", interrupted),
+        pytest.raises(RuntimeError, match="injected Finalizer settlement interruption"),
+    ):
+        application.settle_finalizer_invocation(settlement)
+    assert coordinator.show("change-a").writer == attempt.writer
+    assert runtimes["change-a"].finalization() is None
+
+    receipt = application.settle_finalizer_invocation(settlement)
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    assert coordinator.show("change-a").finalization_attention.receipt_id == receipt.receipt_id
+    assert (state_root / "changes/change-a/retry-ledger/owner-results" / f"{attempt.writer.attempt_id}.json").is_file()
+    assert application.settle_finalizer_invocation(settlement) == receipt
+
+
+def test_finalizer_settlement_is_noop_after_exact_successful_finalization(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    reviewed_base = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id),
+    )
+    before = (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+    )
+    settlement = FinalizerSettlement(
+        change_id="change-a",
+        attempt_id=attempt.writer.attempt_id,
+        claim_id=attempt.writer.claim_id,
+        expected_head=attempt.exact_head,
+        expected_reviewed_base=reviewed_base,
+        report_id="0" * 64,
+        disposition="normal-return",
+        outcome="proof-failed",
+        host_id=attempt.writer.actor_id,
+        session_id=attempt.writer.process_id,
+    )
+
+    assert application.settle_finalizer_invocation(settlement) == finalization
+    assert (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+    ) == before
+    assert coordinator.show("change-a").writer is None
+    assert coordinator.show("change-a").finalization_attention is None
+    assert not application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id).exists()
 
 
 def test_application_retains_failure_without_lifecycle_effect_and_prioritizes_success(tmp_path: Path) -> None:
@@ -6216,7 +7910,6 @@ def test_known_corrupt_change_remains_visible_without_relaxing_parser(tmp_path: 
 @pytest.mark.parametrize(
     ("stage", "operation"),
     [
-        (DeliveryStage.DESIGN, "resume-design"),
         (DeliveryStage.PLANNING, "start-orchestration"),
         (DeliveryStage.IMPLEMENTATION, "start-orchestration"),
     ],
@@ -6233,6 +7926,34 @@ def test_nonfinalization_ready_actions_skip_workspace_inspection(tmp_path: Path,
     assert decision.operation.value == operation
     assert decision.executable
     assert decision.basis.workspace_fingerprint is None
+
+
+def test_design_attention_is_human_not_executable_by_continuation(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.DESIGN})
+
+    view = application.get_change("change-a")
+    readiness = view.readiness
+    assert readiness.status == "blocked"
+    assert readiness.operation is None
+    assert not readiness.executable
+    assert readiness.action is None
+    assert readiness.next_actor.value == "you"
+    assert readiness.reason_code == "design-attention"
+    assert readiness.prompt is not None
+    assert readiness.prompt.startswith("/design change-a")
+    assert "does not approve or admit" in readiness.prompt
+    assert view.detail.card.action.kind.value == "resume-design"
+    assert view.detail.card.action.command == "/design change-a"
+
+    result = application.acquire_change_action(_continuation_request(application, "change-a"))
+
+    assert result.kind == "human"
+    assert result.reason_code == "design-attention"
+    assert result.readiness.prompt == readiness.prompt
+    assert result.launch is None
+    assert result.engine_action is None
+    assert runtimes["change-a"].active_claims() == ()
+    assert runtimes["change-a"].claimable_outcome_ids() == ()
 
 
 def test_active_lifecycle_guard_survives_readiness_capture(tmp_path: Path) -> None:

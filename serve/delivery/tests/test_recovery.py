@@ -17,6 +17,7 @@ import pytest
 from serve.delivery.tests.test_portfolio_application import (
     _attach_local_target,
     _awaiting_acceptance_fixture,
+    _builder_retry_handoff_setup,
     _commit_reviewed_head,
     _continuation_request,
     _engine_action,
@@ -28,6 +29,7 @@ from serve.delivery.tests.test_portfolio_application import (
     _portfolio,
     _prepare_legacy_integration_repair,
     _reopen_portfolio,
+    _settle_builder_handoff_attempt,
     _task,
     _task_result,
 )
@@ -477,6 +479,59 @@ def test_recovery_intent_binds_only_the_active_task_authority(tmp_path: Path) ->
     assert intent.authority_matches(intent.model_copy(update={"admitted_task_digest": "d" * 64})) is False
     assert coordinator.show("change-a").recovery_owner_id is None
     assert launch.claim.task_id == task.task_id
+
+
+def test_clean_claim_recovery_refuses_retained_builder_handoff_before_writes(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    (
+        application,
+        runtime,
+        _coordinator,
+        _state_root,
+        original,
+        _branch_head,
+        _before_workspace,
+        settlement,
+    ) = _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    host = _host(application)
+    settled = _settle_builder_handoff_attempt(application, original.claim, settlement)
+    handoff = settled.builder_handoff_context
+    assert handoff is not None
+
+    now[0] = "2026-08-04T01:00:00Z"
+    resumed_result = application.acquire_change_action(_continuation_request(application, "change-a"))
+    assert resumed_result.launch is not None
+    resumed = resumed_result.launch
+    assert resumed.claim.task_id == handoff.original_task_id
+    assert resumed.builder_handoff_context == handoff
+
+    binding = runtime.show_binding(resumed.outcome_id)
+    assert binding.active_claim == resumed.claim
+    assert binding.builder_handoff_context == handoff
+    intent = application._propose_recovery("change-a")
+    assert intent.kind == "clean-claim"
+    reference = host.seal(intent, "excluded")
+    evidence = host.verify(reference, intent)
+    receipt = RecoveryReceipt(
+        recovery_id=intent.recovery_id,
+        evidence=evidence,
+        owner_effect="no-workspace-effect",
+        finished_at=now[0],
+    )
+
+    before = recovery_effect_snapshot(application)
+    pending_before = runtime.pending_state_publication()
+    with (
+        patch.object(application._workspace_manager, "prepare_recovery_release") as prepare_release,
+        patch.object(runtime, "_replace_content") as replace_content,
+        pytest.raises(DeliveryWorkerExclusionRequiredError),
+    ):
+        runtime.complete_recovery(intent, receipt)
+
+    prepare_release.assert_not_called()
+    replace_content.assert_not_called()
+    assert recovery_effect_snapshot(application) == before
+    assert runtime.pending_state_publication() == pending_before
 
 
 @pytest.mark.parametrize(

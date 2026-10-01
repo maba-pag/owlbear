@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from owlbear_delivery.acceptance import CompletionReceiptStore
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
+    BuilderHandoffSource,
     ChangeCoordination,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -30,12 +31,27 @@ from owlbear_delivery.delivery_contract_discovery import (
     discover_persisted_changes,
 )
 from owlbear_delivery.delivery_runtime import (
+    BlockDelivery,
     DeliveryAcceptanceAttentionReason,
+    DeliveryActiveClaim,
+    DeliveryBuilderHandoffContext,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryPendingStatePublication,
+    DeliveryPlanCandidate,
+    DeliveryRequestKind,
     DeliveryRuntime,
+    DeliveryStage,
     DeliveryWorkerRole,
+    OutcomeAuthorityBinding,
+    RetryDelivery,
+    ReturnDelivery,
+    _DeliveryBuilderInvocationSettlementReceipt,
+    _DeliveryBuilderPlanPromotionReceipt,
+    _model_content,
+    _read_builder_handoff_change_intent_receipts,
+    _read_builder_request_resolution_receipt,
 )
 from owlbear_delivery.delivery_state import (
     DeliveryStatePublicationError,
@@ -100,6 +116,15 @@ class _DeliveryPaths:
     runtime_root: Path
     repository_root: Path
     worktree_root: Path
+
+
+@dataclass(frozen=True)
+class _BuilderReturnReplayContext:
+    snapshot: DeliveryStateSnapshot
+    local_frontier: DeliveryFrontier
+    settlement: _DeliveryBuilderInvocationSettlementReceipt
+    paths: _DeliveryPaths
+    branch_head: str
 
 
 class DeliveryApplicationLoadError(RuntimeError):
@@ -371,7 +396,7 @@ def _bootstrap_remote_state(
     for snapshot in inventory.snapshots:
         try:
             if snapshot.change_id in local_change_ids:
-                _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
+                _validate_local_snapshot(snapshot, config, paths, package_store, workspace_manager)
             else:
                 _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
         except _DeferredRemoteStateReconciliationError as exc:
@@ -483,7 +508,7 @@ def _validate_local_snapshot(
     config: DeliveryStartupConfig,
     paths: _DeliveryPaths,
     package_store: DesignPackageStore,
-    coordinator: PortfolioCoordinator,
+    workspace_manager: ChangeWorkspaceManager,
 ) -> None:
     """Reject local Delivery state outside exact or explicitly recoverable authority."""
     try:
@@ -493,7 +518,7 @@ def _validate_local_snapshot(
     if package.package_id != snapshot.package_id:
         _bootstrap_failure("local Delivery package differs from its remote snapshot")
     try:
-        coordination = coordinator.show(snapshot.change_id)
+        coordination = workspace_manager.show(snapshot.change_id)
     except (OSError, RuntimeError, ValueError) as exc:
         _bootstrap_failure("local Delivery coordination cannot be reconciled with its remote snapshot", exc)
     if (
@@ -515,13 +540,29 @@ def _validate_local_snapshot(
         relative_root / "state-publication.json",
         frontier_bytes,
     )
+    if local_pending_publication and (
+        coordination.builder_handoff is not None
+        or any(binding.builder_handoff_context is not None for binding in frontier.bindings)
+    ):
+        _bootstrap_failure("local Builder handoff cannot be combined with portable state publication")
     local_attention_successor = _is_unpublished_acceptance_attention_successor(
         snapshot.frontier, frontier
     ) or _is_unpublished_target_sync_attention_successor(snapshot.frontier, frontier)
     local_claim_successor = _is_unpublished_claim_successor(snapshot.frontier, frontier)
+    local_builder_handoff_successor = _is_unpublished_builder_handoff_successor(
+        snapshot,
+        frontier,
+        coordination,
+        paths,
+        workspace_manager,
+    )
     local_checkpoint_successor = _is_unpublished_checkpoint_successor(snapshot.frontier, frontier)
     local_recoverable_successor = (
-        local_attention_successor or local_claim_successor or local_checkpoint_successor or local_pending_publication
+        local_attention_successor
+        or local_claim_successor
+        or local_builder_handoff_successor
+        or local_checkpoint_successor
+        or local_pending_publication
     )
     if local_claim_successor:
         _require_local_snapshot_branch(snapshot, paths.repository_root)
@@ -530,7 +571,7 @@ def _validate_local_snapshot(
         config,
         paths.repository_root,
         allow_local_branch=True,
-        allow_local_descendant=local_attention_successor,
+        allow_local_descendant=local_attention_successor or local_builder_handoff_successor,
     )
     if frontier_bytes != expected["frontier.json"] and not local_recoverable_successor:
         _bootstrap_failure("local Delivery runtime artifact differs from its remote snapshot: frontier.json")
@@ -744,6 +785,854 @@ def _is_unpublished_claim_successor(
         update={"bindings": tuple(binding.model_copy(update=transient_fields) for binding in local_frontier.bindings)}
     )
     return local_has_claim and snapshot_without_claims == local_without_claims
+
+
+def _is_unpublished_builder_handoff_successor(
+    snapshot: DeliveryStateSnapshot,
+    local_frontier: DeliveryFrontier,
+    coordination: ChangeCoordination,
+    paths: _DeliveryPaths,
+    workspace_manager: ChangeWorkspaceManager,
+) -> bool:
+    """Recognize one exact local Builder handoff settlement or its permitted successor."""
+    local_bindings = tuple(
+        binding for binding in local_frontier.bindings if binding.builder_handoff_context is not None
+    )
+    if not local_bindings and coordination.builder_handoff is None:
+        return False
+    if len(local_bindings) != 1:
+        _bootstrap_failure("local Builder handoff does not have one exact outcome context")
+    local_binding = local_bindings[0]
+    context = local_binding.builder_handoff_context
+    if context is None:
+        _bootstrap_failure("local Builder handoff context is unavailable")
+    snapshot_binding = next(
+        (binding for binding in snapshot.frontier.bindings if binding.outcome_id == context.outcome_id),
+        None,
+    )
+    if snapshot_binding is None:
+        _bootstrap_failure("local Builder handoff outcome is absent from its remote snapshot")
+    receipt = _read_local_builder_handoff_receipt(paths.runtime_root, snapshot.change_id, context)
+    if not _builder_handoff_receipt_matches_snapshot(snapshot, snapshot_binding, receipt.handoff_context, receipt):
+        _bootstrap_failure("local Builder handoff receipt does not match its reviewed task authority")
+    if not _builder_handoff_owner_matches(coordination, local_binding, context, receipt.envelope):
+        _bootstrap_failure("local Builder handoff receipt does not match current Change custody")
+    branch_head = _validate_local_builder_handoff_workspace(snapshot, coordination, context, paths, workspace_manager)
+    _validate_local_builder_handoff_frontier(
+        snapshot,
+        local_frontier,
+        receipt,
+        branch_head,
+        paths,
+    )
+    return True
+
+
+def _builder_handoff_receipt_matches_snapshot(
+    snapshot: DeliveryStateSnapshot,
+    snapshot_binding: OutcomeAuthorityBinding,
+    context: DeliveryBuilderHandoffContext,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+) -> bool:
+    """Bind one immutable Builder settlement to its published task authority and route."""
+    envelope = receipt.envelope
+    request = envelope.request
+    if isinstance(request, RetryDelivery):
+        request_matches = request.abandoned_commit == context.branch_head and request.attempt_id == envelope.attempt_id
+        expected_route = "same-task"
+    elif isinstance(request, BlockDelivery):
+        delivery_request = request.request
+        request_matches = (
+            delivery_request is not None
+            and delivery_request.resolution is None
+            and delivery_request.outcome_id == context.outcome_id
+            and delivery_request.request_id not in {item.request_id for item in snapshot_binding.requests}
+        )
+        expected_route = "same-task"
+    elif isinstance(request, ReturnDelivery):
+        expected_route = {
+            DeliveryStage.PLANNING: "same-outcome-planner",
+            DeliveryStage.DESIGN: "same-outcome-design",
+        }.get(request.target)
+        request_matches = (
+            expected_route is not None
+            and request.preserved_commit == context.branch_head
+            and request.attempt_id == envelope.attempt_id
+        )
+    else:
+        return False
+    original_task = next((task for task in snapshot_binding.tasks if task.task_id == context.original_task_id), None)
+    return all(
+        (
+            request_matches,
+            context.route == expected_route,
+            receipt.handoff_context == context,
+            envelope.disposition == "normal-return",
+            envelope.change_id == snapshot.change_id,
+            envelope.outcome_id == context.outcome_id,
+            envelope.task_id == context.original_task_id,
+            request.outcome_id == context.outcome_id,
+            request.claim_id == envelope.claim_id,
+            envelope.expected_last_reviewed_commit == snapshot.last_reviewed_commit,
+            context.last_reviewed_commit == snapshot.last_reviewed_commit,
+            any(outcome.outcome_id == context.outcome_id for outcome in snapshot.contract.outcomes),
+            original_task is not None,
+            original_task.plan_scope_id == snapshot_binding.plan_scope_id,
+            original_task.commitment_ids == context.original_task_commitment_ids,
+            original_task.maintained_surfaces == context.original_task_maintained_surfaces,
+        )
+    )
+
+
+def _validate_local_builder_handoff_workspace(
+    snapshot: DeliveryStateSnapshot,
+    coordination: ChangeCoordination,
+    context: DeliveryBuilderHandoffContext,
+    paths: _DeliveryPaths,
+    workspace_manager: ChangeWorkspaceManager,
+) -> str:
+    """Require retained metadata or an active successor branch to match the exact handoff."""
+    if coordination.builder_handoff is None:
+        active_head = workspace_manager.source_head(
+            snapshot.change_id,
+            require_clean=False,
+            builder_handoff_source=BuilderHandoffSource(
+                settlement_id=context.settlement_id,
+                original_task_id=context.original_task_id,
+                branch_head=context.branch_head,
+                last_reviewed_commit=context.last_reviewed_commit,
+                metadata_fingerprint=context.metadata_fingerprint,
+            ),
+        )
+        local_branch_head = _loader_git_output(
+            paths.repository_root,
+            "rev-parse",
+            "--verify",
+            f"refs/heads/{snapshot.branch}^{{commit}}",
+        )
+        if not (
+            active_head == local_branch_head
+            and _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head)
+        ):
+            _bootstrap_failure("active Builder handoff branch differs from its captured descendant")
+        return active_head
+
+    metadata = workspace_manager._capture_builder_handoff_metadata(coordination)  # noqa: SLF001
+    local_branch_head = _loader_git_output(
+        paths.repository_root,
+        "rev-parse",
+        "--verify",
+        f"refs/heads/{snapshot.branch}^{{commit}}",
+    )
+    if not all(
+        (
+            metadata.change_id == snapshot.change_id,
+            metadata.branch == snapshot.branch,
+            metadata.worktree_path == coordination.worktree_path,
+            metadata.last_reviewed_commit == context.last_reviewed_commit,
+            metadata.branch_head == context.branch_head,
+            metadata.registration.path == metadata.worktree_path,
+            metadata.registration.branch == metadata.branch,
+            metadata.registration.head == metadata.branch_head,
+            metadata.fingerprint == context.metadata_fingerprint,
+            local_branch_head == context.branch_head,
+            _loader_git_is_ancestor(paths.repository_root, snapshot.change_head, context.branch_head),
+        )
+    ):
+        _bootstrap_failure("local Builder handoff metadata or Change head differs from its captured proof")
+    return context.branch_head
+
+
+def _validate_local_builder_handoff_frontier(
+    snapshot: DeliveryStateSnapshot,
+    local_frontier: DeliveryFrontier,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    branch_head: str,
+    paths: _DeliveryPaths,
+) -> None:
+    """Require the exact retry or pause result, answer, claim, and candidate."""
+    if isinstance(receipt.envelope.request, ReturnDelivery):
+        _validate_local_builder_return_frontier(
+            _BuilderReturnReplayContext(snapshot, local_frontier, receipt, paths, branch_head)
+        )
+        return
+    outcome_id = receipt.envelope.outcome_id
+    local_binding = next((binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id), None)
+    if local_binding is None:
+        _bootstrap_failure("local Builder handoff frontier lacks its exact outcome binding")
+    expected_binding = _builder_handoff_settled_binding(snapshot, local_binding, receipt, paths)
+    if local_binding.active_claim is not None:
+        claim = local_binding.active_claim
+        expected_binding = expected_binding.model_copy(update={"active_claim": claim})
+        candidate = local_binding.result_candidate
+        if candidate is not None:
+            _validate_local_builder_handoff_candidate(snapshot, local_binding, receipt, branch_head, paths)
+            expected_binding = expected_binding.model_copy(
+                update={"result_candidate": candidate, "output": candidate.output}
+            )
+    expected_frontier = snapshot.frontier.model_copy(
+        update={
+            "bindings": tuple(
+                expected_binding if binding.outcome_id == receipt.envelope.outcome_id else binding
+                for binding in snapshot.frontier.bindings
+            )
+        }
+    )
+    if local_binding.active_claim is None:
+        expected_frontier = _builder_handoff_lifecycle_successor_frontier(
+            snapshot.frontier,
+            expected_frontier,
+            receipt,
+            paths.runtime_root,
+        )
+    if expected_frontier != local_frontier:
+        _bootstrap_failure("local Delivery frontier contains state outside the exact Builder handoff")
+
+
+def _validate_local_builder_return_frontier(
+    replay: _BuilderReturnReplayContext,
+) -> None:
+    """Validate the passive Design handoff or an exact successor of a Builder return."""
+    snapshot = replay.snapshot
+    local_frontier = replay.local_frontier
+    settlement = replay.settlement
+    paths = replay.paths
+    outcome_id = settlement.envelope.outcome_id
+    local_binding = next((binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id), None)
+    if local_binding is None or local_binding.builder_handoff_context is None:
+        _bootstrap_failure("local Builder return frontier lacks its exact outcome handoff")
+    settled_binding = _builder_handoff_settled_binding(snapshot, local_binding, settlement, paths)
+    context = local_binding.builder_handoff_context
+    if context.route == "same-outcome-planner":
+        expected_frontier = _local_planner_return_frontier(replay, local_binding, settled_binding)
+    elif context.route == "same-outcome-design":
+        if local_binding.stage != DeliveryStage.DESIGN or local_binding != settled_binding:
+            _bootstrap_failure("local Design return differs from its exact passive handoff")
+        expected_frontier = _local_builder_return_successor_frontier(replay, settled_binding)
+    elif context.route == "same-task":
+        expected_frontier = _local_promoted_builder_return_frontier(replay, local_binding, settled_binding)
+    else:
+        _bootstrap_failure("local Builder return has an unsupported handoff route")
+
+    if expected_frontier != local_frontier:
+        _bootstrap_failure("local Delivery frontier differs from its exact Builder return promotion")
+
+
+def _local_planner_return_frontier(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    settled_binding: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    """Derive the exact Planning-stage successor and its permitted active candidate fields."""
+    snapshot = replay.snapshot
+    settlement = replay.settlement
+    paths = replay.paths
+    if (
+        local_binding.stage != DeliveryStage.PLANNING
+        or local_binding.builder_handoff_context != settlement.handoff_context
+    ):
+        _bootstrap_failure("local Builder return does not retain its exact Planning handoff")
+    promotion = _read_local_builder_plan_promotion_receipt(
+        paths.runtime_root,
+        snapshot.change_id,
+        settlement.settlement_id,
+        required=False,
+    )
+    if promotion is not None:
+        _bootstrap_failure("unpromoted Builder return already has a plan promotion receipt")
+    expected_binding = _local_planner_handoff_successor(snapshot, settled_binding, local_binding, settlement)
+    return _local_builder_return_successor_frontier(replay, expected_binding)
+
+
+def _local_promoted_builder_return_frontier(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    settled_binding: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    """Derive the receipt-backed same-task successor before or after Builder acquisition."""
+    snapshot = replay.snapshot
+    settlement = replay.settlement
+    paths = replay.paths
+    if local_binding.stage != DeliveryStage.IMPLEMENTATION:
+        _bootstrap_failure("promoted Builder return is not in Implementation")
+    promotion = _read_local_builder_plan_promotion_receipt(
+        paths.runtime_root,
+        snapshot.change_id,
+        settlement.settlement_id,
+        required=True,
+    )
+    _validate_local_builder_plan_promotion(snapshot, settlement, settled_binding, promotion)
+    if promotion.result_binding.builder_handoff_context != local_binding.builder_handoff_context:
+        _bootstrap_failure("promoted Builder return lost its exact same-task handoff")
+    expected_binding = _promoted_builder_return_successor(replay, local_binding, promotion)
+    return _local_builder_return_successor_frontier(replay, expected_binding, promotion=promotion)
+
+
+def _promoted_builder_return_successor(
+    replay: _BuilderReturnReplayContext,
+    local_binding: OutcomeAuthorityBinding,
+    promotion: _DeliveryBuilderPlanPromotionReceipt,
+) -> OutcomeAuthorityBinding:
+    """Allow only the promoted binding or its exact same-task Builder claim and result candidate."""
+    expected_binding = promotion.result_binding
+    claim = local_binding.active_claim
+    if claim is None:
+        return expected_binding
+    settlement = replay.settlement
+    context = settlement.handoff_context
+    if (
+        claim.worker_role != DeliveryWorkerRole.BUILDER
+        or claim.task_id != context.original_task_id
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("promoted Builder return has an unrelated active claim")
+    expected_binding = expected_binding.model_copy(update={"active_claim": claim})
+    candidate = local_binding.result_candidate
+    if candidate is None:
+        return expected_binding
+    _validate_local_builder_handoff_candidate(
+        replay.snapshot,
+        local_binding,
+        settlement,
+        replay.branch_head,
+        replay.paths,
+    )
+    return expected_binding.model_copy(update={"result_candidate": candidate, "output": candidate.output})
+
+
+def _local_builder_return_successor_frontier(
+    replay: _BuilderReturnReplayContext,
+    expected_binding: OutcomeAuthorityBinding,
+    *,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None = None,
+) -> DeliveryFrontier:
+    """Replace only the exact handoff row and fold any authenticated lifecycle receipts."""
+    snapshot = replay.snapshot
+    local_frontier = replay.local_frontier
+    settlement = replay.settlement
+    outcome_id = settlement.envelope.outcome_id
+    expected_frontier = snapshot.frontier.model_copy(
+        update={
+            "bindings": tuple(
+                expected_binding if binding.outcome_id == outcome_id else binding
+                for binding in snapshot.frontier.bindings
+            )
+        }
+    )
+    if next(binding for binding in local_frontier.bindings if binding.outcome_id == outcome_id).active_claim is None:
+        return _builder_handoff_lifecycle_successor_frontier(
+            snapshot.frontier,
+            expected_frontier,
+            settlement,
+            replay.paths.runtime_root,
+            promotion=promotion,
+        )
+    return expected_frontier
+
+
+def _local_planner_handoff_successor(
+    snapshot: DeliveryStateSnapshot,
+    settled_binding: OutcomeAuthorityBinding,
+    local_binding: OutcomeAuthorityBinding,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> OutcomeAuthorityBinding:
+    """Allow only one exact active Planner claim and its canonical candidate after settlement."""
+    claim = local_binding.active_claim
+    candidate = local_binding.candidate
+    if claim is None:
+        if candidate is not None:
+            _bootstrap_failure("local Planner candidate has no active Planner claim")
+        return settled_binding
+    if (
+        claim.worker_role != DeliveryWorkerRole.PLANNER
+        or claim.task_id is not None
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("local Builder return has an unrelated active Planner claim")
+    if candidate is None:
+        return settled_binding.model_copy(update={"active_claim": claim})
+    _validate_local_builder_plan_candidate(snapshot, settled_binding, claim, candidate)
+    return settled_binding.model_copy(
+        update={"active_claim": claim, "candidate": candidate, "output": candidate.output}
+    )
+
+
+def _validate_local_builder_plan_candidate(
+    snapshot: DeliveryStateSnapshot,
+    settled_binding: OutcomeAuthorityBinding,
+    planner_claim: DeliveryActiveClaim,
+    candidate: DeliveryPlanCandidate,
+) -> None:
+    """Validate one claim-bound, canonical same-outcome Planner return candidate."""
+    context = settled_binding.builder_handoff_context
+    tasks = candidate.tasks
+    task_ids = tuple(task.task_id for task in tasks)
+    task_map = {task.task_id: task for task in tasks}
+    source_tasks = {task.task_id: task for task in settled_binding.tasks}
+    completed_task_ids = {result.task_id for result in settled_binding.results}
+    contract_outcome = next(
+        (outcome for outcome in snapshot.contract.outcomes if outcome.outcome_id == settled_binding.outcome_id),
+        None,
+    )
+    digest = hashlib.sha256(b"".join(_model_content(task) for task in tasks)).hexdigest()
+    original_task = task_map.get(context.original_task_id)
+    if contract_outcome is None or original_task is None:
+        _bootstrap_failure("local Planner candidate lacks its exact outcome or original task")
+    if not all(
+        (
+            planner_claim.worker_role == DeliveryWorkerRole.PLANNER,
+            planner_claim.task_id is None,
+            candidate.claim_id == planner_claim.claim_id,
+            candidate.candidate_id == f"plan-{digest}",
+            candidate.digest == digest,
+            len(task_ids) == len(set(task_ids)),
+            all(
+                task.outcome_id == settled_binding.outcome_id
+                and task.plan_scope_id == settled_binding.plan_scope_id
+                and set(task.commitment_ids) <= set(contract_outcome.commitment_ids)
+                and set(task.dependency_ids) <= set(task_ids)
+                and task.task_id not in task.dependency_ids
+                for task in tasks
+            ),
+            all(
+                result.task_id in task_map
+                and result.task_digest == source_tasks[result.task_id].digest
+                and task_map[result.task_id] == source_tasks[result.task_id]
+                for result in settled_binding.results
+            ),
+            original_task.task_id not in completed_task_ids,
+            original_task.commitment_ids == context.original_task_commitment_ids,
+            original_task.maintained_surfaces == context.original_task_maintained_surfaces,
+            set(original_task.dependency_ids) <= completed_task_ids,
+        )
+    ):
+        _bootstrap_failure("local Planner candidate differs from its exact task, result, or scope authority")
+    ready = {task.task_id for task in tasks if not task.dependency_ids}
+    visited = set(ready)
+    while True:
+        expanded = visited | {task.task_id for task in tasks if set(task.dependency_ids) <= visited}
+        if expanded == visited:
+            break
+        visited = expanded
+    if not ready or visited != set(task_ids):
+        _bootstrap_failure("local Planner candidate does not contain an acyclic task chain")
+
+
+def _validate_local_builder_plan_promotion(
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    settled_binding: OutcomeAuthorityBinding,
+    promotion: _DeliveryBuilderPlanPromotionReceipt,
+) -> None:
+    """Require the exact Planner claim, candidate, and successor bound to the original return."""
+    claim = promotion.planner_claim
+    if (
+        promotion.change_id != snapshot.change_id
+        or promotion.outcome_id != settlement.envelope.outcome_id
+        or promotion.settlement_id != settlement.settlement_id
+        or promotion.source_binding.builder_handoff_context != settlement.handoff_context
+        or claim.attempt_id == settlement.envelope.attempt_id
+        or claim.claim_id == settlement.envelope.claim_id
+    ):
+        _bootstrap_failure("local Builder plan promotion receipt has a foreign identity")
+    _validate_local_builder_plan_candidate(snapshot, settled_binding, claim, promotion.candidate)
+    expected_source = settled_binding.model_copy(
+        update={
+            "active_claim": claim,
+            "candidate": promotion.candidate,
+            "output": promotion.candidate.output,
+        }
+    )
+    if promotion.source_binding != expected_source:
+        _bootstrap_failure("local Builder plan promotion receipt does not retain its exact Planner source row")
+
+
+def _builder_handoff_settled_binding(
+    snapshot: DeliveryStateSnapshot,
+    local_binding: OutcomeAuthorityBinding,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    paths: _DeliveryPaths,
+) -> OutcomeAuthorityBinding:
+    """Derive the exact immutable retry or request-bearing pause result."""
+    envelope = receipt.envelope
+    snapshot_binding = next(
+        (binding for binding in snapshot.frontier.bindings if binding.outcome_id == envelope.outcome_id),
+        None,
+    )
+    if snapshot_binding is None:
+        _bootstrap_failure("local Builder handoff outcome is absent from its remote snapshot")
+    if isinstance(envelope.request, BlockDelivery):
+        expected_result = DeliveryRuntime._builder_pause_settled_binding(  # noqa: SLF001
+            snapshot_binding,
+            receipt.handoff_context,
+            envelope.request,
+        )
+        if receipt.result != expected_result:
+            _bootstrap_failure("local Builder pause result is not the exact successor of its remote binding")
+        if local_binding != expected_result:
+            return _builder_request_resolution_successor(paths.runtime_root, snapshot, receipt)
+        return expected_result
+    if isinstance(envelope.request, ReturnDelivery):
+        if envelope.request.target not in {DeliveryStage.PLANNING, DeliveryStage.DESIGN}:
+            _bootstrap_failure("local Builder return settlement has an unsupported target")
+        expected_results = tuple(
+            DeliveryRuntime._builder_return_settled_binding(  # noqa: SLF001
+                snapshot_binding,
+                receipt.handoff_context,
+                envelope.request,
+                exhausted=exhausted,
+            )
+            for exhausted in (False, True)
+        )
+        if receipt.result not in expected_results:
+            _bootstrap_failure("local Builder return result is not the exact successor of its remote binding")
+        return receipt.result
+    if not isinstance(envelope.request, RetryDelivery):
+        _bootstrap_failure("local Builder handoff route is unsupported")
+    expected_results = tuple(
+        DeliveryRuntime._builder_retry_settled_binding(  # noqa: SLF001
+            snapshot_binding,
+            receipt.handoff_context,
+            envelope,
+            exhausted=exhausted,
+        )
+        for exhausted in (False, True)
+    )
+    if receipt.result not in expected_results:
+        _bootstrap_failure("local Builder handoff result is not the exact retry successor of its remote binding")
+    return receipt.result
+
+
+def _builder_handoff_lifecycle_successor_frontier(
+    snapshot_frontier: DeliveryFrontier,
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    runtime_root: Path,
+    *,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None = None,
+) -> DeliveryFrontier:
+    """Fold exact local lifecycle receipts over a known Builder settlement or answer."""
+    try:
+        chain = _read_builder_handoff_change_intent_receipts(
+            runtime_root,
+            settlement.envelope.change_id,
+            settlement.handoff_context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder lifecycle intent receipt chain is unavailable or invalid", exc)
+    if not chain:
+        return expected_frontier
+
+    baselines, resolved_frontier, settlement_frontier, promotion_frontier = _builder_handoff_lifecycle_baselines(
+        snapshot_frontier,
+        expected_frontier,
+        settlement,
+        promotion,
+    )
+    lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
+    previous_frontier: DeliveryFrontier | None = None
+    previous_baseline: DeliveryFrontier | None = None
+    for item in chain:
+        baseline = next(
+            (
+                candidate
+                for candidate in baselines
+                if _builder_handoff_frontier_with_lifecycle_fields(candidate, item.before_frontier)
+                == item.before_frontier
+            ),
+            None,
+        )
+        if baseline is None:
+            _bootstrap_failure("local Builder lifecycle intent is not anchored to its exact settlement or answer")
+        if _builder_handoff_frontier_with_lifecycle_fields(baseline, item.after_frontier) != item.after_frontier:
+            _bootstrap_failure("local Builder lifecycle intent receipt changes unsupported frontier state")
+
+        if previous_frontier is not None and item.before_frontier != previous_frontier:
+            resolved_after_answer = (
+                previous_baseline == settlement_frontier
+                and resolved_frontier is not None
+                and baseline == resolved_frontier
+                and all(
+                    getattr(previous_frontier, field_name) == getattr(item.before_frontier, field_name)
+                    for field_name in lifecycle_fields
+                )
+            )
+            promoted_after_settlement = (
+                promotion_frontier is not None
+                and previous_baseline == settlement_frontier
+                and baseline == promotion_frontier
+                and all(
+                    getattr(previous_frontier, field_name) == getattr(item.before_frontier, field_name)
+                    for field_name in lifecycle_fields
+                )
+            )
+            if not (resolved_after_answer or promoted_after_settlement):
+                _bootstrap_failure("local Builder lifecycle intent chain contains an unrecorded frontier transition")
+
+        previous_frontier = item.after_frontier
+        previous_baseline = baseline
+
+    return _builder_handoff_frontier_with_lifecycle_fields(expected_frontier, chain[-1].after_frontier)
+
+
+def _builder_handoff_lifecycle_baselines(
+    snapshot_frontier: DeliveryFrontier,
+    expected_frontier: DeliveryFrontier,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+    promotion: _DeliveryBuilderPlanPromotionReceipt | None,
+) -> tuple[
+    tuple[DeliveryFrontier, ...],
+    DeliveryFrontier | None,
+    DeliveryFrontier,
+    DeliveryFrontier | None,
+]:
+    """Select only a settlement, answered pause, or exact promotion as a lifecycle baseline."""
+    outcome_id = settlement.envelope.outcome_id
+    settlement_frontier = snapshot_frontier.model_copy(
+        update={
+            "bindings": tuple(
+                settlement.result if binding.outcome_id == outcome_id else binding
+                for binding in snapshot_frontier.bindings
+            )
+        }
+    )
+    promotion_frontier = (
+        snapshot_frontier.model_copy(
+            update={
+                "bindings": tuple(
+                    promotion.result_binding if binding.outcome_id == outcome_id else binding
+                    for binding in snapshot_frontier.bindings
+                )
+            }
+        )
+        if promotion is not None
+        else None
+    )
+    if expected_frontier == settlement_frontier:
+        resolved_frontier = None
+        baselines = (settlement_frontier,)
+    elif isinstance(settlement.envelope.request, BlockDelivery):
+        resolved_frontier = expected_frontier
+        baselines = (settlement_frontier, resolved_frontier)
+    elif (
+        promotion_frontier is not None
+        and _builder_handoff_frontier_with_lifecycle_fields(promotion_frontier, expected_frontier) == expected_frontier
+    ):
+        resolved_frontier = None
+        baselines = (settlement_frontier, promotion_frontier)
+    else:
+        _bootstrap_failure("local Builder lifecycle intent has an unknown request-resolution baseline")
+    return baselines, resolved_frontier, settlement_frontier, promotion_frontier
+
+
+def _builder_handoff_frontier_with_lifecycle_fields(
+    frontier: DeliveryFrontier,
+    lifecycle_frontier: DeliveryFrontier,
+) -> DeliveryFrontier:
+    """Copy only fields permitted to change in a Builder handoff lifecycle receipt."""
+    lifecycle_fields = ("change_deferral", "change_abandonment", "pending_checkpoint")
+    return frontier.model_copy(
+        update={field_name: getattr(lifecycle_frontier, field_name) for field_name in lifecycle_fields}
+    )
+
+
+def _validate_local_builder_handoff_candidate(
+    snapshot: DeliveryStateSnapshot,
+    local_binding: OutcomeAuthorityBinding,
+    receipt: _DeliveryBuilderInvocationSettlementReceipt,
+    branch_head: str,
+    paths: _DeliveryPaths,
+) -> None:
+    """Validate one candidate against its exact same-task claim and commit ancestry."""
+    candidate = local_binding.result_candidate
+    claim = local_binding.active_claim
+    task = next(
+        (item for item in local_binding.tasks if item.task_id == receipt.handoff_context.original_task_id),
+        None,
+    )
+    if candidate is None or claim is None or task is None:
+        _bootstrap_failure("local Builder result candidate lacks its exact task or active claim")
+    result_digest = hashlib.sha256(_canonical_model(candidate.result)).hexdigest()
+    if not all(
+        (
+            claim.worker_role == DeliveryWorkerRole.BUILDER,
+            claim.task_id == task.task_id,
+            candidate.claim_id == claim.claim_id,
+            candidate.candidate_id == f"result-{result_digest}",
+            candidate.digest == result_digest,
+            candidate.result.change_id == snapshot.change_id,
+            candidate.result.authority_digest == snapshot.authority_digest,
+            candidate.result.task_id == task.task_id,
+            candidate.result.task_digest == task.digest,
+            _loader_git_is_ancestor(
+                paths.repository_root,
+                receipt.handoff_context.branch_head,
+                candidate.result.completed_commit,
+            ),
+            _loader_git_is_ancestor(paths.repository_root, candidate.result.completed_commit, branch_head),
+        )
+    ):
+        _bootstrap_failure("local Builder result candidate differs from its exact active claim and task")
+
+
+def _builder_request_resolution_successor(
+    runtime_root: Path,
+    snapshot: DeliveryStateSnapshot,
+    settlement: _DeliveryBuilderInvocationSettlementReceipt,
+) -> OutcomeAuthorityBinding:
+    """Derive only the exact request and block resolution recorded for one local pause."""
+    envelope = settlement.envelope
+    block_request = envelope.request
+    if not isinstance(block_request, BlockDelivery) or block_request.request is None:
+        _bootstrap_failure("local Builder handoff has no exact request-bearing pause")
+    original_request = block_request.request
+    original_block = settlement.result.block
+    if original_block is None or original_block.request_id != original_request.request_id:
+        _bootstrap_failure("local Builder pause result does not retain its exact request block")
+    try:
+        resolution_receipt = _read_builder_request_resolution_receipt(
+            runtime_root,
+            snapshot.change_id,
+            original_request.request_id,
+            settlement.handoff_context,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder request resolution receipt is unavailable or invalid", exc)
+
+    resolution = resolution_receipt.resolved_request.resolution
+    if resolution is None:
+        _bootstrap_failure("local Builder request resolution receipt has no user answer")
+    if (original_request.kind == DeliveryRequestKind.DECISION and resolution.selected_option_id is None) or (
+        resolution.selected_option_id is not None
+        and resolution.selected_option_id not in {option.option_id for option in original_request.options}
+    ):
+        _bootstrap_failure("local Builder request resolution does not answer its exact bounded options")
+    expected_request = original_request.model_copy(update={"resolution": resolution})
+    expected_block = original_block.model_copy(
+        update={
+            "resolution_note": resolution.response_text or resolution.selected_option_id,
+            "resolution_locators": (original_request.request_id,),
+        }
+    )
+    if not all(
+        (
+            resolution_receipt.change_id == snapshot.change_id,
+            resolution_receipt.outcome_id == envelope.outcome_id,
+            resolution_receipt.request_id == original_request.request_id,
+            resolution_receipt.settlement_id == settlement.settlement_id,
+            resolution_receipt.builder_handoff_context == settlement.handoff_context,
+            resolution_receipt.resolved_request == expected_request,
+            resolution_receipt.updated_block == expected_block,
+        )
+    ):
+        _bootstrap_failure("local Builder request resolution receipt differs from its exact settlement pause")
+    return settlement.result.model_copy(
+        update={
+            "requests": tuple(
+                expected_request if request.request_id == original_request.request_id else request
+                for request in settlement.result.requests
+            ),
+            "block": expected_block,
+        }
+    )
+
+
+def _builder_handoff_owner_matches(
+    coordination: ChangeCoordination,
+    binding: OutcomeAuthorityBinding,
+    context: DeliveryBuilderHandoffContext,
+    envelope: DeliveryBuilderInvocationSettlement,
+) -> bool:
+    """Match a retained handoff or its exact newly acquired Builder claim."""
+    writer = coordination.writer
+    if writer is None or coordination.change_id != envelope.change_id:
+        return False
+    handoff = coordination.builder_handoff
+    if handoff is not None:
+        if not all(
+            (
+                handoff.change_id == envelope.change_id,
+                writer == handoff.original_writer.model_copy(update={"kind": "handoff"}),
+                handoff.settlement_id == context.settlement_id,
+                handoff.original_task_id == context.original_task_id,
+                handoff.last_reviewed_commit == context.last_reviewed_commit,
+                handoff.branch_head == context.branch_head,
+                handoff.metadata_fingerprint == context.metadata_fingerprint,
+            )
+        ):
+            return False
+        claim = binding.active_claim
+        if claim is None:
+            return True
+        return (
+            context.route == "same-outcome-planner"
+            and binding.stage == DeliveryStage.PLANNING
+            and claim.worker_role == DeliveryWorkerRole.PLANNER
+            and claim.task_id is None
+            and claim.attempt_id != envelope.attempt_id
+            and claim.claim_id != envelope.claim_id
+        )
+    claim = binding.active_claim
+    return (
+        claim is not None
+        and claim.worker_role == DeliveryWorkerRole.BUILDER
+        and claim.task_id == context.original_task_id
+        and claim.attempt_id != envelope.attempt_id
+        and claim.claim_id != envelope.claim_id
+        and writer.kind == "build"
+        and writer.attempt_id == claim.attempt_id
+        and writer.claim_id == claim.claim_id
+        and writer.actor_id == claim.owner_id
+        and writer.process_id == claim.process_id
+        and writer.claimed_at == claim.started_at
+    )
+
+
+def _read_local_builder_handoff_receipt(
+    runtime_root: Path,
+    change_id: str,
+    context: DeliveryBuilderHandoffContext,
+) -> _DeliveryBuilderInvocationSettlementReceipt:
+    """Read one exact immutable Builder settlement receipt without constructing a runtime."""
+    attempt_digest = hashlib.sha256(context.attempt_id.encode("utf-8")).hexdigest()
+    change_root = runtime_root / "changes" / change_id
+    receipt_directory = change_root / "builder-invocation-receipts"
+    receipt_path = receipt_directory / f"{attempt_digest}.json"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory, receipt_path)):
+        _bootstrap_failure("local Builder handoff receipt path is unsafe")
+    if not receipt_path.is_file():
+        _bootstrap_failure("local Builder handoff settlement receipt is missing")
+    try:
+        return _DeliveryBuilderInvocationSettlementReceipt.model_validate_json(receipt_path.read_bytes(), strict=True)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder handoff settlement receipt is invalid", exc)
+
+
+def _read_local_builder_plan_promotion_receipt(
+    runtime_root: Path,
+    change_id: str,
+    settlement_id: str,
+    *,
+    required: bool,
+) -> _DeliveryBuilderPlanPromotionReceipt | None:
+    """Read one exact host-local Planning promotion receipt without constructing a runtime."""
+    change_root = runtime_root / "changes" / change_id
+    receipt_directory = change_root / "builder-plan-promotion-receipts"
+    receipt_path = receipt_directory / f"{settlement_id}.json"
+    if any(path.is_symlink() for path in (runtime_root / "changes", change_root, receipt_directory, receipt_path)):
+        _bootstrap_failure("local Builder plan promotion receipt path is unsafe")
+    if not receipt_path.exists():
+        if required:
+            _bootstrap_failure("local Builder plan promotion receipt is missing")
+        return None
+    if not receipt_path.is_file():
+        _bootstrap_failure("local Builder plan promotion receipt is not a regular file")
+    try:
+        return _DeliveryBuilderPlanPromotionReceipt.model_validate_json(receipt_path.read_bytes(), strict=True)
+    except (OSError, TypeError, ValueError) as exc:
+        _bootstrap_failure("local Builder plan promotion receipt is invalid", exc)
 
 
 def _is_unpublished_checkpoint_successor(

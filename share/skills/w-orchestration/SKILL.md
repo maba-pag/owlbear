@@ -6,10 +6,11 @@ user-invocable: false
 
 # Delivery Orchestration
 
-Run the portfolio until acquisition is quiescent or bounded attention requires a user/operator.
-Delivery owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
-provider-observed acceptance, and retained Integration attention. Orchestrator performs only the mechanical
-dispatch loop around that authority.
+Run the portfolio until acquisition is quiescent or bounded attention requires
+a user/operator. Delivery owns readiness, capacity, claims, identities, reviewer
+policy, writer custody, transitions, provider-observed acceptance, and retained
+Integration attention. Orchestrator performs only the mechanical dispatch loop
+around that authority.
 
 ## Change Continuation Entry
 
@@ -72,13 +73,30 @@ action, while `blocked` retains custody and forbids a replacement operation.
 
 A dispatched Builder that already called `submit_result` returns `kind: submitted`; record it and do
 not call `transition_delivery` again for that result. A structurally valid, launch-bound
-`DeliveryTransition` is validated and forwarded through Step 3 unchanged.
+`DeliveryTransition` is validated and routed through Step 3 with its worker-selected payload unchanged.
 
 A dispatched `finalizer` returns one `w-change-finalization` mapping, not a worker transition.
 Require its `change_id` to equal the selected Change and any returned `operation_id` to equal
-`finalization.attempt.writer.attempt_id`. Record `finalized`, `already_finalized`, `proof_failed`, or
-`review_failed` as the outcome of that issued attempt and re-observe with `get_change`; never forward
-any of them to `transition_delivery` and never run a second attempt beside it.
+`finalization.attempt.writer.attempt_id`. Record `finalized` and `already_finalized` as successful
+outcomes and re-observe with `get_change`; do not settle either result. For a normally returned
+`proof_failed` or `review_failed`, require that exact `operation_id` and a lowercase 64-hex
+`report_id` returned by `report_finalization_failure`. Construct `FinalizerSettlement` only from the
+issued launch: copy `change_id`, `attempt.writer.attempt_id`, `attempt.writer.claim_id`,
+`attempt.exact_head`, `context.reviewed_change_head`, `attempt.writer.actor_id`, and
+`attempt.writer.process_id`; copy the actual `report_id`; set `disposition: normal-return` and map the
+outcome to `proof-failed` or `review-failed`. Call the existing `settle_worker_invocation` once with
+only `{"settlement": <FinalizerSettlement>}`. Record its exact receipt and retained attention;
+preserve the report's code and `checks_state` (`not-run`, `failed`, or `unknown`) without presenting the report as
+proof or as evidence that the Finalizer process is closed.
+
+A missing or malformed report identity, missing or mismatched operation identity, malformed result,
+`dispatch_failure`, or dispatch/transport that may still be running is unknown execution: do not settle,
+recover, reacquire, or redispatch; report the issued attempt and retain custody. If the settlement call
+errors or returns a malformed result, re-read `get_change` before any retry; retry only the identical
+settlement when that view proves the same issued attempt is still active and unfinished. Otherwise
+report the engine-observed state or unknown outcome without retrying. Never call a lower-level
+settlement operation or forward a Finalizer result to
+`transition_delivery`.
 
 Step 2's `recover_claim` route does not apply to a continuation dispatch. Continuation and
 finalization custody is engine-held, and `recover_claim` rejects it because caller confirmation is
@@ -104,18 +122,18 @@ A non-acquired result carries no launch. Respond to its `kind` exactly:
 | `unavailable` | Custody is retained. Report `failure` and its retry condition unchanged; never redispatch, replay the effect, acquire a replacement operation, or reconstruct journals |
 | `terminal` | Report completion or abandonment. Never merge, clean up, remove a worktree, or transition anything implicitly |
 
-When the selected Change's action is `resume-design`, report its engine-authored
-`/design <change_id>` command for that same Change. Do not create another Change identity, restate
-design content, or treat the handoff as approval.
+When the selected Change's action is `resume-design`, report its complete engine-authored
+`readiness.prompt` unchanged for that same Change. Do not replace it with a bare command, create
+another Change identity, restate design content, or treat the handoff as approval.
 
 ### Continuation Refresh And Output
 
-After a released engine action or a recorded worker transition, re-observe with `get_change` and
-acquire again for the same Change. Stop on the first yielding, unsupported, unavailable, or terminal
+After a released engine action, recorded worker settlement, or recorded worker transition, re-observe
+with `get_change` and acquire again for the same Change. Stop on the first yielding, unsupported, unavailable, or terminal
 disposition, or when readiness offers no further action. Report the Change identity, each acquired
-action and its exact disposition, forwarded transitions, preserved engine results and failure
-envelopes, the retained custody statement when one applies, and the exact next user command when the
-engine authored one.
+action and its exact disposition, forwarded transitions and worker settlement results, preserved
+engine results and failure envelopes, the retained custody statement when one applies, and the exact
+next user command when the engine authored one.
 
 ## Step 1 - Acquire One Current Batch
 
@@ -123,15 +141,15 @@ Before using a target operation, call it directly when a callable binding is alr
 deferred inventory listing does not override that binding. If a required target operation has no
 direct callable binding, load the target tools once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery recover_claim recover_integration_repair_claim`
+`OwlBear Delivery target portfolio list_changes acquire_actions delivery_health get_change transition_delivery settle_worker_invocation recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_actions`, require callable bindings for `transition_delivery`,
-`recover_claim`, `recover_integration_repair_claim`, and `delivery_health`. Invoke any directly bound
-operation as granted; run one focused `tool_search` only for each operation with no direct callable
-binding. If any binding remains unavailable or its focused search returns a tool error,
-report the exact missing operation and end the session without acquisition. Transition and recovery
-are required dispatch safety authority, not optional operations to discover after a claim has been
-acquired.
+`settle_worker_invocation`, `recover_claim`, `recover_integration_repair_claim`, and
+`delivery_health`. Invoke any directly bound operation as granted; run one focused `tool_search` only
+for each operation with no direct callable binding. If any binding remains unavailable or its
+focused search returns a tool error, report the exact missing operation and end the session without
+acquisition. Transition, settlement, and recovery are required dispatch safety authority, not
+optional operations to discover after a claim has been acquired.
 
 Call `list_changes` only for bounded portfolio reporting. Call `acquire_actions` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
@@ -173,7 +191,7 @@ envelope as `recovered`. `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED` is non-retryab
 missing supported host evidence and stop with custody intact. Read-only diagnosis remains available.
 Do not inspect or classify private preservation contents or ask the user to operate Git or kill processes.
 
-## Step 3 - Forward One Worker Transition
+## Step 3 - Route One Completed Worker Result
 
 Require the worker result to be one `DeliveryTransition` mapping or one `kind: submitted`
 `DeliveryResultSubmissionResult` mapping. Validate only identity binding:
@@ -187,22 +205,58 @@ and require the returned binding to name the launch outcome. The Builder already
 `submit_result`, so record the submission and do not call `transition_delivery` again.
 
 Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
-commit fields. For a `DeliveryTransition`, call `transition_delivery` with outer
-`change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
-An implementation-stage Builder `block` or `return` is forwarded unchanged, but it is not a
-guaranteed custody release: runtime rejects the handoff with `ERR_DELIVERY_WORKER_EXCLUSION_REQUIRED`
-while a dispatched worker can still write, leaving its claim, worktree, and capacity held. Report the
-exact Change, outcome, attempt, and claim identities with that rejection. It is not malformed worker
-output or proof that the worker was lost; do not call `recover_claim`, redispatch, or synthesize a
-replacement transition. A malformed submission result or identity mismatch follows the existing
-dispatch-failure recovery route. A `retry` cannot release custody without verified exclusion; report
-the non-retryable rejection and do not rewrite it into another transition.
+commit fields. Route normal completed returns as follows:
 
-Immediately before forwarding, if no directly callable `transition_delivery` binding exists, run one focused
-`tool_search` for that exact operation. If it remains unavailable or the search returns a tool
-error, retain the launch's exact change, outcome, attempt, and claim IDs, report
-the routing failure and missing exclusion evidence, and end the session after the current acquired batch. Do
-not redispatch Planner, Builder, or another agent to echo, relay, reconstruct, or apply a transition.
+| Launch role | Returned transition | Operation |
+| --- | --- | --- |
+| `planner` | `retry` | `settle_worker_invocation` with `DeliveryPlanningRetrySettlement` |
+| `builder` | `retry`, `block`, or `return` to `planning` or `design` | `settle_worker_invocation` with `DeliveryBuilderInvocationSettlement` |
+| Any task role | Any other supported transition | `transition_delivery` with the unchanged transition |
+
+The real `settle_worker_invocation` MCP envelope has only these top-level fields:
+
+```json
+{
+  "settlement": {},
+  "host_id": "<optional exact claim owner>",
+  "session_id": "<optional exact claim process>"
+}
+```
+
+`settlement` is required and is one typed model. For a Planner retry, copy `change_id`, `outcome_id`,
+`claim_id`, and `attempt_id` from the acquired launch, set `disposition: normal-return`, and copy the
+returned `RetryDelivery` unchanged to `request`. For a Builder retry, block, or return to Planning or Design,
+use the same launch identities plus `task_id=launch.task_id` and
+`expected_last_reviewed_commit=launch.last_reviewed_commit`,
+set `disposition: normal-return`, and copy the returned transition unchanged to `request`. When the
+claim is a continuation, set the optional `host_id` and `session_id` from its exact `owner_id` and
+`process_id`; never guess either value.
+
+A completed-timeout settlement uses the matching typed identity, `disposition: completed-timeout`,
+and no `request`. Orchestrator owns this completion report; the timed-out child need not return
+a typed transition. Use it only after observing that the dispatched invocation has ended because
+of timeout and its owned mutating terminals and asynchronous jobs are settled. Elapsed time,
+a still-running tool, transport failure, cancelled wait or disconnect alone does not qualify.
+Malformed non-timeout output is not a timeout outcome. Those unknown executions retain custody
+under Step 2; do not dispatch a replacement beside them.
+
+A normal Builder `return` to `design` is settled through the same typed envelope. Settlement clears
+the exact active claim, records its failed attempt, and retains the task/results lineage and managed
+workspace as a passive handoff. It does not revise or admit Design, grant Designer access to the
+worktree, or make the Design route claimable by Planner or Builder. Re-read `get_change` and surface
+its complete engine-authored `readiness.prompt` unchanged for the human-owned Design attention;
+do not rebuild a bare `/design <change_id>` command or omit its recorded context. Do not fall back to
+`transition_delivery` or synthesize a different transition.
+
+For every other supported `DeliveryTransition`, call `transition_delivery` with outer
+`change_id=launch.change_id` and the returned transition as `transition` byte-for-structure unchanged.
+Immediately before either operation, if no directly callable binding exists, run one focused
+`tool_search` for that exact operation. If it remains unavailable or the search returns a tool error,
+retain the launch's exact change, outcome, attempt, and claim IDs, report the routing failure, and end
+the session after the current acquired batch. Do not redispatch Planner, Builder, or another agent to
+echo, relay, reconstruct, or apply a result. A failed settlement call must be reconciled with
+`get_change` before any retry; it is not a reason to send its request through `transition_delivery`
+or attempt recovery without the Step 2 evidence.
 
 An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
 the exact Step 2 recovery route for the still-active claim. A rejected `transition_delivery` call
@@ -228,8 +282,8 @@ the end of the cycle.
 ## Step 5 - Run Periodic Housekeeping
 
 Count completed acquisition cycles from 1 within this orchestrator invocation. A completed cycle is
-a non-empty acquisition batch whose launches have been handled and whose worker transitions or exact
-recovery results have been recorded. Do not count an empty acquisition, an acquisition failure, or
+a non-empty acquisition batch whose launches have been handled and whose worker transitions, exact
+settlements, or recovery results have been recorded. Do not count an empty acquisition, an acquisition failure, or
 an interrupted batch. Dispatch `memory-curator` after cycle 3, then after cycles 13, 23, and so on
 every tenth completed cycle thereafter, with exactly `Curate: Periodic curation`. This is
 non-Delivery housekeeping, not a launch package: provide no task, Change, outcome, attempt, or claim
@@ -259,7 +313,8 @@ stages as bounded acquisition attention and stop; do not infer a launch or mutat
 
 ## Output
 
-Report forwarded transition identities, typed Integration attention, periodic housekeeping results,
+Report forwarded transition and settlement identities, typed Integration attention, periodic
+housekeeping results,
 exact recovery results, unclaimed acquisition failures, bounded acquisition attention, and cycle
 count. Report quiescence
 only when both acquisition and the final work-item projection are empty. Do not translate those typed

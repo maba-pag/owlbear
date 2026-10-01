@@ -36,12 +36,15 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
+    BuilderHandoffSource,
+    ChangeBuilderHandoff,
     ChangeContinuationAction,
     ChangeCoordination,
     ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeFinalizationAttempt,
+    ChangeFinalizationAttention,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -56,6 +59,7 @@ from owlbear_delivery.change_workspace import (
     PromoteExternalHead,
     PublicationBaselineRecoveryReceipt,
     PublicationBaselineUnavailableError,
+    PublicationLock,
     RecoverOutOfBandHead,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
@@ -81,6 +85,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActionSelectionConflictError,
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryBuilderHandoffContext,
+    DeliveryBuilderInvocationSettlement,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
     DeliveryChangeDispositionBusyError,
@@ -157,6 +163,9 @@ from owlbear_delivery.finalization_reports import (
     FinalizationReportError,
     FinalizationReportSnapshot,
     FinalizationReportStore,
+    FinalizerSettlement,
+    FinalizerSettlementReceipt,
+    FinalizerWorkspaceObservation,
     ProofAttemptStore,
     ReportFinalizationFailure,
 )
@@ -751,6 +760,7 @@ class DeliveryLaunchPackage(_ApplicationModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
     task_id: str | None = None
+    builder_handoff_context: DeliveryBuilderHandoffContext | None = None
     claim: DeliveryActiveClaim
     policy: DeliveryRolePolicy
     package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -767,6 +777,22 @@ class DeliveryLaunchPackage(_ApplicationModel):
         if self.policy.worker_role != self.claim.worker_role or self.task_id != self.claim.task_id:
             message = "launch policy and task identity must match the active claim"
             raise ValueError(message)
+        if self.builder_handoff_context is not None:
+            context = self.builder_handoff_context
+            planner_handoff = (
+                self.policy.worker_role == DeliveryWorkerRole.PLANNER
+                and context.route == "same-outcome-planner"
+                and self.task_id is None
+                and self.writer is None
+            )
+            builder_handoff = (
+                self.policy.worker_role == DeliveryWorkerRole.BUILDER
+                and context.route == "same-task"
+                and context.original_task_id == self.task_id
+            )
+            if context.outcome_id != self.outcome_id or not (planner_handoff or builder_handoff):
+                message = "launch Builder handoff context must match its exact outcome and worker route"
+                raise ValueError(message)
         if (self.claim.worker_role == DeliveryWorkerRole.BUILDER) != (self.writer is not None):
             message = "only Build launch packages carry writer custody"
             raise ValueError(message)
@@ -2116,18 +2142,28 @@ class PortfolioApplication:
                 ledger.record_accepted_progress(attempt.attempt_id, now=self._clock())
             return
 
-    def _record_proven_unstarted_retry_release(self, runtime: DeliveryRuntime, attempt_id: str) -> None:
+    def _record_proven_unstarted_retry_release(
+        self,
+        runtime: DeliveryRuntime,
+        attempt_id: str,
+        *,
+        refund: bool = False,
+    ) -> None:
         owner_result = (
             Path("changes") / runtime.contract.change_id / "retry-ledger" / "owner-results" / f"{attempt_id}.json"
         )
         if not self._contained_record_is_absent(owner_result):
             return
         try:
-            runtime.retry_ledger(clock=self._clock).record_failure(
-                attempt_id,
-                failure_code="owner-publication-failed-before-start",
-                now=self._clock(),
-            )
+            ledger = runtime.retry_ledger(clock=self._clock)
+            if refund:
+                ledger.record_pause(attempt_id, now=self._clock())
+            else:
+                ledger.record_failure(
+                    attempt_id,
+                    failure_code="owner-publication-failed-before-start",
+                    now=self._clock(),
+                )
         except (OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
             return
 
@@ -2168,6 +2204,7 @@ class PortfolioApplication:
         candidate: _Candidate,
         claim: DeliveryActiveClaim,
         frontier_before: bytes,
+        prepared_coordination: ChangeCoordination,
     ) -> None:
         runtime = candidate.runtime
         try:
@@ -2175,20 +2212,57 @@ class PortfolioApplication:
             binding = runtime.show_binding(candidate.binding.outcome_id)
             finalization = coordination.finalization_attempt
             continuation = coordination.continuation_action
+            handoff = prepared_coordination.builder_handoff
             if (
                 runtime.frontier_bytes() != frontier_before
                 or binding.active_claim is not None
                 or runtime.active_claims()
                 or runtime.integration_repair_claim() is not None
-                or coordination.writer is not None
+                or coordination.writer != prepared_coordination.writer
+                or coordination.builder_handoff != handoff
                 or coordination.publication_lease is not None
                 or (finalization is not None and finalization.finished_at is None)
                 or (continuation is not None and continuation.finished_at is None)
             ):
                 return
+            if handoff is not None:
+                settled_binding = self._settled_builder_handoff_binding(coordination, runtime)
+                context = binding.builder_handoff_context
+                expected_writer = handoff.original_writer.model_copy(update={"kind": "handoff"})
+                planner_handoff = (
+                    candidate.role is DeliveryWorkerRole.PLANNER
+                    and binding.stage == DeliveryStage.PLANNING
+                    and context is not None
+                    and context.route == "same-outcome-planner"
+                    and candidate.task_id is None
+                )
+                builder_handoff = (
+                    candidate.role is DeliveryWorkerRole.BUILDER
+                    and binding.stage == DeliveryStage.IMPLEMENTATION
+                    and context is not None
+                    and context.route == "same-task"
+                    and candidate.task_id == handoff.original_task_id
+                )
+                if (
+                    prepared_coordination.writer != expected_writer
+                    or coordination.writer != expected_writer
+                    or settled_binding is None
+                    or settled_binding != binding
+                    or settled_binding.outcome_id != candidate.binding.outcome_id
+                    or context is None
+                    or context != candidate.binding.builder_handoff_context
+                    or context.settlement_id != handoff.settlement_id
+                    or context.original_task_id != handoff.original_task_id
+                    or not (planner_handoff or builder_handoff)
+                ):
+                    return
         except (OSError, RuntimeError, ValueError):
             return
-        self._record_proven_unstarted_retry_release(runtime, claim.attempt_id)
+        self._record_proven_unstarted_retry_release(
+            runtime,
+            claim.attempt_id,
+            refund=prepared_coordination.builder_handoff is not None,
+        )
 
     def _release_unpublished_finalizer(self, runtime: DeliveryRuntime, attempt: ChangeFinalizationAttempt) -> None:
         try:
@@ -3259,14 +3333,25 @@ class PortfolioApplication:
     ) -> FinalizationReport | DeliveryReadiness:
         """Persist structural diagnostics without granting lifecycle or proof authority."""
         with locked_roots((self._checkpoint_lock_root(request.change_id),)):
-            try:
-                report = FinalizationReportStore(self._target_root, request.change_id).record(
-                    request,
-                    _timestamp(self._clock()),
-                    lambda: self._validate_finalization_report_basis(request),
-                )
-            except _FinalizationReadUnavailableError as exc:
-                return exc.readiness
+            with self._coordinator.recovery_lock(request.change_id):
+                report_store = FinalizationReportStore(self._target_root, request.change_id)
+                attention = self._workspace_manager.show(request.change_id).finalization_attention
+                if attention is not None:
+                    attention_report = next(
+                        (item for item in report_store.read().reports if item.report_id == attention.report_id),
+                        None,
+                    )
+                    if attention_report is None or attention_report.request != request:
+                        msg = "diagnostic-conflict"
+                        raise FinalizationReportError(msg)
+                try:
+                    report = report_store.record(
+                        request,
+                        _timestamp(self._clock()),
+                        lambda: self._validate_finalization_report_basis(request),
+                    )
+                except _FinalizationReadUnavailableError as exc:
+                    return exc.readiness
             if isinstance(report, FinalizationReport):
                 with suppress(OSError, RetryLedgerConflictError, RetryLedgerCorruptError, RuntimeError, ValueError):
                     self._runtime(request.change_id).retry_ledger(clock=self._clock).record_failure(
@@ -3277,13 +3362,249 @@ class PortfolioApplication:
                     )
             return report
 
+    @staticmethod
+    def _finalizer_settlement_receipt_path(change_id: str, attempt_id: str) -> Path:
+        attempt_digest = hashlib.sha256(attempt_id.encode("utf-8")).hexdigest()
+        return Path("finalizer-settlements") / change_id / f"{attempt_digest}.json"
+
+    @staticmethod
+    def _raise_finalizer_settlement_conflict(
+        message: str,
+        cause: BaseException | None = None,
+    ) -> Never:
+        error = DeliveryActionSelectionConflictError(message)
+        if cause is None:
+            raise error
+        raise error from cause
+
+    def _read_finalizer_settlement_receipt(
+        self,
+        change_id: str,
+        attempt_id: str,
+    ) -> FinalizerSettlementReceipt | None:
+        relative_path = self._finalizer_settlement_receipt_path(change_id, attempt_id)
+        try:
+            content = read_record(self._target_root, relative_path)
+        except FileNotFoundError:
+            return None
+        receipt = FinalizerSettlementReceipt.model_validate_json(content, strict=True)
+        if receipt.settlement.change_id != change_id or receipt.settlement.attempt_id != attempt_id:
+            self._raise_finalizer_settlement_conflict("Finalizer settlement receipt identity is invalid")
+        return receipt
+
+    @staticmethod
+    def _finalizer_attention_matches_receipt(
+        coordination: ChangeCoordination,
+        receipt: FinalizerSettlementReceipt | None,
+    ) -> bool:
+        attention = coordination.finalization_attention
+        attempt = coordination.finalization_attempt
+        writer = coordination.writer
+        if attention is None or attempt is None or writer is None or receipt is None:
+            return False
+        settlement = receipt.settlement
+        return (
+            receipt.receipt_id == attention.receipt_id
+            and settlement.attempt_id == attempt.writer.attempt_id == attention.attempt_id
+            and settlement.claim_id == attempt.writer.claim_id
+            and settlement.host_id == attempt.writer.actor_id
+            and settlement.session_id == attempt.writer.process_id
+            and settlement.report_id == attention.report_id
+            and settlement.outcome == attention.outcome
+            and settlement.expected_head == attempt.exact_head == attention.expected_head
+            and settlement.expected_reviewed_base == attention.expected_reviewed_base
+            and receipt.finished_at.isoformat().replace("+00:00", "Z") == attention.finished_at
+            and receipt.workspace.head == attention.workspace_head
+            and receipt.workspace.fingerprint == attention.workspace_fingerprint
+            and receipt.workspace.paths == attention.workspace_paths
+            and writer == attempt.writer.model_copy(update={"kind": "finalization-attention"})
+        )
+
+    def settle_finalizer_invocation(
+        self,
+        settlement: FinalizerSettlement,
+    ) -> FinalizerSettlementReceipt | DeliveryFinalizationReceipt:
+        """Settle only one normally returned Finalizer failure backed by its exact current report."""
+        settlement = self._validate_finalizer_settlement_envelope(settlement)
+        runtime = self._runtime(settlement.change_id, for_mutation=True, allow_finalizer=True)
+        with self._coordinator.publication_lock(settlement.change_id) as lock:
+            self._coordinator.recover_pending_transactions()
+            prior = self._read_finalizer_settlement_receipt(settlement.change_id, settlement.attempt_id)
+            if prior is not None:
+                if prior.settlement != settlement:
+                    self._raise_finalizer_settlement_conflict(
+                        "Finalizer settlement conflicts with its immutable receipt"
+                    )
+                return prior
+            finalization = self._already_finalized_settlement(runtime, settlement)
+            if finalization is not None:
+                return finalization
+            coordination, attempt = self._active_finalizer_attempt(settlement)
+            evidence = self._finalizer_settlement_evidence(runtime, settlement, coordination, attempt)
+            return self._publish_finalizer_settlement(runtime, settlement, attempt, evidence, lock)
+
+    def _validate_finalizer_settlement_envelope(self, settlement: FinalizerSettlement) -> FinalizerSettlement:
+        if not isinstance(settlement, FinalizerSettlement):
+            self._raise_finalizer_settlement_conflict("Finalizer settlement requires its typed normal-return envelope")
+        try:
+            return FinalizerSettlement.model_validate_json(_canonical_model_bytes(settlement), strict=True)
+        except (TypeError, ValueError) as exc:
+            self._raise_finalizer_settlement_conflict("Finalizer settlement envelope is invalid", exc)
+
+    def _already_finalized_settlement(
+        self,
+        runtime: DeliveryRuntime,
+        settlement: FinalizerSettlement,
+    ) -> DeliveryFinalizationReceipt | None:
+        finalization = runtime.finalization()
+        if finalization is None:
+            return None
+        coordination = self._coordinator.show(settlement.change_id)
+        attempt = coordination.finalization_attempt
+        if (
+            finalization.operation_id == settlement.attempt_id
+            and finalization.exact_head == settlement.expected_head
+            and coordination.writer is None
+            and attempt is not None
+            and attempt.finished_at is not None
+            and attempt.writer.attempt_id == settlement.attempt_id
+            and attempt.writer.claim_id == settlement.claim_id
+            and attempt.writer.actor_id == settlement.host_id
+            and attempt.writer.process_id == settlement.session_id
+            and attempt.exact_head == settlement.expected_head
+        ):
+            return finalization
+        self._raise_finalizer_settlement_conflict("Change is already finalized with different authority")
+        return None
+
+    def _active_finalizer_attempt(
+        self,
+        settlement: FinalizerSettlement,
+    ) -> tuple[ChangeCoordination, ChangeFinalizationAttempt]:
+        coordination = self._coordinator.show(settlement.change_id)
+        attempt = coordination.finalization_attempt
+        if (
+            attempt is None
+            or attempt.finished_at is not None
+            or coordination.writer != attempt.writer
+            or attempt.writer.kind != "finalize"
+            or attempt.writer.attempt_id != settlement.attempt_id
+            or attempt.writer.claim_id != settlement.claim_id
+            or attempt.writer.actor_id != settlement.host_id
+            or attempt.writer.process_id != settlement.session_id
+            or attempt.exact_head != settlement.expected_head
+            or coordination.last_reviewed_commit != settlement.expected_reviewed_base
+        ):
+            self._raise_finalizer_settlement_conflict("Finalizer settlement does not match its exact active attempt")
+        return coordination, attempt
+
+    def _finalizer_settlement_evidence(
+        self,
+        runtime: DeliveryRuntime,
+        settlement: FinalizerSettlement,
+        coordination: ChangeCoordination,
+        attempt: ChangeFinalizationAttempt,
+    ) -> tuple[FinalizationReport, FinalizerWorkspaceObservation]:
+        snapshot = self._delivery_snapshot(runtime)
+        if (
+            contract_fingerprint(snapshot.contract) != attempt.contract_digest
+            or snapshot.version != attempt.frontier_digest
+        ):
+            self._raise_finalizer_settlement_conflict("Finalizer settlement basis is no longer current")
+
+        report_snapshot = FinalizationReportStore(self._target_root, settlement.change_id).read()
+        report = next((item for item in report_snapshot.reports if item.report_id == settlement.report_id), None)
+        if report is None or report_snapshot.current_report_id != settlement.report_id:
+            self._raise_finalizer_settlement_conflict("Finalizer settlement requires its exact current report")
+        request = report.request
+        expected_outcome = "review-failed" if request.category == "independent-review" else "proof-failed"
+        if (
+            request.change_id != settlement.change_id
+            or request.attempt_key != settlement.attempt_id
+            or request.expected_change_head != settlement.expected_head
+            or request.expected_reviewed_head != settlement.expected_reviewed_base
+            or request.expected_contract_digest != attempt.contract_digest
+            or request.expected_frontier_digest != attempt.frontier_digest
+            or settlement.outcome != expected_outcome
+        ):
+            self._raise_finalizer_settlement_conflict("Finalizer settlement does not match its stored report")
+
+        observed, head, fingerprint, paths, _reason = self._workspace_manager.capture_finalization_workspace(
+            settlement.change_id,
+            tuple(result.completed_commit for binding in snapshot.frontier.bindings for result in binding.results),
+        )
+        if observed != coordination or head != settlement.expected_head:
+            self._raise_finalizer_settlement_conflict("Finalizer workspace changed before settlement")
+        if request.category == "custody-preflight" and request.expected_workspace_fingerprint != fingerprint:
+            self._raise_finalizer_settlement_conflict("Finalizer custody report no longer matches the workspace")
+        if request.category == "proof-mutation" and request.proof_fingerprint_after != fingerprint:
+            self._raise_finalizer_settlement_conflict("Finalizer proof-mutation report no longer matches the workspace")
+        return report, FinalizerWorkspaceObservation(head=head, fingerprint=fingerprint, paths=paths)
+
+    def _publish_finalizer_settlement(
+        self,
+        runtime: DeliveryRuntime,
+        settlement: FinalizerSettlement,
+        attempt: ChangeFinalizationAttempt,
+        evidence: tuple[FinalizationReport, FinalizerWorkspaceObservation],
+        lock: PublicationLock,
+    ) -> FinalizerSettlementReceipt:
+        report, workspace = evidence
+        finished_at = _timestamp(self._clock())
+        finished_at_text = finished_at.isoformat().replace("+00:00", "Z")
+        receipt = FinalizerSettlementReceipt.create(
+            settlement=settlement,
+            report=report,
+            finished_at=finished_at,
+            workspace=workspace,
+        )
+        attention = ChangeFinalizationAttention(
+            change_id=settlement.change_id,
+            receipt_id=receipt.receipt_id,
+            attempt_id=settlement.attempt_id,
+            report_id=report.report_id,
+            outcome=settlement.outcome,
+            expected_head=settlement.expected_head,
+            expected_reviewed_base=settlement.expected_reviewed_base,
+            finished_at=finished_at_text,
+            workspace_head=workspace.head,
+            workspace_fingerprint=workspace.fingerprint,
+            workspace_paths=workspace.paths,
+        )
+        coordination_participant = self._coordinator.prepare_finalization_attention(
+            settlement.change_id, attempt.writer, attention, lock
+        )
+        owner_result_participants = runtime.retry_ledger(clock=self._clock).owner_result_participants(
+            settlement.attempt_id,
+            accepted=False,
+            failure_code=report.request.code.value,
+            now=report.observed_at,
+        )
+        if len(owner_result_participants) != 1:
+            self._raise_finalizer_settlement_conflict("Finalizer retry owner evidence is unavailable")
+        receipt_participant = TransactionParticipant(
+            self._target_root,
+            self._finalizer_settlement_receipt_path(settlement.change_id, settlement.attempt_id),
+            _canonical_model_bytes(receipt),
+        )
+        RuntimeTransaction(
+            self._target_root,
+            f"finalizer-settlement-{receipt.receipt_id}",
+            (receipt_participant, *owner_result_participants, coordination_participant),
+        ).commit()
+        return receipt
+
     def _validate_finalization_report_basis(self, request: ReportFinalizationFailure) -> None:
         self._reconcile_runtimes()
         observation = self._discovered_changes.get(request.change_id)
         if observation is not None and not observation.actionable_runtime:
             raise _FinalizationReadUnavailableError(self._unavailable_change(request.change_id).readiness)
         runtime = self._runtime(request.change_id)
-        attempt = self._workspace_manager.show(request.change_id).finalization_attempt
+        coordination = self._workspace_manager.show(request.change_id)
+        if coordination.finalization_attention is not None:
+            msg = "diagnostic-conflict"
+            raise FinalizationReportError(msg)
+        attempt = coordination.finalization_attempt
         if attempt is not None and attempt.finished_at is None and request.attempt_key != attempt.writer.attempt_id:
             msg = "diagnostic-conflict"
             raise FinalizationReportError(msg)
@@ -3331,100 +3652,6 @@ class PortfolioApplication:
         ):
             msg = "diagnostic-conflict"
             raise FinalizationReportError(msg)
-
-    def mark_change_ready(
-        self,
-        change_id: str,
-        request: MarkChangePullRequestReady,
-    ) -> PullRequestReadyReceipt:
-        """Mark the exact finalized and fully published Change pull request ready."""
-        if self._draft_pull_request_publisher is None:
-            message = "draft pull-request publication is not configured"
-            raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id, for_mutation=True)
-        with self._engine_checkpoint_lock(change_id):
-            if runtime.change_disposition() is not None:
-                message = "pull-request readiness requires current Change attention resolution"
-                raise PortfolioApplicationError(message)
-            finalization = runtime.finalization()
-            publication = runtime.checkpoint_publication_state()
-            if (
-                finalization is None
-                or request.change_id != change_id
-                or request.finalization_id != finalization.finalization_id
-                or request.exact_head != finalization.exact_head
-            ):
-                message = "pull-request ready request does not match current finalization authority"
-                raise PortfolioApplicationError(message)
-            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
-                message = "pull-request readiness requires the reconciled final checkpoint"
-                raise PortfolioApplicationError(message)
-            existing_ready = runtime.ready_receipt()
-            if (
-                existing_ready is not None
-                and existing_ready.finalization_id == finalization.finalization_id
-                and existing_ready.head_sha == finalization.exact_head
-            ):
-                receipt = self._draft_pull_request_publisher.mark_ready(request)
-                ready = runtime.mark_awaiting_merge(receipt)
-                self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
-                return ready
-            try:
-                observation, failures = self._observe_required_checks_for_ready(
-                    change_id,
-                    finalization.exact_head,
-                )
-            except PublicationProviderError as exc:
-                if not exc.retry_safe:
-                    raise
-                raise _PreEffectReadyObservationError(
-                    exc.code,
-                    exc.operation,
-                    str(exc),
-                    retry_safe=True,
-                ) from exc
-            receipt = self._draft_pull_request_publisher.mark_ready(request)
-            ready = runtime.mark_awaiting_merge(receipt)
-            if failures:
-                self._record_required_check_attention(runtime, observation, failures, ready)
-            self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
-            return ready
-
-    def _observe_required_checks_for_ready(
-        self,
-        change_id: str,
-        exact_head: str,
-    ) -> tuple[PublicationCheckObservationReceipt, tuple[PublicationCheck, ...]]:
-        """Observe provider-required checks without gating the pull-request ready state."""
-        publisher = self._draft_pull_request_publisher
-        if publisher is None:
-            message = "draft pull-request publication is not configured"
-            raise PortfolioApplicationError(message)
-        observation = publisher.observe_checks(
-            ObserveChangePublicationChecks(change_id=change_id, published_head=exact_head)
-        )
-        failures = _failed_required_publication_checks(observation.snapshot)
-        return observation, failures
-
-    @staticmethod
-    def _record_required_check_attention(
-        runtime: DeliveryRuntime,
-        observation: PublicationCheckObservationReceipt,
-        failures: tuple[PublicationCheck, ...],
-        ready: PullRequestReadyReceipt,
-    ) -> None:
-        """Retain failing provider-required checks after the PR is ready."""
-        runtime.capture_publication_attention(
-            observation.observed_at,
-            _required_check_diagnostics(observation.snapshot, observation.observation_id, failures),
-            publication_identity=DeliveryChangePublicationIdentity(
-                change_id=ready.change_id,
-                repository=ready.repository,
-                number=ready.number,
-                node_id=ready.node_id,
-                head_sha=ready.head_sha,
-            ),
-        )
 
     def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
         """Mark the current exact finalization ready without caller-supplied authority."""
@@ -4825,14 +5052,14 @@ class PortfolioApplication:
 
     def settle_worker_invocation(
         self,
-        settlement: DeliveryPlanningRetrySettlement,
+        settlement: DeliveryPlanningRetrySettlement | DeliveryBuilderInvocationSettlement,
         *,
         host_id: str | None = None,
         session_id: str | None = None,
     ) -> OutcomeAuthorityBinding:
-        """Settle one completed Planner retry invocation through its exact owner receipt."""
-        if not isinstance(settlement, DeliveryPlanningRetrySettlement):
-            self._fail("Planner retry settlement requires its typed invocation envelope")
+        """Settle one completed Planner or Builder invocation through its exact owner receipt."""
+        if not isinstance(settlement, (DeliveryPlanningRetrySettlement, DeliveryBuilderInvocationSettlement)):
+            self._fail("worker settlement requires its typed completed-invocation envelope")
         change_id = settlement.change_id
         runtime = self._runtime(change_id, for_mutation=True)
         with (
@@ -4840,36 +5067,53 @@ class PortfolioApplication:
             self._selected_action_checkpoint_lock(change_id),
         ):
             claim = runtime.show_binding(settlement.outcome_id).active_claim
+            worker_role = (
+                DeliveryWorkerRole.PLANNER
+                if isinstance(settlement, DeliveryPlanningRetrySettlement)
+                else DeliveryWorkerRole.BUILDER
+            )
             if (
                 claim is not None
                 and claim.claim_id == settlement.claim_id
                 and claim.attempt_id == settlement.attempt_id
-                and claim.worker_role is DeliveryWorkerRole.PLANNER
+                and claim.worker_role is worker_role
                 and claim.continuation
                 and (host_id != claim.owner_id or session_id != claim.process_id)
             ):
-                self._fail("Planner continuation settlement does not match its active host and session binding")
+                self._fail("worker continuation settlement does not match its active host and session binding")
             frontier_before = runtime.frontier_bytes()
-            result = runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
+            result = (
+                runtime.settle_planning_retry(settlement, retry_observed_at=self._clock())
+                if isinstance(settlement, DeliveryPlanningRetrySettlement)
+                else runtime.settle_builder_invocation(settlement, retry_observed_at=self._clock())
+            )
             frontier_after = runtime.frontier_bytes()
+            settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
             if frontier_after != frontier_before:
                 self._reconcile_retry_results_fail_closed(runtime)
-                self._publish_delivery_state(
-                    change_id,
-                    runtime,
-                    _checkpoint_operation_id(
-                        "planning-retry-settlement", change_id, settlement.outcome_id, settlement.claim_id
-                    ),
-                )
-            elif not runtime.active_claims():
-                pending = runtime.pending_state_publication()
-                settlement_digest = hashlib.sha256(_canonical_model_bytes(settlement)).hexdigest()
+            pending = runtime.pending_state_publication()
+            if pending is not None:
+                frontier_digest = hashlib.sha256(frontier_after).hexdigest()
                 if (
-                    pending is not None
-                    and pending.frontier_digest == hashlib.sha256(frontier_after).hexdigest()
+                    pending.frontier_digest == frontier_digest
                     and pending.transition_request_digest == settlement_digest
                 ):
-                    failure = self._replay_pending_state_publication(change_id, runtime)
+                    if frontier_after != frontier_before and self._delivery_state_publisher is not None:
+                        settlement_kind = (
+                            "builder-invocation-settlement"
+                            if isinstance(settlement, DeliveryBuilderInvocationSettlement)
+                            else "planning-retry-settlement"
+                        )
+                        self._publish_delivery_state(
+                            change_id,
+                            runtime,
+                            _checkpoint_operation_id(
+                                settlement_kind, change_id, settlement.outcome_id, settlement.claim_id
+                            ),
+                        )
+                        failure = None
+                    else:
+                        failure = self._replay_pending_state_publication(change_id, runtime)
                     if failure is not None:
                         raise DeliveryRuntimeReconciliationError(change_id, failure.detail)
             return result
@@ -6085,7 +6329,20 @@ class PortfolioApplication:
             return decision
         if decision.status == "running":
             return decision
+        binding = (
+            next((item for item in snapshot.frontier.bindings if item.outcome_id == card.work_item_id), None)
+            if card.scope is WorkItemScope.OUTCOME
+            else None
+        )
         exact_head = decision.basis.candidate_head or decision.basis.source_head
+        if (
+            exact_head is None
+            and binding is not None
+            and binding.block is not None
+            and binding.builder_handoff_context is not None
+            and binding.block.block_id == f"builder-attempt-limit-{binding.builder_handoff_context.settlement_id}"
+        ):
+            exact_head = binding.builder_handoff_context.last_reviewed_commit
         if exact_head is None:
             return decision
         finalization = snapshot.frontier.finalization
@@ -6206,9 +6463,10 @@ class PortfolioApplication:
                 {
                     "status": "blocked",
                     "reason_code": "retry-exhausted",
+                    "operation": None,
                     "executable": False,
                     "action": None,
-                    "next_actor": WorkItemNextActor.NONE,
+                    "next_actor": WorkItemNextActor.AGENT,
                 }
             )
         elif episode.stop_code is RetryStopCode.ACCEPTANCE_WAIT:
@@ -6441,18 +6699,39 @@ class PortfolioApplication:
                     "target_head": self._workspace_manager.observed_target_head(),
                 }
             )
-            if (coordination.writer is not None and coordination.writer.kind != "finalize") or (
-                coordination.publication_lease is not None
-            ):
+            if (
+                coordination.writer is not None
+                and coordination.writer.kind not in {"finalize", "finalization-attention"}
+            ) or coordination.publication_lease is not None:
                 return basis, "active-custody"
             coordination, head, fingerprint, _paths, reason = self._workspace_manager.capture_finalization_workspace(
                 snapshot.contract.change_id,
                 tuple(result.completed_commit for binding in snapshot.frontier.bindings for result in binding.results),
             )
             basis = basis.model_copy(update={"candidate_head": head, "workspace_fingerprint": fingerprint})
-            if coordination.writer is not None and coordination.writer.kind == "finalize":
+            if coordination.writer is not None and coordination.writer.kind in {
+                "finalize",
+                "finalization-attention",
+            }:
                 reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
-                if any(report.request.attempt_key == coordination.writer.attempt_id for report in reports.reports):
+                report_matches = any(
+                    report.request.attempt_key == coordination.writer.attempt_id for report in reports.reports
+                )
+                if coordination.writer.kind == "finalization-attention":
+                    attention = coordination.finalization_attention
+                    receipt = self._read_finalizer_settlement_receipt(
+                        snapshot.contract.change_id, coordination.writer.attempt_id
+                    )
+                    report_matches = (
+                        attention is not None
+                        and self._finalizer_attention_matches_receipt(coordination, receipt)
+                        and any(
+                            report.report_id == attention.report_id
+                            and report.request.attempt_key == coordination.writer.attempt_id
+                            for report in reports.reports
+                        )
+                    )
+                if report_matches:
                     return basis, "finalization-failed"
             invalidation = snapshot.frontier.finalization_invalidation
             if invalidation and invalidation.reason == "review-repair" and head == invalidation.expected_head:
@@ -6487,7 +6766,11 @@ class PortfolioApplication:
             return WorkItemAction(
                 kind=WorkItemActionKind.FINALIZE, label="Finalize Change", command=f"/finalize-change {card.change_id}"
             )
-        if card.action.kind is WorkItemActionKind.FINALIZE:
+        if card.action.kind is WorkItemActionKind.FINALIZE or (
+            card.scope is WorkItemScope.OUTCOME
+            and card.stage is not None
+            and card.stage.value == DeliveryStage.DESIGN.value
+        ):
             return WorkItemAction()
         if (
             card.scope is WorkItemScope.OUTCOME
@@ -6521,6 +6804,12 @@ class PortfolioApplication:
                 f"/continue-change {change_id} reread get_change and pass its readiness basis unchanged to "
                 "acquire_change_action; declare only capabilities this session can dispatch and execute only the "
                 "acquired operation. Yield on busy, waiting, and human; do not dispatch siblings or infer progress."
+            )
+        if reason == "retry-exhausted":
+            return (
+                f"/inspect-change {change_id} Diagnose the exhausted retry episode read-only. Preserve its block and "
+                "attempt history; do not clear the block, retry, dispatch, or reset the budget. Any new attempt "
+                "requires approved current authority."
             )
         if reason == "engine-action-pending":
             return (
@@ -6560,7 +6849,8 @@ class PortfolioApplication:
                 "and settles all descendant writers and jobs; preserve custody and journals, and do not retry or "
                 "infer termination."
             )
-        if reason not in {
+        prompt: str | None = None
+        if reason in {
             "active-custody",
             "claim-activation-failed",
             "claim-custody-unreconciled",
@@ -6569,13 +6859,37 @@ class PortfolioApplication:
             "engine-action-incomplete",
             "engine-action-blocked",
         }:
-            return None
-        return (
-            f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "
-            "This does not repair authority or prove host/worker closure. Do not stop a worker, retry, release "
-            "custody, or dispatch a replacement. The responsible owner must establish any missing authority "
-            "through a supported path before Delivery can resume; this diagnostic does not supply that authority."
-        )
+            prompt = (
+                f"/repair-delivery Diagnose Change {change_id} read-only; preserve existing custody and journals. "
+                "This does not repair authority or prove host/worker closure. Do not stop a worker, retry, release "
+                "custody, or dispatch a replacement. The responsible owner must establish any missing authority "
+                "through a supported path before Delivery can resume; this diagnostic does not supply that authority."
+            )
+        return prompt
+
+    @staticmethod
+    def _user_action_readiness(card: WorkItemCardView, operation: WorkItemActionKind | None) -> tuple[str, str]:
+        if (
+            card.scope is WorkItemScope.OUTCOME
+            and card.stage is not None
+            and card.stage.value == DeliveryStage.DESIGN.value
+        ):
+            return "blocked", "design-attention"
+        return ("ready" if operation else "blocked"), "request-action"
+
+    @classmethod
+    def _readiness_prompt(
+        cls,
+        snapshot: DeliveryPortfolioSnapshot,
+        card: WorkItemCardView,
+        reason: str,
+        *,
+        executable: bool,
+    ) -> str | None:
+        if reason != "design-attention":
+            return cls._engine_action_prompt(snapshot.contract.change_id, reason, executable=executable)
+        binding = next(item for item in snapshot.frontier.bindings if item.outcome_id == card.work_item_id)
+        return cls._design_attention_prompt(snapshot.contract.change_id, binding)
 
     @classmethod
     def _card_readiness(
@@ -6647,11 +6961,11 @@ class PortfolioApplication:
         elif card.needs is WorkItemNeed.DEPENDENCY:
             status, reason = "waiting", "dependency-wait"
         elif card.needs is WorkItemNeed.YOU and not finalization:
-            status, reason = ("ready" if operation else "blocked"), "request-action"
+            status, reason = cls._user_action_readiness(card, operation)
         else:
             status, reason = cls._action_prerequisites(operation, workspace_reason)
         executable = status == "ready" and operation is not None
-        prompt = cls._engine_action_prompt(snapshot.contract.change_id, reason, executable=executable)
+        prompt = cls._readiness_prompt(snapshot, card, reason, executable=executable)
         return DeliveryReadiness(
             status=status,
             operation=operation,
@@ -6662,6 +6976,27 @@ class PortfolioApplication:
             basis=basis,
             action=action if executable else None,
             prompt=prompt,
+        )
+
+    @staticmethod
+    def _design_attention_prompt(change_id: str, binding: OutcomeAuthorityBinding) -> str:
+        return_context = binding.return_context
+        if return_context is None:
+            evidence = "No return context is recorded; do not infer a missing decision or evidence."
+        else:
+            locators = ", ".join(return_context.locators)
+            evidence = (
+                f"Outcome: {binding.outcome_id}. Delivery stage: {binding.stage.value}. "
+                f"Return reason: {return_context.reason}. Source locators: {locators}. "
+                f"Preserved commit: {return_context.preserved_commit or 'unavailable'}. "
+                f"Completed boundary: {return_context.completed_boundary or 'unavailable'}."
+            )
+        return (
+            f"/design {change_id} Resume the existing Design session. Read its verified current intent and Design, "
+            f"then assess the persisted return evidence. {evidence} Settlement only cleared the Builder claim and "
+            "retained a passive workspace handoff; it does not approve or admit a Design revision or grant access "
+            "to the managed worktree. Preserve that worktree and use the version-bound Design workflow; require "
+            "explicit user approval before revision or re-admission."
         )
 
     def _worktree_cleanup_view(
@@ -6923,11 +7258,97 @@ class PortfolioApplication:
         except (OSError, RuntimeError, ValueError) as exc:
             raise DeliveryRuntimeReconciliationError(None, f"execution custody is unknown: {exc}") from exc
         for coordination in registered:
-            if coordination.writer is not None or (
+            if self._writer_occupies_execution_slot(coordination) or (
                 coordination.continuation_action is not None and coordination.continuation_action.finished_at is None
             ):
                 occupancy[coordination.change_id] = max(occupancy.get(coordination.change_id, 0), 1)
         return sum(occupancy.values())
+
+    def _writer_occupies_execution_slot(
+        self,
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime | None = None,
+    ) -> bool:
+        """Count every live or unverified writer, excluding only an exact settled handoff."""
+        writer = coordination.writer
+        if writer is None:
+            return False
+        if writer.kind == "finalization-attention":
+            try:
+                receipt = self._read_finalizer_settlement_receipt(coordination.change_id, writer.attempt_id)
+            except (OSError, RuntimeError, ValueError):
+                return True
+            return not self._finalizer_attention_matches_receipt(coordination, receipt)
+        if writer.kind != "handoff" or coordination.builder_handoff is None:
+            return True
+        runtime = runtime or self._runtimes.get(coordination.change_id)
+        return runtime is None or self._settled_builder_handoff_binding(coordination, runtime) is None
+
+    @staticmethod
+    def _settled_builder_handoff_binding(
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime,
+    ) -> OutcomeAuthorityBinding | None:
+        """Return only a frontier binding corroborating the exact ended workspace handoff."""
+        handoff = coordination.builder_handoff
+        writer = coordination.writer
+        if (
+            handoff is None
+            or writer is None
+            or writer.kind != "handoff"
+            or writer != handoff.original_writer.model_copy(update={"kind": "handoff"})
+        ):
+            return None
+        try:
+            bindings = runtime.bindings()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DeliveryRuntimeReconciliationError(
+                coordination.change_id, "Builder handoff frontier authority is unavailable"
+            ) from exc
+        for binding in bindings:
+            context = binding.builder_handoff_context
+            if (
+                binding.active_claim is None
+                and context is not None
+                and context.settlement_id == handoff.settlement_id
+                and context.outcome_id == binding.outcome_id
+                and context.original_task_id == handoff.original_task_id
+                and context.attempt_id == handoff.original_writer.attempt_id
+                and context.last_reviewed_commit == handoff.last_reviewed_commit
+                and context.branch_head == handoff.branch_head
+                and context.metadata_fingerprint == handoff.metadata_fingerprint
+            ):
+                return binding
+        return None
+
+    def _claimable_handoff_binding(
+        self,
+        coordination: ChangeCoordination,
+        runtime: DeliveryRuntime,
+        claimable_outcome_ids: set[str],
+    ) -> OutcomeAuthorityBinding | None:
+        handoff = coordination.builder_handoff
+        if handoff is None:
+            return None
+        try:
+            binding = self._settled_builder_handoff_binding(coordination, runtime)
+        except (OSError, RuntimeError, ValueError):
+            return None
+        context = binding.builder_handoff_context if binding is not None else None
+        if (
+            binding is None
+            or binding.outcome_id not in claimable_outcome_ids
+            or context is None
+            or context.settlement_id != handoff.settlement_id
+            or context.outcome_id != binding.outcome_id
+            or context.original_task_id != handoff.original_task_id
+            or not (
+                (binding.stage == DeliveryStage.PLANNING and context.route == "same-outcome-planner")
+                or (binding.stage == DeliveryStage.IMPLEMENTATION and context.route == "same-task")
+            )
+        ):
+            return None
+        return binding
 
     def _persisted_claim_occupancy(self, change_id: str) -> int:
         """Count structurally valid custody without admitting incompatible runtime authority."""
@@ -7222,10 +7643,7 @@ class PortfolioApplication:
                     if available == 0:
                         break
                     source = self._prepare_source(
-                        candidate.change_id,
-                        candidate.runtime,
-                        candidate.binding.outcome_id,
-                        candidate.role,
+                        candidate,
                         allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
                     )
                     if isinstance(source, DeliveryAcquisitionFailure):
@@ -7891,7 +8309,11 @@ class PortfolioApplication:
             "claim-custody-unreconciled",
         }:
             kind, reason = "unavailable", readiness.reason_code
-        elif runtime.active_claims() or runtime.integration_repair_claim() or coordination.writer:
+        elif (
+            runtime.active_claims()
+            or runtime.integration_repair_claim()
+            or self._writer_occupies_execution_slot(coordination, runtime)
+        ):
             kind, reason = ("unsupported", "repair-required") if repair is not None else ("busy", "active-custody")
         elif coordination.publication_lease is not None:
             kind, reason = "unsupported", "publication-reconciliation-required"
@@ -8029,10 +8451,7 @@ class PortfolioApplication:
         self, request: DeliveryContinuationRequest, readiness: DeliveryReadiness, candidate: _Candidate
     ) -> DeliveryContinuationResult:
         source = self._prepare_source(
-            candidate.change_id,
-            candidate.runtime,
-            candidate.binding.outcome_id,
-            candidate.role,
+            candidate,
             allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
         )
         if isinstance(source, DeliveryAcquisitionFailure):
@@ -8043,7 +8462,10 @@ class PortfolioApplication:
                 readiness=readiness,
                 failure=source,
             )
-        if source.source_head != request.expected_basis.source_head:
+        if (
+            source.source_head != request.expected_basis.source_head
+            and candidate.binding.builder_handoff_context is None
+        ):
             return DeliveryContinuationResult(
                 change_id=request.change_id, kind="stale", reason_code="source-head-changed", readiness=readiness
             )
@@ -8165,15 +8587,12 @@ class PortfolioApplication:
         selection: DeliveryActionSelection,
     ) -> DeliveryAcquisitionResult:
         source = self._prepare_source(
-            candidate.change_id,
-            candidate.runtime,
-            candidate.binding.outcome_id,
-            candidate.role,
+            candidate,
             allow_dirty=candidate.role is DeliveryWorkerRole.BUILDER,
         )
         if isinstance(source, DeliveryAcquisitionFailure):
             return DeliveryAcquisitionResult(launch_packages=(), failures=(source,))
-        if source.source_head != selection.expected_source_head:
+        if source.source_head != selection.expected_source_head and candidate.binding.builder_handoff_context is None:
             message = "selected action source head changed; refresh the selection"
             raise DeliveryActionSelectionConflictError(message)
         if hashlib.sha256(candidate.runtime.frontier_bytes()).hexdigest() != selection.expected_frontier_digest:
@@ -9560,6 +9979,32 @@ class PortfolioApplication:
             raise DeliveryWorkerExclusionRequiredError
         return observation.observation_id
 
+    @staticmethod
+    def _candidate_authority(
+        runtime: DeliveryRuntime,
+        outcome_id: str,
+        handoff_binding: OutcomeAuthorityBinding | None,
+        handoff_task_id: str | None,
+    ) -> tuple[OutcomeAuthorityBinding, str | None, int, DeliveryWorkerRole] | None:
+        if handoff_binding is not None and outcome_id != handoff_binding.outcome_id:
+            return None
+        binding = handoff_binding if handoff_binding is not None else runtime.show_binding(outcome_id)
+        task_id = None
+        task_index = 0
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            task_ids = runtime.claimable_task_ids(outcome_id)
+            if not task_ids:
+                return None
+            task_id = task_ids[0]
+            if handoff_task_id is not None and task_id != handoff_task_id:
+                return None
+            task_index = binding.task_ids.index(task_id)
+        role = {
+            DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
+            DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
+        }[binding.stage]
+        return binding, task_id, task_index, role
+
     def _candidates(self, selected_change_id: str | None = None) -> tuple[_Candidate, ...]:  # noqa: C901
         candidates = []
         for change_id, runtime in self._runtimes.items():
@@ -9569,10 +10014,11 @@ class PortfolioApplication:
                 continue
             try:
                 pending_publication = runtime.pending_state_publication()
+                coordination = self._workspace_manager.show(change_id)
                 occupied = (
                     runtime.active_claims()
                     or runtime.change_stage() != DeliveryChangeStage.BUILDING
-                    or self._workspace_manager.show(change_id).writer is not None
+                    or self._writer_occupies_execution_slot(coordination, runtime)
                 )
             except (OSError, RuntimeError, ValueError):
                 continue
@@ -9584,23 +10030,27 @@ class PortfolioApplication:
             ):
                 continue
             claimable = set(runtime.claimable_outcome_ids())
+            handoff = coordination.builder_handoff
+            handoff_binding: OutcomeAuthorityBinding | None = None
+            handoff_task_id: str | None = None
+            if handoff is not None:
+                handoff_binding = self._claimable_handoff_binding(coordination, runtime, claimable)
+                if handoff_binding is None:
+                    continue
+                handoff_task_id = handoff.original_task_id
             ranked = []
             for outcome_index, outcome in enumerate(runtime.contract.outcomes):
                 if outcome.outcome_id not in claimable:
                     continue
-                binding = runtime.show_binding(outcome.outcome_id)
-                task_id = None
-                task_index = 0
-                if binding.stage == DeliveryStage.IMPLEMENTATION:
-                    task_ids = runtime.claimable_task_ids(outcome.outcome_id)
-                    if not task_ids:
-                        continue
-                    task_id = task_ids[0]
-                    task_index = binding.task_ids.index(task_id)
-                role = {
-                    DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
-                    DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-                }[binding.stage]
+                authority = self._candidate_authority(
+                    runtime,
+                    outcome.outcome_id,
+                    handoff_binding,
+                    handoff_task_id,
+                )
+                if authority is None:
+                    continue
+                binding, task_id, task_index, role = authority
                 ranked.append(
                     _Candidate(
                         sort_key=(
@@ -9620,20 +10070,141 @@ class PortfolioApplication:
                 candidates.append(min(ranked, key=lambda item: item.sort_key))
         return tuple(sorted(candidates, key=lambda item: item.sort_key))
 
+    def _validate_planner_handoff_source(
+        self,
+        candidate: _Candidate,
+        coordination: ChangeCoordination,
+        handoff_context: DeliveryBuilderHandoffContext,
+        handoff: ChangeBuilderHandoff,
+    ) -> None:
+        binding = candidate.binding
+        claim = binding.active_claim
+        settled_binding = (
+            self._settled_builder_handoff_binding(coordination, candidate.runtime) if claim is None else None
+        )
+        context_identity = (
+            binding.stage,
+            handoff_context.route,
+            handoff_context.outcome_id,
+            handoff_context.original_task_id,
+            candidate.task_id,
+            coordination.writer,
+        )
+        expected_identity = (
+            DeliveryStage.PLANNING,
+            "same-outcome-planner",
+            candidate.binding.outcome_id,
+            handoff.original_task_id,
+            None,
+            handoff.original_writer.model_copy(update={"kind": "handoff"}),
+        )
+        claim_matches = (claim is None and settled_binding == binding) or (
+            claim is not None and claim.worker_role is DeliveryWorkerRole.PLANNER and claim.task_id is None
+        )
+        if context_identity != expected_identity or not claim_matches:
+            self._fail("Planning handoff authority does not match its exact returned outcome")
+
+    def _validate_builder_handoff_source(
+        self,
+        candidate: _Candidate,
+        coordination: ChangeCoordination,
+        handoff_context: DeliveryBuilderHandoffContext,
+        handoff: ChangeBuilderHandoff,
+    ) -> None:
+        settled_binding = self._settled_builder_handoff_binding(coordination, candidate.runtime)
+        actual_identity = (
+            candidate.role,
+            settled_binding.outcome_id if settled_binding is not None else None,
+            candidate.binding.active_claim,
+            candidate.binding.stage,
+            handoff_context.route,
+            handoff_context.original_task_id,
+            candidate.task_id,
+        )
+        expected_identity = (
+            DeliveryWorkerRole.BUILDER,
+            candidate.binding.outcome_id,
+            None,
+            DeliveryStage.IMPLEMENTATION,
+            "same-task",
+            handoff.original_task_id,
+            handoff.original_task_id,
+        )
+        if actual_identity != expected_identity:
+            self._fail("Builder handoff authority does not match its exact same-task retry")
+
     def _prepare_source(
         self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        outcome_id: str,
-        worker_role: DeliveryWorkerRole,
+        candidate: _Candidate,
         *,
         allow_dirty: bool = False,
     ) -> _PreparedSource | DeliveryAcquisitionFailure:
+        change_id = candidate.change_id
+        runtime = candidate.runtime
+        outcome_id = candidate.binding.outcome_id
+        worker_role = candidate.role
+        task_id = candidate.task_id
         try:
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
             coordination = self._workspace_manager.show(change_id)
-            source_head = self._workspace_manager.source_head(change_id, require_clean=not allow_dirty)
+            binding = runtime.show_binding(outcome_id)
+            handoff_context = binding.builder_handoff_context
+            handoff = coordination.builder_handoff
+            is_handoff_source = False
+            if handoff_context is not None and handoff is not None:
+                if worker_role is DeliveryWorkerRole.PLANNER:
+                    self._validate_planner_handoff_source(candidate, coordination, handoff_context, handoff)
+                else:
+                    self._validate_builder_handoff_source(candidate, coordination, handoff_context, handoff)
+                source_head = self._workspace_manager.source_head(
+                    change_id,
+                    require_clean=False,
+                    builder_handoff_source=BuilderHandoffSource(
+                        settlement_id=handoff_context.settlement_id,
+                        original_task_id=handoff_context.original_task_id,
+                        branch_head=handoff_context.branch_head,
+                        last_reviewed_commit=handoff_context.last_reviewed_commit,
+                        metadata_fingerprint=handoff_context.metadata_fingerprint,
+                        retained_handoff=handoff,
+                    ),
+                )
+                is_handoff_source = True
+            elif handoff_context is not None:
+                claim = binding.active_claim
+                writer = coordination.writer
+                if (
+                    worker_role is not DeliveryWorkerRole.BUILDER
+                    or binding.stage is not DeliveryStage.IMPLEMENTATION
+                    or handoff_context.route != "same-task"
+                    or handoff_context.outcome_id != outcome_id
+                    or handoff_context.original_task_id != task_id
+                    or claim is None
+                    or claim.worker_role is not DeliveryWorkerRole.BUILDER
+                    or claim.task_id != task_id
+                    or writer is None
+                    or writer.kind != "build"
+                    or writer.attempt_id != claim.attempt_id
+                    or writer.claim_id != claim.claim_id
+                    or writer.actor_id != claim.owner_id
+                    or writer.process_id != claim.process_id
+                    or writer.claimed_at != claim.started_at
+                ):
+                    self._fail("active Builder handoff context does not match its exact successor claim")
+                source_head = self._workspace_manager.source_head(
+                    change_id,
+                    require_clean=False,
+                    builder_handoff_source=BuilderHandoffSource(
+                        settlement_id=handoff_context.settlement_id,
+                        original_task_id=handoff_context.original_task_id,
+                        branch_head=handoff_context.branch_head,
+                        last_reviewed_commit=handoff_context.last_reviewed_commit,
+                        metadata_fingerprint=handoff_context.metadata_fingerprint,
+                    ),
+                )
+                is_handoff_source = True
+            else:
+                source_head = self._workspace_manager.source_head(change_id, require_clean=not allow_dirty)
             adoption = coordination.external_head_adoption_receipt
             promotion = coordination.external_head_promotion_receipt
             if promotion != runtime.external_head_promotion_receipt():
@@ -9644,8 +10215,10 @@ class PortfolioApplication:
                     detail="external Change head promotion is not reconciled to Delivery authority",
                     retry_condition="Replay the exact external Change head promotion operation.",
                 )
-            if source_head != coordination.last_reviewed_commit and (
-                adoption is None or runtime.external_head_adoption_receipt() != adoption
+            if (
+                not is_handoff_source
+                and source_head != coordination.last_reviewed_commit
+                and (adoption is None or runtime.external_head_adoption_receipt() != adoption)
             ):
                 return DeliveryAcquisitionFailure(
                     change_id=change_id,
@@ -9654,7 +10227,11 @@ class PortfolioApplication:
                     detail="external Change head adoption is not reconciled to Delivery authority",
                     retry_condition="Replay the exact external Change head adoption operation.",
                 )
-            if worker_role == DeliveryWorkerRole.BUILDER and source_head != coordination.last_reviewed_commit:
+            if (
+                worker_role == DeliveryWorkerRole.BUILDER
+                and source_head != coordination.last_reviewed_commit
+                and not is_handoff_source
+            ):
                 return DeliveryAcquisitionFailure(
                     change_id=change_id,
                     outcome_id=outcome_id,
@@ -9796,40 +10373,17 @@ class PortfolioApplication:
                 ),
             )
         try:
-            self._register_recovery_invocation(
-                candidate.runtime,
-                claim.claim_id,
-                claim.attempt_id,
-                "claim",
-                source.source_head,
-                candidate.binding.outcome_id,
-            )
-            candidate.runtime.activate_claim(
-                ActivateDeliveryClaim(
-                    outcome_id=candidate.binding.outcome_id,
-                    claim=claim,
-                    expected_frontier_digest=expected_frontier_digest,
-                )
-            )
+            builder_writer = self._activate_candidate_claim(candidate, claim, source, expected_frontier_digest)
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
-            self._release_unpublished_worker_claim(candidate, claim, frontier_before)
+            self._release_unpublished_worker_claim(candidate, claim, frontier_before, source.coordination)
             raise
         try:
-            writer = None
-            if candidate.role == DeliveryWorkerRole.BUILDER:
-                coordination = self._coordinator.acquire(
-                    candidate.change_id,
-                    ChangeWriter(
-                        attempt_id=claim.attempt_id,
-                        claim_id=claim.claim_id,
-                        actor_id=claim.owner_id,
-                        process_id=claim.process_id,
-                        claimed_at=claim.started_at,
-                        job_id=1,
-                        kind="build",
-                    ),
-                )
-                writer = coordination.writer
+            handoff = source.coordination.builder_handoff
+            writer = self._acquire_candidate_writer(
+                candidate,
+                builder_writer,
+                consumes_handoff=handoff is not None,
+            )
             return self._launch_package(candidate, claim, source, writer)
         except (OSError, RuntimeError, ValueError) as exc:
             if reservation is not None and reservation.attempt_id is not None:
@@ -9856,6 +10410,138 @@ class PortfolioApplication:
                     else "Recover the exact failed claim after reconciling writer custody."
                 ),
             )
+
+    def _activate_candidate_claim(
+        self,
+        candidate: _Candidate,
+        claim: DeliveryActiveClaim,
+        source: _PreparedSource,
+        expected_frontier_digest: str | None,
+    ) -> ChangeWriter | None:
+        writer = (
+            ChangeWriter(
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                actor_id=claim.owner_id,
+                process_id=claim.process_id,
+                claimed_at=claim.started_at,
+                job_id=1,
+                kind="build",
+            )
+            if candidate.role is DeliveryWorkerRole.BUILDER
+            else None
+        )
+        activation = ActivateDeliveryClaim(
+            outcome_id=candidate.binding.outcome_id,
+            claim=claim,
+            expected_frontier_digest=expected_frontier_digest,
+        )
+        handoff = source.coordination.builder_handoff
+        if handoff is None:
+            self._register_recovery_invocation(
+                candidate.runtime,
+                claim.claim_id,
+                claim.attempt_id,
+                "claim",
+                source.source_head,
+                candidate.binding.outcome_id,
+            )
+            candidate.runtime.activate_claim(activation)
+            return writer
+        if candidate.role is DeliveryWorkerRole.PLANNER:
+            context = candidate.binding.builder_handoff_context
+            if candidate.task_id is not None or context is None or context.route != "same-outcome-planner":
+                self._fail("Planner handoff activation requires its exact task-less Planning claim")
+            with self._coordinator.publication_lock(candidate.change_id) as lock:
+                coordination = self._workspace_manager.show(candidate.change_id)
+                binding = candidate.runtime.show_binding(candidate.binding.outcome_id)
+                settled_binding = self._settled_builder_handoff_binding(coordination, candidate.runtime)
+                if (
+                    coordination.builder_handoff != handoff
+                    or coordination.writer != handoff.original_writer.model_copy(update={"kind": "handoff"})
+                    or binding.builder_handoff_context != context
+                    or binding.stage != DeliveryStage.PLANNING
+                    or binding.active_claim is not None
+                    or settled_binding != binding
+                ):
+                    self._fail("Planning handoff changed before same-outcome claim activation")
+                source_head = self._workspace_manager.source_head(
+                    candidate.change_id,
+                    require_clean=False,
+                    builder_handoff_source=BuilderHandoffSource(
+                        settlement_id=context.settlement_id,
+                        original_task_id=context.original_task_id,
+                        branch_head=context.branch_head,
+                        last_reviewed_commit=context.last_reviewed_commit,
+                        metadata_fingerprint=context.metadata_fingerprint,
+                        retained_handoff=handoff,
+                    ),
+                )
+                if source_head != source.source_head:
+                    self._fail("Planning handoff source changed before claim activation")
+                self._register_recovery_invocation(
+                    candidate.runtime,
+                    claim.claim_id,
+                    claim.attempt_id,
+                    "claim",
+                    source.source_head,
+                    candidate.binding.outcome_id,
+                )
+                candidate.runtime.activate_claim(activation, builder_handoff_lock=lock)
+            return None
+        if writer is None or candidate.task_id is None:
+            self._fail("Builder handoff activation requires exact Builder writer and task authority")
+        with self._coordinator.publication_lock(candidate.change_id) as lock:
+            coordination = self._workspace_manager.show(candidate.change_id)
+            binding = candidate.runtime.show_binding(candidate.binding.outcome_id)
+            settled_binding = self._settled_builder_handoff_binding(coordination, candidate.runtime)
+            if (
+                coordination.builder_handoff != handoff
+                or binding.builder_handoff_context != candidate.binding.builder_handoff_context
+                or settled_binding is None
+                or settled_binding.outcome_id != candidate.binding.outcome_id
+                or candidate.task_id != handoff.original_task_id
+            ):
+                self._fail("Builder handoff changed before same-task claim activation")
+            self._register_recovery_invocation(
+                candidate.runtime,
+                claim.claim_id,
+                claim.attempt_id,
+                "claim",
+                source.source_head,
+                candidate.binding.outcome_id,
+            )
+            participant = self._workspace_manager.prepare_builder_handoff_acquisition(
+                candidate.change_id,
+                writer,
+                handoff,
+                lock,
+                task_id=candidate.task_id,
+            )
+            candidate.runtime.activate_claim(
+                activation,
+                builder_handoff_participant=participant,
+                builder_handoff_lock=lock,
+            )
+        return writer
+
+    def _acquire_candidate_writer(
+        self,
+        candidate: _Candidate,
+        writer: ChangeWriter | None,
+        *,
+        consumes_handoff: bool,
+    ) -> ChangeWriter | None:
+        if candidate.role is not DeliveryWorkerRole.BUILDER:
+            return None
+        if writer is None:
+            self._fail("Builder activation lost its exact workspace writer")
+        coordination = (
+            self._coordinator.show(candidate.change_id)
+            if consumes_handoff
+            else self._coordinator.acquire(candidate.change_id, writer)
+        )
+        return coordination.writer
 
     def _reserve_worker_attempt(
         self,
@@ -9903,20 +10589,14 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         binding: OutcomeAuthorityBinding,
     ) -> DeliveryLaunchPackage:
-        source = self._prepare_source(
-            change_id,
-            runtime,
-            binding.outcome_id,
-            binding.active_claim.worker_role,
-            allow_dirty=binding.active_claim.worker_role is DeliveryWorkerRole.BUILDER,
-        )
-        if isinstance(source, DeliveryAcquisitionFailure):
-            self._fail(source.detail)
         claim = binding.active_claim
         if claim is None:
             self._fail("outcome has no active claim")
-        writer = source.coordination.writer if claim.worker_role == DeliveryWorkerRole.BUILDER else None
         candidate = _Candidate((0, 0, 0, change_id), change_id, runtime, binding, claim.task_id, claim.worker_role)
+        source = self._prepare_source(candidate, allow_dirty=claim.worker_role is DeliveryWorkerRole.BUILDER)
+        if isinstance(source, DeliveryAcquisitionFailure):
+            self._fail(source.detail)
+        writer = source.coordination.writer if claim.worker_role == DeliveryWorkerRole.BUILDER else None
         return self._launch_package(candidate, claim, source, writer)
 
     def _launch_package(
@@ -9932,6 +10612,7 @@ class PortfolioApplication:
             outcome_id=candidate.binding.outcome_id,
             plan_scope_id=candidate.binding.plan_scope_id,
             task_id=candidate.task_id,
+            builder_handoff_context=candidate.binding.builder_handoff_context,
             claim=claim,
             policy=self._policies[candidate.role],
             package_id=source.package.package_id,
@@ -10074,7 +10755,9 @@ class PortfolioApplication:
         *,
         expected_remote_head: str | None = None,
     ) -> DeliveryStatePublicationReceipt | None:
-        if self._delivery_state_publisher is None:
+        if self._delivery_state_publisher is None or any(
+            binding.builder_handoff_context is not None for binding in runtime.bindings()
+        ):
             return None
         checkpoint = runtime.checkpoint_publication_state()
         pending = checkpoint.pending_checkpoint

@@ -79,6 +79,9 @@ and initial plan-job identities.
 
 - This role owns Specification, not Delivery implementation, frontier planning, acceptance, or audit.
 - Only the user can resolve material product and architecture choices or grant admission approval.
+- For returned Design attention, use the exact caller-supplied reason and locators, then re-read the
+  verified package. This handoff is not revision approval or admission; if its return context or
+  current Delivery stage is absent or ambiguous, leave the package unchanged and report that limit.
 - Memory is qualified supporting evidence, never current specification or execution authority.
 - A challenger `warning` remains visible in known limits; `error` or malformed evidence blocks
   admission.

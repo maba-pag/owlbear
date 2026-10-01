@@ -36,7 +36,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageResult
 from owlbear_delivery.diagnostics import classify_delivery_failure
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
-from owlbear_delivery.finalization_reports import FinalizationReport, ReportFinalizationFailure
+from owlbear_delivery.finalization_reports import FinalizationReport, FinalizerSettlement, ReportFinalizationFailure
 from owlbear_delivery.portfolio_application import (
     DeliveryAnswer,
     DeliveryAnswerResult,
@@ -1055,8 +1055,13 @@ class TargetMCPAdapter:
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.transition))
 
     async def settle_worker_invocation(self, request: SettleWorkerInvocationRequest) -> dict[str, object]:
-        """Settle one exact completed Planner retry invocation."""
+        """Settle one exact completed Planner, Builder, or normally returned Finalizer invocation."""
         params = self._validate(SettleWorkerInvocationParams, request)
+        if isinstance(params.settlement, FinalizerSettlement):
+            return self._call(
+                params,
+                lambda: self._application.settle_finalizer_invocation(params.settlement),
+            )
         return self._call(
             params,
             lambda: self._application.settle_worker_invocation(

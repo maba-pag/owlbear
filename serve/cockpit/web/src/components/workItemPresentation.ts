@@ -27,6 +27,7 @@ export const READINESS_STATUS_LABELS: Record<DeliveryReadinessStatus, string> = 
 
 export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string> = {
   ready: "Delivery reports this operation is eligible now.",
+  "design-attention": "The returned Design needs human review before re-admission.",
   "active-custody": "An active operation retains Change custody.",
   "builder-transition-contained":
     "The Builder transition was refused; custody is retained and host worker-exclusion evidence is missing.",

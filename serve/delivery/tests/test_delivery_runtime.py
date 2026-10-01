@@ -79,8 +79,16 @@ from owlbear_delivery import (
     repair_missing_request_provenance,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryBlock,
+    DeliveryBuilderHandoffContext,
     DeliveryBuilderInvocationSettlement,
     DeliveryPlanningRetrySettlement,
+    _DeliveryBuilderHandoffChangeIntentReceipt,
+    _DeliveryBuilderInvocationSettlementReceipt,
+    _DeliveryBuilderRequestResolutionReceipt,
+    _model_content,
+    _read_builder_handoff_change_intent_receipts,
+    _read_builder_request_resolution_receipt,
     invalidate_checkpoint_publication,
     parse_delivery_frontier,
 )
@@ -89,9 +97,14 @@ from owlbear_delivery.recovery import (
     DeliveryWorkerExclusionRequiredError,
     RetryEpisodeKey,
     RetryFailureClass,
+    RetryLedger,
     RetryOwnerResult,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction
+from owlbear_delivery.runtime_transaction import (
+    ReplacementTransactionParticipant,
+    RuntimeTransaction,
+    TransactionParticipant,
+)
 
 
 def test_parse_delivery_frontier_canonicalizes_schema_17_retry_defaults() -> None:
@@ -269,6 +282,14 @@ def _contract() -> DeliveryContract:
 
 def _canonical(model: DeliveryFrontier) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _frontier_changed_fields(before: DeliveryFrontier, after: DeliveryFrontier) -> set[str]:
+    return {
+        field_name
+        for field_name in DeliveryFrontier.model_fields
+        if getattr(before, field_name) != getattr(after, field_name)
+    }
 
 
 def _runtime(
@@ -1139,6 +1160,7 @@ def test_change_deferral_retains_frontier_and_suppresses_claimability(tmp_path: 
     assert runtime.change_deferral() is None
     assert runtime.change_stage() == DeliveryChangeStage.BUILDING
     assert runtime.claimable_outcome_ids() == ("OUT-001", "OUT-003")
+    assert not (tmp_path / "changes/delivery-runtime/builder-handoff-change-intent-receipts").exists()
 
 
 def test_attention_can_be_deferred_and_resumes_to_the_same_attention_state(tmp_path: Path) -> None:
@@ -2586,6 +2608,73 @@ def test_builder_settlement_skips_portable_publication_while_other_claim_is_acti
     assert runtime.pending_state_publication() is None
 
 
+def test_builder_handoff_direct_activation_without_consumption_is_refused(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+    )
+    runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, request))
+    frontier = runtime.frontier_bytes()
+    custody = coordinator.coordination_bytes("delivery-runtime")
+    workspace = _git_worktree_snapshot(coordination.worktree_path)
+    state_root = coordinator.runtime_root / "changes/delivery-runtime"
+    state = {path.relative_to(state_root): path.read_bytes() for path in state_root.rglob("*") if path.is_file()}
+    with pytest.raises(DeliveryRuntimeConflictError, match="jointly prepared"):
+        _activate(runtime, "OUT-001", "unjoined-claim", task_id="TASK-002", attempt_id="unjoined-attempt")
+    assert runtime.frontier_bytes() == frontier
+    assert coordinator.coordination_bytes("delivery-runtime") == custody
+    assert _git_worktree_snapshot(coordination.worktree_path) == workspace
+    assert {
+        path.relative_to(state_root): path.read_bytes() for path in state_root.rglob("*") if path.is_file()
+    } == state
+
+    owner_result_path = (
+        coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json"
+    )
+    owner_result = owner_result_path.read_bytes()
+    bogus_participant = ReplacementTransactionParticipant(
+        root=coordinator.runtime_root,
+        relative_path=owner_result_path.relative_to(coordinator.runtime_root),
+        expected_content=owner_result,
+        replacement_content=owner_result,
+    )
+    activation = ActivateDeliveryClaim(
+        outcome_id="OUT-001",
+        claim=DeliveryActiveClaim(
+            attempt_id="unjoined-attempt",
+            claim_id="unjoined-claim",
+            owner_id="owner-unjoined-claim",
+            process_id="process-unjoined-claim",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.BUILDER,
+            task_id="TASK-002",
+        ),
+    )
+    with (
+        coordinator.publication_lock("delivery-runtime") as lock,
+        pytest.raises(
+            DeliveryRuntimeConflictError,
+            match="participant does not match",
+        ),
+    ):
+        runtime.activate_claim(
+            activation,
+            builder_handoff_participant=bogus_participant,
+            builder_handoff_lock=lock,
+        )
+    assert runtime.frontier_bytes() == frontier
+    assert coordinator.coordination_bytes("delivery-runtime") == custody
+    assert _git_worktree_snapshot(coordination.worktree_path) == workspace
+    assert {
+        path.relative_to(state_root): path.read_bytes() for path in state_root.rglob("*") if path.is_file()
+    } == state
+
+
 def test_builder_settlement_replay_conflict_and_late_publish_refusal(tmp_path: Path) -> None:
     runtime, coordinator, coordination, _initial, branch_head, _first_result, tasks = _active_second_task(tmp_path)
     _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
@@ -2766,6 +2855,307 @@ def test_builder_request_block_pauses_without_charging_or_discarding_work(tmp_pa
     assert coordinator.show("delivery-runtime").builder_handoff is not None
 
 
+def _assert_builder_request_resolution_receipt(
+    receipt: _DeliveryBuilderRequestResolutionReceipt,
+    resolved: DeliveryRequest,
+    binding: OutcomeAuthorityBinding,
+    context: DeliveryBuilderHandoffContext,
+    receipt_path: Path,
+) -> None:
+    assert set(receipt.model_dump(mode="json")) == {
+        "schema_version",
+        "change_id",
+        "outcome_id",
+        "request_id",
+        "settlement_id",
+        "builder_handoff_context",
+        "resolved_request",
+        "updated_block",
+    }
+    assert receipt.change_id == "delivery-runtime"
+    assert receipt.outcome_id == "OUT-001"
+    assert receipt.request_id == resolved.request_id
+    assert receipt.settlement_id == context.settlement_id
+    assert receipt.builder_handoff_context == context
+    assert receipt.resolved_request == resolved
+    assert receipt.updated_block == binding.block
+    assert receipt.updated_block.resolved
+    assert receipt_path.name == f"{context.settlement_id}.json"
+
+    invalid_request_identity = receipt.model_dump() | {"request_id": "different-builder-request"}
+    with pytest.raises(ValidationError, match="Builder request resolution receipt"):
+        _DeliveryBuilderRequestResolutionReceipt.model_validate(invalid_request_identity)
+    invalid_settlement_identity = receipt.model_dump() | {"settlement_id": "f" * 64}
+    with pytest.raises(ValidationError, match="Builder request resolution receipt"):
+        _DeliveryBuilderRequestResolutionReceipt.model_validate(invalid_settlement_identity)
+    unresolved_decision = receipt.model_dump()
+    unresolved_decision["resolved_request"]["resolution"]["selected_option_id"] = None
+    with pytest.raises(ValidationError, match="Builder request resolution receipt"):
+        _DeliveryBuilderRequestResolutionReceipt.model_validate(unresolved_decision)
+    forged_choice = receipt.model_dump()
+    forged_choice["resolved_request"]["resolution"]["selected_option_id"] = "forged"
+    with pytest.raises(ValidationError, match="Builder request resolution receipt"):
+        _DeliveryBuilderRequestResolutionReceipt.model_validate(forged_choice)
+
+
+def _stage_followup_builder_request_settlement(
+    runtime: DeliveryRuntime,
+    coordinator: PortfolioCoordinator,
+    request: DeliveryRequest,
+    original_block: BlockDelivery,
+    previous_context: DeliveryBuilderHandoffContext,
+) -> DeliveryBuilderHandoffContext:
+    attempt_id = "attempt-003"
+    claim_id = "claim-003"
+    block_request = original_block.model_copy(
+        update={"block_id": "builder-request-resolution-block-003", "claim_id": claim_id}
+    )
+    envelope = DeliveryBuilderInvocationSettlement(
+        change_id="delivery-runtime",
+        outcome_id=request.outcome_id,
+        claim_id=claim_id,
+        attempt_id=attempt_id,
+        task_id=previous_context.original_task_id,
+        expected_last_reviewed_commit=previous_context.last_reviewed_commit,
+        disposition="normal-return",
+        request=block_request,
+    )
+    context = DeliveryBuilderHandoffContext(
+        settlement_id=hashlib.sha256(_model_content(envelope)).hexdigest(),
+        original_task_id=previous_context.original_task_id,
+        outcome_id=previous_context.outcome_id,
+        attempt_id=attempt_id,
+        last_reviewed_commit=previous_context.last_reviewed_commit,
+        branch_head=previous_context.branch_head,
+        metadata_fingerprint=previous_context.metadata_fingerprint,
+        route="same-task",
+    )
+    block = DeliveryBlock(
+        block_id=block_request.block_id,
+        reason=block_request.reason,
+        unblock_condition=block_request.unblock_condition,
+        expected_evidence=block_request.expected_evidence,
+        locators=block_request.locators,
+        request_id=request.request_id,
+        resume_commit=block_request.resume_commit,
+    )
+    binding = runtime.show_binding(request.outcome_id)
+    followup_binding = OutcomeAuthorityBinding.model_validate(
+        binding.model_dump(mode="python")
+        | {
+            "active_claim": None,
+            "block": block,
+            "builder_handoff_context": context,
+            "requests": (request,),
+        }
+    )
+    settlement_receipt = _DeliveryBuilderInvocationSettlementReceipt(
+        settlement_id=context.settlement_id,
+        envelope=envelope,
+        handoff_context=context,
+        result=followup_binding,
+    )
+    previous = runtime.frontier_bytes()
+    frontier = DeliveryFrontier.model_validate_json(previous)
+    followup_frontier = frontier.model_copy(
+        update={
+            "bindings": tuple(
+                followup_binding if item.outcome_id == request.outcome_id else item for item in frontier.bindings
+            )
+        }
+    )
+    runtime._replace(
+        previous,
+        followup_frontier,
+        additional_participants=(
+            TransactionParticipant(
+                coordinator.runtime_root,
+                Path("changes")
+                / "delivery-runtime"
+                / "builder-invocation-receipts"
+                / f"{hashlib.sha256(attempt_id.encode('utf-8')).hexdigest()}.json",
+                _model_content(settlement_receipt),
+            ),
+        ),
+    )
+    return context
+
+
+def _assert_resolution_reader_rejects_invalid_decisions(
+    coordinator: PortfolioCoordinator,
+    receipt_path: Path,
+    receipt_content: bytes,
+    receipt: _DeliveryBuilderRequestResolutionReceipt,
+) -> None:
+    context = receipt.builder_handoff_context
+    try:
+        for selected_option_id in (None, "forged"):
+            invalid_receipt = receipt.model_dump(mode="json")
+            invalid_receipt["resolved_request"]["resolution"]["selected_option_id"] = selected_option_id
+            invalid_content = (json.dumps(invalid_receipt, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            receipt_path.write_bytes(invalid_content)
+            with pytest.raises(DeliveryRuntimeReferenceError, match="Builder request resolution receipt is invalid"):
+                _read_builder_request_resolution_receipt(
+                    coordinator.runtime_root,
+                    receipt.change_id,
+                    receipt.request_id,
+                    context,
+                )
+    finally:
+        receipt_path.write_bytes(receipt_content)
+
+
+def _assert_reused_request_has_independent_settlement_receipts(
+    runtime: DeliveryRuntime,
+    coordinator: PortfolioCoordinator,
+    block_request: BlockDelivery,
+    receipt: _DeliveryBuilderRequestResolutionReceipt,
+    receipt_path: Path,
+) -> None:
+    request = block_request.request
+    assert request is not None
+    context = receipt.builder_handoff_context
+    answer = receipt.resolved_request.resolution
+    assert answer is not None
+    resolved = receipt.resolved_request
+    receipt_content = receipt_path.read_bytes()
+    pending_publication = runtime.pending_state_publication()
+    second_context = _stage_followup_builder_request_settlement(runtime, coordinator, request, block_request, context)
+    second_receipt_path = receipt_path.parent / f"{second_context.settlement_id}.json"
+    before_second_resolution = runtime.frontier_bytes()
+    assert second_context.settlement_id != context.settlement_id
+    assert second_receipt_path != receipt_path
+    assert runtime.resolve_request(request.request_id, answer) == resolved
+    after_second_resolution = runtime.frontier_bytes()
+    assert after_second_resolution != before_second_resolution
+    assert runtime.pending_state_publication() == pending_publication
+    assert receipt_path.read_bytes() == receipt_content
+    second_receipt = _read_builder_request_resolution_receipt(
+        coordinator.runtime_root,
+        "delivery-runtime",
+        request.request_id,
+        second_context,
+    )
+    _assert_builder_request_resolution_receipt(
+        second_receipt,
+        resolved,
+        runtime.show_binding(context.outcome_id),
+        second_context,
+        second_receipt_path,
+    )
+    second_receipt_content = second_receipt_path.read_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="already resolved"):
+        runtime.resolve_request(request.request_id, DeliveryRequestResolution(selected_option_id="remote"))
+    assert runtime.frontier_bytes() == after_second_resolution
+    assert runtime.pending_state_publication() == pending_publication
+    assert receipt_path.read_bytes() == receipt_content
+    assert second_receipt_path.read_bytes() == second_receipt_content
+
+
+def test_builder_request_resolution_persists_exact_local_receipt_without_side_effects(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    before_index = _git(coordination.worktree_path, "write-tree")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    request = DeliveryRequest(
+        request_id="builder-request-resolution-002",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the evidence source for the retained Builder task.",
+        options=(
+            DeliveryRequestOption(option_id="local", label="Use local evidence"),
+            DeliveryRequestOption(option_id="remote", label="Wait for remote evidence"),
+        ),
+    )
+    block_request = BlockDelivery(
+        action="block",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        block_id="builder-request-resolution-block",
+        reason="A bounded evidence-source decision is required.",
+        unblock_condition="The user selects an evidence source.",
+        expected_evidence=("Selected evidence source",),
+        locators=("TASK-002",),
+        request=request,
+        resume_commit=branch_head,
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, block_request))
+    context = settled.builder_handoff_context
+    assert context is not None
+    assert settled.block is not None
+    assert not settled.block.resolved
+    ledger.reconcile_owner_results()
+    paused_episode = ledger.episode(key)
+    assert paused_episode is not None
+
+    answer = DeliveryRequestResolution(
+        selected_option_id="local",
+        response_text="Use the verified local evidence.",
+        provenance="user-confirmed",
+    )
+    unknown_request_id = "unknown-builder-request"
+    receipt_directory = coordinator.runtime_root / "changes/delivery-runtime/builder-request-resolution-receipts"
+    unknown_receipts_before = tuple(receipt_directory.glob("*.json"))
+    before_unknown = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeReferenceError, match="absent or ambiguous"):
+        runtime.resolve_request(unknown_request_id, answer)
+    assert runtime.frontier_bytes() == before_unknown
+    assert tuple(receipt_directory.glob("*.json")) == unknown_receipts_before
+
+    receipt_path = (
+        coordinator.runtime_root
+        / "changes/delivery-runtime/builder-request-resolution-receipts"
+        / f"{context.settlement_id}.json"
+    )
+    before_frontier = runtime.frontier_bytes()
+    before_custody = coordinator.coordination_bytes("delivery-runtime")
+    before_publication = runtime.pending_state_publication()
+
+    resolved = runtime.resolve_request(request.request_id, answer)
+
+    receipt_content = receipt_path.read_bytes()
+    receipt = _DeliveryBuilderRequestResolutionReceipt.model_validate_json(receipt_content, strict=True)
+    _assert_resolution_reader_rejects_invalid_decisions(
+        coordinator,
+        receipt_path,
+        receipt_content,
+        receipt,
+    )
+    binding = runtime.show_binding("OUT-001")
+    _assert_builder_request_resolution_receipt(receipt, resolved, binding, context, receipt_path)
+    assert (
+        _read_builder_request_resolution_receipt(
+            coordinator.runtime_root,
+            "delivery-runtime",
+            request.request_id,
+            context,
+        )
+        == receipt
+    )
+
+    after_resolution = runtime.frontier_bytes()
+    assert after_resolution != before_frontier
+    assert runtime.pending_state_publication() == before_publication
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert _git(coordination.worktree_path, "write-tree") == before_index
+    assert coordinator.coordination_bytes("delivery-runtime") == before_custody
+    assert coordinator.show("delivery-runtime").builder_handoff is not None
+    assert ledger.episode(key) == paused_episode
+
+    assert runtime.resolve_request(request.request_id, answer) == resolved
+    assert runtime.frontier_bytes() == after_resolution
+    assert runtime.pending_state_publication() == before_publication
+    assert receipt_path.read_bytes() == receipt_content
+    _assert_reused_request_has_independent_settlement_receipts(
+        runtime,
+        coordinator,
+        block_request,
+        receipt,
+        receipt_path,
+    )
+
+
 def test_builder_handoff_blocks_administrative_move_without_mutation(tmp_path: Path) -> None:
     runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
     _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
@@ -2816,6 +3206,293 @@ def test_builder_handoff_blocks_administrative_move_without_mutation(tmp_path: P
     assert _git_worktree_snapshot(coordination.worktree_path) == before_git
 
 
+def _builder_handoff_external_state(
+    runtime: DeliveryRuntime,
+    coordinator: PortfolioCoordinator,
+    worktree: Path,
+    ledger: RetryLedger,
+    key: RetryEpisodeKey,
+) -> tuple[object, ...]:
+    ledger_root = coordinator.runtime_root / "changes/delivery-runtime/retry-ledger"
+    return (
+        coordinator.coordination_bytes("delivery-runtime"),
+        _git_worktree_snapshot(worktree),
+        ledger.episode(key),
+        tuple(
+            (path.relative_to(ledger_root).as_posix(), path.read_bytes())
+            for path in sorted(ledger_root.rglob("*"))
+            if path.is_file()
+        ),
+        runtime.pending_state_publication(),
+    )
+
+
+def test_builder_handoff_defer_resume_receipts_are_exact_and_replayable(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, retry))
+    context = settled.builder_handoff_context
+    assert context is not None
+    ledger.reconcile_owner_results()
+    external_state = _builder_handoff_external_state(
+        runtime,
+        coordinator,
+        coordination.worktree_path,
+        ledger,
+        key,
+    )
+
+    before_defer = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    deferral = runtime.defer_change("pause for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+    deferred_frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    defer_receipt = _read_builder_handoff_change_intent_receipts(
+        coordinator.runtime_root,
+        "delivery-runtime",
+        context,
+    )[0]
+    assert defer_receipt.action == "defer"
+    assert defer_receipt.deferral == deferral
+    assert defer_receipt.before_frontier == before_defer
+    assert defer_receipt.after_frontier == deferred_frontier
+    assert defer_receipt.before_frontier_digest == hashlib.sha256(_model_content(before_defer)).hexdigest()
+    assert defer_receipt.after_frontier_digest == hashlib.sha256(_model_content(deferred_frontier)).hexdigest()
+    assert _frontier_changed_fields(before_defer, deferred_frontier) == {"change_deferral"}
+    assert before_defer.bindings == deferred_frontier.bindings
+    assert _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key) == (
+        external_state
+    )
+
+    before_replay = runtime.frontier_bytes()
+    assert runtime.defer_change("different replay text", datetime(2026, 8, 11, 18, tzinfo=UTC)) == deferral
+    assert runtime.frontier_bytes() == before_replay
+    assert len(_read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)) == 1
+
+    assert runtime.resume_change() == deferral
+    resumed_frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    receipts = _read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)
+    assert len(receipts) == 2
+    resume_receipt = receipts[-1]
+    assert resume_receipt.action == "resume"
+    assert resume_receipt.deferral == deferral
+    assert resume_receipt.before_frontier.change_deferral == deferral
+    assert resume_receipt.after_frontier == resumed_frontier
+    assert resume_receipt.after_frontier.change_deferral is None
+    assert _frontier_changed_fields(resume_receipt.before_frontier, resumed_frontier) == {"change_deferral"}
+    assert _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key) == (
+        external_state
+    )
+
+    before_duplicate_resume = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="not deferred"):
+        runtime.resume_change()
+    assert runtime.frontier_bytes() == before_duplicate_resume
+
+
+def test_builder_handoff_abandonment_receipt_removes_exact_deferral(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, retry))
+    context = settled.builder_handoff_context
+    assert context is not None
+    ledger.reconcile_owner_results()
+    external_state = _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key)
+
+    deferral = runtime.defer_change("pause before abandoning", datetime(2026, 8, 11, 17, tzinfo=UTC))
+    before_abandon = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    abandonment = runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 18, tzinfo=UTC))
+    after_abandon = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    receipts = _read_builder_handoff_change_intent_receipts(
+        coordinator.runtime_root,
+        "delivery-runtime",
+        context,
+    )
+    abandon_receipt = receipts[-1]
+    assert len(receipts) == 2
+    assert abandon_receipt.action == "abandon"
+    assert abandon_receipt.deferral == deferral
+    assert abandon_receipt.abandonment == abandonment
+    assert abandonment.prior_stage == DeliveryChangeStage.DEFERRED
+    assert after_abandon.change_deferral is None
+    assert _frontier_changed_fields(before_abandon, after_abandon) == {"change_deferral", "change_abandonment"}
+    assert _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key) == (
+        external_state
+    )
+
+    before_replay = runtime.frontier_bytes()
+    assert runtime.abandon_change("ignored replay text", datetime(2026, 8, 11, 19, tzinfo=UTC)) == abandonment
+    assert runtime.frontier_bytes() == before_replay
+    assert (
+        len(
+            _read_builder_handoff_change_intent_receipts(
+                coordinator.runtime_root,
+                "delivery-runtime",
+                context,
+            )
+        )
+        == 2
+    )
+
+
+def test_builder_handoff_change_intent_rejects_bad_record_and_unknown_head(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, retry))
+    context = settled.builder_handoff_context
+    assert context is not None
+    ledger.reconcile_owner_results()
+    external_state = _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key)
+    runtime.defer_change("pause for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+    receipt = _read_builder_handoff_change_intent_receipts(
+        coordinator.runtime_root,
+        "delivery-runtime",
+        context,
+    )[0]
+
+    invalid_receipt = receipt.model_dump(mode="json")
+    invalid_receipt["after_frontier"]["bindings"][0]["tasks"][0]["title"] = "Unrecorded task mutation"
+    invalid_after = DeliveryFrontier.model_validate_json(json.dumps(invalid_receipt["after_frontier"]), strict=True)
+    invalid_receipt["after_frontier_digest"] = hashlib.sha256(_model_content(invalid_after)).hexdigest()
+    with pytest.raises(ValidationError, match="unsupported frontier fields"):
+        _DeliveryBuilderHandoffChangeIntentReceipt.model_validate_json(json.dumps(invalid_receipt), strict=True)
+
+    head_path = (
+        coordinator.runtime_root
+        / "changes/delivery-runtime/builder-handoff-change-intent-receipts"
+        / context.settlement_id
+        / "head.json"
+    )
+    original_head = head_path.read_bytes()
+    invalid_head = json.loads(original_head)
+    invalid_head["latest_receipt_id"] = "f" * 64
+    corrupt_head = (json.dumps(invalid_head, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    head_path.write_bytes(corrupt_head)
+    before_refused_resume = runtime.frontier_bytes()
+    try:
+        with pytest.raises(DeliveryRuntimeReferenceError, match="Builder handoff change-intent receipt"):
+            runtime.resume_change()
+        assert runtime.frontier_bytes() == before_refused_resume
+        assert head_path.read_bytes() == corrupt_head
+    finally:
+        head_path.write_bytes(original_head)
+    assert _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key) == (
+        external_state
+    )
+
+
+def test_builder_handoff_rejects_other_binding_answer_and_unblock_without_mutation(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, retry))
+    assert settled.builder_handoff_context is not None
+    ledger.reconcile_owner_results()
+
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    request = DeliveryRequest(
+        request_id="other-outcome-request",
+        kind=DeliveryRequestKind.ACTION,
+        outcome_id="OUT-003",
+        summary="Provide evidence for the unrelated outcome.",
+    )
+    requested_block = DeliveryBlock(
+        block_id="other-outcome-request-block",
+        reason="The unrelated outcome needs user evidence.",
+        unblock_condition="The evidence is supplied.",
+        expected_evidence=("User evidence",),
+        locators=("OUT-003",),
+        request_id=request.request_id,
+    )
+    requestless_block = DeliveryBlock(
+        block_id="other-outcome-requestless-block",
+        reason="The unrelated outcome needs verification.",
+        unblock_condition="Verification is recorded.",
+        expected_evidence=("Verification locator",),
+        locators=("OUT-002",),
+    )
+    bindings = tuple(
+        binding.model_copy(update={"requests": (request,), "block": requested_block})
+        if binding.outcome_id == "OUT-003"
+        else binding.model_copy(update={"block": requestless_block})
+        if binding.outcome_id == "OUT-002"
+        else binding
+        for binding in frontier.bindings
+    )
+    path = coordinator.runtime_root / "changes/delivery-runtime/frontier.json"
+    path.write_bytes(_canonical(frontier.model_copy(update={"bindings": bindings})))
+
+    ledger_root = coordinator.runtime_root / "changes/delivery-runtime/retry-ledger"
+    ledger_files = {
+        item.relative_to(ledger_root).as_posix(): item.read_bytes()
+        for item in sorted(ledger_root.rglob("*"))
+        if item.is_file()
+    }
+    ledger_episode = ledger.episode(key)
+    coordination_state = coordinator.coordination_bytes("delivery-runtime")
+    git_state = _git_worktree_snapshot(coordination.worktree_path)
+    before_frontier = runtime.frontier_bytes()
+    publication_state = runtime.pending_state_publication()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="outside the exact retained Builder handoff"):
+        runtime.resolve_request(
+            request.request_id,
+            DeliveryRequestResolution(response_text="Use user workflow.", provenance="user-confirmed"),
+        )
+    assert runtime.frontier_bytes() == before_frontier
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="requestless unblock cannot mutate"):
+        runtime.unblock(
+            "OUT-002",
+            requestless_block.block_id,
+            "Retry budget is exhausted; wait for the user workflow handler.",
+            ("retry-ledger",),
+        )
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.coordination_bytes("delivery-runtime") == coordination_state
+    assert _git_worktree_snapshot(coordination.worktree_path) == git_state
+    assert ledger.episode(key) == ledger_episode
+    assert {
+        item.relative_to(ledger_root).as_posix(): item.read_bytes()
+        for item in sorted(ledger_root.rglob("*"))
+        if item.is_file()
+    } == ledger_files
+    assert runtime.pending_state_publication() == publication_state
+
+
 def test_builder_return_to_planning_preserves_history_and_retains_partial_handoff(tmp_path: Path) -> None:
     runtime, coordinator, coordination, _initial, branch_head, first_result, tasks = _active_second_task(tmp_path)
     before_git = _git_worktree_snapshot(coordination.worktree_path)
@@ -2845,11 +3522,9 @@ def test_builder_return_to_planning_preserves_history_and_retains_partial_handof
     assert result.return_context is not None
     assert result.return_context.completed_boundary == coordination.last_reviewed_commit
     assert result.builder_handoff_context is not None
-    assert result.builder_handoff_context.route == "planning-routing-unimplemented"
-    assert result.block is not None
-    assert result.block.request_id is None
-    assert "Planning task routing is not implemented" in result.block.reason
-    assert "OUT-001" not in runtime.claimable_outcome_ids()
+    assert result.builder_handoff_context.route == "same-outcome-planner"
+    assert result.block is None
+    assert "OUT-001" in runtime.claimable_outcome_ids()
     assert coordinator.show("delivery-runtime").builder_handoff is not None
     ledger.reconcile_owner_results()
     episode = ledger.episode(key)
@@ -3001,8 +3676,11 @@ def test_builder_settlement_refuses_attempt_without_retry_reservation(tmp_path: 
     assert _git_worktree_snapshot(coordination.worktree_path) == before_git
 
 
-@pytest.mark.parametrize("invalid_shape", ["unknown-request", "elapsed-timeout", "timeout-inner-request"])
-def test_builder_settlement_rejects_unknown_request_and_elapsed_timeout_without_mutation(
+@pytest.mark.parametrize(
+    "invalid_shape",
+    ["unknown-request", "unknown-return", "elapsed-timeout", "timeout-inner-request"],
+)
+def test_builder_settlement_rejects_unknown_request_or_return_and_elapsed_timeout_without_mutation(
     tmp_path: Path,
     invalid_shape: str,
 ) -> None:
@@ -3023,6 +3701,17 @@ def test_builder_settlement_rejects_unknown_request_and_elapsed_timeout_without_
             claim_id="claim-002",
             output=_output("claim-002", DeliveryStage.IMPLEMENTATION),
         ).model_dump(mode="json")
+    elif invalid_shape == "unknown-return":
+        invalid_values["request"] = {
+            "action": "return",
+            "outcome_id": "OUT-001",
+            "claim_id": "claim-002",
+            "target": "unsupported-stage",
+            "reason": "The admitted meaning needs revision.",
+            "locators": ["OUT-001"],
+            "preserved_commit": branch_head,
+            "attempt_id": "attempt-002",
+        }
     elif invalid_shape == "elapsed-timeout":
         invalid_values["elapsed_timeout"] = True
     else:
@@ -3030,6 +3719,7 @@ def test_builder_settlement_rejects_unknown_request_and_elapsed_timeout_without_
     before_frontier = runtime.frontier_bytes()
     before_workspace = coordinator.show("delivery-runtime")
     before_git = _git_worktree_snapshot(coordination.worktree_path)
+    before_ledger = runtime.retry_ledger().read()
 
     with pytest.raises(ValidationError):
         DeliveryBuilderInvocationSettlement.model_validate(invalid_values)
@@ -3037,10 +3727,58 @@ def test_builder_settlement_rejects_unknown_request_and_elapsed_timeout_without_
     assert runtime.frontier_bytes() == before_frontier
     assert coordinator.show("delivery-runtime") == before_workspace
     assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert runtime.retry_ledger().read() == before_ledger
 
 
-def test_builder_return_to_design_is_a_bounded_read_only_refusal(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("foreign_field", "foreign_value"),
+    [
+        ("change_id", "foreign-change"),
+        ("outcome_id", "OUT-099"),
+        ("claim_id", "foreign-claim"),
+        ("task_id", "TASK-FOREIGN"),
+        ("attempt_id", "foreign-attempt"),
+    ],
+)
+def test_builder_design_settlement_rejects_foreign_identity_without_mutation(
+    tmp_path: Path,
+    foreign_field: str,
+    foreign_value: str,
+) -> None:
     runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    request = ReturnDelivery(
+        action="return",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        target=DeliveryStage.DESIGN,
+        reason="The admitted meaning needs revision.",
+        locators=("design.md",),
+        preserved_commit=branch_head,
+        attempt_id="attempt-002",
+    )
+    envelope = _builder_settlement_envelope(runtime, coordination, request)
+    before_frontier = runtime.frontier_bytes()
+    before_workspace = coordinator.show("delivery-runtime")
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    before_ledger = runtime.retry_ledger().read()
+
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.settle_builder_invocation(envelope.model_copy(update={foreign_field: foreign_value}))
+
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("delivery-runtime") == before_workspace
+    assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert runtime.retry_ledger().read() == before_ledger
+
+
+def test_builder_return_to_design_settles_as_passive_design_handoff(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, first_result, tasks = _active_second_task(tmp_path)
+    before_git = _git_worktree_snapshot(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(
+        runtime,
+        "attempt-002",
+        coordination.last_reviewed_commit,
+    )
     request = ReturnDelivery(
         action="return",
         outcome_id="OUT-001",
@@ -3052,16 +3790,44 @@ def test_builder_return_to_design_is_a_bounded_read_only_refusal(tmp_path: Path)
         attempt_id="attempt-002",
     )
     envelope = _builder_settlement_envelope(runtime, coordination, request)
-    before_frontier = runtime.frontier_bytes()
-    before_workspace = coordinator.show("delivery-runtime")
-    before_git = _git_worktree_snapshot(coordination.worktree_path)
 
-    with pytest.raises(DeliveryRuntimeConflictError, match="supported Design workspace owner route"):
-        runtime.settle_builder_invocation(envelope)
+    result = runtime.settle_builder_invocation(envelope)
 
-    assert runtime.frontier_bytes() == before_frontier
-    assert coordinator.show("delivery-runtime") == before_workspace
     assert _git_worktree_snapshot(coordination.worktree_path) == before_git
+    assert result.stage == DeliveryStage.DESIGN
+    assert result.active_claim is None
+    assert result.tasks == tasks
+    assert result.results == (first_result,)
+    assert result.return_context is not None
+    assert result.return_context.target == DeliveryStage.DESIGN
+    assert result.return_context.reason == request.reason
+    assert result.return_context.locators == request.locators
+    assert result.return_context.preserved_commit == branch_head
+    assert result.return_context.completed_boundary == coordination.last_reviewed_commit
+    handoff = result.builder_handoff_context
+    assert handoff is not None
+    assert handoff.route == "same-outcome-design"
+    assert handoff.original_task_id == "TASK-002"
+    assert handoff.original_task_commitment_ids == tasks[1].commitment_ids
+    assert handoff.original_task_maintained_surfaces == tasks[1].maintained_surfaces
+    workspace = coordinator.show("delivery-runtime")
+    assert workspace.writer is not None
+    assert workspace.writer.kind == "handoff"
+    assert workspace.builder_handoff is not None
+    assert workspace.builder_handoff.original_task_id == "TASK-002"
+    assert workspace.builder_handoff.settlement_id == handoff.settlement_id
+    ledger.reconcile_owner_results()
+    episode = ledger.episode(key)
+    assert episode is not None
+    assert episode.total_attempts == 1
+    assert episode.reset_count == 0
+    owner_result_path = (
+        coordinator.runtime_root / "changes/delivery-runtime/retry-ledger/owner-results/attempt-002.json"
+    )
+    owner_result = RetryOwnerResult.model_validate_json(owner_result_path.read_bytes())
+    assert owner_result.accepted is False
+    assert owner_result.paused is False
+    assert owner_result.failure_code == "worker-returned"
 
 
 @pytest.mark.parametrize("crash_stage", ["after-first-publication", "before-handoff-publication"])
