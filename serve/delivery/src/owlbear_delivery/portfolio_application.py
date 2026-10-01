@@ -7284,12 +7284,19 @@ class PortfolioApplication:
                 f"Preserved commit: {return_context.preserved_commit or 'unavailable'}. "
                 f"Completed boundary: {return_context.completed_boundary or 'unavailable'}."
             )
+        if binding.builder_handoff_context is None:
+            return (
+                f"/design {change_id} Resume the existing Design session and assess its verified intent, Design "
+                f"and persisted return evidence. {evidence} Require explicit user approval before revision "
+                "or re-admission; this attention does not approve or admit a Design revision."
+            )
         return (
-            f"/design {change_id} Resume the existing Design session. Read its verified current intent and Design, "
-            f"then assess the persisted return evidence. {evidence} Settlement only cleared the Builder claim and "
+            f"/inspect-change {change_id} Inspect the existing verified intent, Design and persisted return "
+            f"evidence read-only. {evidence} Settlement only cleared the Builder claim and "
             "retained a passive workspace handoff; it does not approve or admit a Design revision or grant access "
-            "to the managed worktree. Preserve that worktree and use the version-bound Design workflow; require "
-            "explicit user approval before revision or re-admission."
+            "to the managed worktree. Re-admission is unavailable while this handoff is retained; its correction "
+            "is separate D04 work. Preserve the worktree. Only read-only inspection, defer or abandon is "
+            "supported here; user approval does not bypass the retained-handoff admission fence."
         )
 
     def _worktree_cleanup_view(

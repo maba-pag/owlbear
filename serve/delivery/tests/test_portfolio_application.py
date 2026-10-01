@@ -3405,7 +3405,7 @@ def test_builder_return_to_design_routes_to_human_and_releases_capacity(tmp_path
     assert view.detail.card.action.kind.value == "resume-design"
     assert view.detail.card.action.command == "/design change-a"
     assert readiness.prompt is not None
-    assert readiness.prompt.startswith("/design change-a")
+    assert readiness.prompt.startswith("/inspect-change change-a")
     assert reason in readiness.prompt
     assert "design.md" in readiness.prompt
     assert "Outcome: OUT-001" in readiness.prompt
@@ -3414,6 +3414,9 @@ def test_builder_return_to_design_routes_to_human_and_releases_capacity(tmp_path
     assert f"Completed boundary: {settled.return_context.completed_boundary}" in readiness.prompt
     assert "does not approve or admit" in readiness.prompt
     assert "managed worktree" in readiness.prompt
+    assert "Re-admission is unavailable while this handoff is retained" in readiness.prompt
+    assert "separate D04 work" in readiness.prompt
+    assert "Only read-only inspection, defer or abandon" in readiness.prompt
 
     continuation = application.acquire_change_action(_continuation_request(application, "change-a"))
     assert continuation.kind == "human"
