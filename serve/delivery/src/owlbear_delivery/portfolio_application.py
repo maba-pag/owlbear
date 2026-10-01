@@ -3653,6 +3653,100 @@ class PortfolioApplication:
             msg = "diagnostic-conflict"
             raise FinalizationReportError(msg)
 
+    def mark_change_ready(
+        self,
+        change_id: str,
+        request: MarkChangePullRequestReady,
+    ) -> PullRequestReadyReceipt:
+        """Mark the exact finalized and fully published Change pull request ready."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id, for_mutation=True)
+        with self._engine_checkpoint_lock(change_id):
+            if runtime.change_disposition() is not None:
+                message = "pull-request readiness requires current Change attention resolution"
+                raise PortfolioApplicationError(message)
+            finalization = runtime.finalization()
+            publication = runtime.checkpoint_publication_state()
+            if (
+                finalization is None
+                or request.change_id != change_id
+                or request.finalization_id != finalization.finalization_id
+                or request.exact_head != finalization.exact_head
+            ):
+                message = "pull-request ready request does not match current finalization authority"
+                raise PortfolioApplicationError(message)
+            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+                message = "pull-request readiness requires the reconciled final checkpoint"
+                raise PortfolioApplicationError(message)
+            existing_ready = runtime.ready_receipt()
+            if (
+                existing_ready is not None
+                and existing_ready.finalization_id == finalization.finalization_id
+                and existing_ready.head_sha == finalization.exact_head
+            ):
+                receipt = self._draft_pull_request_publisher.mark_ready(request)
+                ready = runtime.mark_awaiting_merge(receipt)
+                self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
+                return ready
+            try:
+                observation, failures = self._observe_required_checks_for_ready(
+                    change_id,
+                    finalization.exact_head,
+                )
+            except PublicationProviderError as exc:
+                if not exc.retry_safe:
+                    raise
+                raise _PreEffectReadyObservationError(
+                    exc.code,
+                    exc.operation,
+                    str(exc),
+                    retry_safe=True,
+                ) from exc
+            receipt = self._draft_pull_request_publisher.mark_ready(request)
+            ready = runtime.mark_awaiting_merge(receipt)
+            if failures:
+                self._record_required_check_attention(runtime, observation, failures, ready)
+            self._publish_delivery_state(change_id, runtime, f"ready-{ready.receipt_id}")
+            return ready
+
+    def _observe_required_checks_for_ready(
+        self,
+        change_id: str,
+        exact_head: str,
+    ) -> tuple[PublicationCheckObservationReceipt, tuple[PublicationCheck, ...]]:
+        """Observe provider-required checks without gating the pull-request ready state."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        observation = publisher.observe_checks(
+            ObserveChangePublicationChecks(change_id=change_id, published_head=exact_head)
+        )
+        failures = _failed_required_publication_checks(observation.snapshot)
+        return observation, failures
+
+    @staticmethod
+    def _record_required_check_attention(
+        runtime: DeliveryRuntime,
+        observation: PublicationCheckObservationReceipt,
+        failures: tuple[PublicationCheck, ...],
+        ready: PullRequestReadyReceipt,
+    ) -> None:
+        """Retain failing provider-required checks after the PR is ready."""
+        runtime.capture_publication_attention(
+            observation.observed_at,
+            _required_check_diagnostics(observation.snapshot, observation.observation_id, failures),
+            publication_identity=DeliveryChangePublicationIdentity(
+                change_id=ready.change_id,
+                repository=ready.repository,
+                number=ready.number,
+                node_id=ready.node_id,
+                head_sha=ready.head_sha,
+            ),
+        )
+
     def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
         """Mark the current exact finalization ready without caller-supplied authority."""
         finalization = self._runtime(change_id).finalization()
