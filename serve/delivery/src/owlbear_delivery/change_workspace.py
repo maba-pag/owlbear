@@ -518,6 +518,40 @@ class ChangeContinuationAction(_WorkspaceModel):
         return self
 
 
+def _is_settled_finalizer_attention_sync(
+    coordination: ChangeCoordination,
+    action: ChangeContinuationAction,
+) -> bool:
+    attention = coordination.finalization_attention
+    attempt = coordination.finalization_attempt
+    attention_writer = (
+        attempt.writer.model_copy(update={"kind": "finalization-attention"}) if attempt is not None else None
+    )
+    exact_action = (
+        attempt is not None
+        and attempt.finished_at is not None
+        and action.finalization_id is None
+        and coordination.dirty_worktree_quarantine is None
+        and action.change_id == coordination.change_id
+        and action.kind == "sync-target"
+        and action.contract_digest == attempt.contract_digest
+        and action.frontier_digest == attempt.frontier_digest
+        and action.exact_head == attempt.exact_head == coordination.last_reviewed_commit
+        and action.target_head != attempt.target_head
+    )
+    if not exact_action:
+        return False
+    return (
+        attention is not None
+        and coordination.writer == attention_writer
+        and not attention.workspace_paths
+        and attention.attempt_id == attempt.writer.attempt_id
+        and attention.expected_head == attempt.exact_head
+        and attention.workspace_head == attempt.exact_head
+        and attention.expected_reviewed_base == coordination.last_reviewed_commit
+    )
+
+
 class _ChangeWorktreeCleanupRecord(_WorkspaceModel):
     """Identity-bound record for one exact Change worktree cleanup."""
 
@@ -1475,8 +1509,10 @@ class ChangeCoordination(_WorkspaceModel):
     @model_validator(mode="after")
     def _validate_finalization_custody(self) -> Self:
         action = self.continuation_action
+        retained_attention_sync = action is not None and _is_settled_finalizer_attention_sync(self, action)
         if action is not None and (
-            action.change_id != self.change_id or (action.finished_at is None and self.writer is not None)
+            action.change_id != self.change_id
+            or (action.finished_at is None and self.writer is not None and not retained_attention_sync)
         ):
             message = "continuation action requires its exact exclusive Change custody"
             raise ValueError(message)
@@ -1543,7 +1579,9 @@ class ChangeCoordination(_WorkspaceModel):
                 (
                     self.builder_handoff,
                     self.publication_lease,
-                    self.continuation_action is not None and self.continuation_action.finished_at is None,
+                    self.continuation_action is not None
+                    and self.continuation_action.finished_at is None
+                    and not _is_settled_finalizer_attention_sync(self, self.continuation_action),
                     self.recovery_owner_id,
                     self.worktree_cleanup_intent,
                     self.worktree_cleanup,
@@ -2091,7 +2129,8 @@ class PortfolioCoordinator:
         with self.publication_lock(action.change_id):
             coordination, previous = self._read_coordination(action.change_id)
             self.require_continuation_access(action.change_id)
-            if coordination.writer is not None or coordination.publication_lease is not None:
+            attention_sync = _is_settled_finalizer_attention_sync(coordination, action)
+            if (coordination.writer is not None and not attention_sync) or coordination.publication_lease is not None:
                 _coordination_conflict("continuation cannot overlap active ownership")
             if coordination.worktree_cleanup_intent is not None or coordination.worktree_cleanup is not None:
                 _coordination_conflict("continuation cannot overlap worktree cleanup")
@@ -2416,17 +2455,49 @@ class PortfolioCoordinator:
             raise CoordinationConflictError(msg) from exc
         return coordination
 
-    @staticmethod
     def _validate_coordination_ownership_update(
+        self,
         existing: ChangeCoordination,
         replacement: ChangeCoordination,
     ) -> None:
         if existing.builder_handoff is not None and existing != replacement:
             _coordination_conflict("workspace update cannot mutate retained Builder handoff custody")
-        if (
+        action = existing.continuation_action
+        receipt = replacement.target_sync_receipt
+        conflict = replacement.target_sync_conflict
+        sync_outcome_matches = action is not None and (
+            (
+                receipt is not None
+                and receipt.operation_id == action.operation_id
+                and receipt.expected_target == action.target_head
+                and receipt.change_head_before == action.exact_head
+                and receipt.merged_head == replacement.last_reviewed_commit
+            )
+            or (
+                conflict is not None
+                and conflict.operation_id == action.operation_id
+                and conflict.target_head == action.target_head
+                and conflict.change_head_before == action.exact_head
+                and conflict.change_id == action.change_id
+            )
+        )
+        attention_sync_release = (
+            action is not None
+            and self.executing_continuation(existing.change_id)
+            and action.finished_at is None
+            and action == replacement.continuation_action
+            and _is_settled_finalizer_attention_sync(existing, action)
+            and replacement.writer is None
+            and replacement.finalization_attention is None
+            and sync_outcome_matches
+        )
+        ownership_changed = (
             existing.writer != replacement.writer
-            or existing.builder_handoff != replacement.builder_handoff
             or existing.finalization_attention != replacement.finalization_attention
+        )
+        if (
+            (ownership_changed and not attention_sync_release)
+            or existing.builder_handoff != replacement.builder_handoff
             or existing.recovery_owner_id != replacement.recovery_owner_id
             or existing.recovery_exclusions != replacement.recovery_exclusions
             or existing.publication_lease != replacement.publication_lease
@@ -3918,10 +3989,18 @@ class ChangeWorkspaceManager:
             change_head_before=change_head_before,
             conflict_paths=self._unmerged_paths(coordination.worktree_path),
         )
-        self._coordinator.update(
-            coordination.model_copy(update={"target_sync_receipt": None, "target_sync_conflict": conflict}),
-            lock=lock,
+        action = coordination.continuation_action
+        attention_sync = (
+            self._coordinator.executing_continuation(request.change_id)
+            and action is not None
+            and action.operation_id == request.operation_id
+            and action.target_head == request.expected_target
+            and _is_settled_finalizer_attention_sync(coordination, action)
         )
+        updates = {"target_sync_receipt": None, "target_sync_conflict": conflict}
+        if attention_sync:
+            updates.update({"writer": None, "finalization_attention": None})
+        self._coordinator.update(coordination.model_copy(update=updates), lock=lock)
         raise ChangeTargetSyncConflictError(
             request.change_id,
             request.operation_id,
@@ -3933,7 +4012,7 @@ class ChangeWorkspaceManager:
         self,
         request: SyncChangeWithTarget,
         coordination: ChangeCoordination,
-    ) -> None:
+    ) -> bool:
         conflict = coordination.target_sync_conflict
         if conflict is not None:
             if conflict.operation_id != request.operation_id or conflict.target_head != request.expected_target:
@@ -3949,13 +4028,22 @@ class ChangeWorkspaceManager:
             and coordination.target_sync_abort_receipt.operation_id == request.operation_id
         ):
             _coordination_conflict("target synchronization operation was explicitly aborted")
-        if coordination.writer is not None:
+        action = coordination.continuation_action
+        attention_sync = (
+            self._coordinator.executing_continuation(request.change_id)
+            and action is not None
+            and action.operation_id == request.operation_id
+            and action.target_head == request.expected_target
+            and _is_settled_finalizer_attention_sync(coordination, action)
+        )
+        if coordination.writer is not None and not attention_sync:
             _coordination_conflict("target synchronization cannot overlap an active writer")
         if coordination.publication_lease is not None:
             _coordination_conflict("target synchronization cannot overlap a publication lease")
         branch_head = self._resolve(coordination.branch)
         if branch_head != coordination.last_reviewed_commit:
             _coordination_conflict("target synchronization requires the reviewed Change head")
+        return attention_sync
 
     def sync_with_target(
         self,
@@ -3971,7 +4059,7 @@ class ChangeWorkspaceManager:
             previous_receipt = self._replay_target_sync_receipt(request, coordination)
             if previous_receipt is not None:
                 return previous_receipt
-            self._require_target_sync_start(request, coordination)
+            attention_sync = self._require_target_sync_start(request, coordination)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,
@@ -3980,10 +4068,16 @@ class ChangeWorkspaceManager:
                 branch_head,
             )
             merge_head = self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True)
+            if merge_head is not None and merge_head != request.expected_target:
+                _coordination_conflict("preserved target synchronization conflict target differs from the request")
             if merge_head is not None:
-                if merge_head != request.expected_target:
-                    _coordination_conflict("preserved target synchronization conflict target differs from the request")
-                self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
+                self._persist_target_sync_conflict(
+                    request,
+                    coordination,
+                    lock,
+                    merge_head,
+                    branch_head,
+                )
             if self._git(
                 "--no-optional-locks",
                 "status",
@@ -4018,7 +4112,13 @@ class ChangeWorkspaceManager:
             if merge.returncode != 0:
                 merge_head = self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True)
                 if merge_head is not None:
-                    self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
+                    self._persist_target_sync_conflict(
+                        request,
+                        coordination,
+                        lock,
+                        merge_head,
+                        branch_head,
+                    )
                 _workspace_failure("target synchronization merge failed")
             merged_head = self._resolve(coordination.branch)
             inherited_review_requirement = (
@@ -4035,18 +4135,19 @@ class ChangeWorkspaceManager:
                 change_head_before=branch_head,
                 merged_head=merged_head,
                 merge_commit=self._is_merge_commit(merged_head, coordination.worktree_path),
-                review_required=inherited_review_requirement,
+                review_required=inherited_review_requirement or attention_sync,
             )
+            updates = {
+                "target_head": target_head,
+                "target_sync_conflict": None,
+                "target_sync_receipt": receipt,
+                "target_sync_abort_receipt": None,
+                "last_reviewed_commit": merged_head,
+            }
+            if attention_sync:
+                updates.update({"writer": None, "finalization_attention": None})
             self._coordinator.update(
-                coordination.model_copy(
-                    update={
-                        "target_head": target_head,
-                        "target_sync_conflict": None,
-                        "target_sync_receipt": receipt,
-                        "target_sync_abort_receipt": None,
-                        "last_reviewed_commit": merged_head,
-                    }
-                ),
+                coordination.model_copy(update=updates),
                 lock=lock,
             )
             return receipt

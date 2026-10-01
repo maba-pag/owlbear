@@ -837,7 +837,11 @@ def _builder_handoff_receipt_matches_snapshot(
     """Bind one immutable Builder settlement to its published task authority and route."""
     envelope = receipt.envelope
     request = envelope.request
-    if isinstance(request, RetryDelivery):
+    completed_timeout = envelope.disposition == "completed-timeout" and request is None
+    if completed_timeout:
+        request_matches = True
+        expected_route = "same-task"
+    elif isinstance(request, RetryDelivery):
         request_matches = request.abandoned_commit == context.branch_head and request.attempt_id == envelope.attempt_id
         expected_route = "same-task"
     elif isinstance(request, BlockDelivery):
@@ -867,12 +871,11 @@ def _builder_handoff_receipt_matches_snapshot(
             request_matches,
             context.route == expected_route,
             receipt.handoff_context == context,
-            envelope.disposition == "normal-return",
+            envelope.disposition == "normal-return" or completed_timeout,
             envelope.change_id == snapshot.change_id,
             envelope.outcome_id == context.outcome_id,
             envelope.task_id == context.original_task_id,
-            request.outcome_id == context.outcome_id,
-            request.claim_id == envelope.claim_id,
+            request is None or (request.outcome_id == context.outcome_id and request.claim_id == envelope.claim_id),
             envelope.expected_last_reviewed_commit == snapshot.last_reviewed_commit,
             context.last_reviewed_commit == snapshot.last_reviewed_commit,
             any(outcome.outcome_id == context.outcome_id for outcome in snapshot.contract.outcomes),
@@ -1289,7 +1292,8 @@ def _builder_handoff_settled_binding(
         if receipt.result not in expected_results:
             _bootstrap_failure("local Builder return result is not the exact successor of its remote binding")
         return receipt.result
-    if not isinstance(envelope.request, RetryDelivery):
+    completed_timeout = envelope.disposition == "completed-timeout" and envelope.request is None
+    if not isinstance(envelope.request, RetryDelivery) and not completed_timeout:
         _bootstrap_failure("local Builder handoff route is unsupported")
     expected_results = tuple(
         DeliveryRuntime._builder_retry_settled_binding(  # noqa: SLF001

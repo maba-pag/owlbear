@@ -1973,6 +1973,7 @@ def test_builder_return_handoff_survives_default_loader_restart(  # noqa: PLR091
     [
         "refused",
         "settled",
+        "completed-timeout",
         "deferred",
         "forged-context",
         "missing-receipt",
@@ -2098,8 +2099,8 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
             attempt_id=launch.claim.attempt_id,
             task_id=launch.task_id,
             expected_last_reviewed_commit=launch.last_reviewed_commit,
-            disposition="normal-return",
-            request=retry,
+            disposition="completed-timeout" if scenario == "completed-timeout" else "normal-return",
+            request=None if scenario == "completed-timeout" else retry,
         )
         with patch.object(application, "_clock", return_value="1970-01-02T00:00:00Z"):
             settled = application.settle_worker_invocation(
@@ -2175,7 +2176,7 @@ def test_remote_state_bootstrap_preserves_builder_retry_state(  # noqa: PLR0915,
         (fresh / ".owlbear/delivery/runtime/changes" / change_id / "frontier.json").read_bytes(), strict=False
     )
     binding = next(item for item in persisted_frontier.bindings if item.outcome_id == "OUT-001")
-    if scenario == "settled":
+    if scenario in {"settled", "completed-timeout"}:
         assert binding.active_claim is None
         assert binding.builder_handoff_context == handoff_context
         resumed = reloaded.acquire_frontier_work().launch_packages[0]

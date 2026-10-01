@@ -67,6 +67,7 @@ if TYPE_CHECKING:
 _MAX_WORKER_RETRIES = 3
 _MAX_COMPLETED_REPAIR_RECEIPTS = 256
 _MAX_BUILDER_HANDOFF_CHANGE_INTENTS = 32
+_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS = _MAX_BUILDER_HANDOFF_CHANGE_INTENTS + 1
 _BUILDER_HANDOFF_CHANGE_INTENT_FRONTIER_FIELDS = frozenset(
     {"change_deferral", "change_abandonment", "pending_checkpoint"}
 )
@@ -1888,7 +1889,7 @@ class _DeliveryBuilderHandoffChangeIntentReceipt(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     builder_handoff_context: DeliveryBuilderHandoffContext
-    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENTS)
+    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS)
     previous_receipt_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     before_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     after_frontier_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -2045,7 +2046,7 @@ class _DeliveryBuilderHandoffChangeIntentHead(_DeliveryModel):
     settlement_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     builder_handoff_context: DeliveryBuilderHandoffContext
     latest_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENTS)
+    sequence: int = Field(ge=1, le=_MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS)
 
     @model_validator(mode="after")
     def _validate_head(self) -> _DeliveryBuilderHandoffChangeIntentHead:
@@ -5265,7 +5266,7 @@ class DeliveryRuntime:
             context = binding.builder_handoff_context
             if context is None:
                 continue
-            receipts = self._builder_handoff_change_intent_chain(before, context)
+            receipts = self._builder_handoff_change_intent_chain(before, context, action)
             receipt, head = self._new_builder_handoff_change_intent_receipt(
                 binding,
                 mutation,
@@ -5278,6 +5279,7 @@ class DeliveryRuntime:
         self,
         before: DeliveryFrontier,
         context: DeliveryBuilderHandoffContext,
+        action: Literal["defer", "resume", "abandon"],
     ) -> tuple[_DeliveryBuilderHandoffChangeIntentReceipt, ...]:
         receipts = _read_builder_handoff_change_intent_receipts(self._target_root, self._contract.change_id, context)
         if receipts:
@@ -5289,7 +5291,9 @@ class DeliveryRuntime:
                 _conflict("Builder handoff lifecycle flags do not match the recorded receipt chain")
         elif before.change_deferral is not None or before.change_abandonment is not None:
             _conflict("Builder handoff lifecycle flags are missing their receipt chain")
-        if len(receipts) >= _MAX_BUILDER_HANDOFF_CHANGE_INTENTS:
+        if len(receipts) > _MAX_BUILDER_HANDOFF_CHANGE_INTENTS or (
+            len(receipts) == _MAX_BUILDER_HANDOFF_CHANGE_INTENTS and action != "abandon"
+        ):
             _conflict("Builder handoff change-intent receipt chain is exhausted")
         return receipts
 
@@ -6304,6 +6308,10 @@ def _validate_builder_handoff_change_intent_chain(
         or chain[-1].outcome_id != head.outcome_id
     ):
         _reference("Builder handoff change-intent head does not identify the end of its receipt chain")
+    if len(chain) > _MAX_BUILDER_HANDOFF_CHANGE_INTENTS and (
+        len(chain) != _MAX_BUILDER_HANDOFF_CHANGE_INTENT_RECEIPTS or chain[-1].action != "abandon"
+    ):
+        _reference("Builder handoff change-intent receipt chain exceeds its supported limit")
     for previous, current in pairwise(chain):
         if current.previous_receipt_id != previous.receipt_id or current.sequence != previous.sequence + 1:
             _reference("Builder handoff change-intent receipt chain is invalid")

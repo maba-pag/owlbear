@@ -83,6 +83,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBuilderHandoffContext,
     DeliveryBuilderInvocationSettlement,
     DeliveryPlanningRetrySettlement,
+    _DeliveryBuilderHandoffChangeIntentHead,
     _DeliveryBuilderHandoffChangeIntentReceipt,
     _DeliveryBuilderInvocationSettlementReceipt,
     _DeliveryBuilderRequestResolutionReceipt,
@@ -3349,6 +3350,99 @@ def test_builder_handoff_abandonment_receipt_removes_exact_deferral(tmp_path: Pa
         )
         == 2
     )
+
+
+def test_builder_handoff_change_intent_cap_only_allows_terminal_abandon(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, branch_head, _first_result, _tasks = _active_second_task(tmp_path)
+    _dirty_builder_worktree(coordination.worktree_path)
+    ledger, key = _reserve_builder_settlement(runtime, "attempt-002", coordination.last_reviewed_commit)
+    retry = RetryDelivery(
+        action="retry",
+        outcome_id="OUT-001",
+        claim_id="claim-002",
+        attempt_id="attempt-002",
+        abandoned_commit=branch_head,
+        failure_code="builder-failed",
+    )
+    settled = runtime.settle_builder_invocation(_builder_settlement_envelope(runtime, coordination, retry))
+    context = settled.builder_handoff_context
+    assert context is not None
+    ledger.reconcile_owner_results()
+    external_state = _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key)
+
+    for index in range(16):
+        deferred_at = datetime(2026, 8, 11, 17, tzinfo=UTC) + timedelta(minutes=index)
+        runtime.defer_change(f"bounded pause {index}", deferred_at)
+        runtime.resume_change()
+
+    receipts = _read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)
+    assert len(receipts) == 32
+    before_refused_defer = runtime.frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="receipt chain is exhausted"):
+        runtime.defer_change("one too many nonterminal entries", datetime(2026, 8, 12, 17, tzinfo=UTC))
+    assert runtime.frontier_bytes() == before_refused_defer
+    assert (
+        len(_read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)) == 32
+    )
+
+    before_abandon = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    abandonment = runtime.abandon_change(
+        "terminal abandonment at the receipt cap",
+        datetime(2026, 8, 12, 18, tzinfo=UTC),
+    )
+    after_abandon = DeliveryFrontier.model_validate_json(runtime.frontier_bytes(), strict=False)
+    receipts = _read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)
+    assert len(receipts) == 33
+    assert receipts[-1].sequence == 33
+    assert receipts[-1].action == "abandon"
+    assert receipts[-1].before_frontier == before_abandon
+    assert receipts[-1].after_frontier == after_abandon
+    assert after_abandon.change_abandonment == abandonment
+    assert _builder_handoff_external_state(runtime, coordinator, coordination.worktree_path, ledger, key) == (
+        external_state
+    )
+
+    first_deferral = next(receipt.deferral for receipt in receipts if receipt.action == "defer")
+    assert first_deferral is not None
+    base_frontier = receipts[-2].after_frontier
+    nonterminal_after = base_frontier.model_copy(update={"change_deferral": first_deferral})
+    nonterminal = _DeliveryBuilderHandoffChangeIntentReceipt.create(
+        action="defer",
+        change_id="delivery-runtime",
+        outcome_id=context.outcome_id,
+        context=context,
+        sequence=33,
+        previous_receipt_id=receipts[-2].receipt_id,
+        before_frontier=base_frontier,
+        after_frontier=nonterminal_after,
+        deferral=first_deferral,
+        abandonment=None,
+    )
+    head_path = (
+        coordinator.runtime_root
+        / "changes/delivery-runtime/builder-handoff-change-intent-receipts"
+        / context.settlement_id
+        / "head.json"
+    )
+    nonterminal_path = head_path.parent / f"{nonterminal.receipt_id}.json"
+    nonterminal_path.write_bytes(_model_content(nonterminal))
+    nonterminal_head = _DeliveryBuilderHandoffChangeIntentHead(
+        change_id="delivery-runtime",
+        outcome_id=context.outcome_id,
+        settlement_id=context.settlement_id,
+        builder_handoff_context=context,
+        latest_receipt_id=nonterminal.receipt_id,
+        sequence=33,
+    )
+    head_path.write_bytes(_model_content(nonterminal_head))
+    with pytest.raises(DeliveryRuntimeReferenceError, match="receipt chain exceeds its supported limit"):
+        _read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)
+
+    oversized_head = json.loads(head_path.read_bytes())
+    oversized_head["sequence"] = 34
+    head_path.write_bytes((json.dumps(oversized_head, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    with pytest.raises(DeliveryRuntimeReferenceError, match="head is invalid"):
+        _read_builder_handoff_change_intent_receipts(coordinator.runtime_root, "delivery-runtime", context)
 
 
 def test_builder_handoff_change_intent_rejects_bad_record_and_unknown_head(tmp_path: Path) -> None:

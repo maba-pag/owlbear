@@ -208,7 +208,7 @@ from owlbear_delivery.recovery import (
     RetryLedger,
     digest,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction
+from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery_github import GitHubCliPublicationProvider
 
@@ -3950,6 +3950,79 @@ def test_exhausted_builder_retry_projects_read_only_diagnostic_without_clear_act
     assert "approved current authority" in view.card.next_step
 
 
+def test_exhausted_builder_return_to_planning_projects_read_only_diagnostic(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtime, coordinator, _state_root, first, _head, _workspace, retry_settlement = (
+        _builder_retry_handoff_setup(tmp_path, now, add_workspace_changes=False)
+    )
+    builders = [first]
+    _settle_builder_handoff_attempt(application, first.claim, retry_settlement)
+
+    for hour in (1, 2):
+        now[0] = f"2026-08-04T{hour:02}:00:00Z"
+        acquired = application.acquire_change_action(_continuation_request(application, "change-a"))
+        assert acquired.launch is not None, acquired
+        builder = acquired.launch
+        builders.append(builder)
+        if hour == 1:
+            retry_settlement = DeliveryBuilderInvocationSettlement(
+                change_id=builder.change_id,
+                outcome_id=builder.outcome_id,
+                claim_id=builder.claim.claim_id,
+                attempt_id=builder.claim.attempt_id,
+                task_id=builder.task_id,
+                expected_last_reviewed_commit=builder.last_reviewed_commit,
+                disposition="normal-return",
+                request=RetryDelivery(
+                    action="retry",
+                    outcome_id=builder.outcome_id,
+                    claim_id=builder.claim.claim_id,
+                    attempt_id=builder.claim.attempt_id,
+                    abandoned_commit=builder.source_head,
+                    failure_code="builder-failed",
+                ),
+            )
+            _settle_builder_handoff_attempt(application, builder.claim, retry_settlement)
+        else:
+            settled, preserved_commit, _before_workspace, _reason = _return_builder(application, builder)
+            assert settled.stage is DeliveryStage.PLANNING
+            assert settled.builder_handoff_context is not None
+            assert settled.builder_handoff_context.attempt_id == builder.claim.attempt_id
+            assert settled.builder_handoff_context.branch_head == preserved_commit
+
+    binding = runtime.show_binding("OUT-001")
+    assert binding.block is not None
+    assert binding.block.block_id.startswith("builder-planning-route-")
+    assert binding.block.request_id is None
+    assert binding.requests == ()
+    assert binding.builder_handoff_context is not None
+    episode = runtime.retry_ledger().episode_for_attempt(builders[-1].claim.attempt_id)
+    assert episode is not None
+    assert episode.total_attempts == 3
+    assert episode.attempt_ids == tuple(builder.claim.attempt_id for builder in builders)
+    assert episode.key.exact_head == builders[-1].last_reviewed_commit
+    assert episode.reset_count == 0
+
+    before_frontier = runtime.frontier_bytes()
+    before_coordination = coordinator.show("change-a")
+    before_ledger = runtime.retry_ledger().read()
+    view = application.show_work_item_view("change-a", "outcome:OUT-001")
+    assert view.readiness is not None
+    assert view.readiness.reason_code == "retry-exhausted"
+    assert view.readiness.attempts == 3
+    assert view.readiness.operation is None
+    assert not view.readiness.executable
+    assert view.readiness.prompt is not None
+    assert view.readiness.prompt.startswith("/inspect-change change-a")
+    assert "read-only" in view.readiness.prompt
+    assert view.card.next_actor.value == "agent"
+    assert view.card.action.kind.value == "none"
+    assert view.card.action.command is None
+    assert runtime.frontier_bytes() == before_frontier
+    assert coordinator.show("change-a") == before_coordination
+    assert runtime.retry_ledger().read() == before_ledger
+
+
 @pytest.mark.parametrize("writer_state", ["unchanged", "replaced"])
 def test_handoff_pre_activation_cas_failure_refunds_only_unchanged_writer_reservation(
     tmp_path: Path,
@@ -4411,13 +4484,28 @@ def test_worker_and_finalizer_no_launch_retries_wait_for_backoff(tmp_path: Path,
         return current_time[0]
 
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage}, clock=clock)
-    owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
-    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
-    with (
-        patch.object(owner, operation, side_effect=OSError("interrupted owner publication")),
-        pytest.raises(OSError, match="interrupted owner"),
-    ):
-        application.acquire_change_action(_continuation_request(application))
+    if stage is DeliveryStage.PLANNING:
+        with (
+            patch.object(
+                runtimes["change-a"],
+                "activate_claim",
+                side_effect=OSError("interrupted owner publication"),
+            ) as injected,
+            pytest.raises(OSError, match="interrupted owner"),
+        ):
+            application.acquire_change_action(_continuation_request(application))
+    else:
+        with patch.object(
+            coordinator,
+            "_acquire",
+            side_effect=CoordinationConflictError("interrupted owner publication"),
+        ) as injected:
+            result = application.acquire_change_action(_continuation_request(application))
+        assert result.kind == "unavailable"
+        assert result.reason_code == "workspace-preflight-failed"
+        assert result.launch is None
+        assert result.finalization is None
+    injected.assert_called_once()
     ledger = RetryLedger(state_root, "change-a")
     before = ledger.read()
     assert before.episodes[0].total_attempts == 1
@@ -4455,7 +4543,7 @@ def test_worker_and_finalizer_no_launch_retries_wait_for_backoff(tmp_path: Path,
 def test_committed_worker_or_finalizer_publication_error_keeps_reservation_pending(tmp_path: Path, stage) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
     owner = runtimes["change-a"] if stage is DeliveryStage.PLANNING else coordinator
-    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "acquire"
+    operation = "activate_claim" if stage is DeliveryStage.PLANNING else "_acquire"
     publish = getattr(owner, operation)
     message = "owner publication response lost"
 
@@ -4464,10 +4552,11 @@ def test_committed_worker_or_finalizer_publication_error_keeps_reservation_pendi
         raise OSError(message)
 
     with (
-        patch.object(owner, operation, side_effect=publish_then_raise),
+        patch.object(owner, operation, side_effect=publish_then_raise) as injected,
         pytest.raises(OSError, match="owner publication response lost"),
     ):
         application.acquire_change_action(_continuation_request(application))
+    injected.assert_called_once()
 
     ledger = RetryLedger(state_root, "change-a")
     pending_ids = {attempt.attempt_id for attempt in ledger.pending_attempts()}
@@ -5056,17 +5145,21 @@ def test_continuation_finalizer_counts_capacity_and_never_expires_custody(tmp_pa
 def test_continuation_finalizer_fences_frontier_at_custody_acquisition(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
     request = _continuation_request(application)
-    original_acquire = coordinator.acquire
+    original_acquire = coordinator._acquire
+    drift = []
 
     def changed(change_id, writer, **kwargs):
+        before = runtimes[change_id].frontier_bytes()
         runtimes[change_id].queue_explicit_checkpoint(request.expected_basis.candidate_head)
+        drift.append(runtimes[change_id].frontier_bytes() != before)
         return original_acquire(change_id, writer, **kwargs)
 
-    with (
-        patch.object(coordinator, "acquire", changed),
-        pytest.raises(CoordinationConflictError, match="frontier changed"),
-    ):
-        application.acquire_change_action(request)
+    with patch.object(coordinator, "_acquire", changed):
+        rejected = application.acquire_change_action(request)
+    assert drift == [True]
+    assert rejected.kind == "stale"
+    assert rejected.reason_code == "readiness-changed"
+    assert rejected.finalization is None
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-a").finalization_attempt is None
 
@@ -5107,6 +5200,15 @@ def test_continuation_finalizer_rejects_target_drift_without_releasing_custody(t
     assert coordinator.show("change-a").writer == attempt.writer
 
 
+def _owns_finalization_frontier_publication(transaction: RuntimeTransaction) -> bool:
+    return any(
+        isinstance(participant, ReplacementTransactionParticipant)
+        and participant.relative_path.name == "frontier.json"
+        and json.loads(participant.replacement_content).get("finalization") is not None
+        for participant in transaction._participants
+    )
+
+
 @pytest.mark.parametrize("crash_stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
 def test_continuation_finalization_replays_atomic_custody_release_after_interruption(
     tmp_path: Path, crash_stage: str
@@ -5116,17 +5218,20 @@ def test_continuation_finalization_replays_atomic_custody_release_after_interrup
     attempt = acquired.finalization.attempt
     proof = _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
     original_commit = RuntimeTransaction.commit
+    injected = []
 
     def interrupted(transaction):
         def fail(stage):
             if stage == crash_stage:
+                injected.append(stage)
                 message = "injected custody completion interruption"
                 raise RuntimeError(message)
 
-        original_commit(transaction, failure=fail)
+        original_commit(transaction, failure=fail if _owns_finalization_frontier_publication(transaction) else None)
 
     with patch.object(RuntimeTransaction, "commit", interrupted), pytest.raises(RuntimeError, match="injected"):
         application.finalize_change("change-a", proof)
+    assert injected == [crash_stage]
     if crash_stage != "before-manifest-cleanup":
         assert coordinator.show("change-a").writer == attempt.writer
     reopened, _, _ = _reopen_portfolio(tmp_path, state_root, runtimes)
@@ -5990,14 +6095,18 @@ def test_finalization_replays_atomic_local_boundary_after_interruption(tmp_path:
     exact_head = _commit_local_descendant(coordination, "local-replay.txt")
     request = _finalization_request("change-a", exact_head)
     original_commit = RuntimeTransaction.commit
+    injected = []
 
     def interrupt_after_frontier(transaction: RuntimeTransaction) -> None:
         def interrupt(stage: str) -> None:
             if stage == "after-first-publication":
+                injected.append(stage)
                 message = "simulated finalization interruption"
                 raise RuntimeError(message)
 
-        original_commit(transaction, failure=interrupt)
+        original_commit(
+            transaction, failure=interrupt if _owns_finalization_frontier_publication(transaction) else None
+        )
 
     with (
         patch.object(RuntimeTransaction, "commit", interrupt_after_frontier),
@@ -6005,6 +6114,7 @@ def test_finalization_replays_atomic_local_boundary_after_interruption(tmp_path:
     ):
         application.finalize_change("change-a", request)
 
+    assert injected == ["after-first-publication"]
     assert coordinator.show("change-a").last_reviewed_commit == initial
     assert tuple((state_root / "transactions").glob("*.yaml"))
 
@@ -7587,14 +7697,183 @@ def test_finalizer_attention_retry_requires_current_receipt_and_clean_workspace(
     assert _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all") == dirty_status_before
 
 
-@pytest.mark.parametrize("publisher_configured", [False, True], ids=["no-publisher", "publisher-configured"])
-def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: PLR0915 - target-drift proof.
-    tmp_path: Path, *, publisher_configured: bool
-) -> None:
+def test_settled_dirty_finalizer_attention_stays_blocked_after_workspace_cleanup(tmp_path: Path) -> None:  # noqa: PLR0915 - retains dirty settlement evidence through cleanup.
     now = ["2026-08-04T00:00:00Z"]
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    worktree = coordinator.show("change-a").worktree_path
+    private_path = worktree / "private-material.txt"
+    private_path.write_text("private payload that must remain undisclosed\n", encoding="utf-8")
+    failure_basis = application.show_finalization_context("change-a").readiness.basis
+    assert failure_basis.workspace_fingerprint is not None
+    report = application.report_finalization_failure(
+        _failure_request(
+            application,
+            attempt_key=attempt.writer.attempt_id,
+            category="custody-preflight",
+            code=FinalizationFailureCode.WORKSPACE_DIRTY,
+            checks_state="not-run",
+            expected_workspace_fingerprint=failure_basis.workspace_fingerprint,
+            paths=(private_path.name,),
+        )
+    )
+    assert isinstance(report, FinalizationReport)
+    receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    assert report.request.paths == (private_path.name,)
+    assert attention.workspace_paths == receipt.workspace.paths == (private_path.name,)
+
+    now[0] = "2026-08-04T00:00:02Z"
+    private_path.write_text("changed private payload\n", encoding="utf-8")
+    changed = application.get_change("change-a").readiness
+    assert changed.reason_code == "workspace-dirty"
+    assert changed.status == "blocked"
+    assert not changed.executable
+    assert changed.prompt is None
+
+    private_path.unlink()
+    cleaned_change = application.get_change("change-a")
+    cleaned = cleaned_change.readiness
+    assert cleaned.reason_code == "workspace-dirty"
+    assert cleaned.status == "blocked"
+    assert cleaned.next_actor.value == "agent"
+    assert cleaned.checks_state != "passed"
+    assert cleaned.last_attempt is not None
+    assert cleaned.last_attempt.report == report
+    assert not cleaned.executable
+    assert cleaned.action is None
+    assert cleaned.prompt is None
+    assert cleaned.basis.workspace_fingerprint != attention.workspace_fingerprint
+
+    publication = next(
+        item for group in application.list_changes().groups for item in group.items if item.item_key == "publication"
+    )
+    assert publication.next_actor.value == "agent"
+    assert publication.action.kind.value == "none"
+    assert "/inspect-change change-a" in publication.next_step
+    assert "read-only" in publication.next_step
+    assert "defer or abandon" in publication.next_step.lower()
+    assert "supported repair" in publication.next_step
+    assert "private-material.txt" not in publication.next_step
+    assert "private payload" not in publication.next_step
+    assert "host/worker closure" not in publication.next_step
+
+    index_path = Path(_git(worktree, "rev-parse", "--git-path", "index"))
+    if not index_path.is_absolute():
+        index_path = worktree / index_path
+    protected_state = (
+        _file_bytes(state_root),
+        runtimes["change-a"].frontier_bytes(),
+        index_path.read_bytes(),
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        _workspace_content_snapshot(worktree),
+    )
+    with (
+        patch.object(application, "_register_recovery_invocation") as register_invocation,
+        patch.object(application, "finalize_change") as finalize_change,
+        patch.object(application, "sync_change_with_target") as sync_with_target,
+    ):
+        blocked = application.acquire_change_action(_continuation_request(application))
+    assert blocked.kind != "acquired"
+    assert blocked.reason_code == "workspace-dirty"
+    register_invocation.assert_not_called()
+    finalize_change.assert_not_called()
+    sync_with_target.assert_not_called()
+    assert (
+        _file_bytes(state_root),
+        runtimes["change-a"].frontier_bytes(),
+        index_path.read_bytes(),
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        _workspace_content_snapshot(worktree),
+    ) == protected_state
+
+
+def _inject_settled_attention_drift(
+    application: PortfolioApplication,
+    state_root: Path,
+    worktree: Path,
+    receipt_path: Path,
+    damage: str,
+) -> None:
+    if damage == "dirty":
+        (worktree / "foreign-private.txt").write_text("private\n", encoding="utf-8")
+        return
+    if damage == "branch":
+        _git(worktree, "commit", "--allow-empty", "-m", "advance Change branch")
+        return
+    if damage == "index":
+        product_file = worktree / "product.txt"
+        product_file.write_text("staged-only\n", encoding="utf-8")
+        _git(worktree, "add", "product.txt")
+        product_file.write_text("baseline\n", encoding="utf-8")
+        return
+    if damage == "receipt":
+        receipt_path.write_bytes(b"{")
+        return
+    if damage == "receipt-before-registration":
+        receipt_path.write_bytes(b"{")
+        return
+    if damage == "missing-receipt":
+        receipt_path.unlink()
+        return
+
+    coordination = application._workspace_manager.show("change-a")
+    attempt = coordination.finalization_attempt
+    attention = coordination.finalization_attention
+    assert attempt is not None
+    assert attention is not None
+    if damage == "contract":
+        replacement = coordination.model_copy(
+            update={"finalization_attempt": attempt.model_copy(update={"contract_digest": "f" * 64})}
+        )
+    elif damage == "frontier":
+        replacement = coordination.model_copy(
+            update={"finalization_attempt": attempt.model_copy(update={"frontier_digest": "f" * 64})}
+        )
+    elif damage == "report":
+        replacement = coordination.model_copy(
+            update={"finalization_attention": attention.model_copy(update={"report_id": "f" * 64})}
+        )
+    else:
+        raise AssertionError
+    (state_root / "coordination/changes/change-a.json").write_bytes(_canonical(replacement))
+
+
+@pytest.mark.parametrize(
+    ("publisher_configured", "damage"),
+    [
+        pytest.param(False, None, id="no-publisher"),
+        pytest.param(True, None, id="publisher-configured"),
+        pytest.param(True, "dirty", id="dirty-private-material"),
+        pytest.param(True, "contract", id="stale-contract"),
+        pytest.param(True, "frontier", id="stale-frontier"),
+        pytest.param(True, "branch", id="stale-branch"),
+        pytest.param(True, "index", id="stale-index"),
+        pytest.param(True, "report", id="stale-report-identity"),
+        pytest.param(True, "receipt", id="stale-settlement-receipt"),
+        pytest.param(True, "missing-receipt", id="missing-settlement-receipt"),
+        pytest.param(True, "receipt-before-registration", id="receipt-changed-before-registration"),
+        pytest.param(True, "receipt-after-reservation", id="receipt-changed-before-effect"),
+    ],
+)
+def test_settled_finalizer_attention_continues_target_drift_through_engine_owner(  # noqa: C901, PLR0915 - lifecycle proof.
+    tmp_path: Path, *, publisher_configured: bool, damage: str | None
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
+        execution_capacity=1,
         clock=lambda: now[0],
     )
     acquired = application.acquire_change_action(_continuation_request(application))
@@ -7608,15 +7887,20 @@ def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: 
     assert isinstance(receipt, FinalizerSettlementReceipt)
     attention = coordinator.show("change-a").finalization_attention
     assert attention is not None
-    if publisher_configured:
-        application._change_branch_publisher = Mock()
-        application._draft_pull_request_publisher = Mock()
+    finalizer_budget = RetryLedger(state_root, "change-a").episode_for_attempt(attempt.writer.attempt_id)
+    assert finalizer_budget is not None
+
+    provider, remote = _attach_engine_publication(application, tmp_path)
+    if not publisher_configured:
+        application._change_branch_publisher = None
+        application._draft_pull_request_publisher = None
 
     now[0] = "2026-08-04T00:00:01Z"
     repository = application._workspace_manager.repository
-    _git(repository, "commit", "--allow-empty", "-m", "advance target")
-    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
-    assert application._workspace_manager.observed_target_head() != attempt.target_head
+    target = _advance_remote_target(tmp_path, remote)
+    _git(repository, "fetch", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == target
+    assert target != attempt.target_head
 
     coordination_path = state_root / "coordination/changes/change-a.json"
     worktree = coordinator.show("change-a").worktree_path
@@ -7624,7 +7908,11 @@ def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: 
     if not index_path.is_absolute():
         index_path = worktree / index_path
     receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    if damage is not None and damage not in {"receipt-after-reservation", "receipt-before-registration"}:
+        _inject_settled_attention_drift(application, state_root, worktree, receipt_path, damage)
     report_store = FinalizationReportStore(state_root, "change-a")
+    report_before = report_store.read()
+    receipt_before = receipt_path.read_bytes() if receipt_path.exists() else None
 
     def protected_state():
         return (
@@ -7632,7 +7920,7 @@ def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: 
             runtimes["change-a"].frontier_bytes(),
             RetryLedger(state_root, "change-a").read(),
             report_store.read(),
-            receipt_path.read_bytes(),
+            receipt_path.read_bytes() if receipt_path.exists() else None,
             _git(worktree, "rev-parse", "HEAD"),
             _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
             index_path.read_bytes(),
@@ -7640,38 +7928,429 @@ def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: 
         )
 
     state_before = protected_state()
+    if not publisher_configured or damage not in {
+        None,
+        "receipt-after-reservation",
+        "receipt-before-registration",
+    }:
+        with (
+            patch.object(application, "_register_recovery_invocation") as register_invocation,
+            patch.object(application, "_identity_factory", wraps=application._identity_factory) as identity_factory,
+            patch.object(application, "sync_change_with_target") as sync_with_target,
+        ):
+            for _ in range(2):
+                readiness = application.get_change("change-a").readiness
+                assert readiness.status in {"blocked", "unavailable"}
+                assert readiness.reason_code != "ready"
+                assert readiness.operation is None or readiness.operation.value != "sync-target"
+                assert not readiness.executable
+                assert readiness.action is None
+                if not publisher_configured:
+                    assert readiness.reason_code == "settled-attention-target-drift"
+                    assert readiness.prompt is not None
+                    assert readiness.prompt.startswith("/inspect-change change-a ")
+                    assert "Read-only" in readiness.prompt
+                    assert "Do not synchronize the target" in readiness.prompt
+
+                blocked = application.acquire_change_action(_continuation_request(application))
+                assert blocked.kind != "acquired"
+                assert blocked.reason_code != "ready"
+                if not publisher_configured:
+                    assert blocked.reason_code == "settled-attention-target-drift"
+                assert blocked.readiness is not None
+                assert blocked.readiness.status in {"blocked", "unavailable"}
+                assert not blocked.readiness.executable
+                assert blocked.readiness.action is None
+                assert protected_state() == state_before
+
+        register_invocation.assert_not_called()
+        identity_factory.assert_not_called()
+        sync_with_target.assert_not_called()
+        assert provider.create_calls == 0
+        assert provider.draft_state_calls == 0
+        if not publisher_configured:
+            assert coordinator.show("change-a").finalization_attention == attention
+            assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
+                update={"finished_at": attention.finished_at}
+            )
+            assert runtimes["change-a"].finalization() is None
+        return
+
+    readiness = application.get_change("change-a").readiness
+    assert readiness.status == "ready", readiness
+    assert readiness.operation.value == "sync-target"
+    assert readiness.executable
+    assert readiness.action is not None
+    assert readiness.action.kind.value == "sync-target"
+
+    sync_request = _continuation_request(application)
+    if damage == "receipt-before-registration":
+        original_preflight = application._engine_action_preflight
+        observed_after_corruption = []
+
+        def corrupt_before_preflight(action, runtime):
+            receipt_path.write_bytes(b"{")
+            observed_after_corruption.append(protected_state())
+            return original_preflight(action, runtime)
+
+        with (
+            patch.object(application, "_engine_action_preflight", side_effect=corrupt_before_preflight),
+            patch.object(application, "_register_recovery_invocation") as register_invocation,
+            patch.object(application, "sync_change_with_target") as sync_with_target,
+        ):
+            stale = application.acquire_change_action(sync_request)
+        assert stale.kind == "stale", stale
+        assert stale.engine_result is not None
+        assert stale.engine_result.reason_code == "readiness-changed"
+        register_invocation.assert_not_called()
+        sync_with_target.assert_not_called()
+        assert observed_after_corruption == [(*state_before[:4], b"{", *state_before[5:])]
+        assert protected_state() == observed_after_corruption[0]
+        assert provider.create_calls == 0
+        assert provider.draft_state_calls == 0
+        return
+
+    with patch.object(
+        application, "_register_recovery_invocation", wraps=application._register_recovery_invocation
+    ) as register_invocation:
+        sync_owner = application.acquire_change_action(sync_request)
+        assert sync_owner.kind == "acquired", sync_owner
+        assert sync_owner.engine_action is not None
+        action = sync_owner.engine_action
+        assert action.kind == "sync-target"
+        assert action.exact_head == attempt.exact_head
+        assert action.target_head == target
+
+        same_owner = application.acquire_change_action(sync_request)
+        assert same_owner.kind == "acquired", same_owner
+        assert same_owner.engine_action == action
+        assert register_invocation.call_count == 1
+
+    reserved = coordinator.show("change-a")
+    assert reserved.continuation_action == action
+    assert reserved.finalization_attention == attention
+    assert reserved.writer == attempt.writer.model_copy(update={"kind": "finalization-attention"})
+    assert reserved.finalization_attempt == attempt.model_copy(update={"finished_at": attention.finished_at})
+    unrelated = application.acquire_change_action(_continuation_request(application, "change-b"))
+    assert unrelated.kind == "waiting"
+    assert unrelated.reason_code == "execution-capacity"
+
+    if damage == "receipt-after-reservation":
+        receipt_path.write_bytes(b"{")
+        workspace_before = (
+            _git(worktree, "rev-parse", "HEAD"),
+            _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+            index_path.read_bytes(),
+            _git(repository, "show-ref"),
+        )
+        frontier_before = runtimes["change-a"].frontier_bytes()
+        start_path = coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json")
+        sync_call = Mock(wraps=application.sync_change_with_target)
+        with patch.object(application, "sync_change_with_target", sync_call):
+            stale = _execute_engine(application, action)
+        assert stale.kind == "stale", stale
+        sync_call.assert_not_called()
+        assert not start_path.exists()
+        assert (
+            _git(worktree, "rev-parse", "HEAD"),
+            _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+            index_path.read_bytes(),
+            _git(repository, "show-ref"),
+        ) == workspace_before
+        assert runtimes["change-a"].frontier_bytes() == frontier_before
+        assert receipt_path.read_bytes() == b"{"
+        assert provider.create_calls == 0
+        assert provider.draft_state_calls == 0
+        return
+
+    sync_call = Mock(wraps=application.sync_change_with_target)
+    original_finish = coordinator.finish_continuation_action
+
+    def lose_result_response(*args, **kwargs):
+        original_finish(*args, **kwargs)
+        raise RuntimeError
+
     with (
-        patch.object(application, "_register_recovery_invocation") as register_invocation,
-        patch.object(application, "_identity_factory", wraps=application._identity_factory) as identity_factory,
+        patch.object(application, "sync_change_with_target", sync_call),
+        patch.object(coordinator, "finish_continuation_action", side_effect=lose_result_response),
+        pytest.raises(RuntimeError),
     ):
-        for _ in range(2):
-            readiness = application.get_change("change-a").readiness
-            assert readiness.status == "blocked"
-            assert readiness.reason_code == "settled-attention-target-drift"
-            assert readiness.operation is None or readiness.operation.value != "sync-target"
-            assert not readiness.executable
-            assert readiness.action is None
-            assert readiness.prompt is not None
-            assert readiness.prompt.startswith("/inspect-change change-a ")
-            assert "Read-only" in readiness.prompt
-            assert "Do not synchronize the target" in readiness.prompt
+        _execute_engine(application, action)
+    sync_call.assert_called_once_with("change-a", target, action.operation_id)
 
-            blocked = application.acquire_change_action(_continuation_request(application))
-            assert blocked.kind != "acquired"
-            assert blocked.reason_code == "settled-attention-target-drift"
-            assert blocked.readiness is not None
-            assert blocked.readiness.status == "blocked"
-            assert not blocked.readiness.executable
-            assert blocked.readiness.action is None
-            assert protected_state() == state_before
+    reopened, reopened_coordinator, _manager = _reopen_portfolio(tmp_path, state_root, runtimes, execution_capacity=1)
+    with patch.object(reopened, "sync_change_with_target") as repeated_sync:
+        synchronized = _execute_engine(reopened, action)
+        repeated_sync.assert_not_called()
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync.target_head == target
+    assert synchronized.target_sync.merged_head != attempt.exact_head
+    assert synchronized.target_sync.review_required
 
-    register_invocation.assert_not_called()
-    identity_factory.assert_not_called()
-    assert coordinator.show("change-a").finalization_attention == attention
-    assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
-        update={"finished_at": attention.finished_at}
+    settled = reopened_coordinator.show("change-a")
+    assert settled.finalization_attention is None
+    assert settled.writer is None
+    assert settled.finalization_attempt == attempt.model_copy(update={"finished_at": attention.finished_at})
+    assert FinalizationReportStore(state_root, "change-a").read() == report_before
+    assert receipt_path.read_bytes() == receipt_before
+    assert RetryLedger(state_root, "change-a").episode_for_attempt(attempt.writer.attempt_id) == finalizer_budget
+
+    fresh_readiness = reopened.get_change("change-a").readiness
+    assert fresh_readiness.status == "ready", fresh_readiness
+    assert fresh_readiness.operation.value == "finalize"
+    assert fresh_readiness.executable
+    fresh = reopened.acquire_change_action(_continuation_request(reopened))
+    assert fresh.kind == "acquired", fresh
+    assert fresh.finalization is not None
+    fresh_attempt = fresh.finalization.attempt
+    assert fresh_attempt.writer.attempt_id != attempt.writer.attempt_id
+    assert fresh_attempt.exact_head == synchronized.target_sync.merged_head
+    assert fresh_attempt.target_head == target
+    finalized = reopened.finalize_change(
+        "change-a", _finalization_request("change-a", fresh_attempt.exact_head, fresh_attempt.writer.attempt_id)
     )
-    assert runtimes["change-a"].finalization() is None
+    assert reopened._runtime("change-a").finalization() == finalized
+
+    newly_available = reopened.acquire_change_action(_continuation_request(reopened, "change-b"))
+    assert newly_available.kind == "acquired", newly_available
+    assert newly_available.finalization is not None
+
+
+def _settle_failed_finalizer_attempt(application: PortfolioApplication) -> ChangeFinalizationAttempt:
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.kind == "acquired"
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    return attempt
+
+
+def test_successful_finalizer_syncs_after_target_conflict_abort(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    coordination = coordinator.show("change-a")
+    worktree = coordination.worktree_path
+    (worktree / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "Change product")
+    exact_head = _git(worktree, "rev-parse", "HEAD")
+    coordinator.update(coordination.model_copy(update={"last_reviewed_commit": exact_head}))
+
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    assert attempt.exact_head == exact_head
+    application.finalize_change(
+        "change-a", _finalization_request("change-a", attempt.exact_head, attempt.writer.attempt_id)
+    )
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    runtime = runtimes["change-a"]
+    conflicted_target = _advance_remote_target(tmp_path, remote, product="target\n")
+    repository = application._workspace_manager.repository
+    _git(repository, "fetch", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == conflicted_target
+    with pytest.raises(ChangeTargetSyncConflictError) as raised:
+        application.sync_change_with_target("change-a", conflicted_target, "sync-conflict")
+    assert raised.value.conflict_paths == ("product.txt",)
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    abort_receipt = application.abort_target_sync_conflict(
+        "change-a",
+        disposition.disposition_id,
+        conflicted_target,
+        "sync-conflict",
+    )
+    assert abort_receipt.restored_head == attempt.exact_head
+    assert coordinator.show("change-a").target_sync_conflict is None
+
+    retry_root = tmp_path / "retry-target"
+    retry_root.mkdir()
+    target = _advance_remote_target(retry_root, remote, product="baseline\n")
+    _git(repository, "fetch", "--no-prune", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == target
+    now[0] = "2026-08-04T00:00:01Z"
+
+    readiness = application.get_change("change-a").readiness
+    assert readiness.status == "ready", readiness
+    assert readiness.operation is not None
+    assert readiness.operation.value == "sync-target"
+    owner = application.acquire_change_action(_continuation_request(application))
+    assert owner.kind == "acquired", owner
+    assert owner.engine_action is not None
+    synchronized = _execute_engine(application, owner.engine_action)
+
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync is not None
+    assert synchronized.target_sync.target_head == target
+    assert coordinator.show("change-a").writer is None
+    assert coordinator.show("change-a").finalization_attention is None
+
+
+def test_corrupt_settlement_receipt_after_sync_reservation_retains_attention(  # noqa: PLR0915 - stale custody proof.
+    tmp_path: Path,
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path, {"change-a": DeliveryStage.COMPLETED}, clock=lambda: now[0]
+    )
+    attempt = _settle_failed_finalizer_attempt(application)
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    attention_writer = attempt.writer.model_copy(update={"kind": "finalization-attention"})
+    retry_ledger = RetryLedger(state_root, "change-a")
+    budget_before = retry_ledger.episode_for_attempt(attempt.writer.attempt_id)
+    assert budget_before is not None
+    report_store = FinalizationReportStore(state_root, "change-a")
+    reports_before = report_store.read()
+
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    target = _advance_remote_target(tmp_path, remote)
+    repository = application._workspace_manager.repository
+    _git(repository, "fetch", "--no-prune", "origin", "main:refs/remotes/origin/main")
+    assert application._workspace_manager.observed_target_head() == target
+    now[0] = "2026-08-04T00:00:01Z"
+    readiness = application.get_change("change-a").readiness
+    assert readiness.status == "ready", readiness
+    assert readiness.operation is not None
+    assert readiness.operation.value == "sync-target"
+
+    owner = application.acquire_change_action(_continuation_request(application))
+    assert owner.kind == "acquired", owner
+    assert owner.engine_action is not None
+    action = owner.engine_action
+    reserved = coordinator.show("change-a")
+    assert reserved.continuation_action == action
+    assert reserved.writer == attention_writer
+    assert reserved.finalization_attention == attention
+
+    receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    receipt_path.write_bytes(b"{")
+    worktree = reserved.worktree_path
+    workspace_before = _workspace_mutation_snapshot(worktree)
+    frontier_before = runtimes["change-a"].frontier_bytes()
+    start_path = coordinator.continuation_record_path("change-a", action.operation_id).with_name("started.json")
+    stale = _execute_engine(application, action)
+
+    assert stale.kind == "stale", stale
+    assert stale.reason_code == "readiness-changed"
+    assert not start_path.exists()
+    assert _workspace_mutation_snapshot(worktree) == workspace_before
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert report_store.read() == reports_before
+    assert receipt_path.read_bytes() == b"{"
+    assert retry_ledger.episode_for_attempt(attempt.writer.attempt_id) == budget_before
+
+    after = coordinator.show("change-a")
+    assert after.continuation_action is not None
+    assert after.continuation_action.operation_id == action.operation_id
+    assert after.continuation_action.finished_at is not None
+    assert after.writer == attention_writer
+    assert after.finalization_attention == attention
+    assert after.finalization_attempt == attempt.model_copy(update={"finished_at": attention.finished_at})
+
+    blocked_readiness = application.get_change("change-a").readiness
+    assert blocked_readiness.status in {"blocked", "unavailable"}
+    assert not blocked_readiness.executable
+    assert blocked_readiness.action is None
+    assert blocked_readiness.operation is None or blocked_readiness.operation.value != "sync-target"
+    blocked = application.acquire_change_action(_continuation_request(application))
+    assert blocked.kind != "acquired", blocked
+    assert blocked.reason_code != "ready"
+    after_retry = coordinator.show("change-a")
+    assert after_retry.writer == attention_writer
+    assert after_retry.finalization_attention == attention
+    assert retry_ledger.episode_for_attempt(attempt.writer.attempt_id) == budget_before
+
+
+@pytest.mark.parametrize("failed_attempts", [1, 2, 3], ids=["one-failure", "two-failures", "exhausted"])
+def test_finalizer_retry_budget_survives_settled_target_sync(  # noqa: PLR0915 - lifecycle proof.
+    tmp_path: Path, *, failed_attempts: int
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    attempts = []
+    for index in range(failed_attempts):
+        now[0] = f"2026-08-04T00:00:{index * 10:02d}Z"
+        attempts.append(_settle_failed_finalizer_attempt(application))
+
+    retry_ledger = RetryLedger(state_root, "change-a")
+    episode = retry_ledger.episode_for_attempt(attempts[-1].writer.attempt_id)
+    assert episode is not None
+    assert episode.total_attempts == failed_attempts
+    for attempt in attempts:
+        linked = retry_ledger.episode_for_attempt(attempt.writer.attempt_id)
+        assert linked is not None
+        assert linked.episode_id == episode.episode_id
+
+    _provider, remote = _attach_engine_publication(application, tmp_path)
+    target = _advance_remote_target(tmp_path, remote)
+    repository = application._workspace_manager.repository
+    _git(repository, "fetch", "origin", "main:refs/remotes/origin/main")
+    now[0] = "2026-08-04T00:01:00Z"
+    worktree = coordinator.show("change-a").worktree_path
+    head_before_sync = _git(worktree, "rev-parse", "HEAD")
+    assert target != attempts[-1].target_head
+
+    readiness = application.get_change("change-a").readiness
+    if failed_attempts == RetryLedger.transient_attempts:
+        assert readiness.status == "blocked"
+        assert readiness.reason_code == "retry-exhausted"
+        assert readiness.attempts == failed_attempts
+        assert readiness.operation is None
+        assert not readiness.executable
+
+        blocked = application.acquire_change_action(_continuation_request(application))
+        assert blocked.kind != "acquired"
+        assert blocked.reason_code == "retry-exhausted"
+        assert runtimes["change-a"].target_sync_receipt() is None
+        assert _git(worktree, "rev-parse", "HEAD") == head_before_sync
+        assert coordinator.show("change-a").finalization_attention is not None
+        return
+
+    assert readiness.status == "ready", readiness
+    assert readiness.operation is not None
+    assert readiness.operation.value == "sync-target"
+    sync_owner = application.acquire_change_action(_continuation_request(application))
+    assert sync_owner.kind == "acquired", sync_owner
+    assert sync_owner.engine_action is not None
+    synchronized = _execute_engine(application, sync_owner.engine_action)
+    assert synchronized.kind == "completed", synchronized
+    assert synchronized.target_sync is not None
+    assert synchronized.target_sync.target_head == target
+    assert synchronized.target_sync.review_required
+
+    fresh_readiness = application.get_change("change-a").readiness
+    assert fresh_readiness.status == "ready", fresh_readiness
+    assert fresh_readiness.operation is not None
+    assert fresh_readiness.operation.value == "finalize"
+    assert fresh_readiness.attempts == failed_attempts
+    fresh = application.acquire_change_action(_continuation_request(application))
+    assert fresh.kind == "acquired", fresh
+    assert fresh.finalization is not None
+    fresh_attempt = fresh.finalization.attempt
+    assert fresh_attempt.exact_head == synchronized.target_sync.merged_head
+    assert fresh_attempt.target_head == target
+    continued_episode = retry_ledger.episode_for_attempt(fresh_attempt.writer.attempt_id)
+    assert continued_episode is not None
+    assert continued_episode.episode_id == episode.episode_id
+    assert continued_episode.total_attempts == failed_attempts + 1
+
+    finalized = application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", fresh_attempt.exact_head, fresh_attempt.writer.attempt_id),
+    )
+    assert finalized.exact_head == fresh_attempt.exact_head
 
 
 @pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest", "target_head"])
@@ -8283,20 +8962,24 @@ def test_finalizer_settlement_replays_after_interrupted_atomic_publication(tmp_p
     assert isinstance(report, FinalizationReport)
     settlement = _finalizer_settlement(application, attempt, report)
     original_commit = RuntimeTransaction.commit
+    injected = []
 
     def interrupted(transaction: RuntimeTransaction) -> None:
         def fail(stage: str) -> None:
             if stage == "after-first-publication":
+                injected.append(stage)
                 message = "injected Finalizer settlement interruption"
                 raise RuntimeError(message)
 
-        original_commit(transaction, failure=fail)
+        owned = transaction._transaction_id.startswith("finalizer-settlement-")
+        original_commit(transaction, failure=fail if owned else None)
 
     with (
         patch.object(RuntimeTransaction, "commit", interrupted),
         pytest.raises(RuntimeError, match="injected Finalizer settlement interruption"),
     ):
         application.settle_finalizer_invocation(settlement)
+    assert injected == ["after-first-publication"]
     assert coordinator.show("change-a").writer == attempt.writer
     assert runtimes["change-a"].finalization() is None
 
@@ -13265,6 +13948,182 @@ def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_pa
         )
         == ""
     )
+
+
+def test_interrupted_first_design_admission_replays_after_workspace_ensure(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
+    change_id = "change-a"
+    intent = b"""# Interrupted first admission
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: regression test
+statement: Preserve the admitted Design source.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Complete first admission
+promise: Register the workspace with the verified Design package.
+acceptance: [The admitted Design snapshot is registered.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    design = b"# Architecture\n"
+    application.create_design_session(change_id, intent, design)
+    request = DeliveryAdmissionRequest(
+        change_id=change_id,
+        expected_package_id=_approved_package_id(application, change_id),
+        active_claim_ids=(),
+    )
+    package_root = tmp_path / "packages" / change_id
+    delivery_root = state_root / "changes" / change_id
+    registry_before = _file_bytes(delivery_root)
+    assert registry_before == {}
+
+    with (
+        patch.object(
+            application._workspace_manager,
+            "ensure",
+            side_effect=RuntimeError("interrupted workspace registration"),
+        ) as ensure,
+        pytest.raises(RuntimeError, match="interrupted workspace registration"),
+    ):
+        application.admit_delivery_change(request)
+    ensure.assert_called_once_with(change_id, recovery_reviewed_head=None)
+
+    registry_after_interruption = _file_bytes(delivery_root)
+    assert registry_after_interruption != registry_before
+    assert coordinator.find_registered(change_id) is None
+    authority_before_replay = {name: registry_after_interruption[name] for name in ("contract.json", "admission.json")}
+    package_after_interruption = _file_bytes(package_root)
+    assert package_after_interruption["intent.md"] == intent
+    assert package_after_interruption["design.md"] == design
+
+    replayed = application.admit_delivery_change(request)
+
+    assert replayed.replayed
+    registry_after_replay = _file_bytes(delivery_root)
+    assert {name: registry_after_replay[name] for name in authority_before_replay} == authority_before_replay
+    assert replayed.receipt == DeliveryAdmissionReceipt.model_validate_json(authority_before_replay["admission.json"])
+    assert _file_bytes(package_root) == package_after_interruption
+    coordination = coordinator.find_registered(change_id)
+    assert coordination is not None
+    snapshot = coordination.design_package_snapshot
+    assert snapshot is not None
+    package = application.read_design_session(change_id)
+    assert snapshot.package_id == package.package_id
+    assert package.intent_bytes == intent
+    assert package.design_bytes == design
+    assert snapshot.snapshot_head == coordination.last_reviewed_commit
+    package_paths = {
+        f".owlbear/delivery/packages/{change_id}/authority.json",
+        f".owlbear/delivery/packages/{change_id}/design.md",
+        f".owlbear/delivery/packages/{change_id}/intent.md",
+        f".owlbear/delivery/packages/{change_id}/manifest.json",
+    }
+    tree_paths = _git(
+        application._workspace_manager.repository,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        coordination.branch,
+    ).splitlines()
+    assert set(tree_paths) >= package_paths
+
+
+def test_design_return_revised_admission_refuses_retained_builder_handoff(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    runtime = runtimes["change-a"]
+    _completed_task, _original_task, _first_result, builder = _seed_two_task_builder(
+        application, runtimes, coordinator, state_root
+    )
+    settled, _branch_head, _workspace_before_return, _reason = _return_builder(
+        application,
+        builder,
+        target=DeliveryStage.DESIGN,
+    )
+    assert settled.builder_handoff_context is not None
+    assert any(binding.builder_handoff_context is not None for binding in runtime.bindings())
+
+    current = application.read_design_session("change-a")
+    revised_intent = b"""# change-a
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: regression test
+statement: Revised premise after Design return.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Revised outcome
+promise: Revised promise.
+acceptance: [Revised acceptance.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.revise_design_session("change-a", current.package_id, revised_intent, current.design_bytes)
+
+    coordination_before = coordinator.show("change-a")
+    assert coordination_before.builder_handoff is not None
+    assert coordination_before.writer is not None
+    assert coordination_before.writer.kind == "handoff"
+    snapshot = coordination_before.design_package_snapshot
+    delivery_root = state_root / "changes" / "change-a"
+    package_root = tmp_path / "packages" / "change-a"
+    worktree = coordination_before.worktree_path
+    repository = application._workspace_manager.repository
+    registry_before = _file_bytes(delivery_root)
+    frontier_before = runtime.frontier_bytes()
+    coordination_bytes_before = coordinator.coordination_bytes("change-a")
+    package_before = _file_bytes(package_root)
+    worktree_before = (
+        _workspace_content_snapshot(worktree),
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+    )
+    repository_refs_before = _git(repository, "show-ref")
+    request = DeliveryAdmissionRequest(
+        change_id="change-a",
+        expected_package_id=_approved_package_id(application, "change-a"),
+        active_claim_ids=(),
+        expected_frontier_digest=hashlib.sha256(frontier_before).hexdigest(),
+        expected_design_package_snapshot_receipt_id=(snapshot.receipt_id if snapshot is not None else None),
+    )
+
+    with (
+        patch.object(
+            application._authority_registry,
+            "admit",
+            wraps=application._authority_registry.admit,
+        ) as registry_admit,
+        pytest.raises(DeliveryAdmissionConflictError, match="handoff or writer blocks admission"),
+    ):
+        application.admit_delivery_change(request)
+
+    registry_admit.assert_not_called()
+    assert _file_bytes(delivery_root) == registry_before
+    assert runtime.frontier_bytes() == frontier_before
+    assert coordinator.coordination_bytes("change-a") == coordination_bytes_before
+    assert _file_bytes(package_root) == package_before
+    assert (
+        _workspace_content_snapshot(worktree),
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+    ) == worktree_before
+    assert _git(repository, "show-ref") == repository_refs_before
 
 
 def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:
