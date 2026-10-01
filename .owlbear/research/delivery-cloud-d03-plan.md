@@ -47,51 +47,65 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `ac01a0cab746a295764f9026ed1f7e790679d534`.** This implements the
-user-directed native settlement revision above after independently challenged implementation slices.
-Planner retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer
-failures settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
-dirty/staged/committed work, releases execution capacity without destructive cleanup, and binds fresh
-acquisition to the same task or its exact replanned lineage. Three total failed attempts, bounded
-backoff, durable receipts and default-loader restart retain the failure episode across sessions.
+**Native repair checkpoint: `6760bf8f8d07d18c9210ef79617e21489c1eb8ca`.** This is the
+committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
+retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer failures
+settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
+dirty/staged/committed work and binds fresh acquisition to the same task or exact replanned lineage.
+The three-attempt episode, bounded backoff, durable receipts and default-loader restart preserve the
+original failure budget across sessions.
 
-The cumulative challenge of published `539fe951` found that settled Finalizer attention freed
-capacity but offered no continuation for the same Change. The repair now admits a fresh Finalizer
-after backoff only for exact receipt/report authority and a clean, unchanged workspace, frontier,
-contract and target. Attention-to-attempt replacement is fenced under the publication lock; old
-reports, failed attempts and retry counts remain history. Dirty or target-stale attention stays
-non-executable with read-only inspection, not a promise of worker closure or implicit target sync.
-Passive attention permits exact defer/resume/abandon without granting workspace cleanup authority.
+Exact, clean, settled target-stale attention may sync only through the existing engine owner. The
+passive-writer reservation remains held until that owner records its merge or conflict outcome; the
+next Finalizer cycle requires fresh independent review and a fresh Finalizer under the original
+budget. Three failures exhaust that budget, and target sync cannot renew it. Dirty workspaces, stale
+identities, unattributed material and unknown/live execution remain contained; this does not grant
+implicit sync or worker-closure authority for those cases.
 
-CI on `539fe951` also exposed dropped exact-head publication methods. `b3ac9e50` restores
-`mark_change_ready` and its required-check consumers without changing their publication contract.
-The repaired review-repair exhaustion regression retains its semantic key, three-attempt and
-no-dispatch assertions while matching the already-exhausted readiness short circuit. Cockpit's
-reason type, label and rendering contract now include settled-attention target drift.
+The checkpoint retains exact-head publication methods and their required-check consumers, the
+review-repair exhaustion guard, and settled-attention target-drift reason parity in Cockpit. Partial
+first-admission replay works without repeating authority mutation. Default-loader restart restores a
+timeout result with `request=None`; Planning-return exhaustion remains read-only, and dirty Finalizer
+attention remains inspect-only. One terminal `abandon` is permitted as the 33rd lifecycle transition
+after the 32-transition cap. Approved Design-return readmission is refused before authority mutation;
+any admission correction is separate D04 work. Retained-handoff Design attention therefore offers
+only read-only inspection and the supported defer/abandon lifecycle exits, not an admission promise.
 
-Answered pauses, supported local lifecycle intents, Planning promotion and Design attention are
-validated against private exact receipt chains. Handoff state remains host-local, not a portable
-snapshot. Unknown/live execution is still retained. No CLI, sampling, Invocation Host, live activation
-or new Integration repair authority is added. Fresh cumulative independent review and all four CI
-results must apply to the exact publication head on
-[PR #326](https://github.com/maba-pag/owlbear/pull/326); older green runs do not prove this checkpoint.
+Answered pauses, supported local lifecycle intents, Planning promotion and Design attention remain
+validated against private exact receipt chains. Handoff state is host-local, not a portable snapshot.
+No CLI, sampling, Invocation Host, live activation or new Integration repair authority is added.
+Fresh cumulative unnamed Opus 5.5 challenge and exact-head CI are required for the final publication;
+their authoritative exact-publication results are on [PR #326](https://github.com/maba-pag/owlbear/pull/326).
+This record names the code checkpoint, not the future commit for this documentation update.
 
 | Gate | Current disposition |
 | --- | --- |
-| Source and contract | Native ended-invocation settlement supersedes blanket ordinary-worker refusal. Unknown execution, stale identity and unattributed material remain fail-closed; normal result trust is workflow authority, not OS exclusion |
-| Independent challenge | The cumulative review of `539fe951` and the Finalizer repair reviews are reconciled; a fresh cumulative unnamed Opus 5.5 challenge remains required for this repaired publication head |
-| Required CI | `539fe951` passed Cockpit and Agent ecosystem but failed Source and Dependency. Those supported failures are repaired; all four workflows must succeed on the same new exact published head. Older green runs are historical |
-| PR and documentation metadata | PR #326 is non-draft, not accepted. Its body names the exact published head, current review and check results; this committed record names the code checkpoints and their evidence rather than claiming its own future commit hash |
-| User direction | Native Orchestrator settlement is explicitly directed; no approval of the rejected host-expansion design is required. Unknown execution remains contained and may saturate shared capacity; no unavailable-host progress is promised |
+| Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
+| Independent challenge | The unnamed cumulative challenge of `c3db27ea` found one misleading Design-return prompt, repaired in `6760bf8f`. A fresh cumulative challenge of the final publication is required; its exact result belongs on PR #326 |
+| Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `6760bf8f8d07d18c9210ef79617e21489c1eb8ca`, not the future SHA of this documentation update |
+| User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
 | Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
-**Repair proof executed by the caller:** a serial 39-case selection covering settled Finalizer
-continuation, stale-target refusal, review-repair exhaustion, registered settlement and exact-head
-publication passed. Scoped Ruff lint/format and editor diagnostics passed. Backend/frontend reason
-parity and the continuation rendering matrix passed, followed by scoped Biome and TypeScript.
+**Current caller proof:** before `c3db27ea`, an intermediate selection
+across `test_portfolio_application`, `test_change_workspace`, `test_delivery_runtime` and
+`test_delivery_state` reported 928 passed and 3 failed in 425.66 seconds. All three failures were
+repaired: two obsolete fault hooks and one foreign-publication custody classification (`blocked`,
+not `stale`). The final focused 20-case rerun passed. Eleven registered MCP/HTTP/package-boundary
+consumer checks passed with one existing Starlette warning. Seven files passed scoped Ruff lint and
+format plus editor diagnostics; scoped commit gates passed. These are selected checks, not a whole
+owner-suite pass. The three focused Design-return/attention checks passed after the prompt repair
+in `6760bf8f`, followed by scoped Ruff and commit gates. The focused rerun is reported separately and does not turn the intermediate
+four-file result into a passing whole-owner suite. No full-project agent suite, MegaLinter, live
+service/provider mutation, host-exclusion guarantee, merge or activation is claimed.
+
+**Historical repair proof on the prior checkpoint:** a serial 39-case selection covering settled
+Finalizer continuation, stale-target refusal, review-repair exhaustion, registered settlement and
+exact-head publication passed. Scoped Ruff lint/format and editor diagnostics passed. Backend/frontend
+reason parity and the continuation rendering matrix passed, followed by scoped Biome and TypeScript.
 All scoped commit gates passed. Independent repair reviewers separately ran focused tests; their
-counts are not caller executions or additive totals. No full-project agent suite, MegaLinter,
-live service/provider mutation, host-exclusion guarantee, merge or activation is claimed.
+counts are not caller executions or additive totals. This proof is historical, not proof for the
+current code checkpoint.
 
 **Historical native checkpoint proof:** focused core, default-loader restart, registered MCP, handoff, retry
 exhaustion, Planning/Design return and Finalizer checks were executed during the sliced repairs;
@@ -99,8 +113,8 @@ their reports are not additive or a whole-suite claim. The caller reran all six 
 restart cases, then four selected ecosystem cases, all successfully. All 17 changed Python files
 passed full-config scoped Ruff lint/format. Real skill, agent (14 files) and prompt (22 files)
 validators passed. After the commit hook formatted the routing table, the caller reran the three
-selected settlement/inspector contracts successfully; all scoped commit gates passed. Fresh external
-CI and cumulative review remain unrun for this publication checkpoint.
+selected settlement/inspector contracts successfully; all scoped commit gates passed. These are
+historical checks and do not establish review or CI for the current code checkpoint.
 
 **Historical repair proof, executed by the caller:** complete-model registered validation passed its
 new regression and eight existing field-validation cases; Planning acknowledgment/restart and
@@ -165,12 +179,11 @@ core/recovery and 12 adapter cases, TypeScript `noEmit` and two-file Biome passe
 or treat their reports as independently rerun proof. No fresh full-suite, live host or browser
 pass is claimed.
 
-**Completion still requires:** focused regressions preserving original safe containment and exact
-result replay, with adequate proof for the current material contract; a fresh unnamed Opus 5.5
-read-only challenge reconciled with no accepted defect or blocker remaining; all four required CI
-workflows succeeding on the same exact published head and exact PR/docs metadata. Review against the
-user-directed native revision, including truthful remaining unknown-execution limits. None grants
-merge, live activation or automatic Design revision/admission.
+**Completion still requires:** a fresh cumulative unnamed Opus 5.5 read-only challenge and all four
+required CI workflows on the same exact published code head, with exact-head results reported on
+PR #326. The focused checks above are not a whole-owner-suite pass. Reconcile any review findings and
+retain truthful unknown-execution limits. None grants merge, live activation or automatic Design
+revision/admission.
 
 ### Historical integration evidence
 
