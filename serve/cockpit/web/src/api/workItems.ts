@@ -71,6 +71,7 @@ export type DeliveryReadinessReasonCode =
   | "builder-transition-contained"
   | "retry-transition-contained"
   | "finalization-failed"
+  | "settled-attention-target-drift"
   | "claim-activation-failed"
   | "coordination-unavailable"
   | "execution-occupancy-unavailable"

@@ -11,6 +11,7 @@ import secrets
 import stat
 import subprocess
 import tempfile
+from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, suppress
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -480,6 +481,17 @@ class ChangeFinalizationAttention(_WorkspaceModel):
     @classmethod
     def _normalize_workspace_paths(cls, value: object) -> object:
         return tuple(value) if isinstance(value, list) else value
+
+
+@dataclass(frozen=True)
+class FinalizerAcquisition:
+    """Exact clean-workspace fence and issuance hook for one Finalizer attempt."""
+
+    attempt: ChangeFinalizationAttempt
+    expected_attention: ChangeFinalizationAttention | None
+    expected_workspace_fingerprint: str | None
+    promoted_commits: tuple[str, ...]
+    before_acquire: Callable[[], None] | None = None
 
 
 class ChangeContinuationAction(_WorkspaceModel):
@@ -2208,7 +2220,45 @@ class PortfolioCoordinator:
         if publication_expiry is not None and publication_expiry > datetime.now(UTC):
             _coordination_conflict("change already has an active writer")
         with self.publication_lock(change_id):
-            return self._acquire(change_id, writer, finalization_attempt=finalization_attempt)
+            return self._acquire(
+                change_id,
+                writer,
+                finalization_attempt=finalization_attempt,
+            )
+
+    @staticmethod
+    def _validate_finalizer_attention_retry(
+        coordination: ChangeCoordination,
+        writer: ChangeWriter,
+        finalization_attempt: ChangeFinalizationAttempt | None,
+        expected_finalization_attention: ChangeFinalizationAttention | None,
+    ) -> bool:
+        if expected_finalization_attention is None:
+            return False
+        prior_attempt = coordination.finalization_attempt
+        expected_attention_writer = (
+            prior_attempt.writer.model_copy(update={"kind": "finalization-attention"})
+            if prior_attempt is not None
+            else None
+        )
+        if (
+            prior_attempt is None
+            or prior_attempt.finished_at is None
+            or coordination.finalization_attention != expected_finalization_attention
+            or coordination.writer != expected_attention_writer
+            or expected_finalization_attention.attempt_id != prior_attempt.writer.attempt_id
+            or expected_finalization_attention.expected_head != prior_attempt.exact_head
+            or expected_finalization_attention.expected_reviewed_base != coordination.last_reviewed_commit
+            or prior_attempt.writer.attempt_id == writer.attempt_id
+            or prior_attempt.writer.claim_id == writer.claim_id
+            or finalization_attempt is None
+            or finalization_attempt.contract_digest != prior_attempt.contract_digest
+            or finalization_attempt.frontier_digest != prior_attempt.frontier_digest
+            or finalization_attempt.exact_head != prior_attempt.exact_head
+            or finalization_attempt.target_head != prior_attempt.target_head
+        ):
+            _coordination_conflict("finalizer retry does not match its retained attention")
+        return True
 
     def _acquire(
         self,
@@ -2216,6 +2266,7 @@ class PortfolioCoordinator:
         writer: ChangeWriter,
         *,
         finalization_attempt: ChangeFinalizationAttempt | None = None,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
     ) -> ChangeCoordination:
         if writer.kind in {"handoff", "finalization-attention"}:
             _coordination_conflict("passive workspace custody is not an executable writer")
@@ -2230,8 +2281,14 @@ class PortfolioCoordinator:
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
         publication_expiry = coordination.publication_expiry
         publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
+        attention_retry = self._validate_finalizer_attention_retry(
+            coordination,
+            writer,
+            finalization_attempt,
+            expected_finalization_attention,
+        )
         if (
-            coordination.writer is not None
+            (coordination.writer is not None and not attention_retry)
             or publication_active
             or coordination.worktree_cleanup_intent is not None
             or coordination.worktree_cleanup is not None
@@ -2242,7 +2299,8 @@ class PortfolioCoordinator:
                 "writer": writer,
                 "finalization_attempt": finalization_attempt or coordination.finalization_attempt,
                 "publication_lease": None,
-                "dirty_worktree_quarantine": None,
+                "finalization_attention": None if attention_retry else coordination.finalization_attention,
+                "dirty_worktree_quarantine": (coordination.dirty_worktree_quarantine if attention_retry else None),
             }
         )
         participants = [_replacement(self._state_root, coordination_path, coordination_bytes, claimed)]
@@ -2468,16 +2526,30 @@ class PortfolioCoordinator:
             raise AssertionError from exc
         return _replacement(self._state_root, path, previous, updated)
 
-    def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
+    def prepare_runtime_custody_guard(
+        self,
+        change_id: str,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> ReplacementTransactionParticipant:
         """Fence a runtime mutation against concurrent finalizer acquisition."""
         self.require_continuation_access(change_id)
         path = self._coordination_path(change_id)
         coordination, previous = self._read_coordination(change_id)
         self._require_continuation_coordination(coordination)
-        if (coordination.writer is not None and coordination.writer.kind == "finalize") or (
-            coordination.finalization_attention is not None
+        attempt = coordination.finalization_attempt
+        if expected_finalization_attention is None and (
+            (coordination.writer is not None and coordination.writer.kind == "finalize")
+            or coordination.finalization_attention is not None
         ):
             _coordination_conflict("mutation cannot overlap active or retained Finalizer custody")
+        if expected_finalization_attention is not None and (
+            coordination.finalization_attention != expected_finalization_attention
+            or attempt is None
+            or attempt.finished_at != expected_finalization_attention.finished_at
+            or coordination.writer != attempt.writer.model_copy(update={"kind": "finalization-attention"})
+        ):
+            _coordination_conflict("finalization attention changed during a passive Change intent")
         return ReplacementTransactionParticipant(
             self._state_root, path.relative_to(self._state_root), previous, previous
         )
@@ -2701,9 +2773,17 @@ class ChangeWorkspaceManager:
         self._require_preservation_environment()
         return self._resolve(self._target_ref())
 
-    def prepare_runtime_custody_guard(self, change_id: str) -> ReplacementTransactionParticipant:
+    def prepare_runtime_custody_guard(
+        self,
+        change_id: str,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> ReplacementTransactionParticipant:
         """Join current workspace custody to the caller's runtime transaction."""
-        return self._coordinator.prepare_runtime_custody_guard(change_id)
+        return self._coordinator.prepare_runtime_custody_guard(
+            change_id,
+            expected_finalization_attention=expected_finalization_attention,
+        )
 
     def prepare_recovery_release(
         self, intent: RecoveryIntent, receipt: RecoveryReceipt
@@ -2762,19 +2842,19 @@ class ChangeWorkspaceManager:
         *,
         handoff: ChangeBuilderHandoff | None = None,
         handoff_task_id: str | None = None,
-        finalization_attempt: ChangeFinalizationAttempt | None = None,
+        finalizer: FinalizerAcquisition | None = None,
     ) -> ChangeCoordination:
         """Acquire ordinary writer custody or consume one revalidated exact Builder handoff."""
+        if finalizer is not None:
+            return self._acquire_finalizer(change_id, writer, finalizer)
         coordination = self._coordinator.show(change_id)
         if coordination.builder_handoff is None:
             if handoff is not None:
                 _coordination_conflict("Builder handoff is no longer retained by the Change")
-            return self._coordinator.acquire(change_id, writer, finalization_attempt=finalization_attempt)
+            return self._coordinator.acquire(change_id, writer)
         if handoff is None or handoff != coordination.builder_handoff or handoff_task_id != handoff.original_task_id:
             _coordination_conflict("Builder handoff settlement or original task identity differs")
         with self._coordinator.publication_lock(change_id) as lock:
-            if finalization_attempt is not None:
-                _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
             participant = self.prepare_builder_handoff_acquisition(
                 change_id, writer, handoff, lock, task_id=handoff_task_id
             )
@@ -2782,6 +2862,51 @@ class ChangeWorkspaceManager:
                 self.runtime_root, f"acquire-builder-handoff-{change_id}-{writer.claim_id}", (participant,)
             ).commit()
             return self._coordinator.show(change_id)
+
+    def _acquire_finalizer(
+        self,
+        change_id: str,
+        writer: ChangeWriter,
+        finalizer: FinalizerAcquisition,
+    ) -> ChangeCoordination:
+        if (
+            writer.kind != "finalize"
+            or writer != finalizer.attempt.writer
+            or finalizer.expected_workspace_fingerprint is None
+        ):
+            _coordination_conflict("Finalizer acquisition requires its exact clean workspace fingerprint")
+        with self._coordinator.publication_lock(change_id):
+            current = self._coordinator.show(change_id)
+            self._coordinator._validate_finalizer_attention_retry(  # noqa: SLF001
+                current,
+                writer,
+                finalizer.attempt,
+                finalizer.expected_attention,
+            )
+            if current.builder_handoff is not None:
+                _coordination_conflict("only a new Builder claim can consume Builder handoff custody")
+            captured, head, fingerprint, paths, reason = self.capture_finalization_workspace(
+                change_id, finalizer.promoted_commits
+            )
+            target_head = self.observed_target_head()
+            expected_reason = "active-custody" if finalizer.expected_attention is not None else None
+            if (
+                current != captured
+                or head != finalizer.attempt.exact_head
+                or fingerprint != finalizer.expected_workspace_fingerprint
+                or paths
+                or reason != expected_reason
+                or target_head != finalizer.attempt.target_head
+            ):
+                _coordination_conflict("Finalizer workspace changed before acquisition")
+            if finalizer.before_acquire is not None:
+                finalizer.before_acquire()
+            return self._coordinator._acquire(  # noqa: SLF001 - manager validates the clean workspace under this lock.
+                change_id,
+                writer,
+                finalization_attempt=finalizer.attempt,
+                expected_finalization_attention=finalizer.expected_attention,
+            )
 
     def prepare_builder_handoff_acquisition(
         self,

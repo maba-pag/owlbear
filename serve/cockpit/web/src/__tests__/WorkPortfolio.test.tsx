@@ -5608,6 +5608,7 @@ it("labels every continuation readiness reason without blanking a new engine sta
   const continuationReasons: DeliveryReadinessReasonCode[] = [
     "design-attention",
     "finalization-failed",
+    "settled-attention-target-drift",
     "claim-activation-failed",
     "coordination-unavailable",
     "execution-occupancy-unavailable",
@@ -5630,8 +5631,9 @@ it("labels every continuation readiness reason without blanking a new engine sta
 
   for (const reason of continuationReasons) {
     const designAttention = reason === "design-attention";
+    const targetDrift = reason === "settled-attention-target-drift";
     const state = readiness({
-      status: designAttention ? "blocked" : "waiting",
+      status: designAttention || targetDrift ? "blocked" : "waiting",
       next_actor: designAttention ? "you" : "agent",
       reason_code: reason,
     });
@@ -5645,6 +5647,10 @@ it("labels every continuation readiness reason without blanking a new engine sta
     expect(rendered).not.toHaveTextContent(READINESS_REASON_LABELS.ready);
     if (designAttention) {
       expect(inspector.querySelector('[data-readiness-actor="you"]')).toHaveTextContent("Next: You");
+    }
+    if (targetDrift) {
+      expect(within(inspector).getByTestId("readiness-status")).toHaveTextContent("Blocked");
+      expect(within(inspector).getByTestId("readiness-not-executable")).toBeInTheDocument();
     }
     unmount();
   }

@@ -159,6 +159,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.change_workspace import (
     ChangeContinuationAction,
+    FinalizerAcquisition,
     PreservationFenceError,
     PreservationPathProvenance,
     PreservationProvenanceEvidence,
@@ -7451,6 +7452,634 @@ def test_finalization_attention_replays_only_its_report_and_rejects_new_diagnost
         coordination_path.read_bytes(),
         runtimes["change-a"].frontier_bytes(),
     ) == report_state
+
+
+def test_finalizer_attention_allows_only_passive_change_intents(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+
+    with pytest.raises(CoordinationConflictError, match="mutation cannot overlap active or retained Finalizer custody"):
+        application._workspace_manager.prepare_runtime_custody_guard("change-a")
+
+    deferred = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.DEFER,
+            expected_frontier_digest=hashlib.sha256(runtimes["change-a"].frontier_bytes()).hexdigest(),
+            reason="Wait for a user decision.",
+        )
+    )
+    assert deferred.kind is DeliveryChangeIntentKind.DEFER
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+
+    resumed = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.RESUME,
+            expected_frontier_digest=deferred.frontier_digest,
+        )
+    )
+    assert resumed.kind is DeliveryChangeIntentKind.RESUME
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+
+    abandoned = application.set_change_intent(
+        DeliveryChangeIntent(
+            change_id="change-a",
+            kind=DeliveryChangeIntentKind.ABANDON,
+            expected_frontier_digest=resumed.frontier_digest,
+            reason="Stop this Change.",
+        )
+    )
+    assert abandoned.kind is DeliveryChangeIntentKind.ABANDON
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").writer.kind == "finalization-attention"
+    assert (
+        state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    ).is_file()
+    assert FinalizationReportStore(state_root, "change-a").read().reports[0] == report
+
+
+@pytest.mark.parametrize(
+    ("damage", "expected_reason"),
+    [
+        ("dirty-worktree", "workspace-dirty"),
+        ("changed-head", "workspace-preflight-failed"),
+        ("missing-receipt", "finalization-failed"),
+        ("corrupt-receipt", "workspace-inspection-failed"),
+        ("missing-report", "report-store-unavailable"),
+        ("corrupt-report", "report-store-unavailable"),
+        ("retired-report", "finalization-failed"),
+    ],
+)
+def test_finalizer_attention_retry_requires_current_receipt_and_clean_workspace(
+    tmp_path: Path, damage: str, expected_reason: str
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    report_path = state_root / "finalization-reports/change-a/reports" / f"{report.report_id}.json"
+    worktree = coordinator.show("change-a").worktree_path
+
+    if damage == "dirty-worktree":
+        (worktree / "product.txt").write_text("preserve this local change\n", encoding="utf-8")
+    elif damage == "changed-head":
+        _commit_local_descendant(coordinator.show("change-a"))
+    elif damage == "missing-receipt":
+        receipt_path.unlink()
+    elif damage == "corrupt-receipt":
+        receipt_path.write_bytes(b"{")
+    elif damage == "missing-report":
+        report_path.unlink()
+    elif damage == "corrupt-report":
+        report_path.write_bytes(b"{")
+    else:
+        FinalizationReportStore(state_root, "change-a").retire(attempt.exact_head, attempt.contract_digest)
+
+    now[0] = "2026-08-04T00:00:01Z"
+    coordination_before = (state_root / "coordination/changes/change-a.json").read_bytes()
+    frontier_before = runtimes["change-a"].frontier_bytes()
+    ledger_before = RetryLedger(state_root, "change-a").read()
+    receipt_before = receipt_path.read_bytes() if receipt_path.exists() else None
+    report_before = report_path.read_bytes() if report_path.exists() else None
+    head_before = _git(worktree, "rev-parse", "HEAD")
+    dirty_status_before = _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+
+    result = application.acquire_change_action(_continuation_request(application))
+    assert result.kind != "acquired", result
+    assert result.reason_code == expected_reason
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").writer == attempt.writer.model_copy(update={"kind": "finalization-attention"})
+    assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
+        update={"finished_at": attention.finished_at}
+    )
+    assert (state_root / "coordination/changes/change-a.json").read_bytes() == coordination_before
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert RetryLedger(state_root, "change-a").read() == ledger_before
+    assert (receipt_path.read_bytes() if receipt_path.exists() else None) == receipt_before
+    assert (report_path.read_bytes() if report_path.exists() else None) == report_before
+    assert _git(worktree, "rev-parse", "HEAD") == head_before
+    assert _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all") == dirty_status_before
+
+
+@pytest.mark.parametrize("publisher_configured", [False, True], ids=["no-publisher", "publisher-configured"])
+def test_settled_finalizer_attention_blocks_target_drift_before_retry(  # noqa: PLR0915 - target-drift proof.
+    tmp_path: Path, *, publisher_configured: bool
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    if publisher_configured:
+        application._change_branch_publisher = Mock()
+        application._draft_pull_request_publisher = Mock()
+
+    now[0] = "2026-08-04T00:00:01Z"
+    repository = application._workspace_manager.repository
+    _git(repository, "commit", "--allow-empty", "-m", "advance target")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert application._workspace_manager.observed_target_head() != attempt.target_head
+
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    worktree = coordinator.show("change-a").worktree_path
+    index_path = Path(_git(worktree, "rev-parse", "--git-path", "index"))
+    if not index_path.is_absolute():
+        index_path = worktree / index_path
+    receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    report_store = FinalizationReportStore(state_root, "change-a")
+
+    def protected_state():
+        return (
+            coordination_path.read_bytes(),
+            runtimes["change-a"].frontier_bytes(),
+            RetryLedger(state_root, "change-a").read(),
+            report_store.read(),
+            receipt_path.read_bytes(),
+            _git(worktree, "rev-parse", "HEAD"),
+            _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+            index_path.read_bytes(),
+            _git(repository, "show-ref"),
+        )
+
+    state_before = protected_state()
+    with (
+        patch.object(application, "_register_recovery_invocation") as register_invocation,
+        patch.object(application, "_identity_factory", wraps=application._identity_factory) as identity_factory,
+    ):
+        for _ in range(2):
+            readiness = application.get_change("change-a").readiness
+            assert readiness.status == "blocked"
+            assert readiness.reason_code == "settled-attention-target-drift"
+            assert readiness.operation is None or readiness.operation.value != "sync-target"
+            assert not readiness.executable
+            assert readiness.action is None
+            assert readiness.prompt is not None
+            assert readiness.prompt.startswith("/inspect-change change-a ")
+            assert "Read-only" in readiness.prompt
+            assert "Do not synchronize the target" in readiness.prompt
+
+            blocked = application.acquire_change_action(_continuation_request(application))
+            assert blocked.kind != "acquired"
+            assert blocked.reason_code == "settled-attention-target-drift"
+            assert blocked.readiness is not None
+            assert blocked.readiness.status == "blocked"
+            assert not blocked.readiness.executable
+            assert blocked.readiness.action is None
+            assert protected_state() == state_before
+
+    register_invocation.assert_not_called()
+    identity_factory.assert_not_called()
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").finalization_attempt == attempt.model_copy(
+        update={"finished_at": attention.finished_at}
+    )
+    assert runtimes["change-a"].finalization() is None
+
+
+@pytest.mark.parametrize("mismatched_field", ["contract_digest", "frontier_digest", "target_head"])
+def test_manager_rejects_stale_finalizer_attention_before_registration(  # noqa: PLR0915 - custody proof.
+    tmp_path: Path, *, mismatched_field: str
+) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": DeliveryStage.COMPLETED})
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    first_attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=first_attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    application.settle_finalizer_invocation(_finalizer_settlement(application, first_attempt, report))
+
+    attention_coordination = coordinator.show("change-a")
+    attention = attention_coordination.finalization_attention
+    retained_attempt = attention_coordination.finalization_attempt
+    assert attention is not None
+    assert retained_attempt is not None
+    manager = application._workspace_manager
+    repository = manager.repository
+    if mismatched_field == "target_head":
+        _git(repository, "commit", "--allow-empty", "-m", "advance target")
+        _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    writer = retained_attempt.writer.model_copy(
+        update={
+            "attempt_id": f"late-{mismatched_field}-attempt",
+            "claim_id": f"late-{mismatched_field}-claim",
+            "actor_id": "late-host",
+            "process_id": "late-session",
+            "claimed_at": "2026-08-04T00:00:01Z",
+        }
+    )
+    attempt_updates = {"writer": writer, "finished_at": None}
+    attempt_updates[mismatched_field] = (
+        manager.observed_target_head()
+        if mismatched_field == "target_head"
+        else hashlib.sha256(f"stale-{mismatched_field}".encode()).hexdigest()
+    )
+    retry_attempt = retained_attempt.model_copy(update=attempt_updates)
+    promoted_commits = tuple(
+        result.completed_commit for binding in runtimes["change-a"].bindings() for result in binding.results
+    )
+    workspace = manager.capture_finalization_workspace("change-a", promoted_commits)
+    assert workspace[4] == "active-custody"
+    register_invocation = Mock()
+    finalizer = FinalizerAcquisition(
+        attempt=retry_attempt,
+        expected_attention=attention,
+        expected_workspace_fingerprint=workspace[2],
+        promoted_commits=promoted_commits,
+        before_acquire=register_invocation,
+    )
+
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    receipt_path = state_root / application._finalizer_settlement_receipt_path(
+        "change-a", first_attempt.writer.attempt_id
+    )
+    report_store = FinalizationReportStore(state_root, "change-a")
+    worktree = attention_coordination.worktree_path
+    index_path = Path(_git(worktree, "rev-parse", "--git-path", "index"))
+    if not index_path.is_absolute():
+        index_path = worktree / index_path
+    refs_before = _git(repository, "show-ref")
+    workspace_before = (
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        index_path.read_bytes(),
+    )
+    coordination_before = coordination_path.read_bytes()
+    frontier_before = runtimes["change-a"].frontier_bytes()
+    ledger_before = RetryLedger(state_root, "change-a").read()
+    report_before = report_store.read()
+    receipt_before = receipt_path.read_bytes()
+
+    with pytest.raises(CoordinationConflictError, match="finalizer retry does not match its retained attention"):
+        manager.acquire("change-a", writer, finalizer=finalizer)
+
+    register_invocation.assert_not_called()
+    assert coordination_path.read_bytes() == coordination_before
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert RetryLedger(state_root, "change-a").read() == ledger_before
+    assert report_store.read() == report_before
+    assert receipt_path.read_bytes() == receipt_before
+    assert _git(repository, "show-ref") == refs_before
+    assert (
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        index_path.read_bytes(),
+    ) == workspace_before
+    assert coordinator.show("change-a").finalization_attempt == retained_attempt
+
+
+def test_unsettled_finalizer_failure_keeps_active_writer_after_backoff(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    coordination_before = (state_root / "coordination/changes/change-a.json").read_bytes()
+    frontier_before = runtimes["change-a"].frontier_bytes()
+    ledger_before = RetryLedger(state_root, "change-a").read()
+    assert not application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id).exists()
+
+    now[0] = "2026-08-04T00:00:01Z"
+    result = application.acquire_change_action(_continuation_request(application))
+    assert result.kind == "unavailable"
+    assert result.reason_code == "finalization-failed"
+    assert coordinator.show("change-a").writer == attempt.writer
+    assert coordinator.show("change-a").finalization_attempt == attempt
+    assert coordinator.show("change-a").finalization_attention is None
+    assert (state_root / "coordination/changes/change-a.json").read_bytes() == coordination_before
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert RetryLedger(state_root, "change-a").read() == ledger_before
+
+
+def test_finalizer_acquisition_recaptures_workspace_before_attention_cas(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    acquired = application.acquire_change_action(_continuation_request(application))
+    assert acquired.finalization is not None
+    attempt = acquired.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(application, attempt_key=attempt.writer.attempt_id)
+    )
+    assert isinstance(report, FinalizationReport)
+    receipt = application.settle_finalizer_invocation(_finalizer_settlement(application, attempt, report))
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    attention = coordinator.show("change-a").finalization_attention
+    assert attention is not None
+    receipt_path = state_root / application._finalizer_settlement_receipt_path("change-a", attempt.writer.attempt_id)
+    receipt_bytes = receipt_path.read_bytes()
+    reports_before = FinalizationReportStore(state_root, "change-a").read()
+    coordination_before = (state_root / "coordination/changes/change-a.json").read_bytes()
+    frontier_before = runtimes["change-a"].frontier_bytes()
+    refs_before = _git(application._workspace_manager.repository, "show-ref")
+    worktree = coordinator.show("change-a").worktree_path
+    dirty_path = worktree / "product.txt"
+    now[0] = "2026-08-04T00:00:01Z"
+    request = _continuation_request(application)
+    manager = application._workspace_manager
+    original_acquire = manager.acquire
+
+    def dirty_before_acquire(*args, **kwargs):
+        dirty_path.write_text("preserve this new local work\n", encoding="utf-8")
+        return original_acquire(*args, **kwargs)
+
+    with (
+        patch.object(application, "_register_recovery_invocation") as register_invocation,
+        patch.object(manager, "acquire", side_effect=dirty_before_acquire),
+    ):
+        blocked = application.acquire_change_action(request)
+
+    register_invocation.assert_not_called()
+    assert blocked.kind == "unavailable"
+    assert blocked.reason_code == "workspace-dirty"
+    assert dirty_path.read_text(encoding="utf-8") == "preserve this new local work\n"
+    assert coordinator.show("change-a").finalization_attention == attention
+    assert coordinator.show("change-a").writer == attempt.writer.model_copy(update={"kind": "finalization-attention"})
+    assert coordinator.show("change-a").finalization_attempt.finished_at == attention.finished_at
+    assert (state_root / "coordination/changes/change-a.json").read_bytes() == coordination_before
+    assert runtimes["change-a"].frontier_bytes() == frontier_before
+    assert _git(application._workspace_manager.repository, "show-ref") == refs_before
+    assert receipt_path.read_bytes() == receipt_bytes
+    assert FinalizationReportStore(state_root, "change-a").read() == reports_before
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 1
+
+
+def test_settled_finalizer_retries_stop_at_three_attempts_without_recovery(tmp_path: Path) -> None:  # noqa: PLR0915 - full retry-budget proof.
+    now = ["2026-08-04T00:00:00Z"]
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    attempt_ids: list[str] = []
+    expected_key = None
+
+    for index, eligible_at in enumerate(("00:00:00Z", "00:00:01Z", "00:00:03Z")):
+        now[0] = f"2026-08-04T{eligible_at}"
+        acquired = application.acquire_change_action(_continuation_request(application))
+        assert acquired.kind == "acquired", acquired
+        assert acquired.finalization is not None
+        attempt = acquired.finalization.attempt
+        attempt_ids.append(attempt.writer.attempt_id)
+        episode_key = RetryLedger(state_root, "change-a").read().episodes[0].key
+        expected_key = episode_key if expected_key is None else expected_key
+        assert episode_key == expected_key
+
+        report = application.report_finalization_failure(
+            _failure_request(application, attempt_key=attempt.writer.attempt_id)
+        )
+        assert isinstance(report, FinalizationReport)
+        reports = FinalizationReportStore(state_root, "change-a").read()
+        assert reports.current_report_id == report.report_id
+        assert len(reports.reports) == index + 1
+        settlement = _finalizer_settlement(application, attempt, report)
+        assert isinstance(application.settle_finalizer_invocation(settlement), FinalizerSettlementReceipt)
+        episode = RetryLedger(state_root, "change-a").read().episodes[0]
+        assert episode.key == expected_key
+        assert episode.total_attempts == index + 1
+        assert episode.reset_count == 0
+
+        if index == 1:
+            now[0] = "2026-08-04T00:00:02Z"
+            before_backoff = application.acquire_change_action(_continuation_request(application))
+            assert before_backoff.kind == "waiting"
+            assert before_backoff.reason_code == "retry-backoff"
+            assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 2
+
+    episode = RetryLedger(state_root, "change-a").read().episodes[0]
+    assert len(set(attempt_ids)) == 3
+    assert set(attempt_ids) <= set(episode.attempt_ids)
+    assert {alias.value for alias in episode.aliases if alias.alias_kind == "operation"} >= set(attempt_ids)
+    assert episode.total_attempts == 3
+    assert episode.reset_count == 0
+    assert len(FinalizationReportStore(state_root, "change-a").read().reports) == 3
+    assert all(
+        (state_root / application._finalizer_settlement_receipt_path("change-a", attempt_id)).is_file()
+        for attempt_id in attempt_ids
+    )
+
+    blocked = application.acquire_change_action(_continuation_request(application))
+    assert blocked.kind == "unsupported"
+    assert blocked.reason_code == "retry-exhausted"
+    assert blocked.readiness is not None
+    assert blocked.readiness.attempts == 3
+    assert not blocked.readiness.executable
+    assert blocked.readiness.action is None
+    assert blocked.readiness.next_actor.value == "agent"
+    assert blocked.readiness.prompt is not None
+    assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose")
+    assert "read-only" in blocked.readiness.prompt
+    assert "do not clear the block, retry, dispatch, or reset the budget" in blocked.readiness.prompt
+    assert RetryLedger(state_root, "change-a").read().episodes[0].total_attempts == 3
+    assert coordinator.show("change-a").finalization_attention is not None
+    assert coordinator.show("change-a").finalization_attempt.finished_at is not None
+
+
+@pytest.mark.parametrize(
+    ("category", "code"),
+    [
+        ("maintained-check", FinalizationFailureCode.MAINTAINED_CHECK_FAILED),
+        ("independent-review", FinalizationFailureCode.INDEPENDENT_REVIEW_FAILED),
+    ],
+)
+def test_settled_finalizer_failure_retries_after_persisted_backoff(  # noqa: PLR0915 - full settled-retry lifecycle proof.
+    tmp_path: Path, category: str, code: FinalizationFailureCode
+) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_change_action(_continuation_request(application))
+    assert first.finalization is not None
+    first_attempt = first.finalization.attempt
+    report = application.report_finalization_failure(
+        _failure_request(
+            application,
+            attempt_key=first_attempt.writer.attempt_id,
+            category=category,
+            code=code,
+        )
+    )
+    assert isinstance(report, FinalizationReport)
+    settlement = _finalizer_settlement(application, first_attempt, report)
+    receipt = application.settle_finalizer_invocation(settlement)
+    assert isinstance(receipt, FinalizerSettlementReceipt)
+    with pytest.raises(DeliveryActionBusyError, match="failed finalization attempt cannot submit success"):
+        application.finalize_change(
+            "change-a", _finalization_request("change-a", first_attempt.exact_head, first_attempt.writer.attempt_id)
+        )
+
+    ledger = RetryLedger(state_root, "change-a")
+    settled_ledger = ledger.read()
+    receipt_path = state_root / application._finalizer_settlement_receipt_path(
+        "change-a", first_attempt.writer.attempt_id
+    )
+    receipt_bytes = receipt_path.read_bytes()
+    report_store = FinalizationReportStore(state_root, "change-a")
+    reports = report_store.read()
+    assert application.settle_finalizer_invocation(settlement) == receipt
+
+    application, coordinator, _manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        runtimes,
+        clock=lambda: now[0],
+    )
+    coordination_path = state_root / "coordination/changes/change-a.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    worktree = coordinator.show("change-a").worktree_path
+    index_path = Path(_git(worktree, "rev-parse", "--git-path", "index"))
+    if not index_path.is_absolute():
+        index_path = worktree / index_path
+    workspace_state = (
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        index_path.read_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+        tuple(
+            (path.relative_to(worktree).as_posix(), path.read_bytes())
+            for path in sorted(worktree.rglob("*"))
+            if path.is_file() and path.name != ".git"
+        ),
+    )
+
+    before_backoff = application.acquire_change_action(_continuation_request(application))
+    assert before_backoff.kind == "waiting"
+    assert before_backoff.reason_code == "retry-backoff"
+    assert ledger.read() == settled_ledger
+
+    now[0] = "2026-08-04T00:00:01Z"
+    retry_request = _continuation_request(application, host_id="retry-host", session_id="retry-session")
+    retry = application.acquire_change_action(retry_request)
+    assert retry.kind == "acquired", retry
+    assert retry.finalization is not None
+    second_attempt = retry.finalization.attempt
+    assert second_attempt.writer.attempt_id != first_attempt.writer.attempt_id
+    assert second_attempt.writer.claim_id != first_attempt.writer.claim_id
+    assert second_attempt.exact_head == first_attempt.exact_head
+    assert coordinator.show("change-a").writer == second_attempt.writer
+    assert coordinator.show("change-a").finalization_attempt == second_attempt
+    assert coordinator.show("change-a").finalization_attention is None
+    assert receipt_path.read_bytes() == receipt_bytes
+    assert report_store.read() == reports
+    duplicate_before = (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        ledger.read(),
+    )
+    duplicate = application.acquire_change_action(retry_request)
+    assert duplicate.kind == "busy"
+    assert (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        ledger.read(),
+    ) == duplicate_before
+    with pytest.raises(DeliveryActionBusyError, match="failed finalization attempt cannot submit success"):
+        application.finalize_change(
+            "change-a", _finalization_request("change-a", first_attempt.exact_head, first_attempt.writer.attempt_id)
+        )
+    assert (
+        (state_root / "coordination/changes/change-a.json").read_bytes(),
+        runtimes["change-a"].frontier_bytes(),
+        ledger.read(),
+    ) == duplicate_before
+    assert (
+        _git(worktree, "rev-parse", "HEAD"),
+        _git(worktree, "status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        index_path.read_bytes(),
+        _git(application._workspace_manager.repository, "show-ref"),
+        tuple(
+            (path.relative_to(worktree).as_posix(), path.read_bytes())
+            for path in sorted(worktree.rglob("*"))
+            if path.is_file() and path.name != ".git"
+        ),
+    ) == workspace_state
+    episodes = ledger.read().episodes
+    assert len(episodes) == 1
+    assert episodes[0].key == settled_ledger.episodes[0].key
+    assert episodes[0].total_attempts == 2
+    assert {first_attempt.writer.attempt_id, second_attempt.writer.attempt_id} <= set(episodes[0].attempt_ids)
+    assert {alias.value for alias in episodes[0].aliases if alias.alias_kind == "operation"} >= {
+        first_attempt.writer.attempt_id,
+        second_attempt.writer.attempt_id,
+    }
+
+    retained_before_replay = (
+        coordination_path.read_bytes(),
+        frontier_path.read_bytes(),
+        ledger.read(),
+        report_store.read(),
+        receipt_path.read_bytes(),
+    )
+    assert application.settle_finalizer_invocation(settlement) == receipt
+    assert (
+        coordination_path.read_bytes(),
+        frontier_path.read_bytes(),
+        ledger.read(),
+        report_store.read(),
+        receipt_path.read_bytes(),
+    ) == retained_before_replay
+
+    finalization = application.finalize_change(
+        "change-a", _finalization_request("change-a", second_attempt.exact_head, second_attempt.writer.attempt_id)
+    )
+    assert finalization.operation_id == second_attempt.writer.attempt_id
+    assert coordinator.show("change-a").writer is None
+    assert receipt_path.read_bytes() == receipt_bytes
+    assert any(item.report_id == report.report_id for item in report_store.read().reports)
 
 
 def test_finalizer_settlement_rejects_mismatched_authority_without_effects(tmp_path: Path) -> None:

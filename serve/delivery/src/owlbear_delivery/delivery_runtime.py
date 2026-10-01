@@ -26,6 +26,7 @@ from owlbear_delivery.change_workspace import (
     ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
+    ChangeFinalizationAttention,
     ChangeTargetSyncReceipt,
     ChangeWriter,
     PublicationLock,
@@ -2401,7 +2402,13 @@ class DeliveryRuntime:
         """Return the terminal user-requested Change abandonment, if any."""
         return self._read()[0].change_abandonment
 
-    def defer_change(self, reason: str, deferred_at: datetime) -> DeliveryChangeDeferral:
+    def defer_change(
+        self,
+        reason: str,
+        deferred_at: datetime,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeDeferral:
         """Pause one nonterminal Change while retaining its exact frontier and worktree."""
         frontier, previous = self._read()
         if frontier.change_deferral is not None:
@@ -2427,10 +2434,20 @@ class DeliveryRuntime:
             "defer",
             deferral=deferral,
         )
-        self._replace(previous, replacement, additional_participants=participants)
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        self._replace(
+            previous,
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
+        )
         return deferral
 
-    def resume_change(self) -> DeliveryChangeDeferral:
+    def resume_change(
+        self,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeDeferral:
         """Resume one exact deferred Change and return its preserved prior-state receipt."""
         frontier, previous = self._read()
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
@@ -2447,10 +2464,22 @@ class DeliveryRuntime:
             "resume",
             deferral=deferral,
         )
-        self._replace(previous, replacement, additional_participants=participants)
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        self._replace(
+            previous,
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
+        )
         return deferral
 
-    def abandon_change(self, reason: str, abandoned_at: datetime) -> DeliveryChangeAbandonment:
+    def abandon_change(
+        self,
+        reason: str,
+        abandoned_at: datetime,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> DeliveryChangeAbandonment:
         """Terminate one uncompleted Change without discarding its retained authority."""
         frontier, previous = self._read()
         if frontier.change_abandonment is not None:
@@ -2489,7 +2518,13 @@ class DeliveryRuntime:
             deferral=frontier.change_deferral,
             abandonment=abandonment,
         )
-        self._replace(previous, replacement, additional_participants=participants)
+        participants = self._change_intent_custody_participants(participants, expected_finalization_attention)
+        self._replace(
+            previous,
+            replacement,
+            additional_participants=participants,
+            include_custody_guard=False,
+        )
         return abandonment
 
     def _capture_existing_change_disposition(
@@ -5887,6 +5922,19 @@ class DeliveryRuntime:
             raise DeliveryRuntimeReferenceError(message) from exc
         else:
             return frontier, canonical
+
+    def _change_intent_custody_participants(
+        self,
+        participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...],
+        expected_finalization_attention: ChangeFinalizationAttention | None,
+    ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
+        if self._workspace_manager is None:
+            return participants
+        guard = self._workspace_manager.prepare_runtime_custody_guard(
+            self._contract.change_id,
+            expected_finalization_attention=expected_finalization_attention,
+        )
+        return (*participants, guard)
 
     def _replace(
         self,

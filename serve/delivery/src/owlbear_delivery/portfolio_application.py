@@ -54,6 +54,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
+    FinalizerAcquisition,
     OutOfBandHeadRecoveryReceipt,
     PortfolioCoordinator,
     PromoteExternalHead,
@@ -2264,7 +2265,13 @@ class PortfolioApplication:
             refund=prepared_coordination.builder_handoff is not None,
         )
 
-    def _release_unpublished_finalizer(self, runtime: DeliveryRuntime, attempt: ChangeFinalizationAttempt) -> None:
+    def _release_unpublished_finalizer(
+        self,
+        runtime: DeliveryRuntime,
+        attempt: ChangeFinalizationAttempt,
+        *,
+        expected_finalization_attention: ChangeFinalizationAttention | None = None,
+    ) -> None:
         try:
             active_claims = runtime.active_claims()
             integration_repair_claim = runtime.integration_repair_claim()
@@ -2272,8 +2279,16 @@ class PortfolioApplication:
             coordination = self._coordinator.show(runtime.contract.change_id)
             retained = coordination.finalization_attempt
             continuation = coordination.continuation_action
+            attention_unchanged = (
+                expected_finalization_attention is not None
+                and coordination.finalization_attention == expected_finalization_attention
+                and retained is not None
+                and retained.finished_at is not None
+                and retained.writer.attempt_id != attempt.writer.attempt_id
+                and coordination.writer == retained.writer.model_copy(update={"kind": "finalization-attention"})
+            )
             if (
-                coordination.writer is not None
+                (coordination.writer is not None and not attention_unchanged)
                 or coordination.publication_lease is not None
                 or (
                     retained is not None
@@ -2287,7 +2302,11 @@ class PortfolioApplication:
                 return
         except (OSError, RuntimeError, ValueError):
             return
-        self._record_proven_unstarted_retry_release(runtime, attempt.writer.attempt_id)
+        self._record_proven_unstarted_retry_release(
+            runtime,
+            attempt.writer.attempt_id,
+            refund=attention_unchanged,
+        )
 
     def _import_legacy_worker_budgets(self, runtime: DeliveryRuntime) -> None:
         """Preserve historical failures before a mutation can clear binding metadata."""
@@ -6780,6 +6799,53 @@ class PortfolioApplication:
             updates["action"] = decision.action.model_copy(update={"label": "Retry verification"})
         return decision.model_copy(update=updates)
 
+    def _finalizer_attention_retry_reason(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+        basis: DeliveryReadinessBasis,
+        workspace: tuple[ChangeCoordination, str, str, tuple[str, ...], str | None],
+        reports: FinalizationReportSnapshot,
+        receipt: FinalizerSettlementReceipt | None,
+    ) -> str | None:
+        coordination, head, fingerprint, paths, workspace_reason = workspace
+        attention = coordination.finalization_attention
+        attempt = coordination.finalization_attempt
+        if attention is None:
+            return "finalization-failed"
+        if paths or attention.workspace_paths:
+            return "workspace-dirty"
+        if (
+            head != attention.expected_head
+            or head != attention.workspace_head
+            or fingerprint != attention.workspace_fingerprint
+        ):
+            return "workspace-preflight-failed"
+        report = next((item for item in reports.reports if item.report_id == attention.report_id), None)
+        if (
+            attempt is None
+            or attempt.finished_at is None
+            or receipt is None
+            or not self._finalizer_attention_matches_receipt(coordination, receipt)
+            or reports.current_report_id != attention.report_id
+            or report is None
+            or report != receipt.report
+            or attempt.contract_digest != basis.contract_digest
+            or attempt.contract_digest != contract_fingerprint(snapshot.contract)
+            or attempt.frontier_digest != basis.frontier_digest
+            or attempt.frontier_digest != snapshot.version
+            or attempt.exact_head != head
+            or attempt.writer.attempt_id != attention.attempt_id
+            or report.request.attempt_key != attention.attempt_id
+            or report.request.expected_change_head != head
+            or report.request.expected_reviewed_head != coordination.last_reviewed_commit
+            or report.request.expected_contract_digest != attempt.contract_digest
+            or report.request.expected_frontier_digest != attempt.frontier_digest
+        ):
+            return "finalization-failed"
+        if attempt.target_head != basis.target_head:
+            return "settled-attention-target-drift"
+        return workspace_reason if workspace_reason not in {None, "active-custody"} else None
+
     def _capture_readiness_workspace(
         self,
         snapshot: DeliveryPortfolioSnapshot,
@@ -6808,28 +6874,24 @@ class PortfolioApplication:
                 "finalization-attention",
             }:
                 reports = FinalizationReportStore(self._target_root, snapshot.contract.change_id).read()
-                report_matches = any(
-                    report.request.attempt_key == coordination.writer.attempt_id for report in reports.reports
-                )
                 if coordination.writer.kind == "finalization-attention":
-                    attention = coordination.finalization_attention
                     receipt = self._read_finalizer_settlement_receipt(
                         snapshot.contract.change_id, coordination.writer.attempt_id
                     )
-                    report_matches = (
-                        attention is not None
-                        and self._finalizer_attention_matches_receipt(coordination, receipt)
-                        and any(
-                            report.report_id == attention.report_id
-                            and report.request.attempt_key == coordination.writer.attempt_id
-                            for report in reports.reports
-                        )
+                    return basis, self._finalizer_attention_retry_reason(
+                        snapshot,
+                        basis,
+                        (coordination, head, fingerprint, _paths, reason),
+                        reports,
+                        receipt,
                     )
-                if report_matches:
+                if any(report.request.attempt_key == coordination.writer.attempt_id for report in reports.reports):
                     return basis, "finalization-failed"
             invalidation = snapshot.frontier.finalization_invalidation
             if invalidation and invalidation.reason == "review-repair" and head == invalidation.expected_head:
                 reason = "review-repair"
+        except FinalizationReportError:
+            return basis, "report-store-unavailable"
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
             return basis, "workspace-inspection-failed"
         return basis, reason
@@ -6899,12 +6961,16 @@ class PortfolioApplication:
                 "acquire_change_action; declare only capabilities this session can dispatch and execute only the "
                 "acquired operation. Yield on busy, waiting, and human; do not dispatch siblings or infer progress."
             )
-        if reason == "retry-exhausted":
-            return (
-                f"/inspect-change {change_id} Diagnose the exhausted retry episode read-only. Preserve its block and "
-                "attempt history; do not clear the block, retry, dispatch, or reset the budget. Any new attempt "
-                "requires approved current authority."
+        if reason in {"retry-exhausted", "settled-attention-target-drift"}:
+            diagnosis = (
+                "Diagnose the exhausted retry episode read-only. Preserve its block and attempt history; do not clear "
+                "the block, retry, dispatch, or reset the budget. Any new attempt requires approved current authority."
+                if reason == "retry-exhausted"
+                else "Diagnose settled Finalizer attention after the target head changed. Read-only: preserve the "
+                "retained attention, failure report, receipt, and retry history. Do not synchronize the target, retry "
+                "finalization, clear the block, or reset the budget; stop for owner direction before any new attempt."
             )
+            return f"/inspect-change {change_id} {diagnosis}"
         if reason == "engine-action-pending":
             return (
                 f"/continue-change {change_id} Resume the exact engine-selected operation after rereading "
@@ -7843,7 +7909,24 @@ class PortfolioApplication:
         self._coordinator.recover_pending_transactions()
         runtime = self._runtimes.get(request.change_id)
         if runtime is not None:
-            self._reconcile_retry_results(runtime)
+            try:
+                self._reconcile_retry_results(runtime)
+            except FinalizationReportError:
+                unavailable = observed.model_copy(
+                    update={
+                        "status": "unavailable",
+                        "reason_code": "report-store-unavailable",
+                        "checks_state": "unknown",
+                        "executable": False,
+                        "action": None,
+                    }
+                )
+                return DeliveryContinuationResult(
+                    change_id=request.change_id,
+                    kind="unavailable",
+                    reason_code="report-store-unavailable",
+                    readiness=unavailable,
+                )
         replay = self._replay_continuation_action(request, observed)
         if replay is not None:
             return replay
@@ -8522,16 +8605,63 @@ class PortfolioApplication:
             target_head=self._workspace_manager.observed_target_head(),
         )
         try:
-            self._register_recovery_invocation(
-                runtime,
-                attempt.writer.claim_id,
-                attempt.writer.attempt_id,
-                "finalizer",
-                attempt.exact_head,
+
+            def register_invocation() -> None:
+                self._register_recovery_invocation(
+                    runtime,
+                    attempt.writer.claim_id,
+                    attempt.writer.attempt_id,
+                    "finalizer",
+                    attempt.exact_head,
+                )
+
+            self._workspace_manager.acquire(
+                request.change_id,
+                attempt.writer,
+                finalizer=FinalizerAcquisition(
+                    attempt=attempt,
+                    expected_attention=coordination.finalization_attention,
+                    expected_workspace_fingerprint=readiness.basis.workspace_fingerprint,
+                    promoted_commits=tuple(
+                        result.completed_commit for binding in runtime.bindings() for result in binding.results
+                    ),
+                    before_acquire=register_invocation,
+                ),
             )
-            self._coordinator.acquire(request.change_id, attempt.writer, finalization_attempt=attempt)
+        except CoordinationConflictError:
+            self._release_unpublished_finalizer(
+                runtime,
+                attempt,
+                expected_finalization_attention=coordination.finalization_attention,
+            )
+            current = self.get_change(request.change_id).readiness
+            if current.reason_code == "active-custody":
+                kind, reason = "busy", "active-custody"
+            elif current.reason_code in {
+                "finalization-failed",
+                "report-store-unavailable",
+                "workspace-dirty",
+                "workspace-inspection-failed",
+                "workspace-preflight-failed",
+            }:
+                kind, reason = "unavailable", current.reason_code
+            elif current.basis != request.expected_basis:
+                kind, reason = "stale", "readiness-changed"
+            else:
+                kind, reason = "unavailable", "workspace-preflight-failed"
+                current = current.model_copy(update={"status": "unavailable", "executable": False, "action": None})
+            return DeliveryContinuationResult(
+                change_id=request.change_id,
+                kind=kind,
+                reason_code=reason,
+                readiness=current,
+            )
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
-            self._release_unpublished_finalizer(runtime, attempt)
+            self._release_unpublished_finalizer(
+                runtime,
+                attempt,
+                expected_finalization_attention=coordination.finalization_attention,
+            )
             raise
         return DeliveryContinuationResult(
             change_id=request.change_id,
@@ -9259,6 +9389,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(intent.change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(intent.change_id),)):
+                attention = self._workspace_manager.show(intent.change_id).finalization_attention
                 current_digest = hashlib.sha256(runtime.frontier_bytes()).hexdigest()
                 if current_digest != intent.expected_frontier_digest:
                     if intent.kind is DeliveryChangeIntentKind.DEFER:
@@ -9283,13 +9414,21 @@ class PortfolioApplication:
                 if intent.kind is DeliveryChangeIntentKind.DEFER:
                     if intent.reason is None:
                         self._fail("defer intent requires a reason")
-                    receipt = runtime.defer_change(intent.reason, _timestamp(self._clock()))
+                    receipt = runtime.defer_change(
+                        intent.reason,
+                        _timestamp(self._clock()),
+                        expected_finalization_attention=attention,
+                    )
                 elif intent.kind is DeliveryChangeIntentKind.RESUME:
-                    receipt = runtime.resume_change()
+                    receipt = runtime.resume_change(expected_finalization_attention=attention)
                 else:
                     if intent.reason is None:
                         self._fail("abandon intent requires a reason")
-                    receipt = runtime.abandon_change(intent.reason, _timestamp(self._clock()))
+                    receipt = runtime.abandon_change(
+                        intent.reason,
+                        _timestamp(self._clock()),
+                        expected_finalization_attention=attention,
+                    )
                 self._publish_delivery_state(
                     intent.change_id,
                     runtime,

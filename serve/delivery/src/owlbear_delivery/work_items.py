@@ -297,6 +297,7 @@ DeliveryReadinessReason = Literal[
     "workspace-inspection-failed",
     "workspace-dirty",
     "workspace-preflight-failed",
+    "settled-attention-target-drift",
     "review-repair",
     "publication-wait",
     "checkpoint-pending",
@@ -555,11 +556,16 @@ class WorkItemProjector:
                 "engine-action-blocked",
                 "retry-exhausted",
                 "retry-containment",
+                "settled-attention-target-drift",
             }
             readiness_fallbacks = {
                 "workspace-dirty": "Managed workspace preflight is blocked by local changes.",
                 "workspace-inspection-failed": "Managed workspace readiness could not be observed.",
                 "workspace-preflight-failed": "Managed workspace preflight did not pass.",
+                "settled-attention-target-drift": (
+                    "Settled Finalizer attention targets an earlier base; preserve its report, receipt, and retry "
+                    "history pending owner direction."
+                ),
                 "active-custody": "An active operation retains Change custody.",
                 "engine-action-pending": (
                     "The Delivery engine owner retains an unstarted exact operation; no failure or closure "

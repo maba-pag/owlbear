@@ -1314,6 +1314,7 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
         assert episode.total_attempts == 3
     repair_binding_reads = []
     original_repair_bindings = RetryLedger.repair_bindings
+    expected_repair_binding_reads = [] if exhausted else [False]
 
     def read_repair_bindings(ledger, *, recover_transactions=True):
         repair_binding_reads.append(recover_transactions)
@@ -1350,7 +1351,7 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
     repair_binding_reads.clear()
     with patch.object(RetryLedger, "repair_bindings", read_repair_bindings):
         readiness = application._with_retry_readiness(snapshot, card, card.readiness)
-    assert repair_binding_reads == [False]
+    assert repair_binding_reads == expected_repair_binding_reads
     assert pending_path.read_bytes() == b"must-not-appear"
     assert tuple((path, path.read_bytes()) for path, _content in pending_manifests) == pending_manifests
     assert readiness.attempts == (3 if exhausted else 1)
@@ -1361,8 +1362,10 @@ def test_review_repair_finalizer_readiness_and_acquisition_share_retry_identity(
     assert blocked.readiness is not None
     assert blocked.readiness.attempts == (3 if exhausted else 1)
     if exhausted:
-        assert blocked.readiness.next_actor.value == "none"
-        assert blocked.readiness.prompt is None
+        assert blocked.readiness.operation is None
+        assert blocked.readiness.next_actor.value == "agent"
+        assert blocked.readiness.prompt is not None
+        assert blocked.readiness.prompt.startswith("/inspect-change change-a Diagnose the exhausted retry episode")
     assert RetryLedger(state_root, "change-a").episode(key).total_attempts == (3 if exhausted else 1)
     assert runtime.finalization() is None
 

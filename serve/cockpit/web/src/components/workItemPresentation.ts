@@ -34,6 +34,8 @@ export const READINESS_REASON_LABELS: Record<DeliveryReadinessReasonCode, string
   "retry-transition-contained":
     "The worker retry was refused; its claim remains held until host worker-exclusion is verified.",
   "finalization-failed": "A recorded finalization diagnostic retains that attempt.",
+  "settled-attention-target-drift":
+    "The target changed after failed verification. Inspection only; sync, retry, and reset remain blocked.",
   "claim-activation-failed": "Delivery could not activate custody for the selected action.",
   "coordination-unavailable": "This Change has no readable coordination record.",
   "execution-occupancy-unavailable": "Delivery could not read current execution occupancy.",
