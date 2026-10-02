@@ -47,7 +47,7 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `6760bf8f8d07d18c9210ef79617e21489c1eb8ca`.** This is the
+**Native repair checkpoint: `8ec88b7bfffa9baa55deff0ffb5b639e6f487ecc`.** This is the
 committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
 retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer failures
 settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
@@ -74,20 +74,50 @@ only read-only inspection and the supported defer/abandon lifecycle exits, not a
 Answered pauses, supported local lifecycle intents, Planning promotion and Design attention remain
 validated against private exact receipt chains. Handoff state is host-local, not a portable snapshot.
 No CLI, sampling, Invocation Host, live activation or new Integration repair authority is added.
-Fresh cumulative unnamed Opus 5.5 challenge and exact-head CI are required for the final publication;
-their authoritative exact-publication results are on [PR #326](https://github.com/maba-pag/owlbear/pull/326).
+Exact-head CI results for the final publication are on [PR #326](https://github.com/maba-pag/owlbear/pull/326).
 This record names the code checkpoint, not the future commit for this documentation update.
+
+The `58a819f6..8ec88b7b` repair series closes the findings of a fresh cumulative challenge of
+`58a819f6`:
+
+- A Planner request-bearing or requestless pause after a Builder Planning return can be answered or
+  cleared, restores the retained return context and survives default-loader restart, including
+  repeated pauses, defer/resume/abandon around them and the exhausted Planning return.
+- Readiness `retry_history` and Build context `prior_attempts` project bounded attempt metadata
+  (ordinal, kind, status, validated failure code, time) from the retry ledger; no detail text or paths.
+- Finalizer episode linkage uses the settled attempt's own failed outcome, so a proven-unstarted refund
+  cannot wedge settled-attention target sync or mint a fresh budget.
+- Batch acquisition reports one Change's unreadable retry accounting as that Change's failure and
+  continues with independent Changes; backoff is reported as `ERR_DELIVERY_RETRY_BACKOFF`, and
+  readiness uses the retained handoff's original task lineage.
+- Offline diagnosis inspects every Change-scoped runtime record family, scopes traversal to a selected
+  Change, inspects current authority records first and charges fixed reads to the 256-entry bound;
+  truncation stays explicit and asks for a per-Change rerun.
+- Workspace governance, `/orchestrate`, WIRING and Cockpit component coverage match native settlement.
 
 | Gate | Current disposition |
 | --- | --- |
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
-| Independent challenge | The unnamed cumulative challenge of `c3db27ea` found one misleading Design-return prompt, repaired in `6760bf8f`. A fresh cumulative challenge of the final publication is required; its exact result belongs on PR #326 |
+| Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
-| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `6760bf8f8d07d18c9210ef79617e21489c1eb8ca`, not the future SHA of this documentation update |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `8ec88b7bfffa9baa55deff0ffb5b639e6f487ecc`, not the future SHA of this documentation update |
 | User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
 | Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
-**Current caller proof:** before `c3db27ea`, an intermediate selection
+**Current caller proof for `8ec88b7b`:** on identical working-tree content immediately before the
+scoped commits, the caller ran focused selections serially: `test_delivery_state.py`
+handoff/planner/loader/restart 55 passed; `test_portfolio_application.py`
+retry/exhaust/backoff/handoff/build-context/restart/batch/sibling/finalizer 114 passed;
+`test_delivery_runtime.py` handoff/planner/retry/settle/request/unblock 64 passed; whole
+`test_retry_ledger`, `test_recovery`, `test_finalization_reports`, `test_delivery_diagnostics`,
+`test_delivery_adapter`, `test_package_boundary`, `test_cockpit_boundary`,
+`test_agent_ecosystem_validation` and `test_delivery_worktree_authority` 491 passed; whole
+`test_target_server` and `tests/test_cockpit_work_items` 204 passed. Scoped Ruff check/format on all
+33 changed Python files, `WorkPortfolio.test.tsx` (120 passed), TypeScript `noEmit`, scoped Biome
+and `git diff --check` passed; scoped commit gates passed. The final challenger independently ran
+79 focused cases. These are selected checks, not a whole-owner or whole-project suite pass.
+
+**Historical caller proof:** before `c3db27ea`, an intermediate selection
 across `test_portfolio_application`, `test_change_workspace`, `test_delivery_runtime` and
 `test_delivery_state` reported 928 passed and 3 failed in 425.66 seconds. All three failures were
 repaired: two obsolete fault hooks and one foreign-publication custody classification (`blocked`,
@@ -179,9 +209,9 @@ core/recovery and 12 adapter cases, TypeScript `noEmit` and two-file Biome passe
 or treat their reports as independently rerun proof. No fresh full-suite, live host or browser
 pass is claimed.
 
-**Completion still requires:** a fresh cumulative unnamed Opus 5.5 read-only challenge and all four
-required CI workflows on the same exact published code head, with exact-head results reported on
-PR #326. The focused checks above are not a whole-owner-suite pass. Reconcile any review findings and
+**Completion still requires:** all four required CI workflows on the same exact published head,
+with exact-head results reported on PR #326, and human review and merge. The fresh cumulative unnamed
+read-only challenge of code checkpoint `8ec88b7b` returned `implementation-sound`. The focused checks above are not a whole-owner-suite pass. Reconcile any review findings and
 retain truthful unknown-execution limits. None grants merge, live activation or automatic Design
 revision/admission.
 
