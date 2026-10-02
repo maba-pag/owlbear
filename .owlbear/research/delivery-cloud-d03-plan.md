@@ -47,7 +47,7 @@ the superseded implementation; this revision controls ordinary returned worker t
 
 ### Current handoff
 
-**Native repair checkpoint: `95955627f2bef53d00d60ceecd35d44c7e3e73ba`.** This is the
+**Native repair checkpoint: `225cec5da7a1e28d6255346e6d37369635468572`.** This is the
 committed code checkpoint for the user-approved native Orchestrator settlement revision. Planner
 retries, Builder retry/request block/Planning or Design return, and report-backed Finalizer failures
 settle exact ended invocations through `settle_worker_invocation`. Builder handoff preserves
@@ -100,7 +100,7 @@ The `58a819f6..8ec88b7b` repair series closes the findings of a fresh cumulative
 | Source and contract | Native Orchestrator settlement is user-approved. Exact clean settled target-stale attention may sync through the existing engine owner, retaining the passive-writer reservation through its merge/conflict outcome; fresh review precedes a new Finalizer under the original budget. Dirty workspaces, stale identities, unattributed material and unknown execution remain contained; sync cannot renew the three-attempt budget |
 | Independent challenge | A fresh unnamed GPT-6.1 Sol cumulative challenge of `58a819f6` found eleven material findings; two interim Sol reviews of the repairs found three more (repeated pauses/lifecycle intents at restart, exhausted Planning-return restart, diagnostic bounds). All were repaired. A fresh unnamed GPT-6.1 Sol cumulative challenge of `8ec88b7b` returned `implementation-sound` with no material findings |
 | Required CI | All four required workflows must succeed on the same exact published head. Their exact-head results belong on PR #326; no new CI result is claimed here. Older green runs are historical |
-| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `95955627f2bef53d00d60ceecd35d44c7e3e73ba` (`8ec88b7b` plus one test-double signature fix), not the future SHA of this documentation update |
+| PR and documentation metadata | Route exact-publication review and CI results to PR #326. This record names code checkpoint `225cec5da7a1e28d6255346e6d37369635468572` (`8ec88b7b` plus two test-only fixes: one test-double signature and an interpreter-pinned offline wheel build), not the future SHA of this documentation update |
 | User direction | Native Orchestrator settlement is explicitly approved; no host-design approval is needed. Design-return readmission is refused before authority mutation and its correction is separate D04 work |
 | Host and activation boundary | Only an exact normally returned invocation, or an actually ended timeout with owned mutation jobs settled, qualifies. Elapsed time, transport failure and possibly running work do not. No merge or live activation is implied |
 
@@ -118,7 +118,11 @@ and `git diff --check` passed; scoped commit gates passed. The final challenger 
 79 focused cases. Closeout whole-file runs on `8ec88b7b`: `test_delivery_state.py` 80 passed and
 `test_delivery_runtime.py` 119 passed; `test_portfolio_application.py` reported 551 passed and one
 stale test double that did not forward the new batch-isolation keyword. `95955627` fixes only that
-double; it and its two neighboring batch-isolation cases then passed with scoped Ruff. These are
+double; it and its two neighboring batch-isolation cases then passed with scoped Ruff. Exact-head CI
+on `18dc9cb3` then failed only the installed-console diagnostics test in the Python 3.12 job:
+`uv build --offline` resolved the repository's pinned 3.14.7 interpreter, which that job does not
+install. `225cec5d` builds with the running interpreter; the caller reproduced the failure with no
+managed 3.14.7 and confirmed the fix under both 3.12.14 and 3.14.7. These are
 selected owner files, not a whole-project suite pass.
 
 **Historical caller proof:** before `c3db27ea`, an intermediate selection
