@@ -162,6 +162,7 @@ def test_quality_runs_local_lint_then_megalint() -> None:
         patch.object(sys, "argv", ["quality", "--no-fix"]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", None)),
         pytest.raises(SystemExit, match="0"),
     ):
         quality()
